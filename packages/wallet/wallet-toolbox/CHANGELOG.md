@@ -61,9 +61,9 @@ attention to changes that materially alter behavior or extend functionality.
   so of two concurrent actions spending the same input, the second sees it spent
   and fails with the existing double-spend or unspendable-input error instead of
   overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
-- Callers that count `listOutputs` results narrow `totalOutputs` to a number,
-  following the `@bsv/sdk` change that lets BRC-112 module balance queries
-  return decimal text.
+- Callers that count `listOutputs` results narrow `totalOutputs` to a number
+  with the exported `numericTotalOutputs`, following the `@bsv/sdk` change that
+  lets BRC-112 module balance queries return decimal text.
 - `@bsv/sdk` 4.0.0 is accepted as a peer alongside the existing 2.x and 3.x
   ranges.
 

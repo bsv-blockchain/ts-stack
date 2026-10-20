@@ -1,5 +1,6 @@
 import { CWIStyleWalletManager, UMPTokenInteractor } from './CWIStyleWalletManager'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
+import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import {
   WalletInterface,
   Random,
@@ -109,8 +110,11 @@ async function proveInternalizedFaucetOutput(
   const outpoint = `${redemptionTxid}.${outputIndex}`.toLowerCase()
   const proof = await wallet.listOutputs(
     {
-      basket: 'default', include: 'entire transactions', includeLabels: true,
-      limit: 1, offset
+      basket: 'default',
+      include: 'entire transactions',
+      includeLabels: true,
+      limit: 1,
+      offset
     },
     adminOriginator
   )
@@ -130,9 +134,8 @@ async function proveInternalizedFaucetOutput(
   const transaction = Beef.fromBinaryStrict(proof.BEEF).findTxid(redemptionTxid)?.tx
   if (
     transaction?.outputs[outputIndex]?.satoshis !== satoshis ||
-    transaction.inputs.filter((_, inputIndex) =>
-      transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint
-    ).length !== 1
+    transaction.inputs.filter((_, inputIndex) => transactionInputOutpoint(transaction, inputIndex) === faucetOutpoint)
+      .length !== 1
   ) {
     throw new Error('Wallet returned unrelated internalized faucet transaction evidence.')
   }
@@ -158,10 +161,9 @@ async function hasInternalizedFaucetOutput(
       { basket: 'default', includeLabels: true, limit: pageSize, offset },
       adminOriginator
     )
-    const totalOutputs = page.totalOutputs
+    const totalOutputs = numericTotalOutputs(page)
     if (
       !Array.isArray(page.outputs) ||
-      typeof totalOutputs !== 'number' ||
       !Number.isSafeInteger(totalOutputs) ||
       totalOutputs < 0 ||
       page.outputs.length > pageSize ||
@@ -176,7 +178,9 @@ async function hasInternalizedFaucetOutput(
         throw new Error('Wallet returned unrelated internalized faucet output.')
       }
       await proveInternalizedFaucetOutput(
-        wallet, { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label }, adminOriginator,
+        wallet,
+        { redemptionTxid, outputIndex, satoshis, faucetOutpoint, label },
+        adminOriginator,
         offset + index
       )
       return true
@@ -282,10 +286,15 @@ async function recoverWABFaucetPayment(
     Number.isSafeInteger(internalized[0].outputIndex) &&
     internalized[0].outputIndex >= 0 &&
     internalized[0].outputIndex <= 0xffffffff &&
-    await hasInternalizedFaucetOutput(
-      wallet, action.txid.toLowerCase(), internalized[0].outputIndex,
-      internalized[0].satoshis, faucetOutpoint, label, adminOriginator
-    )
+    (await hasInternalizedFaucetOutput(
+      wallet,
+      action.txid.toLowerCase(),
+      internalized[0].outputIndex,
+      internalized[0].satoshis,
+      faucetOutpoint,
+      label,
+      adminOriginator
+    ))
   ) {
     return true
   }
