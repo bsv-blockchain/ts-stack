@@ -87,6 +87,7 @@ const MAX_RECEIPT_INSTRUCTION_BYTES = 1000
 const LIST_PAGE_LIMIT = 10_000
 const SUBMIT_ATTEMPTS = 3
 const NOSEND_EXPIRY_LABEL_PREFIX = 'p nosend expiry '
+const PROOF_LABEL_PREFIX = 'p color proof '
 const STATE_TAG_PREFIX = 'color_state_'
 const UTF8 = new TextEncoder()
 
@@ -416,8 +417,8 @@ function actionConsent(
 
 /** Plan and action features this module version does not implement. */
 function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs, handoff: boolean): void {
-  if ((plan.tokenProofs ?? []).length > 0 || Object.keys(plan.profileData ?? {}).length > 0) {
-    throw new Error('BRC-207: token proofs and profile data are not supported')
+  if (Object.keys(plan.profileData ?? {}).length > 0) {
+    throw new Error('BRC-207: plan.profileData is not supported')
   }
   if (handoff && (args.inputs ?? []).length > 0) {
     throw new Error('BRC-207: explicit inputs are not supported with a BRC-177 handoff')
@@ -972,6 +973,10 @@ export class ColorPermissionModule implements PermissionsModule {
       assertSatoshiChangePosition(plan, placed.length)
       return {
         ...args,
+        // `p color proof` labels carry BRC-176 lineage packets for modules that validate them, and
+        // are never stored. This module relies on overlay admission and spendability instead, so it
+        // drops them unread; a wallet that wants BRC-176 supplies its own color module.
+        labels: labels.filter(label => !label.startsWith(PROOF_LABEL_PREFIX)),
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
         outputs: placed
       }
@@ -1762,12 +1767,10 @@ export class ColorPermissionModule implements PermissionsModule {
       'signature envelope'
     )
     if (envelope.version !== 1) throw new Error('BRC-207: signature envelope version must be 1')
-    if (
-      parseTokenProofs(envelope.tokenProofs, 'signature envelope tokenProofs', MAX_ENVELOPE_BYTES)
-        .length > 0
-    ) {
-      throw new Error('BRC-207: token proofs are not supported by this module version')
-    }
+    // BRC-176 lineage packets serve modules that validate them. This module relies on overlay
+    // admission and spendability instead, so it checks their shape and ignores them; a wallet
+    // that wants BRC-176 supplies its own color module.
+    parseTokenProofs(envelope.tokenProofs, 'signature envelope tokenProofs', MAX_ENVELOPE_BYTES)
     if (
       Object.keys(parseProfileData(envelope.profileData, 'signature envelope profileData') ?? {})
         .length > 0

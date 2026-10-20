@@ -90,7 +90,7 @@ The module fails explicitly, rather than falling back, on:
 - BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
-- `tokenProofs` and `profileData` entries;
+- `profileData` entries;
 - explicit inputs together with a BRC-177 handoff.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
@@ -99,6 +99,10 @@ them. An input missing from `inputBEEF` is resolved by the wallet and checked
 in `signAction`. `inputPositions` and `changePositions` are honored; change
 positions follow the requested outputs, satoshi change comes after the token
 change, and both need `options.randomizeOutputs: false`.
+
+The module does not validate BRC-176 lineage: `p color proof` labels are
+dropped before the action is stored, and signature-envelope `tokenProofs` are
+ignored. It relies on overlay admission and spendability.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure.

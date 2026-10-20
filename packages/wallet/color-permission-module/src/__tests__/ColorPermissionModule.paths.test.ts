@@ -177,6 +177,19 @@ describe('ColorPermissionModule boundaries', () => {
     ).rejects.toThrow('not admitted and unspent')
   })
 
+  it('drops p color proof labels unread before the wallet stores the action', async () => {
+    await holdTokens(wallet, provider, assetId, [300n])
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
+    const labels = [...plan(), 'p color proof 0 1 00', 'invoice']
+    const funded = await createAction({
+      labels,
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ]
+    })
+    expect(funded.labels).toEqual([...plan(), 'invoice'])
+  })
+
   it('places token change at a pinned output index', async () => {
     await holdTokens(wallet, provider, assetId, [300n])
     const recipient = await tokenPayment(wallet, new FakeWallet(), assetId, 100n)
@@ -751,12 +764,16 @@ describe('ColorPermissionModule boundaries', () => {
     await expect(
       module.handleRequest({ ...request({}), args: { ...request({}).args, data: undefined } }, next)
     ).rejects.toThrow('envelope is missing')
+    // Token proofs are shape-checked and ignored: the request fails later, on overlay admission.
     await expect(
       module.handleRequest(
         request({ tokenProofs: [{ assetId, subjects: [`${source.id('hex')}.0`], beef: [1] }] }),
         next
       )
-    ).rejects.toThrow('token proofs are not supported')
+    ).rejects.toThrow('not admitted and unspent')
+    await expect(
+      module.handleRequest(request({ tokenProofs: [{ assetId, subjects: [], beef: [1] }] }), next)
+    ).rejects.toThrow('must not be empty')
     await expect(
       module.handleRequest(request({ profileData: { 'x:y': {} } }), next)
     ).rejects.toThrow('does not require')

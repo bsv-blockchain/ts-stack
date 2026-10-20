@@ -73,7 +73,6 @@ export interface ColorPlan {
   inputPositions: Array<{ outpoint: string; index: number }>
   changePositions: Array<{ assetId: string | null; index: number }>
   sighashTypes: Array<{ outpoint: string; sighashType: number }>
-  tokenProofs?: ColorTokenProof[]
   profileData?: Record<string, Record<string, JsonValue>>
 }
 
@@ -119,7 +118,7 @@ export function parseRemittances(value: JsonValue | undefined, label: string): C
   return remittances
 }
 
-/** Validates optional `tokenProofs`: `{assetId, subjects, beef}` items with distinct scopes. */
+/** Validates a signature envelope's optional `tokenProofs`: `{assetId, subjects, beef}` items with distinct scopes. */
 export function parseTokenProofs(
   value: JsonValue | undefined,
   label: string,
@@ -178,7 +177,7 @@ function parsePlan(value: JsonValue): ColorPlan {
       'changePositions',
       'sighashTypes'
     ],
-    ['tokenProofs', 'profileData'],
+    ['profileData'],
     'plan'
   )
   if (object.version !== 1) throw new Error('BRC-207: plan version must be 1')
@@ -257,8 +256,6 @@ function parsePlan(value: JsonValue): ColorPlan {
     changePositions,
     sighashTypes
   }
-  if (object.tokenProofs !== undefined)
-    plan.tokenProofs = parseTokenProofs(object.tokenProofs, 'plan.tokenProofs', MAX_PLAN_BYTES)
   const profileData = parseProfileData(object.profileData, 'plan.profileData')
   if (profileData !== undefined) plan.profileData = profileData
   const referenced = [
@@ -266,8 +263,7 @@ function parsePlan(value: JsonValue): ColorPlan {
     ...plan.operations.map(operation => operation.assetId),
     ...plan.changePositions.flatMap(position =>
       position.assetId === null ? [] : [position.assetId]
-    ),
-    ...(plan.tokenProofs ?? []).map(proof => proof.assetId)
+    )
   ]
   for (const assetId of referenced) {
     if (!assets.includes(assetId))

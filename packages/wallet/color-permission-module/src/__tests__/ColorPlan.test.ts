@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
-import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
+import { ColorPlan, parseTokenProofs, type ColorPlan as Plan } from '../ColorPlan.js'
 
 const ASSET = `${'ab'.repeat(32)}_0`
 const SENDER = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
@@ -118,7 +118,7 @@ describe('ColorPlan', () => {
     )
   })
 
-  it('carries position constraints, signature overrides, token proofs and profile data', () => {
+  it('carries position constraints, signature overrides and profile data', () => {
     const outpoint = `${'cd'.repeat(32)}.1`
     const full = plan({
       inputPositions: [{ outpoint, index: 0 }],
@@ -127,7 +127,6 @@ describe('ColorPlan', () => {
         { assetId: null, index: 3 }
       ],
       sighashTypes: [{ outpoint, sighashType: 0x43 }],
-      tokenProofs: [{ assetId: ASSET, subjects: [outpoint], beef: [1, 2, 3] }],
       profileData: { 'https://example.com/profile': { [ASSET]: { anything: [1] }, ISSUE: null } }
     })
     expect(
@@ -140,9 +139,33 @@ describe('ColorPlan', () => {
       )
     ).toMatchObject({
       inputPositions: [{ outpoint, index: 0 }],
-      sighashTypes: [{ outpoint, sighashType: 0x43 }],
-      tokenProofs: [{ assetId: ASSET, subjects: [outpoint], beef: [1, 2, 3] }]
+      sighashTypes: [{ outpoint, sighashType: 0x43 }]
     })
+  })
+
+  it('has no tokenProofs member; plan proofs travel in their own labels', () => {
+    const json = JSON.stringify({ ...plan(), tokenProofs: [] })
+    expect(() => ColorPlan.fromLabels(labelsFor(json))).toThrow('unknown member tokenProofs')
+  })
+
+  it('validates signature envelope token proofs', () => {
+    const subject = `${'cd'.repeat(32)}.1`
+    expect(
+      parseTokenProofs([{ assetId: ASSET, subjects: [subject], beef: [1, 2, 3] }], 'proofs', 10)
+    ).toEqual([{ assetId: ASSET, subjects: [subject], beef: [1, 2, 3] }])
+    expect(() =>
+      parseTokenProofs([{ assetId: ASSET, subjects: [], beef: [1] }], 'proofs', 10)
+    ).toThrow('must not be empty')
+    expect(() =>
+      parseTokenProofs(
+        [
+          { assetId: ASSET, subjects: [subject], beef: [1] },
+          { assetId: ASSET, subjects: [subject], beef: [2] }
+        ],
+        'proofs',
+        10
+      )
+    ).toThrow('scope')
   })
 
   it.each([
@@ -170,21 +193,6 @@ describe('ColorPlan', () => {
       'a sighash type above 255',
       { sighashTypes: [{ outpoint: `${'cd'.repeat(32)}.1`, sighashType: 256 }] },
       '0..255'
-    ],
-    [
-      'an empty proof subject list',
-      { tokenProofs: [{ assetId: ASSET, subjects: [], beef: [1] }] },
-      'must not be empty'
-    ],
-    [
-      'duplicate proof scopes',
-      {
-        tokenProofs: [
-          { assetId: ASSET, subjects: [`${'cd'.repeat(32)}.1`], beef: [1] },
-          { assetId: ASSET, subjects: [`${'cd'.repeat(32)}.1`], beef: [2] }
-        ]
-      },
-      'scope'
     ],
     [
       'a profile entry for an invalid asset',
