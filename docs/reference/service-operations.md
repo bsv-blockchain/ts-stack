@@ -13,7 +13,7 @@ tags: [reference, infrastructure, operations, observability, slo, recovery]
 # Service Operations Contract
 
 This page is generated from `governance/service-operations.json`. CI verifies
-all seven released services against their configuration, secret, telemetry,
+all eight released services against their configuration, secret, telemetry,
 container, health, lifecycle, recovery, and checked-in workload contracts.
 
 ## Public service boundary
@@ -35,6 +35,7 @@ and CSP remains an independent document/UI policy rather than API authorization.
 | `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
 | `wab`                      | PORT (default 8080)                                      | `/healthz` | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
 | `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/healthz` | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
+| `webrtpay-relay`           | PORT (default 8787)                                      | `/health`  | `/ready`        | implemented | [guide](../infrastructure/webrtpay-relay.md)                                                                   |
 
 Health endpoints are public and non-sensitive. They do not replace protocol
 authentication, administrative authorization, rate limits, or dependency-aware
@@ -323,6 +324,37 @@ Incident handling follows this evidence-preserving sequence:
 - Topology: Separate monitor leadership and its private optional admin listener from horizontally safe API capacity when production demand justifies it.
 - Operator guide:
   [infra/wallet-infra/guides/kube_samples/README.md](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md)
+
+### webrtpay-relay
+
+- Configuration: required `PUBLIC_URLS`; optional
+  `CLOUDFLARE_TURN_API_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CONNECTIONS_PER_48_PER_MINUTE`, `CONNECTIONS_PER_IP_PER_MINUTE`, `HOST`, `MAX_OVER_RATE_FRAMES`, `MAX_SOCKETS`, `MAX_UNAUTHENTICATED_SOCKETS`, `PORT`, `SIGNALS_PER_PAIR_PER_MINUTE`, `SIGNALS_PER_RECIPIENT_PER_MINUTE`, `SOCKETS_PER_48`, `SOCKETS_PER_IP`, `STUN_URLS`, `TRUSTED_IP_HEADER`, `TURN_PER_48_PER_HOUR`, `TURN_PER_HOUR`, `TURN_PER_IP_PER_HOUR`, `TURN_PROVIDER`, `TURN_SECRET`, `TURN_TTL`, `TURN_URLS`; secret-bearing
+  `CLOUDFLARE_TURN_API_TOKEN`, `OTEL_EXPORTER_OTLP_HEADERS`, `TURN_SECRET`.
+- Telemetry: ESM bootstrap
+  `src/telemetry.ts`, logger
+  `src/logger.ts`, preload
+  `--import ./dist/telemetry.js`.
+- Critical journeys:
+- authenticate a socket by BRC-100 identity key against PUBLIC_URLS
+- forward an encrypted signalling envelope to every socket of the recipient identity
+- issue short-lived TURN credentials within the per-source and global budgets
+- Alerts:
+- authentication failures rise after a PUBLIC_URLS, proxy, or TLS change
+- admission refusals (HTTP 429/503) or rate_limited replies remain saturated
+- the TURN provider repeatedly fails or the hourly TURN budget is exhausted
+- event-loop delay or open-socket count remains above the operator alert threshold
+- State: Stateless. Sockets, authenticated identities, and rate-limit buckets live only in process memory; nothing is written to disk or a database.
+- Migration/startup: No schema or data migration. Roll forward or back by replacing the image; clients reconnect and re-authenticate.
+- Backup/restore: Nothing to back up. Retain the deployment configuration and the TURN secrets in the secret manager.
+- RPO starting point: Not applicable: the relay holds no durable state.
+- RTO starting point: Minutes: the time to start a replacement container with the same configuration and public url.
+- Restore validation: Verify /health and /ready, a client authenticating against each PUBLIC_URLS entry, a signal delivered between two test identities, and TURN issuance when a provider is configured.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT close every WebSocket, stop the listener, and flush telemetry.
+- Scaling: Run one replica per public url: two clients meet only on the same replica, and per-source limits are per process. Scale vertically with the limit variables.
+- Disruption: A restart drops every socket; clients reconnect and re-authenticate. Schedule replacements when brief signalling interruption is acceptable.
+- Topology: Keep the listener reachable only through the TLS-terminating proxy that sets TRUSTED_IP_HEADER.
+- Operator guide:
+  [docs/infrastructure/webrtpay-relay.md](../infrastructure/webrtpay-relay.md)
 
 ## Stateful example boundary
 

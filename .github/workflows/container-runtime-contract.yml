@@ -99,7 +99,8 @@ jobs:
           --health-timeout 5s
           --health-retries 30
       mongo:
-        image: mongo@sha256:5351bff2b5d1563e3fa603a74b9be85ef9323e10aeb0b45cea933a93876e77fd
+        # MongoDB 7.0.45. 8.0+ refuses to start on Linux 6.19+ runners (SERVER-121912).
+        image: mongo@sha256:c53852c00c23ca9f23fc39690350ffa9a80e3642fe8f96879726d8da0abe80a7
         ports:
           - 27017:27017
         options: >-

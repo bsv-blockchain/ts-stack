@@ -4,6 +4,30 @@ All notable changes to this package are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and the package adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.1
+
+The relay can run as a governed container image: it now answers the readiness and CORS probes
+a hosted runtime makes, and a wrapper can start it exactly as `webrtpay-relay` does.
+
+### Added
+
+- `GET /ready` (and `HEAD`) on a server the relay creates: `200 {"status":"ready"}` while it
+  accepts connections, `503 {"status":"closing"}` from the moment `close()` is called (SIGTERM
+  or SIGINT for the CLI). `GET /health` stays `200 {"status":"ok"}` until the server stops.
+- Wildcard CORS on `/health` and `/ready`: `Access-Control-Allow-Origin: *`, never with
+  credentials. `OPTIONS` on either path answers a preflight with `204`,
+  `Access-Control-Allow-Methods: GET, HEAD, OPTIONS`, `Access-Control-Allow-Headers` listing
+  `Content-Type` and every well-formed header the browser asked for, and
+  `Access-Control-Max-Age: 600`.
+- `@bsv/webrtpay/server` exports `relayOptionsFromEnv(env)` and `relayUsage()`, the environment
+  parser and `--help` text the CLI uses, with `DEFAULT_HOST` and `DEFAULT_RELAY_PORT`.
+
+### Unchanged
+
+- Other paths and methods still answer `404` without CORS, WebSocket upgrades are admitted as
+  before, and a relay attached to an app's own server (`server`) still leaves that server's
+  requests alone, `/health` and `/ready` included.
+
 ## 0.2.0
 
 Fast dial: an offline payee is known within 2 s, and an online one is paid in about 1–2 s over

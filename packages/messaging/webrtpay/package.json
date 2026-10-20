@@ -1,6 +1,6 @@
 {
   "name": "@bsv/webrtpay",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Direct wallet-to-wallet BSV payments over WebRTC data channels, authenticated with BRC-100 identity keys",
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
@@ -54,7 +54,7 @@
     "test:property": "node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/codec.property.test.ts test/frames.property.test.ts",
     "test:turn": "RUN_TURN_TESTS=1 node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
-    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --allow-source-prefixes examples --exports DirectPayClient,PeerLink,authenticate,decodeCode,encodeOfferCode,encodeAnswerCode,acceptDirectPayment,verifyDirectPayment,validatePaymentToken,MessageBoxSignaler,RelaySignaler,createMemoryHub,WebRTPayError --entry-exports \"./server=createRelayServer|turnCredentials|DEFAULT_RELAY_LIMITS\" --bin webrtpay-relay --bin-args --help",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --allow-source-prefixes examples --exports DirectPayClient,PeerLink,authenticate,decodeCode,encodeOfferCode,encodeAnswerCode,acceptDirectPayment,verifyDirectPayment,validatePaymentToken,MessageBoxSignaler,RelaySignaler,createMemoryHub,WebRTPayError --entry-exports \"./server=createRelayServer|turnCredentials|DEFAULT_RELAY_LIMITS|relayOptionsFromEnv|relayUsage\" --bin webrtpay-relay --bin-args --help",
     "prepublishOnly": "pnpm build"
   },
   "dependencies": {
