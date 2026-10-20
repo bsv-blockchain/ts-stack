@@ -643,6 +643,82 @@ describe('PeerLink with a fake peer connection', () => {
     expect((await closed)?.code).toBe('protocol')
   })
 
+  // react-native-webrtc cannot report an unset limit as null: Android gives -1 (for any channel
+  // the peer opened) and iOS gives libwebrtc's uint16_t, where unset is -1 read as 65535.
+  const limitFields = ['maxRetransmits', 'maxPacketLifeTime'] as const
+
+  /** A channel for an answerer, reporting `limits` as a platform binding might. */
+  function channelReporting(limits: {
+    ordered?: boolean
+    maxRetransmits?: number
+    maxPacketLifeTime?: number
+  }): FakeChannel {
+    const channel = new FakeChannel()
+    // Not `Object.assign(new FakeChannel(), limits)`: the fake's `null` limits and these numbers
+    // would intersect to `never`.
+    Object.assign(channel, limits)
+    channel.readyState = 'open'
+    return channel
+  }
+
+  /** Announce `channel` to a fresh answerer: `open`, or the code the link closed with. */
+  async function announcedToAnswerer(channel: FakeChannel): Promise<string> {
+    const { link, pc } = await fakeAnswerer()
+    announce(pc, channel)
+    try {
+      await link.waitOpen(100)
+      return 'open'
+    } catch (error) {
+      return (error as WebRTPayError).code
+    } finally {
+      link.close()
+    }
+  }
+
+  it.each(
+    limitFields.flatMap(field =>
+      [undefined, -1, 65535].map(value => [`${field} ${value}`, field, value] as const)
+    )
+  )('opens an answerer whose channel reports %s as its limit', async (_, field, value) => {
+    expect(await announcedToAnswerer(channelReporting({ [field]: value }))).toBe('open')
+  })
+
+  it.each([
+    ['Android', -1],
+    ['iOS', 65535]
+  ])(
+    'opens an answerer whose channel is what react-native-webrtc on %s reports',
+    async (_, unset) => {
+      const channel = channelReporting({
+        ordered: true,
+        maxRetransmits: unset,
+        maxPacketLifeTime: unset
+      })
+      expect(await announcedToAnswerer(channel)).toBe('open')
+    }
+  )
+
+  it.each(
+    limitFields.flatMap(field =>
+      [0, 1, 3, 65534, -2].map(value => [`${field} ${value}`, field, value] as const)
+    )
+  )(
+    'closes with protocol when the answerer is offered a channel with %s',
+    async (_, field, value) => {
+      expect(await announcedToAnswerer(channelReporting({ [field]: value }))).toBe('protocol')
+    }
+  )
+
+  it('closes with protocol when only one of the limits is unset', async () => {
+    const channel = channelReporting({ maxRetransmits: -1, maxPacketLifeTime: 3 })
+    expect(await announcedToAnswerer(channel)).toBe('protocol')
+  })
+
+  it('closes with protocol when the answerer is offered an unordered channel with unset limits', async () => {
+    const channel = channelReporting({ ordered: false, maxRetransmits: -1, maxPacketLifeTime: -1 })
+    expect(await announcedToAnswerer(channel)).toBe('protocol')
+  })
+
   it('closes with protocol when the offerer is offered a channel', async () => {
     const { link, pc } = await fakeOfferer()
     const closed = closeOf(link)
