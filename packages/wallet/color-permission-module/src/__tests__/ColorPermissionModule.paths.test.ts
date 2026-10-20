@@ -84,6 +84,128 @@ describe('ColorPermissionModule boundaries', () => {
     return { custody, output: { lockingScript, satoshis: 1, outputDescription: 'To myself' } }
   }
 
+  it('funds an AMM-style swap around a foreign pool input pinned at index 0', async () => {
+    const other = (await deployAsset(new FakeWallet(), provider, 1_000n)).assetId
+    await holdTokens(wallet, provider, other, [200n])
+    const pool = new FakeWallet()
+    const poolTx = (await tokenPayment(new FakeWallet(), pool, assetId, 1_000n)).tx
+    provider.admit(assetId, poolTx, 0)
+    wallet.store(poolTx, 0, 'foreign')
+    const poolOutpoint = `${poolTx.id('hex')}.0`
+    const inputBEEF = new Beef()
+    inputBEEF.mergeTransaction(poolTx)
+    const poolAsset = (await tokenPayment(pool, pool, assetId, 900n)).tx.outputs[0]
+    const poolOther = (await tokenPayment(pool, pool, other, 50n)).tx.outputs[0]
+    const { custody, output: mine } = await ownedOutput(100n)
+    const funded = await createAction({
+      labels: plan({
+        assets: [assetId, other],
+        ownedOutputs: [{ ...custody, outputIndex: 2 }],
+        operations: [
+          { assetId, operation: 'transfer' },
+          { assetId: other, operation: 'transfer' }
+        ],
+        inputPositions: [{ outpoint: poolOutpoint, index: 0 }]
+      }),
+      inputBEEF: inputBEEF.toBinary(),
+      inputs: [{ outpoint: poolOutpoint, unlockingScriptLength: 1, inputDescription: 'Pool' }],
+      outputs: [
+        { lockingScript: poolAsset.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pool' },
+        { lockingScript: poolOther.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pool' },
+        mine
+      ],
+      options: { randomizeOutputs: false }
+    })
+
+    expect(funded.inputs!.map(input => input.outpoint)[0]).toBe(poolOutpoint)
+    expect(funded.inputs).toHaveLength(2)
+    const amounts = funded.outputs!.map(output => [
+      OneColor.tokenIdToString(
+        OneColor.decode(LockingScript.fromHex(output.lockingScript)).tokenId!
+      ),
+      OneColor.decode(LockingScript.fromHex(output.lockingScript)).amount
+    ])
+    expect(amounts).toEqual([
+      [assetId, 900n],
+      [other, 50n],
+      [assetId, 100n],
+      [other, 150n]
+    ])
+    expect(funded.outputs![2]).toMatchObject({ basket: assetBasket(assetId, 'value') })
+
+    const created = await wallet.createAction(funded)
+    const signable = created.signableTransaction!
+    const action = {
+      reference: signable.reference,
+      transaction: Transaction.fromAtomicBEEF(signable.tx),
+      noSend: false
+    }
+    const signed = (
+      await module.onRequest({
+        method: 'signAction',
+        args: { reference: signable.reference, spends: {} },
+        originator: APP,
+        action
+      })
+    ).args as { spends: Record<number, { unlockingScript: string }> }
+    expect(Object.keys(signed.spends)).toEqual(['1'])
+
+    provider.spend(poolOutpoint)
+    await expect(
+      module.onRequest({
+        method: 'signAction',
+        args: { reference: signable.reference, spends: {} },
+        originator: APP,
+        action
+      })
+    ).rejects.toThrow('no longer spendable')
+  })
+
+  it('refuses a foreign token input its overlay has not admitted', async () => {
+    const poolTx = (await tokenPayment(new FakeWallet(), new FakeWallet(), assetId, 1_000n)).tx
+    const poolOutpoint = `${poolTx.id('hex')}.0`
+    const inputBEEF = new Beef()
+    inputBEEF.mergeTransaction(poolTx)
+    await expect(
+      createAction({
+        inputBEEF: inputBEEF.toBinary(),
+        inputs: [{ outpoint: poolOutpoint, unlockingScriptLength: 1, inputDescription: 'Pool' }],
+        outputs: [(await ownedOutput(1_000n)).output]
+      })
+    ).rejects.toThrow('not admitted and unspent')
+  })
+
+  it('places token change at a pinned output index', async () => {
+    await holdTokens(wallet, provider, assetId, [300n])
+    const recipient = await tokenPayment(wallet, new FakeWallet(), assetId, 100n)
+    const output = {
+      lockingScript: recipient.tx.outputs[0].lockingScript.toHex(),
+      satoshis: 1,
+      outputDescription: 'Payment'
+    }
+    const funded = await createAction({
+      labels: plan({ changePositions: [{ assetId, index: 0 }] }),
+      outputs: [output],
+      options: { randomizeOutputs: false }
+    })
+    expect(funded.outputs![0]).toMatchObject({ basket: assetBasket(assetId, 'value') })
+    expect(funded.outputs![1].lockingScript).toBe(output.lockingScript)
+
+    await expect(
+      createAction({
+        labels: plan({ changePositions: [{ assetId, index: 5 }] }),
+        outputs: [output],
+        options: { randomizeOutputs: false }
+      })
+    ).rejects.toThrow('cannot be satisfied')
+    await expect(
+      createAction({
+        labels: plan({ changePositions: [{ assetId, index: 0 }] }),
+        outputs: [output]
+      })
+    ).rejects.toThrow('randomizeOutputs false')
+  })
+
   it('is constructed only with its dependencies', () => {
     expect(() => new ColorPermissionModule({} as never)).toThrow('wallet is required')
     expect(() => new ColorPermissionModule({ wallet: wallet.asWallet() } as never)).toThrow(
@@ -198,7 +320,7 @@ describe('ColorPermissionModule boundaries', () => {
 
   it.each([
     [
-      'explicit inputs',
+      'a foreign input without its source transaction',
       async () => ({
         inputs: [
           {
@@ -208,7 +330,7 @@ describe('ColorPermissionModule boundaries', () => {
           }
         ]
       }),
-      'explicit inputs'
+      'inputBEEF'
     ],
     [
       'plan constraints',

@@ -73,9 +73,15 @@ The module fails explicitly, rather than falling back, on:
 - BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
-- `tokenProofs`, `profileData` entries, plan position constraints and
-  signature-type overrides;
-- explicit inputs in a `createAction` with a plan.
+- `tokenProofs`, `profileData` entries, `sighashTypes` overrides and
+  satoshi change positions (`changePositions` with a null `assetId`);
+- explicit inputs together with a BRC-177 handoff.
+
+Explicit inputs are supported: this wallet's `p color` outputs are signed by the
+module, and foreign token inputs (with their source in `inputBEEF`) count only
+once their asset's overlay admits them. `inputPositions` and token
+`changePositions` are honored; change positions need
+`options.randomizeOutputs: false`.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure.
