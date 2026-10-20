@@ -221,6 +221,9 @@ const BRC205_MAX_VALUE_BYTES = 256
 const BRC205_MAX_ATTRIBUTES = 24
 const BRC205_MAX_BYTES = 2048
 
+/** UTF-16 code-unit order: locale-independent, so the advertised attribute order is stable everywhere. */
+const compareCodeUnits = (a: string, b: string): number => Number(a > b) - Number(a < b)
+
 /**
  * Appends the BRC-205 capability attributes of `modules` to a wallet version string:
  * `base; key=value; key2=value2;`, one space after every nonterminal semicolon, no spaces around
@@ -242,9 +245,9 @@ export function withBrc205Capabilities(version: string, modules: Readonly<Record
           .filter(attribute => attribute !== '')
   const keys = new Set(attributes.map(attribute => attribute.split('=')[0]))
   let added = 0
-  for (const scheme of Object.keys(modules).sort()) {
+  for (const scheme of Object.keys(modules).sort(compareCodeUnits)) {
     const capabilities = modules[scheme]?.capabilities ?? {}
-    for (const key of Object.keys(capabilities).sort()) {
+    for (const key of Object.keys(capabilities).sort(compareCodeUnits)) {
       const value = capabilities[key]
       if (
         !BRC205_KEY.test(key) ||
@@ -257,10 +260,11 @@ export function withBrc205Capabilities(version: string, modules: Readonly<Record
       ) {
         continue
       }
-      const candidate = `${base}; ${[...attributes, `${key}=${value}`].join('; ')};`
+      const attribute = `${key}=${value}`
+      const candidate = `${base}; ${[...attributes, attribute].join('; ')};`
       if (candidate.length > BRC205_MAX_BYTES) continue
       keys.add(key)
-      attributes.push(`${key}=${value}`)
+      attributes.push(attribute)
       added++
     }
   }
