@@ -304,6 +304,42 @@ describe('ColorPermissionModule', () => {
       ).rejects.toThrow('insufficient spendable balance')
     })
 
+    it('resubmits a held output its overlay does not report, then spends it', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const outpoint = `${held.id('hex')}.0`
+      provider.current.delete(outpoint)
+      const result = await send({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(Transaction.fromAtomicBEEF(result.tx!).inputs[0].sourceTransaction!.id('hex')).toBe(
+        held.id('hex')
+      )
+      expect(provider.submissions[0]).toEqual({
+        topics: [colorTopic(assetId)],
+        txid: held.id('hex')
+      })
+    })
+
+    it('tries a failed submission again before reporting it', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const submit = provider.submit
+      let failures = 2
+      provider.submit = async (topics, beef) => {
+        if (failures-- > 0) throw new Error('overlay unavailable')
+        return await submit(topics, beef)
+      }
+      const result = await send({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(provider.submissions.map(submission => submission.txid)).toEqual([
+        Transaction.fromAtomicBEEF(result.tx!).id('hex')
+      ])
+      failures = 3
+      await expect(
+        send({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 50n)] })
+      ).rejects.toThrow('overlay unavailable')
+    })
+
     it('refuses to sign an input that stopped being spendable after createAction', async () => {
       const [held] = await holdTokens(wallet, provider, assetId, [300n])
       const funded = (

@@ -85,6 +85,7 @@ const DEFAULT_SIGHASH = TransactionSignature.SIGHASH_ALL | TransactionSignature.
 const MAX_ENVELOPE_BYTES = 16 * 1024 * 1024
 const MAX_RECEIPT_INSTRUCTION_BYTES = 1000
 const LIST_PAGE_LIMIT = 10_000
+const SUBMIT_ATTEMPTS = 3
 const NOSEND_EXPIRY_LABEL_PREFIX = 'p nosend expiry '
 const STATE_TAG_PREFIX = 'color_state_'
 const UTF8 = new TextEncoder()
@@ -500,6 +501,25 @@ function tokenSources(
       }
     ]
   })
+}
+
+/**
+ * The existing assets among a transaction's token inputs (read from `inputs`, which carries their
+ * sources) and outputs, and whether output 0 is a deploy: the topics it is submitted to.
+ */
+function submissionAssets(
+  tx: Transaction,
+  inputs: Transaction = tx
+): { assetIds: string[]; deploy: boolean } {
+  const txid = tx.id('hex')
+  const outputs = tx.outputs.map((output, vout) =>
+    tryReadTokenOutput(output.lockingScript, { txid, vout })
+  )
+  const assetIds = new Set([
+    ...tokenSources(inputs, new Set()).map(input => input.assetId),
+    ...outputs.flatMap(token => (token === undefined || token.deploy ? [] : [token.assetId]))
+  ])
+  return { assetIds: [...assetIds], deploy: outputs[0]?.deploy === true }
 }
 
 /** Runs one input's unlocking script against its source output; throws when it does not unlock. */
@@ -1009,7 +1029,12 @@ export class ColorPermissionModule implements PermissionsModule {
       if (managed === undefined)
         throw new Error('BRC-207: an explicit p color input is not a managed token output')
       await this.#assertSupportedAsset(managed.assetId)
-      if (!(await this.#spendable(managed.assetId, [managed])).has(managed.outpoint))
+      if (
+        !(await this.#spendable(managed.assetId, [managed])).has(managed.outpoint) &&
+        !(await this.#resubmitHeld(managed.assetId, managed.role, [managed], originator)).has(
+          managed.outpoint
+        )
+      )
         throw new Error('BRC-207: an explicit p color input is not admitted and unspent')
       explicit.managed.push(managed)
       const totals = holding(explicit.holdings, managed.assetId, emptyExplicitHolding)
@@ -1347,11 +1372,52 @@ export class ColorPermissionModule implements PermissionsModule {
       if (unreadable.length > 0) continue
       const selected = inputs as ManagedInput[]
       const admitted = await this.#spendable(assetId, selected)
-      const missing = selected.filter(input => !admitted.has(input.outpoint))
+      const unlisted = selected.filter(input => !admitted.has(input.outpoint))
+      const recovered = await this.#resubmitHeld(assetId, role, unlisted, originator)
+      const missing = unlisted.filter(input => !recovered.has(input.outpoint))
       if (missing.length === 0) return selected
       for (const input of missing) rejected.add(input.outpoint)
       this.#release(reserved, missing)
     }
+  }
+
+  /**
+   * Resubmits the wallet's own copies of the transactions behind held outputs that the overlay
+   * does not report, as BTMS does when it selects, and returns the outputs it then admits.
+   */
+  async #resubmitHeld(
+    assetId: string,
+    role: TokenRole,
+    outputs: readonly SourceOutput[],
+    originator: string
+  ): Promise<Set<string>> {
+    if (outputs.length === 0) return new Set()
+    const txids = new Set(outputs.map(output => parseOutpoint(output.outpoint).txid))
+    const beef = new Beef()
+    for (let offset = 0; [...txids].some(txid => beef.findTxid(txid) === undefined);) {
+      const page = await this.#wallet.listOutputs(
+        {
+          basket: assetBasket(assetId, role),
+          include: 'entire transactions',
+          limit: LIST_PAGE_LIMIT,
+          offset
+        },
+        originator
+      )
+      if (page.BEEF !== undefined) beef.mergeBeef(page.BEEF)
+      offset += page.outputs.length
+      if (page.outputs.length < LIST_PAGE_LIMIT) break
+    }
+    await eachInOrder(txids, async txid => {
+      if (beef.findTxid(txid) === undefined) return
+      const atomic = beef.toBinaryAtomic(txid)
+      const { assetIds, deploy } = submissionAssets(Transaction.fromAtomicBEEF(atomic))
+      // A refused resubmission leaves the output unlisted; the spendability check decides.
+      await this.#provider
+        .submit([...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)], atomic)
+        .catch(() => undefined)
+    })
+    return await this.#spendable(assetId, outputs)
   }
 
   /** One basket's token outputs of the asset, read from their locking scripts, excluding selected ones. */
@@ -1610,24 +1676,28 @@ export class ColorPermissionModule implements PermissionsModule {
    */
   async #submitSigned(result: SignActionResult, template: Transaction): Promise<void> {
     if (result?.tx === undefined) return
-    const tx = Transaction.fromAtomicBEEF(result.tx)
-    const txid = tx.id('hex')
-    const outputs = tx.outputs.map((output, vout) =>
-      tryReadTokenOutput(output.lockingScript, { txid, vout })
-    )
-    const deploy = outputs[0]?.deploy === true
-    const assetIds = new Set([
-      ...tokenSources(template, new Set()).map(input => input.assetId),
-      ...outputs.flatMap(token => (token === undefined || token.deploy ? [] : [token.assetId]))
-    ])
-    if (assetIds.size > 0 || deploy) await this.#submit([...assetIds], result.tx, deploy)
+    const { assetIds, deploy } = submissionAssets(Transaction.fromAtomicBEEF(result.tx), template)
+    if (assetIds.length > 0 || deploy) await this.#submit(assetIds, result.tx, deploy)
+  }
+
+  /** Submits a transaction, trying again up to `SUBMIT_ATTEMPTS` times before reporting the failure. */
+  async #submit(assetIds: string[], beef: AtomicBEEF, deploy = false): Promise<void> {
+    let failure: unknown
+    for (let attempt = 0; attempt < SUBMIT_ATTEMPTS; attempt++) {
+      try {
+        return await this.#submitOnce(assetIds, beef, deploy)
+      } catch (error) {
+        failure = error
+      }
+    }
+    throw failure
   }
 
   /**
    * Submits to each asset topic, and a deploy to the discovery topic, and fails unless every
    * token output is admitted. A deploy's own asset must then be admitted by its asset overlay.
    */
-  async #submit(assetIds: string[], beef: AtomicBEEF, deploy = false): Promise<void> {
+  async #submitOnce(assetIds: string[], beef: AtomicBEEF, deploy: boolean): Promise<void> {
     const tx = Transaction.fromAtomicBEEF(beef)
     const txid = tx.id('hex')
     const topics = [...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)]

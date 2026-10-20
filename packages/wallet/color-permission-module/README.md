@@ -55,7 +55,9 @@ Call `color.dispose()` when the host tears down the wallet.
   `signAction` it checks the funded transaction against the plan, asks the user
   to approve it (`color_send`: every asset leg, satoshi totals and fee, the
   signatures it releases), signs the token inputs with any `sighashTypes`
-  override and submits the processed transaction to each asset topic.
+  override and submits the processed transaction to each asset topic, trying up
+  to three times. As in BTMS, a held output the overlay does not report is
+  resubmitted from the wallet's copy of its transaction when it is selected.
 - **Mint, burn and authority operations**: the plan declares exactly the
   operations BRC-207 derives from the transaction (`mint`, `burn`,
   `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are

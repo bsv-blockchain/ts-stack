@@ -286,6 +286,29 @@ describe('ColorPermissionModule boundaries', () => {
     await expect(wallet.signAction(signed)).resolves.toMatchObject({ txid: expect.any(String) })
   })
 
+  it('resubmits an explicit managed input its overlay does not report', async () => {
+    const [held] = await holdTokens(wallet, provider, assetId, [300n])
+    const outpoint = `${held.id('hex')}.0`
+    provider.current.delete(outpoint)
+    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 300n)).tx.outputs[0]
+    const funded = await createAction({
+      inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'Mine' }],
+      outputs: [
+        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+      ]
+    })
+    expect(funded.inputs!.map(input => input.outpoint)).toEqual([outpoint])
+    provider.spend(outpoint)
+    await expect(
+      createAction({
+        inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'Mine' }],
+        outputs: [
+          { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+        ]
+      })
+    ).rejects.toThrow('not admitted and unspent')
+  })
+
   it('checks at signAction a token input the wallet resolved without inputBEEF', async () => {
     await holdTokens(wallet, provider, assetId, [300n])
     const extra = (await tokenPayment(new FakeWallet(), wallet, assetId, 50n)).tx

@@ -231,8 +231,12 @@ export class FakeProvider {
     }
   }
 
+  /** Spent outputs are never admitted again. */
+  readonly spent = new Set<string>()
+
   spend(outpoint: string): void {
     this.current.delete(outpoint)
+    this.spent.add(outpoint)
   }
 
   spendability = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> =>
@@ -259,7 +263,8 @@ export class FakeProvider {
             readTokenOutput(output.lockingScript, { txid, vout })?.assetId === assetId ? [vout] : []
           )
       if (topic !== DISCOVERY_TOPIC || this.seedDeploys)
-        for (const vout of outputsToAdmit) this.admit(assetId, tx, vout)
+        for (const vout of outputsToAdmit)
+          if (!this.spent.has(`${txid}.${vout}`)) this.admit(assetId, tx, vout)
       steak[topic] = { outputsToAdmit, coinsToRetain: [] }
     }
     return steak
