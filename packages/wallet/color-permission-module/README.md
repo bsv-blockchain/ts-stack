@@ -91,8 +91,7 @@ The module fails explicitly, rather than falling back, on:
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
 - `profileData` entries;
-- explicit inputs together with a BRC-177 handoff;
-- non-final (time-locked) transactions.
+- explicit inputs together with a BRC-177 handoff.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits
@@ -107,7 +106,8 @@ action. It relies on overlay admission and spendability. Plans, signature
 envelopes and receipt instructions have no `tokenProofs` member.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
-exposure.
+exposure. BRC-207's non-final transaction rules are not implemented; such
+transactions follow the wallet's existing behavior.
 
 ## Verification
 

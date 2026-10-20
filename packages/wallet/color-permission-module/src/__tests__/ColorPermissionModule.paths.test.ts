@@ -273,28 +273,6 @@ describe('ColorPermissionModule boundaries', () => {
     expect(Object.keys(signed.spends)).toEqual(['0'])
   })
 
-  it('refuses to approve or sign a non-final action', async () => {
-    await holdTokens(wallet, provider, assetId, [300n])
-    const prompts: string[] = []
-    module = createModule(wallet, provider, async (_app, message) => {
-      prompts.push(message)
-      return true
-    })
-    const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
-    const funded = await createAction({
-      outputs: [
-        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
-      ]
-    })
-    await expect(
-      signAction(funded, tx => {
-        tx.lockTime = 900_000
-        tx.inputs[0].sequence = 0
-      })
-    ).rejects.toThrow('non-final transactions are not supported')
-    expect(prompts).toEqual([])
-  })
-
   it('signs a managed input with its sighash override', async () => {
     const [held] = await holdTokens(wallet, provider, assetId, [300n])
     const outpoint = `${held.id('hex')}.0`
@@ -576,7 +554,7 @@ describe('ColorPermissionModule boundaries', () => {
     await expect(createAction(await build())).rejects.toThrow(message)
   })
 
-  it('rejects receipts with action labels or a non-final transaction', async () => {
+  it('rejects receipts with action labels or a non-asset basket', async () => {
     const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 5n)
     provider.admit(assetId, tx, 0)
     const outputs = [
@@ -604,20 +582,6 @@ describe('ColorPermissionModule boundaries', () => {
       originator: APP
     })
     expect((received.args as { labels: string[] }).labels).toEqual(['invoice'])
-    const nonFinal = new Transaction(1, [], [tx.outputs[0]], 500)
-    nonFinal.addInput({
-      sourceTransaction: tx,
-      sourceOutputIndex: 0,
-      sequence: 0,
-      unlockingScript: new UnlockingScript()
-    })
-    await expect(
-      module.onRequest({
-        method: 'internalizeAction',
-        args: { tx: nonFinal.toAtomicBEEF(), outputs, description: 'Receive tokens' },
-        originator: APP
-      })
-    ).rejects.toThrow('non-final')
     await expect(
       module.onRequest({
         method: 'internalizeAction',
@@ -807,12 +771,6 @@ describe('ColorPermissionModule boundaries', () => {
     await expect(
       module.handleRequest(request({ profileData: { 'x:y': {} } }), next)
     ).rejects.toThrow('does not require')
-    const timeLocked = Transaction.fromAtomicBEEF(spend.toAtomicBEEF())
-    timeLocked.lockTime = 900_000
-    timeLocked.inputs[0].sequence = 0
-    await expect(
-      module.handleRequest(request({ tx: Array.from(timeLocked.toAtomicBEEF()) }), next)
-    ).rejects.toThrow('non-final transactions are not supported')
     await expect(module.handleRequest(request({ inputIndex: 1 }), next)).rejects.toThrow(
       'source transaction'
     )

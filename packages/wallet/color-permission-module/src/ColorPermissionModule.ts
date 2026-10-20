@@ -191,17 +191,6 @@ function selectsAsset(selector: string, token: TokenOutput): boolean {
   return selector === ISSUE ? token.deploy : !token.deploy && selector === token.assetId
 }
 
-/**
- * Rejects a transaction that may not be consensus-final; non-final (time-locked) transactions are
- * not supported. Without the chain context a lock time is judged against, any nonzero lock time
- * with a non-final sequence fails.
- */
-function assertFinal(tx: Transaction): void {
-  if (tx.lockTime !== 0 && tx.inputs.some(input => (input.sequence ?? 0xffffffff) !== 0xffffffff)) {
-    throw new Error('BRC-207: non-final transactions are not supported')
-  }
-}
-
 /** One asset's token units and authority outputs on one side of a transaction. */
 interface Holding {
   value: bigint
@@ -876,7 +865,6 @@ export class ColorPermissionModule implements PermissionsModule {
       )
     }
     const tx = Transaction.fromAtomicBEEF(args.tx)
-    assertFinal(tx)
     const receipts = args.outputs.flatMap(output => {
       const remittance = output.insertionRemittance
       return output.protocol === 'basket insertion' &&
@@ -1638,7 +1626,6 @@ export class ColorPermissionModule implements PermissionsModule {
     if (createArgs === undefined || plan === undefined)
       throw new Error("BRC-207: signAction needs the action's p color createAction arguments")
     const tx = action.transaction
-    assertFinal(tx)
     const tokens = transactionTokens(tx)
     assertTransactionOperations(plan, tokens)
     const satoshiChange = plan.changePositions.find(position => position.assetId === null)
@@ -1792,7 +1779,6 @@ export class ColorPermissionModule implements PermissionsModule {
     const tx = Transaction.fromAtomicBEEF(
       jsonByteArray(envelope.tx, 'signature envelope tx', MAX_ENVELOPE_BYTES)
     )
-    assertFinal(tx)
     const inputIndex = jsonUint32(envelope.inputIndex, 'signature envelope inputIndex')
     const sighashType = jsonUint32(envelope.sighashType, 'signature envelope sighashType')
     if (sighashType > 255) throw new Error('BRC-207: sighashType must be in 0..255')
