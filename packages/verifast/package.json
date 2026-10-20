@@ -101,7 +101,7 @@
     "ts-loader": "^9.6.2",
     "tsx": "^4.23.13",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.4"
   },
   "peerDependencies": {
     "@bsv/sdk": "^2.1.8 || ^3.0.0"
