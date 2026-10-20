@@ -58,8 +58,10 @@ Call `color.dispose()` when the host tears down the wallet.
   to approve it (`color_send`: every asset leg, satoshi totals and fee, the
   signatures it releases), signs the token inputs with any `sighashTypes`
   override and submits the processed transaction to each asset topic, trying up
-  to three times. As in BTMS, a held output the overlay does not report is
-  resubmitted from the wallet's copy of its transaction when it is selected.
+  to three times. As in BTMS, an accepted submission completes the action: an
+  output the overlay then does not admit shows as pending, and a held output
+  the overlay does not report is resubmitted from the wallet's copy of its
+  transaction when it is selected.
 - **Mint, burn and authority operations**: the plan declares exactly the
   operations BRC-207 derives from the transaction (`mint`, `burn`,
   `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are
@@ -68,9 +70,8 @@ Call `color.dispose()` when the host tears down the wallet.
 - **Deploy**: a BRC-162 deploy at output 0 with `ISSUE` in `plan.assets` and
   its remittance in `plan.ownedOutputs`.
   Once signed, an owned deploy is filed in its asset's value or authority
-  basket (keeping its `ISSUE` key), then submitted to `tm_color`; the call
-  fails while `tm_color_<assetId>` has not admitted it, and the deploy stays
-  pending in the inventory.
+  basket (keeping its `ISSUE` key), then submitted to `tm_color`; it stays
+  pending in the inventory until `tm_color_<assetId>` admits it.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
   split to the exact amount, after a separate prompt that shows its fee.

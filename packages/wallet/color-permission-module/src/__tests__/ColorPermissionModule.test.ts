@@ -394,12 +394,39 @@ describe('ColorPermissionModule', () => {
       ).rejects.toThrow('no longer spendable')
     })
 
-    it('reports an overlay that does not admit the processed transaction', async () => {
+    it('completes a send its overlay accepts but does not admit; the change shows as pending', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
       provider.rejectSubmissions = true
+      const { txid } = await send({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(provider.submissions).toEqual([{ topics: [colorTopic(assetId)], txid }])
+      const inventory = (await module.handleRequest(
+        {
+          method: 'listOutputs',
+          args: { basket: 'p color assets', includeTags: true },
+          originator: APP
+        },
+        async () => {
+          throw new Error('not forwarded')
+        }
+      )) as ListOutputsResult
+      expect(inventory.outputs).toEqual([
+        expect.objectContaining({ outpoint: `${txid}.1`, tags: ['color_state_pending'] })
+      ])
+    })
+
+    it('reports a provider that refuses the submission three times', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      let attempts = 0
+      provider.submit = async () => {
+        attempts++
+        throw new Error('overlay unavailable')
+      }
       await expect(
         send({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
-      ).rejects.toThrow('needs reconciliation')
+      ).rejects.toThrow('overlay unavailable')
+      expect(attempts).toBe(3)
     })
 
     it('holds the outputs it chose while checking them, so a concurrent send cannot take them', async () => {

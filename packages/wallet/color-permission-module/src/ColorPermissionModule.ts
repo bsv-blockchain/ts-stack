@@ -1793,56 +1793,25 @@ export class ColorPermissionModule implements PermissionsModule {
     if (assetIds.length > 0 || deploy) await this.submit(assetIds, result.tx, deploy)
   }
 
-  /** Submits a transaction, trying again up to `SUBMIT_ATTEMPTS` times before reporting the failure. */
+  /**
+   * Submits a transaction to each asset topic, and a deploy to the discovery topic, trying again
+   * up to `SUBMIT_ATTEMPTS` times before reporting the provider's failure. As in BTMS, an accepted
+   * submission completes the action: every token input was overlay-checked and the plan verified
+   * before signing, so an output the overlay then does not admit shows as pending in the
+   * inventory and is resubmitted when it is next selected.
+   */
   protected async submit(assetIds: string[], beef: AtomicBEEF, deploy = false): Promise<void> {
+    const topics = [...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)]
     let failure: unknown
     for (let attempt = 0; attempt < SUBMIT_ATTEMPTS; attempt++) {
       try {
-        return await this.submitOnce(assetIds, beef, deploy)
+        await this.provider.submit(topics, Array.from(beef))
+        return
       } catch (error) {
         failure = error
       }
     }
     throw failure
-  }
-
-  /**
-   * Submits to each asset topic, and a deploy to the discovery topic, and fails unless every
-   * token output is admitted. A deploy's own asset must then be admitted by its asset overlay.
-   */
-  protected async submitOnce(assetIds: string[], beef: AtomicBEEF, deploy: boolean): Promise<void> {
-    const tx = Transaction.fromAtomicBEEF(beef)
-    const txid = tx.id('hex')
-    const topics = [...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)]
-    const steak = await this.provider.submit(topics, Array.from(beef))
-    for (const assetId of assetIds) {
-      const admitted = steak?.[colorTopic(assetId)]?.outputsToAdmit ?? []
-      const missing = tx.outputs
-        .map((output, vout) => ({
-          token: readSentToken(output.lockingScript, { txid, vout }),
-          vout
-        }))
-        .filter(({ token, vout }) => token?.assetId === assetId && !admitted.includes(vout))
-        .map(({ vout }) => vout)
-      if (missing.length > 0) {
-        throw new Error(
-          `BRC-207: ${colorTopic(assetId)} did not admit outputs ${missing.join(', ')} of ${txid}; ` +
-            'the transaction was processed and its overlay state needs reconciliation'
-        )
-      }
-    }
-    if (!deploy) return
-    if (!(steak?.[DISCOVERY_TOPIC]?.outputsToAdmit ?? []).includes(0))
-      throw new Error(`BRC-207: ${DISCOVERY_TOPIC} did not admit the deploy of ${txid}`)
-    const output = tx.outputs[0]
-    const outpoint = outpointString(txid, 0)
-    const admitted = await this.spendable(`${txid}_0`, [
-      { outpoint, lockingScript: output.lockingScript, satoshis: output.satoshis ?? 0 }
-    ])
-    if (!admitted.has(outpoint))
-      throw new Error(
-        `BRC-207: deployment ${txid} was processed; its per-asset admission remains pending`
-      )
   }
 
   /* ----------------------------------------------------------------------

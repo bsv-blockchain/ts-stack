@@ -602,17 +602,16 @@ describe('ColorPermissionModule token operations', () => {
     it('files a deploy its asset overlay has not admitted yet as pending', async () => {
       provider.seedDeploys = false
       const deploy = await owned('', ISSUE, 0n, 0)
-      await expect(
-        run({
-          labels: labels(
-            [ISSUE],
-            [{ assetId: ISSUE, operation: 'deploy-authority' }],
-            [deploy.remittance]
-          ),
-          outputs: deploy.output,
-          options: { randomizeOutputs: false }
-        })
-      ).rejects.toThrow('per-asset admission remains pending')
+      const tx = await run({
+        labels: labels(
+          [ISSUE],
+          [{ assetId: ISSUE, operation: 'deploy-authority' }],
+          [deploy.remittance]
+        ),
+        outputs: deploy.output,
+        options: { randomizeOutputs: false }
+      })
+      expect(provider.submissions).toEqual([{ topics: [DISCOVERY_TOPIC], txid: tx.id('hex') }])
       const [outpoint, stored] = [...wallet.outputs].find(([, output]) => output.vout === 0)!
       expect(stored.basket).toBe(assetBasket(`${outpoint.slice(0, 64)}_0`, 'authority'))
       const inventory = (await module.handleRequest(
