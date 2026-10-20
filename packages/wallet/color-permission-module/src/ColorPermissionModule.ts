@@ -13,6 +13,7 @@ import {
   type CreateActionOutput,
   type CreateSignatureArgs,
   type InternalizeActionArgs,
+  type ListActionsArgs,
   type ListOutputsArgs,
   type ListOutputsResult,
   type SignActionArgs,
@@ -886,9 +887,14 @@ export class ColorPermissionModule implements PermissionsModule {
         await this.internalizeAction(args, req.originator)
         return { args: { ...args, labels: withoutProofLabels(args.labels ?? []) } }
       }
-      case 'listActions':
-        await this.authorizeRead(req.originator)
-        return { args: req.args }
+      case 'listActions': {
+        const args = req.args as ListActionsArgs
+        await this.authorizeRead(req.originator, {
+          labels: (args.labels ?? []).filter(label => label.startsWith(COLOR_BASKET_NAMESPACE)),
+          seekPermission: args.seekPermission !== false
+        })
+        return { args }
+      }
       default:
         throw new Error(`BRC-207: ${req.method} is not available in the p color namespace`)
     }
@@ -1939,17 +1945,19 @@ export class ColorPermissionModule implements PermissionsModule {
     originator: string,
     next: PermissionsModuleNext
   ): Promise<unknown> {
+    const seekPermission = args.seekPermission !== false
     if (args.basket === ASSETS_SELECTOR) {
-      await this.authorizeRead(originator)
+      await this.authorizeRead(originator, { basket: args.basket, seekPermission })
       return await this.inventory(args, originator)
     }
     const balance = parseBalanceSelector(args.basket)
     if (balance !== undefined) {
-      await this.authorizeRead(originator)
+      await this.authorizeRead(originator, { basket: args.basket, ...balance, seekPermission })
       return await this.balance(balance.assetId, balance.role, args, originator)
     }
-    if (parseAssetBasket(args.basket) !== undefined) {
-      await this.authorizeRead(originator)
+    const held = parseAssetBasket(args.basket)
+    if (held !== undefined) {
+      await this.authorizeRead(originator, { basket: args.basket, ...held, seekPermission })
       return await next(args)
     }
     throw new Error('BRC-207: unknown p color basket selector')
@@ -2318,7 +2326,12 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /** Every `p color` read asks the host; the host decides whether an existing grant covers it. */
-  protected async authorizeRead(originator: string): Promise<void> {
-    await this.approve(originator, { type: 'color_access' })
+  /**
+   * Asks the host to approve a read, naming what is read: the `basket` requested (with the
+   * `assetId` and `role` of a balance or holdings read) or the `p color` `labels` of a
+   * listActions, and the caller's `seekPermission`.
+   */
+  protected async authorizeRead(originator: string, read: Record<string, unknown>): Promise<void> {
+    await this.approve(originator, { type: 'color_access', ...read })
   }
 }

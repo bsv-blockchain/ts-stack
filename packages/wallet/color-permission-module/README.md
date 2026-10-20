@@ -41,9 +41,11 @@ which overlays it trusts:
 
 `requestTokenAccess` receives a JSON message whose `type` is `color_send`,
 `color_signature`, `color_access` (a read) or `color_relinquish`,
-and returns true to approve. The module asks on every operation and keeps no
-grants; the host decides whether an existing grant covers a request and when to
-prompt the user.
+and returns true to approve. A `color_access` names the `basket` read (with
+`assetId` and `role` for a balance or holdings basket) or the `p color`
+`labels` of a `listActions`, and the caller's `seekPermission`. The module asks
+on every operation and keeps no grants; the host decides whether an existing
+grant covers a request and when to prompt the user.
 
 Call `color.dispose()` when the host tears down the wallet.
 

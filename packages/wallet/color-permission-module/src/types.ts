@@ -18,6 +18,11 @@ export interface ColorOverlayProvider {
  * `color_send`, `color_signature`, `color_access` (a read) or
  * `color_relinquish`. Resolves true only when approved.
  *
+ * A `color_access` names what is read, as the permissions manager's requests do: the `basket`
+ * requested (`p color assets`, `p color balance <tag>[ authority]` or `p color <tag>[ authority]`,
+ * the latter two with `assetId` and `role`) or the `p color` `labels` of a listActions, and the
+ * caller's `seekPermission`.
+ *
  * The module asks on every operation and keeps no grants. The host decides whether an
  * existing grant covers a request, how long grants last, and whether to prompt the user.
  */

@@ -47,7 +47,9 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 answers the BRC-207 `color-spendability` and `color-admission` queries and
 submits transactions to `tm_color_<assetId>`; the host decides which overlays
 it trusts. `requestTokenAccess` shows the user each token send,
-signature request and inventory read, and returns true to approve.
+signature request and read (`color_access` names the basket, asset and role or
+the `p color` labels read, and the caller's `seekPermission`), and returns true
+to approve.
 
 ## Application calls
 

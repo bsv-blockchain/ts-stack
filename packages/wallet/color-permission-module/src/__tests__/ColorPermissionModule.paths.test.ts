@@ -14,7 +14,7 @@ import { OneColor } from '@bsv/templates'
 import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { createColorModule } from '../index.js'
-import { assetBasket, COLOR_KEY_ID, colorProtocolID, ISSUE } from '../identifiers.js'
+import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID, ISSUE } from '../identifiers.js'
 import {
   createModule,
   deployAsset,
@@ -411,15 +411,49 @@ describe('ColorPermissionModule boundaries', () => {
     })
   })
 
-  it('asks the host on every read and denies a declined one', async () => {
-    const answers = [true, false]
-    const reader = createModule(wallet, provider, async () => answers.shift()!)
+  it('asks the host on every read, naming what is read, and denies a declined one', async () => {
+    const answers = [true, true, true, false]
+    const asked: Array<Record<string, unknown>> = []
+    const reader = createModule(wallet, provider, async (_app, message) => {
+      asked.push(JSON.parse(message))
+      return answers.shift()!
+    })
     const read = {
       method: 'listOutputs',
-      args: { basket: assetBasket(assetId, 'value') },
+      args: { basket: assetBasket(assetId, 'value'), seekPermission: false },
       originator: APP
     }
     await expect(reader.handleRequest(read, next)).resolves.toBeDefined()
+    await reader.handleRequest(
+      {
+        method: 'listOutputs',
+        args: { basket: `p color balance ${assetTag(assetId)} authority` },
+        originator: APP
+      },
+      next
+    )
+    await reader.onRequest({
+      method: 'listActions',
+      args: { labels: ['p color plan 0 1 7b7d', 'other'], seekPermission: false },
+      originator: APP
+    })
+    expect(asked).toEqual([
+      {
+        type: 'color_access',
+        basket: assetBasket(assetId, 'value'),
+        assetId,
+        role: 'value',
+        seekPermission: false
+      },
+      {
+        type: 'color_access',
+        basket: `p color balance ${assetTag(assetId)} authority`,
+        assetId,
+        role: 'authority',
+        seekPermission: true
+      },
+      { type: 'color_access', labels: ['p color plan 0 1 7b7d'], seekPermission: false }
+    ])
     await expect(reader.handleRequest(read, next)).rejects.toThrow(
       'declined the color_access request'
     )

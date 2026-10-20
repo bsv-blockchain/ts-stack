@@ -941,7 +941,10 @@ describe('ColorPermissionModule', () => {
         notForwarded
       )) as ListOutputsResult
       expect(filtered.outputs.map(output => output.outpoint)).toEqual([`${reserved.id('hex')}.0`])
-      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_access', 'color_access'])
+      expect(prompts.map(prompt => prompt.request)).toEqual([
+        { type: 'color_access', basket: 'p color assets', seekPermission: true },
+        { type: 'color_access', basket: 'p color assets', seekPermission: true }
+      ])
     })
 
     it('decrypts custody only for the inventory page it returns', async () => {
