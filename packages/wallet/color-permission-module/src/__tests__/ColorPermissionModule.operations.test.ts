@@ -4,6 +4,7 @@ import {
   type CreateActionArgs,
   type CreateActionOutput,
   type CreateActionResult,
+  type ListOutputsResult,
   type SignActionResult
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
@@ -124,7 +125,7 @@ describe('ColorPermissionModule token operations', () => {
     const action: PermissionsModuleAction = {
       reference: signable.reference,
       transaction: Transaction.fromAtomicBEEF(signable.tx),
-      noSend: false,
+      noSend: args.options?.noSend === true,
       createArgs: wallet.pending.get(signable.reference)!.args
     }
     const signArgs = (
@@ -324,13 +325,21 @@ describe('ColorPermissionModule token operations', () => {
         options: { randomizeOutputs: false }
       })
       expect(provider.submissions).toEqual([{ topics: [DISCOVERY_TOPIC], txid: tx.id('hex') }])
+      const filed = wallet.outputs.get(`${tx.id('hex')}.0`)!
+      expect(filed.basket).toBe(assetBasket(`${tx.id('hex')}_0`, 'value'))
+      expect(
+        JSON.parse(await maybeDecryptMetadata(wallet.asWallet(), filed.customInstructions!))
+      ).toMatchObject({
+        assetId: ISSUE,
+        derivationPrefix: deploy.remittance.derivationPrefix
+      })
       expect(prompts[0]).toMatchObject({
         deploy: { operation: 'deploy-fixed', amount: '1000000', owned: true },
         assets: []
       })
     })
 
-    it('reports a deploy its asset overlay has not admitted yet', async () => {
+    it('files a deploy its asset overlay has not admitted yet as pending', async () => {
       provider.seedDeploys = false
       const deploy = await owned('', ISSUE, 0n, 0)
       await expect(
@@ -344,6 +353,38 @@ describe('ColorPermissionModule token operations', () => {
           options: { randomizeOutputs: false }
         })
       ).rejects.toThrow('per-asset admission remains pending')
+      const [outpoint, stored] = [...wallet.outputs].find(([, output]) => output.vout === 0)!
+      expect(stored.basket).toBe(assetBasket(`${outpoint.slice(0, 64)}_0`, 'authority'))
+      const inventory = (await module.handleRequest(
+        {
+          method: 'listOutputs',
+          args: { basket: 'p color assets', includeTags: true },
+          originator: APP
+        },
+        async () => {
+          throw new Error('not forwarded')
+        }
+      )) as ListOutputsResult
+      expect(inventory.outputs).toEqual([
+        expect.objectContaining({ outpoint, spendable: false, tags: ['color_state_pending'] })
+      ])
+    })
+
+    it('files a noSend deploy without submitting it', async () => {
+      const deploy = await owned('', ISSUE, 7n, 0)
+      const tx = await run({
+        labels: labels(
+          [ISSUE],
+          [{ assetId: ISSUE, operation: 'deploy-fixed' }],
+          [deploy.remittance]
+        ),
+        outputs: deploy.output,
+        options: { randomizeOutputs: false, noSend: true }
+      })
+      expect(wallet.outputs.get(`${tx.id('hex')}.0`)?.basket).toBe(
+        assetBasket(`${tx.id('hex')}_0`, 'value')
+      )
+      expect(provider.submissions).toEqual([])
     })
 
     it('rejects a deploy with the wrong operation, order or basket', async () => {

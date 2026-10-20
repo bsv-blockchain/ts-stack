@@ -89,7 +89,7 @@ export class FakeWallet {
   encrypt: WalletInterface['encrypt'] = async args => await this.proto.encrypt(args)
   decrypt: WalletInterface['decrypt'] = async args => await this.proto.decrypt(args)
 
-  store(tx: Transaction, vout: number, basket: string, customInstructions?: string): void {
+  store(tx: Transaction, vout: number, basket?: string, customInstructions?: string): void {
     this.outputs.set(`${tx.id('hex')}.${vout}`, {
       tx,
       vout,
@@ -100,6 +100,14 @@ export class FakeWallet {
   }
 
   async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult> {
+    if (args.basket === toolbox.specOpSetOutputBasket) {
+      const [outpoint, basket] = args.tags ?? []
+      const output = this.outputs.get(outpoint)
+      if (output === undefined || output.basket !== undefined)
+        throw new Error(`${outpoint} is not an output without a basket`)
+      output.basket = basket
+      return { totalOutputs: 0, outputs: [] }
+    }
     const inventory = args.basket === toolbox.specOpBasketPrefixOutputs
     const records = [...this.outputs.entries()]
       .filter(([, output]) =>
@@ -170,8 +178,7 @@ export class FakeWallet {
     this.pending.delete(args.reference)
     for (const input of pending.args.inputs ?? []) this.outputs.get(input.outpoint)!.spent = true
     pending.args.outputs?.forEach((output, vout) => {
-      if (output.basket !== undefined)
-        this.store(pending.tx, vout, output.basket, output.customInstructions)
+      this.store(pending.tx, vout, output.basket, output.customInstructions)
     })
     return { txid: pending.tx.id('hex'), tx: pending.tx.toAtomicBEEF() }
   }

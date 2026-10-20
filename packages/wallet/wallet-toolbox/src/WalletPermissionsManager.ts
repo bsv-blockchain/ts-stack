@@ -46,7 +46,7 @@ import {
 } from './utility/exactActionSpend'
 import { copyActionOutputAuthorizations } from './utility/actionOutputAuthorizations'
 import { WERR_REVIEW_ACTIONS, WERR_UNAUTHORIZED } from './sdk/WERR_errors'
-import { specOpBasketPrefixOutputs } from './sdk/types'
+import { specOpBasketPrefixOutputs, specOpSetOutputBasket } from './sdk/types'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
 // module graph) to avoid an unrelated circular-import edge from this file.
@@ -5768,8 +5768,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private isAdminBasket(basket: string): boolean {
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
-    // Lists P-basket outputs past their permission modules.
-    if (basket === specOpBasketPrefixOutputs) return true
+    // Lists P-basket outputs past their permission modules, or files an output in one.
+    if (basket === specOpBasketPrefixOutputs || basket === specOpSetOutputBasket) return true
     return false
   }
 

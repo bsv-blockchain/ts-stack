@@ -191,6 +191,16 @@ export const specOpSetWalletChangeParams = 'a4979d28ced8581e9c1c92f1001cc7cb3aab
 export const specOpBasketPrefixOutputs = 'b9184a72141e6a4d3d148c67a6d0ad92864a4d85290579ea5bef8bd62eb01b6f'
 
 /**
+ * `listOutputs` special operation basket name value.
+ *
+ * Files an unspent output that has no basket, of the wallet's own signed transaction, in a basket,
+ * without changing the transaction's status. Tag 0 is the outpoint (`txid.vout`); tag 1 is the
+ * basket name, which must not be `default`. For permission modules whose basket is known only
+ * once the transaction ID is final, such as a `p color` deploy.
+ */
+export const specOpSetOutputBasket = 'd2e2f7cf775a291df28d3b07f85efc269668ac8e0326dce78439849092395008'
+
+/**
  * @param basket Output basket name value.
  * @returns true iff the `basket` name is a reserved `listOutputs` special operation identifier.
  */
@@ -200,7 +210,8 @@ export function isListOutputsSpecOp(basket: string): boolean {
     specOpWalletManagedUtxos,
     specOpInvalidChange,
     specOpSetWalletChangeParams,
-    specOpBasketPrefixOutputs
+    specOpBasketPrefixOutputs,
+    specOpSetOutputBasket
   ].includes(basket)
 }
 

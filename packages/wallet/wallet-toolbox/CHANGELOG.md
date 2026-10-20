@@ -53,6 +53,11 @@ attention to changes that materially alter behavior or extend functionality.
   basket in that namespace that are unspent or reserved as an input of a
   pending action (`spendable` false), ordered by txid and vout. Spent outputs
   are excluded. The permissions manager reserves it for the admin originator.
+- New `listOutputs` special operation `specOpSetOutputBasket`: with an outpoint
+  in tag 0 and a basket name in tag 1, it files an unspent output that has no
+  basket, of the wallet's own signed transaction, in that basket without
+  changing the transaction's status. The permissions manager reserves it for
+  the admin originator.
 - Callers that count `listOutputs` results narrow `totalOutputs` to a number,
   following the `@bsv/sdk` change that lets BRC-112 module balance queries
   return decimal text.

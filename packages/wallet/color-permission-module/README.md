@@ -63,8 +63,10 @@ Call `color.dispose()` when the host tears down the wallet.
   burns use only the caller's value inputs and get no change.
 - **Deploy**: a BRC-162 deploy at output 0 with `options.randomizeOutputs:
 false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
-  The processed deploy is submitted to `tm_color`, and the call fails while
-  `tm_color_<assetId>` has not admitted it.
+  Once signed, an owned deploy is filed in its asset's value or authority
+  basket (keeping its `ISSUE` key), then submitted to `tm_color`; the call
+  fails while `tm_color_<assetId>` has not admitted it, and the deploy stays
+  pending in the inventory.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
   split to the exact amount, after a separate prompt that shows its fee.

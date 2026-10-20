@@ -791,11 +791,42 @@ export class ColorPermissionModule implements PermissionsModule {
     res: unknown,
     context: { method: string; originator: string; action?: PermissionsModuleAction }
   ): Promise<unknown> {
-    // A noSend action is a handoff: its receiver submits it.
-    if (context.method === 'signAction' && context.action?.noSend === false) {
-      await this.#submitSigned(res as SignActionResult, context.action.transaction)
+    if (context.method === 'signAction' && context.action !== undefined) {
+      await this.#fileDeploy(res as SignActionResult, context.action, context.originator)
+      // A noSend action is a handoff: its receiver submits it.
+      if (!context.action.noSend)
+        await this.#submitSigned(res as SignActionResult, context.action.transaction)
     }
     return res
+  }
+
+  /**
+   * Files a signed deploy this wallet keeps in its asset's value or authority basket, now that
+   * the asset ID is final. The deploy keeps its `ISSUE` key; it stays pending until admitted.
+   */
+  async #fileDeploy(
+    result: SignActionResult,
+    action: PermissionsModuleAction,
+    originator: string
+  ): Promise<void> {
+    if (result?.tx === undefined) return
+    const tx = Transaction.fromAtomicBEEF(result.tx)
+    const txid = tx.id('hex')
+    const deploy = tryReadTokenOutput(tx.outputs[0]?.lockingScript ?? new LockingScript(), {
+      txid,
+      vout: 0
+    })
+    const owned = ColorPlan.fromLabels(action.createArgs?.labels)?.ownedOutputs.some(
+      remittance => remittance.outputIndex === 0 && remittance.assetId === ISSUE
+    )
+    if (deploy?.deploy !== true || owned !== true) return
+    await this.#wallet.listOutputs(
+      {
+        basket: toolbox.specOpSetOutputBasket,
+        tags: [outpointString(txid, 0), assetBasket(deploy.assetId, deploy.role)]
+      },
+      originator
+    )
   }
 
   /* ----------------------------------------------------------------------
@@ -1850,8 +1881,12 @@ export class ColorPermissionModule implements PermissionsModule {
     assetId: string,
     records: InventoryRecord[]
   ): Promise<Set<string> | undefined> {
+    const { txid, vout } = parseAssetId(assetId)
+    // The wallet's own deploy is authenticated by its own bytes before any overlay admits it.
+    const deploy = records.find(record => record.output.outpoint === outpointString(txid, vout))
     try {
-      await this.#assertSupportedAsset(assetId)
+      if (deploy === undefined || !isDeployOutput(deploy.source.lockingScript, { txid, vout }))
+        await this.#assertSupportedAsset(assetId)
     } catch {
       // An unsupported or unauthenticated asset is not a validated holding.
       return undefined

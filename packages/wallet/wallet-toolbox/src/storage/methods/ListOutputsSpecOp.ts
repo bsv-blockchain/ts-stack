@@ -6,6 +6,7 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import {
   specOpBasketPrefixOutputs,
   specOpInvalidChange,
+  specOpSetOutputBasket,
   specOpSetWalletChangeParams,
   specOpWalletBalance,
   specOpWalletManagedUtxos,
@@ -18,6 +19,9 @@ import { MAX_UTXO_REVIEW_CANDIDATES, reviewUtxoOutputs } from './reviewUtxoOutpu
 
 /** Statuses of a signed transaction whose outputs the basket-prefix operation lists. */
 const LISTED_OUTPUT_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending', 'unprocessed']
+
+/** Statuses of the wallet's own signed transactions whose outputs `setOutputBasket` may file. */
+const SIGNED_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending', 'unprocessed']
 
 /** Statuses of a spending action under which its inputs are reserved rather than spent. */
 const RESERVING_TX_STATUSES: TransactionStatus[] = ['unsigned', 'unprocessed', 'nosend', 'sending']
@@ -114,6 +118,36 @@ async function listBasketPrefixOutputs(
   }, Promise.resolve())
   if (vargs.includeTransactions) result.BEEF = beef.toBinary()
   return result
+}
+
+/** Files an unspent, basket-less output of the wallet's own signed transaction in a basket. */
+async function setOutputBasket(
+  s: StorageProvider,
+  auth: AuthId,
+  vargs: ValidListOutputsArgs,
+  specOpTags: string[]
+): Promise<ListOutputsResult> {
+  const [outpoint, basketName] = specOpTags
+  const match = /^([0-9a-f]{64})\.(0|[1-9]\d*)$/.exec(outpoint ?? '')
+  if (match == null) throw new WERR_INVALID_PARAMETER('tags', 'an outpoint as the first tag')
+  if (!basketName || basketName === 'default') {
+    throw new WERR_INVALID_PARAMETER('tags', 'a basket name other than default as the second tag')
+  }
+  const userId = verifyId(auth.userId)
+  const outputs = await s.findOutputs({ partial: { userId, txid: match[1], vout: Number(match[2]) } })
+  const output = outputs[0]
+  if (output === undefined || output.basketId != null || output.change || output.spentBy != null) {
+    throw new WERR_INVALID_OPERATION(`${outpoint} is not an unspent output without a basket.`)
+  }
+  const tx = verifyOne(
+    await s.findTransactions({ partial: { userId, transactionId: output.transactionId }, noRawTx: true })
+  )
+  if (!tx.isOutgoing || !SIGNED_TX_STATUSES.includes(tx.status)) {
+    throw new WERR_INVALID_OPERATION(`${outpoint} is not an output of this wallet's signed transaction.`)
+  }
+  const basket = await s.findOrInsertOutputBasket(userId, basketName)
+  await s.updateOutput(output.outputId, { basketId: basket.basketId })
+  return { totalOutputs: 0, outputs: [] }
 }
 
 export interface ListOutputsSpecOp {
@@ -237,6 +271,11 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
       name: 'basketPrefixOutputs',
       tagsParamsCount: 1,
       resultFromTags: listBasketPrefixOutputs
+    },
+    [specOpSetOutputBasket]: {
+      name: 'setOutputBasket',
+      tagsParamsCount: 2,
+      resultFromTags: setOutputBasket
     }
   }
 }

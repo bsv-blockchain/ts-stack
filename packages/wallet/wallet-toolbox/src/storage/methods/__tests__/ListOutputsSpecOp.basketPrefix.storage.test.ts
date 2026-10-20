@@ -1,7 +1,7 @@
 import type { Validation } from '@bsv/sdk'
 import 'fake-indexeddb/auto'
 import { _tu } from '../../../../test/utils/TestUtilsWalletStorage'
-import { specOpBasketPrefixOutputs, TransactionStatus } from '../../../sdk/types'
+import { specOpBasketPrefixOutputs, specOpSetOutputBasket, TransactionStatus } from '../../../sdk/types'
 import { StorageIdb } from '../../StorageIdb'
 import { StorageProvider } from '../../StorageProvider'
 import type { TableOutput, TableTransaction, TableUser } from '../../schema/tables'
@@ -124,6 +124,47 @@ describe('basket-prefix special-operation storage parity', () => {
           customInstructions: 'p color ccc'
         }
       ])
+    }
+  })
+
+  test('SQLite and IndexedDB file a basket-less output of a signed transaction in a basket', async () => {
+    for (const storage of storages) {
+      const user = await _tu.insertTestUser(storage)
+      const auth = { userId: user.userId, identityKey: user.identityKey }
+      const deploy = await seedTransaction(storage, user, 20, 'unprocessed')
+      const output = await _tu.insertTestOutput(storage, deploy, 0, 1, undefined, false, {
+        txid: deploy.txid,
+        change: false,
+        lockingScript: [0x51],
+        scriptLength: 1,
+        scriptOffset: undefined,
+        customInstructions: 'custody',
+        spendable: true,
+        spentBy: undefined
+      })
+      const file = async (tags: string[]) =>
+        await storage.listOutputs(auth, { ...args(tags), basket: specOpSetOutputBasket })
+
+      await expect(file([`${deploy.txid}.0`, 'p color aaa'])).resolves.toEqual({ totalOutputs: 0, outputs: [] })
+      const filed = await storage.findOutputs({ partial: { outputId: output.outputId } })
+      expect(filed[0].basketId).toBe((await storage.findOrInsertOutputBasket(user.userId, 'p color aaa')).basketId)
+      expect((await storage.findTransactions({ partial: { transactionId: deploy.transactionId } }))[0].status).toBe(
+        'unprocessed'
+      )
+      expect((await storage.listOutputs(auth, args(['p color']))).outputs.map(o => o.outpoint)).toEqual([
+        `${deploy.txid}.0`
+      ])
+
+      await expect(file([`${deploy.txid}.0`, 'p color bbb'])).rejects.toThrow('without a basket')
+      await expect(file([`${deploy.txid}.0`, 'default'])).rejects.toThrow('other than default')
+      await expect(file(['not an outpoint', 'p color aaa'])).rejects.toThrow('outpoint')
+      const unsigned = await seedTransaction(storage, user, 21, 'unsigned')
+      await _tu.insertTestOutput(storage, unsigned, 0, 1, undefined, false, {
+        txid: unsigned.txid,
+        change: false,
+        spentBy: undefined
+      })
+      await expect(file([`${unsigned.txid}.0`, 'p color aaa'])).rejects.toThrow('signed transaction')
     }
   })
 
