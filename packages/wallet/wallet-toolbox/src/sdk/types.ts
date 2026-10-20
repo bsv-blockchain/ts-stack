@@ -183,9 +183,10 @@ export const specOpSetWalletChangeParams = 'a4979d28ced8581e9c1c92f1001cc7cb3aab
  *
  * Lists outputs from every basket in the namespace given by tag 0 (a basket matches when its
  * name is that tag followed by a space and more), for permission modules that keep one basket
- * per asset, such as `p color`. Includes unspent outputs, and outputs reserved as an
- * input of a pending (`unsigned`, `unprocessed`, `nosend` or `sending`) action with `spendable`
- * false. Spent outputs are excluded. Results are ordered by txid and vout and are not paged.
+ * per asset, such as `p color`. Includes unspent outputs of signed transactions, including those
+ * awaiting broadcast, and outputs reserved as an input of a pending (`unsigned`, `unprocessed`,
+ * `nosend` or `sending`) action with `spendable` false. Spent outputs are excluded. Results are
+ * ordered by txid and vout and are not paged.
  */
 export const specOpBasketPrefixOutputs = 'b9184a72141e6a4d3d148c67a6d0ad92864a4d85290579ea5bef8bd62eb01b6f'
 

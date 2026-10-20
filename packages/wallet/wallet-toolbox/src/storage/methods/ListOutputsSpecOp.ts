@@ -16,8 +16,8 @@ import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { MAX_UTXO_REVIEW_CANDIDATES, reviewUtxoOutputs } from './reviewUtxoOutputs'
 
-/** Statuses of an output's creating transaction under which `listOutputs` lists it. */
-const LISTED_OUTPUT_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending']
+/** Statuses of a signed transaction whose outputs the basket-prefix operation lists. */
+const LISTED_OUTPUT_TX_STATUSES: TransactionStatus[] = ['completed', 'unproven', 'nosend', 'sending', 'unprocessed']
 
 /** Statuses of a spending action under which its inputs are reserved rather than spent. */
 const RESERVING_TX_STATUSES: TransactionStatus[] = ['unsigned', 'unprocessed', 'nosend', 'sending']

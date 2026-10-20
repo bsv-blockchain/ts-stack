@@ -2,6 +2,7 @@ import {
   Beef,
   LockingScript,
   Signature,
+  Spend,
   Transaction,
   TransactionSignature,
   UnlockingScript,
@@ -415,7 +416,7 @@ function placeChange(
 function tokenSources(
   tx: Transaction,
   managed: ReadonlySet<string>
-): Array<SourceOutput & { assetId: string }> {
+): Array<SourceOutput & { assetId: string; token: TokenOutput }> {
   return tx.inputs.flatMap(input => {
     const outpoint = inputOutpoint(input)
     const source = input.sourceTransaction?.outputs[input.sourceOutputIndex]
@@ -427,10 +428,38 @@ function tokenSources(
         outpoint,
         lockingScript: source.lockingScript,
         satoshis: source.satoshis,
-        assetId: token.assetId
+        assetId: token.assetId,
+        token
       }
     ]
   })
+}
+
+/** Runs one input's unlocking script against its source output; throws when it does not unlock. */
+function assertUnlocks(tx: Transaction, inputIndex: number): void {
+  const input = tx.inputs[inputIndex]
+  const source = input.sourceTransaction?.outputs[input.sourceOutputIndex]
+  if (source?.satoshis === undefined || input.unlockingScript === undefined)
+    throw new Error(`BRC-207: transaction input ${inputIndex} lacks its source or unlocking script`)
+  new Spend({
+    sourceTXID: input.sourceTransaction!.id('hex'),
+    sourceOutputIndex: input.sourceOutputIndex,
+    sourceSatoshis: source.satoshis,
+    lockingScript: source.lockingScript,
+    transactionVersion: tx.version,
+    otherInputs: tx.inputs.filter((_, index) => index !== inputIndex),
+    outputs: tx.outputs,
+    inputIndex,
+    unlockingScript: input.unlockingScript,
+    inputSequence: input.sequence ?? 0xffffffff,
+    lockTime: tx.lockTime
+  }).validate()
+}
+
+function addToken(totals: Map<string, Holding>, token: TokenOutput): void {
+  const entry = holding(totals, token.assetId, emptyHolding)
+  if (token.role === 'value') entry.value += token.amount
+  else entry.authority += 1
 }
 
 /** A foreign input's source output, from the caller's inputBEEF. */
@@ -651,8 +680,40 @@ export class ColorPermissionModule implements PermissionsModule {
         ? [{ outputIndex: output.outputIndex, remittance }]
         : []
     })
+    if (receipts.length === 0) return
+    await this.#assertCompletedTransaction(tx)
     await eachInOrder(receipts, async ({ outputIndex, remittance }) => {
       await this.#verifyReceipt(tx, outputIndex, remittance, originator)
+    })
+  }
+
+  /**
+   * Checks a received transaction: every input unlocks its source, every consumed token input
+   * was admitted to its asset overlay, and each asset's outputs follow BRC-162's supply rules.
+   */
+  async #assertCompletedTransaction(tx: Transaction): Promise<void> {
+    for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
+    const txid = tx.id('hex')
+    const consumed = tokenSources(tx, new Set())
+    const inputs = new Map<string, Holding>()
+    for (const source of consumed) addToken(inputs, source.token)
+    const outputs = new Map<string, Holding>()
+    tx.outputs.forEach((output, vout) => {
+      const token = readTokenOutput(output.lockingScript, { txid, vout })
+      if (token !== undefined && !token.deploy) addToken(outputs, token)
+    })
+    await eachInOrder(new Set([...inputs.keys(), ...outputs.keys()]), async assetId => {
+      await this.#assertSupportedAsset(assetId)
+      const sources = consumed.filter(source => source.assetId === assetId)
+      if (sources.length > 0) {
+        const admitted = await this.#listed('admission', assetId, sources)
+        if (sources.some(source => !admitted.has(source.outpoint)))
+          throw new Error(`BRC-207: a consumed ${assetId} input was never admitted to its overlay`)
+      }
+      requiredOperations(
+        inputs.get(assetId) ?? emptyHolding(),
+        outputs.get(assetId) ?? emptyHolding()
+      )
     })
   }
 
@@ -1782,8 +1843,17 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /** The queried outputs the overlay reports admitted and unspent, matched to their source bytes. */
   async #spendable(assetId: string, outputs: readonly SourceOutput[]): Promise<Set<string>> {
+    return await this.#listed('spendability', assetId, outputs)
+  }
+
+  /** The queried outputs a `color-spendability` or `color-admission` answer lists, matched to their source bytes. */
+  async #listed(
+    query: 'spendability' | 'admission',
+    assetId: string,
+    outputs: readonly SourceOutput[]
+  ): Promise<Set<string>> {
     const outpoints = outputs.map(output => output.outpoint)
-    const listed = readOutputList(await this.#provider.spendability(assetId, outpoints), outpoints)
+    const listed = readOutputList(await this.#provider[query](assetId, outpoints), outpoints)
     for (const output of outputs) {
       const answer = listed.get(output.outpoint)
       if (

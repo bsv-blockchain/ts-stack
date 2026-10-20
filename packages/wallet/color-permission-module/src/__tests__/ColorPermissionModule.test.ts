@@ -148,8 +148,28 @@ describe('ColorPermissionModule', () => {
 
     it('rejects a receipt the overlay has not admitted', async () => {
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
+      provider.admit(assetId, tx, 0)
+      provider.spend(`${tx.id('hex')}.0`)
       await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
         'not admitted and unspent'
+      )
+    })
+
+    it('rejects a receipt whose transaction is not a valid token transfer', async () => {
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
+      await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
+        'was never admitted to its overlay'
+      )
+      provider.admit(assetId, tx, 0)
+      const minted = new Transaction()
+      minted.addOutput(tx.outputs[0])
+      provider.admit(assetId, minted, 0)
+      await expect(receipt(customInstructions, undefined, minted)).rejects.toThrow(
+        'exceed the authenticated input balance'
+      )
+      tx.inputs[0].unlockingScript = UnlockingScript.fromHex('00')
+      await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
+        'Script evaluation error'
       )
     })
 

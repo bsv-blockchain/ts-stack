@@ -1,6 +1,7 @@
 import {
   Beef,
   LockingScript,
+  OP,
   PrivateKey,
   ProtoWallet,
   Spend,
@@ -200,10 +201,27 @@ export class FakeProvider {
   readonly submissions: Array<{ topics: string[]; txid: string }> = []
   rejectSubmissions = false
 
+  /** Admits an output; the token inputs its transaction consumed count as admitted before. */
   admit(assetId: string, tx: Transaction, vout: number): void {
     const entry = { assetId, tx, vout }
     this.current.set(`${tx.id('hex')}.${vout}`, entry)
     this.history.set(`${tx.id('hex')}.${vout}`, entry)
+    for (const input of tx.inputs) {
+      const source = input.sourceTransaction
+      const token =
+        source === undefined
+          ? undefined
+          : readTokenOutput(source.outputs[input.sourceOutputIndex].lockingScript, {
+              txid: source.id('hex'),
+              vout: input.sourceOutputIndex
+            })
+      if (token !== undefined)
+        this.history.set(`${source!.id('hex')}.${input.sourceOutputIndex}`, {
+          assetId: token.assetId,
+          tx: source!,
+          vout: input.sourceOutputIndex
+        })
+    }
   }
 
   spend(outpoint: string): void {
@@ -339,7 +357,19 @@ export async function tokenPayment(
     keyID: COLOR_KEY_ID,
     counterparty: recipient.identityKey
   })
+  // The payment spends an anyone-can-spend source of the same amount, so it is a valid transfer.
+  const prefix = new OneColor().lock(assetId, amount, Array(20).fill(0)).chunks.slice(0, 3)
+  const source = new Transaction()
+  source.addOutput({
+    lockingScript: new LockingScript([...prefix, { op: OP.OP_TRUE }]),
+    satoshis: 1000
+  })
   const tx = new Transaction()
+  tx.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScript: new UnlockingScript()
+  })
   tx.addOutput({
     lockingScript: new OneColor().lock(assetId, amount, hash160(toArray(publicKey, 'hex'))),
     satoshis: 1000

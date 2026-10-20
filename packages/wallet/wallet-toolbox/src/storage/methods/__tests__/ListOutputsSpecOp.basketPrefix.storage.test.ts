@@ -93,13 +93,14 @@ describe('basket-prefix special-operation storage parity', () => {
         spentBy: completedSpender.transactionId
       })
       await seedOutput(storage, user, await seedTransaction(storage, user, 4, 'unsigned'), 'p color aaa')
+      await seedOutput(storage, user, await seedTransaction(storage, user, 8, 'unprocessed'), 'p color ccc')
       await seedOutput(storage, user, await seedTransaction(storage, user, 5, 'completed'), 'p colorful aaa')
       await seedOutput(storage, user, await seedTransaction(storage, user, 6, 'completed'), 'p btms aaa')
       await seedOutput(storage, user, await seedTransaction(storage, user, 7, 'completed'), 'default')
 
       const result = await storage.listOutputs(auth, args(['p color']))
 
-      expect(result.totalOutputs).toBe(2)
+      expect(result.totalOutputs).toBe(3)
       expect(result.outputs).toEqual([
         {
           outpoint: `${'1'.padStart(64, '0')}.0`,
@@ -114,6 +115,13 @@ describe('basket-prefix special-operation storage parity', () => {
           spendable: true,
           lockingScript: '51',
           customInstructions: 'p color aaa'
+        },
+        {
+          outpoint: `${'8'.padStart(64, '0')}.0`,
+          satoshis: 1,
+          spendable: true,
+          lockingScript: '51',
+          customInstructions: 'p color ccc'
         }
       ])
     }
