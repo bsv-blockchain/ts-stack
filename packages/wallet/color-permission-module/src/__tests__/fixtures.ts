@@ -23,7 +23,13 @@ import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
 import { sdk as toolbox } from '@bsv/wallet-toolbox-client'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
-import { assetBasket, COLOR_KEY_ID, colorProtocolID, colorTopic, ISSUE } from '../identifiers.js'
+import {
+  assetBasket,
+  COLOR_KEY_ID,
+  colorProtocolID,
+  DISCOVERY_TOPIC,
+  ISSUE
+} from '../identifiers.js'
 import { readTokenOutput } from '../tokenOutputs.js'
 
 interface StoredOutput {
@@ -191,7 +197,7 @@ export class FakeWallet {
 export class FakeProvider {
   readonly current = new Map<string, { assetId: string; tx: Transaction; vout: number }>()
   readonly history = new Map<string, { assetId: string; tx: Transaction; vout: number }>()
-  readonly submissions: Array<{ assetIds: string[]; txid: string }> = []
+  readonly submissions: Array<{ topics: string[]; txid: string }> = []
   rejectSubmissions = false
 
   admit(assetId: string, tx: Transaction, vout: number): void {
@@ -210,21 +216,26 @@ export class FakeProvider {
   admission = async (assetId: string, outpoints: string[]): Promise<LookupAnswer> =>
     this.#answer(this.history, assetId, outpoints)
 
-  submit = async (assetIds: string[], beef: number[]): Promise<STEAK> => {
+  /** Seeds a deploy's asset overlay from the discovery topic, as a configured provider would. */
+  seedDeploys = true
+
+  submit = async (topics: string[], beef: number[]): Promise<STEAK> => {
     const tx = Transaction.fromAtomicBEEF(beef)
     const txid = tx.id('hex')
-    this.submissions.push({ assetIds, txid })
+    this.submissions.push({ topics, txid })
     for (const input of tx.inputs)
       this.spend(`${input.sourceTransaction!.id('hex')}.${input.sourceOutputIndex}`)
     const steak: STEAK = {}
-    for (const assetId of assetIds) {
+    for (const topic of topics) {
+      const assetId = topic === DISCOVERY_TOPIC ? `${txid}_0` : topic.slice('tm_color_'.length)
       const outputsToAdmit = this.rejectSubmissions
         ? []
         : tx.outputs.flatMap((output, vout) =>
             readTokenOutput(output.lockingScript, { txid, vout })?.assetId === assetId ? [vout] : []
           )
-      for (const vout of outputsToAdmit) this.admit(assetId, tx, vout)
-      steak[colorTopic(assetId)] = { outputsToAdmit, coinsToRetain: [] }
+      if (topic !== DISCOVERY_TOPIC || this.seedDeploys)
+        for (const vout of outputsToAdmit) this.admit(assetId, tx, vout)
+      steak[topic] = { outputsToAdmit, coinsToRetain: [] }
     }
     return steak
   }
@@ -250,7 +261,7 @@ export function remittanceString(): string {
   return toBase64(Random(16))
 }
 
-/** Deploys a fixed-supply asset to `issuer`, held in its value basket, and admits the deploy. */
+/** Deploys an asset to `issuer`, held in its value basket (or authority basket for amount 0), and admits the deploy. */
 export async function deployAsset(
   issuer: FakeWallet,
   provider: FakeProvider,
@@ -278,7 +289,7 @@ export async function deployAsset(
   issuer.store(
     tx,
     0,
-    assetBasket(assetId, 'value'),
+    assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
     JSON.stringify({ version: 1, assetId: ISSUE, ...custody })
   )
   return { assetId, tx }
@@ -336,7 +347,7 @@ export async function tokenPayment(
   return { tx, customInstructions: JSON.stringify(custody) }
 }
 
-/** Gives `holder` admitted outputs of each amount, as completed receipts. */
+/** Gives `holder` admitted outputs of each amount (0 for an authority), as completed receipts. */
 export async function holdTokens(
   holder: FakeWallet,
   provider: FakeProvider,
@@ -348,7 +359,12 @@ export async function holdTokens(
   for (const amount of amounts) {
     const { tx, customInstructions } = await tokenPayment(sender, holder, assetId, amount)
     provider.admit(assetId, tx, 0)
-    holder.store(tx, 0, assetBasket(assetId, 'value'), customInstructions)
+    holder.store(
+      tx,
+      0,
+      assetBasket(assetId, amount === 0n ? 'authority' : 'value'),
+      customInstructions
+    )
     txs.push(tx)
   }
   return txs

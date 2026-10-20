@@ -182,6 +182,9 @@ export function parseBalanceSelector(
   return parseTaggedBasket(parts.slice(3))
 }
 
+/** The shared deployment discovery topic. */
+export const DISCOVERY_TOPIC = 'tm_color'
+
 export function colorTopic(assetId: string): string {
   return `tm_color_${assetId}`
 }

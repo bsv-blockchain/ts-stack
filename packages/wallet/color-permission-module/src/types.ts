@@ -9,8 +9,8 @@ export interface ColorOverlayProvider {
   spendability: (assetId: string, outpoints: string[]) => Promise<LookupAnswer>
   /** BRC-207 `color-admission`: the queried outputs ever admitted to `tm_color_<assetId>`, spent or unspent. */
   admission: (assetId: string, outpoints: string[]) => Promise<LookupAnswer>
-  /** Submits a transaction to `tm_color_<assetId>` for each asset, returning each topic's admittance. */
-  submit: (assetIds: string[], beef: number[]) => Promise<STEAK>
+  /** Submits a transaction to each topic (`tm_color_<assetId>`, or `tm_color` for a deploy), returning each topic's admittance. */
+  submit: (topics: string[], beef: number[]) => Promise<STEAK>
 }
 
 /**

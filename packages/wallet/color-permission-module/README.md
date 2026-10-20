@@ -33,11 +33,11 @@ operation.
 `provider` implements `ColorOverlayProvider`. The wallet implementer decides
 which overlays it trusts:
 
-| Method                             | BRC-207 query                                                             |
-| ---------------------------------- | ------------------------------------------------------------------------- |
-| `spendability(assetId, outpoints)` | `color-spendability`: outputs currently admitted and unspent              |
-| `admission(assetId, outpoints)`    | `color-admission`: outputs ever admitted, used to read the asset's deploy |
-| `submit(assetIds, beef)`           | Submits to `tm_color_<assetId>` for each asset                            |
+| Method                             | BRC-207 query                                                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------ |
+| `spendability(assetId, outpoints)` | `color-spendability`: outputs currently admitted and unspent                   |
+| `admission(assetId, outpoints)`    | `color-admission`: outputs ever admitted, used to read the asset's deploy      |
+| `submit(topics, beef)`             | Submits to each topic: `tm_color_<assetId>` per asset, `tm_color` for a deploy |
 
 `requestTokenAccess` receives a JSON message whose `type` is `color_send`,
 `color_split`, `color_signature`, `color_access` (a read) or `color_relinquish`,
@@ -53,6 +53,15 @@ Call `color.dispose()` when the host tears down the wallet.
   `p color plan` labels, built with `ColorPlan.toLabels`. The module selects
   admitted token inputs, adds token change, prompts, signs the token inputs in
   `signAction` and submits the processed transaction to each asset topic.
+- **Mint, burn and authority operations**: the plan declares exactly the
+  operations BRC-207 derives from the transaction (`mint`, `burn`,
+  `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are
+  selected from the authority basket when the caller supplies none; mints and
+  burns use only the caller's value inputs and get no change.
+- **Deploy**: a BRC-162 deploy at output 0 with `options.randomizeOutputs:
+false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
+  The processed deploy is submitted to `tm_color`, and the call fails while
+  `tm_color_<assetId>` has not admitted it.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
   split to the exact amount, after a separate prompt that shows its fee.
@@ -69,7 +78,6 @@ Call `color.dispose()` when the host tears down the wallet.
 
 The module fails explicitly, rather than falling back, on:
 
-- issuance, minting, burns and authority operations;
 - BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
@@ -80,8 +88,8 @@ The module fails explicitly, rather than falling back, on:
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs (with their source in `inputBEEF`) count only
 once their asset's overlay admits them. `inputPositions` and token
-`changePositions` are honored; change positions need
-`options.randomizeOutputs: false`.
+`changePositions` are honored; change positions follow the requested outputs and
+need `options.randomizeOutputs: false`.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure.

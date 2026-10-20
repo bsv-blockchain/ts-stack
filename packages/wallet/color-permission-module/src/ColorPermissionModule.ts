@@ -35,6 +35,7 @@ import {
 } from '@bsv/wallet-toolbox-client'
 import {
   ColorPlan,
+  type ColorOperationName,
   parseProfileData,
   parseRemittances,
   parseTokenProofs,
@@ -47,6 +48,7 @@ import {
   COLOR_KEY_ID,
   colorProtocolID,
   colorTopic,
+  DISCOVERY_TOPIC,
   ISSUE,
   outpointString,
   parseAssetBasket,
@@ -109,6 +111,7 @@ interface Candidate extends SourceOutput {
 
 interface ManagedInput extends SourceOutput {
   assetId: string
+  role: TokenRole
   amount: bigint
   custody: Custody
 }
@@ -188,24 +191,152 @@ function assertFinal(tx: Transaction): void {
   }
 }
 
-/** A send's per-asset totals and the token outputs that leave the wallet. */
+/** One asset's token units and authority outputs on one side of a transaction. */
+interface Holding {
+  value: bigint
+  authority: number
+}
+
+/** What the caller's explicit inputs contribute to one asset, and how much of it is foreign. */
+interface ExplicitHolding extends Holding {
+  foreignValue: bigint
+  foreignAuthority: number
+}
+
 /** The caller's explicit inputs and what they contribute per asset. */
 interface ExplicitInputs {
   inputs: CreateActionInput[]
   managed: ManagedInput[]
-  /** Managed and foreign token amounts per asset. */
-  available: Map<string, bigint>
-  foreign: Map<string, bigint>
+  holdings: Map<string, ExplicitHolding>
 }
 
-interface PlannedSends {
-  required: Map<string, bigint>
+/** The requested outputs' token totals per existing asset, the deploy, and the outputs that leave the wallet. */
+interface PlannedOutputs {
+  holdings: Map<string, Holding>
+  deploy?: { operation: ColorOperationName; amount: bigint; owned: boolean }
   destinations: Array<{
     outputIndex: number
     assetId: string
+    role: TokenRole
     amount: string
     lockingScript: string
   }>
+}
+
+/** One existing asset's funding: its selected inputs, token change and complete operation set. */
+interface AssetFunding {
+  assetId: string
+  selected: ManagedInput[]
+  change: bigint
+  operations: ColorOperationName[]
+  inputs: Holding
+  outputs: Holding
+}
+
+const AUTHORITY_OPERATIONS: readonly ColorOperationName[] = [
+  'authority-split',
+  'authority-combine',
+  'authority-transfer',
+  'authority-end'
+]
+
+function holding<T extends Holding>(totals: Map<string, T>, assetId: string, empty: () => T): T {
+  let entry = totals.get(assetId)
+  if (entry === undefined) {
+    entry = empty()
+    totals.set(assetId, entry)
+  }
+  return entry
+}
+
+function emptyHolding(): Holding {
+  return { value: 0n, authority: 0 }
+}
+
+function emptyExplicitHolding(): ExplicitHolding {
+  return { value: 0n, authority: 0, foreignValue: 0n, foreignAuthority: 0 }
+}
+
+/** The BRC-207 authority operation for a transaction's authority input and output counts. */
+function authorityOperation(inputs: number, outputs: number): ColorOperationName {
+  if (outputs === 0) return 'authority-end'
+  if (outputs < inputs) return 'authority-combine'
+  return outputs === inputs ? 'authority-transfer' : 'authority-split'
+}
+
+/** Authority inputs to select for a declared authority operation when the caller supplies none. */
+function authorityInputsFor(operation: ColorOperationName, outputs: number): number {
+  if (operation === 'authority-transfer') return outputs
+  if (operation === 'authority-combine') return outputs + 1
+  return 1
+}
+
+/**
+ * The operations BRC-207 requires for one existing asset: value inputs fund value outputs
+ * first, the rest of the inputs is burned and the rest of the outputs is minted.
+ */
+function requiredOperations(inputs: Holding, outputs: Holding): ColorOperationName[] {
+  if (inputs.authority === 0 && outputs.authority > 0)
+    throw new Error('BRC-207: an authority output needs an authority input of the same asset')
+  const { transferred, burned, minted } = supplyChange(inputs, outputs)
+  if (minted > 0n && inputs.authority === 0)
+    throw new Error('BRC-207: token outputs exceed the authenticated input balance')
+  const operations: ColorOperationName[] = []
+  if (transferred > 0n) operations.push('transfer')
+  if (burned > 0n) operations.push('burn')
+  if (minted > 0n) operations.push('mint')
+  if (inputs.authority > 0) operations.push(authorityOperation(inputs.authority, outputs.authority))
+  return operations
+}
+
+function declaredOperations(plan: ColorPlan, assetId: string): Set<ColorOperationName> {
+  return new Set(
+    plan.operations.filter(operation => operation.assetId === assetId).map(op => op.operation)
+  )
+}
+
+/** Fails unless the plan declares exactly the operations the asset's transaction requires. */
+function assertOperations(plan: ColorPlan, assetId: string, required: ColorOperationName[]): void {
+  const declared = declaredOperations(plan, assetId)
+  if (declared.size !== required.length || required.some(operation => !declared.has(operation))) {
+    throw new Error(
+      `BRC-207: ${assetId} requires the operations [${required.join(', ')}] but the plan declares [${[...declared].join(', ')}]`
+    )
+  }
+}
+
+/** Supply accounting: value inputs fund value outputs first; the rest is burned or minted. */
+function supplyChange(
+  inputs: Holding,
+  outputs: Holding
+): { transferred: bigint; burned: bigint; minted: bigint } {
+  const transferred = outputs.value < inputs.value ? outputs.value : inputs.value
+  return {
+    transferred,
+    burned: inputs.value - transferred,
+    minted: outputs.value - transferred
+  }
+}
+
+/** What the user approves for one asset of an action. */
+function consentFacts(asset: AssetFunding, explicit: ExplicitHolding | undefined) {
+  const foreignValue = explicit?.foreignValue ?? 0n
+  const foreignAuthority = explicit?.foreignAuthority ?? 0
+  const { transferred, burned, minted } = supplyChange(asset.inputs, asset.outputs)
+  return {
+    assetId: asset.assetId,
+    operations: asset.operations,
+    amount: (asset.outputs.value - asset.change).toString(),
+    inputAmount: (asset.inputs.value - foreignValue).toString(),
+    foreignAmount: foreignValue.toString(),
+    change: asset.change.toString(),
+    transferred: transferred.toString(),
+    burned: burned.toString(),
+    minted: minted.toString(),
+    authorityInputs: asset.inputs.authority - foreignAuthority,
+    foreignAuthorityInputs: foreignAuthority,
+    authorityOutputs: asset.outputs.authority
+  }
 }
 
 /** Plan and action features this module version does not implement. */
@@ -251,32 +382,37 @@ function orderInputs(
   return Array.from({ length: all.length }, (_, index) => slots.get(index) ?? rest.shift()!)
 }
 
-/** Requested outputs in order, with each asset's token change at its pinned index if it has one. */
+/**
+ * Requested outputs at their own indices, then token change, each asset's change at its pinned
+ * index if it has one. A change position cannot displace a requested output.
+ */
 function placeChange(
   outputs: readonly CreateActionOutput[],
   changes: ReadonlyArray<{ assetId: string; output: CreateActionOutput }>,
   positions: ColorPlan['changePositions']
 ): CreateActionOutput[] {
-  const all = [...outputs, ...changes.map(change => change.output)]
-  if (positions.length === 0) return all
   const slots = new Map<number, CreateActionOutput>()
   for (const { assetId, index } of positions) {
+    if (index < outputs.length)
+      throw new Error('BRC-207: plan.changePositions conflict with the requested outputs')
     const change = changes.find(candidate => candidate.assetId === assetId)
-    if (change === undefined || index >= all.length || slots.has(index))
+    if (change === undefined || index >= outputs.length + changes.length)
       throw new Error('BRC-207: plan.changePositions cannot be satisfied')
     slots.set(index, change.output)
   }
   const placed = new Set(slots.values())
-  const rest = all.filter(output => !placed.has(output))
-  return Array.from({ length: all.length }, (_, index) => slots.get(index) ?? rest.shift()!)
+  const rest = changes.map(change => change.output).filter(output => !placed.has(output))
+  return [
+    ...outputs,
+    ...Array.from(
+      { length: changes.length },
+      (_, offset) => slots.get(outputs.length + offset) ?? rest.shift()!
+    )
+  ]
 }
 
-function addAmount(totals: Map<string, bigint>, assetId: string, amount: bigint): void {
-  totals.set(assetId, (totals.get(assetId) ?? 0n) + amount)
-}
-
-/** Token inputs of `tx` that are not the module's own, read from their source transactions. */
-function foreignTokenInputs(
+/** Token inputs of `tx` other than those in `except`, read from their source transactions. */
+function tokenSources(
   tx: Transaction,
   managed: ReadonlySet<string>
 ): Array<SourceOutput & { assetId: string }> {
@@ -306,21 +442,10 @@ function foreignSource(beef: Beef | undefined, outpoint: string): SourceOutput {
   return { outpoint, lockingScript: output.lockingScript, satoshis: output.satoshis }
 }
 
-/** The plan names exactly the assets the action moves, with one transfer operation each. */
-function assertPlanAssets(plan: ColorPlan, required: ReadonlySet<string>): void {
-  for (const assetId of plan.assets) {
-    if (!required.has(assetId))
-      throw new Error('BRC-207: plan.assets names an asset the action does not use')
-  }
-  const declared = new Set(
-    plan.operations.map(operation => `${operation.assetId} ${operation.operation}`)
-  )
-  if (
-    declared.size !== required.size ||
-    [...required.keys()].some(assetId => !declared.has(`${assetId} transfer`))
-  ) {
-    throw new Error('BRC-207: plan.operations must declare exactly one transfer per asset')
-  }
+/** The plan names exactly the assets among the action's token inputs and outputs. */
+function assertPlanAssets(plan: ColorPlan, involved: ReadonlySet<string>): void {
+  if (plan.assets.length !== involved.size || plan.assets.some(assetId => !involved.has(assetId)))
+    throw new Error('BRC-207: plan.assets must name exactly the assets the action moves')
 }
 
 /** Largest amount first. */
@@ -503,7 +628,7 @@ export class ColorPermissionModule implements PermissionsModule {
   ): Promise<unknown> {
     // A noSend action is a handoff: its receiver submits it.
     if (context.method === 'signAction' && context.action?.noSend === false) {
-      await this.#submitSigned(res as SignActionResult)
+      await this.#submitSigned(res as SignActionResult, context.action.transaction)
     }
     return res
   }
@@ -576,7 +701,7 @@ export class ColorPermissionModule implements PermissionsModule {
    * Send
    * ---------------------------------------------------------------------- */
 
-  /** Adds selected token inputs and per-asset change to a planned token send. */
+  /** Checks a planned token action and adds its selected token inputs and per-asset change. */
   async #createAction(args: CreateActionArgs, originator: string): Promise<CreateActionArgs> {
     const labels = args.labels ?? []
     const plan = ColorPlan.fromLabels(labels)
@@ -584,14 +709,20 @@ export class ColorPermissionModule implements PermissionsModule {
       throw new Error('BRC-207: a p color createAction requires a p color plan')
     const handoff = labels.some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
     assertPlanSupported(plan, args, handoff)
-    const { sends, outputs } = await this.#planOutputs(plan, args.outputs ?? [], originator)
+    const { planned, outputs } = await this.#planOutputs(plan, args, originator)
     // Storage locks the inputs when the wallet creates the action; until then they stay selected.
     const reserved = new Set<string>()
     try {
       const explicit = await this.#explicitInputs(args, originator)
       this.#reserve(reserved, explicit.managed)
-      assertPlanAssets(plan, new Set([...sends.required.keys(), ...explicit.available.keys()]))
-      const { inputs, changes } = await this.#fund(reserved, sends, explicit, handoff, originator)
+      const { inputs, changes } = await this.#fund(
+        reserved,
+        plan,
+        planned,
+        explicit,
+        handoff,
+        originator
+      )
       return {
         ...args,
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
@@ -623,14 +754,10 @@ export class ColorPermissionModule implements PermissionsModule {
    */
   async #explicitInputs(args: CreateActionArgs, originator: string): Promise<ExplicitInputs> {
     const inputs = args.inputs ?? []
-    const explicit: ExplicitInputs = {
-      inputs: [...inputs],
-      managed: [],
-      available: new Map(),
-      foreign: new Map()
-    }
+    const explicit: ExplicitInputs = { inputs: [...inputs], managed: [], holdings: new Map() }
     if (inputs.length === 0) return explicit
     const outpoints = new Set(inputs.map(input => input.outpoint))
+    if (outpoints.size !== inputs.length) throw new Error('BRC-207: duplicate explicit input')
     const listed = await this.#wallet.listOutputs(
       {
         basket: toolbox.specOpBasketPrefixOutputs,
@@ -653,12 +780,14 @@ export class ColorPermissionModule implements PermissionsModule {
         throw new Error('BRC-207: an explicit p color input is reserved by another action')
       const managed = await this.#managedInput(output, originator)
       if (managed === undefined)
-        throw new Error('BRC-207: an explicit p color input is not a managed value output')
+        throw new Error('BRC-207: an explicit p color input is not a managed token output')
       await this.#assertSupportedAsset(managed.assetId)
       if (!(await this.#spendable(managed.assetId, [managed])).has(managed.outpoint))
         throw new Error('BRC-207: an explicit p color input is not admitted and unspent')
       explicit.managed.push(managed)
-      addAmount(explicit.available, managed.assetId, managed.amount)
+      const totals = holding(explicit.holdings, managed.assetId, emptyExplicitHolding)
+      if (managed.role === 'value') totals.value += managed.amount
+      else totals.authority += 1
     })
     return explicit
   }
@@ -672,42 +801,50 @@ export class ColorPermissionModule implements PermissionsModule {
     const source = foreignSource(beef, outpoint)
     const token = readTokenOutput(source.lockingScript, parseOutpoint(outpoint))
     if (token === undefined) return
-    if (token.deploy || token.role !== 'value')
-      throw new Error('BRC-207: foreign deploy and authority inputs are not supported')
     await this.#assertSupportedAsset(token.assetId)
     if (!(await this.#spendable(token.assetId, [source])).has(outpoint))
       throw new Error('BRC-207: a foreign token input is not admitted and unspent in its overlay')
-    addAmount(explicit.available, token.assetId, token.amount)
-    addAmount(explicit.foreign, token.assetId, token.amount)
+    const totals = holding(explicit.holdings, token.assetId, emptyExplicitHolding)
+    if (token.role === 'value') {
+      totals.value += token.amount
+      totals.foreignValue += token.amount
+    } else {
+      totals.authority += 1
+      totals.foreignAuthority += 1
+    }
   }
 
-  /** Classifies the requested outputs, totalling each asset the send moves. */
+  /** Classifies the requested outputs, totalling each asset's value and authority outputs. */
   async #planOutputs(
     plan: ColorPlan,
-    requestedOutputs: CreateActionOutput[],
+    args: CreateActionArgs,
     originator: string
-  ): Promise<{ sends: PlannedSends; outputs: CreateActionOutput[] }> {
+  ): Promise<{ planned: PlannedOutputs; outputs: CreateActionOutput[] }> {
+    const requested = args.outputs ?? []
     for (const remittance of plan.ownedOutputs) {
-      if (remittance.outputIndex >= requestedOutputs.length) {
+      if (remittance.outputIndex >= requested.length) {
         throw new Error('BRC-207: plan.ownedOutputs names a missing output')
       }
     }
     const owned = new Map(plan.ownedOutputs.map(remittance => [remittance.outputIndex, remittance]))
-    const sends: PlannedSends = { required: new Map(), destinations: [] }
+    const planned: PlannedOutputs = { holdings: new Map(), destinations: [] }
     const outputs: CreateActionOutput[] = []
-    await eachInOrder(requestedOutputs.entries(), async ([index, output]) => {
-      outputs.push(await this.#planOutput(plan, index, output, owned.get(index), sends, originator))
+    await eachInOrder(requested.entries(), async ([index, output]) => {
+      outputs.push(
+        await this.#planOutput(plan, args, index, output, owned.get(index), planned, originator)
+      )
     })
-    return { sends, outputs }
+    return { planned, outputs }
   }
 
   /** One requested output: passed through, a token destination, or a token output this wallet keeps. */
   async #planOutput(
     plan: ColorPlan,
+    args: CreateActionArgs,
     index: number,
     output: CreateActionOutput,
     remittance: ColorRemittance | undefined,
-    sends: PlannedSends,
+    planned: PlannedOutputs,
     originator: string
   ): Promise<CreateActionOutput> {
     const token = readTokenOutput(LockingScript.fromHex(output.lockingScript), {
@@ -722,27 +859,76 @@ export class ColorPermissionModule implements PermissionsModule {
       }
       return output
     }
-    if (token.deploy) throw new Error('BRC-207: issuance is not supported by this module version')
-    if (token.role !== 'value')
-      throw new Error('BRC-207: authority operations are not supported by this module version')
+    if (token.deploy)
+      return await this.#deployOutput(args, output, token, remittance, planned, originator)
     if (!plan.assets.includes(token.assetId))
       throw new Error('BRC-207: an output asset is missing from plan.assets')
-    sends.required.set(token.assetId, (sends.required.get(token.assetId) ?? 0n) + token.amount)
+    const totals = holding(planned.holdings, token.assetId, emptyHolding)
+    if (token.role === 'value') totals.value += token.amount
+    else totals.authority += 1
     if (remittance !== undefined)
       return await this.#ownedOutput(token, output, remittance, originator)
     if (output.basket !== undefined) {
       throw new Error('BRC-207: only outputs in plan.ownedOutputs may enter a p color basket')
     }
-    sends.destinations.push({
+    planned.destinations.push({
       outputIndex: index,
       assetId: token.assetId,
+      role: token.role,
       amount: token.amount.toString(),
       lockingScript: output.lockingScript
     })
     return output
   }
 
-  /** A token output of the send that this wallet keeps, placed in its asset's basket. */
+  /**
+   * The action's deploy, which BRC-162 requires at output 0. An owned deploy keeps its `ISSUE`
+   * key; its asset basket is assigned once the transaction ID is final.
+   */
+  async #deployOutput(
+    args: CreateActionArgs,
+    output: CreateActionOutput,
+    token: TokenOutput,
+    remittance: ColorRemittance | undefined,
+    planned: PlannedOutputs,
+    originator: string
+  ): Promise<CreateActionOutput> {
+    if (args.options?.randomizeOutputs !== false)
+      throw new Error('BRC-207: a deploy requires options.randomizeOutputs false')
+    if (output.basket !== undefined)
+      throw new Error(
+        "BRC-207: a deploy output's basket is assigned once its transaction is signed"
+      )
+    planned.deploy = {
+      operation: token.amount > 0n ? 'deploy-fixed' : 'deploy-authority',
+      amount: token.amount,
+      owned: remittance !== undefined
+    }
+    if (remittance === undefined) {
+      planned.destinations.push({
+        outputIndex: 0,
+        assetId: ISSUE,
+        role: token.role,
+        amount: token.amount.toString(),
+        lockingScript: output.lockingScript
+      })
+      return output
+    }
+    if (remittance.assetId !== ISSUE)
+      throw new Error('BRC-207: a deploy output remittance must use ISSUE')
+    await this.#assertOwned(token, remittance, remittance.senderIdentityKey, originator)
+    // Without a p color basket the manager does not encrypt its custody, so it is encrypted here.
+    return {
+      ...output,
+      customInstructions: await encryptMetadata(
+        this.#wallet,
+        custodyInstructions(custodyOf(remittance)),
+        originator
+      )
+    }
+  }
+
+  /** A token output of the action that this wallet keeps, placed in its asset's basket. */
   async #ownedOutput(
     token: TokenOutput,
     output: CreateActionOutput,
@@ -752,7 +938,7 @@ export class ColorPermissionModule implements PermissionsModule {
     if (remittance.assetId !== token.assetId)
       throw new Error('BRC-207: an owned output remittance names another asset')
     await this.#assertOwned(token, remittance, remittance.senderIdentityKey, originator)
-    const basket = assetBasket(token.assetId, 'value')
+    const basket = assetBasket(token.assetId, token.role)
     if (output.basket !== undefined && output.basket !== basket) {
       throw new Error('BRC-207: an owned output names the wrong p color basket')
     }
@@ -764,12 +950,13 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * Selects and reserves what each asset still needs after the explicit inputs, asks the user to
-   * approve the send, splits for a handoff, and returns the selected inputs and token change.
+   * Funds each asset the plan involves, checks its operations, asks the user to approve the
+   * action, splits for a handoff, and returns the selected inputs and token change.
    */
   async #fund(
     reserved: Set<string>,
-    sends: PlannedSends,
+    plan: ColorPlan,
+    planned: PlannedOutputs,
     explicit: ExplicitInputs,
     handoff: boolean,
     originator: string
@@ -777,64 +964,131 @@ export class ColorPermissionModule implements PermissionsModule {
     inputs: ManagedInput[]
     changes: Array<{ assetId: string; output: CreateActionOutput }>
   }> {
-    const assets = new Map<string, bigint>()
-    for (const assetId of [...sends.required.keys(), ...explicit.available.keys()])
-      assets.set(assetId, sends.required.get(assetId) ?? 0n)
-    const selections = new Map<string, ManagedInput[]>()
-    await eachInOrder(assets, async ([assetId, amount]) => {
+    const assetIds = new Set([
+      ...planned.holdings.keys(),
+      ...explicit.holdings.keys(),
+      ...plan.operations.flatMap(operation =>
+        operation.assetId === ISSUE ? [] : [operation.assetId]
+      )
+    ])
+    assertPlanAssets(plan, new Set([...assetIds, ...(planned.deploy === undefined ? [] : [ISSUE])]))
+    if (planned.deploy !== undefined) assertOperations(plan, ISSUE, [planned.deploy.operation])
+    const funding: AssetFunding[] = []
+    await eachInOrder(assetIds, async assetId => {
       await this.#assertSupportedAsset(assetId)
-      const need = amount - (explicit.available.get(assetId) ?? 0n)
-      const selected = need > 0n ? await this.#selectInputs(assetId, need, originator) : []
-      this.#reserve(reserved, selected)
-      selections.set(assetId, selected)
+      funding.push(
+        await this.#fundAsset(
+          reserved,
+          plan,
+          assetId,
+          planned.holdings.get(assetId) ?? emptyHolding(),
+          explicit.holdings.get(assetId) ?? emptyExplicitHolding(),
+          originator
+        )
+      )
     })
     await this.#approve(originator, {
       type: 'color_send',
       handoff,
-      assets: [...assets].map(([assetId, amount]) => ({
-        assetId,
-        amount: amount.toString(),
-        inputAmount: (
-          sumAmounts(selections.get(assetId) ?? []) +
-          sumAmounts(explicit.managed.filter(input => input.assetId === assetId))
-        ).toString(),
-        foreignAmount: (explicit.foreign.get(assetId) ?? 0n).toString()
-      })),
-      destinations: sends.destinations
+      ...(planned.deploy === undefined
+        ? {}
+        : {
+            deploy: {
+              operation: planned.deploy.operation,
+              amount: planned.deploy.amount.toString(),
+              owned: planned.deploy.owned
+            }
+          }),
+      assets: funding.map(asset => consentFacts(asset, explicit.holdings.get(asset.assetId))),
+      destinations: planned.destinations
     })
     const inputs: ManagedInput[] = []
     const changes: Array<{ assetId: string; output: CreateActionOutput }> = []
-    await eachInOrder(assets, async ([assetId, amount]) => {
-      const selected = selections.get(assetId) ?? []
-      const assetInputs =
-        handoff && sumAmounts(selected) > amount
-          ? await this.#splitExact(reserved, assetId, selected, amount, sends, originator)
-          : selected
-      inputs.push(...assetInputs)
-      const change = sumAmounts(assetInputs) + (explicit.available.get(assetId) ?? 0n) - amount
-      if (change > 0n)
+    await eachInOrder(funding, async asset => {
+      const value = asset.selected.filter(input => input.role === 'value')
+      const needed =
+        asset.outputs.value - asset.change - (explicit.holdings.get(asset.assetId)?.value ?? 0n)
+      const split =
+        handoff && asset.change > 0n
+          ? await this.#splitExact(reserved, asset.assetId, value, needed, planned, originator)
+          : undefined
+      inputs.push(...(split ?? asset.selected))
+      if (split === undefined && asset.change > 0n)
         changes.push({
-          assetId,
-          output: (await this.#newManagedOutput(assetId, change, originator)).output
+          assetId: asset.assetId,
+          output: (await this.#newManagedOutput(asset.assetId, asset.change, originator)).output
         })
     })
     return { inputs, changes }
   }
 
-  /** Replaces a handoff's inputs with one split output of exactly `amount`, which it reserves. */
+  /**
+   * Selects one asset's value inputs for a transfer and authority inputs for a declared authority
+   * operation, then checks the resulting operations against the plan. Value is selected, with
+   * change, only when the asset's operations are a transfer without a mint or burn.
+   */
+  async #fundAsset(
+    reserved: Set<string>,
+    plan: ColorPlan,
+    assetId: string,
+    requested: Holding,
+    explicit: ExplicitHolding,
+    originator: string
+  ): Promise<AssetFunding> {
+    const declared = declaredOperations(plan, assetId)
+    const selected: ManagedInput[] = []
+    const automatic = declared.has('transfer') && !declared.has('mint') && !declared.has('burn')
+    if (automatic && requested.value > explicit.value) {
+      selected.push(
+        ...(await this.#selectInputs(
+          assetId,
+          'value',
+          requested.value - explicit.value,
+          originator
+        ))
+      )
+      this.#reserve(reserved, selected)
+    }
+    const authorityOperation = AUTHORITY_OPERATIONS.find(operation => declared.has(operation))
+    const authorityCount =
+      authorityOperation === undefined || explicit.authority > 0
+        ? 0
+        : authorityInputsFor(authorityOperation, requested.authority)
+    if (authorityCount > 0) {
+      const authorities = await this.#selectInputs(
+        assetId,
+        'authority',
+        BigInt(authorityCount),
+        originator
+      )
+      this.#reserve(reserved, authorities)
+      selected.push(...authorities)
+    }
+    const selectedValue = sumAmounts(selected)
+    const value = explicit.value + selectedValue
+    // Change returns what selection adds beyond the need; excess explicit value is a burn.
+    const change = selectedValue > 0n ? value - requested.value : 0n
+    const inputs = { value, authority: explicit.authority + authorityCount }
+    const outputs = { value: requested.value + change, authority: requested.authority }
+    const operations = requiredOperations(inputs, outputs)
+    assertOperations(plan, assetId, operations)
+    return { assetId, selected, change, operations, inputs, outputs }
+  }
+
+  /** Replaces a handoff's value inputs with one split output of exactly `amount`, which it reserves. */
   async #splitExact(
     reserved: Set<string>,
     assetId: string,
     selected: ManagedInput[],
     amount: bigint,
-    sends: PlannedSends,
+    planned: PlannedOutputs,
     originator: string
   ): Promise<ManagedInput[]> {
     const exact = await this.#split(
       assetId,
       selected,
       amount,
-      sends.destinations.filter(destination => destination.assetId === assetId),
+      planned.destinations.filter(destination => destination.assetId === assetId),
       originator
     )
     this.#release(reserved, selected)
@@ -842,24 +1096,32 @@ export class ColorPermissionModule implements PermissionsModule {
     return [exact]
   }
 
-  /** Selects admitted, unspent value outputs of one asset covering `amount`, largest first. */
+  /**
+   * Selects admitted, unspent outputs of one asset's value or authority basket: value outputs
+   * covering `target` units, largest first, or `target` authority outputs.
+   */
   async #selectInputs(
     assetId: string,
-    amount: bigint,
+    role: TokenRole,
+    target: bigint,
     originator: string
   ): Promise<ManagedInput[]> {
-    const candidates = (await this.#candidates(assetId, originator)).sort(byAmountDescending)
+    const weight = (candidate: Candidate): bigint => (role === 'value' ? candidate.amount : 1n)
+    const candidates = (await this.#candidates(assetId, role, originator)).sort(byAmountDescending)
     const rejected = new Set<string>()
     for (;;) {
       const chosen: Candidate[] = []
       let total = 0n
       for (const candidate of candidates) {
-        if (total >= amount) break
+        if (total >= target) break
         if (rejected.has(candidate.outpoint)) continue
         chosen.push(candidate)
-        total += candidate.amount
+        total += weight(candidate)
       }
-      if (total < amount) throw new Error(`BRC-207: insufficient spendable balance of ${assetId}`)
+      if (total < target)
+        throw new Error(
+          `BRC-207: insufficient spendable ${role === 'value' ? 'balance' : 'authority'} of ${assetId}`
+        )
       // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
       const inputs = await Promise.all(
         chosen.map(async candidate => await this.#readableInput(candidate, originator))
@@ -875,14 +1137,14 @@ export class ColorPermissionModule implements PermissionsModule {
     }
   }
 
-  /** One asset's value outputs, read from their locking scripts, excluding those a send has selected. */
-  async #candidates(assetId: string, originator: string): Promise<Candidate[]> {
-    const outputs = await this.#listBasket(assetBasket(assetId, 'value'), originator, {})
+  /** One basket's token outputs of the asset, read from their locking scripts, excluding selected ones. */
+  async #candidates(assetId: string, role: TokenRole, originator: string): Promise<Candidate[]> {
+    const outputs = await this.#listBasket(assetBasket(assetId, role), originator, {})
     return outputs.flatMap(output => {
       if (this.#selected.has(output.outpoint) || output.customInstructions === undefined) return []
       const source = this.#sourceOutput(output)
       const token = tryReadTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
-      if (token?.assetId !== assetId || token.role !== 'value' || token.deploy) return []
+      if (token?.assetId !== assetId || token.role !== role) return []
       return [
         { ...source, token, amount: token.amount, customInstructions: output.customInstructions }
       ]
@@ -906,12 +1168,11 @@ export class ColorPermissionModule implements PermissionsModule {
     }
   }
 
-  /** A `p color` basket output as a managed value input, or undefined when it is not one. */
+  /** A `p color` basket output as a managed token input, or undefined when it is not one. */
   async #managedInput(output: WalletOutput, originator: string): Promise<ManagedInput | undefined> {
     const source = this.#sourceOutput(output)
     const token = readTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
-    if (token?.role !== 'value' || token.deploy || output.customInstructions === undefined)
-      return undefined
+    if (token === undefined || output.customInstructions === undefined) return undefined
     return await this.#custodyInput({ ...source, token }, output.customInstructions, originator)
   }
 
@@ -928,7 +1189,7 @@ export class ColorPermissionModule implements PermissionsModule {
     )
     if (!selectsAsset(custody.assetId, output.token)) return undefined
     const { token, ...source } = output
-    return { ...source, assetId: token.assetId, amount: token.amount, custody }
+    return { ...source, assetId: token.assetId, role: token.role, amount: token.amount, custody }
   }
 
   /**
@@ -1026,6 +1287,7 @@ export class ColorPermissionModule implements PermissionsModule {
       lockingScript: LockingScript.fromHex(exact.output.lockingScript),
       satoshis: TOKEN_CARRIER_SATOSHIS,
       assetId,
+      role: 'value',
       amount,
       custody: exact.custody
     }
@@ -1069,7 +1331,7 @@ export class ColorPermissionModule implements PermissionsModule {
     // Foreign token inputs are rechecked too; only the module's own inputs are signed.
     const checked = [
       ...inputs,
-      ...foreignTokenInputs(action.transaction, new Set(inputs.map(input => input.outpoint)))
+      ...tokenSources(action.transaction, new Set(inputs.map(input => input.outpoint)))
     ]
     if (checked.length === 0) return args
     const assetIds = [...new Set(checked.map(input => input.assetId))]
@@ -1118,24 +1380,34 @@ export class ColorPermissionModule implements PermissionsModule {
     return managed.filter(input => input !== undefined)
   }
 
-  /** Submits a signed token transaction to the topic of every asset among its outputs. */
-  async #submitSigned(result: SignActionResult): Promise<void> {
+  /**
+   * Submits a signed token transaction to the topic of every asset among its inputs and outputs,
+   * and a deploy to the discovery topic.
+   */
+  async #submitSigned(result: SignActionResult, template: Transaction): Promise<void> {
     if (result?.tx === undefined) return
     const tx = Transaction.fromAtomicBEEF(result.tx)
     const txid = tx.id('hex')
-    const assetIds = new Set(
-      tx.outputs.flatMap(
-        (output, vout) => tryReadTokenOutput(output.lockingScript, { txid, vout })?.assetId ?? []
-      )
+    const outputs = tx.outputs.map((output, vout) =>
+      tryReadTokenOutput(output.lockingScript, { txid, vout })
     )
-    if (assetIds.size > 0) await this.#submit([...assetIds], result.tx)
+    const deploy = outputs[0]?.deploy === true
+    const assetIds = new Set([
+      ...tokenSources(template, new Set()).map(input => input.assetId),
+      ...outputs.flatMap(token => (token === undefined || token.deploy ? [] : [token.assetId]))
+    ])
+    if (assetIds.size > 0 || deploy) await this.#submit([...assetIds], result.tx, deploy)
   }
 
-  /** Submits to each asset topic and fails unless every token output of that asset is admitted. */
-  async #submit(assetIds: string[], beef: AtomicBEEF): Promise<void> {
+  /**
+   * Submits to each asset topic, and a deploy to the discovery topic, and fails unless every
+   * token output is admitted. A deploy's own asset must then be admitted by its asset overlay.
+   */
+  async #submit(assetIds: string[], beef: AtomicBEEF, deploy = false): Promise<void> {
     const tx = Transaction.fromAtomicBEEF(beef)
     const txid = tx.id('hex')
-    const steak = await this.#provider.submit(assetIds, Array.from(beef))
+    const topics = [...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)]
+    const steak = await this.#provider.submit(topics, Array.from(beef))
     for (const assetId of assetIds) {
       const admitted = steak?.[colorTopic(assetId)]?.outputsToAdmit ?? []
       const missing = tx.outputs
@@ -1152,6 +1424,18 @@ export class ColorPermissionModule implements PermissionsModule {
         )
       }
     }
+    if (!deploy) return
+    if (!(steak?.[DISCOVERY_TOPIC]?.outputsToAdmit ?? []).includes(0))
+      throw new Error(`BRC-207: ${DISCOVERY_TOPIC} did not admit the deploy of ${txid}`)
+    const output = tx.outputs[0]
+    const outpoint = outpointString(txid, 0)
+    const admitted = await this.#spendable(`${txid}_0`, [
+      { outpoint, lockingScript: output.lockingScript, satoshis: output.satoshis ?? 0 }
+    ])
+    if (!admitted.has(outpoint))
+      throw new Error(
+        `BRC-207: deployment ${txid} was processed; its per-asset admission remains pending`
+      )
   }
 
   /* ----------------------------------------------------------------------

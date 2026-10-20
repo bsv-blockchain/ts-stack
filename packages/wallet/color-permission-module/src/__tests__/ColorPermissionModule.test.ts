@@ -21,7 +21,7 @@ import {
 } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
-import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID } from '../identifiers.js'
+import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID, colorTopic } from '../identifiers.js'
 import {
   createModule,
   deployAsset,
@@ -210,7 +210,7 @@ describe('ColorPermissionModule', () => {
         100n,
         200n
       ])
-      expect(provider.submissions).toEqual([{ assetIds: [assetId], txid: tx.id('hex') }])
+      expect(provider.submissions).toEqual([{ topics: [colorTopic(assetId)], txid: tx.id('hex') }])
       expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send'])
       expect(prompts[0].request).toMatchObject({
         assets: [{ assetId, amount: '100', inputAmount: '300' }],
@@ -397,7 +397,7 @@ describe('ColorPermissionModule', () => {
           args: { description: 'Send tokens', labels: burn, outputs: [output] },
           originator: APP
         })
-      ).rejects.toThrow('exactly one transfer per asset')
+      ).rejects.toThrow('exceed the authenticated input balance')
       await expect(
         module.onRequest({
           method: 'createAction',
@@ -426,7 +426,9 @@ describe('ColorPermissionModule', () => {
         100n,
         200n
       ])
-      expect(provider.submissions).toEqual([{ assetIds: [assetId], txid: split.id('hex') }])
+      expect(provider.submissions).toEqual([
+        { topics: [colorTopic(assetId)], txid: split.id('hex') }
+      ])
       expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send', 'color_split'])
       expect(prompts[1].request).toMatchObject({ assetId, amount: '100', change: '200' })
       const stored = wallet.outputs.get(`${split.id('hex')}.0`)?.customInstructions ?? ''

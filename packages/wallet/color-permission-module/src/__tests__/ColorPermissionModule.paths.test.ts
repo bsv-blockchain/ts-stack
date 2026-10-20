@@ -184,12 +184,20 @@ describe('ColorPermissionModule boundaries', () => {
       outputDescription: 'Payment'
     }
     const funded = await createAction({
-      labels: plan({ changePositions: [{ assetId, index: 0 }] }),
+      labels: plan({ changePositions: [{ assetId, index: 1 }] }),
       outputs: [output],
       options: { randomizeOutputs: false }
     })
-    expect(funded.outputs![0]).toMatchObject({ basket: assetBasket(assetId, 'value') })
-    expect(funded.outputs![1].lockingScript).toBe(output.lockingScript)
+    expect(funded.outputs![0].lockingScript).toBe(output.lockingScript)
+    expect(funded.outputs![1]).toMatchObject({ basket: assetBasket(assetId, 'value') })
+
+    await expect(
+      createAction({
+        labels: plan({ changePositions: [{ assetId, index: 0 }] }),
+        outputs: [output],
+        options: { randomizeOutputs: false }
+      })
+    ).rejects.toThrow('conflict with the requested outputs')
 
     await expect(
       createAction({
@@ -200,7 +208,7 @@ describe('ColorPermissionModule boundaries', () => {
     ).rejects.toThrow('cannot be satisfied')
     await expect(
       createAction({
-        labels: plan({ changePositions: [{ assetId, index: 0 }] }),
+        labels: plan({ changePositions: [{ assetId, index: 1 }] }),
         outputs: [output]
       })
     ).rejects.toThrow('randomizeOutputs false')
@@ -395,7 +403,7 @@ describe('ColorPermissionModule boundaries', () => {
           }
         ]
       }),
-      'issuance is not supported'
+      'randomizeOutputs false'
     ],
     [
       'authority outputs',
@@ -408,7 +416,7 @@ describe('ColorPermissionModule boundaries', () => {
           }
         ]
       }),
-      'authority operations'
+      'needs an authority input'
     ],
     [
       'an output asset missing from the plan',
@@ -425,7 +433,11 @@ describe('ColorPermissionModule boundaries', () => {
       }),
       'missing from plan.assets'
     ],
-    ['a plan asset the action does not use', async () => ({ outputs: [] }), 'does not use']
+    [
+      'a plan asset the action does not use',
+      async () => ({ outputs: [] }),
+      'requires the operations []'
+    ]
   ])('rejects %s', async (_name, build, message) => {
     await holdTokens(wallet, provider, assetId, [50n])
     await expect(createAction(await build())).rejects.toThrow(message)
