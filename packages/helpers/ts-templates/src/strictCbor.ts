@@ -3,7 +3,7 @@
 // bytewise) without duplicates, floats only as finite 64-bit values, no simple values beyond
 // false/true/null, and tag 42 (a CID link) as the only tag. Hand-rolled on purpose: one
 // decoder that the TS and Go overlays implement byte for byte, with identical messages, which
-// the Mandala overlay copies into its reject reasons. The Go overlay needs the same change.
+// the Mandala overlay copies into its reject reasons.
 //
 // The spec sets no size or nesting limit. STRICT_CBOR_MAX_DEPTH bounds container nesting only,
 // so hostile input cannot exhaust the stack.

@@ -45,8 +45,8 @@ allowed`. New messages: `float must be 64-bit`, `non-finite float`, `simple
 value not allowed`, `only tag 42 is allowed`, `invalid CID`, `input bytes
 outside 0..255`. The 4096-byte ceiling (`STRICT_CBOR_MAX_BYTES`) and the
   depth-4 cap are gone: the spec sets neither; `STRICT_CBOR_MAX_DEPTH` (1024)
-  remains as an anti-DoS bound on nesting. The Go overlay implements the same
-  decoder and needs the same change; `test/vectors/brc162.json` is regenerated.
+  remains as an anti-DoS bound on nesting. `test/vectors/brc162.json` is
+  regenerated.
 
 ### 2.0.0 candidate — BRC-162 (breaking)
 
