@@ -4,9 +4,9 @@
   "sourceRevision": "f9137ff037c6d608019d04b4e2f984812b0385b7",
   "tracker": "https://github.com/bsv-blockchain/ts-stack/issues/324",
   "workspace": {
-    "projects": 47,
-    "packageAreaProjects": 41,
-    "publicPackages": 38,
+    "projects": 48,
+    "packageAreaProjects": 42,
+    "publicPackages": 39,
     "privatePackageAreaProjects": 3
   },
   "ci": {
@@ -334,6 +334,7 @@
     "@bsv/wallet-toolbox-mobile": "2.15.3",
     "@bsv/wallet-toolbox": "2.15.3",
     "@bsv/output-knowledge": "0.1.0",
-    "@bsv/color-permission-module": "0.2.0"
+    "@bsv/color-permission-module": "0.2.0",
+    "@bsv/rabin-permission-module": "0.1.0"
   }
 }
