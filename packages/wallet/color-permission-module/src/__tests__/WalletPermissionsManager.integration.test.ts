@@ -103,6 +103,7 @@ describe('color module registered on a WalletPermissionsManager', () => {
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: '180', outputs: [] })
+    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=5')
   })
 
   it('aborts a declined send, so the inputs it reserved are spendable again', async () => {

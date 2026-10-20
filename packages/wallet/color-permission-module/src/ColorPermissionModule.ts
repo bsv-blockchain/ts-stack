@@ -819,6 +819,8 @@ export class ColorPermissionModule implements PermissionsModule {
   protected readonly wallet: WalletInterface
   protected readonly provider: ColorOverlayProvider
   protected readonly requestTokenAccess: ColorTokenAccessHandler
+  /** BRC-205 attribute for BRC-207's Discovery section: this module implements revision 5. */
+  readonly capabilities: Readonly<Record<string, string>> = { 'brc207-color': '5' }
   /** Outputs a send in progress has selected, so a concurrent send does not select them too. */
   protected readonly selected = new Set<string>()
   protected readonly supportedAssets = new Map<string, Promise<void>>()

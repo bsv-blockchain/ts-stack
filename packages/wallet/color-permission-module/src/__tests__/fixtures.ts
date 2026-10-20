@@ -82,6 +82,8 @@ export class FakeWallet {
   }
 
   getPublicKey: WalletInterface['getPublicKey'] = async args => await this.proto.getPublicKey(args)
+
+  getVersion: WalletInterface['getVersion'] = async () => ({ version: 'fake-1.0.0' })
   createSignature: WalletInterface['createSignature'] = async args =>
     await this.proto.createSignature(args)
   verifySignature: WalletInterface['verifySignature'] = async args =>
