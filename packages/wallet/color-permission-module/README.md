@@ -79,7 +79,11 @@ false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
   relies on that admission for the transaction's token amounts rather than
   re-evaluating them.
 - **App-built transactions**: `createSignature` with a `p color` protocol ID
-  and a BRC-207 signature envelope in `data`.
+  and a BRC-207 signature envelope in `data`. The whole transaction is
+  evaluated as a send is: every input needs its source, every token input must
+  be admitted and unspent in its overlay, and the user approves the same facts
+  (`color_signature`: every asset leg, destinations, satoshi totals and fee,
+  the signature released) before the module signs.
 - **Reads**: `listOutputs` with `p color assets`, `p color balance <assetTag>`
   or `p color balance <assetTag> authority`. Balances are exact decimal strings.
 

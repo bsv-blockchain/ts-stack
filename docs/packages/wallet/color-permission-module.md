@@ -69,5 +69,6 @@ BRC-161 authority operations, satoshi change positions (wallet-toolbox does not
 position satoshi change) and assets with required processing profiles, ignores BRC-176 lineage proofs, and does not yet record exposure for signatures
 released through `createSignature`. BRC-207's non-final transaction rules are not
 implemented; such transactions follow the wallet's existing behavior. A send is approved in `signAction`, against
-the funded transaction. A receipt relies on its overlay's admission of the received output
+the funded transaction; a `createSignature` request is approved against the whole
+app-built transaction, after every token input is found admitted and unspent. A receipt relies on its overlay's admission of the received output
 for the transaction's token amounts; the module does not re-evaluate them.

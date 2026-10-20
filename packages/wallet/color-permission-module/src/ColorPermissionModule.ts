@@ -345,6 +345,46 @@ function actionConsent(
   const kept = (index: number): boolean =>
     requested[index]?.basket?.startsWith(`${COLOR_BASKET_NAMESPACE} `) === true ||
     plan.ownedOutputs.some(remittance => remittance.outputIndex === index)
+  return {
+    type: 'color_send',
+    handoff: (createArgs.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX)),
+    ...transactionConsent(
+      tx,
+      tokens,
+      managed,
+      kept,
+      vout => vout < requested.length && !kept(vout),
+      managed.map(input => ({
+        outpoint: input.outpoint,
+        inputIndex: tx.inputs.findIndex(candidate => inputOutpoint(candidate) === input.outpoint),
+        sighashType: scopes.get(input.outpoint) ?? DEFAULT_SIGHASH
+      })),
+      plan.ownedOutputs.some(remittance => remittance.outputIndex === 0)
+    )
+  }
+}
+
+interface ReleasedSignature {
+  outpoint: string
+  inputIndex: number
+  sighashType: number
+}
+
+/**
+ * The facts the user approves for any transaction this wallet signs token inputs of, whether the
+ * wallet funded it or an app built it: every asset leg with this wallet's (`own`) and foreign
+ * inputs, kept and outgoing outputs and the supply change; the destinations; satoshi totals and
+ * fee; the signatures released; and the lock time.
+ */
+function transactionConsent(
+  tx: Transaction,
+  tokens: TransactionTokens,
+  own: ReadonlyArray<{ assetId: string; role: TokenRole; amount: bigint }>,
+  kept: (vout: number) => boolean,
+  destination: (vout: number) => boolean,
+  signatures: ReleasedSignature[],
+  deployOwned: boolean
+): Record<string, unknown> {
   const txid = tx.id('hex')
   const outputs = tx.outputs.map((output, vout) => ({
     vout,
@@ -352,7 +392,7 @@ function actionConsent(
     satoshis: output.satoshis ?? 0
   }))
   const assets = [...new Set([...tokens.inputs.keys(), ...tokens.outputs.keys()])].map(assetId => {
-    const own = managed.filter(input => input.assetId === assetId)
+    const ownInputs = own.filter(input => input.assetId === assetId)
     const inputs = tokens.inputs.get(assetId) ?? emptyHolding()
     const all = tokens.outputs.get(assetId) ?? emptyHolding()
     const keptOutputs = outputs.filter(
@@ -362,11 +402,11 @@ function actionConsent(
     return {
       assetId,
       operations: requiredOperations(inputs, all),
-      inputAmount: sumAmounts(own).toString(),
-      foreignAmount: (inputs.value - sumAmounts(own)).toString(),
-      authorityInputs: own.filter(input => input.role === 'authority').length,
+      inputAmount: sumAmounts(ownInputs).toString(),
+      foreignAmount: (inputs.value - sumAmounts(ownInputs)).toString(),
+      authorityInputs: ownInputs.filter(input => input.role === 'authority').length,
       foreignAuthorityInputs:
-        inputs.authority - own.filter(input => input.role === 'authority').length,
+        inputs.authority - ownInputs.filter(input => input.role === 'authority').length,
       keptAmount: sumAmounts(keptOutputs.map(output => output.token!)).toString(),
       keptAuthorities: keptOutputs.filter(output => output.token!.role === 'authority').length,
       outgoingAmount: (all.value - sumAmounts(keptOutputs.map(output => output.token!))).toString(),
@@ -384,20 +424,18 @@ function actionConsent(
   )
   const outputSatoshis = outputs.reduce((total, output) => total + output.satoshis, 0)
   return {
-    type: 'color_send',
-    handoff: (createArgs.labels ?? []).some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX)),
     ...(tokens.deploy === undefined
       ? {}
       : {
           deploy: {
             operation: deployOperation(tokens.deploy),
             amount: tokens.deploy.amount.toString(),
-            owned: plan.ownedOutputs.some(remittance => remittance.outputIndex === 0)
+            owned: deployOwned
           }
         }),
     assets,
     destinations: outputs
-      .filter(output => output.vout < requested.length && !kept(output.vout))
+      .filter(output => destination(output.vout))
       .map(output => ({
         outputIndex: output.vout,
         satoshis: output.satoshis,
@@ -415,11 +453,7 @@ function actionConsent(
       outputs: outputSatoshis,
       fee: inputSatoshis - outputSatoshis
     },
-    signatures: managed.map(input => ({
-      outpoint: input.outpoint,
-      inputIndex: tx.inputs.findIndex(candidate => inputOutpoint(candidate) === input.outpoint),
-      sighashType: scopes.get(input.outpoint) ?? DEFAULT_SIGHASH
-    })),
+    signatures,
     lockTime: tx.lockTime
   }
 }
@@ -1841,7 +1875,14 @@ export class ColorPermissionModule implements PermissionsModule {
       )
     }
     await this.#assertOwned(token, selector, args.counterparty ?? 'anyone', originator)
-    await this.#assertSupportedAsset(token.assetId)
+    // The signature commits to the whole transaction, so it is evaluated as a send is: every
+    // input authenticated from its source, every asset's legs and supply change derived, and
+    // every token input admitted and unspent in its overlay.
+    const tokens = transactionTokens(tx, true)
+    await eachInOrder(
+      new Set([token.assetId, ...tokens.inputs.keys(), ...tokens.outputs.keys()]),
+      async assetId => await this.#assertSupportedAsset(assetId)
+    )
     await Promise.all(
       ownedOutputs.map(async remittance => {
         const output = tx.outputs[remittance.outputIndex]
@@ -1860,19 +1901,29 @@ export class ColorPermissionModule implements PermissionsModule {
     )
     const outpoint = outpointString(sourceTXID, input.sourceOutputIndex)
     const signed = { outpoint, lockingScript: source.lockingScript, satoshis: source.satoshis }
-    const admitted = await this.#spendable(token.assetId, [signed])
-    if (!admitted.has(outpoint))
-      throw new Error('BRC-207: the signed input is not admitted and unspent in its overlay')
+    await eachInOrder(new Set(tokens.consumed.map(consumed => consumed.assetId)), async assetId => {
+      const assetInputs = tokens.consumed.filter(consumed => consumed.assetId === assetId)
+      const admitted = await this.#spendable(assetId, assetInputs)
+      if (!admitted.has(outpoint) && assetId === token.assetId)
+        throw new Error('BRC-207: the signed input is not admitted and unspent in its overlay')
+      if (assetInputs.some(consumed => !admitted.has(consumed.outpoint)))
+        throw new Error(`BRC-207: a ${assetId} input is not admitted and unspent in its overlay`)
+    })
     const preimage = this.#preimage(tx, inputIndex, signed, sighashType)
+    const kept = (vout: number): boolean =>
+      ownedOutputs.some(remittance => remittance.outputIndex === vout)
     await this.#approve(originator, {
       type: 'color_signature',
-      assetId: token.assetId,
-      role: token.role,
-      amount: token.amount.toString(),
-      outpoint,
       inputIndex,
-      sighashType,
-      outputs: tx.outputs.length
+      ...transactionConsent(
+        tx,
+        tokens,
+        [token],
+        kept,
+        vout => !kept(vout),
+        [{ outpoint, inputIndex, sighashType }],
+        kept(0)
+      )
     })
     return await next({
       protocolID: args.protocolID,

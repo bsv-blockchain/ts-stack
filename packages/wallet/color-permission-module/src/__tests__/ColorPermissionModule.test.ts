@@ -678,6 +678,20 @@ describe('ColorPermissionModule', () => {
       ])
       expect(validInput(tx, 0)).toBe(true)
       expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_signature'])
+      expect(prompts[0].request).toMatchObject({
+        inputIndex: 0,
+        assets: [
+          { assetId, inputAmount: '40', foreignAmount: '0', keptAmount: '0', outgoingAmount: '40' }
+        ],
+        destinations: [{ outputIndex: 0, assetId, amount: '40' }],
+        signatures: [
+          {
+            outpoint: `${tx.inputs[0].sourceTransaction!.id('hex')}.0`,
+            inputIndex: 0,
+            sighashType: 0x41
+          }
+        ]
+      })
     })
 
     it('rejects a direct hash, SINGLE without a matching output, and a mismatched asset selector', async () => {
@@ -697,15 +711,13 @@ describe('ColorPermissionModule', () => {
         TransactionSignature.SIGHASH_SINGLE | TransactionSignature.SIGHASH_FORKID
       )
       const envelope = JSON.parse(new TextDecoder().decode(new Uint8Array(single.args.data)))
-      const twoInputs = Transaction.fromAtomicBEEF(envelope.tx)
-      twoInputs.addInput({
-        sourceTransaction: twoInputs.inputs[0].sourceTransaction,
-        sourceOutputIndex: 0,
-        unlockingScript: new UnlockingScript()
-      })
+      // A satoshi input ahead of the token input, with its source: every input must be
+      // authenticated before the SIGHASH scope is checked.
+      const funding = new Transaction()
+      funding.addOutput({ lockingScript: LockingScript.fromASM('OP_TRUE'), satoshis: 1000 })
       const swapped = Transaction.fromAtomicBEEF(envelope.tx)
       swapped.inputs.unshift({
-        sourceTXID: 'ee'.repeat(32),
+        sourceTransaction: funding,
         sourceOutputIndex: 0,
         unlockingScript: new UnlockingScript(),
         sequence: 0xffffffff
