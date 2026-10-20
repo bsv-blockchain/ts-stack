@@ -67,4 +67,5 @@ This version rejects BRC-161 JSON outputs and assets with required processing
 profiles, ignores BRC-176 lineage proofs, and does not yet record exposure for signatures
 released through `createSignature`. BRC-207's non-final transaction rules are not
 implemented; such transactions follow the wallet's existing behavior. A send is approved in `signAction`, against
-the funded transaction.
+the funded transaction. A receipt relies on its overlay's admission of the received output
+for the transaction's token amounts; the module does not re-evaluate them.

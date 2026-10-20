@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import {
   Beef,
   LockingScript,
+  OP,
   Signature,
   Transaction,
   TransactionSignature,
@@ -157,15 +158,35 @@ describe('ColorPermissionModule', () => {
       )
     })
 
-    it('rejects a receipt whose transaction is not a valid token transfer', async () => {
+    it('accepts an admitted output spending inputs it cannot read as BRC-162', async () => {
+      const legacyId = legacyDeploy(provider, 1)
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, legacyId, 25n)
+      // A BRC-161 JSON transfer, spendable by anyone, replaces the payment's binary source.
+      const json = `{"p":"bsv-20","op":"transfer","id":"${legacyId}","amt":"25"}`
+      const source = new Transaction()
+      source.addOutput({
+        lockingScript: new LockingScript()
+          .writeOpCode(OP.OP_FALSE)
+          .writeOpCode(OP.OP_IF)
+          .writeBin(toArray('ord', 'utf8'))
+          .writeOpCode(OP.OP_1)
+          .writeBin(toArray('application/bsv-20', 'utf8'))
+          .writeOpCode(OP.OP_FALSE)
+          .writeBin(toArray(json, 'utf8'))
+          .writeOpCode(OP.OP_ENDIF)
+          .writeOpCode(OP.OP_TRUE),
+        satoshis: 1
+      })
+      tx.inputs[0].sourceTransaction = source
+      provider.admit(legacyId, tx, 0)
+      await expect(
+        receipt(customInstructions, assetBasket(legacyId, 'value'), tx)
+      ).resolves.toEqual(expect.objectContaining({ args: expect.anything() }))
+    })
+
+    it('rejects a receipt whose input does not unlock its source', async () => {
       const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 25n)
       provider.admit(assetId, tx, 0)
-      const minted = new Transaction()
-      minted.addOutput(tx.outputs[0])
-      provider.admit(assetId, minted, 0)
-      await expect(receipt(customInstructions, undefined, minted)).rejects.toThrow(
-        'exceed the authenticated input balance'
-      )
       tx.inputs[0].unlockingScript = UnlockingScript.fromHex('00')
       await expect(receipt(customInstructions, undefined, tx)).rejects.toThrow(
         'Script evaluation error'

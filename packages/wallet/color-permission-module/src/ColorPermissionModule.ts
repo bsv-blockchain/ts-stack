@@ -877,19 +877,15 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * Checks a received transaction: every input unlocks its source and each asset's outputs follow
-   * BRC-162's supply rules. Consumed token inputs are not looked up: the received output must be
-   * admitted and unspent, and its overlay admits it only after validating its inputs.
+   * Checks a received transaction: every input unlocks its source and every asset it involves is
+   * supported. Token amounts are not re-evaluated: the received output must be admitted and
+   * unspent, and its overlay admits it only after applying the amount and authority rules.
    */
   async #assertCompletedTransaction(tx: Transaction): Promise<void> {
     for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
     const { inputs, outputs } = transactionTokens(tx)
     await eachInOrder(new Set([...inputs.keys(), ...outputs.keys()]), async assetId => {
       await this.#assertSupportedAsset(assetId)
-      requiredOperations(
-        inputs.get(assetId) ?? emptyHolding(),
-        outputs.get(assetId) ?? emptyHolding()
-      )
     })
   }
 
