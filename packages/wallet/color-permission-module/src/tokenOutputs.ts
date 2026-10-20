@@ -17,8 +17,8 @@ export interface TokenOutput {
   jsonOperation?: JsonOperation
 }
 
-/** The BRC-161 operations whose outputs carry value. */
-export type JsonOperation = 'transfer' | 'mint' | 'deploy+mint'
+/** The BRC-161 operations this module reads: value outputs, and the authority outputs. */
+export type JsonOperation = 'transfer' | 'mint' | 'deploy+mint' | 'auth' | 'deploy+auth'
 
 type Cbor =
   | bigint
@@ -212,14 +212,15 @@ export function readTokenOutput(
 
 const BSV20_CONTENT_TYPE = 'application/bsv-20'
 const MAX_UINT64 = (1n << 64n) - 1n
-const VALUE_OPERATIONS = new Set<JsonOperation>(['transfer', 'mint', 'deploy+mint'])
-const UNSUPPORTED_OPERATIONS = new Set(['auth', 'deploy+auth', 'burn'])
+const VALUE_OPERATIONS = new Set<string>(['transfer', 'mint', 'deploy+mint'])
+const AUTHORITY_OPERATIONS = new Set<string>(['auth', 'deploy+auth'])
 
 /**
  * Reads a BRC-161 JSON token output: a BRC-160 `ord` inscription of type `application/bsv-20`
  * anywhere in the script, located by `Bsv21Token`. Returns undefined for a script without such an
- * inscription. `transfer`, `mint` and `deploy+mint` outputs carry value (BRC-161 L262); the
- * `auth`, `deploy+auth` and `burn` operations fail as unsupported, as does a malformed inscription.
+ * inscription. `transfer`, `mint` and `deploy+mint` outputs carry value (BRC-161 L262); `auth` and
+ * `deploy+auth` are authority outputs of no value (L191-207); `burn` fails as unsupported, as does
+ * a malformed inscription.
  */
 export function readJsonTokenOutput(
   lockingScript: LockingScript,
@@ -243,20 +244,23 @@ export function readJsonTokenOutput(
     throw malformed((error as Error).message)
   }
   const op = decoded.op
-  if (UNSUPPORTED_OPERATIONS.has(op))
+  if (op === 'burn')
     throw new Error(`BRC-207: BRC-161 ${op} is an operation this module does not support`)
-  if (!VALUE_OPERATIONS.has(op as JsonOperation)) throw malformed('unknown op')
+  const authority = AUTHORITY_OPERATIONS.has(op)
+  if (!authority && !VALUE_OPERATIONS.has(op)) throw malformed('unknown op')
+  const jsonOperation = op as JsonOperation
   const amount = BigInt(decoded.amt)
   if (amount > MAX_UINT64) throw malformed('amt is not a uint64')
-  if (amount === 0n) throw malformed('amt must be positive')
-  if (op === 'deploy+mint') {
+  if (!authority && amount === 0n) throw malformed('amt must be positive')
+  const role: TokenRole = authority ? 'authority' : 'value'
+  if (op === 'deploy+mint' || op === 'deploy+auth') {
     return {
       assetId: `${outpoint.txid}_${outpoint.vout}`,
-      role: 'value',
+      role,
       amount,
       deploy: true,
       encoding: 'brc161',
-      jsonOperation: op
+      jsonOperation
     }
   }
   try {
@@ -264,14 +268,7 @@ export function readJsonTokenOutput(
   } catch {
     throw malformed('id is not a token ID')
   }
-  return {
-    assetId: decoded.id,
-    role: 'value',
-    amount,
-    deploy: false,
-    encoding: 'brc161',
-    jsonOperation: op as JsonOperation
-  }
+  return { assetId: decoded.id, role, amount, deploy: false, encoding: 'brc161', jsonOperation }
 }
 
 /** Reads a token output in either encoding; binary wins when a script parses as both (BRC-162). */

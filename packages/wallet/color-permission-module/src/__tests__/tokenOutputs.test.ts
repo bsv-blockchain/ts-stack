@@ -222,10 +222,29 @@ describe('BRC-161 JSON token outputs', () => {
     expect(readJsonTokenOutput(text, at)).toBeUndefined()
   })
 
-  it.each(['auth', 'deploy+auth', 'burn'])('refuses the %s operation', op => {
+  it('reads auth and deploy+auth as authority outputs of no value', () => {
+    expect(
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'auth', id: ASSET }), at)
+    ).toEqual({
+      assetId: ASSET,
+      role: 'authority',
+      amount: 0n,
+      deploy: false,
+      encoding: 'brc161',
+      jsonOperation: 'auth'
+    })
+    expect(
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'deploy+auth' }), at)
+    ).toMatchObject({ assetId: `${at.txid}_2`, role: 'authority', amount: 0n, deploy: true })
     expect(() =>
-      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op, id: ASSET, amt: '5' }), at)
-    ).toThrow(`BRC-161 ${op} is an operation this module does not support`)
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'auth', id: ASSET, amt: '5' }), at)
+    ).toThrow('malformed BRC-161 inscription')
+  })
+
+  it('refuses the burn operation', () => {
+    expect(() =>
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'burn', id: ASSET, amt: '5' }), at)
+    ).toThrow('BRC-161 burn is an operation this module does not support')
   })
 
   it.each([

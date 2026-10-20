@@ -1230,8 +1230,11 @@ export class ColorPermissionModule implements PermissionsModule {
     if (!plan.assets.includes(token.assetId))
       throw new Error('BRC-207: an output asset is missing from plan.assets')
     const totals = holding(planned.holdings, token.assetId, emptyHolding)
-    totals.value += token.amount
-    if (token.jsonOperation !== 'mint') totals.jsonValue = (totals.jsonValue ?? 0n) + token.amount
+    if (token.role === 'authority') totals.authority += 1
+    else {
+      totals.value += token.amount
+      if (token.jsonOperation !== 'mint') totals.jsonValue = (totals.jsonValue ?? 0n) + token.amount
+    }
     planned.destinations.push({
       outputIndex: index,
       assetId: token.assetId,

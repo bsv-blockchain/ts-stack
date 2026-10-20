@@ -313,13 +313,15 @@ describe('ColorPermissionModule token operations', () => {
     function holdJson(
       amount: bigint,
       admitted = true,
-      op: 'transfer' | 'mint' = 'transfer',
+      op: 'transfer' | 'mint' | 'auth' = 'transfer',
       envelopeFirst = true
     ): void {
       held = new Transaction()
       held.addOutput({
         lockingScript: jsonTokenScript(
-          { p: 'bsv-20', op, id: assetId, amt: `${amount}` },
+          op === 'auth'
+            ? { p: 'bsv-20', op, id: assetId }
+            : { p: 'bsv-20', op, id: assetId, amt: `${amount}` },
           undefined,
           envelopeFirst
         ),
@@ -427,6 +429,81 @@ describe('ColorPermissionModule token operations', () => {
       expect(tx.outputs).toHaveLength(1)
       expect(prompts[0]).toMatchObject({
         assets: [{ assetId: authorityId, operations: ['mint', 'authority-end'], minted: '5' }]
+      })
+    })
+
+    it('transfers a JSON auth input into a BRC-162 authority output', async () => {
+      holdJson(0n, true, 'auth')
+      const mine = await owned(assetId, assetId, 0n, 0)
+      const tx = await run({
+        labels: labels(
+          [assetId],
+          [{ assetId, operation: 'authority-transfer' }],
+          [mine.remittance]
+        ),
+        inputBEEF,
+        inputs: input,
+        outputs: mine.output
+      })
+      expect(wallet.outputs.get(`${tx.id('hex')}.0`)?.basket).toBe(
+        assetBasket(assetId, 'authority')
+      )
+      expect(prompts[0]).toMatchObject({
+        assets: [
+          {
+            assetId,
+            operations: ['authority-transfer'],
+            foreignAuthorityInputs: 1,
+            keptAuthorities: 1
+          }
+        ]
+      })
+    })
+
+    it('mints a JSON output from a JSON auth input it transfers', async () => {
+      holdJson(0n, true, 'auth')
+      const mine = await owned(assetId, assetId, 0n, 0)
+      const minted = jsonTokenScript({ p: 'bsv-20', op: 'mint', id: assetId, amt: '5' })
+      const tx = await run({
+        labels: labels(
+          [assetId],
+          [
+            { assetId, operation: 'mint' },
+            { assetId, operation: 'authority-transfer' }
+          ],
+          [mine.remittance]
+        ),
+        inputBEEF,
+        inputs: input,
+        outputs: [
+          ...mine.output,
+          { lockingScript: minted.toHex(), satoshis: 1, outputDescription: 'Mint' }
+        ]
+      })
+      expect(tx.outputs).toHaveLength(2)
+      expect(prompts[0]).toMatchObject({
+        assets: [{ assetId, operations: ['mint', 'authority-transfer'], minted: '5' }]
+      })
+    })
+
+    it('counts a JSON auth output to another party as an authority output', async () => {
+      holdJson(0n, true, 'auth')
+      const mine = await owned(assetId, assetId, 0n, 0)
+      const theirs = jsonTokenScript({ p: 'bsv-20', op: 'auth', id: assetId })
+      const tx = await run({
+        labels: labels([assetId], [{ assetId, operation: 'authority-split' }], [mine.remittance]),
+        inputBEEF,
+        inputs: input,
+        outputs: [
+          ...mine.output,
+          { lockingScript: theirs.toHex(), satoshis: 1, outputDescription: 'Auth' }
+        ]
+      })
+      expect(tx.outputs).toHaveLength(2)
+      expect(prompts[0]).toMatchObject({
+        assets: [
+          { assetId, operations: ['authority-split'], keptAuthorities: 1, outgoingAuthorities: 1 }
+        ]
       })
     })
 

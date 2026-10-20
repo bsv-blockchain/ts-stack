@@ -93,10 +93,10 @@ Call `color.dispose()` when the host tears down the wallet.
 
 The module fails explicitly, rather than falling back, on:
 
-- holding, creating or filing BRC-161 JSON outputs, and the BRC-161 `auth`,
-  `deploy+auth` and `burn` operations. BRC-161 JSON `transfer`, `mint` and
-  `deploy+mint` outputs are read as value, as inputs and as outputs to other
-  parties, with the same overlay checks as any foreign token input; the
+- holding, creating or filing BRC-161 JSON outputs, and the BRC-161 `burn`
+  operation. BRC-161 JSON `transfer`, `mint` and `deploy+mint` outputs are read
+  as value and `auth` and `deploy+auth` as authority, as inputs and as outputs
+  to other parties, with the same overlay checks as any foreign token input; the
   envelope may sit anywhere in the script (BRC-160). Only value inputs can fund
   JSON transfer outputs; a JSON mint needs an authority input. Assets first
   deployed as BRC-161, at any output index, are supported in BRC-162 form;

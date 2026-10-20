@@ -64,8 +64,8 @@ signature request and inventory read, and returns true to approve.
 ## Limits
 
 This version reads BRC-161 JSON `transfer`, `mint` and `deploy+mint` outputs as
-value, as inputs and as outputs to other parties, but never holds or creates
-them, rejects the BRC-161 `auth`, `deploy+auth` and `burn` operations, satoshi change positions (wallet-toolbox does not
+value and `auth` and `deploy+auth` as authority, as inputs and as outputs to other
+parties, but never holds or creates them, rejects the BRC-161 `burn` operation, satoshi change positions (wallet-toolbox does not
 position satoshi change) and assets with required processing profiles, ignores BRC-176 lineage proofs, and does not yet record exposure for signatures
 released through `createSignature`. BRC-207's non-final transaction rules are not
 implemented; such transactions follow the wallet's existing behavior. A send is approved in `signAction`, against
