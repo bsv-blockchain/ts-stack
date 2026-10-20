@@ -31,7 +31,7 @@ import {
   DISCOVERY_TOPIC,
   ISSUE
 } from '../identifiers.js'
-import { readTokenOutput } from '../tokenOutputs.js'
+import { readAnyTokenOutput } from '../tokenOutputs.js'
 
 interface StoredOutput {
   tx: Transaction
@@ -243,7 +243,9 @@ export class FakeProvider {
       const outputsToAdmit = this.rejectSubmissions
         ? []
         : tx.outputs.flatMap((output, vout) =>
-            readTokenOutput(output.lockingScript, { txid, vout })?.assetId === assetId ? [vout] : []
+            readAnyTokenOutput(output.lockingScript, { txid, vout })?.assetId === assetId
+              ? [vout]
+              : []
           )
       if (topic !== DISCOVERY_TOPIC || this.seedDeploys)
         for (const vout of outputsToAdmit)
@@ -268,6 +270,26 @@ export class FakeProvider {
       })
     }
   }
+}
+
+/**
+ * A BRC-161 JSON token output: an `ord` inscription of type `application/bsv-20` carrying
+ * `payload`, followed by `rest` (anyone can spend it by default).
+ */
+export function jsonTokenScript(
+  payload: object,
+  rest = LockingScript.fromASM('OP_TRUE')
+): LockingScript {
+  const script = new LockingScript()
+    .writeOpCode(OP.OP_FALSE)
+    .writeOpCode(OP.OP_IF)
+    .writeBin(toArray('ord', 'utf8'))
+    .writeOpCode(OP.OP_1)
+    .writeBin(toArray('application/bsv-20', 'utf8'))
+    .writeOpCode(OP.OP_FALSE)
+    .writeBin(toArray(JSON.stringify(payload), 'utf8'))
+    .writeOpCode(OP.OP_ENDIF)
+  return new LockingScript([...script.chunks, ...rest.chunks])
 }
 
 export function remittanceString(): string {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from '@jest/globals'
 import {
+  Beef,
   Transaction,
   type CreateActionArgs,
   type CreateActionOutput,
@@ -27,6 +28,8 @@ import {
   FakeProvider,
   FakeWallet,
   holdTokens,
+  jsonTokenScript,
+  legacyDeploy,
   remittanceString,
   tokenPayment,
   validInput
@@ -293,6 +296,116 @@ describe('ColorPermissionModule token operations', () => {
           outputs: [{ lockingScript: '006a', satoshis: 1, outputDescription: 'Data' }]
         })
       ).rejects.toThrow('requires the operations [burn] but the plan declares [transfer]')
+    })
+  })
+
+  describe('BRC-161 JSON inputs and outputs', () => {
+    let assetId: string
+    let held: Transaction
+    let input: CreateActionArgs['inputs'] & object
+    let inputBEEF: number[]
+
+    /** This wallet holds a JSON transfer of `amount`, outside any p color basket. */
+    function holdJson(amount: bigint, admitted = true): void {
+      held = new Transaction()
+      held.addOutput({
+        lockingScript: jsonTokenScript({
+          p: 'bsv-20',
+          op: 'transfer',
+          id: assetId,
+          amt: `${amount}`
+        }),
+        satoshis: 1
+      })
+      if (admitted) provider.admit(assetId, held, 0)
+      wallet.store(held, 0, 'bsv21')
+      const beef = new Beef()
+      beef.mergeTransaction(held)
+      inputBEEF = beef.toBinary()
+      input = [
+        { outpoint: `${held.id('hex')}.0`, unlockingScriptLength: 1, inputDescription: 'JSON' }
+      ]
+    }
+
+    beforeEach(() => {
+      assetId = legacyDeploy(provider, 1)
+    })
+
+    it('migrates a JSON input into a BRC-162 output this wallet keeps', async () => {
+      holdJson(100n)
+      const mine = await owned(assetId, assetId, 100n, 0)
+      const tx = await run({
+        labels: labels([assetId], [{ assetId, operation: 'transfer' }], [mine.remittance]),
+        inputBEEF,
+        inputs: input,
+        outputs: mine.output
+      })
+      expect(tx.inputs.map(i => i.sourceTransaction!.id('hex'))).toEqual([held.id('hex')])
+      expect(wallet.outputs.get(`${tx.id('hex')}.0`)?.basket).toBe(assetBasket(assetId, 'value'))
+      expect(prompts[0]).toMatchObject({
+        assets: [{ assetId, operations: ['transfer'], foreignAmount: '100', keptAmount: '100' }]
+      })
+    })
+
+    it('refuses a JSON input its overlay has not admitted', async () => {
+      holdJson(100n, false)
+      const mine = await owned(assetId, assetId, 100n, 0)
+      await expect(
+        createAction({
+          labels: labels([assetId], [{ assetId, operation: 'transfer' }], [mine.remittance]),
+          inputBEEF,
+          inputs: input,
+          outputs: mine.output
+        })
+      ).rejects.toThrow('not admitted and unspent')
+    })
+
+    it('counts JSON change to the counterparty as a transfer, not a burn', async () => {
+      holdJson(100n)
+      const mine = await owned(assetId, assetId, 60n, 0)
+      const change = jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: assetId, amt: '40' })
+      const tx = await run({
+        labels: labels([assetId], [{ assetId, operation: 'transfer' }], [mine.remittance]),
+        inputBEEF,
+        inputs: input,
+        outputs: [
+          ...mine.output,
+          { lockingScript: change.toHex(), satoshis: 1, outputDescription: 'Their change' }
+        ]
+      })
+      expect(tx.outputs).toHaveLength(2)
+      expect(prompts[0]).toMatchObject({
+        assets: [{ operations: ['transfer'], burned: '0', outgoingAmount: '40' }]
+      })
+    })
+
+    it('refuses JSON outputs that only an authority could fund, and JSON issuance', async () => {
+      await deployAsset(wallet, provider, 0n)
+      const authorityAsset = [...wallet.outputs.values()].find(o =>
+        o.basket?.endsWith('authority')
+      )!
+      const authorityId = `${authorityAsset.tx.id('hex')}_0`
+      const minted = jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: authorityId, amt: '5' })
+      await expect(
+        createAction({
+          labels: labels(
+            [authorityId],
+            [
+              { assetId: authorityId, operation: 'mint' },
+              { assetId: authorityId, operation: 'authority-end' }
+            ]
+          ),
+          outputs: [{ lockingScript: minted.toHex(), satoshis: 1, outputDescription: 'Mint' }]
+        })
+      ).rejects.toThrow('an authority cannot fund them')
+      const issue = jsonTokenScript({ p: 'bsv-20', op: 'deploy+mint', amt: '5' })
+      await expect(
+        createAction({
+          labels: labels([ISSUE], [{ assetId: ISSUE, operation: 'deploy-fixed' }]),
+          outputs: [{ lockingScript: issue.toHex(), satoshis: 1, outputDescription: 'Deploy' }],
+          options: { randomizeOutputs: false }
+        })
+      ).rejects.toThrow('must use BRC-162')
     })
   })
 

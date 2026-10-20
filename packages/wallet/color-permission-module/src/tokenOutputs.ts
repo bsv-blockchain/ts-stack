@@ -1,6 +1,8 @@
-import type { LockingScript } from '@bsv/sdk'
-import { Bsv21Token, isTokenShaped, OneColor } from '@bsv/templates'
-import { type Outpoint, type TokenRole } from './identifiers.js'
+import { OP, type LockingScript } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import { isTokenShaped, OneColor } from '@bsv/templates'
+import { parseAssetId, type Outpoint, type TokenRole } from './identifiers.js'
+import { jsonObject, parseStrictJsonBytes } from './strictJson.js'
 
 export interface TokenOutput {
   assetId: string
@@ -8,6 +10,8 @@ export interface TokenOutput {
   amount: bigint
   /** True for the asset's deploy output, whose key uses the `ISSUE` selector. */
   deploy: boolean
+  /** BRC-162 binary, or BRC-161 JSON, which this module reads but never holds or creates. */
+  encoding: 'brc162' | 'brc161'
   /** Set when the remainder after the prefix is exactly P2PKH. */
   pubKeyHash?: number[]
 }
@@ -187,8 +191,94 @@ export function readTokenOutput(
     role: decoded.amount === 0n ? 'authority' : 'value',
     amount: decoded.amount,
     deploy,
+    encoding: 'brc162',
     pubKeyHash: decoded.restPubKeyHash
   }
+}
+
+const ORD_TAG = toHex(toArray('ord', 'utf8'))
+const BSV20_CONTENT_TYPE = toHex(toArray('application/bsv-20', 'utf8'))
+const MAX_UINT64 = (1n << 64n) - 1n
+const AUTHORITY_OPERATIONS = new Set(['mint', 'auth', 'deploy+auth'])
+
+/**
+ * Reads a BRC-161 JSON token output: an `ord` inscription of type `application/bsv-20` at the
+ * start of the script, followed by any script. Returns undefined for a script without such an
+ * inscription, and for a `burn` output, which carries no token value. Throws for a malformed
+ * inscription and for the authority operations (`mint`, `auth`, `deploy+auth`), which this module
+ * does not support.
+ */
+export function readJsonTokenOutput(
+  lockingScript: LockingScript,
+  outpoint: Outpoint
+): TokenOutput | undefined {
+  const chunks = lockingScript.chunks
+  const hex = (index: number): string | undefined => {
+    const data = chunks[index]?.data
+    return data === undefined ? undefined : toHex(data)
+  }
+  const typeField = chunks[3]?.op === OP.OP_1 || hex(3) === '01'
+  if (
+    chunks[0]?.op !== OP.OP_FALSE ||
+    chunks[1]?.op !== OP.OP_IF ||
+    hex(2) !== ORD_TAG ||
+    !typeField ||
+    hex(4) !== BSV20_CONTENT_TYPE
+  )
+    return undefined
+  const malformed = (reason: string): Error =>
+    new Error(
+      `BRC-207: ${outpoint.txid}.${outpoint.vout} is a malformed BRC-161 inscription (${reason})`
+    )
+  const content = chunks[6]?.data
+  if (chunks[5]?.op !== OP.OP_0 || content === undefined || chunks[7]?.op !== OP.OP_ENDIF)
+    throw malformed('envelope')
+  let payload: ReturnType<typeof jsonObject>
+  try {
+    payload = jsonObject(parseStrictJsonBytes(content, 'BRC-161 payload'), 'BRC-161 payload')
+  } catch (error) {
+    throw malformed((error as Error).message)
+  }
+  if (payload.p !== 'bsv-20') throw malformed('p is not bsv-20')
+  const op = payload.op
+  if (typeof op === 'string' && AUTHORITY_OPERATIONS.has(op))
+    throw new Error(`BRC-207: BRC-161 ${op} is an authority operation this module does not support`)
+  if (op !== 'transfer' && op !== 'burn' && op !== 'deploy+mint') throw malformed('unknown op')
+  const amt = payload.amt
+  const amount = typeof amt === 'string' && /^\d+$/.test(amt) ? BigInt(amt) : undefined
+  if (amount === undefined || amount > MAX_UINT64) throw malformed('amt is not a uint64')
+  if (op === 'deploy+mint') {
+    if (amount === 0n) throw malformed('amt must be positive')
+    return {
+      assetId: `${outpoint.txid}_${outpoint.vout}`,
+      role: 'value',
+      amount,
+      deploy: true,
+      encoding: 'brc161'
+    }
+  }
+  try {
+    parseAssetId(payload.id)
+  } catch {
+    throw malformed('id is not a token ID')
+  }
+  if (op === 'burn') return undefined
+  if (amount === 0n) throw malformed('amt must be positive')
+  return {
+    assetId: payload.id as string,
+    role: 'value',
+    amount,
+    deploy: false,
+    encoding: 'brc161'
+  }
+}
+
+/** Reads a token output in either encoding; binary wins when a script parses as both (BRC-162). */
+export function readAnyTokenOutput(
+  lockingScript: LockingScript,
+  outpoint: Outpoint
+): TokenOutput | undefined {
+  return readTokenOutput(lockingScript, outpoint) ?? readJsonTokenOutput(lockingScript, outpoint)
 }
 
 /**
@@ -196,11 +286,5 @@ export function readTokenOutput(
  * empty here, or a BRC-161 JSON deploy+mint, which carries no processing profiles.
  */
 export function isDeployOutput(lockingScript: LockingScript, outpoint: Outpoint): boolean {
-  const binary = readTokenOutput(lockingScript, outpoint)
-  if (binary !== undefined) return binary.deploy
-  try {
-    return Bsv21Token.decode(lockingScript).isMint
-  } catch {
-    return false
-  }
+  return readAnyTokenOutput(lockingScript, outpoint)?.deploy === true
 }

@@ -2,7 +2,14 @@ import { describe, expect, it } from '@jest/globals'
 import { LockingScript } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
-import { assertNoRequiredProfiles, readTokenOutput } from '../tokenOutputs.js'
+import {
+  assertNoRequiredProfiles,
+  isDeployOutput,
+  readAnyTokenOutput,
+  readJsonTokenOutput,
+  readTokenOutput
+} from '../tokenOutputs.js'
+import { jsonTokenScript } from './fixtures.js'
 
 const TXID = 'cd'.repeat(32)
 const PKH = Array.from({ length: 20 }, (_, i) => i)
@@ -45,6 +52,7 @@ describe('BRC-162 token outputs', () => {
       role: 'value',
       amount: 500n,
       deploy: false,
+      encoding: 'brc162',
       pubKeyHash: PKH
     })
     expect(
@@ -155,5 +163,67 @@ describe('BRC-162 token outputs', () => {
 
   it('treats a map with a non-text key as opaque', () => {
     expect(() => assertNoRequiredProfiles([0xa1, 0x01, 0x01])).not.toThrow()
+  })
+})
+
+describe('BRC-161 JSON token outputs', () => {
+  const ASSET = `${TXID}_1`
+  const at = { txid: 'ab'.repeat(32), vout: 2 }
+
+  it('reads transfers under any lock and deploy+mint at its own outpoint', () => {
+    expect(
+      readJsonTokenOutput(
+        jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: ASSET, amt: '25' }),
+        at
+      )
+    ).toEqual({ assetId: ASSET, role: 'value', amount: 25n, deploy: false, encoding: 'brc161' })
+    const deploy = jsonTokenScript({ p: 'bsv-20', op: 'deploy+mint', amt: '1000', sym: 'OLD' })
+    expect(readJsonTokenOutput(deploy, at)).toMatchObject({
+      assetId: `${at.txid}_2`,
+      amount: 1000n,
+      deploy: true
+    })
+    expect(isDeployOutput(deploy, at)).toBe(true)
+  })
+
+  it('reads a burn as carrying no value and a non-inscription as no JSON token', () => {
+    expect(
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'burn', id: ASSET, amt: '5' }), at)
+    ).toBeUndefined()
+    expect(readJsonTokenOutput(LockingScript.fromASM('OP_TRUE'), at)).toBeUndefined()
+  })
+
+  it.each(['mint', 'auth', 'deploy+auth'])('refuses the %s authority operation', op => {
+    expect(() =>
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op, id: ASSET, amt: '5' }), at)
+    ).toThrow('authority operation this module does not support')
+  })
+
+  it.each([
+    ['an unknown op', { p: 'bsv-20', op: 'swap', id: ASSET, amt: '5' }],
+    ['another protocol', { p: 'bsv-21', op: 'transfer', id: ASSET, amt: '5' }],
+    ['a missing amount', { p: 'bsv-20', op: 'transfer', id: ASSET }],
+    [
+      'an amount above uint64',
+      { p: 'bsv-20', op: 'transfer', id: ASSET, amt: '18446744073709551616' }
+    ],
+    ['an invalid token ID', { p: 'bsv-20', op: 'transfer', id: 'nope', amt: '5' }]
+  ])('fails on a malformed inscription: %s', (_name, payload) => {
+    expect(() => readJsonTokenOutput(jsonTokenScript(payload), at)).toThrow(
+      'malformed BRC-161 inscription'
+    )
+  })
+
+  it('reads a script that parses as both encodings as BRC-162', () => {
+    const inscription = jsonTokenScript({ p: 'bsv-20', op: 'transfer', id: ASSET, amt: '7' })
+    const both = new LockingScript([
+      ...new OneColor().lock(`${TXID}_0`, 9n, PKH).chunks.slice(0, 3),
+      ...inscription.chunks
+    ])
+    expect(readAnyTokenOutput(both, at)).toMatchObject({
+      assetId: `${TXID}_0`,
+      amount: 9n,
+      encoding: 'brc162'
+    })
   })
 })

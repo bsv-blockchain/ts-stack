@@ -70,7 +70,13 @@ import {
   jsonUint32,
   parseStrictJsonBytes
 } from './strictJson.js'
-import { isDeployOutput, readTokenOutput, type TokenOutput } from './tokenOutputs.js'
+import {
+  isDeployOutput,
+  readAnyTokenOutput,
+  readJsonTokenOutput,
+  readTokenOutput,
+  type TokenOutput
+} from './tokenOutputs.js'
 import type {
   ColorOverlayProvider,
   ColorPermissionModuleOptions,
@@ -195,6 +201,8 @@ function selectsAsset(selector: string, token: TokenOutput): boolean {
 interface Holding {
   value: bigint
   authority: number
+  /** The part of `value` in BRC-161 JSON outputs, which only value inputs can fund. */
+  jsonValue?: bigint
 }
 
 /** What the caller's explicit inputs contribute to one asset, and how much of it is foreign. */
@@ -276,6 +284,10 @@ function authorityInputsFor(operation: ColorOperationName, outputs: number): num
 function requiredOperations(inputs: Holding, outputs: Holding): ColorOperationName[] {
   if (inputs.authority === 0 && outputs.authority > 0)
     throw new Error('BRC-207: an authority output needs an authority input of the same asset')
+  if ((outputs.jsonValue ?? 0n) > inputs.value)
+    throw new Error(
+      'BRC-207: BRC-161 transfer outputs exceed the value inputs; an authority cannot fund them'
+    )
   const { transferred, burned, minted } = supplyChange(inputs, outputs)
   if (minted > 0n && inputs.authority === 0)
     throw new Error('BRC-207: token outputs exceed the authenticated input balance')
@@ -336,7 +348,7 @@ function actionConsent(
   const txid = tx.id('hex')
   const outputs = tx.outputs.map((output, vout) => ({
     vout,
-    token: readTokenOutput(output.lockingScript, { txid, vout }),
+    token: readSentToken(output.lockingScript, { txid, vout }),
     satoshis: output.satoshis ?? 0
   }))
   const assets = [...new Set([...tokens.inputs.keys(), ...tokens.outputs.keys()])].map(assetId => {
@@ -475,16 +487,32 @@ function placeChange(
   ]
 }
 
-/** Token inputs of `tx` other than those in `except`, read from their source transactions. */
+/**
+ * Reads a token in a transaction the wallet sends: BRC-162 first, then BRC-161 JSON, which the
+ * module accounts for but never holds or creates.
+ */
+function readSentToken(
+  lockingScript: LockingScript,
+  outpoint: ReturnType<typeof parseOutpoint>
+): TokenOutput | undefined {
+  return tryReadTokenOutput(lockingScript, outpoint) ?? readJsonTokenOutput(lockingScript, outpoint)
+}
+
+/**
+ * Token inputs of `tx` other than those in `except`, read from their source transactions. With
+ * `json`, BRC-161 JSON inputs are read too.
+ */
 function tokenSources(
   tx: Transaction,
-  managed: ReadonlySet<string>
+  managed: ReadonlySet<string>,
+  json = false
 ): Array<SourceOutput & { assetId: string; token: TokenOutput }> {
+  const read = json ? readSentToken : tryReadTokenOutput
   return tx.inputs.flatMap(input => {
     const outpoint = inputOutpoint(input)
     const source = input.sourceTransaction?.outputs[input.sourceOutputIndex]
     if (managed.has(outpoint) || source?.satoshis === undefined) return []
-    const token = tryReadTokenOutput(source.lockingScript, parseOutpoint(outpoint))
+    const token = read(source.lockingScript, parseOutpoint(outpoint))
     if (token === undefined) return []
     return [
       {
@@ -508,10 +536,10 @@ function submissionAssets(
 ): { assetIds: string[]; deploy: boolean } {
   const txid = tx.id('hex')
   const outputs = tx.outputs.map((output, vout) =>
-    tryReadTokenOutput(output.lockingScript, { txid, vout })
+    readSentToken(output.lockingScript, { txid, vout })
   )
   const assetIds = new Set([
-    ...tokenSources(inputs, new Set()).map(input => input.assetId),
+    ...tokenSources(inputs, new Set(), true).map(input => input.assetId),
     ...outputs.flatMap(token => (token === undefined || token.deploy ? [] : [token.assetId]))
   ])
   return { assetIds: [...assetIds], deploy: outputs[0]?.deploy === true }
@@ -542,6 +570,7 @@ function addToken(totals: Map<string, Holding>, token: TokenOutput): void {
   const entry = holding(totals, token.assetId, emptyHolding)
   if (token.role === 'value') entry.value += token.amount
   else entry.authority += 1
+  if (token.encoding === 'brc161') entry.jsonValue = (entry.jsonValue ?? 0n) + token.amount
 }
 
 /** A foreign input's source output from the caller's inputBEEF, if it is there. */
@@ -560,20 +589,27 @@ interface TransactionTokens {
   deploy?: TokenOutput
 }
 
-/** Reads every input's source and every output; an input without its source fails. */
-function transactionTokens(tx: Transaction): TransactionTokens {
+/**
+ * Reads every input's source and every output; an input without its source fails. With `json`,
+ * for a transaction the wallet sends, BRC-161 JSON inputs and outputs are read too.
+ */
+function transactionTokens(tx: Transaction, json = false): TransactionTokens {
   tx.inputs.forEach((input, index) => {
     if (input.sourceTransaction === undefined)
       throw new Error(`BRC-207: input ${index} has no source transaction to authenticate`)
   })
   const txid = tx.id('hex')
-  const consumed = tokenSources(tx, new Set())
+  const consumed = tokenSources(tx, new Set(), json)
   const inputs = new Map<string, Holding>()
   for (const source of consumed) addToken(inputs, source.token)
   const outputs = new Map<string, Holding>()
   let deploy: TokenOutput | undefined
   tx.outputs.forEach((output, vout) => {
-    const token = readTokenOutput(output.lockingScript, { txid, vout })
+    const token = json
+      ? readAnyTokenOutput(output.lockingScript, { txid, vout })
+      : readTokenOutput(output.lockingScript, { txid, vout })
+    if (token?.deploy === true && token.encoding === 'brc161')
+      throw new Error('BRC-207: a new issuance must use BRC-162')
     if (token?.deploy === true) deploy = token
     else if (token !== undefined) addToken(outputs, token)
   })
@@ -1051,7 +1087,7 @@ export class ColorPermissionModule implements PermissionsModule {
     const token =
       source === undefined
         ? undefined
-        : readTokenOutput(source.lockingScript, parseOutpoint(outpoint))
+        : readAnyTokenOutput(source.lockingScript, parseOutpoint(outpoint))
     if (token === undefined) return
     await this.#assertSupportedAsset(token.assetId)
     if (!(await this.#spendable(token.assetId, [source!])).has(outpoint))
@@ -1099,16 +1135,17 @@ export class ColorPermissionModule implements PermissionsModule {
     planned: PlannedOutputs,
     originator: string
   ): Promise<CreateActionOutput> {
-    const token = readTokenOutput(LockingScript.fromHex(output.lockingScript), {
-      txid: '00'.repeat(32),
-      vout: index
-    })
+    const lockingScript = LockingScript.fromHex(output.lockingScript)
+    const placeholder = { txid: '00'.repeat(32), vout: index }
+    const token = readTokenOutput(lockingScript, placeholder)
     if (token === undefined) {
       if (remittance !== undefined)
         throw new Error('BRC-207: plan.ownedOutputs names a non-token output')
       if (output.basket?.startsWith(`${COLOR_BASKET_NAMESPACE} `) === true) {
         throw new Error('BRC-207: a p color basket can only receive BRC-162 token outputs')
       }
+      const json = readJsonTokenOutput(lockingScript, placeholder)
+      if (json !== undefined) this.#jsonDestination(plan, index, output, json, planned)
       return output
     }
     if (token.deploy)
@@ -1131,6 +1168,29 @@ export class ColorPermissionModule implements PermissionsModule {
       lockingScript: output.lockingScript
     })
     return output
+  }
+
+  /** A BRC-161 JSON output to another party: counted for its asset, never held or created here. */
+  #jsonDestination(
+    plan: ColorPlan,
+    index: number,
+    output: CreateActionOutput,
+    token: TokenOutput,
+    planned: PlannedOutputs
+  ): void {
+    if (token.deploy) throw new Error('BRC-207: a new issuance must use BRC-162')
+    if (!plan.assets.includes(token.assetId))
+      throw new Error('BRC-207: an output asset is missing from plan.assets')
+    const totals = holding(planned.holdings, token.assetId, emptyHolding)
+    totals.value += token.amount
+    totals.jsonValue = (totals.jsonValue ?? 0n) + token.amount
+    planned.destinations.push({
+      outputIndex: index,
+      assetId: token.assetId,
+      role: token.role,
+      amount: token.amount.toString(),
+      lockingScript: output.lockingScript
+    })
   }
 
   /**
@@ -1303,7 +1363,11 @@ export class ColorPermissionModule implements PermissionsModule {
     // Change returns what selection adds beyond the need; excess explicit value is a burn.
     const change = selectedValue > 0n ? value - requested.value : 0n
     const inputs = { value, authority: explicit.authority + authorityCount }
-    const outputs = { value: requested.value + change, authority: requested.authority }
+    const outputs = {
+      value: requested.value + change,
+      authority: requested.authority,
+      jsonValue: requested.jsonValue
+    }
     assertOperations(plan, assetId, requiredOperations(inputs, outputs))
     return { assetId, selected, change, outputs }
   }
@@ -1616,7 +1680,7 @@ export class ColorPermissionModule implements PermissionsModule {
     if (createArgs === undefined || plan === undefined)
       throw new Error("BRC-207: signAction needs the action's p color createAction arguments")
     const tx = action.transaction
-    const tokens = transactionTokens(tx)
+    const tokens = transactionTokens(tx, true)
     assertTransactionOperations(plan, tokens)
     const satoshiChange = plan.changePositions.find(position => position.assetId === null)
     if (satoshiChange !== undefined && satoshiChange.index >= tx.outputs.length)
@@ -1702,7 +1766,7 @@ export class ColorPermissionModule implements PermissionsModule {
       const admitted = steak?.[colorTopic(assetId)]?.outputsToAdmit ?? []
       const missing = tx.outputs
         .map((output, vout) => ({
-          token: readTokenOutput(output.lockingScript, { txid, vout }),
+          token: readSentToken(output.lockingScript, { txid, vout }),
           vout
         }))
         .filter(({ token, vout }) => token?.assetId === assetId && !admitted.includes(vout))

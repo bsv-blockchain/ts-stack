@@ -87,8 +87,12 @@ false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
 
 The module fails explicitly, rather than falling back, on:
 
-- BRC-161 JSON outputs (assets first deployed as BRC-161, at any output index, are
-  supported in BRC-162 form);
+- holding, creating or filing BRC-161 JSON outputs, and the BRC-161 `mint`,
+  `auth` and `deploy+auth` operations. BRC-161 JSON `transfer` and `deploy+mint`
+  outputs are read as inputs and as outputs to other parties, with the same
+  overlay checks as any foreign token input; a `burn` output carries no value,
+  and only value inputs can fund JSON outputs. Assets first deployed as BRC-161,
+  at any output index, are supported in BRC-162 form;
 - assets whose deploy declares required processing profiles;
 - `profileData` entries.
 
