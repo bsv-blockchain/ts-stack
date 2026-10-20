@@ -710,16 +710,16 @@ describe('ColorPermissionModule boundaries', () => {
     expect(Beef.fromBinary(page.BEEF!).findTxid(newest.split('.')[0])).toBeDefined()
   })
 
-  it('leaves outputs of an unsupported asset out of inventory', async () => {
+  it('leaves outputs that require a processing profile out of inventory', async () => {
     const text = (value: string): number[] => [0x60 + value.length, ...toArray(value, 'utf8')]
-    const profiled = await deployAsset(new FakeWallet(), provider, 10n, [
-      0xa1,
-      ...text('req'),
-      0xa1,
-      ...text('x:y'),
-      0xf6
-    ])
-    await holdTokens(wallet, provider, profiled.assetId, [3n])
+    const requiresProfile = [0xa1, ...text('req'), 0xa1, ...text('x:y'), 0xf6]
+    const profiled = await deployAsset(new FakeWallet(), provider, 10n, requiresProfile)
+    const held = new Transaction()
+    held.addOutput({
+      lockingScript: new OneColor().lock(profiled.assetId, 3n, Array(20).fill(0), requiresProfile),
+      satoshis: 1
+    })
+    wallet.store(held, 0, assetBasket(profiled.assetId, 'value'), '{}')
     await holdTokens(wallet, provider, assetId, [4n])
     const inventory = (await module.handleRequest(
       { method: 'listOutputs', args: { basket: 'p color assets' }, originator: APP },
@@ -860,6 +860,7 @@ describe('ColorPermissionModule boundaries', () => {
   })
 
   it('rejects assets it cannot authenticate and overlay answers that do not match the wallet', async () => {
+    // A balance read is wallet state alone: an unknown asset simply has none.
     await expect(
       module.handleRequest(
         {
@@ -869,7 +870,7 @@ describe('ColorPermissionModule boundaries', () => {
         },
         next
       )
-    ).rejects.toThrow('no admitted deploy')
+    ).resolves.toEqual({ totalOutputs: '0', outputs: [] })
     const unknown = `${'ee'.repeat(32)}_0`
     const missing = await tokenPayment(new FakeWallet(), wallet, unknown, 5n)
     provider.admit(unknown, missing.tx, 0)

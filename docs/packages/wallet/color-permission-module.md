@@ -73,7 +73,9 @@ released through `createSignature`. BRC-207's non-final transaction rules are no
 implemented; such transactions follow the wallet's existing behavior. A send is approved in `signAction`, against
 the funded transaction; a `createSignature` request is approved against the whole
 app-built transaction, after every token input is found admitted and unspent. A receipt relies on its overlay's admission of the received output
-for the transaction's token amounts; the module does not re-evaluate them.
+for the transaction's token amounts; the module does not re-evaluate them. Reads
+(`p color assets` and balances) report wallet state alone and never query the
+overlay; spendability is checked only when spending.
 
 Derivative modules subclass `ColorPermissionModule`, whose members are
 `protected`, and use its exported evaluation helpers (`transactionTokens`,

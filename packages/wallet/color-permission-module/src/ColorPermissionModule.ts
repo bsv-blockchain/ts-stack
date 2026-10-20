@@ -125,7 +125,7 @@ export interface ManagedInput extends SourceOutput {
   custody: Custody
 }
 
-type InventoryState = 'available' | 'reserved' | 'pending'
+type InventoryState = 'available' | 'reserved'
 
 function sumAmounts(inputs: ReadonlyArray<{ amount: bigint }>): bigint {
   return inputs.reduce((total, input) => total + input.amount, 0n)
@@ -755,10 +755,9 @@ function inventoryRecords(outputs: WalletOutput[], beef: Beef | undefined): Inve
   return records
 }
 
-/** Reserved by a pending action, else available when its overlay admits it, else pending. */
-function inventoryState(record: InventoryRecord, admitted: ReadonlySet<string>): InventoryState {
-  if (!record.output.spendable) return 'reserved'
-  return admitted.has(record.output.outpoint) ? 'available' : 'pending'
+/** Reserved by a pending action, else available. Wallet state only; the overlay is not consulted. */
+function inventoryState(record: InventoryRecord): InventoryState {
+  return record.output.spendable ? 'available' : 'reserved'
 }
 
 /**
@@ -779,8 +778,8 @@ export function tryReadTokenOutput(
 }
 
 /** A record with its stored tags and the computed state tag in place of any stored one. */
-function inventoryView(record: InventoryRecord, admitted: ReadonlySet<string>): InventoryView {
-  const state = inventoryState(record, admitted)
+function inventoryView(record: InventoryRecord): InventoryView {
+  const state = inventoryState(record)
   const tags = [
     ...(record.output.tags ?? []).filter(tag => !tag.startsWith(STATE_TAG_PREFIX)),
     `${STATE_TAG_PREFIX}${state}`
@@ -919,7 +918,8 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /**
    * Files a signed deploy this wallet keeps in its asset's value or authority basket, now that
-   * the asset ID is final. The deploy keeps its `ISSUE` key; it stays pending until admitted.
+   * the asset ID is final. The deploy keeps its `ISSUE` key; its asset overlay must admit it
+   * before it can be spent.
    */
   protected async fileDeploy(
     result: SignActionResult,
@@ -1800,8 +1800,8 @@ export class ColorPermissionModule implements PermissionsModule {
    * Submits a transaction to each asset topic, and a deploy to the discovery topic, trying again
    * up to `SUBMIT_ATTEMPTS` times before reporting the provider's failure. As in BTMS, an accepted
    * submission completes the action: every token input was overlay-checked and the plan verified
-   * before signing, so an output the overlay then does not admit shows as pending in the
-   * inventory and is resubmitted when it is next selected.
+   * before signing, so an output the overlay then does not admit stays in its basket and is
+   * resubmitted when it is next selected.
    */
   protected async submit(assetIds: string[], beef: AtomicBEEF, deploy = false): Promise<void> {
     const topics = [...(deploy ? [DISCOVERY_TOPIC] : []), ...assetIds.map(colorTopic)]
@@ -1974,20 +1974,15 @@ export class ColorPermissionModule implements PermissionsModule {
     args: ListOutputsArgs,
     originator: string
   ): Promise<ListOutputsResult> {
-    await this.assertSupportedAsset(assetId)
+    // As in BTMS, a read reports wallet state alone: the basket's unreserved, unspent outputs.
+    // The overlay is consulted only when spending.
     const held = (await this.listBasket(assetBasket(assetId, role), originator, args))
       .map(output => {
         const source = this.sourceOutput(output)
-        return {
-          ...source,
-          token: readTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
-        }
+        return readTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
       })
-      .filter(output => output.token?.assetId === assetId && output.token.role === role)
-    const admitted = held.length > 0 ? await this.spendable(assetId, held) : new Set<string>()
-    const total = held
-      .filter(output => admitted.has(output.outpoint))
-      .reduce((sum, output) => sum + (role === 'value' ? output.token!.amount : 1n), 0n)
+      .filter(token => token?.assetId === assetId && token.role === role)
+    const total = held.reduce((sum, token) => sum + (role === 'value' ? token!.amount : 1n), 0n)
     return { totalOutputs: total.toString(), outputs: [] }
   }
 
@@ -2007,13 +2002,8 @@ export class ColorPermissionModule implements PermissionsModule {
     )
     const beef =
       entireTransactions && listed.BEEF !== undefined ? Beef.fromBinary(listed.BEEF) : undefined
-    const records = inventoryRecords(listed.outputs, beef)
-    const admitted = await this.admittedByAsset(records)
-    const views = records
-      .flatMap(record => {
-        const assetAdmitted = admitted.get(record.assetId)
-        return assetAdmitted === undefined ? [] : [inventoryView(record, assetAdmitted)]
-      })
+    const views = inventoryRecords(listed.outputs, beef)
+      .map(inventoryView)
       .filter(view => matchesTags(view.tags, args.tags ?? [], args.tagQueryMode))
     const limit = args.limit ?? 10
     const offset = args.offset ?? 0
@@ -2029,44 +2019,6 @@ export class ColorPermissionModule implements PermissionsModule {
     }
     if (beef !== undefined) result.BEEF = pageBeef(beef, page)
     return result
-  }
-
-  /** The outputs each supported asset's overlay admits; unsupported assets are absent. */
-  protected async admittedByAsset(records: InventoryRecord[]): Promise<Map<string, Set<string>>> {
-    const assetIds = [...new Set(records.map(record => record.assetId))]
-    const admitted = await Promise.all(
-      assetIds.map(async assetId => await this.admittedFor(assetId, records))
-    )
-    return new Map(
-      assetIds.flatMap((assetId, index) => {
-        const set = admitted[index]
-        return set === undefined ? [] : [[assetId, set] as const]
-      })
-    )
-  }
-
-  protected async admittedFor(
-    assetId: string,
-    records: InventoryRecord[]
-  ): Promise<Set<string> | undefined> {
-    const { txid, vout } = parseAssetId(assetId)
-    // The wallet's own deploy is authenticated by its own bytes before any overlay admits it.
-    const deploy = records.find(record => record.output.outpoint === outpointString(txid, vout))
-    try {
-      if (deploy === undefined || !isDeployOutput(deploy.source.lockingScript, { txid, vout }))
-        await this.assertSupportedAsset(assetId)
-    } catch {
-      // An unsupported or unauthenticated asset is not a validated holding.
-      return undefined
-    }
-    const unreserved = records.filter(
-      record => record.assetId === assetId && record.output.spendable
-    )
-    if (unreserved.length === 0) return new Set()
-    return await this.spendable(
-      assetId,
-      unreserved.map(record => record.source)
-    )
   }
 
   /** One inventory record as a BRC-100 output with the fields the caller asked for. */

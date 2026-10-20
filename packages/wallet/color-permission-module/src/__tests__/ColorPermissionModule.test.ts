@@ -394,7 +394,7 @@ describe('ColorPermissionModule', () => {
       ).rejects.toThrow('no longer spendable')
     })
 
-    it('completes a send its overlay accepts but does not admit; the change shows as pending', async () => {
+    it('completes a send its overlay accepts but does not admit; the change is held', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
       provider.rejectSubmissions = true
       const { txid } = await send({
@@ -412,7 +412,7 @@ describe('ColorPermissionModule', () => {
         }
       )) as ListOutputsResult
       expect(inventory.outputs).toEqual([
-        expect.objectContaining({ outpoint: `${txid}.1`, tags: ['color_state_pending'] })
+        expect.objectContaining({ outpoint: `${txid}.1`, tags: ['color_state_available'] })
       ])
     })
 
@@ -905,12 +905,13 @@ describe('ColorPermissionModule', () => {
     }
 
     it('lists inventory with one computed state tag per record', async () => {
-      const [available, pending, reserved] = await holdTokens(wallet, provider, assetId, [
+      const [available, unreported, reserved] = await holdTokens(wallet, provider, assetId, [
         5n,
         6n,
         7n
       ])
-      provider.spend(`${pending.id('hex')}.0`)
+      // The overlay no longer reports this output; a read still lists it from the wallet.
+      provider.spend(`${unreported.id('hex')}.0`)
       wallet.outputs.get(`${reserved.id('hex')}.0`)!.reservedBy = 'reference-x'
       const inventory = (await module.handleRequest(
         {
@@ -928,9 +929,9 @@ describe('ColorPermissionModule', () => {
         spendable: true,
         tags: ['color_state_available']
       })
-      expect(byOutpoint[`${pending.id('hex')}.0`]).toMatchObject({
-        spendable: false,
-        tags: ['color_state_pending']
+      expect(byOutpoint[`${unreported.id('hex')}.0`]).toMatchObject({
+        spendable: true,
+        tags: ['color_state_available']
       })
       expect(byOutpoint[`${reserved.id('hex')}.0`]).toMatchObject({
         spendable: false,
@@ -951,6 +952,38 @@ describe('ColorPermissionModule', () => {
         { type: 'color_access', basket: 'p color assets', seekPermission: true },
         { type: 'color_access', basket: 'p color assets', seekPermission: true }
       ])
+    })
+
+    it('reads wallet state only and never consult the overlay', async () => {
+      await holdTokens(wallet, provider, assetId, [5n, 6n])
+      const consulted = (): never => {
+        throw new Error('the overlay was consulted by a read')
+      }
+      provider.spendability = async () => consulted()
+      provider.admission = async () => consulted()
+      provider.submit = async () => consulted()
+      for (const basket of [
+        'p color assets',
+        `p color balance ${assetTag(assetId)}`,
+        `p color balance ${assetTag(assetId)} authority`
+      ]) {
+        await expect(
+          module.handleRequest(
+            { method: 'listOutputs', args: { basket }, originator: APP },
+            notForwarded
+          )
+        ).resolves.toBeDefined()
+      }
+      await expect(
+        module.handleRequest(
+          {
+            method: 'listOutputs',
+            args: { basket: `p color balance ${assetTag(assetId)}` },
+            originator: APP
+          },
+          notForwarded
+        )
+      ).resolves.toEqual({ totalOutputs: '11', outputs: [] })
     })
 
     it('decrypts custody only for the inventory page it returns', async () => {

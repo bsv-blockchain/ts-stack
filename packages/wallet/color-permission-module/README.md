@@ -60,10 +60,9 @@ Call `color.dispose()` when the host tears down the wallet.
   to approve it (`color_send`: every asset leg, satoshi totals and fee, the
   signatures it releases), signs the token inputs with any `sighashTypes`
   override and submits the processed transaction to each asset topic, trying up
-  to three times. As in BTMS, an accepted submission completes the action: an
-  output the overlay then does not admit shows as pending, and a held output
-  the overlay does not report is resubmitted from the wallet's copy of its
-  transaction when it is selected.
+  to three times. As in BTMS, an accepted submission completes the action, and
+  a held output the overlay does not report is resubmitted from the wallet's
+  copy of its transaction when it is next selected.
 - **Mint, burn and authority operations**: the plan declares exactly the
   operations BRC-207 derives from the transaction (`mint`, `burn`,
   `authority-split`, `-combine`, `-transfer`, `-end`). Authority inputs are
@@ -73,8 +72,8 @@ Call `color.dispose()` when the host tears down the wallet.
   its remittance in `plan.ownedOutputs`.
   Once signed, an owned deploy is filed in its asset's value or authority
   basket (keeping its `ISSUE` key) through the wallet's `internalizeAction`,
-  then submitted to `tm_color`; it stays pending in the inventory until
-  `tm_color_<assetId>` admits it. A deploy cannot be a `noSend` action.
+  then submitted to `tm_color`; `tm_color_<assetId>` must admit it before it
+  can be spent. A deploy cannot be a `noSend` action.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
   `noSend`; this is the only `noSend` token action, since a plain `noSend`
   sent later with `sendWith` would never reach the token overlay. When the
@@ -95,6 +94,10 @@ Call `color.dispose()` when the host tears down the wallet.
   the signature released) before the module signs.
 - **Reads**: `listOutputs` with `p color assets`, `p color balance <assetTag>`
   or `p color balance <assetTag> authority`. Balances are exact decimal strings.
+  As in BTMS, reads report wallet state alone and never query the overlay: the
+  inventory tags each output `color_state_available` or `color_state_reserved`
+  (an input of a pending action). Overlay spendability is checked only when
+  spending.
 
 ## Limits of this version
 

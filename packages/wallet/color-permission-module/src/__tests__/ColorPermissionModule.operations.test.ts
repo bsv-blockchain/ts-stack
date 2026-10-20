@@ -599,7 +599,7 @@ describe('ColorPermissionModule token operations', () => {
       })
     })
 
-    it('files a deploy its asset overlay has not admitted yet as pending', async () => {
+    it('files a deploy its asset overlay has not admitted yet; the inventory lists it', async () => {
       provider.seedDeploys = false
       const deploy = await owned('', ISSUE, 0n, 0)
       const tx = await run({
@@ -625,7 +625,7 @@ describe('ColorPermissionModule token operations', () => {
         }
       )) as ListOutputsResult
       expect(inventory.outputs).toEqual([
-        expect.objectContaining({ outpoint, spendable: false, tags: ['color_state_pending'] })
+        expect.objectContaining({ outpoint, spendable: true, tags: ['color_state_available'] })
       ])
     })
 
