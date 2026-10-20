@@ -14,7 +14,6 @@ import {
 import {
   exactMembers,
   jsonArray,
-  jsonByteArray,
   jsonObject,
   jsonUint32,
   parseStrictJsonBytes,
@@ -56,12 +55,6 @@ export interface ColorRemittance {
 export interface ColorOperation {
   assetId: string
   operation: ColorOperationName
-}
-
-export interface ColorTokenProof {
-  assetId: string
-  subjects: string[]
-  beef: number[]
 }
 
 /** A BRC-207 version 1 action plan. */
@@ -116,36 +109,6 @@ export function parseRemittances(value: JsonValue | undefined, label: string): C
     `${label} output index`
   )
   return remittances
-}
-
-/** Validates a signature envelope's optional `tokenProofs`: `{assetId, subjects, beef}` items with distinct scopes. */
-export function parseTokenProofs(
-  value: JsonValue | undefined,
-  label: string,
-  maxBytes: number
-): ColorTokenProof[] {
-  if (value === undefined) return []
-  const proofs = jsonArray(value, label).map((item, i) => {
-    const object = jsonObject(item, `${label}[${i}]`)
-    exactMembers(object, ['assetId', 'subjects', 'beef'], [], `${label}[${i}]`)
-    const subjects = jsonArray(object.subjects, `${label}[${i}].subjects`).map(subject => {
-      parseOutpoint(subject)
-      return subject as string
-    })
-    if (subjects.length === 0) throw new Error(`BRC-207: ${label}[${i}].subjects must not be empty`)
-    unique(subjects, `${label}[${i}] subject`)
-    parseAssetId(object.assetId)
-    return {
-      assetId: object.assetId as string,
-      subjects,
-      beef: jsonByteArray(object.beef, `${label}[${i}].beef`, maxBytes)
-    }
-  })
-  unique(
-    proofs.flatMap(proof => proof.subjects.map(subject => `${proof.assetId} ${subject}`)),
-    `${label} scope`
-  )
-  return proofs
 }
 
 /** Validates optional `profileData`: profile identifier, then asset ID or `ISSUE`, then profile data. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
-import { ColorPlan, parseTokenProofs, type ColorPlan as Plan } from '../ColorPlan.js'
+import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
 
 const ASSET = `${'ab'.repeat(32)}_0`
 const SENDER = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
@@ -146,26 +146,6 @@ describe('ColorPlan', () => {
   it('has no tokenProofs member; plan proofs travel in their own labels', () => {
     const json = JSON.stringify({ ...plan(), tokenProofs: [] })
     expect(() => ColorPlan.fromLabels(labelsFor(json))).toThrow('unknown member tokenProofs')
-  })
-
-  it('validates signature envelope token proofs', () => {
-    const subject = `${'cd'.repeat(32)}.1`
-    expect(
-      parseTokenProofs([{ assetId: ASSET, subjects: [subject], beef: [1, 2, 3] }], 'proofs', 10)
-    ).toEqual([{ assetId: ASSET, subjects: [subject], beef: [1, 2, 3] }])
-    expect(() =>
-      parseTokenProofs([{ assetId: ASSET, subjects: [], beef: [1] }], 'proofs', 10)
-    ).toThrow('must not be empty')
-    expect(() =>
-      parseTokenProofs(
-        [
-          { assetId: ASSET, subjects: [subject], beef: [1] },
-          { assetId: ASSET, subjects: [subject], beef: [2] }
-        ],
-        'proofs',
-        10
-      )
-    ).toThrow('scope')
   })
 
   it.each([

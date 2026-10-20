@@ -570,6 +570,17 @@ describe('ColorPermissionModule boundaries', () => {
         originator: APP
       })
     ).rejects.toThrow('no meaning in internalizeAction')
+    const received = await module.onRequest({
+      method: 'internalizeAction',
+      args: {
+        tx: tx.toAtomicBEEF(),
+        outputs,
+        description: 'Receive tokens',
+        labels: ['p color proof 0 1 00', 'invoice']
+      },
+      originator: APP
+    })
+    expect((received.args as { labels: string[] }).labels).toEqual(['invoice'])
     const nonFinal = new Transaction(1, [], [tx.outputs[0]], 500)
     nonFinal.addInput({
       sourceTransaction: tx,
@@ -764,16 +775,12 @@ describe('ColorPermissionModule boundaries', () => {
     await expect(
       module.handleRequest({ ...request({}), args: { ...request({}).args, data: undefined } }, next)
     ).rejects.toThrow('envelope is missing')
-    // Token proofs are shape-checked and ignored: the request fails later, on overlay admission.
     await expect(
       module.handleRequest(
         request({ tokenProofs: [{ assetId, subjects: [`${source.id('hex')}.0`], beef: [1] }] }),
         next
       )
-    ).rejects.toThrow('not admitted and unspent')
-    await expect(
-      module.handleRequest(request({ tokenProofs: [{ assetId, subjects: [], beef: [1] }] }), next)
-    ).rejects.toThrow('must not be empty')
+    ).rejects.toThrow('unknown member tokenProofs')
     await expect(
       module.handleRequest(request({ profileData: { 'x:y': {} } }), next)
     ).rejects.toThrow('does not require')

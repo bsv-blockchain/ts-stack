@@ -3,12 +3,7 @@ import type { ColorPermissionModuleOptions } from './types.js'
 
 export { ColorPermissionModule } from './ColorPermissionModule.js'
 export { ColorPlan, COLOR_PLAN_LABEL_PREFIX, COLOR_OPERATIONS } from './ColorPlan.js'
-export type {
-  ColorOperation,
-  ColorOperationName,
-  ColorRemittance,
-  ColorTokenProof
-} from './ColorPlan.js'
+export type { ColorOperation, ColorOperationName, ColorRemittance } from './ColorPlan.js'
 export {
   ASSETS_SELECTOR,
   COLOR_KEY_ID,

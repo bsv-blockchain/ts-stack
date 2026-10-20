@@ -100,9 +100,10 @@ in `signAction`. `inputPositions` and `changePositions` are honored; change
 positions follow the requested outputs, satoshi change comes after the token
 change, and both need `options.randomizeOutputs: false`.
 
-The module does not validate BRC-176 lineage: `p color proof` labels are
-dropped before the action is stored, and signature-envelope `tokenProofs` are
-ignored. It relies on overlay admission and spendability.
+The module does not validate BRC-176 lineage: `p color proof` labels on
+`createAction` and `internalizeAction` are dropped before the wallet stores the
+action. It relies on overlay admission and spendability. Plans, signature
+envelopes and receipt instructions have no `tokenProofs` member.
 
 Signatures released through `createSignature` are not yet recorded as BRC-207
 exposure.

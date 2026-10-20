@@ -39,7 +39,6 @@ import {
   type ColorOperationName,
   parseProfileData,
   parseRemittances,
-  parseTokenProofs,
   type ColorRemittance
 } from './ColorPlan.js'
 import {
@@ -129,6 +128,15 @@ function inputOutpoint(input: Transaction['inputs'][number]): string {
   const txid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
   if (txid === undefined) throw new Error('BRC-207: transaction input has no source transaction ID')
   return outpointString(txid, input.sourceOutputIndex)
+}
+
+/**
+ * Drops `p color proof` labels unread. They carry BRC-176 lineage packets for modules that
+ * validate them and are never stored. This module relies on overlay admission and spendability
+ * instead; a wallet that wants BRC-176 supplies its own color module.
+ */
+function withoutProofLabels(labels: readonly string[]): string[] {
+  return labels.filter(label => !label.startsWith(PROOF_LABEL_PREFIX))
 }
 
 function custodyOf(remittance: ColorRemittance): Custody {
@@ -797,9 +805,11 @@ export class ColorPermissionModule implements PermissionsModule {
         return {
           args: await this.#signAction(req.args as SignActionArgs, req.action, req.originator)
         }
-      case 'internalizeAction':
-        await this.#internalizeAction(req.args as InternalizeActionArgs, req.originator)
-        return { args: req.args }
+      case 'internalizeAction': {
+        const args = req.args as InternalizeActionArgs
+        await this.#internalizeAction(args, req.originator)
+        return { args: { ...args, labels: withoutProofLabels(args.labels ?? []) } }
+      }
       case 'listActions':
         await this.#authorizeRead(req.originator)
         return { args: req.args }
@@ -856,8 +866,14 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /** Verifies every `p color` receipt; the caller must already have submitted the transaction. */
   async #internalizeAction(args: InternalizeActionArgs, originator: string): Promise<void> {
-    if ((args.labels ?? []).some(label => label.startsWith(`${COLOR_BASKET_NAMESPACE} `))) {
-      throw new Error('BRC-207: p color labels have no meaning in internalizeAction')
+    if (
+      withoutProofLabels(args.labels ?? []).some(label =>
+        label.startsWith(`${COLOR_BASKET_NAMESPACE} `)
+      )
+    ) {
+      throw new Error(
+        'BRC-207: p color labels other than proof labels have no meaning in internalizeAction'
+      )
     }
     const tx = Transaction.fromAtomicBEEF(args.tx)
     assertFinal(tx)
@@ -973,10 +989,7 @@ export class ColorPermissionModule implements PermissionsModule {
       assertSatoshiChangePosition(plan, placed.length)
       return {
         ...args,
-        // `p color proof` labels carry BRC-176 lineage packets for modules that validate them, and
-        // are never stored. This module relies on overlay admission and spendability instead, so it
-        // drops them unread; a wallet that wants BRC-176 supplies its own color module.
-        labels: labels.filter(label => !label.startsWith(PROOF_LABEL_PREFIX)),
+        labels: withoutProofLabels(labels),
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
         outputs: placed
       }
@@ -1763,14 +1776,10 @@ export class ColorPermissionModule implements PermissionsModule {
     exactMembers(
       envelope,
       ['version', 'tx', 'inputIndex', 'sighashType', 'ownedOutputs'],
-      ['tokenProofs', 'profileData'],
+      ['profileData'],
       'signature envelope'
     )
     if (envelope.version !== 1) throw new Error('BRC-207: signature envelope version must be 1')
-    // BRC-176 lineage packets serve modules that validate them. This module relies on overlay
-    // admission and spendability instead, so it checks their shape and ignores them; a wallet
-    // that wants BRC-176 supplies its own color module.
-    parseTokenProofs(envelope.tokenProofs, 'signature envelope tokenProofs', MAX_ENVELOPE_BYTES)
     if (
       Object.keys(parseProfileData(envelope.profileData, 'signature envelope profileData') ?? {})
         .length > 0
