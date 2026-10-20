@@ -651,10 +651,12 @@ export default class WalletWireTransceiver implements WalletInterface {
     const resultReader = new ReaderUint8Array(result)
     if (isModuleBalanceQuery(args.basket)) {
       const balance = toUTF8Strict(resultReader.read(resultReader.readVarIntNumStrict(false)))
-      if (resultReader.readVarIntNumStrict() !== -1 || !resultReader.eof()) {
-        throw new Error('Invalid listOutputs module balance response')
-      }
-      return validateWalletResult('listOutputs', { totalOutputs: balance, outputs: [] }, bindingRequest)
+      if (!resultReader.eof()) throw new Error('Invalid listOutputs module balance response')
+      return validateWalletResult(
+        'listOutputs',
+        { totalOutputs: balance, outputs: [] },
+        bindingRequest
+      )
     }
     const totalOutputs = this.#requireInteger(
       resultReader.readVarIntNumStrict(false),
@@ -684,9 +686,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     const output: ListOutputsResult['outputs'][number] = { spendable: true, outpoint, satoshis }
     const scriptLen = reader.readVarIntNumStrict()
     if (scriptLen >= 0) output.lockingScript = toHex(reader.read(scriptLen))
-    const spendable = reader.readInt8()
-    if (spendable !== 0 && spendable !== 1) throw new Error('Invalid listOutputs spendable flag')
-    output.spendable = spendable === 1
+    output.spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
     const custLen = reader.readVarIntNumStrict()
     if (custLen >= 0) output.customInstructions = toUTF8Strict(reader.read(custLen))
     const tagsLen = reader.readVarIntNumStrict()

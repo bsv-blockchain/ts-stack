@@ -39,7 +39,7 @@ import {
   stageTransactionOutputs
 } from './ActionBatchPlanner'
 import { beefForTxids } from '../../utility/beefForTxids'
-import { listOutputsCount } from '../../utility/listOutputsCount'
+import { numericTotalOutputs } from '../../utility/numericTotalOutputs'
 import { actionBatchPackLength } from '../../utility/actionBatchPack'
 
 export type ActionBatchMode = 'auto' | 'legacy'
@@ -309,7 +309,7 @@ class ActionBatchWorkspace {
         .reduce((sum, [, output]) => sum + output.satoshis, 0)
       return {
         totalOutputs:
-          listOutputsCount(persisted) - consumedConfirmed + staged.reduce((sum, output) => sum + output.satoshis, 0),
+          numericTotalOutputs(persisted) - consumedConfirmed + staged.reduce((sum, output) => sum + output.satoshis, 0),
         outputs: []
       }
     }
@@ -320,7 +320,7 @@ class ActionBatchWorkspace {
     const offset = args.offset < 0 ? Math.max(0, -args.offset - 1) : args.offset
     const result: ListOutputsResult = {
       totalOutputs:
-        listOutputsCount(persisted) - (persisted.outputs.length - persistedUnconsumed.length) + staged.length,
+        numericTotalOutputs(persisted) - (persisted.outputs.length - persistedUnconsumed.length) + staged.length,
       outputs: ordered.slice(offset, offset + args.limit)
     }
     if (args.includeTransactions) {
