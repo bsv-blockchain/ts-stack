@@ -32,8 +32,10 @@ attention to changes that materially alter behavior or extend functionality.
 - BRC-177 `p nosend expiry never` is supported. The anchor funds the protected
   action without a reclaim allowance, no reclaim transaction is built or
   armed, and the action has no deadline, so the monitor never reclaims it. An
-  unreleased `never` action can still be aborted; aborting a released one
-  fails because its payment is permanently sent. `Brc177NoSendExpiryMode` gains
+  unreleased `never` action can still be aborted; aborting a released one, in
+  any later state, fails because its payment is permanently sent. Released
+  `never` actions are left out of the expiry lifecycle scan, and storage
+  `createAction` refuses caller-supplied BRC-177 metadata. `Brc177NoSendExpiryMode` gains
   `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
   result's `deadline` is `null`.
 

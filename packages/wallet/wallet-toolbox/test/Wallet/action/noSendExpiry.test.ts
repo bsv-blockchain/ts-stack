@@ -980,6 +980,25 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       const after = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
       expect(after.noSendExpiryState).toBe('signed')
       expect(after.status).toBe('nosend')
+
+      // Still refused once the recipient's broadcast has been observed.
+      await ctx.active.updateTransaction(after.transactionId, { noSendExpiryState: 'broadcast' })
+      await expect(ctx.wallet.abortAction({ reference: created.txid! })).rejects.toThrow('permanently sent')
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('storage createAction refuses caller-supplied BRC-177 metadata', async () => {
+    const ctx = await createHarness()
+    try {
+      const { user } = await ctx.active.findOrInsertUser(ctx.wallet.identityKey)
+      const forged = {
+        brc177: { kind: 'protected', expiry: { mode: 'never', value: null, label: 'p nosend expiry never' } }
+      } as unknown as Parameters<typeof ctx.active.createAction>[1]
+      await expect(
+        ctx.active.createAction({ identityKey: ctx.wallet.identityKey, userId: user.userId, isActive: true }, forged)
+      ).rejects.toThrow('without BRC-177 metadata')
     } finally {
       await ctx.destroy()
     }
@@ -1005,9 +1024,19 @@ describe('BRC-177 noSend expiry reference implementation', () => {
         ...protectedArgs(3600, false),
         labels: ['p nosend expiry never']
       })
-      await expect(ctx.wallet.abortAction({ reference: unreleased.signableTransaction!.reference })).resolves.toEqual({
+      const unreleasedReference = unreleased.signableTransaction!.reference
+      await expect(ctx.wallet.abortAction({ reference: unreleasedReference })).resolves.toEqual({
         aborted: true
       })
+      const cancelled = verifyOne(await ctx.active.findTransactions({ partial: { reference: unreleasedReference } }))
+      expect(cancelled.status).toBe('failed')
+      const anchor = verifyOne(
+        await ctx.active.findOutputs({
+          partial: { txid: cancelled.noSendExpiryAnchorTxid, vout: cancelled.noSendExpiryAnchorVout }
+        })
+      )
+      expect(anchor.spendable).toBe(true)
+      expect(anchor.spentBy).toBeUndefined()
     } finally {
       await ctx.destroy()
     }
