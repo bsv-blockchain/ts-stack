@@ -65,7 +65,8 @@ signature request and inventory read, and returns true to approve.
 
 This version reads BRC-161 JSON `transfer` and `deploy+mint` outputs as inputs
 and as outputs to other parties but never holds or creates them, rejects the
-BRC-161 authority operations and assets with required processing profiles, ignores BRC-176 lineage proofs, and does not yet record exposure for signatures
+BRC-161 authority operations, satoshi change positions (wallet-toolbox does not
+position satoshi change) and assets with required processing profiles, ignores BRC-176 lineage proofs, and does not yet record exposure for signatures
 released through `createSignature`. BRC-207's non-final transaction rules are not
 implemented; such transactions follow the wallet's existing behavior. A send is approved in `signAction`, against
 the funded transaction. A receipt relies on its overlay's admission of the received output

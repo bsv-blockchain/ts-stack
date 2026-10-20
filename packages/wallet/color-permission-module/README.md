@@ -94,14 +94,15 @@ The module fails explicitly, rather than falling back, on:
   and only value inputs can fund JSON outputs. Assets first deployed as BRC-161,
   at any output index, are supported in BRC-162 form;
 - assets whose deploy declares required processing profiles;
-- `profileData` entries.
+- `profileData` entries;
+- satoshi change positions (`changePositions` with a null `assetId`): wallet-toolbox
+  adds satoshi change while funding and does not position it.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits
 them. An input missing from `inputBEEF` is resolved by the wallet and checked
-in `signAction`. `inputPositions` and `changePositions` are honored; change
-positions follow the requested outputs, satoshi change comes after the token
-change, and both need `options.randomizeOutputs: false`.
+in `signAction`. `inputPositions` and token `changePositions` are honored; change
+positions follow the requested outputs and need `options.randomizeOutputs: false`.
 
 The module does not validate BRC-176 lineage: `p color proof` labels on
 `createAction` and `internalizeAction` are dropped before the wallet stores the

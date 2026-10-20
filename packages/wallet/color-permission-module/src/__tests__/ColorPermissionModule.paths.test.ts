@@ -230,12 +230,10 @@ describe('ColorPermissionModule boundaries', () => {
   })
 
   /** The signAction hook call for a funded action, as the permissions manager makes it. */
-  /** `prepare` stands in for what storage adds, such as satoshi change after the module's outputs. */
-  async function signAction(funded: CreateActionArgs, prepare?: (tx: Transaction) => void) {
+  async function signAction(funded: CreateActionArgs) {
     const created = await wallet.createAction(funded)
     const signable = created.signableTransaction!
     const pending = wallet.pending.get(signable.reference)!
-    prepare?.(pending.tx)
     const action = {
       reference: signable.reference,
       transaction: Transaction.fromAtomicBEEF(pending.tx.toAtomicBEEF()),
@@ -253,24 +251,23 @@ describe('ColorPermissionModule boundaries', () => {
     return { signed, tx: pending.tx }
   }
 
-  it('places satoshi change after the module outputs and checks it exists before signing', async () => {
-    // The refused action keeps its input reserved, so the second action spends the other output.
-    await holdTokens(wallet, provider, assetId, [300n, 300n])
+  it('refuses satoshi change positions, which the wallet does not place', async () => {
+    await holdTokens(wallet, provider, assetId, [300n])
     const output = (await tokenPayment(wallet, new FakeWallet(), assetId, 100n)).tx.outputs[0]
-    const args = (index: number): Partial<CreateActionArgs> => ({
-      labels: plan({ changePositions: [{ assetId: null, index }] }),
-      outputs: [
-        { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
-      ],
-      options: { randomizeOutputs: false }
-    })
-    await expect(createAction(args(1))).rejects.toThrow('conflict with the requested outputs')
-    await expect(createAction(args(3))).rejects.toThrow('cannot be satisfied')
-    await expect(signAction(await createAction(args(2)))).rejects.toThrow('no satoshi change')
-    const { signed } = await signAction(await createAction(args(2)), tx =>
-      tx.addOutput({ lockingScript: LockingScript.fromHex('51'), satoshis: 5 })
-    )
-    expect(Object.keys(signed.spends)).toEqual(['0'])
+    await expect(
+      createAction({
+        labels: plan({
+          changePositions: [
+            { assetId, index: 1 },
+            { assetId: null, index: 2 }
+          ]
+        }),
+        outputs: [
+          { lockingScript: output.lockingScript.toHex(), satoshis: 1, outputDescription: 'Pay' }
+        ],
+        options: { randomizeOutputs: false }
+      })
+    ).rejects.toThrow('satoshi change positions are not supported')
   })
 
   it('signs a managed input with its sighash override', async () => {

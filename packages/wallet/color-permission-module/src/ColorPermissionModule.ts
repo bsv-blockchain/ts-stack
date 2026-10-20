@@ -429,6 +429,13 @@ function assertPlanSupported(plan: ColorPlan, args: CreateActionArgs): void {
   if (Object.keys(plan.profileData ?? {}).length > 0) {
     throw new Error('BRC-207: plan.profileData is not supported')
   }
+  // Storage adds satoshi change while funding, after this module returns: it appends the requested
+  // outputs, then any storage commission output, then change, and reports neither position.
+  if (plan.changePositions.some(position => position.assetId === null)) {
+    throw new Error(
+      'BRC-207: satoshi change positions are not supported: the wallet does not position satoshi change'
+    )
+  }
   if (plan.changePositions.length > 0 && args.options?.randomizeOutputs !== false) {
     throw new Error('BRC-207: plan.changePositions requires options.randomizeOutputs false')
   }
@@ -634,17 +641,6 @@ function assertTransactionOperations(plan: ColorPlan, tokens: TransactionTokens)
         tokens.outputs.get(assetId) ?? emptyHolding()
       )
     )
-}
-
-/** Satoshi change comes after every module-placed output, where the wallet appends it. */
-function assertSatoshiChangePosition(plan: ColorPlan, outputCount: number): void {
-  const pinned = plan.changePositions.find(position => position.assetId === null)
-  if (pinned === undefined || pinned.index === outputCount) return
-  throw new Error(
-    pinned.index < outputCount
-      ? 'BRC-207: plan.changePositions conflict with the requested outputs'
-      : 'BRC-207: plan.changePositions cannot be satisfied'
-  )
 }
 
 /** The sighash type for each managed input; an override must name one the module signs. */
@@ -995,17 +991,11 @@ export class ColorPermissionModule implements PermissionsModule {
         originator
       )
       sighashScopes(plan, new Set([...explicit.managed, ...inputs].map(input => input.outpoint)))
-      const placed = placeChange(
-        outputs,
-        changes,
-        plan.changePositions.filter(position => position.assetId !== null)
-      )
-      assertSatoshiChangePosition(plan, placed.length)
       return {
         ...args,
         labels: withoutProofLabels(labels),
         inputs: orderInputs(explicit.inputs, tokenInputs(inputs), plan.inputPositions),
-        outputs: placed
+        outputs: placeChange(outputs, changes, plan.changePositions)
       }
     } finally {
       for (const outpoint of reserved) this.#selected.delete(outpoint)
@@ -1682,9 +1672,6 @@ export class ColorPermissionModule implements PermissionsModule {
     const tx = action.transaction
     const tokens = transactionTokens(tx, true)
     assertTransactionOperations(plan, tokens)
-    const satoshiChange = plan.changePositions.find(position => position.assetId === null)
-    if (satoshiChange !== undefined && satoshiChange.index >= tx.outputs.length)
-      throw new Error('BRC-207: the funded action has no satoshi change for plan.changePositions')
     const managed = await this.#actionInputs(tx, originator)
     const scopes = sighashScopes(plan, new Set(managed.map(input => input.outpoint)))
     await eachInOrder(new Set(tokens.consumed.map(input => input.assetId)), async assetId => {
