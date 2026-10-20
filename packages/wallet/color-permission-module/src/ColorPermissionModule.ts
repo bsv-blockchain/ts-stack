@@ -877,20 +877,15 @@ export class ColorPermissionModule implements PermissionsModule {
   }
 
   /**
-   * Checks a received transaction: every input unlocks its source, every consumed token input
-   * was admitted to its asset overlay, and each asset's outputs follow BRC-162's supply rules.
+   * Checks a received transaction: every input unlocks its source and each asset's outputs follow
+   * BRC-162's supply rules. Consumed token inputs are not looked up: the received output must be
+   * admitted and unspent, and its overlay admits it only after validating its inputs.
    */
   async #assertCompletedTransaction(tx: Transaction): Promise<void> {
     for (let index = 0; index < tx.inputs.length; index++) assertUnlocks(tx, index)
-    const { consumed, inputs, outputs } = transactionTokens(tx)
+    const { inputs, outputs } = transactionTokens(tx)
     await eachInOrder(new Set([...inputs.keys(), ...outputs.keys()]), async assetId => {
       await this.#assertSupportedAsset(assetId)
-      const sources = consumed.filter(source => source.assetId === assetId)
-      if (sources.length > 0) {
-        const admitted = await this.#listed('admission', assetId, sources)
-        if (sources.some(source => !admitted.has(source.outpoint)))
-          throw new Error(`BRC-207: a consumed ${assetId} input was never admitted to its overlay`)
-      }
       requiredOperations(
         inputs.get(assetId) ?? emptyHolding(),
         outputs.get(assetId) ?? emptyHolding()
@@ -2079,17 +2074,8 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /** The queried outputs the overlay reports admitted and unspent, matched to their source bytes. */
   async #spendable(assetId: string, outputs: readonly SourceOutput[]): Promise<Set<string>> {
-    return await this.#listed('spendability', assetId, outputs)
-  }
-
-  /** The queried outputs a `color-spendability` or `color-admission` answer lists, matched to their source bytes. */
-  async #listed(
-    query: 'spendability' | 'admission',
-    assetId: string,
-    outputs: readonly SourceOutput[]
-  ): Promise<Set<string>> {
     const outpoints = outputs.map(output => output.outpoint)
-    const listed = readOutputList(await this.#provider[query](assetId, outpoints), outpoints)
+    const listed = readOutputList(await this.#provider.spendability(assetId, outpoints), outpoints)
     for (const output of outputs) {
       const answer = listed.get(output.outpoint)
       if (

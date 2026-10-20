@@ -208,27 +208,10 @@ export class FakeProvider {
   readonly submissions: Array<{ topics: string[]; txid: string }> = []
   rejectSubmissions = false
 
-  /** Admits an output; the token inputs its transaction consumed count as admitted before. */
   admit(assetId: string, tx: Transaction, vout: number): void {
     const entry = { assetId, tx, vout }
     this.current.set(`${tx.id('hex')}.${vout}`, entry)
     this.history.set(`${tx.id('hex')}.${vout}`, entry)
-    for (const input of tx.inputs) {
-      const source = input.sourceTransaction
-      const token =
-        source === undefined
-          ? undefined
-          : readTokenOutput(source.outputs[input.sourceOutputIndex].lockingScript, {
-              txid: source.id('hex'),
-              vout: input.sourceOutputIndex
-            })
-      if (token !== undefined)
-        this.history.set(`${source!.id('hex')}.${input.sourceOutputIndex}`, {
-          assetId: token.assetId,
-          tx: source!,
-          vout: input.sourceOutputIndex
-        })
-    }
   }
 
   /** Spent outputs are never admitted again. */

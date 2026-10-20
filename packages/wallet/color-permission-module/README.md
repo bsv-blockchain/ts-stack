@@ -75,9 +75,8 @@ false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's
   value or authority basket and the BRC-207 receipt instructions. The caller
   must already have submitted the transaction; the received output must be
-  admitted and unspent. Every input must unlock its source, every consumed
-  token input must have been admitted, and each asset must follow BRC-162's
-  supply rules.
+  admitted and unspent. Every input must unlock its source, and each asset
+  must follow BRC-162's supply rules.
 - **App-built transactions**: `createSignature` with a `p color` protocol ID
   and a BRC-207 signature envelope in `data`.
 - **Reads**: `listOutputs` with `p color assets`, `p color balance <assetTag>`

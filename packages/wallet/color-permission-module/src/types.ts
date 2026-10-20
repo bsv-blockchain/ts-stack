@@ -7,7 +7,7 @@ import type { LookupAnswer, STEAK, WalletInterface } from '@bsv/sdk'
 export interface ColorOverlayProvider {
   /** BRC-207 `color-spendability`: the queried outputs currently admitted and unspent in `tm_color_<assetId>`. */
   spendability: (assetId: string, outpoints: string[]) => Promise<LookupAnswer>
-  /** BRC-207 `color-admission`: the queried outputs ever admitted to `tm_color_<assetId>`, spent or unspent. */
+  /** BRC-207 `color-admission`: the queried outputs ever admitted to `tm_color_<assetId>`, spent or unspent. Used only to look up an asset's deploy. */
   admission: (assetId: string, outpoints: string[]) => Promise<LookupAnswer>
   /** Submits a transaction to each topic (`tm_color_<assetId>`, or `tm_color` for a deploy), returning each topic's admittance. */
   submit: (topics: string[], beef: number[]) => Promise<STEAK>
