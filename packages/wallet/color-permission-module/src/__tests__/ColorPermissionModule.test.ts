@@ -14,7 +14,11 @@ import {
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import { toArray } from '@bsv/sdk/primitives/utils'
 import { OneColor } from '@bsv/templates'
-import { maybeDecryptMetadata } from '@bsv/wallet-toolbox-client'
+import {
+  encryptMetadata,
+  maybeDecryptMetadata,
+  type PermissionsModuleAction
+} from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID } from '../identifiers.js'
@@ -75,6 +79,16 @@ describe('ColorPermissionModule', () => {
     assetId = (await deployAsset(new FakeWallet(), provider, 1_000_000n)).assetId
   })
 
+  /** The action a WalletPermissionsManager passes to signAction hooks for a signable result. */
+  function signingAction(created: CreateActionResult, noSend = false): PermissionsModuleAction {
+    const signable = created.signableTransaction!
+    return {
+      reference: signable.reference,
+      transaction: Transaction.fromAtomicBEEF(signable.tx),
+      noSend
+    }
+  }
+
   async function send(args: Partial<CreateActionArgs>): Promise<SignActionResult> {
     const funded = (
       await module.onRequest({
@@ -87,17 +101,19 @@ describe('ColorPermissionModule', () => {
       method: 'createAction',
       originator: APP
     })) as CreateActionResult
-    const reference = created.signableTransaction!.reference
+    const action = signingAction(created, args.options?.noSend === true)
     const signArgs = (
       await module.onRequest({
         method: 'signAction',
-        args: { reference, spends: {} },
-        originator: APP
+        args: { reference: action.reference, spends: {} },
+        originator: APP,
+        action
       })
     ).args as { reference: string; spends: Record<number, { unlockingScript: string }> }
     return (await module.onResponse(await wallet.signAction(signArgs), {
       method: 'signAction',
-      originator: APP
+      originator: APP,
+      action
     })) as SignActionResult
   }
 
@@ -214,15 +230,45 @@ describe('ColorPermissionModule', () => {
 
     it('releases its selection when the user declines', async () => {
       await holdTokens(wallet, provider, assetId, [300n])
-      const declining = createModule(wallet, provider, async () => false)
+      const answers = [false, true]
+      const sender = createModule(wallet, provider, async () => answers.shift()!)
       const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
       const args = { description: 'Send tokens', labels: transferPlan(assetId), outputs: [output] }
       await expect(
-        declining.onRequest({ method: 'createAction', args, originator: APP })
+        sender.onRequest({ method: 'createAction', args, originator: APP })
       ).rejects.toThrow('declined')
-      await expect(
-        module.onRequest({ method: 'createAction', args, originator: APP })
-      ).resolves.toBeDefined()
+      const retried = await sender.onRequest({ method: 'createAction', args, originator: APP })
+      expect((retried.args as CreateActionArgs).inputs).toHaveLength(1)
+    })
+
+    it('reads custody only for the outputs it selects, and skips an unreadable one', async () => {
+      const [largest, middle, smallest] = await holdTokens(wallet, provider, assetId, [
+        300n,
+        200n,
+        50n
+      ])
+      for (const tx of [middle, smallest]) {
+        const stored = wallet.outputs.get(`${tx.id('hex')}.0`)!
+        stored.customInstructions = await encryptMetadata(
+          wallet.asWallet(),
+          stored.customInstructions!
+        )
+      }
+      wallet.outputs.get(`${largest.id('hex')}.0`)!.customInstructions = await encryptMetadata(
+        wallet.asWallet(),
+        'not a custody record'
+      )
+      const decrypt = jest.spyOn(wallet, 'decrypt')
+      const result = await send({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(
+        Transaction.fromAtomicBEEF(result.tx!).inputs.map(input =>
+          input.sourceTransaction!.id('hex')
+        )
+      ).toEqual([middle.id('hex')])
+      // The unreadable record, then the 200-unit output to select and to sign; never the 50.
+      expect(decrypt).toHaveBeenCalledTimes(3)
     })
 
     it('skips outputs the overlay no longer reports and fails on an insufficient balance', async () => {
@@ -257,11 +303,13 @@ describe('ColorPermissionModule', () => {
         originator: APP
       })) as CreateActionResult
       provider.spend(`${held.id('hex')}.0`)
+      const action = signingAction(created)
       await expect(
         module.onRequest({
           method: 'signAction',
-          args: { reference: created.signableTransaction!.reference, spends: {} },
-          originator: APP
+          args: { reference: action.reference, spends: {} },
+          originator: APP,
+          action
         })
       ).rejects.toThrow('no longer spendable')
     })
@@ -272,6 +320,52 @@ describe('ColorPermissionModule', () => {
       await expect(
         send({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
       ).rejects.toThrow('needs reconciliation')
+    })
+
+    it('keeps its selection through a slow approval, so a concurrent send cannot take it', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      let approve: ((approved: boolean) => void) | undefined
+      const gated = createModule(
+        wallet,
+        provider,
+        async () => await new Promise<boolean>(resolve => (approve = resolve))
+      )
+      const request = async () =>
+        await gated.onRequest({
+          method: 'createAction',
+          args: {
+            description: 'Send tokens',
+            labels: transferPlan(assetId),
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+          },
+          originator: APP
+        })
+      const first = request()
+      while (approve === undefined) await new Promise(resolve => setImmediate(resolve))
+      await expect(request()).rejects.toThrow('insufficient spendable balance')
+      approve(true)
+      expect(((await first).args as CreateActionArgs).inputs).toHaveLength(1)
+    })
+
+    it('holds nothing once an action it funded is aborted', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const funded = (
+        await module.onRequest({
+          method: 'createAction',
+          args: {
+            description: 'Send tokens',
+            labels: transferPlan(assetId),
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+          },
+          originator: APP
+        })
+      ).args as CreateActionArgs
+      const created = await wallet.createAction(funded)
+      await wallet.abortAction({ reference: created.signableTransaction!.reference })
+      const result = await send({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(validInput(Transaction.fromAtomicBEEF(result.tx!), 0)).toBe(true)
     })
 
     it('signs a noSend action without submitting it', async () => {
@@ -358,6 +452,22 @@ describe('ColorPermissionModule', () => {
           originator: APP
         })
       ).rejects.toThrow('declined the token split')
+      expect(wallet.pending.size).toBe(0)
+      expect(provider.submissions).toEqual([])
+    })
+
+    it('aborts the split when signing it fails', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      wallet.signAction = async () => {
+        throw new Error('signing failed')
+      }
+      await expect(
+        send({
+          labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+          options: { noSend: true }
+        })
+      ).rejects.toThrow('signing failed')
       expect(wallet.pending.size).toBe(0)
       expect(provider.submissions).toEqual([])
     })
@@ -542,7 +652,30 @@ describe('ColorPermissionModule', () => {
         notForwarded
       )) as ListOutputsResult
       expect(filtered.outputs.map(output => output.outpoint)).toEqual([`${reserved.id('hex')}.0`])
-      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_access'])
+      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_access', 'color_access'])
+    })
+
+    it('decrypts custody only for the inventory page it returns', async () => {
+      const held = await holdTokens(wallet, provider, assetId, [30n, 20n, 10n])
+      for (const tx of held) {
+        const stored = wallet.outputs.get(`${tx.id('hex')}.0`)!
+        stored.customInstructions = await encryptMetadata(
+          wallet.asWallet(),
+          stored.customInstructions!
+        )
+      }
+      const decrypt = jest.spyOn(wallet, 'decrypt')
+      const page = (await module.handleRequest(
+        {
+          method: 'listOutputs',
+          args: { basket: 'p color assets', includeCustomInstructions: true, limit: 1 },
+          originator: APP
+        },
+        notForwarded
+      )) as ListOutputsResult
+      expect(page.totalOutputs).toBe(3)
+      expect(page.outputs).toHaveLength(1)
+      expect(decrypt).toHaveBeenCalledTimes(1)
     })
 
     it('counts available authorities and rejects unknown selectors', async () => {

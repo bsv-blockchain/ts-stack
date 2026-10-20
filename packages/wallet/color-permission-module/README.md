@@ -40,7 +40,10 @@ which overlays it trusts:
 | `submit(assetIds, beef)`           | Submits to `tm_color_<assetId>` for each asset                            |
 
 `requestTokenAccess` receives a JSON message whose `type` is `color_send`,
-`color_split`, `color_signature` or `color_access`, and returns true to approve.
+`color_split`, `color_signature`, `color_access` (a read) or `color_relinquish`,
+and returns true to approve. The module asks on every operation and keeps no
+grants; the host decides whether an existing grant covers a request and when to
+prompt the user.
 
 Call `color.dispose()` when the host tears down the wallet.
 

@@ -14,9 +14,12 @@ export interface ColorOverlayProvider {
 }
 
 /**
- * Prompts the user to approve a token operation described by `message`, a JSON object
- * with a `type` of `color_send`, `color_split`, `color_signature` or `color_access`.
- * Resolves true only when the user approves.
+ * Approves a token operation described by `message`, a JSON object with a `type` of
+ * `color_send`, `color_split`, `color_signature`, `color_access` (a read) or
+ * `color_relinquish`. Resolves true only when approved.
+ *
+ * The module asks on every operation and keeps no grants. The host decides whether an
+ * existing grant covers a request, how long grants last, and whether to prompt the user.
  */
 export type ColorTokenAccessHandler = (app: string, message: string) => Promise<boolean>
 

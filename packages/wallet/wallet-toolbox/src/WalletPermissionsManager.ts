@@ -178,11 +178,22 @@ export type LineItemType = 'input' | 'output' | 'fee'
 /** Security level for DPACP protocol permissions. */
 export type SecurityLevel = 0 | 1 | 2
 
+/** The action a `signAction` hook call signs. */
+export interface PermissionsModuleAction {
+  reference: string
+  /** The signable transaction as `createAction` returned it. */
+  transaction: Transaction
+  /** True when the signed transaction is not broadcast. */
+  noSend: boolean
+}
+
 /** A wallet request routed to a BRC-98/99/111 permission module. */
 export interface PermissionsModuleRequest {
   method: string
   args: object
   originator: string
+  /** Set only for `signAction` hook calls. */
+  action?: PermissionsModuleAction
 }
 
 /**
@@ -196,7 +207,8 @@ export type PermissionsModuleNext = (args: object) => Promise<unknown>
  * Modules are registered in the config mapped by their scheme ID.
  *
  * Modules that handled a `createAction` returning a signable transaction also receive that action's
- * `signAction` through `onRequest` and `onResponse`, with method `signAction`. A module may add `spends`
+ * `signAction` through `onRequest` and `onResponse`, with method `signAction` and the `action` being
+ * signed. A module may add `spends`
  * for inputs it supplied.
  */
 export interface PermissionsModule {
@@ -224,7 +236,7 @@ export interface PermissionsModule {
    * Transforms the response from the underlying wallet before returning to caller.
    *
    * @param res - The response from the underlying wallet
-   * @param context - Metadata about the original request (method, originator)
+   * @param context - Metadata about the original request (method, originator, and for `signAction` the action)
    * @returns Transformed response to return to the caller
    */
   onResponse: (
@@ -232,6 +244,7 @@ export interface PermissionsModule {
     context: {
       method: string
       originator: string
+      action?: PermissionsModuleAction
     }
   ) => Promise<any>
 }
@@ -4440,6 +4453,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (vargs.isSignAction) return createResult
 
     let signResult: SignActionResult
+    const action = this.signingAction(reference, vargs.isNoSend)
     try {
       const signArgs = await this.signActionArgsThroughPModules(
         pModules,
@@ -4448,6 +4462,7 @@ export class WalletPermissionsManager implements WalletInterface {
           spends: {},
           options: { ...args.options, returnTXIDOnly: false }
         },
+        action,
         originator
       )
       signResult = await this.underlying.signAction(signArgs, originator)
@@ -4462,7 +4477,7 @@ export class WalletPermissionsManager implements WalletInterface {
       await this.blockAndAbortAction(reference)
       throw error
     }
-    signResult = await this.signActionResultThroughPModules(pModules, signResult, originator)
+    signResult = await this.signActionResultThroughPModules(pModules, signResult, action, originator)
     return {
       ...createResult,
       ...signResult,
@@ -4911,15 +4926,22 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
+  /** The action a signAction hook call signs, from the template bound at createAction. */
+  private signingAction(reference: string, noSend: boolean): PermissionsModuleAction | undefined {
+    const transaction = this.pendingActionTemplates.get(reference)
+    return transaction === undefined ? undefined : { reference, transaction, noSend }
+  }
+
   /** Passes signAction args through the P-modules that handled the action's createAction, in request order. */
   private async signActionArgsThroughPModules(
     pModules: PermissionsModule[],
     args: SignActionArgs,
+    action: PermissionsModuleAction | undefined,
     originator?: string
   ): Promise<SignActionArgs> {
     return (await pModules.reduce<Promise<object>>(
       async (previous, module) =>
-        (await module.onRequest({ method: 'signAction', args: await previous, originator: originator! })).args,
+        (await module.onRequest({ method: 'signAction', args: await previous, originator: originator!, action })).args,
       Promise.resolve(args)
     )) as SignActionArgs
   }
@@ -4928,11 +4950,12 @@ export class WalletPermissionsManager implements WalletInterface {
   private async signActionResultThroughPModules(
     pModules: PermissionsModule[],
     result: SignActionResult,
+    action: PermissionsModuleAction | undefined,
     originator?: string
   ): Promise<SignActionResult> {
     return await pModules.reduceRight<Promise<SignActionResult>>(
       async (previous, module) =>
-        await module.onResponse(await previous, { method: 'signAction', originator: originator! }),
+        await module.onResponse(await previous, { method: 'signAction', originator: originator!, action }),
       Promise.resolve(result)
     )
   }
@@ -4945,6 +4968,7 @@ export class WalletPermissionsManager implements WalletInterface {
     // The wallet takes noSend from signAction's options, else from createAction's.
     const noSend = (requestArgs.options?.noSend ?? this.pendingNoSendReferences.has(requestArgs.reference)) === true
     const pModules = this.pendingActionModules.get(requestArgs.reference) ?? []
+    const action = this.signingAction(requestArgs.reference, noSend)
     let result: SignActionResult
     try {
       const signArgs = await this.signActionArgsThroughPModules(
@@ -4953,6 +4977,7 @@ export class WalletPermissionsManager implements WalletInterface {
           ...requestArgs,
           options: { ...requestArgs.options, returnTXIDOnly: false }
         },
+        action,
         originator
       )
       result = await this.underlying.signAction(signArgs, originator)
@@ -4967,7 +4992,7 @@ export class WalletPermissionsManager implements WalletInterface {
       await this.blockAndAbortAction(requestArgs.reference)
       throw error
     }
-    return await this.signActionResultThroughPModules(pModules, result, originator)
+    return await this.signActionResultThroughPModules(pModules, result, action, originator)
   }
 
   public async abortAction(
@@ -5139,17 +5164,24 @@ export class WalletPermissionsManager implements WalletInterface {
     originator: string,
     modules: PermissionsModule[]
   ): Promise<Awaited<ReturnType<WalletInterface['internalizeAction']>>> {
-    const transformedArgs = await modules.reduce<Promise<object>>(
-      async (previous, module) =>
-        (await module.onRequest({ method: 'internalizeAction', args: await previous, originator })).args,
-      Promise.resolve(requestArgs)
-    )
+    let transformedArgs: object = requestArgs
+    for (const module of modules) {
+      const transformed = await module.onRequest({
+        method: 'internalizeAction',
+        args: transformedArgs,
+        originator
+      })
+      transformedArgs = transformed.args
+    }
     await this.encryptInternalizeActionModuleMetadata(transformedArgs as InternalizeActionArgs)
-    const result = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
-    return await modules.reduceRight<Promise<Awaited<ReturnType<WalletInterface['internalizeAction']>>>>(
-      async (previous, module) => await module.onResponse(await previous, { method: 'internalizeAction', originator }),
-      Promise.resolve(result)
-    )
+    let result = await this.underlying.internalizeAction(transformedArgs as InternalizeActionArgs, originator)
+    for (let index = modules.length - 1; index >= 0; index--) {
+      result = await modules[index].onResponse(result, {
+        method: 'internalizeAction',
+        originator
+      })
+    }
+    return result
   }
 
   public async internalizeAction(

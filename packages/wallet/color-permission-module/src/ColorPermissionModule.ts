@@ -9,7 +9,6 @@ import {
   type BEEF,
   type CreateActionArgs,
   type CreateActionOutput,
-  type CreateActionResult,
   type CreateSignatureArgs,
   type InternalizeActionArgs,
   type ListOutputsArgs,
@@ -29,6 +28,7 @@ import {
   maybeDecryptMetadata,
   sdk as toolbox,
   type PermissionsModule,
+  type PermissionsModuleAction,
   type PermissionsModuleNext,
   type PermissionsModuleRequest
 } from '@bsv/wallet-toolbox-client'
@@ -74,10 +74,7 @@ import type {
   ColorTokenAccessHandler
 } from './types.js'
 
-const SESSION_TIMEOUT_MS = 60_000
 /** A selection only needs to outlive the createAction that reserves its inputs in storage. */
-const SELECTION_TIMEOUT_MS = 60_000
-const PENDING_TIMEOUT_MS = 15 * 60_000
 const UNLOCKING_SCRIPT_LENGTH = 108
 const TOKEN_CARRIER_SATOSHIS = 1
 const DEFAULT_SIGHASH = TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID
@@ -102,25 +99,22 @@ interface SourceOutput {
   satoshis: number
 }
 
+/** A basket output that may be selected, read from its locking script before any custody is read. */
+interface Candidate extends SourceOutput {
+  token: TokenOutput
+  amount: bigint
+  customInstructions: string
+}
+
 interface ManagedInput extends SourceOutput {
   assetId: string
   amount: bigint
   custody: Custody
 }
 
-/** A createAction this module funded with token inputs, through to its signing. */
-interface PendingAction {
-  inputs: ManagedInput[]
-  assetIds: string[]
-  noSend: boolean
-  originator: string
-  expires: number
-  template?: Transaction
-}
-
 type InventoryState = 'available' | 'reserved' | 'pending'
 
-function sumAmounts(inputs: readonly ManagedInput[]): bigint {
+function sumAmounts(inputs: ReadonlyArray<{ amount: bigint }>): bigint {
   return inputs.reduce((total, input) => total + input.amount, 0n)
 }
 
@@ -230,7 +224,7 @@ function assertPlanAssets(plan: ColorPlan, required: ReadonlyMap<string, bigint>
 }
 
 /** Largest amount first. */
-function byAmountDescending(a: ManagedInput, b: ManagedInput): number {
+function byAmountDescending(a: { amount: bigint }, b: { amount: bigint }): number {
   if (a.amount === b.amount) return 0
   return a.amount > b.amount ? -1 : 1
 }
@@ -313,13 +307,8 @@ export class ColorPermissionModule implements PermissionsModule {
   readonly #wallet: WalletInterface
   readonly #provider: ColorOverlayProvider
   readonly #requestTokenAccess: ColorTokenAccessHandler
-  readonly #readGrants = new Map<string, number>()
-  /** Actions awaiting their createAction result, keyed by each selected input outpoint. */
-  readonly #selected = new Map<string, PendingAction>()
-  /** Signable actions keyed by their reference. */
-  readonly #signable = new Map<string, PendingAction>()
-  /** Actions being signed, keyed by each token input outpoint. */
-  readonly #signing = new Map<string, PendingAction>()
+  /** Outputs a send in progress has selected, so a concurrent send does not select them too. */
+  readonly #selected = new Set<string>()
   readonly #supportedAssets = new Map<string, Promise<void>>()
   #identityKey?: Promise<string>
 
@@ -334,12 +323,9 @@ export class ColorPermissionModule implements PermissionsModule {
     this.#requestTokenAccess = options.requestTokenAccess
   }
 
-  /** Clears in-memory grants and pending action state. */
+  /** Clears in-memory selections and asset checks. */
   dispose(): void {
-    this.#readGrants.clear()
     this.#selected.clear()
-    this.#signable.clear()
-    this.#signing.clear()
     this.#supportedAssets.clear()
   }
 
@@ -348,7 +334,6 @@ export class ColorPermissionModule implements PermissionsModule {
     req: PermissionsModuleRequest,
     next: PermissionsModuleNext
   ): Promise<unknown> {
-    this.#expire()
     switch (req.method) {
       case 'getPublicKey':
       case 'verifySignature':
@@ -358,11 +343,20 @@ export class ColorPermissionModule implements PermissionsModule {
         return await this.#createSignature(req.args as CreateSignatureArgs, req.originator, next)
       case 'listOutputs':
         return await this.#listOutputs(req.args as ListOutputsArgs, req.originator, next)
-      case 'relinquishOutput':
-        if (parseAssetBasket((req.args as { basket: string }).basket) === undefined) {
+      case 'relinquishOutput': {
+        const { basket, output } = req.args as { basket: string; output: string }
+        const target = parseAssetBasket(basket)
+        if (target === undefined) {
           throw new Error('BRC-207: only per-asset baskets hold outputs that can be relinquished')
         }
+        await this.#approve(req.originator, {
+          type: 'color_relinquish',
+          assetId: target.assetId,
+          role: target.role,
+          outpoint: output
+        })
         return await next(req.args)
+      }
       default:
         throw new Error(`BRC-207: ${req.method} is not available in the p color namespace`)
     }
@@ -370,12 +364,13 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /** Label- and basket-routed actions. */
   async onRequest(req: PermissionsModuleRequest): Promise<{ args: object }> {
-    this.#expire()
     switch (req.method) {
       case 'createAction':
         return { args: await this.#createAction(req.args as CreateActionArgs, req.originator) }
       case 'signAction':
-        return { args: await this.#signAction(req.args as SignActionArgs) }
+        return {
+          args: await this.#signAction(req.args as SignActionArgs, req.action, req.originator)
+        }
       case 'internalizeAction':
         await this.#internalizeAction(req.args as InternalizeActionArgs, req.originator)
         return { args: req.args }
@@ -389,10 +384,12 @@ export class ColorPermissionModule implements PermissionsModule {
 
   async onResponse(
     res: unknown,
-    context: { method: string; originator: string }
+    context: { method: string; originator: string; action?: PermissionsModuleAction }
   ): Promise<unknown> {
-    if (context.method === 'createAction') this.#bindSignableAction(res as CreateActionResult)
-    if (context.method === 'signAction') await this.#submitSigned(res as SignActionResult)
+    // A noSend action is a handoff: its receiver submits it.
+    if (context.method === 'signAction' && context.action?.noSend === false) {
+      await this.#submitSigned(res as SignActionResult)
+    }
     return res
   }
 
@@ -474,30 +471,35 @@ export class ColorPermissionModule implements PermissionsModule {
     const { sends, outputs } = await this.#planOutputs(plan, args.outputs ?? [], originator)
     assertPlanAssets(plan, sends.required)
     const handoff = labels.some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
-    const pending: PendingAction = {
-      inputs: [],
-      assetIds: [...sends.required.keys()],
-      noSend: args.options?.noSend === true,
-      originator,
-      expires: Date.now() + SELECTION_TIMEOUT_MS
-    }
+    // Storage locks the inputs when the wallet creates the action; until then they stay selected.
+    const reserved = new Set<string>()
     try {
-      const changeOutputs = await this.#fund(pending, sends, handoff, originator)
-      // A handoff split can take longer than a selection lives; time it from here.
-      pending.expires = Date.now() + SELECTION_TIMEOUT_MS
+      const { inputs, changeOutputs } = await this.#fund(reserved, sends, handoff, originator)
       return {
         ...args,
-        inputs: pending.inputs.map(input => ({
+        inputs: inputs.map(input => ({
           outpoint: input.outpoint,
           unlockingScriptLength: UNLOCKING_SCRIPT_LENGTH,
           inputDescription: 'BRC-207 token input'
         })),
         outputs: [...outputs, ...changeOutputs]
       }
-    } catch (error) {
-      for (const [outpoint, action] of this.#selected)
-        if (action === pending) this.#selected.delete(outpoint)
-      throw error
+    } finally {
+      for (const outpoint of reserved) this.#selected.delete(outpoint)
+    }
+  }
+
+  #reserve(reserved: Set<string>, inputs: readonly ManagedInput[]): void {
+    for (const input of inputs) {
+      this.#selected.add(input.outpoint)
+      reserved.add(input.outpoint)
+    }
+  }
+
+  #release(reserved: Set<string>, inputs: readonly ManagedInput[]): void {
+    for (const input of inputs) {
+      this.#selected.delete(input.outpoint)
+      reserved.delete(input.outpoint)
     }
   }
 
@@ -585,19 +587,19 @@ export class ColorPermissionModule implements PermissionsModule {
 
   /**
    * Selects and reserves each asset's inputs, asks the user to approve the send, splits for a
-   * handoff, and returns the token change outputs.
+   * handoff, and returns the token inputs and change outputs.
    */
   async #fund(
-    pending: PendingAction,
+    reserved: Set<string>,
     sends: PlannedSends,
     handoff: boolean,
     originator: string
-  ): Promise<CreateActionOutput[]> {
+  ): Promise<{ inputs: ManagedInput[]; changeOutputs: CreateActionOutput[] }> {
     const selections = new Map<string, ManagedInput[]>()
     await eachInOrder(sends.required, async ([assetId, amount]) => {
       await this.#assertSupportedAsset(assetId)
       const selected = await this.#selectInputs(assetId, amount, originator)
-      for (const input of selected) this.#selected.set(input.outpoint, pending)
+      this.#reserve(reserved, selected)
       selections.set(assetId, selected)
     })
     await this.#approve(originator, {
@@ -610,24 +612,25 @@ export class ColorPermissionModule implements PermissionsModule {
       })),
       destinations: sends.destinations
     })
+    const inputs: ManagedInput[] = []
     const changeOutputs: CreateActionOutput[] = []
     await eachInOrder(sends.required, async ([assetId, amount]) => {
       const selected = selections.get(assetId) ?? []
-      const inputs =
+      const assetInputs =
         handoff && sumAmounts(selected) > amount
-          ? await this.#splitExact(pending, assetId, selected, amount, sends, originator)
+          ? await this.#splitExact(reserved, assetId, selected, amount, sends, originator)
           : selected
-      pending.inputs.push(...inputs)
-      const change = sumAmounts(inputs) - amount
+      inputs.push(...assetInputs)
+      const change = sumAmounts(assetInputs) - amount
       if (change > 0n)
         changeOutputs.push((await this.#newManagedOutput(assetId, change, originator)).output)
     })
-    return changeOutputs
+    return { inputs, changeOutputs }
   }
 
-  /** Replaces a handoff's inputs with one split output of exactly `amount`, reserved for `pending`. */
+  /** Replaces a handoff's inputs with one split output of exactly `amount`, which it reserves. */
   async #splitExact(
-    pending: PendingAction,
+    reserved: Set<string>,
     assetId: string,
     selected: ManagedInput[],
     amount: bigint,
@@ -641,8 +644,8 @@ export class ColorPermissionModule implements PermissionsModule {
       sends.destinations.filter(destination => destination.assetId === assetId),
       originator
     )
-    for (const input of selected) this.#selected.delete(input.outpoint)
-    this.#selected.set(exact.outpoint, pending)
+    this.#release(reserved, selected)
+    this.#reserve(reserved, [exact])
     return [exact]
   }
 
@@ -652,16 +655,24 @@ export class ColorPermissionModule implements PermissionsModule {
     amount: bigint,
     originator: string
   ): Promise<ManagedInput[]> {
-    const candidates = (await this.#managedOutputs(assetId, originator)).sort(byAmountDescending)
+    const candidates = (await this.#candidates(assetId, originator)).sort(byAmountDescending)
     const rejected = new Set<string>()
     for (;;) {
-      const selected: ManagedInput[] = []
+      const chosen: Candidate[] = []
       for (const candidate of candidates) {
-        if (sumAmounts(selected) >= amount) break
-        if (!rejected.has(candidate.outpoint)) selected.push(candidate)
+        if (sumAmounts(chosen) >= amount) break
+        if (!rejected.has(candidate.outpoint)) chosen.push(candidate)
       }
-      if (sumAmounts(selected) < amount)
+      if (sumAmounts(chosen) < amount)
         throw new Error(`BRC-207: insufficient spendable balance of ${assetId}`)
+      // Custody is read only for chosen outputs; an unreadable record is skipped, not fatal.
+      const inputs = await Promise.all(
+        chosen.map(async candidate => await this.#readableInput(candidate, originator))
+      )
+      const unreadable = chosen.filter((_, index) => inputs[index] === undefined)
+      for (const candidate of unreadable) rejected.add(candidate.outpoint)
+      if (unreadable.length > 0) continue
+      const selected = inputs as ManagedInput[]
       const admitted = await this.#spendable(assetId, selected)
       const missing = selected.filter(input => !admitted.has(input.outpoint))
       if (missing.length === 0) return selected
@@ -669,37 +680,60 @@ export class ColorPermissionModule implements PermissionsModule {
     }
   }
 
-  /** The value outputs of one asset this wallet can sign for, excluding inputs already in use. */
-  async #managedOutputs(assetId: string, originator: string): Promise<ManagedInput[]> {
+  /** One asset's value outputs, read from their locking scripts, excluding those a send has selected. */
+  async #candidates(assetId: string, originator: string): Promise<Candidate[]> {
     const outputs = await this.#listBasket(assetBasket(assetId, 'value'), originator, {})
-    const managed = await Promise.all(
-      outputs.map(async output => await this.#managedInput(assetId, output, originator))
-    )
-    return managed.filter(input => input !== undefined)
+    return outputs.flatMap(output => {
+      if (this.#selected.has(output.outpoint) || output.customInstructions === undefined) return []
+      const source = this.#sourceOutput(output)
+      const token = tryReadTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
+      if (token?.assetId !== assetId || token.role !== 'value' || token.deploy) return []
+      return [
+        { ...source, token, amount: token.amount, customInstructions: output.customInstructions }
+      ]
+    })
   }
 
-  /** A basket output as a managed input, or undefined when it is in use or not this asset's. */
-  async #managedInput(
-    assetId: string,
-    output: WalletOutput,
+  /** A chosen candidate with its custody, or undefined when its custody record is unreadable. */
+  async #readableInput(
+    candidate: Candidate,
     originator: string
   ): Promise<ManagedInput | undefined> {
-    if (this.#selected.has(output.outpoint) || this.#signing.has(output.outpoint)) return undefined
+    try {
+      const { outpoint, lockingScript, satoshis, token, customInstructions } = candidate
+      return await this.#custodyInput(
+        { outpoint, lockingScript, satoshis, token },
+        customInstructions,
+        originator
+      )
+    } catch {
+      return undefined
+    }
+  }
+
+  /** A `p color` basket output as a managed value input, or undefined when it is not one. */
+  async #managedInput(output: WalletOutput, originator: string): Promise<ManagedInput | undefined> {
     const source = this.#sourceOutput(output)
     const token = readTokenOutput(source.lockingScript, parseOutpoint(output.outpoint))
-    if (
-      token?.assetId !== assetId ||
-      token.role !== 'value' ||
-      output.customInstructions === undefined
-    )
+    if (token?.role !== 'value' || token.deploy || output.customInstructions === undefined)
       return undefined
+    return await this.#custodyInput({ ...source, token }, output.customInstructions, originator)
+  }
+
+  /** Decrypts and parses an output's custody tuple; undefined when it names another asset. */
+  async #custodyInput(
+    output: SourceOutput & { token: TokenOutput },
+    customInstructions: string,
+    originator: string
+  ): Promise<ManagedInput | undefined> {
     const custody = parseCustody(
-      await maybeDecryptMetadata(this.#wallet, output.customInstructions, originator),
+      await maybeDecryptMetadata(this.#wallet, customInstructions, originator),
       undefined,
       'managed output customInstructions'
     )
-    if (!selectsAsset(custody.assetId, token)) return undefined
-    return { ...source, assetId, amount: token.amount, custody }
+    if (!selectsAsset(custody.assetId, output.token)) return undefined
+    const { token, ...source } = output
+    return { ...source, assetId: token.assetId, amount: token.amount, custody }
   }
 
   /**
@@ -777,16 +811,21 @@ export class ColorPermissionModule implements PermissionsModule {
       await this.#wallet.abortAction({ reference: signable.reference }, originator)
       throw new Error('BRC-207: the user declined the token split')
     }
-    const spends = await this.#signInputs(
-      template,
-      selected,
-      originator,
-      'BRC-207: the split transaction omits a token input'
-    )
-    const signed = await this.#wallet.signAction(
-      { reference: signable.reference, spends },
-      originator
-    )
+    let signed: SignActionResult
+    try {
+      const spends = await this.#signInputs(
+        template,
+        selected,
+        originator,
+        'BRC-207: the split transaction omits a token input'
+      )
+      signed = await this.#wallet.signAction({ reference: signable.reference, spends }, originator)
+    } catch (error) {
+      await this.#wallet
+        .abortAction({ reference: signable.reference }, originator)
+        .catch(() => undefined)
+      throw error
+    }
     if (signed.txid === undefined || signed.tx === undefined) {
       throw new Error('BRC-207: the split transaction was not returned')
     }
@@ -828,60 +867,74 @@ export class ColorPermissionModule implements PermissionsModule {
     }
   }
 
-  /** Correlates a signable createAction result with the action this module funded. */
-  #bindSignableAction(result: CreateActionResult): void {
-    const signable = result?.signableTransaction
-    if (signable == null) return
-    const template = Transaction.fromAtomicBEEF(signable.tx)
-    const pending = template.inputs
-      .map(input => this.#selected.get(inputOutpoint(input)))
-      .find(Boolean)
-    if (pending === undefined) return
-    for (const input of pending.inputs) this.#selected.delete(input.outpoint)
-    pending.template = template
-    pending.expires = Date.now() + PENDING_TIMEOUT_MS
-    this.#signable.set(signable.reference, pending)
-  }
-
-  /** Signs this module's token inputs after refreshing their overlay spendability. */
-  async #signAction(args: SignActionArgs): Promise<SignActionArgs> {
-    const pending = this.#signable.get(args.reference)
-    if (pending?.template === undefined) return args
-    this.#signable.delete(args.reference)
+  /** Signs the action's inputs that spend this wallet's `p color` outputs, after a fresh spendability check. */
+  async #signAction(
+    args: SignActionArgs,
+    action: PermissionsModuleAction | undefined,
+    originator: string
+  ): Promise<SignActionArgs> {
+    if (action === undefined) return args
+    const inputs = await this.#actionInputs(action.transaction, originator)
+    if (inputs.length === 0) return args
+    const assetIds = [...new Set(inputs.map(input => input.assetId))]
     const stale = await Promise.all(
-      pending.assetIds.map(async assetId => {
-        const inputs = pending.inputs.filter(input => input.assetId === assetId)
-        const admitted = await this.#spendable(assetId, inputs)
-        return inputs.some(input => !admitted.has(input.outpoint))
+      assetIds.map(async assetId => {
+        const assetInputs = inputs.filter(input => input.assetId === assetId)
+        const admitted = await this.#spendable(assetId, assetInputs)
+        return assetInputs.some(input => !admitted.has(input.outpoint))
       })
     )
     const staleIndex = stale.indexOf(true)
     if (staleIndex >= 0) {
-      throw new Error(`BRC-207: a ${pending.assetIds[staleIndex]} input is no longer spendable`)
+      throw new Error(`BRC-207: a ${assetIds[staleIndex]} input is no longer spendable`)
     }
-    const spends = {
-      ...args.spends,
-      ...(await this.#signInputs(
-        pending.template,
-        pending.inputs,
-        pending.originator,
-        'BRC-207: the signable transaction omits a token input'
-      ))
+    return {
+      ...args,
+      spends: {
+        ...args.spends,
+        ...(await this.#signInputs(
+          action.transaction,
+          inputs,
+          originator,
+          'BRC-207: the signable transaction omits a token input'
+        ))
+      }
     }
-    pending.noSend = (args.options?.noSend ?? pending.noSend) === true
-    pending.expires = Date.now() + PENDING_TIMEOUT_MS
-    for (const input of pending.inputs) this.#signing.set(input.outpoint, pending)
-    return { ...args, spends }
   }
 
-  /** Submits a signed, processed token transaction to every asset topic it involves. */
+  /** The transaction's inputs that spend this wallet's `p color` outputs, with their stored custody. */
+  async #actionInputs(tx: Transaction, originator: string): Promise<ManagedInput[]> {
+    const outpoints = new Set(tx.inputs.map(input => inputOutpoint(input)))
+    // The action's own inputs are reserved by it, which this listing includes.
+    const listed = await this.#wallet.listOutputs(
+      {
+        basket: toolbox.specOpBasketPrefixOutputs,
+        tags: [COLOR_BASKET_NAMESPACE],
+        include: 'locking scripts',
+        includeCustomInstructions: true,
+        limit: LIST_PAGE_LIMIT
+      },
+      originator
+    )
+    const managed = await Promise.all(
+      listed.outputs
+        .filter(output => outpoints.has(output.outpoint))
+        .map(async output => await this.#managedInput(output, originator))
+    )
+    return managed.filter(input => input !== undefined)
+  }
+
+  /** Submits a signed token transaction to the topic of every asset among its outputs. */
   async #submitSigned(result: SignActionResult): Promise<void> {
     if (result?.tx === undefined) return
     const tx = Transaction.fromAtomicBEEF(result.tx)
-    const pending = tx.inputs.map(input => this.#signing.get(inputOutpoint(input))).find(Boolean)
-    if (pending === undefined) return
-    for (const input of pending.inputs) this.#signing.delete(input.outpoint)
-    if (!pending.noSend) await this.#submit(pending.assetIds, result.tx)
+    const txid = tx.id('hex')
+    const assetIds = new Set(
+      tx.outputs.flatMap(
+        (output, vout) => tryReadTokenOutput(output.lockingScript, { txid, vout })?.assetId ?? []
+      )
+    )
+    if (assetIds.size > 0) await this.#submit([...assetIds], result.tx)
   }
 
   /** Submits to each asset topic and fails unless every token output of that asset is admitted. */
@@ -1096,16 +1149,18 @@ export class ColorPermissionModule implements PermissionsModule {
       .filter(record => supported.has(record.assetId))
       .map(record => inventoryView(record))
       .filter(view => matchesTags(view.tags, args.tags ?? [], args.tagQueryMode))
-    const matching = await Promise.all(
-      views.map(async view => await this.#inventoryOutput(view, args, originator))
-    )
     const limit = args.limit ?? 10
     const offset = args.offset ?? 0
-    const ordered = offset < 0 ? [...matching].reverse() : matching
+    const ordered = offset < 0 ? [...views].reverse() : views
     const start = offset < 0 ? -offset - 1 : offset
+    // Only the returned page is decrypted.
     const result: ListOutputsResult = {
-      totalOutputs: matching.length,
-      outputs: ordered.slice(start, start + limit)
+      totalOutputs: views.length,
+      outputs: await Promise.all(
+        ordered
+          .slice(start, start + limit)
+          .map(async view => await this.#inventoryOutput(view, args, originator))
+      )
     }
     if (beef !== undefined) result.BEEF = beef
     return result
@@ -1396,20 +1451,8 @@ export class ColorPermissionModule implements PermissionsModule {
       throw new Error(`BRC-207: the user declined the ${String(request.type)} request`)
   }
 
-  /** Inventory and balance reads need a session grant, as BTMS listing does. */
+  /** Every `p color` read asks the host; the host decides whether an existing grant covers it. */
   async #authorizeRead(originator: string): Promise<void> {
-    const granted = this.#readGrants.get(originator)
-    if (granted !== undefined && Date.now() - granted < SESSION_TIMEOUT_MS) return
     await this.#approve(originator, { type: 'color_access' })
-    this.#readGrants.set(originator, Date.now())
-  }
-
-  #expire(now = Date.now()): void {
-    for (const [originator, granted] of this.#readGrants) {
-      if (now - granted >= SESSION_TIMEOUT_MS) this.#readGrants.delete(originator)
-    }
-    for (const map of [this.#selected, this.#signable, this.#signing]) {
-      for (const [key, pending] of map) if (pending.expires <= now) map.delete(key)
-    }
   }
 }

@@ -146,7 +146,7 @@ describe('ColorPermissionModule boundaries', () => {
     })
   })
 
-  it('denies reads the user declines and forgets grants on dispose', async () => {
+  it('asks the host on every read and denies a declined one', async () => {
     const answers = [true, false]
     const reader = createModule(wallet, provider, async () => answers.shift()!)
     const read = {
@@ -155,11 +155,29 @@ describe('ColorPermissionModule boundaries', () => {
       originator: APP
     }
     await expect(reader.handleRequest(read, next)).resolves.toBeDefined()
-    await expect(reader.handleRequest(read, next)).resolves.toBeDefined()
-    reader.dispose()
     await expect(reader.handleRequest(read, next)).rejects.toThrow(
       'declined the color_access request'
     )
+  })
+
+  it('asks the host before relinquishing an output', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    const answers = [true, false]
+    const owner = createModule(wallet, provider, async (_app, message) => {
+      requests.push(JSON.parse(message))
+      return answers.shift()!
+    })
+    const relinquish = { basket: assetBasket(assetId, 'value'), output: `${'ab'.repeat(32)}.0` }
+    const request = { method: 'relinquishOutput', args: relinquish, originator: APP }
+    await expect(owner.handleRequest(request, next)).resolves.toEqual({ forwarded: relinquish })
+    expect(requests).toEqual([
+      { type: 'color_relinquish', assetId, role: 'value', outpoint: relinquish.output }
+    ])
+    next.mockClear()
+    await expect(owner.handleRequest(request, next)).rejects.toThrow(
+      'declined the color_relinquish request'
+    )
+    expect(next).not.toHaveBeenCalled()
   })
 
   it('keeps an owned output in its basket with its custody tuple', async () => {

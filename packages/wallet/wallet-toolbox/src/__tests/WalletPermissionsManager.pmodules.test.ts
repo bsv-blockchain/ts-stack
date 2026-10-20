@@ -1526,13 +1526,35 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         'second response signAction',
         'first response signAction'
       ])
+      const action = {
+        reference: created.signableTransaction!.reference,
+        transaction: expect.anything(),
+        noSend: false
+      }
       expect(second.onRequest).toHaveBeenLastCalledWith({
         method: 'signAction',
         args: expect.objectContaining({ spends: TOKEN_SPENDS }),
-        originator: 'app.com'
+        originator: 'app.com',
+        action
       })
       expect(underlying.signAction).toHaveBeenCalledWith(expect.objectContaining({ spends: TOKEN_SPENDS }), 'app.com')
-      expect(first.onResponse).toHaveBeenLastCalledWith(result, { method: 'signAction', originator: 'app.com' })
+      expect(first.onResponse).toHaveBeenLastCalledWith(result, { method: 'signAction', originator: 'app.com', action })
+    })
+
+    it('tells signAction hooks the action is noSend', async () => {
+      const calls: string[] = []
+      const token = recordingModule('token', calls, true)
+      const manager = managerWith({ token })
+
+      await manager.createAction(sendArgs(['p token plan'], { noSend: true }), 'app.com')
+
+      expect(token.onRequest).toHaveBeenLastCalledWith(
+        expect.objectContaining({ method: 'signAction', action: expect.objectContaining({ noSend: true }) })
+      )
+      expect(token.onResponse).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ method: 'signAction', action: expect.objectContaining({ noSend: true }) })
+      )
     })
 
     it('runs the same hooks when createAction signs the action itself', async () => {

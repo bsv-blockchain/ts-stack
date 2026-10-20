@@ -2,13 +2,8 @@
 // 36-byte token id of an asset first deployed under BRC-161 at a nonzero output:
 // txid in natural order ‖ uint32 little-endian vout. A 36-byte id with vout 0 is
 // non-canonical and invalid.
-import { OP } from '@bsv/sdk/script'
-import type {
-  LockingScript,
-  ScriptChunk,
-  ScriptTemplate,
-  ScriptTemplateUnlock
-} from '@bsv/sdk/script'
+import { LockingScript, OP } from '@bsv/sdk/script'
+import type { ScriptChunk, ScriptTemplate, ScriptTemplateUnlock } from '@bsv/sdk/script'
 import type { PrivateKey } from '@bsv/sdk/primitives'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
 import { toArray, toHex } from '@bsv/sdk/primitives/utils'
@@ -16,8 +11,13 @@ import type { WalletCounterparty, WalletInterface, WalletProtocol } from '@bsv/s
 import {
   Bsv21Binary,
   Bsv21BinaryError,
-  decodeTokenScript,
-  lockTokenScript,
+  decodeAmountChunk,
+  encodeAmountChunk,
+  isTokenShaped,
+  p2pkhHash,
+  payloadChunk,
+  roleOf,
+  splitPayload,
   type Bsv21BinaryDecoded
 } from './Bsv21Binary.js'
 
@@ -25,6 +25,7 @@ import {
 export type OneColorDecoded = Bsv21BinaryDecoded
 
 const TXID_BYTES = 32
+const PKH_BYTES = 20
 const LEGACY_ID_BYTES = 36
 const TOKEN_ID_RE = /^([0-9a-f]{64})_(0|[1-9]\d{0,9})$/
 
@@ -81,7 +82,21 @@ export class OneColor implements ScriptTemplate {
 
   /** Decodes a token-shaped locking script; throws Bsv21BinaryError on any non-canonical prefix. */
   static decode(script: LockingScript): OneColorDecoded {
-    return decodeTokenScript(script, readTokenId)
+    if (!isTokenShaped(script)) fail('not a BRC-162 token output')
+    const c = script.chunks
+    if (c.some(chunk => chunk.invalidLength === true)) fail('truncated push')
+    const tokenId = readTokenId(c[0])
+    const amount = decodeAmountChunk(c[1])
+    const { payload, payloadCanonical, rest } = splitPayload(c.slice(3))
+    return {
+      role: roleOf(tokenId, amount),
+      tokenId,
+      amount,
+      payload,
+      payloadCanonical,
+      restChunks: rest,
+      restPubKeyHash: p2pkhHash(rest)
+    }
   }
 
   /** Builds `<id|OP_0> <amount> OP_2DROP [<payload> OP_DROP]` + P2PKH; `tokenId` null is a deploy. */
@@ -91,12 +106,22 @@ export class OneColor implements ScriptTemplate {
     pubKeyHash: readonly number[],
     payload?: readonly number[]
   ): LockingScript {
-    return lockTokenScript(
-      tokenId === null ? null : OneColor.tokenIdFromString(tokenId),
-      amount,
-      pubKeyHash,
-      payload
+    if (pubKeyHash.length !== PKH_BYTES) fail('pubKeyHash must be 20 bytes')
+    const id = tokenId === null ? null : OneColor.tokenIdFromString(tokenId)
+    const chunks: ScriptChunk[] = [
+      id === null ? { op: OP.OP_0 } : { op: id.length, data: id },
+      encodeAmountChunk(amount),
+      { op: OP.OP_2DROP }
+    ]
+    if (payload !== undefined) chunks.push(payloadChunk(payload), { op: OP.OP_DROP })
+    chunks.push(
+      { op: OP.OP_DUP },
+      { op: OP.OP_HASH160 },
+      { op: PKH_BYTES, data: [...pubKeyHash] },
+      { op: OP.OP_EQUALVERIFY },
+      { op: OP.OP_CHECKSIG }
     )
+    return new LockingScript(chunks)
   }
 
   /** `lock` to hash160 of the wallet-derived (BRC-29 style) public key. */

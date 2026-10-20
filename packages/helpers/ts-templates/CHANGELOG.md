@@ -20,8 +20,8 @@ All notable changes to this project will be documented in this file. The format 
   rejected. `OneColor.tokenIdFromString` and `OneColor.tokenIdToString` convert
   `<txid>_<vout>` ids. `OneColorError`, `OneColorDecoded` and `OneColorRole`
   name the shared error class and types.
-- `Bsv21Binary` is unchanged; `decodeTokenScript` and `lockTokenScript` in
-  `src/Bsv21Binary.ts` hold the prefix code both templates share.
+- `Bsv21Binary` is unchanged; `src/Bsv21Binary.ts` exports the prefix helpers
+  `OneColor` reuses (`payloadChunk`, `splitPayload`, `p2pkhHash`, `roleOf`).
 
 ### 2.0.0 candidate — BRC-162 (breaking)
 
