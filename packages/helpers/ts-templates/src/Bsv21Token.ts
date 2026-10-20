@@ -96,6 +96,62 @@ function parseDecimals(payload: Record<string, unknown>): number | undefined {
   return undefined
 }
 
+/**
+ * Reads the `tag value` pairs of an ord envelope from `start` up to its OP_ENDIF, stopping early
+ * at the body field. Returns the fields, the body if present, and the OP_ENDIF's chunk index.
+ */
+function readEnvelopeFields(
+  chunks: LockingScript['chunks'],
+  start: number
+): { fields: Map<number, number[]>; body: number[] | undefined; end: number } {
+  const fields = new Map<number, number[]>()
+  let body: number[] | undefined
+  let index = start
+  while (chunks[index]?.op !== OP.OP_ENDIF) {
+    const tagChunk = chunks[index]
+    const valueChunk = chunks[index + 1]
+    if (tagChunk === undefined || valueChunk === undefined)
+      throw malformed('unterminated ord envelope')
+    const tag = fieldTag(tagChunk)
+    if (tag === undefined && tagChunk.data === undefined)
+      throw malformed('invalid ord envelope field tag')
+    const value = pushedBytes(valueChunk)
+    if (value === undefined) throw malformed('ord envelope field value is not a push')
+    index += 2
+    if (tag === undefined) continue // a multi-byte tag names a field this decoder does not use
+    if (tag === BODY_FIELD) {
+      body = value
+      break
+    }
+    fields.set(tag, value)
+  }
+  if (chunks[index]?.op !== OP.OP_ENDIF) throw malformed('missing OP_ENDIF')
+  return { fields, body, end: index }
+}
+
+/** Decodes a content-type field as UTF-8; undefined when absent or not valid UTF-8. */
+function decodeContentType(bytes: number[] | undefined): string | undefined {
+  if (bytes === undefined) return undefined
+  try {
+    return toUTF8(bytes)
+  } catch {
+    return undefined
+  }
+}
+
+/** Parses an envelope body as a JSON object. */
+function parseJsonObject(body: number[]): Record<string, unknown> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(toUTF8(body))
+  } catch {
+    throw malformed('invalid JSON payload')
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw malformed('invalid JSON payload')
+  return parsed as Record<string, unknown>
+}
+
 export class Bsv21Token {
   static isBsv21(script: LockingScript): boolean {
     try {
@@ -118,37 +174,10 @@ export class Bsv21Token {
         chunk.op === OP.OP_0 && chunks[index + 1]?.op === OP.OP_IF && isOrd(chunks[index + 2])
     )
     if (start === -1) return undefined
-    const fields = new Map<number, number[]>()
-    let body: number[] | undefined
-    let index = start + 3
-    while (chunks[index]?.op !== OP.OP_ENDIF) {
-      const tagChunk = chunks[index]
-      const valueChunk = chunks[index + 1]
-      if (tagChunk === undefined || valueChunk === undefined)
-        throw malformed('unterminated ord envelope')
-      const tag = fieldTag(tagChunk)
-      if (tag === undefined && tagChunk.data === undefined)
-        throw malformed('invalid ord envelope field tag')
-      const value = pushedBytes(valueChunk)
-      if (value === undefined) throw malformed('ord envelope field value is not a push')
-      index += 2
-      if (tag === undefined) continue // a multi-byte tag names a field this decoder does not use
-      if (tag === BODY_FIELD) {
-        body = value
-        break
-      }
-      fields.set(tag, value)
-    }
-    if (chunks[index]?.op !== OP.OP_ENDIF) throw malformed('missing OP_ENDIF')
-    let rest = chunks.slice(index + 1)
+    const { fields, body, end } = readEnvelopeFields(chunks, start + 3)
+    let rest = chunks.slice(end + 1)
     if (rest[0]?.op === OP.OP_CODESEPARATOR) rest = rest.slice(1)
-    const contentTypeBytes = fields.get(CONTENT_TYPE_FIELD)
-    let contentType: string | undefined
-    try {
-      contentType = contentTypeBytes === undefined ? undefined : toUTF8(contentTypeBytes)
-    } catch {
-      contentType = undefined
-    }
+    const contentType = decodeContentType(fields.get(CONTENT_TYPE_FIELD))
     return {
       fields,
       contentType,
@@ -166,15 +195,7 @@ export class Bsv21Token {
     if (envelope === undefined) throw malformed('missing OP_FALSE OP_IF "ord" envelope')
     if (envelope.contentType !== CONTENT_TYPE) throw malformed('wrong content-type')
     if (envelope.body === undefined) throw malformed('missing JSON payload')
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(toUTF8(envelope.body))
-    } catch {
-      throw malformed('invalid JSON payload')
-    }
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
-      throw malformed('invalid JSON payload')
-    const payload = parsed as Record<string, unknown>
+    const payload = parseJsonObject(envelope.body)
     if (payload.p !== 'bsv-20') throw malformed('not bsv-20')
 
     const op = typeof payload.op === 'string' ? payload.op : ''
