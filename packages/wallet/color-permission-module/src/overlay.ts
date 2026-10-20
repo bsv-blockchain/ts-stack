@@ -4,7 +4,6 @@ export interface ListedOutput {
   outpoint: string
   lockingScript: LockingScript
   satoshis: number
-  transaction: Transaction
 }
 
 /**
@@ -39,8 +38,7 @@ export function readOutputList(
     listed.set(outpoint, {
       outpoint,
       lockingScript: output.lockingScript,
-      satoshis: output.satoshis,
-      transaction
+      satoshis: output.satoshis
     })
   }
   return listed

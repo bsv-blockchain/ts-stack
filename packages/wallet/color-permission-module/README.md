@@ -73,7 +73,7 @@ false`, `ISSUE` in `plan.assets` and its remittance in `plan.ownedOutputs`.
   `noSend`. When the inputs exceed the amount, the module first broadcasts a
   split to the exact amount, after a separate prompt that shows its fee.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's
-  value or authority basket and the BRC-207 receipt instructions. The sender
+  value or authority basket and the BRC-207 receipt instructions. The caller
   must already have submitted the transaction; the received output must be
   admitted and unspent. Every input must unlock its source, every consumed
   token input must have been admitted, and each asset must follow BRC-162's
@@ -91,7 +91,8 @@ The module fails explicitly, rather than falling back, on:
   supported in BRC-162 form);
 - assets whose deploy declares required processing profiles;
 - `profileData` entries;
-- explicit inputs together with a BRC-177 handoff.
+- explicit inputs together with a BRC-177 handoff;
+- non-final (time-locked) transactions.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits
