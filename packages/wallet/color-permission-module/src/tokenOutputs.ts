@@ -1,6 +1,17 @@
 import type { LockingScript } from '@bsv/sdk'
-import { Bsv21Token, isTokenShaped, OneColor } from '@bsv/templates'
-import type { Bsv21Envelope, Bsv21TokenDecoded } from '@bsv/templates'
+import {
+  Bsv21Token,
+  isTokenShaped,
+  OneColor,
+  StrictCborLink,
+  tryDecodeStrictCbor
+} from '@bsv/templates'
+import type {
+  Bsv21Envelope,
+  Bsv21TokenDecoded,
+  StrictCborMap,
+  StrictCborValue
+} from '@bsv/templates'
 import { parseAssetId, type Outpoint, type TokenRole } from './identifiers.js'
 
 export interface TokenOutput {
@@ -20,138 +31,35 @@ export interface TokenOutput {
 /** The BRC-161 operations this module reads: value outputs, and the authority outputs. */
 export type JsonOperation = 'transfer' | 'mint' | 'deploy+mint' | 'auth' | 'deploy+auth'
 
-type Cbor =
-  | bigint
-  | number
-  | boolean
-  | null
-  | string
-  | Uint8Array
-  | Cbor[]
-  | Map<string, Cbor>
-  | { cid: Uint8Array }
-
-const MAX_DEPTH = 64
 const PROFILE_ID = /^[a-z][a-z0-9+.-]*:[\x21-\x7e]+$/
-const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
-function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  if (a.length !== b.length) return a.length - b.length
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]
-  return 0
-}
-
-/** Strict DAG-CBOR: definite lengths, minimal arguments, sorted unique text keys, tag 42 only, 64-bit floats. */
-class DagCborReader {
-  private position = 0
-
-  constructor(private readonly bytes: Uint8Array) {}
-
-  read(): Cbor {
-    const value = this.item(0)
-    if (this.position !== this.bytes.length) throw new Error('trailing bytes')
-    return value
-  }
-
-  private take(count: number): Uint8Array {
-    if (count > this.bytes.length - this.position) throw new Error('truncated')
-    const slice = this.bytes.subarray(this.position, this.position + count)
-    this.position += count
-    return slice
-  }
-
-  private argument(info: number): bigint {
-    if (info < 24) return BigInt(info)
-    const size = { 24: 1, 25: 2, 26: 4, 27: 8 }[info]
-    if (size === undefined) throw new Error('indefinite or reserved length')
-    let value = 0n
-    for (const byte of this.take(size)) value = (value << 8n) | BigInt(byte)
-    if (value < (size === 1 ? 24n : 1n << BigInt(4 * size))) throw new Error('non-minimal argument')
-    return value
-  }
-
-  private length(info: number): number {
-    const length = this.argument(info)
-    if (length > BigInt(this.bytes.length - this.position)) throw new Error('length exceeds input')
-    return Number(length)
-  }
-
-  private item(depth: number): Cbor {
-    if (depth > MAX_DEPTH) throw new Error('nesting too deep')
-    const [initial] = this.take(1)
-    const major = initial >> 5
-    const info = initial & 31
-    switch (major) {
-      case 0:
-        return this.argument(info)
-      case 1:
-        return -1n - this.argument(info)
-      case 2:
-        return this.take(this.length(info)).slice()
-      case 3:
-        return UTF8.decode(this.take(this.length(info)))
-      case 4:
-        return Array.from({ length: this.length(info) }, () => this.item(depth + 1))
-      case 5:
-        return this.map(this.length(info), depth)
-      case 6: {
-        if (this.argument(info) !== 42n) throw new Error('only tag 42 is allowed')
-        const cid = this.item(depth + 1)
-        if (!(cid instanceof Uint8Array) || cid[0] !== 0) throw new Error('invalid CID')
-        return { cid }
-      }
-      default:
-        return this.simple(info)
-    }
-  }
-
-  private map(entries: number, depth: number): Map<string, Cbor> {
-    const map = new Map<string, Cbor>()
-    let previous: Uint8Array | undefined
-    for (let i = 0; i < entries; i++) {
-      const start = this.position
-      const key = this.item(depth + 1)
-      if (typeof key !== 'string') throw new Error('map keys must be text')
-      const encoded = this.bytes.subarray(start, this.position)
-      if (previous !== undefined && compareBytes(previous, encoded) >= 0)
-        throw new Error('unsorted or duplicate keys')
-      previous = encoded
-      map.set(key, this.item(depth + 1))
-    }
-    return map
-  }
-
-  private simple(info: number): Cbor {
-    if (info === 20) return false
-    if (info === 21) return true
-    if (info === 22) return null
-    if (info !== 27) throw new Error('unsupported simple value or float width')
-    const value = new DataView(this.take(8).slice().buffer).getFloat64(0)
-    if (!Number.isFinite(value)) throw new Error('non-finite float')
-    return value
-  }
+/** A decoded DAG-CBOR map, as opposed to an array, bytes, a link or a scalar. */
+function isCborMap(value: StrictCborValue | undefined): value is StrictCborMap {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    !(value instanceof Uint8Array) &&
+    !(value instanceof StrictCborLink)
+  )
 }
 
 /** Reads `req` and `ext` from a payload; an absent, opaque or non-map payload has none. */
 function readPayloadMaps(payload: number[] | undefined): {
-  req?: Map<string, Cbor>
-  ext?: Map<string, Cbor>
+  req?: StrictCborMap
+  ext?: StrictCborMap
 } {
   if (payload === undefined || payload.length === 0) return {}
-  let decoded: Cbor
-  try {
-    decoded = new DagCborReader(Uint8Array.from(payload)).read()
-  } catch {
-    return {}
-  }
-  if (!(decoded instanceof Map)) return {}
-  const req = decoded.get('req')
-  const ext = decoded.get('ext')
-  if (req !== undefined && !(req instanceof Map))
+  // Strict DAG-CBOR, as BRC-162 requires (L144); anything else is an opaque payload.
+  const decoded = tryDecodeStrictCbor(payload)
+  if (decoded === undefined) return {}
+  const req = decoded.req
+  const ext = decoded.ext
+  if (req !== undefined && !isCborMap(req))
     throw new Error('BRC-207: malformed req in a BRC-162 payload')
-  if (ext !== undefined && !(ext instanceof Map))
+  if (ext !== undefined && !isCborMap(ext))
     throw new Error('BRC-207: malformed ext in a BRC-162 payload')
-  for (const profile of [...(req?.keys() ?? []), ...(ext?.keys() ?? [])]) {
+  for (const profile of [...Object.keys(req ?? {}), ...Object.keys(ext ?? {})]) {
     if (profile.length > 200 || !PROFILE_ID.test(profile)) {
       throw new Error('BRC-207: invalid processing-profile identifier in a BRC-162 payload')
     }
@@ -177,7 +85,7 @@ export class UnsupportedProfileError extends Error {
  */
 export function assertNoRequiredProfiles(payload: number[] | undefined): void {
   const { req } = readPayloadMaps(payload)
-  if (req !== undefined && req.size > 0) throw new UnsupportedProfileError()
+  if (req !== undefined && Object.keys(req).length > 0) throw new UnsupportedProfileError()
 }
 
 /**

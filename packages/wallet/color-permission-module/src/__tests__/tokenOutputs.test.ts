@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals'
 import { LockingScript, OP } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
-import { OneColor } from '@bsv/templates'
+import { OneColor, STRICT_CBOR_MAX_DEPTH } from '@bsv/templates'
 import {
   assertNoRequiredProfiles,
   isDeployOutput,
@@ -157,7 +157,7 @@ describe('BRC-162 token outputs', () => {
     ['a length beyond the payload', [0x7a, 0xff, 0xff, 0xff, 0xff]],
     ['a truncated argument', [0x19, 0x01]],
     ['a reserved simple value', [0xf7]],
-    ['excessive nesting', [...Array(70).fill(0x81), 0x01]]
+    ['excessive nesting', [...Array(STRICT_CBOR_MAX_DEPTH + 2).fill(0x81), 0x01]]
   ])('treats a payload with %s as opaque, without reading its req', (_name, value) => {
     const payload = [0xa1, ...text('req'), 0xa1, ...text('x:y'), ...value]
     expect(() => assertNoRequiredProfiles(payload)).not.toThrow()
