@@ -21,10 +21,10 @@ export {
   decodeStrictCbor,
   tryDecodeStrictCbor,
   StrictCborError,
-  STRICT_CBOR_MAX_BYTES,
+  StrictCborLink,
   STRICT_CBOR_MAX_DEPTH
 } from './src/strictCbor.js'
-export type { StrictCborValue, StrictCborMap } from './src/strictCbor.js'
+export type { StrictCborValue, StrictCborMap, StrictCborInput } from './src/strictCbor.js'
 export { StasToken } from './src/StasToken.js'
 export type { StasTokenDecoded } from './src/StasToken.js'
 export { Bsv21Token } from './src/Bsv21Token.js'
