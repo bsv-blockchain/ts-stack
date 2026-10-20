@@ -955,7 +955,9 @@ export class ColorPermissionModule implements PermissionsModule {
     const handoff = labels.some(label => label.startsWith(NOSEND_EXPIRY_LABEL_PREFIX))
     assertPlanSupported(plan, args, handoff)
     const { planned, outputs } = await this.#planOutputs(plan, args, originator)
-    // Storage locks the inputs when the wallet creates the action; until then they stay selected.
+    // The hold keeps concurrent sends in this module from choosing the same outputs while it plans.
+    // It ends when this handler returns; storage then rejects a second action that tries to spend
+    // an input already marked spent.
     const reserved = new Set<string>()
     try {
       const explicit = await this.#explicitInputs(args, originator)

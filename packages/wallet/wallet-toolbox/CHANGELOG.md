@@ -53,6 +53,10 @@ attention to changes that materially alter behavior or extend functionality.
   basket in that namespace that are unspent or reserved as an input of a
   pending action (`spendable` false), ordered by txid and vout. Spent outputs
   are excluded. The permissions manager reserves it for the admin originator.
+- `createAction` locks the known inputs it marks spent on MySQL and Postgres,
+  so of two concurrent actions spending the same input, the second sees it spent
+  and fails with the existing double-spend or unspendable-input error instead of
+  overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
 - New `listOutputs` special operation `specOpSetOutputBasket`: with an outpoint
   in tag 0 and a basket name in tag 1, it files an unspent output that has no
   basket, of the wallet's own signed transaction, in that basket without
