@@ -57,9 +57,9 @@ export interface RabinKey {
 
 const UTF8 = new TextEncoder()
 
-function beToBigInt(bytes: ArrayLike<number>): bigint {
+function beToBigInt(bytes: Iterable<number>): bigint {
   let value = 0n
-  for (let i = 0; i < bytes.length; i++) value = (value << 8n) | BigInt(bytes[i])
+  for (const byte of bytes) value = (value << 8n) | BigInt(byte)
   return value
 }
 
@@ -79,11 +79,13 @@ export function* modPowSteps(base: bigint, exponent: bigint, modulus: bigint): S
   let result = 1n
   let b = ((base % modulus) + modulus) % modulus
   let e = exponent
-  for (let bit = 1; e > 0n; bit++) {
+  let bits = 0
+  while (e > 0n) {
     if ((e & 1n) === 1n) result = (result * b) % modulus
     e >>= 1n
     b = (b * b) % modulus
-    if (bit % EXPONENT_BITS_PER_STEP === 0) yield
+    bits++
+    if (bits % EXPONENT_BITS_PER_STEP === 0) yield
   }
   return result
 }
@@ -185,21 +187,24 @@ export class IncrementalSieve {
 export function* nextAcceptedPrimeSteps(x0: bigint, k: number): Steps<bigint> {
   const limit = 1n << BigInt(k)
   const sieve = yield* IncrementalSieve.build(x0)
-  for (let x = x0, candidate = 1; ; x += 4n, candidate++) {
-    if (x >= limit) throw new Error('RABIN: key generation failed: prime search exceeded 2^k')
-    if (!sieve.hasSmallFactor()) {
-      let accepted = true
-      for (const base of MR_BASES) {
-        if (!(yield* millerRabinSteps(x, base))) {
-          accepted = false
-          break
-        }
-      }
-      if (accepted) return x
-    }
+  let x = x0
+  let candidates = 0
+  while (x < limit) {
+    if (!sieve.hasSmallFactor() && (yield* passesMillerRabinSteps(x))) return x
     sieve.advance()
-    if (candidate % SIEVE_CANDIDATES_PER_STEP === 0) yield
+    x += 4n
+    candidates++
+    if (candidates % SIEVE_CANDIDATES_PER_STEP === 0) yield
   }
+  throw new Error('RABIN: key generation failed: prime search exceeded 2^k')
+}
+
+/** Miller–Rabin for every one of the 32 fixed bases, stopping at the first failure, in steps. */
+function* passesMillerRabinSteps(x: bigint): Steps<boolean> {
+  for (const base of MR_BASES) {
+    if (!(yield* millerRabinSteps(x, base))) return false
+  }
+  return true
 }
 
 /** First accepted prime among x0, x0 + 4, x0 + 8, … below 2^k. */
@@ -221,12 +226,16 @@ export function expandSeed(seed: ArrayLike<number>, bits: RabinBits): Uint8Array
   const prk = sha256hmac(Array.from(UTF8.encode(DOMAIN_SALT)), Array.from(seed))
   const info = Array.from(UTF8.encode(`${DOMAIN_SALT} ${bits}`))
   const okm = new Uint8Array(length)
+  // T(i) = HMAC(PRK, T(i-1) || info || i), concatenated until `length` bytes.
   let block: number[] = []
-  for (let offset = 0, counter = 1; offset < length; counter++) {
+  let offset = 0
+  let counter = 1
+  while (offset < length) {
     block = sha256hmac(prk, [...block, ...info, counter])
     const take = Math.min(block.length, length - offset)
     okm.set(block.slice(0, take), offset)
     offset += take
+    counter++
   }
   prk.fill(0)
   block.fill(0)
