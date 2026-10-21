@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.5.2'
+version: '0.6.0'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -212,6 +212,7 @@ await session.connect()
 - **QR Pairing** — Desktop displays QR code encoding relay URL + session ID. Mobile scans and establishes WebSocket connection.
 - **Encrypted Relay** — All wallet requests/responses are AES-256-GCM encrypted. Relay server never sees plaintext.
 - **Stateless Sessions** — Each pairing session is isolated. Multiple desktops can pair to same mobile (each gets own session).
+- **Origin-bound Key** — `GET /api/session/:id` reports the backend identity key, and `resolveRelay()` rejects a QR whose key differs. The relay delivers desktop-socket messages to a phone only after the backend has accepted that phone's pairing.
 - **Desktop Token** — Opaque token returned from `GET /api/session` and required on `POST /api/request/:id`. Ensures only the frontend that created the session can use it.
 - **Wallet Method Forwarding** — Desktop sends standard JSON-RPC calls (createAction, signAction, getPublicKey, etc.) to mobile wallet.
 - **No Key Export** — Mobile never exports private keys. Desktop sees only signatures, public keys, and action results.
