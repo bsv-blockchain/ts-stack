@@ -64,6 +64,11 @@ export interface RabinPermissionModuleOptions {
   maxCachedKeysPerOriginator?: number
   /** Generations admitted at once, the running one included. Defaults to 8; between 1 and 64. */
   maxPendingGenerations?: number
+  /**
+   * Signatures admitted at once, the running one included; signatures run one at a time so a flood
+   * cannot stall the host. A bound on responsiveness, not a rate limit. Defaults to 16; 1 to 256.
+   */
+  maxPendingSignatures?: number
   /** A queued generation waiting longer fails as busy. Defaults to 60 s; at most 10 minutes. */
   generationQueueTimeout?: number
   /** Uncached generations an originator may start in a burst. Defaults to 4. */

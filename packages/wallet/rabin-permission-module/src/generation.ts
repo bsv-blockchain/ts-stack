@@ -1,5 +1,5 @@
 /**
- * Bounds on key generation (BRC-206 "Scheduling, caching and resource use"): one generation at a
+ * Bounds on key generation and signing (BRC-206 "Scheduling, caching and resource use"): one job at a
  * time, a bounded FIFO queue with a waiting limit, and token buckets that rate-limit generations
  * per originator and overall.
  */

@@ -137,6 +137,11 @@ for fresh keys at will, so the module bounds the work:
   waiting joins it. A request that cannot be admitted fails at once, and one
   that waits longer than 60 s (`generationQueueTimeout`) fails, with
   `RABIN: key generation is busy`.
+- **Signing.** A signature costs a few milliseconds per exponentiation, so
+  signatures also run one at a time, in the same kind of slices; at most 16
+  (`maxPendingSignatures`) are admitted and further ones fail at once with
+  `RABIN: signing is busy`. This bounds responsiveness under a flood; it is not
+  a rate limit, and signing is not rate-limited.
 - **Rate limits.** Only cache misses count; cached keys, joined requests and
   signing are free. Each originator may start 4 generations in a burst and
   regains one every 15 s; all originators together may start 10 and regain one
@@ -179,7 +184,7 @@ only `encrypt`.
 
 Every error the module raises starts with `RABIN:` and names the rejected
 field or capability without key material, and never reveals whether a key was
-cached. Busy (`RABIN: key generation is busy`) and rate-limited
+cached. Busy (`RABIN: key generation is busy`, `RABIN: signing is busy`) and rate-limited
 (`RABIN: key generation rate limit exceeded`) are distinct from denial
 (`RABIN: user denied permission`) and from invalid input, so an app can retry
 the first two later. Errors thrown by the host's key deriver, privileged key

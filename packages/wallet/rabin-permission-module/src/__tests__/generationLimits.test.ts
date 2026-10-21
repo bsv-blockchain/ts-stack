@@ -179,6 +179,59 @@ describe('key generation scheduling', () => {
     expect(derivedKeyIDs()).toEqual(['one', 'two'])
   }, 30_000)
 
+  it('signs one request at a time and refuses signatures beyond the queue at once', async () => {
+    const { instance } = setup({ ...UNLIMITED, maxPendingSignatures: 2 })
+    await execute(instance, keyRequest('signer'))
+    const driver = drivers.runCooperatively
+    let active = 0
+    let maxActive = 0
+    jest.spyOn(drivers, 'runCooperatively').mockImplementation(async (...args) => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      try {
+        return await driver(...args)
+      } finally {
+        active--
+      }
+    })
+    const sign = (i: number) =>
+      observe(execute(instance, encryptArgs('sign', { keyID: 'signer', plaintext: [i] })))
+    const outcomes = await Promise.all([sign(1), sign(2), sign(3)])
+    expect(outcomes.map(outcome => outcome.ok)).toEqual([true, true, false])
+    expect(String((outcomes[2] as { error: unknown }).error)).toContain('RABIN: signing is busy')
+    expect(maxActive).toBe(1)
+    // The queue drains: signing is not rate-limited, only bounded.
+    expect((await sign(4)).ok).toBe(true)
+  }, 30_000)
+
+  it('asks the privileged key provider only after a generation is admitted', async () => {
+    const keyDeriver = new CachedKeyDeriver(new PrivateKey(64))
+    const provider = jest.fn(async () => new CachedKeyDeriver(new PrivateKey(65)))
+    const instance = new RabinPermissionModule({
+      keyDeriver,
+      authorize: async () => true,
+      privilegedKeyDeriver: provider,
+      maxPendingGenerations: 1,
+      originatorGenerationBurst: 1
+    })
+    const privileged = (originator: string) =>
+      execute(
+        instance,
+        encryptArgs('key', { privileged: true, privilegedReason: 'Oracle signing' }),
+        'encrypt',
+        originator
+      )
+    const running = observe(execute(instance, keyRequest('ordinary'), 'encrypt', 'other.example'))
+    await expect(privileged('p.example')).rejects.toThrow(BUSY)
+    expect(provider).not.toHaveBeenCalled()
+    expect((await running).ok).toBe(true)
+
+    await privileged('p.example')
+    expect(provider).toHaveBeenCalledTimes(1)
+    await expect(privileged('p.example')).rejects.toThrow(LIMITED)
+    expect(provider).toHaveBeenCalledTimes(1)
+  }, 30_000)
+
   it('validates the scheduling options', () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(62))
     for (const options of [
@@ -189,7 +242,8 @@ describe('key generation scheduling', () => {
       { globalGenerationBurst: 0 },
       { globalGenerationInterval: 0 },
       { maxCachedKeysPerOriginator: 0 },
-      { maxCachedKeys: 4, maxCachedKeysPerOriginator: 8 }
+      { maxCachedKeys: 4, maxCachedKeysPerOriginator: 8 },
+      { maxPendingSignatures: 0 }
     ]) {
       expect(() => new RabinPermissionModule({ keyDeriver, ...options })).toThrow(/^RABIN: /)
     }

@@ -109,6 +109,9 @@ Call `rabin.dispose()` when the wallet locks.
   outliers several times longer. It runs in slices of a few milliseconds
   between which the event loop runs, one generation at a time with at most 8
   admitted; further requests fail at once with `RABIN: key generation is busy`.
+- Signatures also run one at a time, at most 16 admitted
+  (`RABIN: signing is busy` beyond that); this keeps the host responsive and is
+  not a rate limit.
 - Uncached generations are rate-limited per originator (4, then one per 15 s)
   and overall (10, then one per 6 s), after authorization and before
   derivation: `RABIN: key generation rate limit exceeded`. Cached keys and

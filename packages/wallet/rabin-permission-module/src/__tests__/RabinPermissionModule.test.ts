@@ -645,6 +645,43 @@ describe('RabinPermissionModule authorization', () => {
     expect(authorize).toHaveBeenCalledTimes(5)
   })
 
+  it('keeps counting pending prompts per app correctly across dispose', async () => {
+    const resolvers: Array<(approved: boolean) => void> = []
+    const authorize = jest.fn(
+      async () => await new Promise<boolean>(resolve => resolvers.push(resolve))
+    )
+    const instance = new RabinPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(36)),
+      authorize
+    })
+    const pend = (i: number) =>
+      observe(
+        execute(
+          instance,
+          encryptArgs('key', { protocolID: [1, `p rabin key 2048 flood protocol ${i}`] }),
+          'encrypt',
+          'flood.example'
+        )
+      )
+    const before = [0, 1, 2, 3].map(pend)
+    instance.dispose()
+    const after = [10, 11, 12, 13].map(pend)
+    // The prompts from before dispose settle; that must not free places in the new count.
+    resolvers.slice(0, 4).forEach(resolve => resolve(false))
+    await Promise.all(before)
+    await expect(
+      execute(
+        instance,
+        encryptArgs('key', { protocolID: [1, 'p rabin key 2048 flood protocol 20'] }),
+        'encrypt',
+        'flood.example'
+      )
+    ).rejects.toThrow('RABIN: too many pending authorizations for this app')
+    expect(authorize).toHaveBeenCalledTimes(8)
+    resolvers.slice(4).forEach(resolve => resolve(false))
+    await Promise.all(after)
+  })
+
   it('does not honor an approval that settles after dispose', async () => {
     let approve!: (approved: boolean) => void
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(34))

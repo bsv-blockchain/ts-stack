@@ -52,6 +52,10 @@ const DEFAULT_GLOBAL_GENERATION_INTERVAL = 6 * 1000
 const MAX_GENERATION_BURST = 1000
 const MAX_GENERATION_INTERVAL = 24 * 60 * 60 * 1000
 const BUSY = 'RABIN: key generation is busy'
+const SIGNING_BUSY = 'RABIN: signing is busy'
+const SIGNING_RESET = 'RABIN: the module was reset during signing'
+const DEFAULT_MAX_PENDING_SIGNATURES = 16
+const MAX_MAX_PENDING_SIGNATURES = 256
 const RATE_LIMITED = 'RABIN: key generation rate limit exceeded'
 const RESET = 'RABIN: the module was reset during key generation'
 const MIN_MESSAGE_BYTES = 1024 * 1024
@@ -133,6 +137,7 @@ export class RabinPermissionModule implements PermissionsModule {
   readonly #pendingByOriginator = new Map<string, number>()
   readonly #keys: KeyCache
   readonly #generations: GenerationScheduler<RabinKey>
+  readonly #signatures: GenerationScheduler<{ sig: bigint; padding: bigint }>
   readonly #rateLimiter: GenerationRateLimiter
   #epoch = 0
 
@@ -229,6 +234,18 @@ export class RabinPermissionModule implements PermissionsModule {
       generationQueueTimeout,
       () => new Error(BUSY)
     )
+    const maxPendingSignatures = integerOption(
+      ownedOptions.maxPendingSignatures,
+      DEFAULT_MAX_PENDING_SIGNATURES,
+      1,
+      MAX_MAX_PENDING_SIGNATURES,
+      'RABIN: maxPendingSignatures must be between 1 and 256'
+    )
+    this.#signatures = new GenerationScheduler<{ sig: bigint; padding: bigint }>(
+      maxPendingSignatures,
+      generationQueueTimeout,
+      () => new Error(SIGNING_BUSY)
+    )
     this.#rateLimiter = new GenerationRateLimiter(limits, Date.now())
     this.#maxMessageBytes = integerOption(
       ownedOptions.maxMessageBytes,
@@ -253,6 +270,7 @@ export class RabinPermissionModule implements PermissionsModule {
     this.#pendingGrants.clear()
     this.#pendingByOriginator.clear()
     this.#generations.clear(() => new Error(RESET))
+    this.#signatures.clear(() => new Error(SIGNING_RESET))
     this.#keys.clear()
   }
 
@@ -281,13 +299,18 @@ export class RabinPermissionModule implements PermissionsModule {
       throw new Error('RABIN: privileged key derivation is unavailable')
     }
     await this.#ensureAuthorized(parsed, originator)
-    const keyDeriver = await this.#selectKeyDeriver(parsed)
     const epoch = this.#epoch
-    const key = await this.#getKey(parsed, keyDeriver, originator)
+    const key = await this.#getKey(parsed, originator)
     if (parsed.operation === 'key') return { ciphertext: encodeKeyResult(key.n) }
-    const { sig, padding } = await drivers.runCooperatively(signSteps(parsed.message, key), {
-      isCancelled: () => epoch !== this.#epoch,
-      cancelledError: () => new Error('RABIN: the module was reset during signing')
+    // Signatures run one at a time, like generations, so a flood of cheap requests cannot keep the
+    // event loop busy; beyond the queue they fail at once.
+    if (!this.#signatures.hasCapacity()) throw new Error(SIGNING_BUSY)
+    const { sig, padding } = await this.#signatures.submit(undefined, async () => {
+      if (epoch !== this.#epoch) throw new Error(SIGNING_RESET)
+      return await drivers.runCooperatively(signSteps(parsed.message, key), {
+        isCancelled: () => epoch !== this.#epoch,
+        cancelledError: () => new Error(SIGNING_RESET)
+      })
     })
     return { ciphertext: encodeSignResult(sig, padding) }
   }
@@ -501,7 +524,10 @@ export class RabinPermissionModule implements PermissionsModule {
       this.#pendingGrants.set(scope, pending)
       this.#pendingByOriginator.set(originator, originatorPending + 1)
       const counted = this.#pendingByOriginator
+      const promptEpoch = this.#epoch
       const release = (): void => {
+        // dispose() started a fresh count; a prompt from before it must not free a place in it.
+        if (promptEpoch !== this.#epoch) return
         const remaining = (counted.get(originator) ?? 1) - 1
         if (remaining > 0) counted.set(originator, remaining)
         else counted.delete(originator)
@@ -539,11 +565,7 @@ export class RabinPermissionModule implements PermissionsModule {
    * queue and the rate limits; both are checked after authorization and before derivation.
    * Privileged keys are never cached or joined.
    */
-  async #getKey(
-    parsed: ParsedRabinRequest,
-    keyDeriver: RabinKeyDeriver,
-    originator: string
-  ): Promise<RabinKey> {
+  async #getKey(parsed: ParsedRabinRequest, originator: string): Promise<RabinKey> {
     const epoch = this.#epoch
     const identity = parsed.privileged
       ? undefined
@@ -565,6 +587,10 @@ export class RabinPermissionModule implements PermissionsModule {
       if (!this.#generations.hasCapacity()) throw new Error(BUSY)
       if (!this.#rateLimiter.tryAcquire(originator, Date.now())) throw new Error(RATE_LIMITED)
       pending = this.#generations.submit(identity, async () => {
+        // Only an admitted generation asks for a deriver, so a busy or throttled privileged
+        // request never reaches the privileged key provider.
+        if (epoch !== this.#epoch) throw new Error(RESET)
+        const keyDeriver = await this.#selectKeyDeriver(parsed)
         const key = await this.#generate(parsed, keyDeriver, epoch)
         // The cache owns its own copy; the generation's result object is never zeroed by it.
         if (identity !== undefined) this.#keys.set(identity, { ...key }, originator)
