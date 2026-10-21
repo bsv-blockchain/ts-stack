@@ -79,7 +79,9 @@ package still runs exactly once and serially.
 
 Each shard prints `coverage-other-duration <package> <seconds>s` and a summary
 table. Refresh the lane durations from those hosted values; the initial
-values come from a hosted full-scope run on 2026-10-21. Against round-robin on the same runners, the slowest shard fell from 410 to 161 seconds while total shard time rose from 608 to 774 seconds.
+values come from a hosted full-scope run on 2026-10-21. Against round-robin on
+the same runners, the slowest shard fell from 410 to 161 seconds while total
+shard time rose from 608 to 774 seconds.
 
 ## Execution ledger across outcomes and attempts
 
