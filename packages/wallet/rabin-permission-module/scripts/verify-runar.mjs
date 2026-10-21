@@ -22,8 +22,23 @@ if (runarModules === undefined || runarModules === '' || !existsSync(runarModule
   )
   process.exit(0)
 }
-// Build only once Rúnar is known to be available, so a skipped run costs nothing.
-const build = spawnSync('pnpm', ['build'], { cwd: packageRoot, stdio: 'inherit' })
+// Build only once Rúnar is known to be available, so a skipped run costs nothing. The package's
+// build script is run with this Node binary and tsdown's resolved entry point, so no executable
+// is looked up on PATH.
+const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'))
+const [tool, ...buildArgs] = manifest.scripts.build.split(' ')
+const requireFromPackage = createRequire(join(packageRoot, 'package.json'))
+const toolManifestPath = requireFromPackage.resolve(`${tool}/package.json`)
+const toolManifest = JSON.parse(readFileSync(toolManifestPath, 'utf8'))
+const toolBin = typeof toolManifest.bin === 'string' ? toolManifest.bin : toolManifest.bin[tool]
+const build = spawnSync(
+  process.execPath,
+  [join(dirname(toolManifestPath), toolBin), ...buildArgs],
+  {
+    cwd: packageRoot,
+    stdio: 'inherit'
+  }
+)
 if (build.status !== 0) {
   console.error('verify-runar: build failed')
   process.exit(1)
@@ -70,14 +85,21 @@ const encrypt = async args =>
     throw new Error('unexpected underlying call')
   })
 
-let passed = 0
-for (const vector of vectors.signatures) {
-  const keyVector = vectors.keys.find(candidate => candidate.name === vector.keyVector)
-  const keyResult = await encrypt({ ...keyVector.request, plaintext: [] })
-  const signResult = await encrypt({
-    ...vector.request,
-    plaintext: fromHex(vector.request.plaintext)
+// Ask the module for every key and signature first (it schedules them itself), then check each
+// against the Script VM.
+const results = await Promise.all(
+  vectors.signatures.map(async vector => {
+    const keyVector = vectors.keys.find(candidate => candidate.name === vector.keyVector)
+    const [keyResult, signResult] = await Promise.all([
+      encrypt({ ...keyVector.request, plaintext: [] }),
+      encrypt({ ...vector.request, plaintext: fromHex(vector.request.plaintext) })
+    ])
+    return { vector, keyResult, signResult }
   })
+)
+
+let passed = 0
+for (const { vector, keyResult, signResult } of results) {
   if (hex(signResult.ciphertext) !== vector.response.ciphertext) {
     throw new Error(`${vector.name}: module output differs from the vector`)
   }

@@ -3351,13 +3351,13 @@ export function buildMutationTargets(repositoryRoot) {
         'src/generation.ts',
         'src/keyCache.ts',
         'src/scheduling.ts',
-        'src/rabin.ts:1-309',
-        'src/rabin.ts:311-331'
+        'src/rabin.ts:1-318',
+        'src/rabin.ts:320-340'
       ],
       // The real-clock responsiveness tests are meaningless under mutation instrumentation.
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], {
         esm: true,
-        config: { testPathIgnorePatterns: ['/node_modules/', '\\.slow\\.test\\.ts$'] }
+        config: { testPathIgnorePatterns: ['/node_modules/', String.raw`\.slow\.test\.ts$`] }
       })
     },
     'chirp-codec': {
