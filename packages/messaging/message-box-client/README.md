@@ -136,6 +136,8 @@ await messages.sendLiveMessage({
 
 `sendLiveMessage()` uses an authenticated WebSocket and falls back to the HTTP
 send route when the socket is unavailable or does not acknowledge delivery.
+A conflicting WebSocket identity pin is a misconfiguration, not an unavailable
+socket, so it still throws.
 It captures and validates the same immutable recipient, message-box, body,
 message-ID, permission, and payment-ceiling authority as `sendMessage()` before
 opening or joining a socket. Room names are exact, control-free strings rather
@@ -152,6 +154,15 @@ client rebuilds the socket itself: immediately the first time, then doubling
 from one second to a thirty-second cap until a socket holds its
 authentication.
 
+Joins are paced: at most 16 await the server's answer on a socket, and the rest
+go out as answers arrive, or after five seconds without one. The server drops a
+socket with more than 32 signed messages in process, so a client on more than
+32 boxes that sent every join at once never kept its socket.
+
+A room counts as joined on the current socket from the moment it is requested,
+before the server answers, until the server refuses it with `joinFailed` or you
+leave it. `getJoinedRooms()` and the live status's `rooms` both mean that.
+
 Two things follow for a caller:
 
 - **Polling is required for correctness, not as a fallback.** A live message
@@ -159,9 +170,9 @@ Two things follow for a caller:
   paid message is never pushed at all. Keep calling `listMessages()`; it is
   also the only path that internalizes a recipient payment.
 - **`getJoinedRooms()` reports; it is not a lever.** It returns the rooms
-  joined on the current socket. Mutating the returned set does not cancel a
-  rejoin — call `leaveRoom()`, which releases the room whether or not the
-  socket is up.
+  joined on the current socket, requested and not refused. Mutating the
+  returned set does not cancel a rejoin — call `leaveRoom()`, which releases
+  the room whether or not the socket is up.
 
 ### Knowing what the socket is doing
 
@@ -181,8 +192,10 @@ or a rebuild the client has scheduled. `closed` means nothing will: a deliberate
 `disconnectWebSocket()`, a drop under `managerOptions.reconnection: false`, or a
 rebuild that failed. The next call that needs a socket still builds one.
 
-`rooms` lists the rooms joined on the current socket, and is empty unless the
-state is `live`. A listener that throws is logged and does not stop the others.
+`rooms` lists the rooms joined on the current socket, as defined above, and is
+empty unless the state is `live`. A room the server refuses is removed from it
+with a new report. A listener that throws is logged and does not stop the
+others.
 
 The status describes this socket. It is not a delivery guarantee: keep polling
 `listMessages()` whatever it says.

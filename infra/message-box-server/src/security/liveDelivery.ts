@@ -27,17 +27,19 @@ export interface LiveMessage {
 
 /**
  * The one place a stored message is announced to joined sockets of this
- * process. Sockets on other nodes are not reached (see sticky sessions in
- * DEPLOYING.md).
+ * process: the recipient's sockets joined to the room, newest first, at most
+ * `maxRecipientConnections`. Sockets on other nodes are not reached (see sticky
+ * sessions in DEPLOYING.md).
  */
 export async function deliverLiveMessage(
   connections: WebSocketConnectionRegistry,
-  message: LiveMessage
+  message: LiveMessage,
+  maxRecipientConnections: number
 ): Promise<void> {
   const recipientSockets = connections.recipientSockets(
     message.recipient,
     message.roomId,
-    readMessageBoxResourceConfig().webSocketMaxRecipientConnections
+    maxRecipientConnections
   )
   await Promise.all(
     recipientSockets.map(async recipientSocket => {
@@ -94,6 +96,8 @@ async function announceStored(
     { message?: { messageBox?: unknown; body?: unknown }; payment?: unknown } | undefined
   const results = (payload as { status?: unknown; results?: unknown } | undefined)?.results
   const sent = body?.message
+  const messageBox = sent?.messageBox
+  const sentBody = sent?.body
   // A paid send stores `{ message, payment }` per recipient, but the push
   // carries only the request body. The live handler never internalizes a
   // payment, so a consumer that acknowledges on the push would delete the row
@@ -103,8 +107,8 @@ async function announceStored(
   if (
     (payload as { status?: unknown } | undefined)?.status !== 'success' ||
     !Array.isArray(results) ||
-    typeof sent?.messageBox !== 'string' ||
-    typeof sent.body !== 'string'
+    typeof messageBox !== 'string' ||
+    typeof sentBody !== 'string'
   ) {
     return
   }
@@ -113,17 +117,22 @@ async function announceStored(
   // WEBSOCKET_MAX_RECIPIENT_CONNECTIONS sockets, so the product is emitted off
   // one request. Bounded like the notification fan-out the send route already
   // runs over the same list.
+  const resources = readMessageBoxResourceConfig()
   await mapWithConcurrency(
     results as Array<{ recipient: string; messageId: string }>,
-    readMessageBoxResourceConfig().notificationRecipientConcurrency,
+    resources.notificationRecipientConcurrency,
     async entry => {
-      await deliverLiveMessage(connections, {
-        sender,
-        recipient: entry.recipient,
-        roomId: `${entry.recipient}-${sent.messageBox as string}`,
-        messageId: entry.messageId,
-        body: sent.body as string
-      })
+      await deliverLiveMessage(
+        connections,
+        {
+          sender,
+          recipient: entry.recipient,
+          roomId: `${entry.recipient}-${messageBox}`,
+          messageId: entry.messageId,
+          body: sentBody
+        },
+        resources.webSocketMaxRecipientConnections
+      )
     }
   )
 }

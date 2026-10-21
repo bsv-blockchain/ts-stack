@@ -17,9 +17,11 @@ All notable changes to this project will be documented in this file. The format 
 
 - **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
   `connecting`, `live` with the rooms joined on it, `reconnecting` after a drop
-  something will recover from, or `closed` with nothing coming. Returns an
-  unsubscribe function and calls the listener once immediately with the current
-  status; `liveStatus` reads it without subscribing. A consumer previously had
+  something will recover from, or `closed` with nothing coming. A joined room is
+  one requested on the current socket and not refused by the server: it is
+  recorded when requested, and a refused join removes it from the status at
+  once. Returns an unsubscribe function and calls the listener once immediately
+  with the current status; `liveStatus` reads it without subscribing. A consumer previously had
   to send a message to find out, which is why one downstream package kept a
   self-addressed ping purely to manufacture that traffic. A listener that throws
   is reported and does not stop the others. The status describes the socket
@@ -50,8 +52,9 @@ All notable changes to this project will be documented in this file. The format 
 - `leaveRoom` releases its room before the connected guard, so leaving while
   disconnected no longer leaves a claim that the next connection rejoins.
   `disconnectWebSocket` clears rooms and handlers, as deliberate teardown.
-- `getJoinedRooms()` reports the rooms joined on the current socket. Mutating
-  the returned set no longer cancels a rejoin; use `leaveRoom`.
+- `getJoinedRooms()` reports the rooms joined on the current socket, in the
+  sense above. Mutating the returned set no longer cancels a rejoin; use
+  `leaveRoom`.
 - Read the server's answer to a join. `joinedRoom` and `joinFailed` have always
   been emitted and were never listened for, so a refused join left the client
   certain it was subscribed to a room it had never been given. The record is
@@ -71,6 +74,22 @@ All notable changes to this project will be documented in this file. The format 
   wrapper does not have, so they accumulated for the life of the socket and
   every acknowledgement walked all of them. A refusal carries no `messageId`,
   so the oldest send in flight still takes the acknowledgement, as before.
+- `sendLiveMessage` falls back to HTTP when the socket cannot be established,
+  authenticated or joined, instead of throwing. Right after a server restart the
+  reconnected socket can be closed again while the send waits on it, and the
+  send used to fail with `WebSocket disconnected` and store nothing; an
+  authentication timeout failed the same way. Invalid parameters still throw,
+  and so does a conflicting WebSocket identity pin, which is a misconfiguration
+  that falling back would hide.
+- Pace room joins: at most 16 await the server's answer per socket, and the rest
+  are sent as `joinedRoom` or `joinFailed` arrives for a room in flight, or after
+  five seconds without one, so a server that answers nothing still gets every
+  join. The server drops a socket with more than 32 signed messages in process,
+  so a client on more than 32 boxes, which re-sent every join at once after each
+  authentication, was dropped, rebuilt and dropped again without ever holding a
+  room. A drop clears the queue with the membership. The record stays
+  optimistic: a room is in `getJoinedRooms()` from the moment it is requested,
+  queued or sent, and `joinRoom` still resolves at once.
 - **A live message is delivered a tick after it arrives.** It already was for
   an encrypted message; now it always is, because the body is read before any
   subscriber is called. A consumer asserting synchronous delivery in a test

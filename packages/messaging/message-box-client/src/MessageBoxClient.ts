@@ -97,11 +97,45 @@ const MAX_PAYMENT_OUTPUTS = MAX_MESSAGE_RECIPIENTS + 1
 const REBUILD_BASE_DELAY_MS = 1_000
 const REBUILD_MAX_DELAY_MS = 30_000
 
+/**
+ * Room joins awaiting the server's answer, per socket. The server's authsocket
+ * transport drops a socket with more than 32 signed messages in process
+ * (`SocketServerTransport` default), so a client on more than 32 boxes that
+ * emitted every join at once was dropped after each authentication, for ever.
+ * Half the limit leaves room for the sends, leaves and acknowledgements that
+ * share it, and for a slot the client frees a moment before the server does.
+ */
+const MAX_JOINS_IN_FLIGHT = 16
+/**
+ * A join nobody answers frees its slot after this, so against a server that
+ * never answers every join still goes out, paced.
+ */
+const JOIN_ANSWER_TIMEOUT_MS = 5_000
+
+/** The two pins for an origin disagree: a misconfiguration, not a connection failure. */
+class SocketIdentityPinConflictError extends Error {
+  override name = 'SocketIdentityPinConflictError'
+}
+
 /** Join refusals that re-emitting the same room can never clear. */
 const PERMANENT_JOIN_REFUSALS = new Set([
   'ERR_WEBSOCKET_ROOM_NOT_OWNED',
+  // Mirrors the spec; defensive, since the server sends this refusal without a roomId.
   'ERR_WEBSOCKET_INVALID_ROOM'
 ])
+
+/** The live socket, as the authsocket wrapper builds it. */
+type LiveSocket = ReturnType<typeof AuthSocketClient>
+/** The server's answer to an accepted join. */
+interface JoinedRoomPayload {
+  roomId?: string
+}
+/** The server's answer to a refused join. An older server sends no roomId. */
+interface JoinFailedPayload {
+  roomId?: string
+  reason?: string
+  code?: string
+}
 const unsafeRecordKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
 type OwnDataRecord = Record<string, unknown>
@@ -936,7 +970,7 @@ export class MessageBoxClient {
   private host: string
   public readonly authFetch: AuthFetch
   private readonly walletClient: WalletInterface
-  private socket?: ReturnType<typeof AuthSocketClient>
+  private socket?: LiveSocket
   private myIdentityKey?: string
   private readonly joinedRooms: Set<string> = new Set()
   private readonly lookupResolver: LookupResolver
@@ -949,9 +983,17 @@ export class MessageBoxClient {
   /**
    * Rooms the consumer asked for. Survives a drop; `joinedRooms` does not. Also
    * filled by `sendLiveMessage`, so it is bounded by the distinct boxes used.
-   * Only `leaveRoom` and `disconnectWebSocket` remove from it.
+   * Only `leaveRoom`, `disconnectWebSocket` and a permanent `joinFailed` remove
+   * from it.
    */
   private readonly requestedRooms: Set<string> = new Set()
+  /**
+   * Joins emitted on the current socket and not yet answered, each with the
+   * timer that frees its slot if no answer comes. At most `MAX_JOINS_IN_FLIGHT`.
+   */
+  private readonly joinsInFlight: Map<string, ReturnType<typeof setTimeout>> = new Map()
+  /** Joins waiting for a slot on the current socket, oldest first. */
+  private readonly joinQueue: Set<string> = new Set()
   /** Live-message subscriptions by room. A rebuilt socket has no listeners of its own. */
   private roomHandlers: Array<{
     roomId: string
@@ -989,6 +1031,8 @@ export class MessageBoxClient {
   private readonly socketOptions: MessageBoxClientOptions['socketOptions']
   /** False only when the host set `managerOptions.reconnection` to false. */
   private readonly socketReconnects: boolean
+  /** Sockets that reached `authenticationSuccess`, so a drop knows whether to rebuild. */
+  private readonly authenticatedSockets = new WeakSet<LiveSocket>()
   private readonly expectedServerIdentityByOrigin: ReadonlyMap<string, PubKeyHex>
   private readonly authenticatedServerIdentityByOrigin = new Map<string, PubKeyHex>()
   /**
@@ -1173,6 +1217,11 @@ export class MessageBoxClient {
     return this.lastLiveStatus
   }
 
+  /** Reports a changed room list while live; nothing otherwise. */
+  private refreshLiveRooms(): void {
+    if (this.socketAuthenticated) this.reportLiveStatus('live')
+  }
+
   /** Reports a transition, and nothing when the status is unchanged. */
   private reportLiveStatus(state: LiveConnectionState, reason?: string): void {
     const rooms = state === 'live' ? [...this.joinedRooms] : []
@@ -1200,7 +1249,9 @@ export class MessageBoxClient {
    * @method getJoinedRooms
    * @returns {Set<string>} A set of currently joined WebSocket room IDs
    * @description
-   * Returns the live set of WebSocket rooms joined on the current socket.
+   * Returns the live set of WebSocket rooms joined on the current socket:
+   * requested and not refused by the server. A room is recorded when requested,
+   * before the server answers; a `joinFailed` removes it.
    * Mutating it does not cancel a rejoin; use `leaveRoom`.
    * Useful for inspecting state or ensuring no duplicates are joined.
    */
@@ -1377,7 +1428,9 @@ export class MessageBoxClient {
       sharedExpectedIdentity != null &&
       socketConfiguredIdentity !== sharedExpectedIdentity
     ) {
-      throw new Error(`Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`)
+      throw new SocketIdentityPinConflictError(
+        `Conflicting Message Box WebSocket identity pin for ${targetOrigin}.`
+      )
     }
     const expectedServerIdentityKey = socketConfiguredIdentity ?? sharedExpectedIdentity
     const socket = AuthSocketClient(targetHost, {
@@ -1392,24 +1445,18 @@ export class MessageBoxClient {
     // their listener went with it.
     this.dispatchedEvents.clear()
     this.pendingAcks.clear()
+    this.clearJoins()
     for (const { event } of this.roomHandlers) this.dispatchLive(socket, event)
     this.attachSocketHandlers(socket, targetHost, targetOrigin)
     this.reportLiveStatus('connecting')
   }
-
-  /** Sockets that reached `authenticationSuccess`, so a drop knows whether to rebuild. */
-  private readonly authenticatedSockets = new WeakSet<object>()
 
   /**
    * Registers every handler this socket will ever have, once. Each one re-checks
    * that the socket is still the client's, because the wrapper has no `off` and a
    * replaced socket goes on reporting.
    */
-  private attachSocketHandlers(
-    socket: ReturnType<typeof AuthSocketClient>,
-    targetHost: string,
-    targetOrigin: string
-  ): void {
+  private attachSocketHandlers(socket: LiveSocket, targetHost: string, targetOrigin: string): void {
     // `connect` fires on the first connection and on every Socket.IO reconnection.
     socket.on('connect', () => this.onSocketConnect(socket))
     socket.on('authenticationSuccess', () => this.onSocketAuthenticated(socket, targetOrigin))
@@ -1419,16 +1466,14 @@ export class MessageBoxClient {
     )
     // The server answers every join. An older one answers nothing, which is why
     // `joinRoom` records the room optimistically; these only correct that record.
-    socket.on('joinedRoom', (data?: { roomId?: string }) => this.onRoomJoined(socket, data))
-    socket.on('joinFailed', (data?: { roomId?: string; reason?: string; code?: string }) =>
-      this.onRoomJoinFailed(socket, data)
-    )
+    socket.on('joinedRoom', (data?: JoinedRoomPayload) => this.onRoomJoined(socket, data))
+    socket.on('joinFailed', (data?: JoinFailedPayload) => this.onRoomJoinFailed(socket, data))
     socket.on('error', () => {
       Logger.error('[MB CLIENT ERROR] WebSocket error')
     })
   }
 
-  private onSocketConnect(socket: ReturnType<typeof AuthSocketClient>): void {
+  private onSocketConnect(socket: LiveSocket): void {
     if (this.socket !== socket) return
     Logger.log('[MB CLIENT] Connected to WebSocket.')
     this.socketStale = false
@@ -1445,10 +1490,7 @@ export class MessageBoxClient {
     socket.emit('authenticated', { identityKey: this.myIdentityKey })
   }
 
-  private onSocketAuthenticated(
-    socket: ReturnType<typeof AuthSocketClient>,
-    targetOrigin: string
-  ): void {
+  private onSocketAuthenticated(socket: LiveSocket, targetOrigin: string): void {
     if (this.socket !== socket) return
     this.authenticatedSockets.add(socket)
     const serverIdentityKey = canonicalIdentityKey(
@@ -1461,30 +1503,24 @@ export class MessageBoxClient {
     this.socketAuthenticated = true
     // The server refuses joins before this point, and a reconnect is a new
     // server-side socket in no rooms.
-    for (const roomId of this.requestedRooms) {
-      socket.emit('joinRoom', roomId)
-      this.joinedRooms.add(roomId)
-    }
+    for (const roomId of this.requestedRooms) this.requestJoin(socket, roomId)
     this.reportLiveStatus('live')
     this.settleAuthWait?.()
   }
 
-  private onSocketAuthenticationFailed(socket: ReturnType<typeof AuthSocketClient>): void {
+  private onSocketAuthenticationFailed(socket: LiveSocket): void {
     if (this.socket !== socket) return
     Logger.error('[MB CLIENT ERROR] WebSocket authentication failed')
     this.socketAuthenticated = false
     this.settleAuthWait?.(new Error('[MB CLIENT ERROR] WebSocket authentication failed!'))
   }
 
-  private onSocketDisconnect(
-    socket: ReturnType<typeof AuthSocketClient>,
-    targetHost: string,
-    reason?: string
-  ): void {
+  private onSocketDisconnect(socket: LiveSocket, targetHost: string, reason?: string): void {
     if (this.socket !== socket) return
     Logger.log('[MB CLIENT] Disconnected from MessageBox server')
     // Membership belongs to the server-side socket that joined.
     this.joinedRooms.clear()
+    this.clearJoins()
     this.socketAuthenticated = false
 
     const retriedBySocketIo =
@@ -1513,33 +1549,73 @@ export class MessageBoxClient {
     if (this.rebuildTimer === undefined) this.reportLiveStatus('closed', reason)
   }
 
-  private onRoomJoined(
-    socket: ReturnType<typeof AuthSocketClient>,
-    data?: { roomId?: string }
-  ): void {
+  private onRoomJoined(socket: LiveSocket, data?: JoinedRoomPayload): void {
     if (this.socket !== socket) return
     const roomId = data?.roomId
-    if (typeof roomId !== 'string' || !this.requestedRooms.has(roomId)) return
+    if (typeof roomId !== 'string') return
+    this.settleJoin(socket, roomId)
+    if (!this.requestedRooms.has(roomId)) return
     this.joinedRooms.add(roomId)
-    if (this.socketAuthenticated) this.reportLiveStatus('live')
+    this.refreshLiveRooms()
   }
 
-  private onRoomJoinFailed(
-    socket: ReturnType<typeof AuthSocketClient>,
-    data?: { roomId?: string; reason?: string; code?: string }
-  ): void {
+  private onRoomJoinFailed(socket: LiveSocket, data?: JoinFailedPayload): void {
     if (this.socket !== socket) return
     Logger.error('[MB CLIENT ERROR] WebSocket room join refused')
     const roomId = data?.roomId
     // Without a room this cannot be attributed: an older server sends no room,
     // and several joins can be in flight.
     if (typeof roomId !== 'string') return
+    this.settleJoin(socket, roomId)
     this.joinedRooms.delete(roomId)
     // The handler stays attached. Nothing is pushed to a room we are not in, and
     // dropping it would let a later listen attach a second one.
     if (PERMANENT_JOIN_REFUSALS.has(data?.code ?? '')) {
       this.requestedRooms.delete(roomId)
     }
+    this.refreshLiveRooms()
+  }
+
+  /**
+   * Records the room at once, as `joinRoom` always has, and emits the join as
+   * soon as fewer than `MAX_JOINS_IN_FLIGHT` await an answer on this socket.
+   */
+  private requestJoin(socket: LiveSocket, roomId: string): void {
+    this.joinedRooms.add(roomId)
+    if (this.joinsInFlight.has(roomId)) return
+    this.joinQueue.add(roomId)
+    this.drainJoins(socket)
+  }
+
+  private drainJoins(socket: LiveSocket): void {
+    for (const roomId of this.joinQueue) {
+      if (this.joinsInFlight.size >= MAX_JOINS_IN_FLIGHT) return
+      this.joinQueue.delete(roomId)
+      // Left while it waited.
+      if (!this.requestedRooms.has(roomId)) continue
+      socket.emit('joinRoom', roomId)
+      this.joinsInFlight.set(
+        roomId,
+        setTimeout(() => this.settleJoin(socket, roomId), JOIN_ANSWER_TIMEOUT_MS)
+      )
+    }
+  }
+
+  /** Frees a join's slot on an answer or its timeout, and sends the next. */
+  private settleJoin(socket: LiveSocket, roomId: string): void {
+    if (this.socket !== socket) return
+    const timer = this.joinsInFlight.get(roomId)
+    if (timer === undefined) return
+    clearTimeout(timer)
+    this.joinsInFlight.delete(roomId)
+    this.drainJoins(socket)
+  }
+
+  /** Joins belong to the socket that sent them, like the membership they ask for. */
+  private clearJoins(): void {
+    for (const timer of this.joinsInFlight.values()) clearTimeout(timer)
+    this.joinsInFlight.clear()
+    this.joinQueue.clear()
   }
 
   /**
@@ -1559,7 +1635,7 @@ export class MessageBoxClient {
    * off. Only a socket that authenticated is rebuilt, so a server refusing
    * authentication is not retried in a loop.
    */
-  private scheduleRebuild(socket: object, targetHost: string): void {
+  private scheduleRebuild(socket: LiveSocket, targetHost: string): void {
     if (!this.authenticatedSockets.has(socket)) return
     clearTimeout(this.rebuildHoldTimer)
     const delay = this.rebuildDelay()
@@ -1573,18 +1649,19 @@ export class MessageBoxClient {
     }, delay)
     this.reportLiveStatus('reconnecting')
   }
-  /**
-   * Starts an authentication attempt and registers it as `connectionInitPromise`.
-   * Callers must check that slot first; this does not enforce a single attempt.
-   * The socket's long-lived handlers settle it, so no per-attempt listeners
-   * accumulate across reconnects.
-   */
+
   /** Zero for the first rebuild, then doubling to the cap. */
   private rebuildDelay(): number {
     if (this.rebuildAttempts === 0) return 0
     return Math.min(REBUILD_BASE_DELAY_MS * 2 ** (this.rebuildAttempts - 1), REBUILD_MAX_DELAY_MS)
   }
 
+  /**
+   * Starts an authentication attempt and registers it as `connectionInitPromise`.
+   * Callers must check that slot first; this does not enforce a single attempt.
+   * The socket's long-lived handlers settle it, so no per-attempt listeners
+   * accumulate across reconnects.
+   */
   private beginAuthWait(): Promise<void> {
     const promise = new Promise<void>((resolve, reject) => {
       const settle = (error?: Error): void => {
@@ -1781,12 +1858,16 @@ export class MessageBoxClient {
    * If the WebSocket connection is not already established, this method will first initialize the connection.
    * It also ensures the room is only joined once, and tracks all joined rooms in an internal set.
    *
-   * Resolving means the request was sent, not that the server granted it. The
-   * room is recorded at once so that a server which answers nothing behaves as
-   * it always has; a server that answers corrects the record, dropping a room
-   * it refused and, when the refusal is one that re-emitting can never clear,
-   * no longer asking for it on reconnect. The room is requested again whenever
-   * a socket authenticates, since membership belongs to the socket that joined.
+   * Resolving means the request was sent, or queued behind the joins awaiting
+   * an answer, not that the server granted it. At most 16 joins await an answer
+   * per socket, because the server drops a socket with more than 32 signed
+   * messages in process; the rest go out as answers arrive, or after 5 seconds
+   * without one. The room is recorded at once so that a server which answers
+   * nothing behaves as it always has; a server that answers corrects the
+   * record, dropping a room it refused and, when the refusal is one that
+   * re-emitting can never clear, no longer asking for it on reconnect. The room
+   * is requested again whenever a socket authenticates, since membership
+   * belongs to the socket that joined.
    *
    * Room ID format: `${identityKey}-${messageBox}`
    *
@@ -1819,10 +1900,9 @@ export class MessageBoxClient {
 
     try {
       Logger.log('[MB CLIENT] Joining WebSocket room')
-      this.socket?.emit('joinRoom', roomId)
-      this.joinedRooms.add(roomId)
-      Logger.log('[MB CLIENT] WebSocket room joined')
-      if (this.socketAuthenticated) this.reportLiveStatus('live')
+      if (this.socket != null) this.requestJoin(this.socket, roomId)
+      Logger.log('[MB CLIENT] WebSocket room join requested')
+      this.refreshLiveRooms()
     } catch {
       Logger.error('[MB CLIENT ERROR] Failed to join WebSocket room')
     }
@@ -1906,7 +1986,7 @@ export class MessageBoxClient {
    * list operations, which is what makes `leaveRoom` followed by another
    * `listenForLiveMessages` safe on a socket that cannot detach a listener.
    */
-  private dispatchLive(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+  private dispatchLive(socket: LiveSocket, event: string): void {
     if (this.dispatchedEvents.has(event)) return
     this.dispatchedEvents.add(event)
     socket.on(event, (message: PeerMessage) => {
@@ -1931,7 +2011,7 @@ export class MessageBoxClient {
   }
 
   /** Attaches this socket's only acknowledgement listener for a room. */
-  private dispatchAcks(socket: ReturnType<typeof AuthSocketClient>, event: string): void {
+  private dispatchAcks(socket: LiveSocket, event: string): void {
     if (this.dispatchedEvents.has(event)) return
     this.dispatchedEvents.add(event)
     socket.on(event, (response?: SendMessageResponse) => {
@@ -2015,7 +2095,9 @@ export class MessageBoxClient {
    * Sends a message in real time using WebSocket with authenticated delivery and overlay fallback.
    *
    * This method:
-   * - Ensures the WebSocket connection is open and joins the correct room.
+   * - Ensures the WebSocket connection is open and joins the correct room. If the
+   *   socket cannot be established or authenticated (e.g. right after a server
+   *   restart), or is not connected, sends with `sendMessage()` over HTTP instead.
    * - Derives a unique message ID using an HMAC of the message body and counterparty identity key.
    * - Encrypts the message body using AES-256-GCM based on the ECDH shared secret between derived keys, per [BRC-2](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0002.md),
    *   unless `skipEncryption` is explicitly set to `true`.
@@ -2025,7 +2107,7 @@ export class MessageBoxClient {
    *
    * This hybrid delivery strategy ensures reliability in both real-time and offline-capable environments.
    *
-   * @throws {Error} If message validation fails, HMAC generation fails, or both WebSocket and HTTP fail to deliver.
+   * @throws {Error} If message validation fails, HMAC generation fails, HTTP delivery fails after a WebSocket fallback, or the WebSocket identity pins for the host conflict.
    *
    * @example
    * await client.sendLiveMessage({
@@ -2043,9 +2125,6 @@ export class MessageBoxClient {
     }
     const snapshot = snapshotSendMessageParams(message)
 
-    // Ensure room is joined before sending
-    await this.joinRoom(snapshot.messageBox, overrideHost)
-
     const fallbackMessage = (finalMessageId?: string): SendMessageParams => ({
       recipient: snapshot.recipient,
       messageBox: snapshot.messageBox,
@@ -2055,6 +2134,17 @@ export class MessageBoxClient {
       checkPermissions: snapshot.checkPermissions,
       maximumPayment: snapshot.maximumPayment
     })
+
+    // Ensure room is joined before sending. The message is already validated,
+    // so a failure here is the socket's, e.g. one closed by a server restart.
+    try {
+      await this.joinRoom(snapshot.messageBox, overrideHost)
+    } catch (error) {
+      // A conflicting pin is a misconfiguration; HTTP would only hide it.
+      if (error instanceof SocketIdentityPinConflictError) throw error
+      Logger.warn('[MB CLIENT WARNING] WebSocket unavailable, falling back to HTTP')
+      return await this.sendMessage(fallbackMessage(), overrideHost)
+    }
 
     // Fallback to HTTP if WebSocket is not connected
     if (!this.socket?.connected) {
@@ -2163,7 +2253,7 @@ export class MessageBoxClient {
     // disconnected must not be left claiming a room it will never rejoin.
     this.joinedRooms.delete(roomId)
     this.requestedRooms.delete(roomId)
-    if (this.socketAuthenticated) this.reportLiveStatus('live')
+    this.refreshLiveRooms()
     // The live socket keeps its copy (it cannot detach), but a rebuild will not.
     this.roomHandlers = this.roomHandlers.filter(entry => entry.roomId !== roomId)
 
@@ -2207,6 +2297,7 @@ export class MessageBoxClient {
     }
     // Teardown is deliberate: nothing is left to restore.
     this.joinedRooms.clear()
+    this.clearJoins()
     this.requestedRooms.clear()
     this.roomHandlers = []
     this.dispatchedEvents.clear()

@@ -96,17 +96,12 @@ export interface MessageBoxClientOptions {
 }
 
 /**
- * Represents a decrypted message received from a MessageBox.
- * Includes metadata such as sender identity, timestamps, and optional acknowledgment status.
- *
- * Used in both HTTP and WebSocket message retrieval responses.
- */
-/**
  * What the live socket is doing, as the client knows it. Reported rather than
  * inferred: before this, a consumer could only find out by sending.
  *
  * - `connecting` — a socket exists and has not authenticated yet.
- * - `live` — authenticated; `rooms` are the rooms joined on it.
+ * - `live` — authenticated; `rooms` are the rooms joined on it (see
+ *   {@link LiveStatus.rooms}).
  * - `reconnecting` — dropped, and something will restore it: Socket.IO's own
  *   retry, or a rebuild this client has scheduled.
  * - `closed` — dropped, and nothing will restore it. A deliberate
@@ -116,14 +111,25 @@ export interface MessageBoxClientOptions {
  */
 export type LiveConnectionState = 'connecting' | 'live' | 'reconnecting' | 'closed'
 
+/** A live-socket state and the rooms joined on it, as `onLiveStatus` reports it. */
 export interface LiveStatus {
   state: LiveConnectionState
-  /** Rooms joined on the current socket. Empty unless `state` is `live`. */
+  /**
+   * Rooms joined on the current socket: requested and not refused by the
+   * server. Recorded when requested, before the server answers; a `joinFailed`
+   * removes one. Empty unless `state` is `live`.
+   */
   rooms: readonly string[]
   /** Socket.IO's disconnect reason, when the state came from a drop. */
   reason?: string
 }
 
+/**
+ * Represents a decrypted message received from a MessageBox.
+ * Includes metadata such as sender identity, timestamps, and optional acknowledgment status.
+ *
+ * Used in both HTTP and WebSocket message retrieval responses.
+ */
 export interface PeerMessage {
   messageId: string
   body: string | Record<string, any>

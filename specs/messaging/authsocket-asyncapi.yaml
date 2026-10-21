@@ -268,9 +268,9 @@ components:
     WsSendMessageBroadcastPayload:
       type: object
       description: |
-        Broadcast emitted by the server on `sendMessage-{roomId}` to all
-        connections in the room (including the sender). Note: the event name
-        is dynamic. Emitted for a message stored over HTTP as well as one sent
+        Emitted by the server on `sendMessage-{roomId}` to the recipient's
+        connections joined to the room on the process that served the send.
+        Note: the event name is dynamic. Emitted for a message stored over HTTP as well as one sent
         through a socket, with the exceptions under the `sendMessage-{roomId}`
         channel.
       required: [sender, messageId, body]
@@ -463,7 +463,7 @@ channels:
   sendMessageBroadcast:
     address: 'sendMessage-{roomId}'
     description: |
-      Broadcast emitted to all connections subscribed to `roomId` after a
+      Emitted to the recipient's connections joined to `roomId` after a
       message is stored, whether it was sent through a socket or over HTTP.
       The event name is `sendMessage-<roomId>`.
 
@@ -472,6 +472,8 @@ channels:
         request. A client joined on another process of a scaled-out
         deployment is not reached, so polling remains required for
         correctness rather than as a fallback.
+      - It reaches at most `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS`
+        of the recipient's connections, the newest first.
       - A send carrying a payment is never broadcast. The broadcast carries
         the request body, which has no payment in it, so a recipient that
         acknowledged on the broadcast would delete the stored row before its

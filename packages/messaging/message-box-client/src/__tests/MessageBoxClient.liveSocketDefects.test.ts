@@ -90,6 +90,9 @@ const authenticateSoon = (): void => {
   setTimeout(() => fire('authenticationSuccess'), 10)
 }
 
+/** Clients from `connected`, closed after each test so no timer outlives it. */
+const clients: Array<InstanceType<typeof MessageBoxClient>> = []
+
 const connected = async (
   socketOptions?: Record<string, unknown>
 ): Promise<InstanceType<typeof MessageBoxClient>> => {
@@ -98,6 +101,7 @@ const connected = async (
     host: 'https://message-box-us-1.bsvb.tech',
     socketOptions: socketOptions as any
   })
+  clients.push(client)
   await client.init()
   const connecting = client.initializeConnection()
   authenticateSoon()
@@ -123,6 +127,11 @@ describe('live-socket reconnection', () => {
   beforeEach(() => {
     sockets.length = 0
     ;(AuthSocketClient as jest.Mock).mockClear()
+  })
+
+  afterEach(async () => {
+    for (const client of clients.splice(0)) await client.disconnectWebSocket()
+    jest.useRealTimers()
   })
 
   /** Membership is per socket, so a new one has to join for itself. */
@@ -296,17 +305,22 @@ describe('live-socket reconnection', () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
     const dead = latest()
+    jest.useFakeTimers()
 
     drop(dead)
-    await expect(client.joinRoom('other_inbox')).rejects.toThrow(/timed out/)
+    const timedOut = expect(client.joinRoom('other_inbox')).rejects.toThrow(/timed out/)
+    await jest.advanceTimersByTimeAsync(5_000)
+    await timedOut
 
     authenticateSoon()
-    await client.joinRoom('other_inbox')
+    const joining = client.joinRoom('other_inbox')
+    await jest.advanceTimersByTimeAsync(10)
+    await joining
 
     expect(sockets).toHaveLength(2)
     expect(dead.disconnect).toHaveBeenCalledTimes(1)
     expect(joinRoomEmits(latest()).map(call => call[1])).toContain(ROOM)
-  }, 15000)
+  })
 
   /**
    * A replaced socket keeps its handlers — there is no `off` to take them away.
@@ -575,12 +589,19 @@ describe('live-socket reconnection', () => {
       const socket = latest()
       authenticateSoon()
       drop(socket, 'io server disconnect')
-      await new Promise(resolve => setTimeout(resolve, waitMs))
+      await jest.advanceTimersByTimeAsync(waitMs)
+    }
+
+    /** Connects and listens on real timers, then switches to fake ones. */
+    const listening = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
+      const client = await connected()
+      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      jest.useFakeTimers()
+      return client
     }
 
     it('recovers at once the first time and backs off after that', async () => {
-      const client = await connected()
-      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      await listening()
 
       await cycle(50)
       expect(sockets).toHaveLength(2)
@@ -589,37 +610,38 @@ describe('live-socket reconnection', () => {
       await cycle(100)
       expect(sockets).toHaveLength(2)
 
-      await new Promise(resolve => setTimeout(resolve, 1_200))
+      // The second rebuild waits REBUILD_BASE_DELAY_MS (1 s) from its drop.
+      await jest.advanceTimersByTimeAsync(899)
+      expect(sockets).toHaveLength(2)
+      await jest.advanceTimersByTimeAsync(1)
       expect(sockets).toHaveLength(3)
-    }, 15000)
+    })
 
     it('starts over once a socket has held its authentication', async () => {
-      const client = await connected()
-      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      await listening()
 
       await cycle(50)
       expect(sockets).toHaveLength(2)
 
       // Long enough for the replacement to outlive the next delay.
-      await new Promise(resolve => setTimeout(resolve, 1_200))
+      await jest.advanceTimersByTimeAsync(1_200)
       await cycle(50)
       expect(sockets).toHaveLength(3)
-    }, 15000)
+    })
 
     it('abandons a scheduled rebuild when the connection is closed', async () => {
-      const client = await connected()
-      await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+      const client = await listening()
 
       await cycle(50)
       await cycle(50)
       expect(sockets).toHaveLength(2)
 
       await client.disconnectWebSocket()
-      await new Promise(resolve => setTimeout(resolve, 1_200))
+      await jest.advanceTimersByTimeAsync(60_000)
 
       expect(sockets).toHaveLength(2)
       expect(client.testSocket).toBeUndefined()
-    }, 15000)
+    })
   })
 
   /**
@@ -802,9 +824,12 @@ describe('live-socket reconnection', () => {
     const client = await connected()
     await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
     const socket = latest()
+    jest.useFakeTimers()
 
     drop(socket)
-    await expect(client.initializeConnection()).rejects.toThrow(/timed out/)
+    const timedOut = expect(client.initializeConnection()).rejects.toThrow(/timed out/)
+    await jest.advanceTimersByTimeAsync(5_000)
+    await timedOut
 
     socket.emit.mockClear()
     reconnect(socket)
@@ -813,5 +838,203 @@ describe('live-socket reconnection', () => {
     expect(sockets).toHaveLength(1)
     expect(client.testSocket).toBe(socket)
     expect(joinRoomEmits(socket).map(call => call[1])).toEqual([ROOM])
-  }, 15000)
+  })
+
+  /**
+   * A live send that cannot get a socket is delivered over HTTP, as one that
+   * finds the socket down already is.
+   */
+  describe('a live send whose socket cannot be established', () => {
+    const live = {
+      recipient: IDENTITY,
+      messageBox: BOX,
+      body: 'hello',
+      messageId: 'live-1',
+      skipEncryption: true
+    }
+    const httpFallback = { ...live, checkPermissions: false, maximumPayment: undefined }
+
+    /** A server restart: the transport drops, the socket reconnects, the server closes it. */
+    it('falls back to HTTP when the server closes the socket it is waiting on', async () => {
+      const client = await connected()
+      const socket = latest()
+      const sendMessage = jest.spyOn(client, 'sendMessage')
+
+      drop(socket)
+      const sending = client.sendLiveMessage(live)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      socket.connected = true
+      fireOn(socket, 'connect')
+      drop(socket, 'io server disconnect')
+
+      await expect(sending).resolves.toMatchObject({ status: 'success' })
+      expect(sendMessage).toHaveBeenCalledTimes(1)
+      expect(sendMessage).toHaveBeenCalledWith(httpFallback, undefined)
+      await client.disconnectWebSocket()
+    })
+
+    it('falls back to HTTP when authentication times out', async () => {
+      const client = await connected()
+      const sendMessage = jest.spyOn(client, 'sendMessage')
+      jest.useFakeTimers()
+
+      drop(latest())
+
+      const sending = client.sendLiveMessage(live, 'https://override.example')
+      await jest.advanceTimersByTimeAsync(5_000)
+      await expect(sending).resolves.toMatchObject({ status: 'success' })
+      expect(sendMessage).toHaveBeenCalledTimes(1)
+      expect(sendMessage).toHaveBeenCalledWith(httpFallback, 'https://override.example')
+    })
+
+    it('still rejects a message it could never send', async () => {
+      const client = await connected()
+      const sendMessage = jest.spyOn(client, 'sendMessage')
+      drop(latest())
+
+      await expect(client.sendLiveMessage({ ...live, recipient: '' })).rejects.toThrow(
+        /Recipient identity key is required/
+      )
+      await expect(client.sendLiveMessage({ ...live, messageBox: 'bad\u0000box' })).rejects.toThrow(
+        /Message box/
+      )
+      expect(sendMessage).not.toHaveBeenCalled()
+      await client.disconnectWebSocket()
+    })
+
+    /** A conflicting pin is a misconfiguration; HTTP would only hide it. */
+    it('rejects when the socket identity pins conflict', async () => {
+      const client = new MessageBoxClient({
+        walletClient: new WalletClient(),
+        host: 'https://message-box-us-1.bsvb.tech',
+        serverIdentityKeysByHost: {
+          'https://message-box-us-1.bsvb.tech':
+            '03a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90'
+        },
+        socketOptions: {
+          expectedServerIdentityKey:
+            '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+        } as never
+      })
+      await client.init()
+      const sendMessage = jest.spyOn(client, 'sendMessage')
+
+      await expect(client.sendLiveMessage(live)).rejects.toThrow(
+        /Conflicting Message Box WebSocket identity pin/
+      )
+      expect(sendMessage).not.toHaveBeenCalled()
+      expect(sockets).toHaveLength(0)
+    })
+  })
+
+  /** A refused room is not live, so the status must stop naming it. */
+  it('drops a refused room from the reported live status', async () => {
+    const client = await connected()
+    await client.listenForLiveMessages({ messageBox: BOX, onMessage: () => {} })
+    expect(client.liveStatus.rooms).toEqual([ROOM])
+
+    fire('joinFailed', { roomId: ROOM, code: 'ERR_WEBSOCKET_ROOM_LIMIT' })
+
+    expect(client.liveStatus).toEqual({ state: 'live', rooms: [] })
+    expect(client.liveStatus.rooms).toEqual([...client.getJoinedRooms()])
+  })
+
+  /**
+   * The server's authsocket transport drops a socket with more than 32 signed
+   * messages in flight. A client on 100 boxes used to emit every join at once
+   * after each authentication, so it was dropped, rebuilt, and dropped again.
+   */
+  describe('joins paced against the server in-flight limit', () => {
+    /** The client's cap; the server's is 32. */
+    const JOINS_IN_FLIGHT = 16
+    const BOXES = Array.from({ length: 100 }, (_, index) => `box_${index}`)
+    const roomOf = (box: string): string => `${IDENTITY}-${box}`
+    const emitted = (socket: MockSocket): string[] =>
+      joinRoomEmits(socket).map(call => call[1] as string)
+
+    const onHundredBoxes = async (): Promise<InstanceType<typeof MessageBoxClient>> => {
+      const client = await connected()
+      for (const box of BOXES) await client.joinRoom(box)
+      return client
+    }
+
+    it('never has more joins awaiting an answer than the cap', async () => {
+      const client = await onHundredBoxes()
+
+      expect(emitted(latest())).toHaveLength(JOINS_IN_FLIGHT)
+      // The record stays optimistic: every requested room is claimed at once.
+      expect(client.getJoinedRooms().size).toBe(BOXES.length)
+      await client.disconnectWebSocket()
+    })
+
+    it('sends the rest as the server answers', async () => {
+      const client = await onHundredBoxes()
+      const socket = latest()
+
+      let answered = 0
+      while (answered < emitted(socket).length) {
+        fireOn(socket, 'joinedRoom', { roomId: emitted(socket)[answered] })
+        answered += 1
+        expect(emitted(socket).length - answered).toBeLessThanOrEqual(JOINS_IN_FLIGHT)
+      }
+
+      expect(emitted(socket)).toEqual(BOXES.map(roomOf))
+      await client.disconnectWebSocket()
+    })
+
+    it('frees the slot of a refused join', async () => {
+      const client = await onHundredBoxes()
+      const socket = latest()
+
+      fireOn(socket, 'joinFailed', { roomId: emitted(socket)[0], code: 'ERR_WEBSOCKET_ROOM_LIMIT' })
+
+      expect(emitted(socket)).toHaveLength(JOINS_IN_FLIGHT + 1)
+      await client.disconnectWebSocket()
+    })
+
+    /** An older server may never answer; its joins must still all go out. */
+    it('frees the slot of a join nobody answers', async () => {
+      const client = await connected()
+      jest.useFakeTimers()
+      for (const box of BOXES) await client.joinRoom(box)
+      const socket = latest()
+      expect(emitted(socket)).toHaveLength(JOINS_IN_FLIGHT)
+
+      jest.advanceTimersByTime(5_000)
+      expect(emitted(socket)).toHaveLength(2 * JOINS_IN_FLIGHT)
+
+      jest.advanceTimersByTime(60_000)
+      expect(emitted(socket)).toEqual(BOXES.map(roomOf))
+      await client.disconnectWebSocket()
+    })
+
+    it('starts over, paced, on a reconnected socket', async () => {
+      const client = await onHundredBoxes()
+      const socket = latest()
+
+      drop(socket)
+      expect(client.getJoinedRooms().size).toBe(0)
+      socket.emit.mockClear()
+      reconnect(socket)
+
+      // The old connection's joins died with it and hold no slot.
+      expect(emitted(socket)).toHaveLength(JOINS_IN_FLIGHT)
+      expect(client.getJoinedRooms().size).toBe(BOXES.length)
+      for (const room of emitted(socket)) fireOn(socket, 'joinedRoom', { roomId: room })
+      expect(emitted(socket)).toHaveLength(2 * JOINS_IN_FLIGHT)
+      await client.disconnectWebSocket()
+    })
+
+    it('does not send a queued join for a room left meanwhile', async () => {
+      const client = await onHundredBoxes()
+      const socket = latest()
+
+      await client.leaveRoom(BOXES[JOINS_IN_FLIGHT])
+      fireOn(socket, 'joinedRoom', { roomId: emitted(socket)[0] })
+
+      expect(emitted(socket)).not.toContain(roomOf(BOXES[JOINS_IN_FLIGHT]))
+      expect(emitted(socket)).toContain(roomOf(BOXES[JOINS_IN_FLIGHT + 1]))
+      await client.disconnectWebSocket()
+    })
+  })
 })

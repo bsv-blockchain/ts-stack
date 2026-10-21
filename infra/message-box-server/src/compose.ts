@@ -532,13 +532,17 @@ export function attachMessageBoxWebSockets(
             messageId: message.messageId
           })
 
-          await deliverLiveMessage(connections, {
-            sender: connections.identityKey(socket.id),
-            recipient: message.recipient,
-            roomId,
-            messageId: message.messageId,
-            body: message.body
-          })
+          await deliverLiveMessage(
+            connections,
+            {
+              sender: connections.identityKey(socket.id),
+              recipient: message.recipient,
+              roomId,
+              messageId: message.messageId,
+              body: message.body
+            },
+            resources.webSocketMaxRecipientConnections
+          )
           Logger.log('[WEBSOCKET] Delivered message notification to authenticated recipients.')
         } catch {
           Logger.error('[WEBSOCKET ERROR] Unexpected failure in sendMessage handler.')
