@@ -509,7 +509,8 @@ describe('RabinPermissionModule authorization', () => {
 
   it('fails closed without an authorization handler, including privileged level 0', async () => {
     const instance = new RabinPermissionModule({
-      keyDeriver: new CachedKeyDeriver(new PrivateKey(27))
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(27)),
+      privilegedKeyDeriver: async () => new CachedKeyDeriver(new PrivateKey(28))
     })
     await expect(execute(instance, levelArgs(1))).rejects.toThrow('no authorization handler')
     await expect(
@@ -574,13 +575,16 @@ describe('RabinPermissionModule authorization', () => {
   it('fails closed when privileged derivation is unavailable or invalid', async () => {
     const args = encryptArgs('key', { privileged: true, privilegedReason: 'Oracle signing' })
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(31))
-    const without = new RabinPermissionModule({ keyDeriver, authorize: async () => true })
+    const authorize = jest.fn(async () => true)
+    const without = new RabinPermissionModule({ keyDeriver, authorize })
     const invalid = new RabinPermissionModule({
       keyDeriver,
       authorize: async () => true,
       privilegedKeyDeriver: async () => null as never
     })
     await expect(execute(without, args)).rejects.toThrow('privileged key derivation is unavailable')
+    // Without a provider the request fails before the user is asked to approve it.
+    expect(authorize).not.toHaveBeenCalled()
     await expect(execute(invalid, args)).rejects.toThrow(
       'privileged key provider returned an invalid deriver'
     )

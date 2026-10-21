@@ -195,6 +195,10 @@ export class RabinPermissionModule implements PermissionsModule {
     }
 
     const parsed = this.#parseRequest(ownedRequest.args)
+    // Do not ask the user to approve a request that cannot be served.
+    if (parsed.privileged && this.#privilegedKeyDeriver == null) {
+      throw new Error('RABIN: privileged key derivation is unavailable')
+    }
     await this.#ensureAuthorized(parsed, originator)
     const keyDeriver = await this.#selectKeyDeriver(parsed)
     const key = await this.#getKey(parsed, keyDeriver)
@@ -419,10 +423,7 @@ export class RabinPermissionModule implements PermissionsModule {
 
   async #selectKeyDeriver(parsed: ParsedRabinRequest): Promise<RabinKeyDeriver> {
     if (!parsed.privileged) return this.#keyDeriver
-    if (this.#privilegedKeyDeriver == null) {
-      throw new Error('RABIN: privileged key derivation is unavailable')
-    }
-    const deriver = await this.#privilegedKeyDeriver(parsed.privilegedReason!)
+    const deriver = await this.#privilegedKeyDeriver!(parsed.privilegedReason!)
     if (deriver == null || typeof deriver.derivePrivateKey !== 'function') {
       throw new Error('RABIN: privileged key provider returned an invalid deriver')
     }

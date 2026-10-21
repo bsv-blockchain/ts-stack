@@ -88,9 +88,9 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 })
 ```
 
-The privileged provider is optional. If an application requests
-`privileged: true`, the module authorizes the supplied reason before asking the
-host for a privileged deriver and fails closed when no provider is available.
+The privileged provider is optional. Without one, privileged requests fail
+before any prompt. With one, the module authorizes the supplied reason before
+asking the host for a privileged deriver.
 Call `rabin.dispose()` when the wallet locks.
 
 ## Security and permissions

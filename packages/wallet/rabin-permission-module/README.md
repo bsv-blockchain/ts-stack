@@ -94,7 +94,8 @@ and ordinary-versus-privileged root, and at level 2 also to the counterparty.
 The key ID, operation, key size, and message do not change the grant scope;
 they are passed to the callback for display. Every privileged request requires
 authorization regardless of security level, and privileged grants are scoped to
-the exact `privilegedReason`. `seekPermission: false` fails unless an
+the exact `privilegedReason`. Without a `privilegedKeyDeriver`, privileged
+requests fail before any prompt. `seekPermission: false` fails unless an
 applicable grant is already cached. Concurrent requests with the same scope
 share one prompt. Grants are capped at 1,024 entries and pending prompts at 64.
 
