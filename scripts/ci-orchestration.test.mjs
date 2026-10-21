@@ -106,7 +106,11 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const directGateCondition =
     "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
-  assert.ok(jobs.policy.includes(`    if: ${directGateCondition}\n`))
+  // Lint, policy and typecheck wait for every early gate and the shared build.
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.policy, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.policy, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.policy, /name: Typecheck workspace/)
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
   // The build overlaps the repository-health contract; test lanes still wait
   // for every early gate and the shared build before they start.

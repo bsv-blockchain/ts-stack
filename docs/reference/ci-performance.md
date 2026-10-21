@@ -111,6 +111,12 @@ their Istanbul maps with the library Jest uses and enforces the SDK's configured
 global thresholds, so the result matches one unsharded run. The packed SDK
 browser and UMD contract checks run beside the coverage shards.
 
+The shared build restores each package's outputs from a cache keyed on the git
+blob ids of the package's own files, of every workspace package it depends on,
+and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
+packages whose inputs changed are built. Typecheck runs in the lint and policy
+job after the build, beside the test lanes.
+
 The wallet-toolbox synced-header test restores a cached mainnet header store,
 keyed on the chaintracks storage code that writes it, instead of downloading
 about 75 MB from the header CDN into a fresh store on every run.

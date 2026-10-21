@@ -345,33 +345,39 @@ jobs:
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
+      - name: Restore cached package build outputs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build-cache
+          key: package-builds-${{ runner.os }}-${{ github.sha }}
+          restore-keys: package-builds-${{ runner.os }}-
+
       - name: Build workspace
+        # Packages whose own files, workspace dependencies and root toolchain
+        # inputs are unchanged restore their outputs; the rest build as before.
+        id: build
         env:
           BUILD_PROJECTS: ${{ needs.scope.outputs.build-projects }}
         run: |
+          names=$(jq -c '[.[].name | select(. != "docs-site" and . != "example-paymail")]' <<<"$BUILD_PROJECTS")
+          plan=$(node scripts/build-output-cache.mjs restore --names-json "$names" --cache-directory .build-cache)
+          echo "Restored unchanged package builds: $(jq -c '.restored' <<<"$plan")"
           filters=()
-          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
-            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$BUILD_PROJECTS"
-          )
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(jq -r '.build[]' <<<"$plan")
           if [ "${#filters[@]}" -eq 0 ]; then
             echo "No package build is affected."
           else
             pnpm -r --if-present "${filters[@]}" run build
           fi
+          saved=$(node scripts/build-output-cache.mjs save --names-json "$names" --cache-directory .build-cache)
+          echo "cache-changed=$(jq '.saved | length > 0' <<<"$saved")" >> "$GITHUB_OUTPUT"
 
-      - name: Typecheck workspace
-        env:
-          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
-        run: |
-          filters=()
-          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
-            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$AFFECTED_PROJECTS"
-          )
-          if [ "${#filters[@]}" -eq 0 ]; then
-            echo "No package typecheck is affected."
-          else
-            pnpm -r --if-present "${filters[@]}" run typecheck
-          fi
+      - name: Save package build outputs
+        if: steps.build.outputs.cache-changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build-cache
+          key: package-builds-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Archive build outputs
         run: |
@@ -393,7 +399,10 @@ jobs:
     needs:
       - early-gates
       - scope
-    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
+      - build
+    if: >-
+      always() && !cancelled() && needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' && needs.build.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -441,6 +450,27 @@ jobs:
 
       - name: Verify installed CI qualification integration
         run: node --test scripts/ci-integration/*.test.mjs
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+
+      - name: Typecheck workspace
+        env:
+          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
+        run: |
+          filters=()
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
+            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$AFFECTED_PROJECTS"
+          )
+          if [ "${#filters[@]}" -eq 0 ]; then
+            echo "No package typecheck is affected."
+          else
+            pnpm -r --if-present "${filters[@]}" run typecheck
+          fi
 
       - name: Lint all authored code with zero warnings
         run: pnpm lint
