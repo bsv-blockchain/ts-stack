@@ -317,10 +317,10 @@ jobs:
 
   build:
     name: Build workspace
-    # The build overlaps the repository-health contract instead of waiting for
-    # it; test lanes still start only after every early gate has passed.
-    needs: scope
-    if: always() && !cancelled() && needs.scope.result == 'success'
+    # The build starts immediately, beside the scope job and the
+    # repository-health contract; test lanes still start only after every
+    # early gate has passed. It builds every workspace package, restoring the
+    # unchanged ones from the package build cache.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -357,10 +357,8 @@ jobs:
         # Packages whose own files, workspace dependencies and root toolchain
         # inputs are unchanged restore their outputs; the rest build as before.
         id: build
-        env:
-          BUILD_PROJECTS: ${{ needs.scope.outputs.build-projects }}
         run: |
-          names=$(jq -c '[.[].name | select(. != "docs-site" and . != "example-paymail")]' <<<"$BUILD_PROJECTS")
+          names=$(node scripts/build-output-cache.mjs names)
           plan=$(node scripts/build-output-cache.mjs restore --names-json "$names" --cache-directory .build-cache)
           echo "Restored unchanged package builds: $(jq -c '.restored' <<<"$plan")"
           filters=()
@@ -1181,21 +1179,22 @@ jobs:
           - { id: shard-6, shard: 6 }
           - { id: sync-http-0, latency: 0 }
           - { id: sync-http-1000, latency: 1000 }
-    services:
-      # The Knex storage suites also run against Postgres (RUNPOSTGRES).
-      postgres:
-        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
-        env:
-          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready --host 127.0.0.1 --username postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start Postgres for the Knex storage suites
+        # Postgres 17-alpine, pinned by digest. Runs in the background while the
+        # toolchain installs; the shard waits for it to report healthy before
+        # Jest starts. Only the storage shards (RUNPOSTGRES) use it.
+        if: matrix.shard
+        env:
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          docker run --detach --name postgres
+          --env POSTGRES_PASSWORD
+          --publish 5432:5432
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+          postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -1230,6 +1229,16 @@ jobs:
           # their global transport spies must never overlap in one Jest worker.
           args=(--coverage --coverageDirectory=coverage/${{ matrix.id }})
           if [ -n "$WALLET_SHARD" ]; then
+            for attempt in $(seq 1 120); do
+              status=$(docker inspect --format '{{.State.Health.Status}}' postgres)
+              [ "$status" = healthy ] && break
+              if [ "$status" = unhealthy ] || [ "$attempt" -eq 120 ]; then
+                docker logs postgres
+                echo "::error::Postgres did not become healthy (status: $status)"
+                exit 1
+              fi
+              sleep 1
+            done
             export RUNPOSTGRES=1
             POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
               '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
