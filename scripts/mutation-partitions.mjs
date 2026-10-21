@@ -192,8 +192,27 @@ function measuredTargetSeconds(targetId) {
   return parts.length === 0 ? undefined : parts.reduce((sum, [, value]) => sum + value, 0)
 }
 
-const TOP_LEVEL_DECLARATION =
-  /^(?:export\s+(?:default\s+)?)?(?:declare\s+)?(?:async\s+)?(?:abstract\s+)?(?:function\b|class\b|const\b|let\b|var\b|interface\b|type\b|enum\b)/
+const DECLARATION_MODIFIERS = new Set(['export', 'default', 'declare', 'async', 'abstract'])
+const DECLARATION_KEYWORDS = new Set([
+  'function',
+  'function*',
+  'class',
+  'const',
+  'let',
+  'var',
+  'interface',
+  'type',
+  'enum'
+])
+
+// A top-level declaration starts at column zero with optional modifiers.
+function isTopLevelDeclaration(line) {
+  if (/^\s/.test(line)) return false
+  const words = line.split(/[\s(<{=:]+/)
+  let index = 0
+  while (DECLARATION_MODIFIERS.has(words[index])) index += 1
+  return DECLARATION_KEYWORDS.has(words[index])
+}
 
 function isCode(line) {
   const text = line.trim()
@@ -225,7 +244,7 @@ function fileSegments(lines, weights, pieces) {
     .filter(
       index =>
         index > 0 &&
-        TOP_LEVEL_DECLARATION.test(lines[index]) &&
+        isTopLevelDeclaration(lines[index]) &&
         lines.filter(other => other.startsWith(lines[index])).length === 1
     )
   // For each boundary pick the candidate whose preceding weight is nearest its
@@ -250,8 +269,7 @@ function fileSegments(lines, weights, pieces) {
     .filter((segment, position) => position === 0 || segment.weight > 0)
 }
 
-export function automaticPlan(targetId, target, measured = measuredTargetSeconds(targetId)) {
-  if (typeof target.packageDirectory !== 'string') return undefined
+function filesOf(target) {
   const byFile = new Map()
   for (const specification of target.mutate) {
     const file = partitionFile(specification)
@@ -259,52 +277,38 @@ export function automaticPlan(targetId, target, measured = measuredTargetSeconds
       return undefined
     byFile.set(file, [...(byFile.get(file) ?? []), specification])
   }
-  const files = [...byFile].map(([file, specifications]) => ({
-    file,
-    ...fileLineWeights(target, file, specifications)
-  }))
-  const total = files.reduce(
-    (sum, entry) => sum + entry.weights.reduce((acc, value) => acc + value, 0),
-    0
-  )
-  if (total === 0) return undefined
-  const estimate = measured ?? total * UNMEASURED_SECONDS_PER_CODE_LINE
-  // A file whose share of the estimate exceeds one part is cut inside.
-  const units = files.flatMap(entry => {
-    const weight = entry.weights.reduce((sum, value) => sum + value, 0)
-    const pieces = Math.max(1, Math.ceil((estimate * weight) / total / AUTO_PART_SECONDS))
-    return fileSegments(entry.lines, entry.weights, pieces).map((segment, position) => ({
-      file: entry.file,
-      position,
-      ...segment
-    }))
-  })
-  const count = Math.min(units.length, Math.ceil(estimate / AUTO_PART_SECONDS))
-  if (count < 2) return undefined
-  // Heaviest unit first into the lightest group; ties keep source order.
+  return byFile
+}
+
+const sum = values => values.reduce((total, value) => total + value, 0)
+const unitOrder = unit => `${unit.file}\u0000${String(unit.position).padStart(6, '0')}`
+
+// Heaviest unit first into the lightest group; ties keep source order. Groups
+// are then numbered by their first unit so the plan is stable.
+function groupUnits(units, count) {
   const groups = Array.from({ length: count }, () => ({ weight: 0, units: [] }))
   const ordered = [...units].sort(
-    (left, right) =>
-      right.weight - left.weight ||
-      left.file.localeCompare(right.file) ||
-      left.position - right.position
+    (left, right) => right.weight - left.weight || unitOrder(left).localeCompare(unitOrder(right))
   )
   for (const unit of ordered) {
-    let lightest = groups[0]
-    for (const group of groups) if (group.weight < lightest.weight) lightest = group
+    const lightest = groups.reduce((best, group) => (group.weight < best.weight ? group : best))
     lightest.units.push(unit)
     lightest.weight += unit.weight
   }
-  const order = unit => `${unit.file}\u0000${String(unit.position).padStart(6, '0')}`
   for (const group of groups)
-    group.units.sort((left, right) => order(left).localeCompare(order(right)))
-  groups.sort((left, right) => order(left.units[0]).localeCompare(order(right.units[0])))
+    group.units.sort((left, right) => unitOrder(left).localeCompare(unitOrder(right)))
+  return groups.sort((left, right) =>
+    unitOrder(left.units[0]).localeCompare(unitOrder(right.units[0]))
+  )
+}
+
+function planFromGroups(files, units, groups) {
   const owner = new Map()
   groups.forEach((group, index) => {
     for (const unit of group.units) owner.set(`${unit.file}#${unit.position}`, `auto-${index + 1}`)
   })
   const plan = { fallback: 'auto-1', files: new Map(), lines: new Map() }
-  for (const file of byFile.keys()) {
+  for (const file of files) {
     const segments = units.filter(unit => unit.file === file)
     if (segments.length === 1) plan.files.set(file, owner.get(`${file}#0`))
     else
@@ -314,6 +318,32 @@ export function automaticPlan(targetId, target, measured = measuredTargetSeconds
       )
   }
   return plan
+}
+
+export function automaticPlan(targetId, target, measured = measuredTargetSeconds(targetId)) {
+  if (typeof target.packageDirectory !== 'string') return undefined
+  const byFile = filesOf(target)
+  if (!byFile) return undefined
+  const files = [...byFile].map(([file, specifications]) => ({
+    file,
+    ...fileLineWeights(target, file, specifications)
+  }))
+  const total = sum(files.map(entry => sum(entry.weights)))
+  if (total === 0) return undefined
+  const estimate = measured ?? total * UNMEASURED_SECONDS_PER_CODE_LINE
+  // A file whose share of the estimate exceeds one part is cut inside.
+  const units = files.flatMap(entry => {
+    const share = (estimate * sum(entry.weights)) / total
+    const pieces = Math.max(1, Math.ceil(share / AUTO_PART_SECONDS))
+    return fileSegments(entry.lines, entry.weights, pieces).map((segment, position) => ({
+      file: entry.file,
+      position,
+      ...segment
+    }))
+  })
+  const count = Math.min(units.length, Math.ceil(estimate / AUTO_PART_SECONDS))
+  if (count < 2) return undefined
+  return planFromGroups(byFile.keys(), units, groupUnits(units, count))
 }
 
 export function partitionMutationTarget(targetId, target) {
