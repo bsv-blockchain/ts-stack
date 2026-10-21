@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { WebSocket } from 'ws'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import { WalletRelayService } from '../src/server/WalletRelayService.js'
 import type { RpcResponse, WireEnvelope } from '../src/types.js'
@@ -38,6 +39,14 @@ function plaintext(wallet: ProtoWallet, value: unknown): void {
   jest.spyOn(wallet, 'decrypt').mockResolvedValueOnce({
     plaintext: Array.from(new TextEncoder().encode(JSON.stringify(value)))
   } as never)
+}
+
+async function waitUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for service state')
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
 }
 
 function responseDouble() {
@@ -308,6 +317,66 @@ describe('WalletRelayService boundary and state enforcement', () => {
     }
   })
 
+  it('ignores non-response mobile messages and settles error and custom responses', async () => {
+    const { service, wallet } = createService()
+    try {
+      const session = await connectedSession(service)
+      const disconnect = jest.spyOn((service as any).relay, 'disconnectMobile')
+      const reject = jest.fn()
+      const resolve = jest.fn()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 3,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+
+      plaintext(wallet, { id: RPC_ID, seq: 3, method: 'custom', params: {} })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(true)
+
+      const error = { code: 42, message: 'wallet rejected' }
+      plaintext(wallet, { id: RPC_ID, seq: 3, error })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: RPC_ID, error }))
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+
+      resolve.mockClear()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 4,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+      plaintext(wallet, { id: RPC_ID, seq: 4, result: { ok: true } })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(
+        expect.objectContaining({ id: RPC_ID, result: { ok: true } })
+      )
+      expect(reject).not.toHaveBeenCalled()
+      expect(disconnect).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+    } finally {
+      service.stop()
+    }
+  })
+
   it('disconnects pairing attempts that cannot prove the claimed identity and permissions', async () => {
     const { service, wallet } = createService()
     try {
@@ -315,6 +384,8 @@ describe('WalletRelayService boundary and state enforcement', () => {
       const session = sessions.createSession()
       const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
       const relay = (service as any).relay
+      // No real socket: treat every call as coming from the topic's current mobile socket.
+      jest.spyOn(relay, 'isCurrentMobile').mockReturnValue(true)
       const disconnect = jest.spyOn(relay, 'disconnectMobile')
       const envelope: WireEnvelope = {
         topic: session.id,
@@ -356,6 +427,118 @@ describe('WalletRelayService boundary and state enforcement', () => {
       service.stop()
     }
   })
+
+  it('accepts the pairing mobile socket only after its pairing proof succeeds', async () => {
+    const { service, wallet } = createService()
+    try {
+      const session = (service as any).sessions.createSession()
+      const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
+      const relay = (service as any).relay
+      expect(relay.holdDesktopTraffic).toBe(true)
+      jest.spyOn(relay, 'isCurrentMobile').mockReturnValue(true)
+      const accept = jest.spyOn(relay, 'acceptMobile')
+      const envelope: WireEnvelope = { topic: session.id, mobileIdentityKey, ciphertext: 'AQID' }
+
+      relay.onMessage(session.id, envelope, 'mobile', 7)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(accept).not.toHaveBeenCalled()
+
+      plaintext(wallet, {
+        id: RPC_ID,
+        seq: 1,
+        method: 'pairing_approved',
+        params: { mobileIdentityKey }
+      })
+      relay.onMessage(session.id, envelope, 'mobile', 8)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(accept).toHaveBeenCalledTimes(1)
+      expect(accept).toHaveBeenCalledWith(session.id, 8)
+      expect(service.getSession(session.id)?.status).toBe('connected')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it.each(['decrypt', 'failing decrypt', 'encrypt'] as const)(
+    'ignores a pairing proof that finishes after its socket was replaced (delayed %s)',
+    async delayed => {
+      const onSessionConnected = jest.fn()
+      const { service, wallet, server } = createService({ noServer: false, onSessionConnected })
+      try {
+        const port = await new Promise<number>(resolve =>
+          server.listen(0, '127.0.0.1', () => resolve((server.address() as { port: number }).port))
+        )
+        const session = (service as any).sessions.createSession()
+        const relay = (service as any).relay
+        const url = `ws://127.0.0.1:${port}/ws?topic=${session.id}&role=mobile`
+        const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
+        // The first socket's handler stalls in the delayed wallet call until the test releases it.
+        let release!: () => void
+        const gate = new Promise<void>(resolve => (release = resolve))
+        let stalled = false
+        const approval = {
+          id: RPC_ID,
+          seq: 1,
+          method: 'pairing_approved',
+          params: { mobileIdentityKey }
+        }
+        jest.spyOn(wallet, 'decrypt').mockImplementationOnce(async () => {
+          if (delayed !== 'encrypt') {
+            stalled = true
+            await gate
+          }
+          if (delayed === 'failing decrypt') throw new Error('Decryption failed')
+          return { plaintext: Array.from(new TextEncoder().encode(JSON.stringify(approval))) }
+        })
+        const encrypt = wallet.encrypt.bind(wallet)
+        jest.spyOn(wallet, 'encrypt').mockImplementationOnce(async args => {
+          if (delayed === 'encrypt') {
+            stalled = true
+            await gate
+          }
+          return encrypt(args)
+        })
+
+        const first = new WebSocket(url)
+        await new Promise(resolve => first.once('open', resolve))
+        first.send(JSON.stringify({ topic: session.id, mobileIdentityKey, ciphertext: 'AQID' }))
+        await waitUntil(() => stalled)
+        first.close()
+        await waitUntil(() => relay.topics.get(session.id)?.mobile == null)
+
+        const second = new WebSocket(url)
+        const secondReceived: string[] = []
+        second.on('message', data => secondReceived.push(`${data}`))
+        await new Promise(resolve => second.once('open', resolve))
+        await waitUntil(() => (service as any).mobileAuthTimers.has(session.id))
+        const secondTimer = (service as any).mobileAuthTimers.get(session.id)
+
+        release()
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        expect({
+          authTimerKept: (service as any).mobileAuthTimers.get(session.id) === secondTimer,
+          status: service.getSession(session.id)?.status,
+          mobileIdentityKey: (service as any).sessions.getSession(session.id)?.mobileIdentityKey,
+          sessionConnectedCalls: onSessionConnected.mock.calls.length,
+          framesToSecond: secondReceived.length,
+          secondOpen: second.readyState === WebSocket.OPEN
+        }).toEqual({
+          authTimerKept: true,
+          status: 'disconnected',
+          mobileIdentityKey: undefined,
+          sessionConnectedCalls: 0,
+          framesToSecond: 0,
+          secondOpen: true
+        })
+        second.close()
+      } finally {
+        service.stop()
+        server.closeAllConnections()
+        server.close()
+      }
+    }
+  )
 
   it('routes asynchronous malformed-mobile failures into immediate socket revocation', async () => {
     const { service } = createService()

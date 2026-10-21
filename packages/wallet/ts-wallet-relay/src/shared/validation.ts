@@ -291,6 +291,12 @@ export function validateSessionInfo(
   const status = record.status as SessionStatus
   const result: SessionInfo = { sessionId, status }
   if (record.relay !== undefined) result.relay = normalizeRelayUrl(record.relay)
+  if (record.backendIdentityKey !== undefined) {
+    result.backendIdentityKey = requirePublicKey(
+      record.backendIdentityKey,
+      'session response backendIdentityKey'
+    )
+  }
   if (record.qrDataUrl !== undefined) {
     result.qrDataUrl = requireQrDataUrl(record.qrDataUrl, 'session QR data URL')
   }
