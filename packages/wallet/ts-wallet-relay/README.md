@@ -532,11 +532,15 @@ relay.onValidateTopic(topic => sessions.getSession(topic) !== null)
 relay.onIncoming((topic, envelope, role, connectionId) => {
   if (role !== 'mobile' || !envelope.mobileIdentityKey) return
   // verifyPairing is yours: decrypt pairing_approved and check its mobileIdentityKey.
-  void verifyPairing(topic, envelope).then(ok => {
-    if (!relay.isCurrentMobile(topic, connectionId)) return // socket left meanwhile
-    if (ok) relay.acceptMobile(topic, connectionId)
-    else relay.disconnectMobile(topic)
-  })
+  void verifyPairing(topic, envelope)
+    .then(ok => {
+      if (!relay.isCurrentMobile(topic, connectionId)) return // socket left meanwhile
+      if (ok) relay.acceptMobile(topic, connectionId)
+      else relay.disconnectMobile(topic)
+    })
+    .catch(() => {
+      if (relay.isCurrentMobile(topic, connectionId)) relay.disconnectMobile(topic)
+    })
 })
 sessions.onSessionExpired(id => relay.removeTopic(id))
 ```
