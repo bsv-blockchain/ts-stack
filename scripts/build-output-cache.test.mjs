@@ -5,6 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
+  buildableNames,
   cacheFileName,
   dependencyClosure,
   packageKeys,
@@ -89,6 +90,11 @@ test('cache entries are named per package and the command line is strict', () =>
     'names-json': '[]',
     'cache-directory': 'c'
   })
-  assert.throws(() => parseArguments(['prune']), /restore or save/)
+  assert.deepEqual(parseArguments(['names']), { command: 'names' })
+  assert.deepEqual(
+    buildableNames([...projects, { name: 'docs-site' }, { name: 'example-paymail' }]),
+    ['@bsv/base', '@bsv/middle', '@bsv/other', '@bsv/top']
+  )
+  assert.throws(() => parseArguments(['prune']), /names, restore or save/)
   assert.throws(() => parseArguments(['save', '--names-json', '[]']), /--cache-directory/)
 })

@@ -175,9 +175,20 @@ function save(projects, names, directory) {
   return { saved }
 }
 
+// Every package the shared build produces; docs-site and the paymail example
+// are built by their own jobs.
+export function buildableNames(projects) {
+  return projects
+    .map(project => project.name)
+    .filter(name => name !== 'docs-site' && name !== 'example-paymail')
+    .sort((left, right) => left.localeCompare(right))
+}
+
 export function parseArguments(arguments_) {
   const [command, ...rest] = arguments_
-  if (!['restore', 'save'].includes(command)) throw new Error('Command must be restore or save')
+  if (command === 'names' && rest.length === 0) return { command }
+  if (!['restore', 'save'].includes(command))
+    throw new Error('Command must be names, restore or save')
   const options = { command }
   for (let index = 0; index < rest.length; index += 2) {
     const key = rest[index]
@@ -193,6 +204,10 @@ export function parseArguments(arguments_) {
 
 function main(arguments_) {
   const options = parseArguments(arguments_)
+  if (options.command === 'names') {
+    process.stdout.write(`${JSON.stringify(buildableNames(loadProjects()))}\n`)
+    return
+  }
   const names = JSON.parse(options['names-json'])
   if (!Array.isArray(names) || names.some(name => typeof name !== 'string'))
     throw new Error('--names-json must be an array of package names')

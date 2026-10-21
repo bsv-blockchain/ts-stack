@@ -114,10 +114,9 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
   // The build overlaps the repository-health contract; test lanes still wait
   // for every early gate and the shared build before they start.
-  assert.match(jobs.build, /^    needs: scope$/m)
-  assert.ok(
-    jobs.build.includes("    if: always() && !cancelled() && needs.scope.result == 'success'\n")
-  )
+  // The build waits for nothing; it builds every package from the cache.
+  assert.doesNotMatch(jobs.build, /^    needs:/m)
+  assert.match(jobs.build, /scripts\/build-output-cache\.mjs names/)
   for (const prerequisite of ['early-gates', 'scope', 'build'])
     assert.match(jobs.prepare, new RegExp(`^      - ${prerequisite}$`, 'm'))
   assert.match(jobs.prepare, /needs\.early-gates\.result == 'success' &&$/m)
