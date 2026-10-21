@@ -291,7 +291,10 @@ function groupUnits(units, count) {
     (left, right) => right.weight - left.weight || unitOrder(left).localeCompare(unitOrder(right))
   )
   for (const unit of ordered) {
-    const lightest = groups.reduce((best, group) => (group.weight < best.weight ? group : best))
+    const lightest = groups.reduce(
+      (best, group) => (group.weight < best.weight ? group : best),
+      groups[0]
+    )
     lightest.units.push(unit)
     lightest.weight += unit.weight
   }
