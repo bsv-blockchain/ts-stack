@@ -3,6 +3,7 @@ import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { ColorPlan, type ColorPlan as Plan } from '../ColorPlan.js'
 
 const ASSET = `${'ab'.repeat(32)}_0`
+const MAX_PLAN_BYTES = 16 * 1024 * 1024
 const SENDER = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
 function plan(overrides: Partial<Plan> = {}): Plan {
@@ -46,6 +47,18 @@ describe('ColorPlan', () => {
 
   it('returns undefined when no plan labels are present', () => {
     expect(ColorPlan.fromLabels(['p nosend expiry seconds 30'])).toBeUndefined()
+    expect(ColorPlan.fromLabels([])).toBeUndefined()
+    expect(ColorPlan.fromLabels(undefined)).toBeUndefined()
+  })
+
+  it('accepts only plan version 1', () => {
+    for (const version of [0, 2]) {
+      const json = JSON.stringify({ ...plan(), version })
+      expect(() => ColorPlan.fromLabels(labelsFor(json))).toThrow('BRC-207: plan version must be 1')
+      expect(() => ColorPlan.toLabels({ ...plan(), version } as unknown as Plan)).toThrow(
+        'BRC-207: plan version must be 1'
+      )
+    }
   })
 
   it.each([
@@ -203,5 +216,43 @@ describe('ColorPlan', () => {
     expect(() => ColorPlan.fromLabels(['p color plan 0 1 0'])).toThrow('invalid plan chunk')
     expect(() => ColorPlan.fromLabels(['p color plan x'])).toThrow('invalid p color plan label')
     expect(() => ColorPlan.fromLabels(labelsFor('{"version":2}'))).toThrow('missing')
+  })
+
+  // 16 MiB inputs are built from repeated strings, and every case is rejected before a full
+  // JSON parse, so these stay fast and memory-bounded.
+  it('refuses to encode a plan above 16 MiB of JSON, and bounds the size inclusively', () => {
+    // A first member nested past the JSON depth limit fails the strict parse at once, so a
+    // plan of exactly 16 MiB proves the size bound admitted it without parsing 16 MiB.
+    const deep = JSON.parse(`${'['.repeat(70)}${']'.repeat(70)}`) as unknown
+    const sized = (bytes: number): Plan => {
+      const base = JSON.stringify({ deep, pad: '' }).length
+      return { deep, pad: 'a'.repeat(bytes - base) } as unknown as Plan
+    }
+    expect(() => ColorPlan.toLabels(sized(MAX_PLAN_BYTES))).toThrow('nesting too deep')
+    expect(() => ColorPlan.toLabels(sized(MAX_PLAN_BYTES + 1))).toThrow(
+      'BRC-207: plan exceeds 16 MiB'
+    )
+  })
+
+  it('refuses to reassemble labels above 16 MiB of hex, and bounds the size inclusively', () => {
+    // The part-count cap rounds up, so a full final chunk overshoots 16 MiB by 84 bytes.
+    const fullParts = Math.ceil((MAX_PLAN_BYTES * 2) / 200) - 1
+    const labels = (finalChunk: string): string[] => {
+      const count = fullParts + 1
+      const chunk = 'ff'.repeat(100)
+      return [
+        ...Array.from({ length: fullParts }, (_, i) => `p color plan ${i} ${count} ${chunk}`),
+        `p color plan ${fullParts} ${count} ${finalChunk}`
+      ]
+    }
+    expect(() => ColorPlan.fromLabels(labels('ff'.repeat(100)))).toThrow(
+      'BRC-207: plan exceeds 16 MiB'
+    )
+    // Exactly 16 MiB passes the size bound; 0xff bytes then fail strict UTF-8 decoding.
+    const exact = labels('ff'.repeat(MAX_PLAN_BYTES - fullParts * 100))
+    expect(exact.reduce((total, label) => total + label.split(' ')[5].length, 0)).toBe(
+      MAX_PLAN_BYTES * 2
+    )
+    expect(() => ColorPlan.fromLabels(exact)).toThrow('BRC-207: plan is not strict UTF-8')
   })
 })

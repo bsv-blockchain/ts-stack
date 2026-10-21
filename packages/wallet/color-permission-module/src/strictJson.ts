@@ -8,6 +8,7 @@ export interface JsonObject {
 
 const MAX_DEPTH = 64
 const UINT32_MAX = 0xffffffff
+// Stryker disable next-line StringLiteral: TextDecoder('') throws ERR_ENCODING_NOT_SUPPORTED at module load, so the mutant can only be a RuntimeError, never a behavior change a test could observe
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 const NUMBER = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
 const ESCAPES: Record<string, string> = {
