@@ -15,13 +15,15 @@ const DEPENDENCY_FIELDS = [
   'peerDependencies'
 ]
 
+const PROJECT_REGISTRY_PATH = 'governance/repository-health/projects.json'
+
 const FULL_PACKAGE_CONTROL_PATHS = new Set([
   '.github/workflows/ci.yml',
   'scripts/ci-result-gate.mjs',
   'package.json',
   'pnpm-workspace.yaml',
   'tsconfig.base.json',
-  'governance/repository-health/projects.json',
+  PROJECT_REGISTRY_PATH,
   'scripts/check-browser-package.mjs',
   'scripts/check-package-artifact.mjs',
   'scripts/run-prebuilt-package-script.mjs',
@@ -119,6 +121,209 @@ export function changedLockfileImporters(baseSource, headSource) {
     .sort((left, right) => left.localeCompare(right))
 }
 
+function topLevelSections(source) {
+  const sections = new Map()
+  let key
+  let body = []
+  const flush = () => {
+    if (key !== undefined) sections.set(key, body.join('\n').trimEnd())
+  }
+  for (const line of source.split(/\r?\n/)) {
+    // Full-line comments carry no settings; they also sit above the next key.
+    if (/^\s*#/.test(line)) continue
+    const match = /^([A-Za-z][\w-]*):/.exec(line)
+    if (match !== null) {
+      flush()
+      key = match[1]
+      body = [line]
+    } else if (key !== undefined) {
+      body.push(line)
+    }
+  }
+  flush()
+  return sections
+}
+
+function lockfileEntries(source, header) {
+  const entries = new Map()
+  const lines = source.split(/\r?\n/)
+  const start = lines.indexOf(header)
+  if (start === -1) return entries
+  let key
+  let body = []
+  const flush = () => {
+    if (key !== undefined) entries.set(key, body.join('\n'))
+  }
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (/^\S/.test(line)) break
+    const match = /^ {2}(\S.*?):(?: \{\})?$/.exec(line)
+    if (match !== null) {
+      flush()
+      key = unquote(match[1])
+      body = []
+    } else if (key !== undefined) {
+      body.push(line)
+    }
+  }
+  flush()
+  return entries
+}
+
+// A snapshot key is name@version(peers); an aliased dependency already names
+// its target package in the version.
+function snapshotKey(name, version) {
+  return /^@?[^@(]+@/.test(version) ? version : `${name}@${version}`
+}
+
+function snapshotDependencies(body) {
+  const keys = []
+  for (const line of body.split('\n')) {
+    const match = /^ {6}(\S.*?): (\S.*)$/.exec(line)
+    if (match !== null) keys.push(snapshotKey(unquote(match[1]), unquote(match[2])))
+  }
+  return keys
+}
+
+function importerDependencies(body) {
+  const keys = []
+  let name
+  for (const line of body.split('\n')) {
+    const dependency = /^ {6}(\S.*):$/.exec(line)
+    if (dependency !== null) {
+      name = unquote(dependency[1])
+      continue
+    }
+    const version = /^ {8}version: (\S.*)$/.exec(line)
+    if (version !== null && name !== undefined && !version[1].startsWith('link:'))
+      keys.push(snapshotKey(name, unquote(version[1])))
+  }
+  return keys
+}
+
+// Lockfile sections whose effect on installs is fully reflected in importer
+// and snapshot entries. A change to any other section (settings, version)
+// may change every install, so it selects the whole workspace.
+const LOCKFILE_GRAPH_SECTIONS = new Set([
+  'importers',
+  'packages',
+  'snapshots',
+  'overrides',
+  'patchedDependencies',
+  'packageExtensionsChecksum',
+  'catalogs'
+])
+
+// Importers whose installed dependency graph differs between the lockfiles:
+// their own entries changed, or anything they reach, directly or not, did.
+// Frozen installs make the lockfile the whole truth about what is installed.
+export function lockfileAffectedImporters(baseSource, headSource) {
+  const baseSections = topLevelSections(baseSource)
+  const headSections = topLevelSections(headSource)
+  for (const key of new Set([...baseSections.keys(), ...headSections.keys()])) {
+    if (!LOCKFILE_GRAPH_SECTIONS.has(key) && baseSections.get(key) !== headSections.get(key))
+      return ['.']
+  }
+
+  const changed = new Set()
+  const lockfiles = [baseSource, headSource].map(source => ({
+    importers: lockfileEntries(source, 'importers:'),
+    packages: lockfileEntries(source, 'packages:'),
+    snapshots: lockfileEntries(source, 'snapshots:')
+  }))
+  const [base, head] = lockfiles
+  for (const [from, to] of [
+    [base, head],
+    [head, base]
+  ]) {
+    for (const [key, body] of from.snapshots) if (to.snapshots.get(key) !== body) changed.add(key)
+    for (const [key, body] of from.packages) {
+      if (to.packages.get(key) === body) continue
+      for (const snapshot of from.snapshots.keys())
+        if (snapshot === key || snapshot.startsWith(`${key}(`)) changed.add(snapshot)
+    }
+  }
+
+  const affected = new Set(changedLockfileImporters(baseSource, headSource))
+  for (const lockfile of lockfiles) {
+    // Walk "is depended on by" edges from the changed snapshots once.
+    const dependents = new Map()
+    for (const [key, body] of lockfile.snapshots) {
+      for (const dependency of snapshotDependencies(body)) {
+        const set = dependents.get(dependency) ?? new Set()
+        set.add(key)
+        dependents.set(dependency, set)
+      }
+    }
+    const reaching = closure(changed, dependents)
+    for (const [importer, body] of lockfile.importers) {
+      // The root importer's own changes select the workspace above. Its tools
+      // reached only indirectly (formatters, linters, mutation) run in the
+      // lint, build and artifact jobs on every pull request, while each
+      // package's own test toolchain sits in that package's closure.
+      if (importer === '.') continue
+      if (importerDependencies(body).some(key => reaching.has(key))) affected.add(importer)
+    }
+  }
+  return sortedNames(affected)
+}
+
+// pnpm-workspace.yaml settings that only change dependency resolution, which
+// the frozen lockfile then records in full.
+const RESOLUTION_ONLY_WORKSPACE_KEYS = new Set([
+  'catalog',
+  'catalogs',
+  'minimumReleaseAge',
+  'minimumReleaseAgeExclude',
+  'overrides',
+  'packageExtensions',
+  'patchedDependencies'
+])
+
+export function workspaceChangeIsResolutionOnly(baseSource, headSource) {
+  const base = topLevelSections(baseSource)
+  const head = topLevelSections(headSource)
+  return [...new Set([...base.keys(), ...head.keys()])].every(
+    key => RESOLUTION_ONLY_WORKSPACE_KEYS.has(key) || base.get(key) === head.get(key)
+  )
+}
+
+// A change confined to project entries selects those projects; any other
+// registry change (profiles, owners, schema) still selects the workspace.
+export function projectRegistryChanges(baseSource, headSource) {
+  let base
+  let head
+  try {
+    base = JSON.parse(baseSource)
+    head = JSON.parse(headSource)
+  } catch {
+    return { full: true, paths: [] }
+  }
+  if (!Array.isArray(base?.projects) || !Array.isArray(head?.projects))
+    return { full: true, paths: [] }
+  const { projects: baseProjects, ...baseRest } = base
+  const { projects: headProjects, ...headRest } = head
+  if (JSON.stringify(baseRest) !== JSON.stringify(headRest)) return { full: true, paths: [] }
+  const before = new Map(baseProjects.map(project => [project.path, JSON.stringify(project)]))
+  const paths = headProjects
+    .filter(project => before.get(project.path) !== JSON.stringify(project))
+    .map(project => normalized(project.path))
+  return { full: paths.includes('.'), paths: sortedNames(paths) }
+}
+
+// The most specific project that owns an importer, so a nested importer such
+// as a mobile build does not also select its parent package.
+function importerOwner(projects, importer) {
+  let owner
+  for (const project of projects) {
+    if (project.path === '.') continue
+    if (importer === project.path || importer.startsWith(`${project.path}/`)) {
+      if (owner === undefined || project.path.length > owner.path.length) owner = project
+    }
+  }
+  return owner
+}
+
 function projectOwnsFile(project, file) {
   const roots = [project.path, ...(project.sourceRoots ?? [])]
   return roots.some(root => root !== '.' && (file === root || file.startsWith(`${root}/`)))
@@ -205,11 +410,19 @@ export function mutationTargetProjectNames(projects, targets, ids) {
   return sortedNames(names)
 }
 
-export function selectWorkspaceScope(projects, changedFiles, changedImporters = []) {
+// `narrowed` lists control files whose change was resolved to specific
+// projects (`projectPaths`) instead of the whole workspace.
+export function selectWorkspaceScope(
+  projects,
+  changedFiles,
+  changedImporters = [],
+  { narrowed = [], projectPaths = [] } = {}
+) {
   const files = changedFiles.map(normalized).filter(Boolean)
   const nonRootProjects = projects.filter(project => project.path !== '.')
   const full =
-    files.some(file => FULL_PACKAGE_CONTROL_PATHS.has(file)) || changedImporters.includes('.')
+    files.some(file => FULL_PACKAGE_CONTROL_PATHS.has(file) && !narrowed.includes(file)) ||
+    changedImporters.includes('.')
 
   const direct = new Set()
   if (full) {
@@ -221,10 +434,14 @@ export function selectWorkspaceScope(projects, changedFiles, changedImporters = 
           file =>
             projectOwnsFile(project, file) && !documentationOnlyProjectFile(project.path, file)
         ) ||
-        changedImporters.includes(project.path)
+        projectPaths.includes(project.path)
       ) {
         direct.add(project.name)
       }
+    }
+    for (const importer of changedImporters) {
+      const owner = importerOwner(projects, importer)
+      if (owner !== undefined) direct.add(owner.name)
     }
   }
 
@@ -310,9 +527,18 @@ function gitText(arguments_) {
   return execFileSync('/usr/bin/git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
 }
 
+// A file missing at the base cannot be narrowed; an empty source fails closed.
+function baseText(base, file) {
+  try {
+    return gitText(['show', `${base}:${file}`])
+  } catch {
+    return ''
+  }
+}
+
 function loadProjects() {
   const registry = JSON.parse(
-    readFileSync(path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json'), 'utf8')
+    readFileSync(path.join(REPOSITORY_ROOT, PROJECT_REGISTRY_PATH), 'utf8')
   )
   return registry.projects.map(project => {
     const manifest = JSON.parse(
@@ -365,15 +591,37 @@ function main(arguments_) {
         .filter(Boolean)
   let importers = []
   if (!all && changedFiles.includes('pnpm-lock.yaml')) {
-    importers = changedLockfileImporters(
+    importers = lockfileAffectedImporters(
       gitText(['show', `${base}:pnpm-lock.yaml`]),
       readFileSync(path.join(REPOSITORY_ROOT, 'pnpm-lock.yaml'), 'utf8')
     )
   }
+  const narrowed = []
+  let projectPaths = []
+  if (!all && changedFiles.includes(PROJECT_REGISTRY_PATH)) {
+    const registry = projectRegistryChanges(
+      baseText(base, PROJECT_REGISTRY_PATH),
+      readFileSync(path.join(REPOSITORY_ROOT, PROJECT_REGISTRY_PATH), 'utf8')
+    )
+    if (!registry.full) {
+      narrowed.push(PROJECT_REGISTRY_PATH)
+      projectPaths = registry.paths
+    }
+  }
+  if (
+    !all &&
+    changedFiles.includes('pnpm-workspace.yaml') &&
+    workspaceChangeIsResolutionOnly(
+      baseText(base, 'pnpm-workspace.yaml'),
+      readFileSync(path.join(REPOSITORY_ROOT, 'pnpm-workspace.yaml'), 'utf8')
+    )
+  ) {
+    narrowed.push('pnpm-workspace.yaml')
+  }
   const projects = loadProjects()
   const workspace = all
     ? selectWorkspaceScope(projects, ['tsconfig.base.json'])
-    : selectWorkspaceScope(projects, changedFiles, importers)
+    : selectWorkspaceScope(projects, changedFiles, importers, { narrowed, projectPaths })
   const buildNames = all
     ? workspace.build
     : dependencyClosure(projects, [
