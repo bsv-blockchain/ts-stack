@@ -54,8 +54,9 @@ outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
 package-composition reports without rebuilding the workspace. The shared
-build starts as soon as the scope job finishes, beside the repository-health
-contract; test lanes, lint and policy start only after the repository-health,
+build starts immediately, beside the scope job and the repository-health
+contract, and builds every workspace package (unchanged ones restore from the
+package build cache); test lanes, lint and policy start only after the repository-health,
 scope and dependency-review gates pass. Lint and policy run beside the test
 lanes and gate `build-and-test` and the merge gate. The scope job also plans the
 test-lane matrices, since that needs only Node and jq. Exact-head Sonar analysis runs concurrently with the
@@ -116,6 +117,11 @@ blob ids of the package's own files, of every workspace package it depends on,
 and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
 packages whose inputs changed are built. Typecheck runs in the lint and policy
 job after the build, beside the test lanes.
+
+The affected-dependents lane plans its shards the same way from measured
+per-package test seconds (the `dependent-tests` lane). The wallet-toolbox
+storage shards start their pinned Postgres container in the background after
+checkout and wait for it to report healthy before Jest starts.
 
 The wallet-toolbox synced-header test restores a cached mainnet header store,
 keyed on the chaintracks storage code that writes it, instead of downloading
