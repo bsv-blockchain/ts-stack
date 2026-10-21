@@ -71,7 +71,7 @@
       "publishedVersion": "0.0.0",
       "releaseType": "minor",
       "summary": "Initial release. Implements the BRC-206 p rabin semantic module: wallet-held Rabin public keys and canonical Rabin signatures over arbitrary data, carried over BRC-100 encrypt so no method, call code or wire message is added. Keys are derived from BRC-42 child private keys under p rabin <logicalProtocolID>, expanded with HKDF-SHA256, and generated with the normative trial-division and 32-base Miller-Rabin search; results are minimally encoded Script numbers that Runar verifyRabinSig consumes directly. Only encrypt is accepted in the namespace (decrypt would be a square-root oracle), authorization precedes derivation, grants follow BRC-43 level scoping with bounded grant and pending-prompt state, and ordinary keys are cached in a bounded LRU with coalesced generation. Exports a pure verifier and the result codecs.",
-      "migration": "No migration is required: this is a new package and introduces no change to any existing package, BRC-100 method or wire format. Hosts opt in by registering the module under the rabin scheme in WalletPermissionsManager.permissionModules with their ordinary key deriver and a trusted authorization callback; wallets without the module keep rejecting p rabin as BRC-98 requires."
+      "migration": "No consumer migration required; first release."
     },
     {
       "name": "@bsv/chirp",

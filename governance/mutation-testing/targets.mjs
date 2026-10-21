@@ -3348,8 +3348,8 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [
         'src/RabinPermissionModule.ts',
         'src/encoding.ts',
-        'src/rabin.ts:1-234',
-        'src/rabin.ts:236-251'
+        'src/rabin.ts:1-249',
+        'src/rabin.ts:251-266'
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], {
         esm: true
