@@ -3338,6 +3338,23 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'rabin-permission': {
+      packageDirectory: 'packages/wallet/rabin-permission-module',
+      manifest: 'packages/wallet/rabin-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts',
+      // Omit the no-padding failure: each padding succeeds with probability about 1/4, so no
+      // reachable input exhausts all 65536 candidates.
+      mutate: [
+        'src/RabinPermissionModule.ts',
+        'src/encoding.ts',
+        'src/rabin.ts:1-234',
+        'src/rabin.ts:236-251'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], {
+        esm: true
+      })
+    },
     'chirp-codec': {
       packageDirectory: 'packages/network/chirp',
       manifest: 'packages/network/chirp/package.json',

@@ -67,6 +67,13 @@
       "migration": "Valid canonical BTMS flows remain compatible. Custom prompts must return literal true, authorization maps may contain at most 1,024 entries, and callers must provide dense signatures, safe exact totals, and canonical preimages; coercive or trailing-byte forms now fail closed. SDK consumers may retain ^2.1.6 or install the proposed SDK3 candidate. The immutable SDK2.8.11 reference has nine pre-existing SDK cold-leaf/UMD import defects; all historical floor versions are not qualified by this matrix. SDK3 removes the obsolete DID token API; use the identity-key DID and optional BRC52 adapters described in docs/guides/identity-did-vc-migration.md. No other public API or wire migration is introduced by the peer alternative. Consumers may keep their current SDK or install @bsv/sdk 4.0.1; no migration is required for this package. SDK4 consumers must use @bsv/sdk >=4.0.1 <5; SDK2/3 consumers retain their existing ranges. No application-wallet wire or data migration is required."
     },
     {
+      "name": "@bsv/rabin-permission-module",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Initial release. Implements the BRC-206 p rabin semantic module: wallet-held Rabin public keys and canonical Rabin signatures over arbitrary data, carried over BRC-100 encrypt so no method, call code or wire message is added. Keys are derived from BRC-42 child private keys under p rabin <logicalProtocolID>, expanded with HKDF-SHA256, and generated with the normative trial-division and 32-base Miller-Rabin search; results are minimally encoded Script numbers that Runar verifyRabinSig consumes directly. Only encrypt is accepted in the namespace (decrypt would be a square-root oracle), authorization precedes derivation, grants follow BRC-43 level scoping with bounded grant and pending-prompt state, and ordinary keys are cached in a bounded LRU with coalesced generation. Exports a pure verifier and the result codecs.",
+      "migration": "No migration is required: this is a new package and introduces no change to any existing package, BRC-100 method or wire format. Hosts opt in by registering the module under the rabin scheme in WalletPermissionsManager.permissionModules with their ordinary key deriver and a trusted authorization callback; wallets without the module keep rejecting p rabin as BRC-98 requires."
+    },
+    {
       "name": "@bsv/chirp",
       "publishedVersion": "0.1.6",
       "releaseType": "none",

@@ -211,6 +211,9 @@ diff --git a/packages/wallet/btms/src/types.ts b/packages/wallet/btms/src/types.
 diff --git a/packages/wallet/ecpm-permission-module/src/types.ts b/packages/wallet/ecpm-permission-module/src/types.ts
 +++ b/packages/wallet/ecpm-permission-module/src/types.ts
 @@ -0,0 +1,12 @@
+diff --git a/packages/wallet/rabin-permission-module/src/types.ts b/packages/wallet/rabin-permission-module/src/types.ts
++++ b/packages/wallet/rabin-permission-module/src/types.ts
+@@ -0,0 +1,12 @@
 diff --git a/packages/network/chirp/src/index.ts b/packages/network/chirp/src/index.ts
 +++ b/packages/network/chirp/src/index.ts
 @@ -0,0 +1,12 @@
