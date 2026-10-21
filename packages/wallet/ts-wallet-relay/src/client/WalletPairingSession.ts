@@ -102,6 +102,15 @@ export interface WalletPairingSessionOptions {
    * Useful for identifying the wallet to the desktop.
    */
   walletMeta?: Record<string, unknown>
+
+  /**
+   * Require the origin's session lookup to report `backendIdentityKey`.
+   * `resolveRelay()` always rejects a reported key that differs from the QR's key. A server
+   * older than @bsv/wallet-relay 0.6.0 does not report the key; by default such a lookup is
+   * accepted for compatibility. Set true to reject it instead. Default false; a future minor
+   * release will default it to true.
+   */
+  requireOriginBoundKey?: boolean
 }
 
 /**
@@ -225,6 +234,11 @@ export class WalletPairingSession {
    * is the trust anchor. Always show `params.origin` to the user before calling
    * this method so they can confirm they are connecting to the intended service.
    *
+   * The origin's response binds the QR to the origin: when it reports
+   * `backendIdentityKey`, that key must equal `params.backendIdentityKey` or this
+   * method throws and nothing connects. A response without the key (a server older
+   * than 0.6.0) is accepted unless `requireOriginBoundKey` is set.
+   *
    * ```ts
    * const { params } = parsePairingUri(qrString)
    * // Show params.origin to the user and wait for approval, then:
@@ -245,6 +259,15 @@ export class WalletPairingSession {
       canonicalId: false
     })
     if (data.relay === undefined) throw new Error('Origin server did not return a relay URL')
+    if (data.backendIdentityKey === undefined) {
+      if (this.options.requireOriginBoundKey === true) {
+        throw new Error('Origin server did not report its backend identity key')
+      }
+    } else if (
+      data.backendIdentityKey.toLowerCase() !== this.params.backendIdentityKey.toLowerCase()
+    ) {
+      throw new Error("Origin server's backend identity key does not match the pairing key")
+    }
     this._resolvedRelay = normalizeRelayUrl(data.relay)
     return this._resolvedRelay
   }
