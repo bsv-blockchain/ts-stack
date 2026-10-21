@@ -47,11 +47,17 @@ export class OverlayGASPStorage implements GASPStorage {
   private static readonly MAX_CONCURRENT_ANCHOR_VALIDATIONS = 4
   private static readonly MAX_CONCURRENT_FINALIZATIONS = 2
 
+  private readonly historicalOutput?: {
+    owner: Engine['storage']
+    read: NonNullable<Engine['storage']['findHistoricalOutput']>
+  }
+
   constructor(
     public topic: string,
     public engine: Engine,
     public maxNodesInGraph?: number,
-    public maxBytesInGraph: number = DEFAULT_MAX_BYTES_IN_GRAPH
+    public maxBytesInGraph: number = DEFAULT_MAX_BYTES_IN_GRAPH,
+    options: { historicalOutputs?: boolean } = {}
   ) {
     assertTopic(topic, 'GASP storage topic')
     const nodeLimit = maxNodesInGraph ?? DEFAULT_MAX_NODES_IN_GRAPH
@@ -66,6 +72,13 @@ export class OverlayGASPStorage implements GASPStorage {
       throw new TypeError('maxBytesInGraph must be a positive safe integer')
     }
     this.maxNodesInGraph = nodeLimit
+    if (options.historicalOutputs === true) {
+      const owner = engine.storage,
+        read = owner.findHistoricalOutput
+      if (typeof read !== 'function')
+        throw new TypeError('GASP historical output reader unavailable')
+      this.historicalOutput = { owner, read }
+    }
   }
 
   private graphNodeKey(graphID: string, nodeID: string): string {
@@ -166,13 +179,16 @@ export class OverlayGASPStorage implements GASPStorage {
     assertOutpoint(graphID, 'GASP graphID')
     assertHash(txid, 'GASP txid')
     assertOutputIndex(outputIndex, 'GASP output index')
-    const output = await this.engine.storage.findOutput(
-      txid,
-      outputIndex,
-      this.topic,
-      undefined,
-      true
+    const history = this.historicalOutput
+    if (
+      history &&
+      (this.engine.storage !== history.owner || history.owner.findHistoricalOutput !== history.read)
     )
+      throw new Error('GASP historical output reader changed')
+    const output =
+      history === undefined
+        ? await this.engine.storage.findOutput(txid, outputIndex, this.topic, undefined, true)
+        : await history.read.call(history.owner, txid, outputIndex, this.topic, true)
 
     if (output?.beef === undefined) {
       throw new Error('No matching output found!')
@@ -247,19 +263,7 @@ export class OverlayGASPStorage implements GASPStorage {
       try {
         const neededInputs =
           (await this.engine.managers[this.topic].identifyNeededInputs?.(parsedTx.toBEEF())) ?? []
-        if (!Array.isArray(neededInputs) || neededInputs.length > nodeLimit) {
-          throw new TypeError('Topic manager returned an invalid or oversized needed-input list')
-        }
-        for (const input of neededInputs) {
-          if (typeof input !== 'object' || input === null) {
-            throw new TypeError('Topic manager returned an invalid needed input')
-          }
-          assertHash(input.txid, 'Topic manager needed-input txid')
-          assertOutputIndex(input.outputIndex, 'Topic manager needed-input output index')
-          response.requestedInputs[`${input.txid}.${input.outputIndex}`] = {
-            metadata: false
-          }
-        }
+        this.addNeededInputs(response, neededInputs, nodeLimit)
         return await this.stripAlreadyKnownInputs(response)
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e)
@@ -271,6 +275,22 @@ export class OverlayGASPStorage implements GASPStorage {
       // By default, if the topic manager isn't able to stipulate needed inputs, only the inputs necessary for SPV are requested.
     }
     // Everything else falls through to returning undefined/void, which will terminate the synchronization at this point.
+  }
+
+  private addNeededInputs(
+    response: GASPNodeResponse,
+    neededInputs: unknown,
+    nodeLimit: number
+  ): void {
+    if (!Array.isArray(neededInputs) || neededInputs.length > nodeLimit)
+      throw new TypeError('Topic manager returned an invalid or oversized needed-input list')
+    for (const input of neededInputs) {
+      if (typeof input !== 'object' || input === null)
+        throw new TypeError('Topic manager returned an invalid needed input')
+      assertHash(input.txid, 'Topic manager needed-input txid')
+      assertOutputIndex(input.outputIndex, 'Topic manager needed-input output index')
+      response.requestedInputs[`${input.txid}.${input.outputIndex}`] = { metadata: false }
+    }
   }
 
   /**
@@ -362,15 +382,7 @@ export class OverlayGASPStorage implements GASPStorage {
       if (this.graphNode(tx.graphID, nodeID) !== undefined) {
         throw new Error('The GASP graph already contains this node')
       }
-      const parentTransaction = Transaction.fromHex(parentNode.rawTx)
-      const isReferencedInput = parentTransaction.inputs.some(
-        input =>
-          (input.sourceTXID ?? input.sourceTransaction?.id('hex'))?.toLowerCase() ===
-            txid.toLowerCase() && input.sourceOutputIndex === tx.outputIndex
-      )
-      if (!isReferencedInput) {
-        throw new Error('The GASP child node is not an input of its declared parent')
-      }
+      this.checkParentInput(parentNode, txid, tx.outputIndex)
       // Set parent-child relationship
       parentNode.children.push(newGraphNode)
       newGraphNode.parent = parentNode
@@ -378,6 +390,17 @@ export class OverlayGASPStorage implements GASPStorage {
     }
     this.graphNodeCounts.set(tx.graphID, nodeCount + 1)
     this.graphByteCounts.set(tx.graphID, graphBytes + nodeBytes)
+  }
+
+  private checkParentInput(parent: GraphNode, txid: string, outputIndex: number): void {
+    const parentTransaction = Transaction.fromHex(parent.rawTx)
+    const isReferencedInput = parentTransaction.inputs.some(
+      input =>
+        (input.sourceTXID ?? input.sourceTransaction?.id('hex'))?.toLowerCase() ===
+          txid.toLowerCase() && input.sourceOutputIndex === outputIndex
+    )
+    if (!isReferencedInput)
+      throw new Error('The GASP child node is not an input of its declared parent')
   }
 
   private previousCoinIndexes(tx: Transaction, coins: Set<string>): number[] {

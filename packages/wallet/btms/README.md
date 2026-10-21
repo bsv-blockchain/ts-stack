@@ -1,5 +1,7 @@
 # @bsv/btms
 
+Patch candidate `1.2.5` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 **Basic Token Management System** - A modular library for managing UTXO-based tokens on the BSV blockchain.
 
 ## Overview

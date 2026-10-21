@@ -5,7 +5,6 @@
   "description": "JSON Schema for the BRC-100 Wallet interface as defined in Wallet.interfaces.ts. Every method is represented as a request/response pair under $defs.",
   "version": "1.0.0",
   "$defs": {
-
     "HexString": {
       "type": "string",
       "pattern": "^[0-9a-fA-F]*$",
@@ -135,49 +134,60 @@
       "description": "[securityLevel, protocolString] tuple."
     },
     "WalletCounterparty": {
-      "oneOf": [
-        { "$ref": "#/$defs/PubKeyHex" },
-        { "type": "string", "enum": ["self", "anyone"] }
-      ]
+      "oneOf": [{ "$ref": "#/$defs/PubKeyHex" }, { "type": "string", "enum": ["self", "anyone"] }]
     },
     "ActionStatus": {
       "type": "string",
-      "enum": ["completed", "unprocessed", "sending", "unproven", "unsigned", "nosend", "nonfinal", "failed"]
+      "enum": [
+        "completed",
+        "unprocessed",
+        "sending",
+        "unproven",
+        "unsigned",
+        "nosend",
+        "nonfinal",
+        "failed"
+      ]
     },
     "AcquisitionProtocol": {
       "type": "string",
       "enum": ["direct", "issuance"]
     },
     "KeyringRevealer": {
-      "oneOf": [
-        { "$ref": "#/$defs/PubKeyHex" },
-        { "type": "string", "const": "certifier" }
-      ]
+      "oneOf": [{ "$ref": "#/$defs/PubKeyHex" }, { "type": "string", "const": "certifier" }]
     },
 
     "WalletEncryptionArgs": {
       "type": "object",
       "required": ["protocolID", "keyID"],
       "properties": {
-        "protocolID":      { "$ref": "#/$defs/WalletProtocol" },
-        "keyID":           { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
-        "counterparty":    { "$ref": "#/$defs/WalletCounterparty" },
-        "privileged":      { "type": "boolean", "default": false },
-        "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-        "seekPermission":  { "type": "boolean", "default": true }
+        "protocolID": { "$ref": "#/$defs/WalletProtocol" },
+        "keyID": { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+        "counterparty": { "$ref": "#/$defs/WalletCounterparty" },
+        "privileged": { "type": "boolean", "default": false },
+        "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "seekPermission": { "type": "boolean", "default": true }
       }
     },
 
     "WalletCertificate": {
       "type": "object",
-      "required": ["type", "subject", "serialNumber", "certifier", "revocationOutpoint", "signature", "fields"],
+      "required": [
+        "type",
+        "subject",
+        "serialNumber",
+        "certifier",
+        "revocationOutpoint",
+        "signature",
+        "fields"
+      ],
       "properties": {
-        "type":               { "$ref": "#/$defs/Base64String" },
-        "subject":            { "$ref": "#/$defs/PubKeyHex" },
-        "serialNumber":       { "$ref": "#/$defs/Base64String" },
-        "certifier":          { "$ref": "#/$defs/PubKeyHex" },
+        "type": { "$ref": "#/$defs/Base64String" },
+        "subject": { "$ref": "#/$defs/PubKeyHex" },
+        "serialNumber": { "$ref": "#/$defs/Base64String" },
+        "certifier": { "$ref": "#/$defs/PubKeyHex" },
         "revocationOutpoint": { "$ref": "#/$defs/OutpointString" },
-        "signature":          { "$ref": "#/$defs/HexString" },
+        "signature": { "$ref": "#/$defs/HexString" },
         "fields": {
           "type": "object",
           "additionalProperties": { "type": "string" },
@@ -190,7 +200,7 @@
       "type": "object",
       "required": ["txid", "status"],
       "properties": {
-        "txid":   { "$ref": "#/$defs/TXIDHexString" },
+        "txid": { "$ref": "#/$defs/TXIDHexString" },
         "status": { "type": "string", "enum": ["unproven", "sending", "failed"] }
       }
     },
@@ -199,7 +209,7 @@
       "type": "object",
       "required": ["tx", "reference"],
       "properties": {
-        "tx":        { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
+        "tx": { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
         "reference": { "$ref": "#/$defs/Base64String" }
       }
     },
@@ -208,12 +218,15 @@
       "type": "object",
       "required": ["sourceOutpoint", "sourceSatoshis", "inputDescription", "sequenceNumber"],
       "properties": {
-        "sourceOutpoint":     { "$ref": "#/$defs/OutpointString" },
-        "sourceSatoshis":     { "$ref": "#/$defs/SatoshiValue" },
-        "sourceLockingScript":{ "$ref": "#/$defs/HexString" },
-        "unlockingScript":    { "$ref": "#/$defs/HexString" },
-        "inputDescription":   { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
-        "sequenceNumber":     { "$ref": "#/$defs/PositiveIntegerOrZero" }
+        "sourceOutpoint": { "$ref": "#/$defs/OutpointString" },
+        "sourceSatoshis": { "$ref": "#/$defs/SatoshiValue" },
+        "sourceLockingScript": { "$ref": "#/$defs/HexString" },
+        "unlockingScript": { "$ref": "#/$defs/HexString" },
+        "inputDescription": {
+          "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }],
+          "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged."
+        },
+        "sequenceNumber": { "$ref": "#/$defs/PositiveIntegerOrZero" }
       }
     },
 
@@ -221,14 +234,17 @@
       "type": "object",
       "required": ["satoshis", "spendable", "tags", "outputIndex", "outputDescription", "basket"],
       "properties": {
-        "satoshis":          { "$ref": "#/$defs/SatoshiValue" },
-        "lockingScript":     { "$ref": "#/$defs/HexString" },
-        "spendable":         { "type": "boolean" },
-        "customInstructions":{ "type": "string" },
-        "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
-        "outputIndex":       { "$ref": "#/$defs/PositiveIntegerOrZero" },
-        "outputDescription": { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
-        "basket":            { "$ref": "#/$defs/BasketStringUnder300Bytes" }
+        "satoshis": { "$ref": "#/$defs/SatoshiValue" },
+        "lockingScript": { "$ref": "#/$defs/HexString" },
+        "spendable": { "type": "boolean" },
+        "customInstructions": { "type": "string" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+        "outputIndex": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "outputDescription": {
+          "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }],
+          "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged."
+        },
+        "basket": { "$ref": "#/$defs/BasketStringUnder300Bytes" }
       }
     },
 
@@ -236,42 +252,59 @@
       "type": "object",
       "required": ["satoshis", "spendable", "outpoint"],
       "properties": {
-        "satoshis":          { "$ref": "#/$defs/SatoshiValue" },
-        "lockingScript":     { "$ref": "#/$defs/HexString" },
-        "spendable":         { "type": "boolean" },
-        "customInstructions":{ "type": "string" },
-        "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
-        "outpoint":          { "$ref": "#/$defs/OutpointString" },
-        "labels":            { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } }
+        "satoshis": { "$ref": "#/$defs/SatoshiValue" },
+        "lockingScript": { "$ref": "#/$defs/HexString" },
+        "spendable": { "type": "boolean" },
+        "customInstructions": { "type": "string" },
+        "tags": { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+        "outpoint": { "$ref": "#/$defs/OutpointString" },
+        "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } }
       }
     },
 
     "WalletAction": {
       "type": "object",
-      "required": ["txid", "satoshis", "status", "isOutgoing", "description", "version", "lockTime"],
+      "required": [
+        "txid",
+        "satoshis",
+        "status",
+        "isOutgoing",
+        "description",
+        "version",
+        "lockTime"
+      ],
       "properties": {
-        "txid":        { "$ref": "#/$defs/TXIDHexString" },
-        "satoshis":    { "$ref": "#/$defs/SatoshiValue" },
-        "status":      { "$ref": "#/$defs/ActionStatus" },
-        "isOutgoing":  { "type": "boolean" },
-        "description": { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
-        "labels":      { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
-        "version":     { "$ref": "#/$defs/PositiveIntegerOrZero" },
-        "lockTime":    { "$ref": "#/$defs/PositiveIntegerOrZero" },
-        "inputs":      { "type": "array", "items": { "$ref": "#/$defs/WalletActionInput" } },
-        "outputs":     { "type": "array", "items": { "$ref": "#/$defs/WalletActionOutput" } }
+        "txid": { "$ref": "#/$defs/TXIDHexString" },
+        "satoshis": { "$ref": "#/$defs/SatoshiValue" },
+        "status": { "$ref": "#/$defs/ActionStatus" },
+        "isOutgoing": { "type": "boolean" },
+        "description": {
+          "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }],
+          "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged."
+        },
+        "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+        "version": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "lockTime": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+        "inputs": { "type": "array", "items": { "$ref": "#/$defs/WalletActionInput" } },
+        "outputs": { "type": "array", "items": { "$ref": "#/$defs/WalletActionOutput" } }
       }
     },
 
     "KeyLinkageResult": {
       "type": "object",
-      "required": ["encryptedLinkage", "encryptedLinkageProof", "prover", "verifier", "counterparty"],
+      "required": [
+        "encryptedLinkage",
+        "encryptedLinkageProof",
+        "prover",
+        "verifier",
+        "counterparty"
+      ],
       "properties": {
-        "encryptedLinkage":      { "$ref": "#/$defs/ByteArray" },
+        "encryptedLinkage": { "$ref": "#/$defs/ByteArray" },
         "encryptedLinkageProof": { "$ref": "#/$defs/ByteArray" },
-        "prover":                { "$ref": "#/$defs/PubKeyHex" },
-        "verifier":              { "$ref": "#/$defs/PubKeyHex" },
-        "counterparty":          { "$ref": "#/$defs/PubKeyHex" }
+        "prover": { "$ref": "#/$defs/PubKeyHex" },
+        "verifier": { "$ref": "#/$defs/PubKeyHex" },
+        "counterparty": { "$ref": "#/$defs/PubKeyHex" }
       }
     },
 
@@ -279,10 +312,10 @@
       "type": "object",
       "required": ["name", "iconUrl", "description", "trust"],
       "properties": {
-        "name":        { "type": "string", "maxLength": 100 },
-        "iconUrl":     { "type": "string", "maxLength": 500 },
+        "name": { "type": "string", "maxLength": 100 },
+        "iconUrl": { "type": "string", "maxLength": 500 },
         "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
-        "trust":       { "$ref": "#/$defs/PositiveIntegerMax10" }
+        "trust": { "$ref": "#/$defs/PositiveIntegerMax10" }
       }
     },
 
@@ -293,7 +326,7 @@
           "type": "object",
           "required": ["certifierInfo", "publiclyRevealedKeyring", "decryptedFields"],
           "properties": {
-            "certifierInfo":           { "$ref": "#/$defs/IdentityCertifier" },
+            "certifierInfo": { "$ref": "#/$defs/IdentityCertifier" },
             "publiclyRevealedKeyring": {
               "type": "object",
               "additionalProperties": { "$ref": "#/$defs/Base64String" }
@@ -313,7 +346,10 @@
         {
           "type": "object",
           "properties": {
-            "keyring":  { "type": "object", "additionalProperties": { "$ref": "#/$defs/Base64String" } },
+            "keyring": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/$defs/Base64String" }
+            },
             "verifier": { "type": "string" }
           }
         }
@@ -326,8 +362,8 @@
       "properties": {
         "isError": { "type": "boolean", "const": true },
         "message": { "type": "string" },
-        "code":    { "type": "string", "minLength": 10, "maxLength": 40 },
-        "stack":   { "type": "string" }
+        "code": { "type": "string", "minLength": 10, "maxLength": 40 },
+        "stack": { "type": "string" }
       }
     },
 
@@ -339,18 +375,21 @@
         "required": ["description"],
         "properties": {
           "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "inputBEEF": { "$ref": "#/$defs/ByteArray", "description": "BEEF (BRC-62) data for input transactions." },
+          "inputBEEF": {
+            "$ref": "#/$defs/ByteArray",
+            "description": "BEEF (BRC-62) data for input transactions."
+          },
           "inputs": {
             "type": "array",
             "items": {
               "type": "object",
               "required": ["outpoint", "inputDescription"],
               "properties": {
-                "outpoint":              { "$ref": "#/$defs/OutpointString" },
-                "inputDescription":      { "$ref": "#/$defs/DescriptionString5to50Bytes" },
-                "unlockingScript":       { "$ref": "#/$defs/HexString" },
+                "outpoint": { "$ref": "#/$defs/OutpointString" },
+                "inputDescription": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+                "unlockingScript": { "$ref": "#/$defs/HexString" },
                 "unlockingScriptLength": { "$ref": "#/$defs/PositiveInteger" },
-                "sequenceNumber":        { "$ref": "#/$defs/PositiveIntegerOrZero" }
+                "sequenceNumber": { "$ref": "#/$defs/PositiveIntegerOrZero" }
               }
             }
           },
@@ -360,30 +399,33 @@
               "type": "object",
               "required": ["lockingScript", "satoshis", "outputDescription"],
               "properties": {
-                "lockingScript":     { "$ref": "#/$defs/HexString" },
-                "satoshis":         { "$ref": "#/$defs/SatoshiValue" },
-                "outputDescription":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-                "basket":           { "$ref": "#/$defs/BasketStringUnder300Bytes" },
-                "customInstructions":{ "type": "string" },
-                "tags":             { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } }
+                "lockingScript": { "$ref": "#/$defs/HexString" },
+                "satoshis": { "$ref": "#/$defs/SatoshiValue" },
+                "outputDescription": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+                "basket": { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+                "customInstructions": { "type": "string" },
+                "tags": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" }
+                }
               }
             }
           },
           "lockTime": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "version":  { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "labels":   { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "version": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
           "options": {
             "type": "object",
             "properties": {
-              "signAndProcess":       { "type": "boolean", "default": true },
-              "acceptDelayedBroadcast":{ "type": "boolean", "default": true },
-              "trustSelf":            { "type": "string", "const": "known" },
-              "knownTxids":           { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
-              "returnTXIDOnly":       { "type": "boolean", "default": false },
-              "noSend":               { "type": "boolean", "default": false },
-              "noSendChange":         { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
-              "sendWith":             { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
-              "randomizeOutputs":     { "type": "boolean", "default": true }
+              "signAndProcess": { "type": "boolean", "default": true },
+              "acceptDelayedBroadcast": { "type": "boolean", "default": true },
+              "trustSelf": { "type": "string", "const": "known" },
+              "knownTxids": { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
+              "returnTXIDOnly": { "type": "boolean", "default": false },
+              "noSend": { "type": "boolean", "default": false },
+              "noSendChange": { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
+              "sendWith": { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } },
+              "randomizeOutputs": { "type": "boolean", "default": true }
             }
           },
           "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
@@ -392,9 +434,9 @@
       "response": {
         "type": "object",
         "properties": {
-          "txid":            { "$ref": "#/$defs/TXIDHexString" },
-          "tx":              { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
-          "noSendChange":    { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
+          "txid": { "$ref": "#/$defs/TXIDHexString" },
+          "tx": { "$ref": "#/$defs/ByteArray", "description": "AtomicBEEF (BRC-95)." },
+          "noSendChange": { "type": "array", "items": { "$ref": "#/$defs/OutpointString" } },
           "sendWithResults": { "type": "array", "items": { "$ref": "#/$defs/SendWithResult" } },
           "signableTransaction": { "$ref": "#/$defs/SignableTransaction" }
         }
@@ -415,7 +457,7 @@
               "required": ["unlockingScript"],
               "properties": {
                 "unlockingScript": { "$ref": "#/$defs/HexString" },
-                "sequenceNumber":  { "$ref": "#/$defs/PositiveIntegerOrZero" }
+                "sequenceNumber": { "$ref": "#/$defs/PositiveIntegerOrZero" }
               }
             },
             "description": "Map of input index (string) to unlocking script and optional sequence number."
@@ -424,10 +466,10 @@
           "options": {
             "type": "object",
             "properties": {
-              "acceptDelayedBroadcast":{ "type": "boolean", "default": true },
-              "returnTXIDOnly":       { "type": "boolean", "default": false },
-              "noSend":               { "type": "boolean", "default": false },
-              "sendWith":             { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } }
+              "acceptDelayedBroadcast": { "type": "boolean", "default": true },
+              "returnTXIDOnly": { "type": "boolean", "default": false },
+              "noSend": { "type": "boolean", "default": false },
+              "sendWith": { "type": "array", "items": { "$ref": "#/$defs/TXIDHexString" } }
             }
           },
           "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
@@ -436,8 +478,8 @@
       "response": {
         "type": "object",
         "properties": {
-          "txid":            { "$ref": "#/$defs/TXIDHexString" },
-          "tx":              { "$ref": "#/$defs/ByteArray" },
+          "txid": { "$ref": "#/$defs/TXIDHexString" },
+          "tx": { "$ref": "#/$defs/ByteArray" },
           "sendWithResults": { "type": "array", "items": { "$ref": "#/$defs/SendWithResult" } }
         }
       }
@@ -450,7 +492,7 @@
         "type": "object",
         "required": ["reference"],
         "properties": {
-          "reference":  { "$ref": "#/$defs/Base64String" },
+          "reference": { "$ref": "#/$defs/Base64String" },
           "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
@@ -470,18 +512,18 @@
         "type": "object",
         "required": ["labels"],
         "properties": {
-          "labels":                       { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
-          "labelQueryMode":              { "type": "string", "enum": ["any", "all"], "default": "any" },
-          "includeLabels":               { "type": "boolean", "default": false },
-          "includeInputs":               { "type": "boolean", "default": false },
+          "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "labelQueryMode": { "type": "string", "enum": ["any", "all"], "default": "any" },
+          "includeLabels": { "type": "boolean", "default": false },
+          "includeInputs": { "type": "boolean", "default": false },
           "includeInputSourceLockingScripts": { "type": "boolean", "default": false },
-          "includeInputUnlockingScripts":{ "type": "boolean", "default": false },
-          "includeOutputs":              { "type": "boolean", "default": false },
+          "includeInputUnlockingScripts": { "type": "boolean", "default": false },
+          "includeOutputs": { "type": "boolean", "default": false },
           "includeOutputLockingScripts": { "type": "boolean", "default": false },
-          "limit":                       { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
-          "offset":                      { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "seekPermission":              { "type": "boolean", "default": true },
-          "originator":                  { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "limit": { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "seekPermission": { "type": "boolean", "default": true },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -489,7 +531,7 @@
         "required": ["totalActions", "actions"],
         "properties": {
           "totalActions": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "actions":      { "type": "array", "items": { "$ref": "#/$defs/WalletAction" } }
+          "actions": { "type": "array", "items": { "$ref": "#/$defs/WalletAction" } }
         }
       }
     },
@@ -509,13 +551,13 @@
               "required": ["outputIndex", "protocol"],
               "properties": {
                 "outputIndex": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-                "protocol":    { "type": "string", "enum": ["wallet payment", "basket insertion"] },
+                "protocol": { "type": "string", "enum": ["wallet payment", "basket insertion"] },
                 "paymentRemittance": {
                   "type": "object",
                   "required": ["derivationPrefix", "derivationSuffix", "senderIdentityKey"],
                   "properties": {
-                    "derivationPrefix":  { "$ref": "#/$defs/Base64String" },
-                    "derivationSuffix":  { "$ref": "#/$defs/Base64String" },
+                    "derivationPrefix": { "$ref": "#/$defs/Base64String" },
+                    "derivationSuffix": { "$ref": "#/$defs/Base64String" },
                     "senderIdentityKey": { "$ref": "#/$defs/PubKeyHex" }
                   }
                 },
@@ -523,18 +565,21 @@
                   "type": "object",
                   "required": ["basket"],
                   "properties": {
-                    "basket":            { "$ref": "#/$defs/BasketStringUnder300Bytes" },
-                    "customInstructions":{ "type": "string" },
-                    "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } }
+                    "basket": { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+                    "customInstructions": { "type": "string" },
+                    "tags": {
+                      "type": "array",
+                      "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" }
+                    }
                   }
                 }
               }
             }
           },
-          "description":    { "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "labels":         { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
+          "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
           "seekPermission": { "type": "boolean", "default": true },
-          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -553,17 +598,17 @@
         "type": "object",
         "required": ["basket"],
         "properties": {
-          "basket":                { "$ref": "#/$defs/BasketStringUnder300Bytes" },
-          "tags":                  { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
-          "tagQueryMode":          { "type": "string", "enum": ["all", "any"], "default": "any" },
-          "include":               { "type": "string", "enum": ["locking scripts", "entire transactions"] },
+          "basket": { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+          "tags": { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
+          "tagQueryMode": { "type": "string", "enum": ["all", "any"], "default": "any" },
+          "include": { "type": "string", "enum": ["locking scripts", "entire transactions"] },
           "includeCustomInstructions": { "type": "boolean", "default": false },
-          "includeTags":           { "type": "boolean", "default": false },
-          "includeLabels":         { "type": "boolean", "default": false },
-          "limit":                 { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
-          "offset":                { "type": "integer" },
-          "seekPermission":        { "type": "boolean", "default": true },
-          "originator":            { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "includeTags": { "type": "boolean", "default": false },
+          "includeLabels": { "type": "boolean", "default": false },
+          "limit": { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset": { "type": "integer" },
+          "seekPermission": { "type": "boolean", "default": true },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -571,11 +616,14 @@
         "required": ["totalOutputs", "outputs"],
         "properties": {
           "totalOutputs": {
-            "oneOf": [{ "$ref": "#/$defs/PositiveIntegerOrZero" }, { "$ref": "#/$defs/DecimalString" }],
+            "oneOf": [
+              { "$ref": "#/$defs/PositiveIntegerOrZero" },
+              { "$ref": "#/$defs/DecimalString" }
+            ],
             "description": "The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as a DecimalString with no outputs and no BEEF."
           },
-          "BEEF":         { "$ref": "#/$defs/ByteArray" },
-          "outputs":      { "type": "array", "items": { "$ref": "#/$defs/WalletOutput" } }
+          "BEEF": { "$ref": "#/$defs/ByteArray" },
+          "outputs": { "type": "array", "items": { "$ref": "#/$defs/WalletOutput" } }
         }
       }
     },
@@ -587,8 +635,8 @@
         "type": "object",
         "required": ["basket", "output"],
         "properties": {
-          "basket":     { "$ref": "#/$defs/BasketStringUnder300Bytes" },
-          "output":     { "$ref": "#/$defs/OutpointString" },
+          "basket": { "$ref": "#/$defs/BasketStringUnder300Bytes" },
+          "output": { "$ref": "#/$defs/OutpointString" },
           "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
@@ -608,25 +656,25 @@
         "type": "object",
         "required": ["type", "certifier", "acquisitionProtocol", "fields"],
         "properties": {
-          "type":               { "$ref": "#/$defs/Base64String" },
-          "certifier":          { "$ref": "#/$defs/PubKeyHex" },
-          "acquisitionProtocol":{ "$ref": "#/$defs/AcquisitionProtocol" },
+          "type": { "$ref": "#/$defs/Base64String" },
+          "certifier": { "$ref": "#/$defs/PubKeyHex" },
+          "acquisitionProtocol": { "$ref": "#/$defs/AcquisitionProtocol" },
           "fields": {
             "type": "object",
             "additionalProperties": { "type": "string" }
           },
-          "serialNumber":       { "$ref": "#/$defs/Base64String" },
+          "serialNumber": { "$ref": "#/$defs/Base64String" },
           "revocationOutpoint": { "$ref": "#/$defs/OutpointString" },
-          "signature":          { "$ref": "#/$defs/HexString" },
-          "certifierUrl":       { "type": "string", "format": "uri" },
-          "keyringRevealer":    { "$ref": "#/$defs/KeyringRevealer" },
+          "signature": { "$ref": "#/$defs/HexString" },
+          "certifierUrl": { "type": "string", "format": "uri" },
+          "keyringRevealer": { "$ref": "#/$defs/KeyringRevealer" },
           "keyringForSubject": {
             "type": "object",
             "additionalProperties": { "$ref": "#/$defs/Base64String" }
           },
-          "privileged":         { "type": "boolean", "default": false },
-          "privilegedReason":   { "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "originator":         { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "privileged": { "type": "boolean", "default": false },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": { "$ref": "#/$defs/WalletCertificate" }
@@ -639,13 +687,13 @@
         "type": "object",
         "required": ["certifiers", "types"],
         "properties": {
-          "certifiers":      { "type": "array", "items": { "$ref": "#/$defs/PubKeyHex" } },
-          "types":           { "type": "array", "items": { "$ref": "#/$defs/Base64String" } },
-          "limit":           { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
-          "offset":          { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "privileged":      { "type": "boolean", "default": false },
-          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "certifiers": { "type": "array", "items": { "$ref": "#/$defs/PubKeyHex" } },
+          "types": { "type": "array", "items": { "$ref": "#/$defs/Base64String" } },
+          "limit": { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "privileged": { "type": "boolean", "default": false },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -653,7 +701,7 @@
         "required": ["totalCertificates", "certificates"],
         "properties": {
           "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/CertificateResult" } }
+          "certificates": { "type": "array", "items": { "$ref": "#/$defs/CertificateResult" } }
         }
       }
     },
@@ -665,12 +713,15 @@
         "type": "object",
         "required": ["certificate", "fieldsToReveal", "verifier"],
         "properties": {
-          "certificate":     { "$ref": "#/$defs/WalletCertificate" },
-          "fieldsToReveal":  { "type": "array", "items": { "$ref": "#/$defs/CertificateFieldNameUnder50Bytes" } },
-          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
-          "privileged":      { "type": "boolean", "default": false },
-          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "certificate": { "$ref": "#/$defs/WalletCertificate" },
+          "fieldsToReveal": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/CertificateFieldNameUnder50Bytes" }
+          },
+          "verifier": { "$ref": "#/$defs/PubKeyHex" },
+          "privileged": { "type": "boolean", "default": false },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -682,7 +733,7 @@
             "additionalProperties": { "$ref": "#/$defs/Base64String" }
           },
           "certificate": { "$ref": "#/$defs/WalletCertificate" },
-          "verifier":    { "$ref": "#/$defs/PubKeyHex" }
+          "verifier": { "$ref": "#/$defs/PubKeyHex" }
         }
       }
     },
@@ -694,10 +745,10 @@
         "type": "object",
         "required": ["type", "serialNumber", "certifier"],
         "properties": {
-          "type":         { "$ref": "#/$defs/Base64String" },
+          "type": { "$ref": "#/$defs/Base64String" },
           "serialNumber": { "$ref": "#/$defs/Base64String" },
-          "certifier":    { "$ref": "#/$defs/PubKeyHex" },
-          "originator":   { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "certifier": { "$ref": "#/$defs/PubKeyHex" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -716,11 +767,11 @@
         "type": "object",
         "required": ["identityKey"],
         "properties": {
-          "identityKey":    { "$ref": "#/$defs/PubKeyHex" },
-          "limit":          { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
-          "offset":         { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "identityKey": { "$ref": "#/$defs/PubKeyHex" },
+          "limit": { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset": { "$ref": "#/$defs/PositiveIntegerOrZero" },
           "seekPermission": { "type": "boolean", "default": true },
-          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -728,7 +779,7 @@
         "required": ["totalCertificates", "certificates"],
         "properties": {
           "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
+          "certificates": { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
         }
       }
     },
@@ -744,10 +795,10 @@
             "type": "object",
             "additionalProperties": { "type": "string" }
           },
-          "limit":          { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
-          "offset":         { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "limit": { "$ref": "#/$defs/PositiveIntegerDefault10Max10000" },
+          "offset": { "$ref": "#/$defs/PositiveIntegerOrZero" },
           "seekPermission": { "type": "boolean", "default": true },
-          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -755,7 +806,7 @@
         "required": ["totalCertificates", "certificates"],
         "properties": {
           "totalCertificates": { "$ref": "#/$defs/PositiveIntegerOrZero" },
-          "certificates":      { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
+          "certificates": { "type": "array", "items": { "$ref": "#/$defs/IdentityCertificate" } }
         }
       }
     },
@@ -821,7 +872,7 @@
         "type": "object",
         "required": ["height"],
         "properties": {
-          "height":     { "$ref": "#/$defs/PositiveInteger" },
+          "height": { "$ref": "#/$defs/PositiveInteger" },
           "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
@@ -829,7 +880,12 @@
         "type": "object",
         "required": ["header"],
         "properties": {
-          "header": { "$ref": "#/$defs/HexString", "minLength": 160, "maxLength": 160, "description": "80-byte block header as hex." }
+          "header": {
+            "$ref": "#/$defs/HexString",
+            "minLength": 160,
+            "maxLength": 160,
+            "description": "80-byte block header as hex."
+          }
         }
       }
     },
@@ -876,15 +932,19 @@
       "request": {
         "type": "object",
         "properties": {
-          "identityKey":    { "type": "boolean", "const": true, "description": "If true, return the user's own identity key, ignoring protocolID/keyID/counterparty." },
-          "protocolID":     { "$ref": "#/$defs/WalletProtocol" },
-          "keyID":          { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
-          "counterparty":   { "$ref": "#/$defs/WalletCounterparty" },
-          "privileged":     { "type": "boolean", "default": false },
-          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "identityKey": {
+            "type": "boolean",
+            "const": true,
+            "description": "If true, return the user's own identity key, ignoring protocolID/keyID/counterparty."
+          },
+          "protocolID": { "$ref": "#/$defs/WalletProtocol" },
+          "keyID": { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+          "counterparty": { "$ref": "#/$defs/WalletCounterparty" },
+          "privileged": { "type": "boolean", "default": false },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
           "seekPermission": { "type": "boolean", "default": true },
-          "forSelf":        { "type": "boolean", "default": false },
-          "originator":     { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "forSelf": { "type": "boolean", "default": false },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -903,11 +963,11 @@
         "type": "object",
         "required": ["counterparty", "verifier"],
         "properties": {
-          "counterparty":    { "$ref": "#/$defs/PubKeyHex" },
-          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
-          "privileged":      { "type": "boolean", "default": false },
-          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "counterparty": { "$ref": "#/$defs/PubKeyHex" },
+          "verifier": { "$ref": "#/$defs/PubKeyHex" },
+          "privileged": { "type": "boolean", "default": false },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -931,13 +991,13 @@
         "type": "object",
         "required": ["counterparty", "verifier", "protocolID", "keyID"],
         "properties": {
-          "counterparty":    { "$ref": "#/$defs/WalletCounterparty" },
-          "verifier":        { "$ref": "#/$defs/PubKeyHex" },
-          "protocolID":      { "$ref": "#/$defs/WalletProtocol" },
-          "keyID":           { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
-          "privilegedReason":{ "$ref": "#/$defs/DescriptionString5to50Bytes" },
-          "privileged":      { "type": "boolean", "default": false },
-          "originator":      { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+          "counterparty": { "$ref": "#/$defs/WalletCounterparty" },
+          "verifier": { "$ref": "#/$defs/PubKeyHex" },
+          "protocolID": { "$ref": "#/$defs/WalletProtocol" },
+          "keyID": { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+          "privilegedReason": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+          "privileged": { "type": "boolean", "default": false },
+          "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
         }
       },
       "response": {
@@ -948,8 +1008,8 @@
             "required": ["protocolID", "keyID", "proofType"],
             "properties": {
               "protocolID": { "$ref": "#/$defs/WalletProtocol" },
-              "keyID":      { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
-              "proofType":  { "type": "integer", "minimum": 0, "maximum": 255 }
+              "keyID": { "$ref": "#/$defs/KeyIDStringUnder800Bytes" },
+              "proofType": { "type": "integer", "minimum": 0, "maximum": 255 }
             }
           }
         ]
@@ -966,7 +1026,7 @@
             "type": "object",
             "required": ["plaintext"],
             "properties": {
-              "plaintext":  { "$ref": "#/$defs/ByteArray" },
+              "plaintext": { "$ref": "#/$defs/ByteArray" },
               "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
             }
           }
@@ -1016,7 +1076,7 @@
             "type": "object",
             "required": ["data"],
             "properties": {
-              "data":       { "$ref": "#/$defs/ByteArray" },
+              "data": { "$ref": "#/$defs/ByteArray" },
               "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
             }
           }
@@ -1041,8 +1101,8 @@
             "type": "object",
             "required": ["data", "hmac"],
             "properties": {
-              "data":       { "$ref": "#/$defs/ByteArray" },
-              "hmac":       { "$ref": "#/$defs/ByteArray" },
+              "data": { "$ref": "#/$defs/ByteArray" },
+              "hmac": { "$ref": "#/$defs/ByteArray" },
               "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
             }
           }
@@ -1066,9 +1126,15 @@
           {
             "type": "object",
             "properties": {
-              "data":               { "$ref": "#/$defs/ByteArray", "description": "Data to be signed. Provide this or hashToDirectlySign, not both." },
-              "hashToDirectlySign": { "$ref": "#/$defs/ByteArray", "description": "Pre-hashed value to sign directly when data cannot be revealed." },
-              "originator":         { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+              "data": {
+                "$ref": "#/$defs/ByteArray",
+                "description": "Data to be signed. Provide this or hashToDirectlySign, not both."
+              },
+              "hashToDirectlySign": {
+                "$ref": "#/$defs/ByteArray",
+                "description": "Pre-hashed value to sign directly when data cannot be revealed."
+              },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
             }
           }
         ]
@@ -1077,7 +1143,10 @@
         "type": "object",
         "required": ["signature"],
         "properties": {
-          "signature": { "$ref": "#/$defs/ByteArray", "description": "DER-encoded ECDSA signature bytes." }
+          "signature": {
+            "$ref": "#/$defs/ByteArray",
+            "description": "DER-encoded ECDSA signature bytes."
+          }
         }
       }
     },
@@ -1092,11 +1161,14 @@
             "type": "object",
             "required": ["signature"],
             "properties": {
-              "data":                { "$ref": "#/$defs/ByteArray" },
-              "hashToDirectlyVerify":{ "$ref": "#/$defs/ByteArray" },
-              "signature":           { "$ref": "#/$defs/ByteArray", "description": "DER-encoded ECDSA signature to validate." },
-              "forSelf":             { "type": "boolean", "default": false },
-              "originator":          { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
+              "data": { "$ref": "#/$defs/ByteArray" },
+              "hashToDirectlyVerify": { "$ref": "#/$defs/ByteArray" },
+              "signature": {
+                "$ref": "#/$defs/ByteArray",
+                "description": "DER-encoded ECDSA signature to validate."
+              },
+              "forSelf": { "type": "boolean", "default": false },
+              "originator": { "$ref": "#/$defs/OriginatorDomainNameStringUnder250Bytes" }
             }
           }
         ]

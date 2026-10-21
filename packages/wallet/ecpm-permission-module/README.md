@@ -1,5 +1,7 @@
 # ECPM Permission Module
 
+Patch candidate `0.1.3` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 `@bsv/ecpm-permission-module` implements the BRC-229 `p ecpm` semantic module
 for BRC-100 wallets. It applies or removes a BRC-42/43-derived scalar to an
 arbitrary validated secp256k1 point without adding a method or wire call to the

@@ -1,5 +1,7 @@
 # @bsv/wallet-relay
 
+Patch candidate `0.5.3` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 BSV mobile wallet QR pairing — relay server, session management, and desktop frontend utilities.
 
 Lets any web app offer "connect via mobile wallet" as a signing or authentication option. The desktop shows a QR code; the user scans it with their BSV wallet app; from that point all wallet operations are handled by the mobile over an encrypted WebSocket relay. Wallet keys never leave the mobile device. The relay never sees plaintext.

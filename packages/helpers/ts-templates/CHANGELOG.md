@@ -48,6 +48,8 @@ outside 0..255`. The 4096-byte ceiling (`STRICT_CBOR_MAX_BYTES`) and the
   remains as an anti-DoS bound on nesting. `test/vectors/brc162.json` is
   regenerated.
 
+- The pending 2.0.1 dependency-manifest correction is included in this 2.1.0 candidate; retain the migration requirements above.
+
 ### 2.0.0 candidate — BRC-162 (breaking)
 
 ### Removed

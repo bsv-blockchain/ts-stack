@@ -1,5 +1,6 @@
 diff --git a/src/watchers/common.js b/src/watchers/common.js
 --- a/src/watchers/common.js
++++ b/src/watchers/common.js
 @@ -11,7 +11,7 @@
  exports.includedByGlob = includedByGlob;
  exports.posixPathMatchesPattern = void 0;
@@ -35,6 +36,7 @@ diff --git a/src/watchers/common.js b/src/watchers/common.js
  }
 diff --git a/src/watchers/common.js.flow b/src/watchers/common.js.flow
 --- a/src/watchers/common.js.flow
++++ b/src/watchers/common.js.flow
 @@ -17,8 +17,8 @@
  import type {ChangeEventMetadata} from '../flow-types';
  import type {Stats} from 'node:fs';

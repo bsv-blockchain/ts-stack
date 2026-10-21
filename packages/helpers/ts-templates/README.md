@@ -1,5 +1,7 @@
 # BSV Script Templates
 
+Candidate `2.1.0` adds the `OneColor` BRC-162 template and SDK4 peer support from current main, alongside updated packed first-party dependency ranges. Existing templates, wire formats and defaults remain supported. The additive `OneColor` API and migration guidance are documented below.
+
 BSV BLOCKCHAIN | Script Templates
 
 A collection of script templates for use with the official BSV TypeScript SDK

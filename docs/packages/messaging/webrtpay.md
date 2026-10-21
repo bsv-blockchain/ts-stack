@@ -3,7 +3,7 @@ id: pkg-webrtpay
 title: '@bsv/webrtpay'
 kind: package
 domain: messaging
-version: '0.2.1'
+version: '0.2.2'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-10-19'
 last_verified: '2026-10-19'

@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.2.8` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 - Order equal creation timestamps by unique MongoDB _id for stable discovery pagination.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.

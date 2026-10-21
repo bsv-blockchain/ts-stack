@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": ".",
+  "requiredExports": [
+    "OutputKnowledge",
+    "BitcoinKnowledge",
+    "KnowledgeStore",
+    "IndexedDBJournal",
+    "MemoryJournal",
+    "SDKEvidenceVerifier",
+    "EvidencePool",
+    "SourceMembershipLedger",
+    "reconcileOutputSpends"
+  ],
+  "prohibitedExports": [
+    "SQLiteJournal",
+    "WalletOutputSource",
+    "LookupOutputSource",
+    "DirectDeliverySource",
+    "ProposalPolicyRegistry",
+    "AuthorDocumentPolicy",
+    "SQLiteProposalJournal",
+    "ProposalCapabilityContracts",
+    "ProposalService",
+    "SDKProposalEvidence",
+    "MemoryOperationStateStore",
+    "IndexedDBOperationStateStore",
+    "SQLiteOperationStateStore",
+    "LiveLookupSource",
+    "prepareLiveLookupSource",
+    "liveLookupSourceBinding",
+    "LookupProviderService",
+    "SQLiteLookupIndex",
+    "SQLiteLookupSessions",
+    "RevenueListingLineageVerifier",
+    "parseRevenueListingLineagePackage",
+    "REVENUE_LISTING_LINEAGE_LIMITS",
+    "SQLiteRootEvictionStore",
+    "SDKRootEvictionEvidence",
+    "RootEvictionContracts",
+    "RevenueListingProfileLineageVerifier",
+    "RevenueListingProfilePurchaseVerifier",
+    "parseRevenueListingProfileLineagePackage"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 550000,
+      "gzip": 140000,
+      "brotli": 120000
+    },
+    "esbuild": {
+      "raw": 410000,
+      "gzip": 130000,
+      "brotli": 110000
+    }
+  },
+  "additionalEntries": [
+    {
+      "entry": "./sources",
+      "requiredExports": [
+        "WalletOutputSource",
+        "LookupOutputSource",
+        "DirectDeliverySource",
+        "walletOutputQueryDigest",
+        "lookupOutputQueryDigest"
+      ],
+      "prohibitedExports": ["SQLiteJournal", "BitcoinKnowledge"],
+      "maximumBytes": {
+        "vite": {
+          "raw": 600000,
+          "gzip": 160000,
+          "brotli": 140000
+        },
+        "esbuild": {
+          "raw": 460000,
+          "gzip": 145000,
+          "brotli": 120000
+        }
+      }
+    },
+    {
+      "entry": "./proposals",
+      "requiredExports": [
+        "ProposalPolicyRegistry",
+        "AuthorDocumentPolicy",
+        "proposalChannelKey",
+        "validateProposalWindow",
+        "ProposalTransitions",
+        "proposalRecordToken",
+        "MemoryProposalJournal",
+        "proposalCommitKey",
+        "appendProposalWithRecovery",
+        "ProposalCapabilityContracts",
+        "ProposalService",
+        "SDKProposalEvidence"
+      ],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "BitcoinKnowledge",
+        "WalletOutputSource",
+        "SQLiteProposalJournal"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 550000,
+          "gzip": 140000,
+          "brotli": 120000
+        },
+        "esbuild": {
+          "raw": 410000,
+          "gzip": 130000,
+          "brotli": 110000
+        }
+      }
+    },
+    {
+      "entry": "./operations",
+      "requiredExports": [
+        "MemoryOperationStateStore",
+        "IndexedDBOperationStateStore",
+        "DEFAULT_OPERATION_STATE_LIMITS"
+      ],
+      "prohibitedExports": [
+        "SQLiteOperationStateStore",
+        "SQLiteJournal",
+        "BitcoinKnowledge",
+        "ProposalService"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 70000,
+          "gzip": 21000,
+          "brotli": 18000
+        },
+        "esbuild": {
+          "raw": 80000,
+          "gzip": 27000,
+          "brotli": 23000
+        }
+      }
+    },
+    {
+      "entry": "./sources/live-lookup",
+      "requiredExports": ["LiveLookupSource", "prepareLiveLookupSource", "liveLookupSourceBinding"],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "SQLiteOperationStateStore",
+        "BitcoinKnowledge",
+        "WalletOutputSource"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 400000,
+          "gzip": 110000,
+          "brotli": 95000
+        },
+        "esbuild": {
+          "raw": 320000,
+          "gzip": 105000,
+          "brotli": 90000
+        }
+      }
+    },
+    {
+      "entry": "./lookup",
+      "requiredExports": [
+        "LookupProviderService",
+        "LookupProviderContracts",
+        "LookupQueryRegistry",
+        "CollectionOutputQueryPolicy",
+        "LookupSessionCodec",
+        "LookupWake"
+      ],
+      "prohibitedExports": [
+        "SQLiteLookupIndex",
+        "SQLiteLookupSessions",
+        "BitcoinKnowledge",
+        "LiveLookupSource"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 250000,
+          "gzip": 78000,
+          "brotli": 67000
+        },
+        "esbuild": {
+          "raw": 210000,
+          "gzip": 75000,
+          "brotli": 66000
+        }
+      }
+    },
+    {
+      "entry": "./revenue-listing",
+      "requiredExports": [
+        "RevenueListingLineageVerifier",
+        "parseRevenueListingLineagePackage",
+        "REVENUE_LISTING_LINEAGE_LIMITS",
+        "RevenueListingProfileLineageVerifier",
+        "RevenueListingProfilePurchaseVerifier",
+        "parseRevenueListingProfileLineagePackage"
+      ],
+      "prohibitedExports": [
+        "SQLiteJournal",
+        "SQLiteOperationStateStore",
+        "SQLiteLookupIndex",
+        "SQLiteLookupSessions",
+        "OutputKnowledge"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 485000,
+          "gzip": 131000,
+          "brotli": 110000
+        },
+        "esbuild": {
+          "raw": 375000,
+          "gzip": 120000,
+          "brotli": 103000
+        }
+      }
+    },
+    {
+      "entry": "./root-eviction/evidence",
+      "requiredExports": ["SDKRootEvictionEvidence"],
+      "prohibitedExports": [
+        "SQLiteRootEvictionStore",
+        "SQLiteJournal",
+        "OutputKnowledge",
+        "RevenueListingLineageVerifier"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 525000,
+          "gzip": 142000,
+          "brotli": 118000
+        },
+        "esbuild": {
+          "raw": 405000,
+          "gzip": 130000,
+          "brotli": 111000
+        }
+      }
+    },
+    {
+      "entry": "./root-eviction",
+      "requiredExports": ["RootEvictionContracts"],
+      "prohibitedExports": [
+        "SQLiteRootEvictionStore",
+        "SDKRootEvictionEvidence",
+        "OutputKnowledge"
+      ],
+      "maximumBytes": {
+        "vite": {
+          "raw": 190000,
+          "gzip": 62000,
+          "brotli": 53000
+        },
+        "esbuild": {
+          "raw": 150000,
+          "gzip": 58000,
+          "brotli": 50000
+        }
+      }
+    }
+  ]
+}

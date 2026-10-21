@@ -1,5 +1,7 @@
 # @bsv/amountinator
 
+Patch candidate `2.1.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/amountinator)](https://www.npmjs.com/package/@bsv/amountinator)
 

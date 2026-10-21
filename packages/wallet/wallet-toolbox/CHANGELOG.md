@@ -4,7 +4,33 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.15.0
+## wallet-toolbox 2.15.0 (source candidate)
+
+- Preserve the existing storage `internalizeAction(storage, auth, args, receipt?)`
+  call signature. Local funding recovery uses the separate
+  `internalizeActionWithRecovery` deep import; historical callers need no migration.
+
+- Acquire the local funding route's shared SQL receipt fence inside its atomic
+  ownership/journal transaction. A killed uncommitted writer leaves no pending
+  lease, and independently prepared contenders can reach their coordination
+  boundary. Add an optional transaction-bound backend port without changing
+  ordinary receipt leases, BRC-100 requests or test deadlines.
+
+- Require an exact canonical compressed public-key round trip for opt-in BRC-197 fixed-child recipients before ownership. Add native lifecycle coverage that preserves pre-existing transaction accounting and uses distinct fixture references; ordinary internalization is unchanged.
+
+- Add opt-in local SQLite action recovery for atomic allocation, exact prepared
+  and signed `noSend` transactions, and durable processing reconciliation.
+- Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
+  credit, deferred monitor work and retained receipts. Deep imports require
+  explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Type explicit funding-recovery capacity values as numbers, matching the existing
+  configurable limits. Add retained-record representation and native ownership
+  rejection regressions; runtime validation, defaults and journal formats remain unchanged.
+- Preserve whole wallet databases and keys for these auxiliary journals. Legacy
+  entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
+  not transport or implement them. Reconcile pending operations before rollback.
+- The previously recorded 2.14.5 no-send ownership corrections remain included.
+  This candidate has not been published and does not complete private acquisition.
 
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
@@ -109,7 +135,9 @@ attention to changes that materially alter behavior or extend functionality.
   was encrypted before the permission module ran and again afterwards, so
   `listOutputs` (which decrypts once) returned ciphertext. The after-module
   pass now encrypts only permission-module baskets, matching `createAction`'s
-  once-only rule.- Preserve bounded pre-construction double-spend reviews from remote storage.
+  once-only rule.
+
+- Preserve bounded pre-construction double-spend reviews from remote storage.
   An empty attempted TXID is accepted only with one doubleSpend result, empty
   send results, absent constructed-action fields and nonempty competing evidence.
   Consumers must validate the evidence and synchronize the winning transaction
