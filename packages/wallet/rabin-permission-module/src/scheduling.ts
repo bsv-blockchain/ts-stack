@@ -90,29 +90,54 @@ export const monotonicNow = (): number => globalThis.performance?.now() ?? Date.
 
 const now = monotonicNow
 
-/** Drives a computation in slices of about `budgetMs`, yielding to the event loop in between. */
-export async function runCooperatively<T>(
+/** Runs the computation until it finishes or the slice has used its budget. */
+function runSlice<T>(
   steps: Steps<T>,
-  options: CooperativeOptions = {}
-): Promise<T> {
-  const budget = options.budgetMs ?? DEFAULT_BUDGET_MS
-  let sliceStart = now()
+  budget: number,
+  onSlice: CooperativeOptions['onSlice']
+): IteratorResult<void, T> {
+  const sliceStart = now()
   for (;;) {
     const result = steps.next()
     const elapsed = now() - sliceStart
-    if (result.done === true) {
-      options.onSlice?.(elapsed)
-      return result.value
+    if (result.done === true || elapsed >= budget) {
+      onSlice?.(elapsed)
+      return result
     }
-    if (elapsed < budget) continue
-    options.onSlice?.(elapsed)
-    await yieldToEventLoop()
-    if (options.isCancelled?.() === true) {
-      steps.return(undefined as never)
-      throw options.cancelledError?.() ?? new Error('RABIN: computation cancelled')
-    }
-    sliceStart = now()
   }
+}
+
+/**
+ * Drives a computation in slices of about `budgetMs`, yielding to the event loop in between. Each
+ * slice is scheduled from the previous one's callback, so nothing accumulates across slices (an
+ * awaited recursion would keep every slice's promise alive until the end).
+ */
+export function runCooperatively<T>(steps: Steps<T>, options: CooperativeOptions = {}): Promise<T> {
+  const budget = options.budgetMs ?? DEFAULT_BUDGET_MS
+  return new Promise<T>((resolve, reject) => {
+    const next = (): void => {
+      let result: IteratorResult<void, T>
+      try {
+        result = runSlice(steps, budget, options.onSlice)
+      } catch (error) {
+        reject(error)
+        return
+      }
+      if (result.done === true) {
+        resolve(result.value)
+        return
+      }
+      yieldToEventLoop().then(() => {
+        if (options.isCancelled?.() === true) {
+          steps.return(undefined as never)
+          reject(options.cancelledError?.() ?? new Error('RABIN: computation cancelled'))
+          return
+        }
+        next()
+      }, reject)
+    }
+    next()
+  })
 }
 
 /**

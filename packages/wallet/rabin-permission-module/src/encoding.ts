@@ -17,7 +17,7 @@ export function scriptNum(value: bigint): Uint8Array {
     bytes.push(Number(rest & 0xffn))
     rest >>= 8n
   }
-  if ((bytes[bytes.length - 1] & 0x80) !== 0) bytes.push(0x00)
+  if ((bytes.at(-1)! & 0x80) !== 0) bytes.push(0x00)
   return Uint8Array.from(bytes)
 }
 
@@ -41,7 +41,7 @@ export function encodeFields(fields: ArrayLike<number>[]): number[] {
   for (const field of fields) {
     if (field.length > MAX_FIELD_BYTES) throw new RangeError('RABIN: field exceeds 65535 bytes')
     out.push(field.length & 0xff, field.length >> 8)
-    for (let i = 0; i < field.length; i++) out.push(field[i])
+    for (const byte of Array.from(field)) out.push(byte)
   }
   return out
 }
