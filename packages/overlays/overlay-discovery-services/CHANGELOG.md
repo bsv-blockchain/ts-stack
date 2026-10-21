@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- `isValidTopicOrServiceName`, SHIP/SLAP admission, `WalletAdvertiser` and the
+  SHIP/SLAP lookup filters accept topic and service names with digits, up to
+  256 bytes, matching the `@bsv/sdk` overlay name grammar and the BRC-207
+  per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`). Names
+  accepted before are still accepted; no migration is required.
+
 - Order equal creation timestamps by unique MongoDB _id for stable discovery pagination.
 
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.

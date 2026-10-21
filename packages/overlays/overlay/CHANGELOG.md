@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- SHIP/SLAP advertisement validation accepts topic and service names with
+  digits, up to 256 bytes, matching the `@bsv/sdk` overlay name grammar and the
+  BRC-207 per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`).
+  Names accepted before are still accepted; no migration is required.
+
 - Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
 
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
