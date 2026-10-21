@@ -109,7 +109,8 @@ describe('key generation scheduling', () => {
   }, 60_000)
 
   it('rate-limits uncached generations per app and overall, refilling over time', async () => {
-    jest.useFakeTimers({ doNotFake: ['performance', 'setImmediate', 'nextTick', 'queueMicrotask'] })
+    // The buckets use the monotonic clock, so it is faked too.
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] })
     jest.setSystemTime(1_000_000)
     const { instance, derivedKeyIDs } = setup()
     const generate = async (keyID: string, originator: string) =>
@@ -134,7 +135,7 @@ describe('key generation scheduling', () => {
   }, 60_000)
 
   it('authorizes before throttling and lets neither consume the other', async () => {
-    jest.useFakeTimers({ doNotFake: ['performance', 'setImmediate', 'nextTick', 'queueMicrotask'] })
+    jest.useFakeTimers({ doNotFake: ['setImmediate', 'nextTick', 'queueMicrotask'] })
     jest.setSystemTime(1_000_000)
     const authorize = jest.fn(async () => true)
     const { instance, derivedKeyIDs } = setup({ authorize, originatorGenerationBurst: 1 })
@@ -230,6 +231,16 @@ describe('key generation scheduling', () => {
     expect(provider).toHaveBeenCalledTimes(1)
     await expect(privileged('p.example')).rejects.toThrow(LIMITED)
     expect(provider).toHaveBeenCalledTimes(1)
+  }, 30_000)
+
+  it('measures rate-limit refill on a monotonic clock, not the wall clock', async () => {
+    const { instance, derivedKeyIDs } = setup({ originatorGenerationBurst: 1 })
+    await execute(instance, keyRequest('first'))
+    // The wall clock jumps an hour ahead (a clock change); no time has really passed.
+    const wall = Date.now()
+    jest.spyOn(Date, 'now').mockReturnValue(wall + 60 * 60 * 1000)
+    await expect(execute(instance, keyRequest('second'))).rejects.toThrow(LIMITED)
+    expect(derivedKeyIDs()).toEqual(['first'])
   }, 30_000)
 
   it('validates the scheduling options', () => {

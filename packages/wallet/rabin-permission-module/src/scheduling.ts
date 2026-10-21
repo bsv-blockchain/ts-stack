@@ -85,7 +85,10 @@ export interface CooperativeOptions {
 
 const DEFAULT_BUDGET_MS = 4
 
-const now = (): number => globalThis.performance?.now() ?? Date.now()
+/** Milliseconds on a monotonic clock where the host has one (immune to wall-clock changes). */
+export const monotonicNow = (): number => globalThis.performance?.now() ?? Date.now()
+
+const now = monotonicNow
 
 /** Drives a computation in slices of about `budgetMs`, yielding to the event loop in between. */
 export async function runCooperatively<T>(

@@ -17,6 +17,8 @@ module.exports = {
   preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
   testMatch: ['**/__tests__/**/*.test.ts'],
+  // Real-clock tests run alone (pnpm test:slow): parallel workers distort their timing.
+  testPathIgnorePatterns: ['/node_modules/', '\\.slow\\.test\\.ts$'],
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

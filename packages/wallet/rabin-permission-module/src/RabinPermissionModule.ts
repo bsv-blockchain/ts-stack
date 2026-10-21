@@ -12,7 +12,7 @@ import { encodeKeyResult, encodeSignResult } from './encoding.js'
 import { GenerationRateLimiter, GenerationScheduler } from './generation.js'
 import { forgetKey, KeyCache } from './keyCache.js'
 import { generateKeySteps, signSteps, type RabinKey } from './rabin.js'
-import { drivers } from './scheduling.js'
+import { drivers, monotonicNow } from './scheduling.js'
 import type {
   ParsedRabinRequest,
   RabinAuthorizationRequest,
@@ -246,7 +246,7 @@ export class RabinPermissionModule implements PermissionsModule {
       generationQueueTimeout,
       () => new Error(SIGNING_BUSY)
     )
-    this.#rateLimiter = new GenerationRateLimiter(limits, Date.now())
+    this.#rateLimiter = new GenerationRateLimiter(limits, monotonicNow())
     this.#maxMessageBytes = integerOption(
       ownedOptions.maxMessageBytes,
       MIN_MESSAGE_BYTES,
@@ -585,7 +585,7 @@ export class RabinPermissionModule implements PermissionsModule {
     }
     if (pending === undefined) {
       if (!this.#generations.hasCapacity()) throw new Error(BUSY)
-      if (!this.#rateLimiter.tryAcquire(originator, Date.now())) throw new Error(RATE_LIMITED)
+      if (!this.#rateLimiter.tryAcquire(originator, monotonicNow())) throw new Error(RATE_LIMITED)
       pending = this.#generations.submit(identity, async () => {
         // Only an admitted generation asks for a deriver, so a busy or throttled privileged
         // request never reaches the privileged key provider.
