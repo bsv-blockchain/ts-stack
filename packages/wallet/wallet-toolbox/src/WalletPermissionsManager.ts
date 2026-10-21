@@ -20,6 +20,8 @@ import {
   GetPublicKeyArgs,
   CreateActionArgs,
   CreateActionResult,
+  SignActionArgs,
+  SignActionResult,
   SendWithResult,
   WERR_REVIEW_ACTIONS as SDK_WERR_REVIEW_ACTIONS,
   ListOutputsResult,
@@ -44,6 +46,7 @@ import {
 } from './utility/exactActionSpend'
 import { copyActionOutputAuthorizations } from './utility/actionOutputAuthorizations'
 import { WERR_REVIEW_ACTIONS, WERR_UNAUTHORIZED } from './sdk/WERR_errors'
+import { specOpBasketPrefixOutputs } from './sdk/types'
 // Imported from the leaf module directly (not generateChange.ts, which
 // transitively imports StorageProvider.ts and the full signer/create-action
 // module graph) to avoid an unrelated circular-import edge from this file.
@@ -175,11 +178,24 @@ export type LineItemType = 'input' | 'output' | 'fee'
 /** Security level for DPACP protocol permissions. */
 export type SecurityLevel = 0 | 1 | 2
 
+/** The action a `signAction` hook call signs. */
+export interface PermissionsModuleAction {
+  reference: string
+  /** The signable transaction as `createAction` returned it. */
+  transaction: Transaction
+  /** True when the signed transaction is not broadcast. */
+  noSend: boolean
+  /** The `createAction` arguments as the permission modules returned them, before metadata encryption. */
+  createArgs?: CreateActionArgs
+}
+
 /** A wallet request routed to a BRC-98/99/111 permission module. */
 export interface PermissionsModuleRequest {
   method: string
   args: object
   originator: string
+  /** Set only for `signAction` hook calls. */
+  action?: PermissionsModuleAction
 }
 
 /**
@@ -191,8 +207,79 @@ export type PermissionsModuleNext = (args: object) => Promise<unknown>
 /**
  * A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
  * Modules are registered in the config mapped by their scheme ID.
+ *
+ * Modules that handled a `createAction` returning a signable transaction also receive that action's
+ * `signAction` through `onRequest` and `onResponse`, with method `signAction` and the `action` being
+ * signed. A module may add `spends`
+ * for inputs it supplied.
  */
+// BRC-205 attribute grammar: key = lower *( lower / DIGIT / "-" ); value = 1*( unreserved / pct-encoded ).
+const BRC205_KEY = /^[a-z][a-z0-9-]*$/
+const BRC205_VALUE = /^(?:[A-Za-z0-9._~-]|%[0-9A-F]{2})+$/
+const BRC205_MAX_KEY_BYTES = 64
+const BRC205_MAX_VALUE_BYTES = 256
+const BRC205_MAX_ATTRIBUTES = 24
+const BRC205_MAX_BYTES = 2048
+
+/** UTF-16 code-unit order: locale-independent, so the advertised attribute order is stable everywhere. */
+const compareCodeUnits = (a: string, b: string): number => Number(a > b) - Number(a < b)
+
+/**
+ * Appends the BRC-205 capability attributes of `modules` to a wallet version string:
+ * `base; key=value; key2=value2;`, one space after every nonterminal semicolon, no spaces around
+ * `=`, a trailing semicolon when attributes are present. Modules are visited by scheme id and
+ * their keys in order, so the result is deterministic. Attributes the underlying string already
+ * carries are kept and their keys are not repeated; an invalid key or value, or one that would
+ * exceed BRC-205's limits, is left out. With nothing to add the string is returned unchanged.
+ */
+export function withBrc205Capabilities(version: string, modules: Readonly<Record<string, PermissionsModule>>): string {
+  const separator = version.indexOf(';')
+  const base = separator === -1 ? version : version.slice(0, separator)
+  const attributes =
+    separator === -1
+      ? []
+      : version
+          .slice(separator + 1)
+          .split(';')
+          .map(attribute => attribute.trim())
+          .filter(attribute => attribute !== '')
+  const keys = new Set(attributes.map(attribute => attribute.split('=')[0]))
+  let added = 0
+  for (const scheme of Object.keys(modules).sort(compareCodeUnits)) {
+    const capabilities = modules[scheme]?.capabilities ?? {}
+    for (const key of Object.keys(capabilities).sort(compareCodeUnits)) {
+      const value = capabilities[key]
+      if (
+        !BRC205_KEY.test(key) ||
+        key.length > BRC205_MAX_KEY_BYTES ||
+        typeof value !== 'string' ||
+        !BRC205_VALUE.test(value) ||
+        value.length > BRC205_MAX_VALUE_BYTES ||
+        keys.has(key) ||
+        attributes.length >= BRC205_MAX_ATTRIBUTES
+      ) {
+        continue
+      }
+      const attribute = `${key}=${value}`
+      const candidate = `${base}; ${[...attributes, attribute].join('; ')};`
+      if (candidate.length > BRC205_MAX_BYTES) continue
+      keys.add(key)
+      attributes.push(attribute)
+      added++
+    }
+  }
+  if (added === 0) return version
+  return `${base}; ${attributes.join('; ')};`
+}
+
 export interface PermissionsModule {
+  /**
+   * BRC-205 capability attributes the module advertises through `getVersion`, as attribute key to
+   * value. A key is a lowercase `brc<number>-<suffix>` (`[a-z][a-z0-9-]*`, 1-64 bytes); a value is
+   * 1-256 bytes of unreserved or percent-encoded characters. Invalid entries are left out.
+   */
+  capabilities?: Readonly<Record<string, string>>
+
   /**
    * Optionally owns the complete execution of a P-module request.
    *
@@ -217,7 +304,7 @@ export interface PermissionsModule {
    * Transforms the response from the underlying wallet before returning to caller.
    *
    * @param res - The response from the underlying wallet
-   * @param context - Metadata about the original request (method, originator)
+   * @param context - Metadata about the original request (method, originator, and for `signAction` the action)
    * @returns Transformed response to return to the caller
    */
   onResponse: (
@@ -225,6 +312,7 @@ export interface PermissionsModule {
     context: {
       method: string
       originator: string
+      action?: PermissionsModuleAction
     }
   ) => Promise<any>
 }
@@ -420,6 +508,58 @@ const BASKET_MAP = {
   basket: 'admin basket-access',
   certificate: 'admin certificate-access',
   spending: 'admin spending-authorization'
+}
+
+/**
+ * Preserves the confidentiality of transaction descriptions, input/output descriptions and
+ * custom instructions from lower storage layers. Always used with `keyID="1"` and `counterparty="self"`.
+ */
+const METADATA_ENCRYPTION_PROTOCOL: [2, 'admin metadata encryption'] = [2, 'admin metadata encryption']
+
+/**
+ * Encrypts metadata through `wallet` as a permissions manager with `encryptWalletMetadata` does.
+ * Permission modules use this for metadata they store through the underlying wallet directly.
+ */
+export async function encryptMetadata(
+  wallet: WalletInterface,
+  plaintext: string,
+  originator?: string
+): Promise<Base64String> {
+  const { ciphertext } = await wallet.encrypt(
+    {
+      plaintext: toArray(plaintext, 'utf8'),
+      protocolID: METADATA_ENCRYPTION_PROTOCOL,
+      keyID: '1'
+    },
+    originator
+  )
+  return toBase64(ciphertext)
+}
+
+/**
+ * Decrypts metadata that a permissions manager with `encryptWalletMetadata` stored through `wallet`.
+ * A value that does not decrypt, such as metadata stored without encryption, is returned unchanged.
+ * Permission modules use this to read metadata from their own baskets through the underlying wallet.
+ */
+export async function maybeDecryptMetadata(
+  wallet: WalletInterface,
+  ciphertext: Base64String,
+  originator?: string
+): Promise<string> {
+  try {
+    const { plaintext } = await wallet.decrypt(
+      {
+        ciphertext: toArray(ciphertext, 'base64'),
+        protocolID: METADATA_ENCRYPTION_PROTOCOL,
+        keyID: '1'
+      },
+      originator
+    )
+    return toUTF8(plaintext)
+  } catch {
+    // Decryption failed (e.g. wrong key, unencrypted legacy value) — return original string unchanged
+    return ciphertext
+  }
 }
 
 /**
@@ -682,6 +822,10 @@ export class WalletPermissionsManager implements WalletInterface {
   private readonly blockedActionReferences: Set<string> = new Set()
   /** Pending references whose action was created with `noSend`. */
   private readonly pendingNoSendReferences: Set<string> = new Set()
+  /** P-modules that handled each pending action's createAction, in request order. */
+  private readonly pendingActionModules: Map<string, PermissionsModule[]> = new Map()
+  /** The createAction arguments those P-modules returned, for their signAction hooks. */
+  private readonly pendingActionCreateArgs: Map<string, CreateActionArgs> = new Map()
   /**
    * Originator binding for signed no-send actions, keyed by lowercase txid.
    * Signing drops the pending reference, so without this a non-admin caller
@@ -793,7 +937,11 @@ export class WalletPermissionsManager implements WalletInterface {
         ...config.permissionModules,
         // BRC-177 is a built-in reserved BRC-111 module in every Toolbox wallet.
         nosend: {
+          // BRC-177 L365: this revision, including batches and `never`.
+          capabilities: { 'brc177-nosend': '2' },
           onRequest: async req => {
+            // Signing an action this module already authorized at createAction needs nothing further.
+            if (req.method === 'signAction') return { args: req.args }
             const labels = (req.args as { labels?: string[] }).labels
             parseBrc177NoSendExpiryLabels(labels)
             if (req.method !== 'createAction' && req.method !== 'listActions') {
@@ -2713,15 +2861,6 @@ export class WalletPermissionsManager implements WalletInterface {
     'admin permission token encryption'
   ]
 
-  /**
-   * Similarly, we will use a "metadata encryption" protocol to preserve the confidentiality
-   * of transaction descriptions and input/output descriptions from lower storage layers.
-   */
-  private static readonly METADATA_ENCRYPTION_PROTOCOL: [2, 'admin metadata encryption'] = [
-    2,
-    'admin metadata encryption'
-  ]
-
   /** We always use `keyID="1"` and `counterparty="self"` for these encryption ops. */
   private async encryptPermissionTokenField(plaintext: string | number[]): Promise<number[]> {
     const data = typeof plaintext === 'string' ? toArray(plaintext, 'utf8') : plaintext
@@ -2863,15 +3002,7 @@ export class WalletPermissionsManager implements WalletInterface {
     if (!this.config.encryptWalletMetadata) {
       return plaintext
     }
-    const { ciphertext } = await this.underlying.encrypt(
-      {
-        plaintext: toArray(plaintext, 'utf8'),
-        protocolID: WalletPermissionsManager.METADATA_ENCRYPTION_PROTOCOL,
-        keyID: '1'
-      },
-      this.adminOriginator
-    )
-    return toBase64(ciphertext)
+    return await encryptMetadata(this.underlying, plaintext, this.adminOriginator)
   }
 
   /**
@@ -2880,20 +3011,7 @@ export class WalletPermissionsManager implements WalletInterface {
    * @returns The decrypted metadata. If decryption fails, returns the original value instead.
    */
   private async maybeDecryptMetadata(ciphertext: Base64String): Promise<string> {
-    try {
-      const { plaintext } = await this.underlying.decrypt(
-        {
-          ciphertext: toArray(ciphertext, 'base64'),
-          protocolID: WalletPermissionsManager.METADATA_ENCRYPTION_PROTOCOL,
-          keyID: '1'
-        },
-        this.adminOriginator
-      )
-      return toUTF8(plaintext)
-    } catch {
-      // Decryption failed (e.g. wrong key, unencrypted legacy value) — return original string unchanged
-      return ciphertext
-    }
+    return await maybeDecryptMetadata(this.underlying, ciphertext, this.adminOriginator)
   }
 
   /** Helper to see if a token's expiry is in the past. */
@@ -4334,8 +4452,9 @@ export class WalletPermissionsManager implements WalletInterface {
       labels: [...(args.labels || []), `admin originator ${originator}`, `admin month ${this.getCurrentMonthYearUTC()}`]
     }
     let createResult: CreateActionResult
+    let moduleArgs: CreateActionArgs
     try {
-      createResult = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator)
+      ;({ createResult, moduleArgs } = await this.callCreateActionWithPModules(finalArgs, pModulesByScheme, originator))
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       throw error
@@ -4348,7 +4467,8 @@ export class WalletPermissionsManager implements WalletInterface {
     // data. This ensures malformed BEEF is still aborted and cannot leave an
     // untracked action that may later be signed under another originator.
     const reference = createResult.signableTransaction.reference
-    this.bindPendingAction(reference, originator, vargs.isNoSend)
+    const pModules = Array.from(pModulesByScheme.values())
+    this.bindPendingAction(reference, originator, vargs.isNoSend, pModules, moduleArgs)
 
     // 7a) Parse the signable tx to determine net spend, then gate on spending
     // authorization. SECURITY (GHSA-36f9-7rg5-cpf8) defense-in-depth: confirm every
@@ -4405,31 +4525,37 @@ export class WalletPermissionsManager implements WalletInterface {
     // 9) Finalize or return the signable transaction based on whether more signatures are needed.
     if (vargs.isSignAction) return createResult
 
+    let signResult: SignActionResult
+    const action = this.signingAction(reference, vargs.isNoSend)
     try {
-      const signResult = await this.underlying.signAction(
+      const signArgs = await this.signActionArgsThroughPModules(
+        pModules,
         {
           reference,
           spends: {},
           options: { ...args.options, returnTXIDOnly: false }
         },
+        action,
         originator
       )
-      this.assertAuthorizedSignResult(reference, {}, signResult)
+      signResult = await this.underlying.signAction(signArgs, originator)
+      this.assertAuthorizedSignResult(reference, signArgs.spends, signResult)
       this.clearPendingAction(reference)
       if (vargs.isNoSend && signResult.txid != null) {
         this.recordNoSendAction(signResult.txid, originator)
       }
       this.forgetSentNoSendActions(signResult.sendWithResults)
-      return {
-        ...createResult,
-        ...signResult,
-        noSendChange: noSendChangeOnSignedTransaction(createResult.noSendChange, signResult.txid),
-        signableTransaction: undefined
-      }
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(reference)
       throw error
+    }
+    signResult = await this.signActionResultThroughPModules(pModules, signResult, action, originator)
+    return {
+      ...createResult,
+      ...signResult,
+      noSendChange: noSendChangeOnSignedTransaction(createResult.noSendChange, signResult.txid),
+      signableTransaction: undefined
     }
   }
 
@@ -4482,7 +4608,8 @@ export class WalletPermissionsManager implements WalletInterface {
         originalOutputDescriptions[i] = output.outputDescription
         output.outputDescription = await this.maybeEncryptMetadata(output.outputDescription)
       }
-      if (output.customInstructions) {
+      // P-basket custom instructions are encrypted after the permission modules run.
+      if (output.customInstructions && output.basket?.startsWith('p ') !== true) {
         output.customInstructions = await this.maybeEncryptMetadata(output.customInstructions)
       }
     })
@@ -4496,12 +4623,25 @@ export class WalletPermissionsManager implements WalletInterface {
     return { originalInputDescriptions, originalOutputDescriptions }
   }
 
+  /** Encrypts P-basket output custom instructions as the permission modules left them. */
+  private async encryptCreateActionModuleMetadata(args: CreateActionArgs): Promise<CreateActionArgs> {
+    if (args.outputs === undefined) return args
+    const outputs = await Promise.all(
+      args.outputs.map(async output =>
+        !output.customInstructions || output.basket?.startsWith('p ') !== true
+          ? output
+          : { ...output, customInstructions: await this.maybeEncryptMetadata(output.customInstructions) }
+      )
+    )
+    return { ...args, outputs }
+  }
+
   /** Calls underlying createAction, chaining P-module request/response transforms when needed. */
   private async callCreateActionWithPModules(
     finalArgs: CreateActionArgs & { labels: string[] },
     pModulesByScheme: Map<string, PermissionsModule>,
     originator?: string
-  ): Promise<Awaited<ReturnType<WalletInterface['createAction']>>> {
+  ): Promise<{ createResult: CreateActionResult; moduleArgs: CreateActionArgs }> {
     const pModules = Array.from(pModulesByScheme.values())
     let transformedArgs: object = finalArgs
     for (const module of pModules) {
@@ -4512,7 +4652,11 @@ export class WalletPermissionsManager implements WalletInterface {
       })
       transformedArgs = transformed.args
     }
-    let createResult = await this.underlying.createAction(transformedArgs as CreateActionArgs, originator)
+    const moduleArgs = transformedArgs as CreateActionArgs
+    let createResult = await this.underlying.createAction(
+      await this.encryptCreateActionModuleMetadata(moduleArgs),
+      originator
+    )
     const locallyAuthorizedResult = createResult
     const exactWalletSpend = getExactActionSpend(createResult)
     for (let i = pModules.length - 1; i >= 0; i--) {
@@ -4526,7 +4670,7 @@ export class WalletPermissionsManager implements WalletInterface {
       setExactActionSpend(publicResult, exactWalletSpend)
     }
     copyActionOutputAuthorizations(locallyAuthorizedResult, publicResult)
-    return publicResult
+    return { createResult: publicResult, moduleArgs }
   }
 
   /**
@@ -4802,12 +4946,22 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
-  private bindPendingAction(reference: string, originator: string | undefined, noSend: boolean): void {
+  private bindPendingAction(
+    reference: string,
+    originator: string | undefined,
+    noSend: boolean,
+    pModules: PermissionsModule[],
+    createArgs: CreateActionArgs
+  ): void {
     if (this.pendingActionOriginators.has(reference)) {
       throw new WERR_UNAUTHORIZED('The action reference is already pending.')
     }
     this.pendingActionOriginators.set(reference, originator ?? '')
     if (noSend) this.pendingNoSendReferences.add(reference)
+    if (pModules.length > 0) {
+      this.pendingActionModules.set(reference, pModules)
+      this.pendingActionCreateArgs.set(reference, createArgs)
+    }
   }
 
   private clearPendingAction(reference: string): void {
@@ -4815,6 +4969,8 @@ export class WalletPermissionsManager implements WalletInterface {
     this.pendingActionTemplates.delete(reference)
     this.blockedActionReferences.delete(reference)
     this.pendingNoSendReferences.delete(reference)
+    this.pendingActionModules.delete(reference)
+    this.pendingActionCreateArgs.delete(reference)
   }
 
   /** Lets the originator that created a signed no-send action, and only it, abort it. */
@@ -4854,6 +5010,44 @@ export class WalletPermissionsManager implements WalletInterface {
     }
   }
 
+  /** The action a signAction hook call signs, from the template bound at createAction. */
+  private signingAction(reference: string, noSend: boolean): PermissionsModuleAction | undefined {
+    const transaction = this.pendingActionTemplates.get(reference)
+    if (transaction === undefined) return undefined
+    const createArgs = this.pendingActionCreateArgs.get(reference)
+    return createArgs === undefined
+      ? { reference, transaction, noSend }
+      : { reference, transaction, noSend, createArgs }
+  }
+
+  /** Passes signAction args through the P-modules that handled the action's createAction, in request order. */
+  private async signActionArgsThroughPModules(
+    pModules: PermissionsModule[],
+    args: SignActionArgs,
+    action: PermissionsModuleAction | undefined,
+    originator?: string
+  ): Promise<SignActionArgs> {
+    return (await pModules.reduce<Promise<object>>(
+      async (previous, module) =>
+        (await module.onRequest({ method: 'signAction', args: await previous, originator: originator!, action })).args,
+      Promise.resolve(args)
+    )) as SignActionArgs
+  }
+
+  /** Passes a signAction result back through the same P-modules in reverse order. */
+  private async signActionResultThroughPModules(
+    pModules: PermissionsModule[],
+    result: SignActionResult,
+    action: PermissionsModuleAction | undefined,
+    originator?: string
+  ): Promise<SignActionResult> {
+    return await pModules.reduceRight<Promise<SignActionResult>>(
+      async (previous, module) =>
+        await module.onResponse(await previous, { method: 'signAction', originator: originator!, action }),
+      Promise.resolve(result)
+    )
+  }
+
   public async signAction(
     ...args: Parameters<WalletInterface['signAction']>
   ): ReturnType<WalletInterface['signAction']> {
@@ -4861,26 +5055,32 @@ export class WalletPermissionsManager implements WalletInterface {
     this.assertPendingActionOriginator(requestArgs.reference, originator, false)
     // The wallet takes noSend from signAction's options, else from createAction's.
     const noSend = (requestArgs.options?.noSend ?? this.pendingNoSendReferences.has(requestArgs.reference)) === true
+    const pModules = this.pendingActionModules.get(requestArgs.reference) ?? []
+    const action = this.signingAction(requestArgs.reference, noSend)
+    let result: SignActionResult
     try {
-      const result = await this.underlying.signAction(
+      const signArgs = await this.signActionArgsThroughPModules(
+        pModules,
         {
           ...requestArgs,
           options: { ...requestArgs.options, returnTXIDOnly: false }
         },
+        action,
         originator
       )
-      this.assertAuthorizedSignResult(requestArgs.reference, requestArgs.spends, result)
+      result = await this.underlying.signAction(signArgs, originator)
+      this.assertAuthorizedSignResult(requestArgs.reference, signArgs.spends, result)
       this.clearPendingAction(requestArgs.reference)
       if (noSend && result.txid != null) {
         this.recordNoSendAction(result.txid, originator, requestArgs.reference)
       }
       this.forgetSentNoSendActions(result.sendWithResults)
-      return result
     } catch (error) {
       this.forgetSentNoSendActionsInError(error)
       await this.blockAndAbortAction(requestArgs.reference)
       throw error
     }
+    return await this.signActionResultThroughPModules(pModules, result, action, originator)
   }
 
   public async abortAction(
@@ -5577,10 +5777,18 @@ export class WalletPermissionsManager implements WalletInterface {
     return await this.underlying.getNetwork(...args)
   }
 
+  /**
+   * The underlying wallet's version string with the BRC-205 capability attributes of every
+   * configured permission module appended (see `withBrc205Capabilities`).
+   */
   public async getVersion(
     ...args: Parameters<WalletInterface['getVersion']>
   ): ReturnType<WalletInterface['getVersion']> {
-    return await this.underlying.getVersion(...args)
+    const result = await this.underlying.getVersion(...args)
+    return {
+      ...result,
+      version: withBrc205Capabilities(result.version, this.config.permissionModules ?? {})
+    }
   }
 
   /* ---------------------------------------------------------------------
@@ -5636,6 +5844,8 @@ export class WalletPermissionsManager implements WalletInterface {
   private isAdminBasket(basket: string): boolean {
     if (basket === 'default') return true
     if (basket.startsWith('admin')) return true
+    // Lists P-basket outputs past their permission modules.
+    if (basket === specOpBasketPrefixOutputs) return true
     return false
   }
 

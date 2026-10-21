@@ -14,9 +14,9 @@ import {
 } from '../Bsv21Binary.js'
 import type { Bsv21Role } from '../Bsv21Binary.js'
 import {
-  STRICT_CBOR_MAX_BYTES,
   STRICT_CBOR_MAX_DEPTH,
   StrictCborError,
+  StrictCborLink,
   decodeStrictCbor,
   encodeStrictCbor,
   tryDecodeStrictCbor
@@ -40,37 +40,46 @@ fc.configureGlobal({
 const MAX_UINT64 = (1n << 64n) - 1n
 const hexOf = (bytes: ArrayLike<number>): string => Buffer.from(Array.from(bytes)).toString('hex')
 
+// Floats with an integral value re-encode as integers, so round-trip properties leave them out.
+const floatValue = fc
+  .double({ noNaN: true, noDefaultInfinity: true })
+  .filter(value => !Number.isInteger(value))
 const leafValue: fc.Arbitrary<StrictCborValue> = fc.oneof(
-  fc.bigInt({ min: 0n, max: MAX_UINT64 }),
+  fc.bigInt({ min: -(1n << 64n), max: MAX_UINT64 }),
+  floatValue,
   fc.uint8Array({ maxLength: 16 }),
   fc.string({ unit: 'binary', maxLength: 8 }),
   fc.constant(null),
-  fc.boolean()
+  fc.boolean(),
+  fc.uint8Array({ maxLength: 8 }).map(cid => new StrictCborLink(Uint8Array.from([0, ...cid])))
 )
 const textKey = fc.string({ unit: 'binary', maxLength: 6 })
 
-// The top-level map is depth 1; nested maps may reach STRICT_CBOR_MAX_DEPTH.
+// The top-level map is depth 1; generated containers nest to GENERATED_DEPTH, well inside the
+// decoder's STRICT_CBOR_MAX_DEPTH bound (the spec sets none).
+const GENERATED_DEPTH = 4
 const mapAtDepth = (depth: number): fc.Arbitrary<StrictCborMap> => {
   const value =
-    depth >= STRICT_CBOR_MAX_DEPTH
+    depth >= GENERATED_DEPTH
       ? leafValue
       : fc.oneof(
           { weight: 3, arbitrary: leafValue },
+          { weight: 1, arbitrary: fc.array(leafValue, { maxLength: 3 }) },
           { weight: 1, arbitrary: mapAtDepth(depth + 1) }
         )
   return fc.dictionary(textKey, value, { maxKeys: 3 })
 }
 
-// Generation is small, but the 4096-byte cap is a hard encoder limit: the encoder throws on an
-// oversized map, so the predicate catches that and filters the map out instead of failing.
-const encodesWithinCap = (map: StrictCborMap): boolean => {
-  try {
-    return encodeStrictCbor(map).length <= STRICT_CBOR_MAX_BYTES
-  } catch {
-    return false
-  }
+const strictMap = mapAtDepth(1)
+
+/** True when a decoded value holds a float with an integral value, which re-encodes as an integer. */
+const hasIntegralFloat = (value: StrictCborValue): boolean => {
+  if (typeof value === 'number') return Number.isInteger(value)
+  if (value === null || typeof value !== 'object') return false
+  if (value instanceof Uint8Array || value instanceof StrictCborLink) return false
+  if (Array.isArray(value)) return value.some(hasIntegralFloat)
+  return Object.values(value).some(hasIntegralFloat)
 }
-const strictMap = mapAtDepth(1).filter(encodesWithinCap)
 
 // A deterministic, seed-driven shuffle of every map's own keys, at every depth.
 const mixKey = (seed: number, key: string): number => {
@@ -80,6 +89,7 @@ const mixKey = (seed: number, key: string): number => {
 }
 const permuteKeys = (value: StrictCborValue, seed: number): StrictCborValue => {
   if (value === null || typeof value !== 'object' || value instanceof Uint8Array) return value
+  if (Array.isArray(value) || value instanceof StrictCborLink) return value
   const entries = Object.entries(value as StrictCborMap)
     .map(([k, v]) => [k, permuteKeys(v, seed)] as const)
     .sort((a, b) => mixKey(seed, a[0]) - mixKey(seed, b[0]))
@@ -114,7 +124,10 @@ const amountArb = fc.oneof(
 // the encoder under test.
 
 const NON_MINIMAL = 'non-minimal header'
-const SIMPLE = 'simple value or float not allowed'
+const SIMPLE = 'simple value not allowed'
+const FLOAT_WIDTH = 'float must be 64-bit'
+const NON_FINITE = 'non-finite float'
+const TAG = 'only tag 42 is allowed'
 const LENGTH_EXCEEDS = 'length exceeds input'
 const TRUNCATED = 'truncated input'
 const NOT_A_MAP = 'top level must be a map'
@@ -338,7 +351,8 @@ describe('BRC-162 encoding properties', () => {
     fc.assert(
       fc.property(fc.oneof(arbitraryBytes, nearValid), bytes => {
         const decoded = tryDecodeStrictCbor(bytes)
-        if (decoded !== undefined) expect(encodeStrictCbor(decoded)).toEqual(Array.from(bytes))
+        if (decoded !== undefined && !hasIntegralFloat(decoded))
+          expect(encodeStrictCbor(decoded)).toEqual(Array.from(bytes))
       })
     )
   })
@@ -351,6 +365,8 @@ describe('BRC-162 encoding properties', () => {
         fc.bigInt({ min: 0n, max: 0xffffffffn }),
         slotArb,
         (major, width, seed, slot) => {
+          // A float's bits (major 7, info 25..27) are not an argument and have no minimal form.
+          fc.pre(major !== 7 || width === 0)
           const value = seed % WIDTH_MINIMUM[width]
           const header = [(major << 5) | (24 + width), ...bigEndian(value, 1 << width)]
           expect(rejectMessage(inSlot(slot, header))).toBe(NON_MINIMAL)
@@ -359,36 +375,50 @@ describe('BRC-162 encoding properties', () => {
     )
   })
 
-  test('strict CBOR refuses a value of major type 1, 4 or 6, a non-map top level and a non-text key', () => {
+  test('strict CBOR reads negative integers, refuses tags other than 42, and keeps the top level a map and keys text', () => {
     fc.assert(
-      fc.property(fc.constantFrom(1, 4, 6), argumentArb, slotArb, (major, value, slot) => {
-        const expected = {
-          top: NOT_A_MAP,
-          key: KEY_NOT_TEXT,
-          value: `major type ${major} not allowed`
-        }
-        expect(rejectMessage(inSlot(slot, minimalHeader(major, value)))).toBe(expected[slot])
-      })
-    )
-    fc.assert(
-      fc.property(fc.constantFrom(0, 2, 7), argumentArb, (major, value) => {
+      fc.property(fc.constantFrom(0, 1, 2, 4, 6, 7), argumentArb, (major, value) => {
+        // f8 18..f8 1f is a non-minimal simple value, refused before the slot is judged.
+        fc.pre(major !== 7 || value < 24n || value >= 32n)
         expect(rejectMessage(inSlot('top', minimalHeader(major, value)))).toBe(NOT_A_MAP)
         expect(rejectMessage(inSlot('key', minimalHeader(major, value)))).toBe(KEY_NOT_TEXT)
       })
     )
+    fc.assert(
+      fc.property(argumentArb, value => {
+        expect(decodeStrictCbor(underKeyA(minimalHeader(1, value)))).toEqual({ a: -1n - value })
+      })
+    )
+    fc.assert(
+      fc.property(argumentArb, value => {
+        fc.pre(value !== 42n)
+        expect(rejectMessage(underKeyA(minimalHeader(6, value)))).toBe(TAG)
+      })
+    )
   })
 
-  test('strict CBOR reads only false, true and null from major type 7', () => {
+  test('strict CBOR reads false, true, null and finite 64-bit floats from major type 7', () => {
     const known = new Map<bigint, StrictCborValue>([
       [20n, false],
       [21n, true],
       [22n, null]
     ])
+    const float64 = (bits: bigint): number => {
+      const view = new DataView(new ArrayBuffer(8))
+      view.setBigUint64(0, bits)
+      return view.getFloat64(0)
+    }
     fc.assert(
       fc.property(fc.oneof(argumentArb, fc.constantFrom(20n, 21n, 22n)), value => {
         const bytes = underKeyA(minimalHeader(7, value))
         if (known.has(value)) expect(decodeStrictCbor(bytes)).toEqual({ a: known.get(value) })
-        else expect(rejectMessage(bytes)).toBe(SIMPLE)
+        else if (value < 24n) expect(rejectMessage(bytes)).toBe(SIMPLE)
+        else if (value < 32n) expect(rejectMessage(bytes)).toBe(NON_MINIMAL)
+        else if (value < 0x100n) expect(rejectMessage(bytes)).toBe(SIMPLE)
+        else if (value < 0x100000000n) expect(rejectMessage(bytes)).toBe(FLOAT_WIDTH)
+        else if (Number.isFinite(float64(value)))
+          expect(decodeStrictCbor(bytes)).toEqual({ a: float64(value) })
+        else expect(rejectMessage(bytes)).toBe(NON_FINITE)
       })
     )
   })
@@ -428,7 +458,6 @@ describe('BRC-162 encoding properties', () => {
     fc.assert(
       fc.property(strictMap, fc.uint8Array({ minLength: 1, maxLength: 8 }), (map, extra) => {
         const bytes = [...encodeStrictCbor(map), ...extra]
-        fc.pre(bytes.length <= STRICT_CBOR_MAX_BYTES)
         expect(rejectMessage(bytes)).toBe('trailing bytes')
       })
     )
@@ -456,15 +485,15 @@ describe('BRC-162 encoding properties', () => {
     )
   })
 
-  test('strict CBOR refuses a map nested deeper than 4 before reading its keys', () => {
+  test(`strict CBOR refuses a map nested deeper than ${STRICT_CBOR_MAX_DEPTH} before reading its keys`, () => {
     fc.assert(
       fc.property(
-        fc.integer({ min: STRICT_CBOR_MAX_DEPTH + 1, max: 40 }),
+        fc.integer({ min: STRICT_CBOR_MAX_DEPTH + 1, max: STRICT_CBOR_MAX_DEPTH + 8 }),
         anyChunkHex,
         (depth, tail) => {
           const outer = Array.from({ length: depth - 1 }, () => [0xa1, 0x61, 0x61]).flat()
           const bytes = [...outer, 0xa1, ...Buffer.from(tail, 'hex')]
-          expect(rejectMessage(bytes)).toBe('map nesting deeper than 4')
+          expect(rejectMessage(bytes)).toBe(`nesting deeper than ${STRICT_CBOR_MAX_DEPTH}`)
         }
       )
     )

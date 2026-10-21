@@ -39,10 +39,12 @@ export async function balances(): Promise<void> {
       const seen = new Set<string>()
       for (;;) {
         const change = await setup.wallet.listOutputs({ basket: 'default', limit: 10, offset })
+        const totalOutputs = change.totalOutputs
         if (
-          !Number.isSafeInteger(change.totalOutputs) ||
-          change.totalOutputs < 0 ||
-          change.totalOutputs > MAX_BALANCE_OUTPUTS
+          typeof totalOutputs !== 'number' ||
+          !Number.isSafeInteger(totalOutputs) ||
+          totalOutputs < 0 ||
+          totalOutputs > MAX_BALANCE_OUTPUTS
         ) {
           throw new Error('Wallet reported an invalid or excessive output count')
         }
@@ -59,7 +61,7 @@ export async function balances(): Promise<void> {
           balance = nextBalance
         }
         offset += change.outputs.length
-        if (change.outputs.length === 0 || offset >= change.totalOutputs) break
+        if (change.outputs.length === 0 || offset >= totalOutputs) break
       }
 
       console.log(`balance for ${identityKey} = ${balance}`)

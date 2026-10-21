@@ -4,7 +4,7 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '2.0.1'
+version: '2.0.2'
 last_updated: '2026-10-02'
 last_verified: '2026-10-02'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ tags: ['overlay', 'topics', 'uhrp']
 
 # @bsv/overlay-topics
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

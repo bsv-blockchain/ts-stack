@@ -118,6 +118,13 @@
       "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager. Both relay directions retain the SDK's exact wallet-argument and cryptographic-result validators so a hostile peer cannot smuggle malformed wallet calls or forge signing, payment, or authentication verdicts. The audited exact-tarball composition is one chunk: Vite 169600/47639/39547 raw/gzip/Brotli bytes across 27 modules and four packages; esbuild 130696/43950/36801 across 30 modules."
     },
     {
+      "name": "@bsv/color-permission-module",
+      "path": "packages/wallet/color-permission-module",
+      "budget": "packages/wallet/color-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports BRC-162 script helpers from @bsv/templates and only the metadata decryption helper and storage-operation identifier from @bsv/wallet-toolbox-client, with no host, server or UI adapter bundled."
+    },
+    {
       "name": "@bsv/ecpm-permission-module",
       "path": "packages/wallet/ecpm-permission-module",
       "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",

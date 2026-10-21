@@ -38,6 +38,50 @@ attention to changes that materially alter behavior or extend functionality.
   `createAction` refuses caller-supplied BRC-177 metadata. `Brc177NoSendExpiryMode` gains
   `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
   result's `deadline` is `null`.
+- `WalletPermissionsManager` passes `signAction` through the permission modules
+  that handled the action's `createAction`, both for a caller's `signAction`
+  and for the signing step of a one-call `createAction`. Modules receive it via
+  `onRequest` and `onResponse` with method `signAction` and may add `spends`
+  for inputs they supplied. Both calls carry `action` (`reference`, the
+  signable `transaction`, `noSend` and `createArgs`, the `createAction`
+  arguments as the modules returned them), so a module keeps no state between
+  `createAction` and `signAction`. A module request failure aborts the action; a
+  module response failure is thrown without aborting the signed action. A
+  module that rejects unknown methods must accept `signAction`.
+- `encryptMetadata(wallet, plaintext, originator?)` and
+  `maybeDecryptMetadata(wallet, value, originator?)` are exported. They encrypt
+  and decrypt metadata as a permissions manager with `encryptWalletMetadata`
+  does, so a permission module can store and read its own baskets' custom
+  instructions through the underlying wallet. The manager uses the same
+  functions.
+- `createAction` encrypts P-basket output custom instructions after the
+  permission modules run, as `internalizeAction` already does, so instructions a
+  module adds or replaces are stored encrypted.
+- New `listOutputs` special operation `specOpBasketPrefixOutputs`: with a
+  basket namespace such as `p color` in tag 0, it lists outputs from every
+  basket in that namespace that are unspent or reserved as an input of a
+  pending action (`spendable` false), ordered by txid and vout. Spent outputs
+  are excluded. The permissions manager reserves it for the admin originator.
+- `listOutputs` rejects a `balance p <module> <basket>` query with
+  `WERR_INVALID_PARAMETER`, as BRC-112 requires: the satoshi sum of a BRC-99
+  module basket is never reported past its module. `balance <basket>` on other
+  baskets is unchanged, and a module may offer `p <module> balance <basket>`.
+- `WalletPermissionsManager.getVersion` advertises the BRC-205 capability
+  attributes of the configured permission modules: a `PermissionsModule` may
+  declare `capabilities` (attribute key to value), appended to the underlying
+  version string as `base; key=value;` in scheme-id and key order, merged with
+  attributes the wallet already reports and never repeating a key. The built-in
+  BRC-177 module advertises `brc177-nosend=2`. `withBrc205Capabilities` is
+  exported.
+- `createAction` locks the known inputs it marks spent on MySQL and Postgres,
+  so of two concurrent actions spending the same input, the second sees it spent
+  and fails with the existing double-spend or unspendable-input error instead of
+  overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
+- Callers that count `listOutputs` results narrow `totalOutputs` to a number
+  with the exported `numericTotalOutputs`, following the `@bsv/sdk` change that
+  lets BRC-112 module balance queries return decimal text.
+- `@bsv/sdk` 4.0.0 is accepted as a peer alongside the existing 2.x and 3.x
+  ranges.
 
 ## wallet-toolbox 2.14.10
 

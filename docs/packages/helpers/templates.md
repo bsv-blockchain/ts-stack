@@ -3,7 +3,7 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '2.0.0'
+version: '2.1.0'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-10-01'
 last_verified: '2026-10-01'
@@ -16,7 +16,7 @@ tags: [templates, scripts, locking, unlocking]
 
 # @bsv/templates
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

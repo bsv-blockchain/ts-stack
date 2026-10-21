@@ -214,6 +214,20 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### BRC-112 module balances and listOutputs spendability (4.0.0 candidate)
+
+- `ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`.
+  A BRC-112 module balance query (`p <module> balance <basket>`) returns the
+  exact balance as canonical decimal text with no outputs and no BEEF; every
+  other query still returns a count. Result validation requires decimal text
+  for those queries and rejects it for all others.
+- The BRC-100 binary `listOutputs` response carries the module balance as a
+  UTF-8 string and each output's `spendable` byte after its locking script, as
+  BRC-100 specifies. Both sides of a binary connection must update together:
+  earlier codecs neither write nor read the `spendable` byte.
+- Migration: TypeScript that compares or adds `totalOutputs` must first check
+  `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
 ### Fixed (3.2.1 candidate)
 
 - Align `OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operand decoding with

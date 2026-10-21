@@ -1010,12 +1010,12 @@ const payloads: Array<[string, DeployOptions, string]> = [
   [
     'deploy-payload-float',
     { payload: [0xa2, ...text('dec'), 0xf9, 0x3c, 0x00, ...text('sym'), ...text('USD')] },
-    'simple value or float not allowed'
+    'float must be 64-bit'
   ],
   [
     'deploy-payload-tag',
     { payload: [0xa2, ...text('dec'), 0x02, ...text('sym'), 0xd8, 0x2a, ...text('USD')] },
-    'major type 6 not allowed'
+    'invalid CID'
   ],
   [
     'deploy-payload-unsorted-keys',
@@ -1126,15 +1126,11 @@ const authorityCases: Group = async w => {
 const KEY_BYTES = Utils.toArray(holder.key, 'hex')
 
 const schemaRefusals: Array<[string, number[], string]> = [
-  [
-    'details-tag',
-    [0xa1, ...text('kind'), 0xd8, 0x2a, ...text('issue')],
-    'major type 6 not allowed'
-  ],
+  ['details-tag', [0xa1, ...text('kind'), 0xd8, 0x2a, ...text('issue')], 'invalid CID'],
   [
     'details-float',
     [0xa2, ...text('kind'), ...text('setFeeRate'), ...text('feeRatePerKb'), 0xf9, 0x3c, 0x00],
-    'simple value or float not allowed'
+    'float must be 64-bit'
   ],
   [
     'details-unsorted-keys',

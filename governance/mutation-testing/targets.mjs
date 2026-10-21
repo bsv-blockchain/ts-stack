@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker, endMarker) {
   const lines = readFileSync(resolve(repositoryRoot, packageDirectory, filePath), 'utf8').split(
@@ -17,6 +18,11 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
   return `${filePath}:${startIndex + 1}-${endIndex}`
 }
 
+// Restores Stryker's first-failure bail for Jest; see the module's header.
+const STOP_ON_KILL_ENVIRONMENT = fileURLToPath(
+  new URL('./stop-on-kill-environment.cjs', import.meta.url)
+)
+
 function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
   return {
     testRunner: 'jest',
@@ -25,14 +31,11 @@ function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelat
         projectType: 'custom',
         configFile,
         enableFindRelatedTests: findRelated,
-        ...(testMatch === undefined
-          ? {}
-          : {
-              config: {
-                ...config,
-                testMatch
-              }
-            })
+        config: {
+          ...config,
+          testEnvironment: STOP_ON_KILL_ENVIRONMENT,
+          ...(testMatch === undefined ? {} : { testMatch })
+        }
       },
       ...(esm ? { testRunnerNodeArgs: ['--experimental-vm-modules'] } : {})
     }
@@ -623,6 +626,20 @@ export function buildMutationTargets(repositoryRoot) {
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/BasicTokenModule*.test.ts'], {
         esm: true
       })
+    },
+    'color-permission': {
+      packageDirectory: 'packages/wallet/color-permission-module',
+      manifest: 'packages/wallet/color-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts',
+      mutate: [
+        'src/ColorPlan.ts',
+        'src/strictJson.ts',
+        'src/identifiers.ts',
+        'src/tokenOutputs.ts',
+        'src/overlay.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
     },
     'ecpm-permission': {
       packageDirectory: 'packages/wallet/ecpm-permission-module',

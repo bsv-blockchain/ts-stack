@@ -396,18 +396,23 @@ function makeDefaultOutput(userId: number, transactionId: number, satoshis: numb
 }
 
 /** Check known outputs for double-spend, mark them spent, return competing txid if found. */
-async function markKnownInputsSpent(
+export async function markKnownInputsSpent(
   storage: StorageProvider,
   knownInputRows: Array<{ i: XValidCreateActionInput; o: TableOutput }>,
   transactionId: number
 ): Promise<string | undefined> {
   let doubleSpendTxid: string | undefined
   await storage.transaction(async trx => {
-    const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
-    const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
+    // Locks the inputs on MySQL and Postgres, so a concurrent action spending one waits and then
+    // reads it as spent instead of overwriting spentBy.
+    const knownOutputs = await storage.findOutputsByOutpointsForUpdate(
+      verifyId(knownInputRows[0].o.userId),
+      knownInputRows.map(({ o }) => ({ txid: verifyTruthy(o.txid), vout: o.vout })),
+      trx
+    )
     for (const ni of knownInputRows) {
       const { i, o } = ni
-      const o2 = knownOutputsById[verifyId(o.outputId)]
+      const o2 = knownOutputs[`${o.txid}.${o.vout}`]
       if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
       if (o2.spentBy !== undefined && o2.spentBy !== null) {
         const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)

@@ -7,6 +7,7 @@ import {
   BooleanDefaultTrue,
   Byte,
   CertificateFieldNameUnder50Bytes,
+  DecimalString,
   DescriptionString5to50Bytes,
   EntityIconURLStringMax500Bytes,
   EntityNameStringMax100Bytes,
@@ -257,7 +258,7 @@ export default class WindowCWISubstrate implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{
-    totalOutputs: PositiveIntegerOrZero
+    totalOutputs: PositiveIntegerOrZero | DecimalString
     outputs: Array<{
       outpoint: OutpointString
       satoshis: SatoshiValue

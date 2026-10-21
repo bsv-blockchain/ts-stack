@@ -25,7 +25,7 @@ can read it. Both sides prove their identity key bound to the DTLS session, so w
 the signaling cannot read, change or redirect a payment. The payer connects before it creates
 the transaction, so an unreachable payee costs nothing.
 
-The 0.2.0 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0`. The
+The 0.2.0 source candidate is experimental and declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. The
 byte-level protocol is specified in the package's
 [docs/protocol.md](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/messaging/webrtpay/docs/protocol.md).
 

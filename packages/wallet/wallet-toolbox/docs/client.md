@@ -6573,6 +6573,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 A permissions module handles request/response transformation for a specific P-protocol or P-basket scheme under BRC-98/99.
 Modules are registered in the config mapped by their scheme ID.
 
+Modules that handled a `createAction` returning a signable transaction also receive that action's
+`signAction` through `onRequest` and `onResponse`, with method `signAction` and the `action` being
+signed. A module may add `spends`
+for inputs it supplied.
+
 ```ts
 export interface PermissionsModule {
     handleRequest?: (req: PermissionsModuleRequest, next: PermissionsModuleNext) => Promise<unknown>;
@@ -6582,11 +6587,12 @@ export interface PermissionsModule {
     onResponse: (res: any, context: {
         method: string;
         originator: string;
+        action?: PermissionsModuleAction;
     }) => Promise<any>;
 }
 ```
 
-See also: [PermissionsModuleNext](./client.md#type-permissionsmodulenext), [PermissionsModuleRequest](./client.md#interface-permissionsmodulerequest)
+See also: [PermissionsModuleAction](./client.md#interface-permissionsmoduleaction), [PermissionsModuleNext](./client.md#type-permissionsmodulenext), [PermissionsModuleRequest](./client.md#interface-permissionsmodulerequest)
 
 ###### Property handleRequest
 
@@ -6623,7 +6629,49 @@ Transforms the response from the underlying wallet before returning to caller.
 onResponse: (res: any, context: {
     method: string;
     originator: string;
+    action?: PermissionsModuleAction;
 }) => Promise<any>
+```
+See also: [PermissionsModuleAction](./client.md#interface-permissionsmoduleaction)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Interface: PermissionsModuleAction
+
+The action a `signAction` hook call signs.
+
+```ts
+export interface PermissionsModuleAction {
+    reference: string;
+    transaction: Transaction;
+    noSend: boolean;
+    createArgs?: CreateActionArgs;
+}
+```
+
+###### Property createArgs
+
+The `createAction` arguments as the permission modules returned them, before metadata encryption.
+
+```ts
+createArgs?: CreateActionArgs
+```
+
+###### Property noSend
+
+True when the signed transaction is not broadcast.
+
+```ts
+noSend: boolean
+```
+
+###### Property transaction
+
+The signable transaction as `createAction` returned it.
+
+```ts
+transaction: Transaction
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -6638,8 +6686,20 @@ export interface PermissionsModuleRequest {
     method: string;
     args: object;
     originator: string;
+    action?: PermissionsModuleAction;
 }
 ```
+
+See also: [PermissionsModuleAction](./client.md#interface-permissionsmoduleaction)
+
+###### Property action
+
+Set only for `signAction` hook calls.
+
+```ts
+action?: PermissionsModuleAction
+```
+See also: [PermissionsModuleAction](./client.md#interface-permissionsmoduleaction)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
