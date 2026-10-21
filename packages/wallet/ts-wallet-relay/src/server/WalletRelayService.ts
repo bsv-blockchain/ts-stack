@@ -764,13 +764,20 @@ export class WalletRelayService {
     }
 
     if (!session.mobileIdentityKey) return
+    await this.handleMobileResponse(topic, session.mobileIdentityKey, envelope)
+  }
 
-    // RPC response from mobile
+  /** Decrypts an RPC response from a paired mobile and settles its pending request. */
+  private async handleMobileResponse(
+    topic: string,
+    mobileIdentityKey: string,
+    envelope: WireEnvelope
+  ): Promise<void> {
     let plaintext: string
     try {
       plaintext = await decryptEnvelope(
         this.wallet,
-        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
+        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       )
     } catch {
@@ -783,39 +790,38 @@ export class WalletRelayService {
     } catch {
       return
     }
-    if (this.handler.isResponse(msg)) {
-      const pending = this.pending.get(msg.id)
-      if (!pending) return
-      if (pending.sessionId !== topic || msg.seq !== pending.seq) {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet response was not bound to its request'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
-      try {
-        if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
-          normalizeBRC100WalletByteFields(msg.result)
-          const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
-            ? validateWalletResult(
-                pending.method as (typeof WALLET_METHOD_NAMES)[number],
-                msg.result,
-                pending.params
-              )
-            : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
-          msg = { ...msg, result: ownedResult }
-        }
-      } catch {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet returned an invalid result'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
+    if (!this.handler.isResponse(msg)) return
+    const pending = this.pending.get(msg.id)
+    if (!pending) return
+    if (pending.sessionId !== topic || msg.seq !== pending.seq) {
       clearTimeout(pending.timer)
       this.pending.delete(msg.id)
-      pending.resolve(msg)
+      pending.reject(new Error('Wallet response was not bound to its request'))
+      this.relay.disconnectMobile(topic)
+      return
     }
+    try {
+      if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
+        normalizeBRC100WalletByteFields(msg.result)
+        const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
+          ? validateWalletResult(
+              pending.method as (typeof WALLET_METHOD_NAMES)[number],
+              msg.result,
+              pending.params
+            )
+          : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
+        msg = { ...msg, result: ownedResult }
+      }
+    } catch {
+      clearTimeout(pending.timer)
+      this.pending.delete(msg.id)
+      pending.reject(new Error('Wallet returned an invalid result'))
+      this.relay.disconnectMobile(topic)
+      return
+    }
+    clearTimeout(pending.timer)
+    this.pending.delete(msg.id)
+    pending.resolve(msg)
   }
 
   private async handlePairingApproved(

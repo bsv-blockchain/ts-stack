@@ -260,6 +260,8 @@ describe('pairing key binding and desktop traffic hold', () => {
       await mobile.session.connect()
       await waitFor(() => service.getSession(created.sessionId)?.status === 'connected', 'pairing')
       await waitFor(mobile.isConnected, 'pairing_ack')
+      expect(service.getSession(created.sessionId)?.status).toBe('connected')
+      expect(mobile.isConnected()).toBe(true)
       mobile.session.disconnect()
     }, 10_000)
 
@@ -272,6 +274,8 @@ describe('pairing key binding and desktop traffic hold', () => {
       await mobile.session.connect()
       await waitFor(() => service.getSession(created.sessionId)?.status === 'connected', 'pairing')
       await waitFor(mobile.isConnected, 'pairing_ack')
+      expect(service.getSession(created.sessionId)?.status).toBe('connected')
+      expect(mobile.isConnected()).toBe(true)
       mobile.session.disconnect()
     }, 10_000)
   })
