@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-10-20'
-last_verified: '2026-10-20'
+version: '1.5.0'
+last_updated: '2026-10-21'
+last_verified: '2026-10-21'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -29,9 +29,18 @@ suites; their reverse-dependency closure owns non-instrumented regression,
 compatibility, and browser checks; and the forward closure supplies every build
 prerequisite. This preserves behavioral coverage of possible consumers without
 paying to regenerate unchanged packages' coverage reports.
-A lockfile-only change selects the importers whose lock snapshots actually
-changed instead of treating the root lockfile as a global invalidation. Root
-compiler, workspace and shared CI execution controls select the complete graph deliberately.
+A lockfile change selects every package importer whose installed graph reaches
+a changed or republished package, directly or not, in either lockfile, instead
+of treating the root lockfile as a global invalidation. An indirect upgrade
+therefore tests the packages that install it even when no importer entry
+changed. Changes to the root importer's own dependencies or to lockfile settings
+select the complete graph; root tools reached only indirectly run in the lint,
+build and artifact jobs on every pull request. A `pnpm-workspace.yaml` change
+confined to resolution settings (overrides, patches, package extensions,
+catalogs, release age) defers to that lockfile analysis, and a project registry
+change confined to project entries selects only the changed or added projects.
+Root compiler, other workspace settings and shared CI execution controls select
+the complete graph deliberately.
 
 Mutation selection follows each target's exact implementation, property,
 regression, configuration, and policy inputs. Package-wide mutation suites
@@ -44,16 +53,22 @@ The main CI workflow builds the selected graph once and shares immutable
 outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
-package-composition reports without rebuilding the workspace. The cheap
-repository-health, scope, and dependency-review gates complete before
-dependency installation. Exact-head Sonar analysis runs concurrently with the
+package-composition reports without rebuilding the workspace. The shared
+build starts as soon as the scope job finishes, beside the repository-health
+contract; test lanes, lint and policy start only after the repository-health,
+scope and dependency-review gates pass. Lint and policy run beside the test
+lanes and gate `build-and-test` and the merge gate. The scope job also plans the
+test-lane matrices, since that needs only Node and jq. Exact-head Sonar analysis runs concurrently with the
 shared build and remains mandatory in the final merge gate. Expensive PR mutation waits for both a
 successful shared build and successful exact-head Sonar analysis. Main and
 manual full campaigns allow only the intentional skip of the PR-only analyzer
 gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
 normal mutation launch; suppressed selected mutation is not qualified evidence.
 Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
-result. Matrix siblings finish after a failure so acceptance
+result. They pack the restored shared build instead of rebuilding each package,
+resolve all of a package's public entrypoints in one process per module system
+(the SDK has 459), and reuse an npm download cache that npm verifies against
+each tarball's integrity hash. Matrix siblings finish after a failure so acceptance
 evidence includes every selected shard. Within a regression or coverage shard,
 packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
