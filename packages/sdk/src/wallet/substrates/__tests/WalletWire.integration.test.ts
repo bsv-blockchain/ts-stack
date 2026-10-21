@@ -1757,6 +1757,52 @@ describe('WalletWire Integration Tests', () => {
       expect(listOutputsMock).toHaveBeenCalledWith(args, '')
     })
 
+    it('carries a module inventory record that is not spendable', async () => {
+      const outpoint = 'deadbeef20248806deadbeef20248806deadbeef20248806deadbeef20248806.0'
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({
+          listOutputs: jest.fn().mockResolvedValue({
+            totalOutputs: 2,
+            outputs: [
+              { outpoint, satoshis: 1, spendable: false },
+              { outpoint: outpoint.replace(/\.0$/, '.1'), satoshis: 1, spendable: true }
+            ]
+          })
+        })
+      )
+
+      const result = await wallet.listOutputs({ basket: 'p color assets' })
+
+      expect(result.outputs.map(output => output.spendable)).toEqual([false, true])
+    })
+
+    it('carries an exact BRC-112 module balance as decimal text', async () => {
+      const balance = '18446744073709551616'
+      const listOutputsMock = jest.fn().mockResolvedValue({ totalOutputs: balance, outputs: [] })
+      const wallet = createTestWalletWire(mockUnsupportedMethods({ listOutputs: listOutputsMock }))
+
+      await expect(wallet.listOutputs({ basket: 'p color balance aa' })).resolves.toEqual({
+        totalOutputs: balance,
+        outputs: []
+      })
+    })
+
+    it('rejects a module balance that is not canonical decimal text', async () => {
+      for (const totalOutputs of [5, '05', '-1', '1.5']) {
+        const wallet = createTestWalletWire(
+          mockUnsupportedMethods({ listOutputs: jest.fn().mockResolvedValue({ totalOutputs, outputs: [] }) })
+        )
+        await expect(wallet.listOutputs({ basket: 'p color balance aa' })).rejects.toThrow('totalOutputs')
+      }
+    })
+
+    it('rejects decimal text outside a module balance query', async () => {
+      const wallet = createTestWalletWire(
+        mockUnsupportedMethods({ listOutputs: jest.fn().mockResolvedValue({ totalOutputs: '5', outputs: [] }) })
+      )
+      await expect(wallet.listOutputs({ basket: 'balance savings' })).rejects.toThrow('totalOutputs')
+    })
+
     it('should throw an error with invalid inputs', async () => {
       // Mock the listOutputs method to throw an error
       const listOutputsMock = jest.fn().mockRejectedValue(new Error('Invalid inputs'))

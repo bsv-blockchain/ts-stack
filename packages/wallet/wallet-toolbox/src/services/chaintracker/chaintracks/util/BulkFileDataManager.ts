@@ -37,7 +37,7 @@ const MAX_BULK_FILE_NAME_BYTES = 255
 const HEX_32_BYTES = /^[0-9a-f]{64}$/
 const SHA256_BASE64 = /^[A-Za-z0-9+/]{43}=$/
 const SAFE_BULK_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._~-]*$/
-const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 
 function ownDataValue(value: unknown, property: string, required = true): unknown {
   if (value == null || typeof value !== 'object') {
@@ -675,7 +675,7 @@ export class BulkFileDataManager {
         hash: value('hash') as string
       }
       validateHeaderFormat(candidate)
-      validateHeaderProofOfWork(candidate)
+      validateHeaderProofOfWork(candidate, this.chain)
       authenticatedHeaders.push(candidate)
     }
     newBulkHeaders = authenticatedHeaders
@@ -691,7 +691,8 @@ export class BulkFileDataManager {
       ;({ headers: newBulkHeaders, incrementalChainWork } = trimAlreadyStoredHeaders(
         newBulkHeaders,
         nextHeight,
-        incrementalChainWork
+        incrementalChainWork,
+        this.chain
       ))
 
       if (newBulkHeaders.length === 0) return
@@ -707,7 +708,7 @@ export class BulkFileDataManager {
 
       const lastChainWork = incrementalChainWork
         ? addWork(incrementalChainWork, prevChainWork)
-        : computeChainWorkFromHeaders(newBulkHeaders, lbf)
+        : computeChainWorkFromHeaders(newBulkHeaders, this.chain, lbf)
 
       const data = serializeBaseBlockHeaders(newBulkHeaders)
       const fileHash = asString(sha256(asArray(data)), 'base64')
@@ -922,6 +923,9 @@ export class BulkFileDataManager {
   }
 
   private async validateBfdHeaders(bfd: BulkFileData, expectedFileHash = bfd.fileHash): Promise<Uint8Array> {
+    // The chain selects the proof-of-work limit (regtest's is far higher), so a file
+    // labelled with another chain must never be validated under that chain's rules.
+    if (bfd.chain !== this.chain) throw new WERR_INVALID_PARAMETER('chain', `${this.chain}`)
     const pbf = bfd.firstHeight > 0 ? this.getBfdForHeight(bfd.firstHeight - 1) : undefined
     const prevHash = pbf?.lastHash ?? '00'.repeat(32)
     const prevChainWork = pbf?.lastChainWork ?? '00'.repeat(32)
@@ -935,7 +939,7 @@ export class BulkFileDataManager {
       prevChainWork,
       lastHash: bfd.lastHash,
       lastChainWork: bfd.lastChainWork,
-      chain: bfd.chain
+      chain: this.chain
     })
     bfd.data = result.data
     bfd.fileHash = result.fileHash
@@ -1571,7 +1575,8 @@ export interface BulkFileDataManagerMergeResult {
 function trimAlreadyStoredHeaders(
   headers: BlockHeader[],
   nextHeight: number,
-  incrementalChainWork: string | undefined
+  incrementalChainWork: string | undefined,
+  chain: Chain
 ): { headers: BlockHeader[]; incrementalChainWork: string | undefined } {
   if (nextHeight <= 0 || headers.length === 0 || headers[0].height >= nextHeight) {
     return { headers, incrementalChainWork }
@@ -1581,7 +1586,7 @@ function trimAlreadyStoredHeaders(
   while (headers.length > 0 && headers[0].height < nextHeight) {
     const h = headers.shift()
     if (h != null && incrementalChainWork) {
-      incrementalChainWork = subWork(incrementalChainWork, convertBitsToWork(h.bits))
+      incrementalChainWork = subWork(incrementalChainWork, convertBitsToWork(h.bits, chain))
     }
   }
   return { headers, incrementalChainWork }
@@ -1592,7 +1597,7 @@ function trimAlreadyStoredHeaders(
  * or beginning at genesis when bulk storage is empty, validating that the
  * sequence is contiguous.
  */
-function computeChainWorkFromHeaders(headers: BlockHeader[], lbf?: BulkHeaderFileInfo): string {
+function computeChainWorkFromHeaders(headers: BlockHeader[], chain: Chain, lbf?: BulkHeaderFileInfo): string {
   let lastHeight = lbf != null ? lbf.firstHeight + lbf.count - 1 : -1
   let lastHash = lbf?.lastHash ?? '00'.repeat(32)
   let lastChainWork = lbf?.lastChainWork ?? '00'.repeat(32)
@@ -1603,7 +1608,7 @@ function computeChainWorkFromHeaders(headers: BlockHeader[], lbf?: BulkHeaderFil
         `an extension of existing bulk headers, header with height ${h.height} is non-sequential`
       )
     }
-    lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits))
+    lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits, chain))
     lastHeight = h.height
     lastHash = h.hash
   }

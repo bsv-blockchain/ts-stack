@@ -965,6 +965,11 @@
       "path": "infra/wallet-infra",
       "materials": "all",
       "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/webrtpay-relay",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
     }
   ],
   "clearances": [

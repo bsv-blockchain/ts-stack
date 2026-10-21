@@ -3,7 +3,7 @@ id: pkg-did
 title: '@bsv/did'
 kind: package
 domain: helpers
-version: '0.3.0'
+version: '0.3.1'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'

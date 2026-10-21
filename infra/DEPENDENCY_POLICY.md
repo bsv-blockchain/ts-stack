@@ -17,9 +17,13 @@ builds every affected Docker image before a change can merge.
 ## Updating dependencies
 
 Dependabot groups the root workspace, all infrastructure projects, and GitHub
-Actions into one monthly maintenance pull request. Security updates remain
-eligible immediately. Maintainers should update the grouped pull request
-instead of opening one pull request per package.
+Actions into one maintenance pull request on the 1st and 15th of each month.
+The Dependency lockfile refresh workflow then adds one commit re-resolving
+every infrastructure `package-lock.json` within its declared ranges.
+Automated security-update pull requests are disabled; Dependabot alerts remain
+on, advisory fixes within declared ranges arrive through the grouped pull
+request, and maintainers remediate high and critical alerts manually. Update the
+grouped pull request instead of opening one pull request per package.
 
 For an individual infrastructure project:
 

@@ -15,14 +15,14 @@ tags: [reference, infrastructure, containers, security, releases]
 The infrastructure images are deployable artifacts, so their build inputs,
 review gates, provenance, and rollback identity are part of the public release
 contract. The controls here do not create another service. They make the
-existing seven images auditable and ensure the artifact reviewed by CI is the
+existing eight images auditable and ensure the artifact reviewed by CI is the
 artifact that reaches a registry.
 
 ## Sources of truth
 
 `governance/container-images.json` is the complete release inventory. It owns:
 
-- the seven Docker build contexts and their `linux/amd64` platform;
+- the eight Docker build contexts and their `linux/amd64` platform;
 - the exact digest-pinned Node base and its human-readable expected version;
 - the reviewed runtime-package pins needed to remediate vulnerabilities still
   present in that immutable base;

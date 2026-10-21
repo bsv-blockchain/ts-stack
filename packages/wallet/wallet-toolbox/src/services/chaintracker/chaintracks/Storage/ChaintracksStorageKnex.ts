@@ -365,7 +365,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
     await trx<LiveBlockHeader>(table).insert({
       ...header,
       previousHeaderId: null,
-      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits)),
+      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits, this.chain)),
       isChainTip: true,
       isActive: true
     })
@@ -504,7 +504,7 @@ export class ChaintracksStorageKnex extends ChaintracksStorageBase implements Ch
       result.noTip = true
       return
     }
-    const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits))
+    const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits, this.chain))
     result.isActiveTip = isMoreWork(chainWork, result.priorTip.chainWork)
     const newHeader = {
       ...header,

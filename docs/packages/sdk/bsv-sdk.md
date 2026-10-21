@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '3.1.0'
+version: '4.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,11 +15,41 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
+The 4.0.0 source candidate types `ListOutputsResult.totalOutputs` as
+`PositiveIntegerOrZero | DecimalString`. A BRC-112 module balance query
+(`p <module> balance <basket>`) returns the exact balance as decimal text with
+no outputs and no BEEF; every other query returns a count. The binary
+`listOutputs` response carries that text and each output's `spendable` byte, so
+both ends of a binary connection must update together. Code that uses
+`totalOutputs` as a number must check `typeof totalOutputs === 'number'` first.
+This candidate is not publication.
+
 The isolated SDK3 retirement candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.
 Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
 [migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
 qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.2.0 source candidate fixes saved-contact `any` searches and retains
+contact-only matches in parallel public searches. Both identity-resolution
+methods accept opt-in bounded contact recovery through `contactErrorMode`,
+`contactTimeoutMs` and `onContactError`. Legacy defaults and contact failures
+are preserved; public-discovery errors, certificate checks and wallet
+permission gates remain intact. See the [SDK README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
+for integration details. Consumers must adopt recovery explicitly and render
+lookup errors separately from successful empty results. A contact deadline
+does not cancel an underlying wallet request or permission prompt. This
+candidate is not publication or a deployed search-component update.
+
+The 3.2.1 source candidate aligns the Script interpreter with
+[SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+`OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operands are decoded through the node's
+checked int64 script-number path: an operand longer than nine bytes, or whose
+value lies outside the signed 64-bit range, is a script number overflow instead
+of being read from its first eight bytes, and `OP_SPLIT` also rejects a
+position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
+no API, wire or wallet-data migration is required. This candidate is not
+publication.
 
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact

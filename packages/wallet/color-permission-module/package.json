@@ -1,0 +1,82 @@
+{
+  "name": "@bsv/color-permission-module",
+  "version": "0.1.0",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "BRC-207 1Color wallet module for BRC-162 fungible tokens in BRC-100 wallets",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/color-permission-module/src/**/*.ts\" \"packages/wallet/color-permission-module/README.md\" \"packages/wallet/color-permission-module/*.{cjs,json,ts}\"",
+    "lint": "oxlint src --deny-warnings",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports ColorPermissionModule,ColorPlan,createColorModule",
+    "test": "jest",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "test:coverage": "jest --coverage",
+    "test:property": "jest --runInBand --runTestsByPath src/__tests__/ColorPlan.property.test.ts",
+    "typecheck": "tsc --project tsconfig.typecheck.json"
+  },
+  "keywords": [
+    "brc-207",
+    "brc-162",
+    "1color",
+    "tokens",
+    "permissions",
+    "wallet",
+    "BSV"
+  ],
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "dependencies": {
+    "@bsv/templates": "workspace:^"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^4.0.0",
+    "@bsv/wallet-toolbox-client": "^2.15.0"
+  },
+  "devDependencies": {
+    "@bsv/sdk": "workspace:^",
+    "@bsv/wallet-toolbox-client": "workspace:^",
+    "@jest/globals": "^30.5.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.5.1",
+    "oxlint": "^1.83.0",
+    "ts-jest": "^29.4.12",
+    "tsdown": "0.23.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/wallet/color-permission-module"
+  },
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/color-permission-module#readme"
+}

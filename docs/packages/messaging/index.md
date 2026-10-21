@@ -22,3 +22,4 @@ Real-time and store-and-forward messaging, identity verification, and payment ad
 | **@bsv/authsocket-client** | Client-side BRC-103 mutual authentication wrapper for socket.io-client. Connect to authenticated servers and prove your identity via Bitcoin signature. |
 | **@bsv/message-box-client** | Store-and-forward messaging and peer-to-peer payments via MessageBox overlay. Send encrypted messages and make BRC-29-derived payments with BRC-103 authentication. |
 | **@bsv/paymail** | BRC-121 Paymail protocol implementation. Both client-side capability discovery and server-side router for PKI, P2P destinations, public profiles, and custom capabilities. |
+| **@bsv/webrtpay** | Direct wallet-to-wallet BSV payments over WebRTC data channels. Both peers prove their BRC-100 identity keys bound to the DTLS session; signaling travels by QR code, MessageBox, or a small relay. |

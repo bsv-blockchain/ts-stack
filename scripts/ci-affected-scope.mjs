@@ -36,7 +36,8 @@ export const INFRA_COMPONENTS = [
   { component: 'uhrp-server-cloud-bucket', 'native-modules': 'better-sqlite3' },
   { component: 'uhrp-server-cloud-bucket/notifier', 'native-modules': '' },
   { component: 'wab', 'native-modules': 'better-sqlite3 sqlite3' },
-  { component: 'wallet-infra', 'native-modules': 'better-sqlite3' }
+  { component: 'wallet-infra', 'native-modules': 'better-sqlite3' },
+  { component: 'webrtpay-relay', 'native-modules': '' }
 ]
 
 export const RUNTIME_COMPONENTS = [
@@ -50,7 +51,8 @@ export const RUNTIME_COMPONENTS = [
     wallet: true
   },
   { name: 'wab', path: 'infra/wab', wallet: false },
-  { name: 'wallet-infra', path: 'infra/wallet-infra', wallet: false }
+  { name: 'wallet-infra', path: 'infra/wallet-infra', wallet: false },
+  { name: 'webrtpay-relay', path: 'infra/webrtpay-relay', wallet: false }
 ]
 
 const FULL_INFRA_CONTROL_PATHS = new Set([

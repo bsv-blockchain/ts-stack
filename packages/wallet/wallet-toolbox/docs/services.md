@@ -5819,6 +5819,13 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
         tipHeaderId: 0,
         hashToHeaderId: new Map<string, number>()
     };
+    static readonly regtestData: ChaintracksNoDbData = {
+        chain: "regtest",
+        liveHeaders: new Map<number, LiveBlockHeader>(),
+        maxHeaderId: 0,
+        tipHeaderId: 0,
+        hashToHeaderId: new Map<string, number>()
+    };
     constructor(options: ChaintracksStorageNoDbOptions)
     override async destroy(): Promise<void>
     async getData(): Promise<ChaintracksNoDbData>
@@ -6349,7 +6356,8 @@ export default class SdkWhatsOnChain implements ChainTracker {
     protected readonly URL: string;
     protected readonly httpClient: HttpClient;
     protected readonly requestTimeoutMsecs: number;
-    constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {})
+    constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" | "regtest" = "main", config: LocalWhatsOnChainConfig = {})
+    get isAvailable(): boolean
     protected async request<T, Data = unknown>(url: string, options: HttpClientRequestOptions<Data>): Promise<HttpClientResponse<T>>
     async isValidRootForHeight(root: string, height: number): Promise<boolean>
     async currentHeight(): Promise<number>
@@ -6360,9 +6368,10 @@ export default class SdkWhatsOnChain implements ChainTracker {
 ###### Constructor
 
 Constructs an instance of the WhatsOnChain ChainTracker.
+`tstn` and `regtest` have no WhatsOnChain service, so every request made for them is refused.
 
 ```ts
-constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" = "main", config: LocalWhatsOnChainConfig = {})
+constructor(network: "main" | "test" | "stn" | "ttn" | "tstn" | "regtest" = "main", config: LocalWhatsOnChainConfig = {})
 ```
 
 Argument Details
@@ -6758,50 +6767,51 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [getWhatsOnChainBlockHeaderByHash](#function-getwhatsonchainblockheaderbyhash) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |
-| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [handlePostRawTxErrorResponse](#function-handlepostrawtxerrorresponse) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |
-| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [handleScriptHashHistoryCatch](#function-handlescripthashhistorycatch) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
-| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [handleScriptHashHistoryResponse](#function-handlescripthashhistoryresponse) | [snapshotMerklePathResult](#function-snapshotmerklepathresult) |
-| [addWork](#function-addwork) | [handleUtxoConnReset](#function-handleutxoconnreset) | [snapshotPostBeefRequest](#function-snapshotpostbeefrequest) |
-| [arcDefaultUrl](#function-arcdefaulturl) | [isArcAcceptedTxStatus](#function-isarcacceptedtxstatus) | [startChaintracks](#function-startchaintracks) |
-| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [isArcDoubleSpendTxStatus](#function-isarcdoublespendtxstatus) | [stnArcadeUrl](#function-stnarcadeurl) |
-| [arcadeDefaultUrl](#function-arcadedefaulturl) | [isArcInvalidTxStatus](#function-isarcinvalidtxstatus) | [stnChaintracksUrl](#function-stnchaintracksurl) |
-| [authenticateMerklePathResult](#function-authenticatemerklepathresult) | [isArcServiceErrorStatus](#function-isarcserviceerrorstatus) | [subWork](#function-subwork) |
-| [blockHash](#function-blockhash) | [isBaseBlockHeader](#function-isbaseblockheader) | [swapByteOrder](#function-swapbyteorder) |
-| [buildChaintracksOptionsWithIngestors](#function-buildchaintracksoptionswithingestors) | [isBlockHeader](#function-isblockheader) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
-| [classifyArcadeRejection](#function-classifyarcaderejection) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [toDefaultChaintracksArguments](#function-todefaultchaintracksarguments) |
-| [classifyMerklePathResponse](#function-classifymerklepathresponse) | [isLive](#function-islive) | [toDefaultKnexChaintracksArguments](#function-todefaultknexchaintracksarguments) |
-| [classifyOutputUtxo](#function-classifyoutpututxo) | [isLiveBlockHeader](#function-isliveblockheader) | [tstnArcadeUrl](#function-tstnarcadeurl) |
-| [containsControlCharacter](#function-containscontrolcharacter) | [isMoreWork](#function-ismorework) | [tstnChaintracksUrl](#function-tstnchaintracksurl) |
-| [convertBitsToTarget](#function-convertbitstotarget) | [isValidFiatRate](#function-isvalidfiatrate) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
-| [convertBitsToWork](#function-convertbitstowork) | [makeMerklePathNote](#function-makemerklepathnote) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
-| [convertBufferToUint32](#function-convertbuffertouint32) | [makePostBeefServiceError](#function-makepostbeefserviceerror) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
-| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [mapWithConcurrency](#function-mapwithconcurrency) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
-| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [normalizeArcProviderConfig](#function-normalizearcproviderconfig) | [validateArcadeTxData](#function-validatearcadetxdata) |
-| [copyRawTransactionBytes](#function-copyrawtransactionbytes) | [normalizeBulkFileDataValidationRequest](#function-normalizebulkfiledatavalidationrequest) | [validateBaseBlockHeaderFormat](#function-validatebaseblockheaderformat) |
-| [copyValidatedBlockHeader](#function-copyvalidatedblockheader) | [normalizeBulkHeaderFileInfo](#function-normalizebulkheaderfileinfo) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
-| [createAndStartDefaultChaintracks](#function-createandstartdefaultchaintracks) | [normalizeBulkHeaderFileSequence](#function-normalizebulkheaderfilesequence) | [validateBulkFileData](#function-validatebulkfiledata) |
-| [createAndStartDefaultKnexChaintracks](#function-createandstartdefaultknexchaintracks) | [normalizeBulkHeaderFilesInfo](#function-normalizebulkheaderfilesinfo) | [validateGenesisHeader](#function-validategenesisheader) |
-| [createChaintracksInitialSchema](#function-createchaintracksinitialschema) | [normalizeFiatCurrencies](#function-normalizefiatcurrencies) | [validateHeaderDifficulty](#function-validateheaderdifficulty) |
-| [createDefaultBulkFileDataManager](#function-createdefaultbulkfiledatamanager) | [normalizeFiatCurrency](#function-normalizefiatcurrency) | [validateHeaderFormat](#function-validateheaderformat) |
-| [createDefaultChaintracksClient](#function-createdefaultchaintracksclient) | [normalizeFiatExchangeRates](#function-normalizefiatexchangerates) | [validateHeaderProofOfWork](#function-validateheaderproofofwork) |
-| [createDefaultChaintracksStorageOptions](#function-createdefaultchaintracksstorageoptions) | [normalizeFiatRate](#function-normalizefiatrate) | [validateMerklePathResult](#function-validatemerklepathresult) |
-| [createDefaultIdbChaintracksOptions](#function-createdefaultidbchaintracksoptions) | [normalizeFiatRateTimestamps](#function-normalizefiatratetimestamps) | [validatePostBeefResult](#function-validatepostbeefresult) |
-| [createDefaultKnexChaintracksOptions](#function-createdefaultknexchaintracksoptions) | [normalizeFiatTimestamp](#function-normalizefiattimestamp) | [validatePostBeefResultOrServiceError](#function-validatepostbeefresultorserviceerror) |
-| [createDefaultNoDbChaintracksOptions](#function-createdefaultnodbchaintracksoptions) | [normalizePostRawHex](#function-normalizepostrawhex) | [validatePostTxResult](#function-validateposttxresult) |
-| [createDefaultWalletServicesOptions](#function-createdefaultwalletservicesoptions) | [normalizePostTxids](#function-normalizeposttxids) | [validatePostTxResultOrServiceError](#function-validateposttxresultorserviceerror) |
-| [createIdbChaintracks](#function-createidbchaintracks) | [normalizeTxid](#function-normalizetxid) | [validateRawTxResult](#function-validaterawtxresult) |
-| [createKnexChaintracks](#function-createknexchaintracks) | [normalizeWalletOutpoint](#function-normalizewalletoutpoint) | [validateScriptHash](#function-validatescripthash) |
-| [createNoDbChaintracks](#function-createnodbchaintracks) | [parseFileLink](#function-parsefilelink) | [validateScriptHashHistoryResult](#function-validatescripthashhistoryresult) |
-| [createStopHandler](#function-createstophandler) | [populateUtxoDetails](#function-populateutxodetails) | [validateStatusForTxidsResult](#function-validatestatusfortxidsresult) |
-| [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [publicArcadeUrl](#function-publicarcadeurl) | [validateUtxoStatusResult](#function-validateutxostatusresult) |
-| [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [readUInt32BE](#function-readuint32be) | [validateWocChainInfo](#function-validatewocchaininfo) |
-| [deserializeBlockHeader](#function-deserializeblockheader) | [readUInt32LE](#function-readuint32le) | [wocGetHeadersHeaderToBlockHeader](#function-wocgetheadersheadertoblockheader) |
-| [deserializeBlockHeaders](#function-deserializeblockheaders) | [requireConclusiveUtxo](#function-requireconclusiveutxo) | [workBNtoBuffer](#function-workbntobuffer) |
-| [genesisBuffer](#function-genesisbuffer) | [resolveDefaultChaintracksArguments](#function-resolvedefaultchaintracksarguments) | [writeUInt32BE](#function-writeuint32be) |
-| [genesisHeader](#function-genesisheader) | [resolveDefaultKnexChaintracksArguments](#function-resolvedefaultknexchaintracksarguments) | [writeUInt32LE](#function-writeuint32le) |
-| [getBeefForTxid](#function-getbeeffortxid) | [safeDiagnostic](#function-safediagnostic) |  |
-| [getExchangeRatesIo](#function-getexchangeratesio) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) |  |
+| [WocHeadersBulkListener](#function-wocheadersbulklistener) | [handlePostRawTxErrorResponse](#function-handlepostrawtxerrorresponse) | [selectBulkHeaderFiles](#function-selectbulkheaderfiles) |
+| [WocHeadersBulkListener_test](#function-wocheadersbulklistener_test) | [handleScriptHashHistoryCatch](#function-handlescripthashhistorycatch) | [serializeBaseBlockHeader](#function-serializebaseblockheader) |
+| [WocHeadersLiveListener](#function-wocheaderslivelistener) | [handleScriptHashHistoryResponse](#function-handlescripthashhistoryresponse) | [serializeBaseBlockHeaders](#function-serializebaseblockheaders) |
+| [WocHeadersLiveListener_test](#function-wocheaderslivelistener_test) | [handleUtxoConnReset](#function-handleutxoconnreset) | [sha256HashOfBinaryFile](#function-sha256hashofbinaryfile) |
+| [addWork](#function-addwork) | [isArcAcceptedTxStatus](#function-isarcacceptedtxstatus) | [snapshotMerklePathResult](#function-snapshotmerklepathresult) |
+| [arcDefaultUrl](#function-arcdefaulturl) | [isArcDoubleSpendTxStatus](#function-isarcdoublespendtxstatus) | [snapshotPostBeefRequest](#function-snapshotpostbeefrequest) |
+| [arcGorillaPoolUrl](#function-arcgorillapoolurl) | [isArcInvalidTxStatus](#function-isarcinvalidtxstatus) | [startChaintracks](#function-startchaintracks) |
+| [arcadeDefaultUrl](#function-arcadedefaulturl) | [isArcServiceErrorStatus](#function-isarcserviceerrorstatus) | [stnArcadeUrl](#function-stnarcadeurl) |
+| [authenticateMerklePathResult](#function-authenticatemerklepathresult) | [isBaseBlockHeader](#function-isbaseblockheader) | [stnChaintracksUrl](#function-stnchaintracksurl) |
+| [blockHash](#function-blockhash) | [isBlockHeader](#function-isblockheader) | [subWork](#function-subwork) |
+| [buildChaintracksOptionsWithIngestors](#function-buildchaintracksoptionswithingestors) | [isKnownValidBulkHeaderFile](#function-isknownvalidbulkheaderfile) | [swapByteOrder](#function-swapbyteorder) |
+| [classifyArcadeRejection](#function-classifyarcaderejection) | [isLive](#function-islive) | [toBinaryBaseBlockHeader](#function-tobinarybaseblockheader) |
+| [classifyMerklePathResponse](#function-classifymerklepathresponse) | [isLiveBlockHeader](#function-isliveblockheader) | [toDefaultChaintracksArguments](#function-todefaultchaintracksarguments) |
+| [classifyOutputUtxo](#function-classifyoutpututxo) | [isMoreWork](#function-ismorework) | [toDefaultKnexChaintracksArguments](#function-todefaultknexchaintracksarguments) |
+| [containsControlCharacter](#function-containscontrolcharacter) | [isValidFiatRate](#function-isvalidfiatrate) | [tstnArcadeUrl](#function-tstnarcadeurl) |
+| [convertBitsToTarget](#function-convertbitstotarget) | [makeMerklePathNote](#function-makemerklepathnote) | [tstnChaintracksUrl](#function-tstnchaintracksurl) |
+| [convertBitsToWork](#function-convertbitstowork) | [makePostBeefServiceError](#function-makepostbeefserviceerror) | [updateChaintracksFiatExchangeRates](#function-updatechaintracksfiatexchangerates) |
+| [convertBufferToUint32](#function-convertbuffertouint32) | [mapWithConcurrency](#function-mapwithconcurrency) | [updateExchangeratesapi](#function-updateexchangeratesapi) |
+| [convertUint32ToBuffer](#function-convertuint32tobuffer) | [normalizeArcProviderConfig](#function-normalizearcproviderconfig) | [validBulkHeaderFilesByFileHash](#function-validbulkheaderfilesbyfilehash) |
+| [convertWocToBlockHeaderHex](#function-convertwoctoblockheaderhex) | [normalizeBulkFileDataValidationRequest](#function-normalizebulkfiledatavalidationrequest) | [validateAgainstDirtyHashes](#function-validateagainstdirtyhashes) |
+| [copyRawTransactionBytes](#function-copyrawtransactionbytes) | [normalizeBulkHeaderFileInfo](#function-normalizebulkheaderfileinfo) | [validateArcadeTxData](#function-validatearcadetxdata) |
+| [copyValidatedBlockHeader](#function-copyvalidatedblockheader) | [normalizeBulkHeaderFileSequence](#function-normalizebulkheaderfilesequence) | [validateBaseBlockHeaderFormat](#function-validatebaseblockheaderformat) |
+| [createAndStartDefaultChaintracks](#function-createandstartdefaultchaintracks) | [normalizeBulkHeaderFilesInfo](#function-normalizebulkheaderfilesinfo) | [validateBufferOfHeaders](#function-validatebufferofheaders) |
+| [createAndStartDefaultKnexChaintracks](#function-createandstartdefaultknexchaintracks) | [normalizeFiatCurrencies](#function-normalizefiatcurrencies) | [validateBulkFileData](#function-validatebulkfiledata) |
+| [createChaintracksInitialSchema](#function-createchaintracksinitialschema) | [normalizeFiatCurrency](#function-normalizefiatcurrency) | [validateGenesisHeader](#function-validategenesisheader) |
+| [createDefaultBulkFileDataManager](#function-createdefaultbulkfiledatamanager) | [normalizeFiatExchangeRates](#function-normalizefiatexchangerates) | [validateHeaderDifficulty](#function-validateheaderdifficulty) |
+| [createDefaultChaintracksClient](#function-createdefaultchaintracksclient) | [normalizeFiatRate](#function-normalizefiatrate) | [validateHeaderFormat](#function-validateheaderformat) |
+| [createDefaultChaintracksStorageOptions](#function-createdefaultchaintracksstorageoptions) | [normalizeFiatRateTimestamps](#function-normalizefiatratetimestamps) | [validateHeaderProofOfWork](#function-validateheaderproofofwork) |
+| [createDefaultIdbChaintracksOptions](#function-createdefaultidbchaintracksoptions) | [normalizeFiatTimestamp](#function-normalizefiattimestamp) | [validateMerklePathResult](#function-validatemerklepathresult) |
+| [createDefaultKnexChaintracksOptions](#function-createdefaultknexchaintracksoptions) | [normalizePostRawHex](#function-normalizepostrawhex) | [validatePostBeefResult](#function-validatepostbeefresult) |
+| [createDefaultNoDbChaintracksOptions](#function-createdefaultnodbchaintracksoptions) | [normalizePostTxids](#function-normalizeposttxids) | [validatePostBeefResultOrServiceError](#function-validatepostbeefresultorserviceerror) |
+| [createDefaultWalletServicesOptions](#function-createdefaultwalletservicesoptions) | [normalizeTxid](#function-normalizetxid) | [validatePostTxResult](#function-validateposttxresult) |
+| [createIdbChaintracks](#function-createidbchaintracks) | [normalizeWalletOutpoint](#function-normalizewalletoutpoint) | [validatePostTxResultOrServiceError](#function-validateposttxresultorserviceerror) |
+| [createKnexChaintracks](#function-createknexchaintracks) | [parseFileLink](#function-parsefilelink) | [validateRawTxResult](#function-validaterawtxresult) |
+| [createNoDbChaintracks](#function-createnodbchaintracks) | [populateUtxoDetails](#function-populateutxodetails) | [validateScriptHash](#function-validatescripthash) |
+| [createStopHandler](#function-createstophandler) | [proofOfWorkLimitBits](#function-proofofworklimitbits) | [validateScriptHashHistoryResult](#function-validatescripthashhistoryresult) |
+| [deserializeBaseBlockHeader](#function-deserializebaseblockheader) | [publicArcadeUrl](#function-publicarcadeurl) | [validateStatusForTxidsResult](#function-validatestatusfortxidsresult) |
+| [deserializeBaseBlockHeaders](#function-deserializebaseblockheaders) | [readUInt32BE](#function-readuint32be) | [validateUtxoStatusResult](#function-validateutxostatusresult) |
+| [deserializeBlockHeader](#function-deserializeblockheader) | [readUInt32LE](#function-readuint32le) | [validateWocChainInfo](#function-validatewocchaininfo) |
+| [deserializeBlockHeaders](#function-deserializeblockheaders) | [regtestArcadeUrl](#function-regtestarcadeurl) | [wocGetHeadersHeaderToBlockHeader](#function-wocgetheadersheadertoblockheader) |
+| [genesisBuffer](#function-genesisbuffer) | [regtestChaintracksUrl](#function-regtestchaintracksurl) | [workBNtoBuffer](#function-workbntobuffer) |
+| [genesisHeader](#function-genesisheader) | [requireConclusiveUtxo](#function-requireconclusiveutxo) | [writeUInt32BE](#function-writeuint32be) |
+| [getBeefForTxid](#function-getbeeffortxid) | [resolveDefaultChaintracksArguments](#function-resolvedefaultchaintracksarguments) | [writeUInt32LE](#function-writeuint32le) |
+| [getExchangeRatesIo](#function-getexchangeratesio) | [resolveDefaultKnexChaintracksArguments](#function-resolvedefaultknexchaintracksarguments) |  |
+| [getWhatsOnChainBlockHeaderByHash](#function-getwhatsonchainblockheaderbyhash) | [safeDiagnostic](#function-safediagnostic) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -6964,10 +6974,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: authenticateMerklePathResult
 
 ```ts
-export async function authenticateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, validator: MerkleRootValidator, requireProofOfWork = false, requireHeaderFormat = true): Promise<ValidatedMerklePathResult>
+export async function authenticateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, validator: MerkleRootValidator, requireProofOfWork = false, requireHeaderFormat = true, chain?: Chain): Promise<ValidatedMerklePathResult>
 ```
 
-See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult), [MerkleRootValidator](./services.md#interface-merklerootvalidator), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
+See also: [Chain](./client.md#type-chain), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [MerkleRootValidator](./services.md#interface-merklerootvalidator), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -7093,8 +7103,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Computes "chainWork" value for 4 byte Bitcoin block header "bits" value.
 
 ```ts
-export function convertBitsToWork(bits: number | number[]): string
+export function convertBitsToWork(bits: number | number[], chain?: Chain): string
 ```
+
+See also: [Chain](./client.md#type-chain)
 
 Returns
 
@@ -7104,6 +7116,9 @@ Argument Details
 
 + **bits**
   + number or converted from Buffer using `readUint32LE`
++ **chain**
+  + Optional chain the header belongs to. Selects its proof-of-work limit
+(see `proofOfWorkLimitBits`); omitted means the mainnet limit.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -7195,10 +7210,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: copyValidatedBlockHeader
 
 ```ts
-export function copyValidatedBlockHeader(value: unknown, requireProofOfWork = false, requireHeaderFormat = true): BlockHeader
+export function copyValidatedBlockHeader(value: unknown, requireProofOfWork = false, requireHeaderFormat = true, chain?: Chain): BlockHeader
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -7543,6 +7558,17 @@ export function genesisHeader(chain: Chain): BlockHeader {
                 nonce: 1780488216,
                 height: 0,
                 hash: "000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c"
+            };
+        case "regtest":
+            return {
+                version: 1,
+                previousHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                merkleRoot: "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b",
+                time: 1296688602,
+                bits: 545259519,
+                nonce: 2,
+                height: 0,
+                hash: "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
             };
         case "mock":
             throw new Error("genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.");
@@ -8052,6 +8078,23 @@ See also: [GetUtxoStatusResult](./client.md#interface-getutxostatusresult)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+##### Function: proofOfWorkLimitBits
+
+The compact encoding of the highest proof-of-work target `chain` admits.
+
+Only `'regtest'` raises the limit. Every other chain — and an omitted chain,
+which is how every caller that predates this parameter asks — keeps the mainnet
+limit, so no existing validation is relaxed.
+
+```ts
+export function proofOfWorkLimitBits(chain?: Chain): number
+```
+
+See also: [Chain](./client.md#type-chain)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ##### Function: publicArcadeUrl
 
 Credential-free public Arcade host for supported networks.
@@ -8078,6 +8121,29 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export function readUInt32LE(a: number[] | Uint8Array, offset: number): number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: regtestArcadeUrl
+
+Arcade broadcaster / ARC endpoint for regtest, or `undefined` when `REGTEST_ARCADE_URL` is unset.
+
+```ts
+export function regtestArcadeUrl(): string | undefined
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+##### Function: regtestChaintracksUrl
+
+ChainTracks service URL for regtest. Falls back to `${REGTEST_ARCADE_URL}/chaintracks/v1` when
+`REGTEST_CHAINTRACKS_URL` is unset (mirrors the tstn layout). Throws when neither is configured.
+
+```ts
+export function regtestChaintracksUrl(): string
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -8474,11 +8540,13 @@ Validate headers contained in an array of bytes. The headers must be consecutive
  where the hash of each header equals the previousHash of the following header.
 
 ```ts
-export function validateBufferOfHeaders(buffer: Uint8Array, previousHash: string, offset = 0, count = -1, previousChainWork?: string): {
+export function validateBufferOfHeaders(buffer: Uint8Array, previousHash: string, offset = 0, count = -1, previousChainWork?: string, chain?: Chain): {
     lastHeaderHash: string;
     lastChainWork: string | undefined;
 }
 ```
+
+See also: [Chain](./client.md#type-chain)
 
 Returns
 
@@ -8494,6 +8562,11 @@ Argument Details
   + Optional starting offset within `buffer`.
 + **count**
   + Optional number of headers to validate. Validates to end of buffer if missing.
++ **previousChainWork**
+  + Optional chain work through `previousHash`; when present, the result carries it forward.
++ **chain**
+  + Optional chain the headers belong to. Selects its proof-of-work limit
+(see `proofOfWorkLimitBits`); omitted means the mainnet limit.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -8544,8 +8617,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Ensures that a header has a valid proof-of-work target and hash.
 
 ```ts
-export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number)
+export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number, chain?: Chain)
 ```
+
+See also: [Chain](./client.md#type-chain)
 
 Returns
 
@@ -8553,8 +8628,13 @@ true if the header is valid
 
 Argument Details
 
-+ **header**
-  + The header to validate
++ **hash**
+  + The header hash, big-endian.
++ **bits**
+  + The header's compact target.
++ **chain**
+  + Optional chain the header belongs to. Selects its proof-of-work limit
+(see `proofOfWorkLimitBits`); omitted means the mainnet limit.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -8576,13 +8656,13 @@ Ensures that a structured header's computed hash satisfies its declared
 proof-of-work target.
 
 ```ts
-export function validateHeaderProofOfWork(header: BlockHeader): true {
-    validateConsensusProofOfWork(header.hash, header.bits);
+export function validateHeaderProofOfWork(header: BlockHeader, chain?: Chain): true {
+    validateConsensusProofOfWork(header.hash, header.bits, chain);
     return true;
 }
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain)
 
 Returns
 
@@ -8592,6 +8672,9 @@ Argument Details
 
 + **header**
   + Header whose format and hash have already been checked.
++ **chain**
+  + Optional chain the header belongs to. Selects its proof-of-work limit
+(see `proofOfWorkLimitBits`); omitted means the mainnet limit.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -8599,10 +8682,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: validateMerklePathResult
 
 ```ts
-export function validateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, requireProofOfWork = false, requireHeaderFormat = true): ValidatedMerklePathResult
+export function validateMerklePathResult(requestedTxid: unknown, result: GetMerklePathResult, requireProofOfWork = false, requireHeaderFormat = true, chain?: Chain): ValidatedMerklePathResult
 ```
 
-See also: [GetMerklePathResult](./client.md#interface-getmerklepathresult), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
+See also: [Chain](./client.md#type-chain), [GetMerklePathResult](./client.md#interface-getmerklepathresult), [ValidatedMerklePathResult](./services.md#interface-validatedmerklepathresult)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

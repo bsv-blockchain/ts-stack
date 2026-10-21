@@ -4,8 +4,10 @@ import {
   ListOutputsArgs,
   OriginatorDomainNameStringUnder250Bytes,
   OutputTagStringUnder300Bytes,
+  Validation,
   WalletOutput
 } from '@bsv/sdk'
+import { StorageKnex } from '../../../src/storage/StorageKnex'
 import { _tu, TestWalletProviderNoSetup } from '../../utils/TestUtilsWalletStorage'
 import path from 'node:path'
 
@@ -254,6 +256,16 @@ describe('listOutputs test', () => {
         if (includeTestChaintracks)
           expect(await Beef.fromBinary(r.BEEF || []).verify(await services.getChainTracker())).toBe(true)
       }
+    }
+  })
+
+  test('8b_BEEF from Knex storage is bytes so negotiated binary JSON carries it compactly', async () => {
+    for (const { storage } of ctxs) {
+      if (!(storage.getActive() instanceof StorageKnex)) continue
+      const vargs = Validation.validateListOutputsArgs({ basket: 'default', include: 'entire transactions' })
+      const r = await storage.listOutputs(vargs)
+      expect(r.BEEF).toBeInstanceOf(Uint8Array)
+      expect(Beef.fromBinary(r.BEEF!).txs.length).toBeGreaterThan(0)
     }
   })
 

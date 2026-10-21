@@ -1,5 +1,6 @@
 import { mockUnderlyingWallet, MockedBSV_SDK } from './WalletPermissionsManager.fixtures'
 import { WalletPermissionsManager, PermissionToken } from '../WalletPermissionsManager'
+import { specOpBasketPrefixOutputs } from '../sdk/types'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -314,6 +315,17 @@ describe('WalletPermissionsManager - Permission Checks', () => {
           'some-nonadmin.com'
         )
       ).rejects.toThrow(/admin-only/i)
+    })
+
+    it('reserves the basket-prefix listing special operation for the admin', async () => {
+      manager = new WalletPermissionsManager(underlying, 'admin.com')
+      await expect(
+        manager.listOutputs({ basket: specOpBasketPrefixOutputs, tags: ['p color'] }, 'some-nonadmin.com')
+      ).rejects.toThrow(/admin-only/i)
+      expect(underlying.listOutputs).not.toHaveBeenCalled()
+
+      await manager.listOutputs({ basket: specOpBasketPrefixOutputs, tags: ['p color'] }, 'admin.com')
+      expect(underlying.listOutputs).toHaveBeenCalledTimes(1)
     })
 
     it('should prompt for insertion permission if seekBasketInsertionPermissions=true', async () => {

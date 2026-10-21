@@ -1,5 +1,9 @@
-import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
-import { ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
+import {
+  type ValidListActionsArgs,
+  type ValidListOutputsArgs,
+  validateInternalizeActionArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import { InternalizeActionArgs, ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
   TableCertificate,
@@ -34,6 +38,7 @@ import { reviewStatus } from './methods/reviewStatus'
 import { ServicesCallHistory, WalletServices } from '../sdk/WalletServices.interfaces'
 import {
   AuthId,
+  StorageInternalizeActionResult,
   FindCertificateFieldsArgs,
   FindCertificatesArgs,
   FindCommissionsArgs,
@@ -61,7 +66,9 @@ import {
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
-import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
+import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
+import { canonicalizeAtomicBeef } from '../utility/canonicalizeAtomicBeef'
+import { internalizeAction, InternalizeReceiptClaim } from './methods/internalizeAction'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { managedChangeOutputFields } from './methods/managedChange'
@@ -142,6 +149,128 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       this.knex.on('query', this.onQuery)
       this.knex.on('query-response', this.onQueryResponse)
       this.knex.on('query-error', this.onQueryError)
+    }
+  }
+
+  private receiptClockMs(): Knex.Raw<number> {
+    switch (this.dbtype) {
+      case 'MySQL':
+        return this.knex.raw('CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 AS UNSIGNED)')
+      case 'Postgres':
+        return this.knex.raw('CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)')
+      case 'SQLite':
+        return this.knex.raw("CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)")
+      default:
+        throw new WERR_INTERNAL('wallet receipt claim requires a ready SQL storage provider')
+    }
+  }
+
+  private receiptLeaseMs(): Knex.Raw<number> {
+    return this.knex.raw('(? + ?)', [this.receiptClockMs(), 120_000])
+  }
+
+  private async acquireInternalizeReceipt(
+    userId: number,
+    txid: string
+  ): Promise<{
+    ownerToken: string
+    claim: InternalizeReceiptClaim
+    preserveComplete: boolean
+  }> {
+    const ownerToken = randomBytesBase64(18)
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
+      await this.knex('internalize_receipts')
+        .insert({
+          userId,
+          txid,
+          ownerToken,
+          state: 'pending',
+          leaseUntil: this.receiptLeaseMs(),
+          needsNewReceipt: false
+        })
+        .onConflict(['userId', 'txid'])
+        .ignore()
+
+      const previous = await this.knex('internalize_receipts')
+        .where({ userId, txid })
+        .first<{ ownerToken: string; state: string; needsNewReceipt: boolean }>(
+          'ownerToken',
+          'state',
+          'needsNewReceipt'
+        )
+      if (previous == null) continue
+
+      const retryNew = Boolean(previous.needsNewReceipt)
+      const preserveComplete = previous.state === 'complete'
+      if (previous.ownerToken !== ownerToken) {
+        const changed = await this.knex('internalize_receipts')
+          .where({ userId, txid, ownerToken: previous.ownerToken })
+          .where(builder =>
+            builder.whereIn('state', ['retryable', 'complete']).orWhere('leaseUntil', '<=', this.receiptClockMs())
+          )
+          .update({ ownerToken, state: 'pending', leaseUntil: this.receiptLeaseMs() })
+        if (changed !== 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          continue
+        }
+      }
+
+      const activeRow = (trx: TrxToken) => {
+        const query = (trx as Knex.Transaction)('internalize_receipts')
+          .where({ userId, txid, ownerToken, state: 'pending' })
+          .where('leaseUntil', '>', this.receiptClockMs())
+        return this.dbtype === 'SQLite' ? query : query.forUpdate()
+      }
+      const claim: InternalizeReceiptClaim = {
+        retryNew,
+        assertActive: async trx => {
+          const active = await activeRow(trx).first('ownerToken')
+          if (active == null) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        },
+        markNew: async trx => {
+          const changed = await activeRow(trx).update({ needsNewReceipt: true })
+          if (changed !== 1) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        },
+        complete: async trx => {
+          const changed = await activeRow(trx).update({
+            state: 'complete',
+            needsNewReceipt: false,
+            leaseUntil: 0
+          })
+          if (changed !== 1) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        }
+      }
+      return { ownerToken, claim, preserveComplete }
+    }
+    throw new WERR_INTERNAL('wallet receipt is already being processed; retry after the active request finishes')
+  }
+
+  override async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+    validateInternalizeActionArgs(args)
+    const userId = auth.userId
+    if (userId == null) throw new WERR_UNAUTHORIZED()
+    const txid = canonicalizeAtomicBeef(args.tx).atomicTxid
+    if (txid == null) throw new WERR_INVALID_PARAMETER('tx', 'an AtomicBEEF transaction')
+    const { ownerToken, claim, preserveComplete } = await this.acquireInternalizeReceipt(userId, txid)
+    try {
+      return await internalizeAction(this, auth, args, claim)
+    } finally {
+      // A successful writer marked its claim complete in the same transaction
+      // as the output records. Preserve that durable key across later merges;
+      // release an uncompleted key only when no new receipt header was marked.
+      const noNewReceipt = this.knex('internalize_receipts').where({
+        userId,
+        txid,
+        ownerToken,
+        state: 'pending',
+        needsNewReceipt: false
+      })
+      if (preserveComplete) await noNewReceipt.update({ state: 'complete', leaseUntil: 0 })
+      else await noNewReceipt.delete()
+      await this.knex('internalize_receipts')
+        .where({ userId, txid, ownerToken, state: 'pending', needsNewReceipt: true })
+        .update({ state: 'retryable', leaseUntil: 0 })
     }
   }
 

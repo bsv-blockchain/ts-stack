@@ -214,6 +214,52 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### BRC-112 module balances and listOutputs spendability (4.0.0 candidate)
+
+- `ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`.
+  A BRC-112 module balance query (`p <module> balance <basket>`) returns the
+  exact balance as canonical decimal text with no outputs and no BEEF; every
+  other query still returns a count. Result validation requires decimal text
+  for those queries and rejects it for all others.
+- The BRC-100 binary `listOutputs` response carries the module balance as a
+  UTF-8 string and each output's `spendable` byte after its locking script, as
+  BRC-100 specifies. Both sides of a binary connection must update together:
+  earlier codecs neither write nor read the `spendable` byte.
+- Migration: TypeScript that compares or adds `totalOutputs` must first check
+  `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
+### Fixed (3.2.1 candidate)
+
+- Align `OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operand decoding with
+  [SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+  The node now decodes the offset, length and count operands through a checked
+  int64 script-number path (`int_serialization.h` `deserialize<int64_t>`): an
+  operand longer than nine bytes, or whose sign-magnitude value lies outside
+  the signed 64-bit range, fails with `SCRIPT_ERR_SCRIPTNUM_OVERFLOW`. Node
+  v1.2.2, and this interpreter until now, read only the first eight bytes and
+  ignored the rest, so a nine-byte `04 00 00 00 00 00 00 00 80` was treated as
+  `4` instead of `-4`. Operands of eight bytes or fewer, the int32 saturation
+  of the decoded value and the range errors are unchanged.
+- `OP_SPLIT` rejects a position above `INT32_MAX` in addition to one above the
+  element size, matching the node's new guard for elements larger than
+  `INT32_MAX` bytes.
+- Added node `opcode_tests.cpp` / `int_serialization_tests.cpp` vectors to
+  `ChronicleOpcodes.test.ts` and flipped the one synthetic v1.2.2 regression
+  vector (`gen-00795`) whose verdict the node changed. No API, wire or
+  wallet-data migration is required.
+
+### Identity search recovery (3.2.0 candidate)
+
+- Match `any` queries against saved contact names and keys, retain exact named
+  selectors and return contact-only matches in parallel searches without
+  duplicating their public-certificate overrides.
+- Add opt-in `contactErrorMode`, `contactTimeoutMs` and `onContactError` to both
+  resolution option types. Fallback bounds optional contact loading while
+  preserving public lookup errors and trust checks. Legacy callers retain their
+  defaults and original contact failures.
+- No wire, wallet permission, certificate, or persistence migration. UIs must
+  adopt recovery explicitly and distinguish lookup errors from empty results.
+
 - Add caller-installed additional-output authorization to `completeBoundAction`.
   Bind independently verified local outputs by exact index, script and amount
   while preserving the default external-input restriction and value conservation.

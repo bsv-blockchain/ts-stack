@@ -2,9 +2,9 @@
 id: dependency-release-policy
 title: 'Dependency and Release Policy'
 kind: reference
-version: '1.3.3'
-last_updated: '2026-10-03'
-last_verified: '2026-10-03'
+version: '1.5.0'
+last_updated: '2026-10-15'
+last_verified: '2026-10-15'
 review_cadence_days: 30
 status: stable
 tags: [reference, dependencies, security, releases]
@@ -13,7 +13,9 @@ tags: [reference, dependencies, security, releases]
 # Dependency and Release Policy
 
 This workspace keeps application code, published npm packages, and infrastructure
-images on one reviewed dependency baseline.
+images on one reviewed dependency baseline. Dependency release age is advisory
+and never delays installation or blocks a merge. Vulnerability audits, provenance
+checks, denied dependency lifecycle scripts, and compatibility checks remain required.
 
 ## Supported toolchain
 
@@ -52,14 +54,51 @@ commands are documented in
 
 ## Automation boundaries
 
-Dependabot proposes one coordinated multi-ecosystem maintenance PR each month.
-Patch and minor updates remain automated across the root workspace, standalone
-infrastructure lockfiles, deployment images, code generators, and GitHub
-Actions. The single open version-maintenance slot does not apply to security
-updates, so an old monthly PR cannot block immediate advisory remediation.
-Security updates are grouped only within a package-manager ecosystem and are
-never delayed into the monthly cross-ecosystem version update. First-party
-`@bsv/*` versions remain owned by the release graph.
+Dependabot proposes one coordinated multi-ecosystem maintenance PR on the 1st
+and 15th of each month (`stack-maintenance`, cron `0 6 1,15 * *`
+America/Los_Angeles). Patch and minor updates remain automated across the root
+workspace, standalone infrastructure lockfiles, deployment images, code
+generators, and GitHub Actions. First-party `@bsv/*` versions remain owned by
+the release graph.
+
+Automated Dependabot security-update pull requests are disabled for the
+repository; Dependabot alerts remain enabled. Advisory fixes that a compatible
+release resolves arrive through the grouped PR and its lockfile refresh below,
+so they can wait up to one cycle plus the seven-day release-age delay.
+Maintainers remediate high and critical alerts manually without waiting for the
+cycle, as well as any advisory that an in-range refresh cannot resolve (a fixed
+release outside the declared range, or a lockfile whose refresh failed). The
+dependency policy check rejects `applies-to: security-updates` groups while
+`routineUpdates.securityUpdates.automatedPullRequests` is `false`, because such
+groups would have no effect.
+
+Dependabot version updates move direct dependencies only. The
+[Dependency lockfile refresh](https://github.com/bsv-blockchain/ts-stack/blob/main/.github/workflows/dependency-refresh.yml)
+workflow therefore adds one commit to the open grouped PR that re-resolves the
+root `pnpm-lock.yaml` and every `infra/**/package-lock.json` to the newest
+releases the committed manifests already allow, so transitive patch and
+advisory fixes are reviewed in the same CI run. It runs
+`node scripts/dependency-lockfile-refresh.mjs`, which:
+
+- leaves every `package.json` unchanged and fails if anything other than a
+  lockfile changes;
+- never moves a first-party `@bsv/*` resolution;
+- disables lifecycle scripts and runs package managers without a token;
+- keeps the seven-day release-age delay (`minimumReleaseAge` for pnpm,
+  `--before` for npm) and pnpm's trust-downgrade protection; and
+- refreshes each lockfile independently, committing the ones that succeed and
+  failing the workflow with a per-lockfile summary for the rest.
+
+The refresh pushes with a GitHub App installation token so the PR's CI runs on
+the new head. The App needs only repository Contents read/write; the workflow
+reads `vars.DEPENDENCY_REFRESH_APP_CLIENT_ID` and
+`secrets.DEPENDENCY_REFRESH_APP_PRIVATE_KEY`. Once the refresh commit lands,
+Dependabot stops rebasing that PR, so merge or close it before the next grouped
+run. The workflow selects only the PR whose title names the `stack-maintenance`
+group, so single-package Dependabot PRs on the same branch prefix (for example
+security updates, if they are re-enabled) are never refreshed. To refresh
+an already refreshed PR again before merge, run the workflow manually with
+`force` enabled.
 
 Standalone infrastructure uses npm `package-lock.json` files outside the pnpm
 workspace. Its Dependabot entry excludes only the unrelated ancestor
@@ -79,11 +118,11 @@ byte-for-byte generated-output verification. A resolver proposal does not
 silently change the CI toolchain or authorize different generated types.
 
 Major changes that alter a runtime, compiler, or persisted-data contract are
-held from the routine monthly PR until their focused migration is ready:
+held from the routine grouped PR until their focused migration is ready:
 
 - Future TypeScript compiler majors are held in both root and standalone
   infrastructure npm scopes; TypeScript 7 patch and minor maintenance remains
-  eligible for the monthly update.
+  eligible for the grouped update.
 - Node majors are held in the governed container-base manifest so CI, release,
   and every runtime image move together.
 - MySQL and MongoDB majors are held until backup/restore, supported upgrade
@@ -230,13 +269,14 @@ npm or infrastructure release workflows, the read-only verification workflow:
 
 - generates a direct-versus-latest inventory and separates compatible updates
   from major migration projects, versions younger than the repository's
-  24-hour release-age floor, supported peer ranges, coordinated runtime/tool
+  24-hour advisory release-age reminder, supported peer ranges, coordinated runtime/tool
   migrations, the TypeScript compiler-API bridge, and forward vendor builds;
 - reconciles all public source manifests, recorded published baselines, and npm
   `latest`, explicitly reporting source candidates held by an operator's
   publication decision;
-- installs every published package with lifecycle scripts disabled and runs
-  npm registry signature/provenance verification;
+- installs every exact published package in its own locked consumer context with
+  lifecycle scripts disabled, allowing its declared peers to resolve normally,
+  and runs npm registry signature/provenance verification in every context;
 - pulls every checked-in deployment image by its immutable digest; and
 - verifies generated package, support, conformance, coverage-reporting, and
   version facts.
@@ -266,11 +306,41 @@ Do not hide a future advisory with a broad override or dismissal. Remove an
 unused dependency, upgrade or replace the owning tool, and verify the frozen
 consumer and development graphs first.
 
+## October 6 advisory repair
+
+The protected UMP release qualification detected newly disclosed critical
+`proxy-addr` and high `source-map-js` advisories before publication. The root
+lock selects the compatible patched releases `proxy-addr` 2.0.8 and
+`source-map-js` 1.2.2; the six affected standalone infrastructure locks select
+`proxy-addr` 2.0.8. Overlay Server already selected that release.
+
+The upstream [proxy-addr advisory](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)
+and [source-map-js advisory](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)
+identify those patched versions. Their existing Node engine floors and
+transitive dependency contracts remain compatible. The targeted lock refresh
+introduces no new dependency
+override or exception, and retains the blocking high-severity audit. Requalify
+the frozen root, documentation and standalone service graphs before release.
+
+The complete standalone audit also found the older Message Box multipart parser
+and legacy UHRP/WAB development watcher paths. Message Box selects the compatible
+`@fastify/busboy` 3.2.2 patch, covering the upstream
+[boundary advisory](https://github.com/advisories/GHSA-xjh9-v7x6-24jw),
+[header advisory](https://github.com/advisories/GHSA-x8mw-p69m-v3mx) and
+[disposition advisory](https://github.com/advisories/GHSA-gxm5-99cw-xjw9).
+UHRP Basic, UHRP Cloud Bucket and WAB replace their legacy Nodemon/ts-node-dev
+watchers with `tsx watch`, retaining source/environment-file watch and telemetry
+preload behavior. Production entry points remain unchanged. Removing that
+unused watcher closure removes the unpatched `braces` advisory rather than
+adding a suppression. The existing full high-severity audit, service suites and
+Node 24 runtime contracts remain required.
+
 ## Update and release flow
 
-1. Refresh mature direct dependencies within their declared semver ranges.
-   Never bypass the 24-hour release-age floor merely to make the inventory
-   report `current`.
+1. Refresh direct dependencies within their declared semver ranges after
+   compatibility and security review. Release age is advisory, never an install
+   or merge blocker. The dependency inventory may flag a newly published release
+   for attention; it cannot impose a hold.
 2. Remove obsolete or unused packages before considering overrides.
 3. Run the frozen install, version checks, audit, lint, build, tests,
    conformance, and documentation build.

@@ -9,6 +9,11 @@ describe('wallet chain network mapping', () => {
   it('keeps private and mock chains on local overlay routing', () => {
     expect(toLookupNetworkPreset('stn')).toBe('local')
     expect(toLookupNetworkPreset('tstn')).toBe('local')
+    expect(toLookupNetworkPreset('regtest')).toBe('local')
     expect(toLookupNetworkPreset('mock')).toBe('local')
+  })
+
+  it('reports regtest to BRC-100 callers as a test network', () => {
+    expect(toWalletNetwork('regtest')).toBe('testnet')
   })
 })

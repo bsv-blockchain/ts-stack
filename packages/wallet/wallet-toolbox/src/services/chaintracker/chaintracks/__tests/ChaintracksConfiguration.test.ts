@@ -174,7 +174,7 @@ describe('Chaintracks configuration compatibility', () => {
     }
   )
 
-  test.each(['stn', 'tstn'] as const)('%s requires an explicit remote live source', chain => {
+  test.each(['stn', 'tstn', 'regtest'] as const)('%s requires an explicit remote live source', chain => {
     expect(() => createDefaultNoDbChaintracksOptions(chain)).toThrow(
       `ChainTracks ${chain} requires at least one bulk and live source`
     )

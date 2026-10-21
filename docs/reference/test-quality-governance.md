@@ -26,6 +26,13 @@ honest about what ran. CI rejects:
   started. Gaps must be declared in vector metadata instead of passing
   vacuously.
 
+Elapsed `reviewBy` dates are maintenance reminders, never PR failures. This
+applies to manual inventories and policies, property suites and exclusions,
+mutation policy, required skips, and conformance skip groups across every
+package. The CLI prints `MAINTENANCE` warnings and exits successfully when only
+dates have elapsed. Unknown owners, malformed dates, missing inventory, and
+other structural findings still fail; runtime expiration checks are unchanged.
+
 Run the contract locally:
 
 ```sh

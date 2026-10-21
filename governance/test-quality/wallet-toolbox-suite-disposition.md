@@ -1,7 +1,7 @@
 # Wallet Toolbox manual-suite disposition
 
 Extraction reviewed: 2026-08-30
-Inventory reviewed: [2026-10-01](./wallet-manual-review-2026-10-01.md)
+Inventory reviewed: [2026-10-09](./wallet-manual-review-2026-10-09.md)
 Owner: `ts-stack-maintainers`
 
 This ledger records the manual-suite review that separates executable tests
