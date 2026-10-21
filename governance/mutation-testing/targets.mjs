@@ -638,6 +638,22 @@ export function buildMutationTargets(repositoryRoot) {
       ],
       ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
     },
+    'rabin-permission': {
+      packageDirectory: 'packages/wallet/rabin-permission-module',
+      manifest: 'packages/wallet/rabin-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts',
+      mutate: [
+        'src/RabinPermissionModule.ts',
+        'src/rabin.ts',
+        'src/primes.ts',
+        'src/scriptNumber.ts',
+        'src/hkdf.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/RabinPermissionModule*.test.ts'], {
+        esm: true
+      })
+    },
     'ecpm-permission': {
       packageDirectory: 'packages/wallet/ecpm-permission-module',
       manifest: 'packages/wallet/ecpm-permission-module/package.json',

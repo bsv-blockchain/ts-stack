@@ -63,12 +63,14 @@ test('advanced CodeQL preserves authored languages, events, permissions, and req
     .filter(Boolean)
     .filter(path => !generatedBoundaries.some(boundary => matchesGeneratedBoundary(path, boundary)))
 
-  assert.deepEqual(readIndentedList(workflow, 'language', 8), ['actions', 'javascript-typescript'])
-  assert.deepEqual(
-    authoredPythonFiles,
-    [],
-    'authored Python requires restoring the Python CodeQL lane'
-  )
+  assert.deepEqual(readIndentedList(workflow, 'language', 8), [
+    'actions',
+    'javascript-typescript',
+    'python'
+  ])
+  assert.deepEqual(authoredPythonFiles, [
+    'packages/wallet/rabin-permission-module/conformance/rabin_check.py'
+  ])
   assert.match(workflow, /^  push:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  pull_request:\n    branches: \[main\]$/m)
   assert.match(workflow, /^  schedule:\n    - cron: '.+'$/m)

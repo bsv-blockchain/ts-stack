@@ -43,6 +43,7 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/wallet/color-permission-module/package.json",
+      "packages/wallet/rabin-permission-module/package.json",
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/messaging/webrtpay/package.json"
@@ -441,6 +442,18 @@
         "invariants": [
           "Applying and then removing one module-derived scalar returns every generated finite input point exactly.",
           "Neither randomized root material nor the corresponding derived scalar is exposed in the wallet result."
+        ]
+      },
+      {
+        "path": "packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts",
+        "manifest": "packages/wallet/rabin-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-derived Rabin factors and canonical signatures returned through untrusted encrypt arguments",
+        "target": "Script-number framing, smallest-padding Rabin signatures, and rejection of malformed p rabin envelopes before derivation",
+        "invariants": [
+          "Every generated non-negative script number round-trips through its minimal push.",
+          "Every signature uses the smallest padding below 65536 and the principal CRT root.",
+          "Malformed p rabin envelopes are rejected before any private-key derivation."
         ]
       },
       {

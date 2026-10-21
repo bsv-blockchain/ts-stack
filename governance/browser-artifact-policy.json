@@ -125,6 +125,13 @@
       "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports BRC-162 script helpers from @bsv/templates and only the metadata decryption helper and storage-operation identifier from @bsv/wallet-toolbox-client, with no host, server or UI adapter bundled."
     },
     {
+      "name": "@bsv/rabin-permission-module",
+      "path": "packages/wallet/rabin-permission-module",
+      "budget": "packages/wallet/rabin-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module. It imports the public secp256k1 point parser from @bsv/sdk to reject non-canonical counterparties, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled."
+    },
+    {
       "name": "@bsv/ecpm-permission-module",
       "path": "packages/wallet/ecpm-permission-module",
       "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",

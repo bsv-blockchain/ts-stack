@@ -74,6 +74,13 @@
       "migration": "No existing consumer migration is required; this is the first release. Wallet hosts register the module under the color scheme with the underlying wallet, a ColorOverlayProvider and a prompt callback."
     },
     {
+      "name": "@bsv/rabin-permission-module",
+      "publishedVersion": "0.0.0",
+      "releaseType": "minor",
+      "summary": "Introduces the BRC-206 p rabin wallet module. encrypt carries a modulus or a canonical Rabin signature for the 2048, 3072, and 4096 bit widths. Keys are derived with BRC-42 and HKDF-SHA256. Signatures verify under Rúnar's (signature^2 + padding) mod n equation. decrypt is rejected.",
+      "migration": "No existing consumer migration is required; this is the first release. Wallet hosts register the module under the rabin scheme with a BRC-42 key deriver and an authorization callback for security levels 1 and 2 and for privileged requests."
+    },
+    {
       "name": "@bsv/ecpm-permission-module",
       "publishedVersion": "0.1.2",
       "releaseType": "patch",

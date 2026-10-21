@@ -328,6 +328,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "rabin-permission",
+      "manifest": "packages/wallet/rabin-permission-module/package.json",
+      "propertyTest": "packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet-derived Rabin factors and canonical signatures returned through untrusted encrypt arguments",
+      "minimumScore": 80,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "ecpm-permission",
       "manifest": "packages/wallet/ecpm-permission-module/package.json",
       "propertyTest": "packages/wallet/ecpm-permission-module/src/__tests__/EcpmPermissionModule.property.test.ts",
