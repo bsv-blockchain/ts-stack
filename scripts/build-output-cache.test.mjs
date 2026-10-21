@@ -40,6 +40,9 @@ test('a package key covers its own files and every workspace package it depends 
   // Root toolchain inputs invalidate every package.
   const toolchain = packageKeys(projects, names, listing({ 'pnpm-lock.yaml': 'v2' }))
   for (const name of names) assert.notEqual(toolchain.get(name), before.get(name))
+  // Shared compiler configuration that package tsconfigs extend invalidates every package.
+  const compiler = packageKeys(projects, names, listing({ 'config/typescript': 'v2' }))
+  for (const name of names) assert.notEqual(compiler.get(name), before.get(name))
   assert.deepEqual(packageKeys(projects, names, listing()), before)
   assert.throws(() => packageKeys(projects, ['@bsv/missing'], listing()), /Unknown/)
 })

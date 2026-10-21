@@ -30,6 +30,9 @@ const FULL_PACKAGE_CONTROL_PATHS = new Set([
   'scripts/typescript-toolchain.mjs'
 ])
 
+// Shared compiler configuration that the root and package tsconfigs extend.
+const FULL_PACKAGE_CONTROL_PREFIXES = ['config/typescript/']
+
 export const INFRA_COMPONENTS = [
   { component: 'chaintracks-server', 'native-modules': 'better-sqlite3' },
   { component: 'message-box-server', 'native-modules': 'better-sqlite3' },
@@ -421,8 +424,11 @@ export function selectWorkspaceScope(
   const files = changedFiles.map(normalized).filter(Boolean)
   const nonRootProjects = projects.filter(project => project.path !== '.')
   const full =
-    files.some(file => FULL_PACKAGE_CONTROL_PATHS.has(file) && !narrowed.includes(file)) ||
-    changedImporters.includes('.')
+    files.some(
+      file =>
+        (FULL_PACKAGE_CONTROL_PATHS.has(file) && !narrowed.includes(file)) ||
+        FULL_PACKAGE_CONTROL_PREFIXES.some(prefix => file.startsWith(prefix))
+    ) || changedImporters.includes('.')
 
   const direct = new Set()
   if (full) {

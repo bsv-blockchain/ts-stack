@@ -111,6 +111,11 @@ test('root toolchain changes deliberately retain full workspace coverage', () =>
     selectWorkspaceScope(projects, ['governance/repository-health/projects.json']).direct.length,
     4
   )
+  // Package tsconfigs extend the shared compiler configuration.
+  assert.equal(
+    selectWorkspaceScope(projects, ['config/typescript/node-library.json']).direct.length,
+    4
+  )
 })
 
 test('infrastructure scope never rebuilds unrelated images for workflow-only changes', () => {

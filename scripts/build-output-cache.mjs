@@ -19,6 +19,7 @@ const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 const CACHE_FORMAT = 'build-output-cache-v1'
 const ROOT_INPUTS = [
   '.npmrc',
+  'config/typescript',
   'package.json',
   'patches',
   'pnpm-lock.yaml',
