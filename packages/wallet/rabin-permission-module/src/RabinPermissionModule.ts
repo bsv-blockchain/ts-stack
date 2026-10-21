@@ -21,6 +21,7 @@ import type {
 } from './types.js'
 
 const PROTOCOL_PREFIX = 'p rabin '
+const UNSUPPORTED_BASKETS_AND_LABELS = 'RABIN: p rabin baskets and labels are not supported'
 const PROTOCOL_SHAPE = /^p rabin ([^ ]*) ([^ ]*) (.*)$/
 const LOGICAL_PROTOCOL_PATTERN = /^[a-z0-9]+(?: [a-z0-9]+)*$/
 const MAX_RABIN_PROTOCOL_BYTES = 290
@@ -40,6 +41,7 @@ const MIN_MESSAGE_BYTES = 1024 * 1024
 const MAX_MESSAGE_BYTES = 256 * 1024 * 1024
 const MAX_CACHED_GRANTS = 1024
 const MAX_PENDING_GRANTS = 64
+const MAX_PENDING_GRANTS_PER_ORIGINATOR = 4
 const MAX_ORIGINATOR_BYTES = 1024
 // eslint-disable-next-line no-control-regex -- these are the ASCII controls being rejected.
 const ASCII_CONTROL = /[\0-\x1f\x7f]/
@@ -120,12 +122,13 @@ export class RabinPermissionModule implements PermissionsModule {
   readonly #maxMessageBytes: number
   readonly #grants = new Map<string, number>()
   readonly #pendingGrants = new Map<string, Promise<boolean>>()
+  readonly #pendingByOriginator = new Map<string, number>()
   readonly #keys = new Map<string, RabinKey>()
   readonly #generating = new Map<string, Promise<RabinKey>>()
   #epoch = 0
 
   constructor(options: RabinPermissionModuleOptions) {
-    const ownedOptions = dataRecord(options, 'RABIN options')
+    const ownedOptions = dataRecord(options, 'RABIN: options')
     const keyDeriver = ownedOptions.keyDeriver as RabinKeyDeriver | undefined
     if (keyDeriver == null || typeof keyDeriver.derivePrivateKey !== 'function') {
       throw new TypeError('RABIN: keyDeriver with derivePrivateKey is required')
@@ -170,6 +173,7 @@ export class RabinPermissionModule implements PermissionsModule {
     this.#epoch++
     this.#grants.clear()
     this.#pendingGrants.clear()
+    this.#pendingByOriginator.clear()
     this.#generating.clear()
     for (const key of this.#keys.values()) forget(key)
     this.#keys.clear()
@@ -180,7 +184,7 @@ export class RabinPermissionModule implements PermissionsModule {
     request: PermissionsModuleRequest,
     _next: PermissionsModuleNext
   ): Promise<{ ciphertext: number[] }> {
-    const ownedRequest = dataRecord(request, 'RABIN request')
+    const ownedRequest = dataRecord(request, 'RABIN: request')
     if (ownedRequest.method !== 'encrypt') {
       throw new Error(
         `RABIN: ${String(ownedRequest.method)} is not permitted in the p rabin namespace; only encrypt is`
@@ -207,12 +211,18 @@ export class RabinPermissionModule implements PermissionsModule {
     return { ciphertext: encodeSignResult(sig, padding) }
   }
 
-  async onRequest(request: PermissionsModuleRequest): Promise<{ args: object }> {
-    return { args: request.args }
+  /**
+   * Basket and label hook. BRC-98 dispatch skips the wallet's basket and label permission checks
+   * for `p rabin` baskets and labels and calls this hook instead. The scheme defines none, so
+   * every such request is refused rather than passed through unchecked.
+   */
+  async onRequest(_request: PermissionsModuleRequest): Promise<{ args: object }> {
+    throw new Error(UNSUPPORTED_BASKETS_AND_LABELS)
   }
 
-  async onResponse(result: unknown): Promise<unknown> {
-    return result
+  /** See `onRequest`; never reached because `onRequest` refuses every request. */
+  async onResponse(_result: unknown): Promise<unknown> {
+    throw new Error(UNSUPPORTED_BASKETS_AND_LABELS)
   }
 
   #parseRequest(rawArgs: unknown): ParsedRabinRequest {
@@ -383,6 +393,10 @@ export class RabinPermissionModule implements PermissionsModule {
       if (this.#pendingGrants.size >= MAX_PENDING_GRANTS) {
         throw new Error('RABIN: authorization queue is full')
       }
+      const originatorPending = this.#pendingByOriginator.get(originator) ?? 0
+      if (originatorPending >= MAX_PENDING_GRANTS_PER_ORIGINATOR) {
+        throw new Error('RABIN: too many pending authorizations for this app')
+      }
       const authorization: RabinAuthorizationRequest = {
         originator,
         securityLevel,
@@ -404,6 +418,14 @@ export class RabinPermissionModule implements PermissionsModule {
         pending = Promise.reject(error)
       }
       this.#pendingGrants.set(scope, pending)
+      this.#pendingByOriginator.set(originator, originatorPending + 1)
+      const counted = this.#pendingByOriginator
+      const release = (): void => {
+        const remaining = (counted.get(originator) ?? 1) - 1
+        if (remaining > 0) counted.set(originator, remaining)
+        else counted.delete(originator)
+      }
+      pending.then(release, release)
     }
     const epoch = this.#epoch
     let approved: boolean
@@ -464,13 +486,16 @@ export class RabinPermissionModule implements PermissionsModule {
       return { ...cached }
     }
 
+    const epoch = this.#epoch
     let pending = this.#generating.get(cacheKey)
     if (pending == null) {
-      pending = this.#generateAndRemember(cacheKey, parsed, keyDeriver, this.#epoch)
+      pending = this.#generateAndRemember(cacheKey, parsed, keyDeriver, epoch)
       this.#generating.set(cacheKey, pending)
     }
     const key = await pending
-    if (key.n === 0n) throw new Error('RABIN: the module was reset during key generation')
+    // The generation's own result object is never zeroed (the cache holds a separate copy), so a
+    // concurrent eviction cannot reach it; only a reset by dispose() invalidates the request.
+    if (epoch !== this.#epoch) throw new Error('RABIN: the module was reset during key generation')
     return { ...key }
   }
 
@@ -489,7 +514,7 @@ export class RabinPermissionModule implements PermissionsModule {
         forget(key)
         throw new Error('RABIN: the module was reset during key generation')
       }
-      this.#remember(cacheKey, key)
+      this.#remember(cacheKey, { ...key })
       return key
     } finally {
       // Within one epoch a cache key has at most one generation; dispose() starts a new epoch.

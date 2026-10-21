@@ -52,7 +52,7 @@ describe('BRC-100 carriage of p rabin results', () => {
         })
       ).not.toThrow()
     }
-  })
+  }, 30_000)
 
   it('round-trips through an unmodified WalletClient', async () => {
     const client = new WalletClient(hostWallet(), ORIGINATOR)
@@ -63,7 +63,7 @@ describe('BRC-100 carriage of p rabin results', () => {
     } as never)
     expect(toHex(key.ciphertext)).toBe(K1.response.ciphertext)
     expect(toHex(signed.ciphertext)).toBe(S1.response.ciphertext)
-  })
+  }, 30_000)
 
   it('round-trips through the Wallet Wire substrate', async () => {
     const wire = new WalletWireTransceiver(new WalletWireProcessor(hostWallet()))
@@ -72,7 +72,7 @@ describe('BRC-100 carriage of p rabin results', () => {
       ORIGINATOR
     )
     expect(toHex(signed.ciphertext)).toBe(S1.response.ciphertext)
-  })
+  }, 30_000)
 
   it('round-trips through JSON as an HTTP substrate carries it', async () => {
     const wallet = hostWallet()
@@ -81,7 +81,7 @@ describe('BRC-100 carriage of p rabin results', () => {
     const received = JSON.parse(JSON.stringify(result)) as { ciphertext: number[] }
     expect(validateWalletResult('encrypt', received)).toEqual(received)
     expect(toHex(received.ciphertext)).toBe(S1.response.ciphertext)
-  })
+  }, 30_000)
 
   it('documents why encrypt is the carrier: Rabin values fail getPublicKey and createSignature', () => {
     const n = K1.response.ciphertext.slice(4)

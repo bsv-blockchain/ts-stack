@@ -72,7 +72,7 @@ describe('RabinPermissionModule properties', () => {
         expect(sig === p || sig === q || n !== p * q).toBe(false)
       })
     )
-  })
+  }, 60_000)
 
   it('round-trips every non-negative Script number minimally', () => {
     fc.assert(

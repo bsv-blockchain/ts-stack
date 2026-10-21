@@ -29,14 +29,14 @@
   "scripts": {
     "build": "tsdown src/index.ts --format esm --dts --sourcemap --clean --out-dir dist --tsconfig tsconfig.build.json",
     "clean": "rm -rf dist",
-    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/rabin-permission-module/src/**/*.ts\" \"packages/wallet/rabin-permission-module/scripts/**/*.mjs\" \"packages/wallet/rabin-permission-module/README.md\" \"packages/wallet/rabin-permission-module/*.{cjs,json,ts}\"",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/wallet/rabin-permission-module/src/**/*.ts\" \"packages/wallet/rabin-permission-module/scripts/**/*.{mjs,ts}\" \"packages/wallet/rabin-permission-module/README.md\" \"packages/wallet/rabin-permission-module/*.{cjs,json,ts}\"",
     "lint": "oxlint src scripts --deny-warnings",
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --modes esm --exports RabinPermissionModule,createRabinModule,verify",
     "test": "jest",
     "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
     "test:coverage": "jest --coverage",
     "test:property": "jest --runInBand --runTestsByPath src/__tests__/RabinPermissionModule.property.test.ts",
-    "test:runar": "pnpm build && node scripts/verify-runar.mjs",
+    "test:runar": "node scripts/verify-runar.mjs",
     "typecheck": "tsc --project tsconfig.typecheck.json"
   },
   "keywords": [

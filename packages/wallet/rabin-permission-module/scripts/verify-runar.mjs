@@ -5,8 +5,9 @@
 // skips (exit 0) unless RUNAR_NODE_MODULES names a node_modules directory containing
 // runar-compiler, runar-lang and runar-testing.
 //
-//   pnpm build
-//   RUNAR_NODE_MODULES=/path/to/node_modules node scripts/verify-runar.mjs
+//   RUNAR_NODE_MODULES=/path/to/node_modules pnpm test:runar
+// The package is built only when the check actually runs.
+import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -16,14 +17,18 @@ import { CachedKeyDeriver, PrivateKey } from '@bsv/sdk'
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const runarModules = process.env.RUNAR_NODE_MODULES
 if (runarModules === undefined || runarModules === '' || !existsSync(runarModules)) {
-  console.log('verify-runar: skipped (set RUNAR_NODE_MODULES to a node_modules with Rúnar)')
+  console.log(
+    'verify-runar: skipped: RUNAR_NODE_MODULES is not set to a node_modules directory containing Rúnar'
+  )
   process.exit(0)
 }
-const distEntry = join(packageRoot, 'dist/index.mjs')
-if (!existsSync(distEntry)) {
-  console.error('verify-runar: run `pnpm build` first')
+// Build only once Rúnar is known to be available, so a skipped run costs nothing.
+const build = spawnSync('pnpm', ['build'], { cwd: packageRoot, stdio: 'inherit' })
+if (build.status !== 0) {
+  console.error('verify-runar: build failed')
   process.exit(1)
 }
+const distEntry = join(packageRoot, 'dist/index.mjs')
 
 const requireFromRunar = createRequire(join(runarModules, 'noop.js'))
 const load = async specifier =>

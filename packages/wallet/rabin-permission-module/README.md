@@ -103,15 +103,37 @@ share one prompt. Grants are capped at 1,024 entries and pending prompts at 64.
 
 Key generation is deterministic: HKDF-SHA256 expands the 32-byte derived
 scalar, and each prime is the first candidate `x, x + 4, x + 8, …` that has no
-factor below 2^16 and passes Miller–Rabin for the first 32 prime bases. A
-3072-bit key takes roughly a second of CPU in a JavaScript runtime, so ordinary
-keys are cached in memory (32 by default, `maxCachedKeys` up to 1,024) under
-the full derivation identity, and concurrent first requests for one key share a
-single generation. Generation is synchronous and therefore serialized; a host
-that must keep a UI thread responsive should run the wallet off that thread.
+factor below 2^16 and passes Miller–Rabin for the first 32 prime bases. Measured
+on an Apple M-series machine with Node 24, generation takes about 0.4 s median
+(2 s worst seen) for 2048 bits, 1.2–1.8 s median (3.5 s) for 3072 bits and
+3.5 s median (16 s) for 4096 bits. Ordinary keys are therefore cached in
+memory (32 by default, `maxCachedKeys` up to 1,024) under the full derivation
+identity, and concurrent first requests for one key share a single generation.
 Privileged keys are never cached.
 
 Key material is derived only after authorization succeeds.
+
+Memory hygiene: `dispose()` drops the cached primes, but the host's key
+deriver is outside the module's reach. A `CachedKeyDeriver` keeps every
+derived child key, including each Rabin seed, for the wallet session; only
+discarding the deriver releases them.
+
+## Baskets and labels
+
+The scheme defines no baskets or labels. Wallet Toolbox hands `p rabin …`
+baskets and labels of `createAction`, `internalizeAction` and `listActions` to
+the module's `onRequest`/`onResponse` instead of its own basket and label
+permission checks, so both hooks refuse every request with
+`RABIN: p rabin baskets and labels are not supported`. `listOutputs` and
+`relinquishOutput` on a `p rabin` basket reach `handleRequest`, which accepts
+only `encrypt`.
+
+## Errors
+
+Every error the module raises starts with `RABIN:` and names the rejected
+field or capability without key material. Errors thrown by the host's key
+deriver, privileged key provider or authorization callback propagate
+unchanged.
 
 ## Security model
 

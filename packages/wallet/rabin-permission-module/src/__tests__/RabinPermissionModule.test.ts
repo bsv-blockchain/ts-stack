@@ -66,7 +66,7 @@ describe('RabinPermissionModule through WalletPermissionsManager', () => {
     expect(toHex(signed.ciphertext)).toBe(S1.response.ciphertext)
     expect(handleRequest).toHaveBeenCalledTimes(2)
     expect(calls).toEqual([])
-  })
+  }, 30_000)
 
   it.each([
     ['decrypt', { ciphertext: [1, 2, 3] }],
@@ -99,12 +99,9 @@ describe('RabinPermissionModule through WalletPermissionsManager', () => {
 describe('RabinPermissionModule requests', () => {
   const module = () => new RabinPermissionModule({ keyDeriver: new CachedKeyDeriver(walletAKey()) })
 
-  it('exports a factory and harmless legacy transformation hooks', async () => {
+  it('exports a factory', () => {
     const instance = createRabinModule({ keyDeriver: new CachedKeyDeriver(new PrivateKey(5)) })
-    const request = { method: 'encrypt', args: encryptArgs('key'), originator: ORIGINATOR }
     expect(instance).toBeInstanceOf(RabinPermissionModule)
-    await expect(instance.onRequest(request)).resolves.toEqual({ args: request.args })
-    await expect(instance.onResponse({ ciphertext: [1] })).resolves.toEqual({ ciphertext: [1] })
   })
 
   it('derives under exactly [level, "p rabin " + L] with the key ID and counterparty unchanged', async () => {
@@ -122,7 +119,7 @@ describe('RabinPermissionModule requests', () => {
       'feed 1',
       counterparty
     )
-  })
+  }, 30_000)
 
   it('addresses one key with key and sign, and separates level, protocol, key ID and size', async () => {
     const instance = module()
@@ -137,7 +134,7 @@ describe('RabinPermissionModule requests', () => {
     ])
     const moduli = new Set([n, ...variants.map(result => decodeKeyResult(result.ciphertext))])
     expect(moduli.size).toBe(4)
-  })
+  }, 30_000)
 
   it('accepts the inclusive protocol, key ID, plaintext and reason boundaries', async () => {
     const instance = new RabinPermissionModule({
@@ -183,7 +180,7 @@ describe('RabinPermissionModule requests', () => {
         execute(instance, encryptArgs('key', { privileged: true, privilegedReason }))
       ).resolves.toHaveProperty('ciphertext')
     }
-  })
+  }, 30_000)
 
   it.each([
     ['p rabin verify 2048 example oracle', /unknown operation/],
@@ -335,7 +332,20 @@ describe('RabinPermissionModule requests', () => {
         Object.create({ method: 'encrypt', args: encryptArgs('key'), originator: ORIGINATOR }),
         async () => undefined
       )
-    ).rejects.toThrow('RABIN request must be a plain data object')
+    ).rejects.toThrow('RABIN: request must be a plain data object')
+  })
+
+  it('prefixes every structural error with RABIN:', async () => {
+    const keyDeriver = new CachedKeyDeriver(new PrivateKey(17))
+    expect(() => new RabinPermissionModule(null as never)).toThrow(
+      /^RABIN: options must be an object$/
+    )
+    expect(() => new RabinPermissionModule(Object.create({ keyDeriver }) as never)).toThrow(
+      /^RABIN: options must be a plain data object$/
+    )
+    await expect(
+      new RabinPermissionModule({ keyDeriver }).handleRequest([] as never, async () => undefined)
+    ).rejects.toThrow(/^RABIN: request must be an object$/)
   })
 
   it('validates constructor options', () => {
@@ -423,18 +433,18 @@ describe('RabinPermissionModule authorization', () => {
       messageSha256: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
     })
     expect(authorize.mock.calls[1][0]).toMatchObject({ originator: 'other.example' })
-  })
+  }, 30_000)
 
   it('reports key requests to the authorization handler without message fields', async () => {
-    const authorize = jest.fn(async (_request: RabinAuthorizationRequest) => true)
+    const authorize = jest.fn(async (_request: RabinAuthorizationRequest) => false)
     const instance = new RabinPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(23)),
       authorize
     })
-    await execute(
-      instance,
-      encryptArgs('key', { protocolID: [2, 'p rabin key 4096 example oracle'] })
-    )
+    // Denied, so no 4096-bit key is generated.
+    await expect(
+      execute(instance, encryptArgs('key', { protocolID: [2, 'p rabin key 4096 example oracle'] }))
+    ).rejects.toThrow('denied')
     expect(authorize.mock.calls[0][0]).toMatchObject({
       operation: 'key',
       bits: 4096,
@@ -457,7 +467,7 @@ describe('RabinPermissionModule authorization', () => {
     instance.dispose()
     await execute(instance, levelArgs(2, { counterparty: b }))
     expect(authorize).toHaveBeenCalledTimes(3)
-  })
+  }, 30_000)
 
   it('expires grants after the TTL', async () => {
     let now = 1_000_000
@@ -479,7 +489,7 @@ describe('RabinPermissionModule authorization', () => {
     } finally {
       clock.mockRestore()
     }
-  })
+  }, 30_000)
 
   it('honors seekPermission false and denial without deriving', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(26))
@@ -570,7 +580,7 @@ describe('RabinPermissionModule authorization', () => {
     expect(privilegedKeyDeriver).toHaveBeenCalledWith('Oracle signing')
     // Privileged keys are not cached: every request derives again.
     expect(derivePrivileged).toHaveBeenCalledTimes(3)
-  })
+  }, 30_000)
 
   it('fails closed when privileged derivation is unavailable or invalid', async () => {
     const args = encryptArgs('key', { privileged: true, privilegedReason: 'Oracle signing' })
@@ -596,10 +606,11 @@ describe('RabinPermissionModule authorization', () => {
       keyDeriver: new CachedKeyDeriver(new PrivateKey(32)),
       authorize
     })
+    const levelOneKey = encryptArgs('key', { protocolID: [1, 'p rabin key 2048 example oracle'] })
     for (let i = 0; i < 1025; i++)
-      await execute(instance, levelArgs(1), 'encrypt', `origin-${i}.example`)
+      await execute(instance, levelOneKey, 'encrypt', `origin-${i}.example`)
     expect(authorize).toHaveBeenCalledTimes(1025)
-    await execute(instance, levelArgs(1), 'encrypt', 'origin-0.example')
+    await execute(instance, levelOneKey, 'encrypt', 'origin-0.example')
     expect(authorize).toHaveBeenCalledTimes(1026)
 
     const pending = new RabinPermissionModule({
@@ -611,6 +622,25 @@ describe('RabinPermissionModule authorization', () => {
     await expect(execute(pending, levelArgs(1), 'encrypt', 'overflow.example')).rejects.toThrow(
       'authorization queue is full'
     )
+  }, 30_000)
+
+  it('caps pending prompts per app so one app cannot block the others', async () => {
+    const authorize = jest.fn(async () => await new Promise<boolean>(() => {}))
+    const instance = new RabinPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(35)),
+      authorize
+    })
+    const protocol = (i: number) =>
+      encryptArgs('key', { protocolID: [1, `p rabin key 2048 flood protocol ${i}`] })
+    for (let i = 0; i < 4; i++)
+      void observe(execute(instance, protocol(i), 'encrypt', 'flood.example'))
+    await expect(execute(instance, protocol(4), 'encrypt', 'flood.example')).rejects.toThrow(
+      'RABIN: too many pending authorizations for this app'
+    )
+    // A request that joins an existing pending prompt does not count again.
+    void observe(execute(instance, protocol(0), 'encrypt', 'flood.example'))
+    void observe(execute(instance, protocol(0), 'encrypt', 'other.example'))
+    expect(authorize).toHaveBeenCalledTimes(5)
   })
 
   it('does not honor an approval that settles after dispose', async () => {
@@ -650,7 +680,7 @@ describe('RabinPermissionModule key cache', () => {
     instance.dispose()
     expect(await execute(instance, encryptArgs('sign'))).toEqual(first)
     expect(derivePrivateKey).toHaveBeenCalledTimes(3)
-  })
+  }, 30_000)
 
   it('generates once for concurrent first requests', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(42))
@@ -663,7 +693,20 @@ describe('RabinPermissionModule key cache', () => {
     ])
     expect(derivePrivateKey).toHaveBeenCalledTimes(1)
     expect(results[0]).toEqual(results[2])
-  })
+  }, 30_000)
+
+  it('serves concurrent distinct keys even when each evicts the previous one', async () => {
+    const instance = new RabinPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(45)),
+      maxCachedKeys: 1
+    })
+    const outcomes = await Promise.all(
+      ['key a', 'key b', 'key c'].map(keyID =>
+        observe(execute(instance, encryptArgs('key', { keyID })))
+      )
+    )
+    expect(outcomes.map(outcome => outcome.ok)).toEqual([true, true, true])
+  }, 30_000)
 
   it('evicts the least recently used key at the bound', async () => {
     const keyDeriver = new CachedKeyDeriver(new PrivateKey(43))
@@ -680,35 +723,38 @@ describe('RabinPermissionModule key cache', () => {
     expect(derivePrivateKey).toHaveBeenCalledTimes(3)
     await keyFor('key b')
     expect(derivePrivateKey).toHaveBeenCalledTimes(4)
-  })
+  }, 30_000)
 
   it('fails requests whose generation was overtaken by dispose and shares deriver failures', async () => {
     const real = new CachedKeyDeriver(new PrivateKey(44))
     let instance!: RabinPermissionModule
     const disposingDeriver = {
-      derivePrivateKey: (...args: Parameters<CachedKeyDeriver['derivePrivateKey']>) => {
+      derivePrivateKey: jest.fn((...args: Parameters<CachedKeyDeriver['derivePrivateKey']>) => {
         // The wallet locks while this key is being generated.
         instance.dispose()
         return real.derivePrivateKey(...args)
-      }
+      })
     }
     instance = new RabinPermissionModule({ keyDeriver: disposingDeriver })
     const outcome = await observe(execute(instance, encryptArgs('key')))
     expect(outcome.ok).toBe(false)
     expect(String((outcome as { error: unknown }).error)).toContain('reset during key generation')
+    expect(disposingDeriver.derivePrivateKey).toHaveBeenCalledTimes(1)
 
+    const failingDerive = jest.fn(() => {
+      throw new Error('RABIN: key deriver unavailable')
+    })
     const failing = new RabinPermissionModule({
-      keyDeriver: {
-        derivePrivateKey: () => {
-          throw new Error('RABIN: key deriver unavailable')
-        }
-      }
+      keyDeriver: { derivePrivateKey: failingDerive }
     })
     const outcomes = await Promise.all([
       observe(execute(failing, encryptArgs('key'))),
       observe(execute(failing, encryptArgs('sign')))
     ])
     expect(outcomes.map(o => o.ok)).toEqual([false, false])
+    // The two concurrent requests shared one attempt; a failure is not cached.
+    expect(failingDerive).toHaveBeenCalledTimes(1)
     await expect(execute(failing, encryptArgs('key'))).rejects.toThrow('key deriver unavailable')
-  })
+    expect(failingDerive).toHaveBeenCalledTimes(2)
+  }, 30_000)
 })

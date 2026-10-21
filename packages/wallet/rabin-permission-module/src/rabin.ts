@@ -115,29 +115,44 @@ export function isAcceptedPrime(x: bigint): boolean {
 }
 
 /**
- * First accepted prime among x0, x0 + 4, x0 + 8, … below 2^k. Small-prime residues are tracked
- * incrementally; the result is identical to calling `isAcceptedPrime` on each candidate.
+ * Trial division for the candidates x0, x0 + 4, x0 + 8, …: keeps x mod p for every small prime and
+ * updates the residues as the candidate advances, instead of dividing each candidate.
+ */
+export class IncrementalSieve {
+  readonly #residues: Int32Array
+
+  constructor(x0: bigint) {
+    this.#residues = new Int32Array(SMALL_PRIMES.length)
+    for (let i = 0; i < SMALL_PRIMES.length; i++) {
+      this.#residues[i] = Number(x0 % BigInt(SMALL_PRIMES[i]))
+    }
+  }
+
+  /** True when the current candidate has a prime factor below 2^16. */
+  hasSmallFactor(): boolean {
+    return this.#residues.includes(0)
+  }
+
+  /** Moves to the next candidate, x + 4. */
+  advance(): void {
+    // A modulo, not a single subtraction: for 2 and 3 the step 4 exceeds the prime.
+    for (let i = 0; i < this.#residues.length; i++) {
+      this.#residues[i] = (this.#residues[i] + 4) % SMALL_PRIMES[i]
+    }
+  }
+}
+
+/**
+ * First accepted prime among x0, x0 + 4, x0 + 8, … below 2^k. The result is identical to calling
+ * `isAcceptedPrime` on each candidate in turn.
  */
 export function nextAcceptedPrime(x0: bigint, k: number): bigint {
   const limit = 1n << BigInt(k)
-  const count = SMALL_PRIMES.length
-  const residues = new Int32Array(count)
-  for (let i = 0; i < count; i++) residues[i] = Number(x0 % BigInt(SMALL_PRIMES[i]))
+  const sieve = new IncrementalSieve(x0)
   for (let x = x0; ; x += 4n) {
     if (x >= limit) throw new Error('RABIN: key generation failed: prime search exceeded 2^k')
-    let divisible = false
-    for (let i = 0; i < count; i++) {
-      if (residues[i] === 0) {
-        divisible = true
-        break
-      }
-    }
-    if (!divisible && MR_BASES.every(base => millerRabin(x, base))) return x
-    for (let i = 0; i < count; i++) {
-      const next = residues[i] + 4
-      const prime = SMALL_PRIMES[i]
-      residues[i] = next >= prime ? next - prime : next
-    }
+    if (!sieve.hasSmallFactor() && MR_BASES.every(base => millerRabin(x, base))) return x
+    sieve.advance()
   }
 }
 

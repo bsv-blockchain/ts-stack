@@ -105,8 +105,11 @@ Call `rabin.dispose()` when the wallet locks.
   Every privileged call requires authorization, scoped to the exact reason.
   `seekPermission: false` fails unless an applicable grant is already cached.
 - Keys are derived and generated only after authorization. Generation takes
-  about a second for 3072 bits, so ordinary keys are cached in a bounded
+  about 0.4 s (2048), 1.2–1.8 s (3072) and 3.5 s (4096) median, with
+  outliers several times longer, so ordinary keys are cached in a bounded
   in-memory LRU and concurrent first requests share one generation.
+- `p rabin` baskets and labels are refused: the scheme defines none, and the
+  toolbox would otherwise route them past its basket and label checks.
 - The application receives only `n` or `(sig, padding)`, never the seed, a
   prime, or a key-derivation provider.
 

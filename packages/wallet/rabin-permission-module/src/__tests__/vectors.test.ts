@@ -16,8 +16,10 @@ import {
 import { beHex, execute, fromHex, keyVector, toHex, vectors } from './helpers.js'
 
 const walletA = new CachedKeyDeriver(PrivateKey.fromHex(vectors.parameters.walletA))
-const derivePrivateKey = jest.spyOn(walletA, 'derivePrivateKey')
-const moduleA = createRabinModule({ keyDeriver: walletA, authorize: async () => true })
+// The module gets its own deriver, so its calls are counted apart from the seed checks below.
+const moduleDeriver = new CachedKeyDeriver(PrivateKey.fromHex(vectors.parameters.walletA))
+const derivePrivateKey = jest.spyOn(moduleDeriver, 'derivePrivateKey')
+const moduleA = createRabinModule({ keyDeriver: moduleDeriver, authorize: async () => true })
 
 const seedOf = (name: string): number[] => fromHex(keyVector(name).derivation.seed)
 const keyOf = (name: string) => {
@@ -56,7 +58,8 @@ describe('BRC-206 conformance vectors', () => {
       expect(key.n).toBe(beHex(vector.key.n))
       expect(isAcceptedPrime(key.p)).toBe(true)
       expect(isAcceptedPrime(key.q)).toBe(true)
-    }
+    },
+    30_000
   )
 
   it.each(vectors.keys.map(vector => [vector.name, vector] as const))(
@@ -68,7 +71,8 @@ describe('BRC-206 conformance vectors', () => {
       expect(Array.isArray(result.ciphertext)).toBe(true)
       expect(decodeKeyResult(result.ciphertext)).toBe(beHex(vector.key.n))
       expect(toHex(scriptNum(beHex(vector.key.n)))).toBe(vector.response.nScriptNum)
-    }
+    },
+    30_000
   )
 
   it.each(vectors.signatures.map(vector => [vector.name, vector] as const))(
@@ -89,15 +93,17 @@ describe('BRC-206 conformance vectors', () => {
     }
   )
 
-  it('derives each vector key once and only through the canonical Rabin namespace', () => {
-    const rabinCalls = derivePrivateKey.mock.calls.filter(
-      ([protocolID]) => protocolID[1] === 'p rabin example oracle'
-    )
-    expect(rabinCalls.length).toBeGreaterThan(0)
-    for (const [protocolID, keyID] of rabinCalls) {
-      expect(protocolID).toEqual([2, 'p rabin example oracle'])
-      expect(keyID).toBe('feed 1')
-    }
+  it('derives once per vector key and only through the canonical Rabin namespace', () => {
+    // K1 and K2 share a seed but are distinct keys (sizes), K3 has another counterparty; every
+    // signature vector reuses one of those three cached keys.
+    const calls = derivePrivateKey.mock.calls.map(call => JSON.stringify(call)).sort()
+    const self = JSON.stringify([[2, 'p rabin example oracle'], 'feed 1', 'self'])
+    const walletB = JSON.stringify([
+      [2, 'p rabin example oracle'],
+      'feed 1',
+      vectors.parameters.walletBIdentity
+    ])
+    expect(calls).toEqual([self, self, walletB].sort())
   })
 
   it('verifies every vector and rejects tampered or forged signatures', () => {
@@ -120,23 +126,35 @@ describe('BRC-206 conformance vectors', () => {
     }
   })
 
-  it('separates key sizes from one seed and counterparties by seed', () => {
+  it('separates key sizes from one seed and counterparties by seed', async () => {
+    const deriver = new CachedKeyDeriver(PrivateKey.fromHex(vectors.parameters.walletA))
+    const derive = jest.spyOn(deriver, 'derivePrivateKey')
+    const separate = createRabinModule({ keyDeriver: deriver, authorize: async () => true })
     const k1 = keyVector('K1 2048 self')
     const k2 = keyVector('K2 3072 self')
     const k3 = keyVector('K3 2048 counterparty B')
+    const n = async (vector: typeof k1) =>
+      decodeKeyResult((await execute(separate, { ...vector.request, plaintext: [] })).ciphertext)
+
+    const [n1, n2, n3] = [await n(k1), await n(k2), await n(k3)]
+    expect(derive).toHaveBeenCalledTimes(3)
+    // K1 and K2: the same derivation (one seed), different sizes, different moduli.
+    expect(derive.mock.calls[0]).toEqual(derive.mock.calls[1])
+    expect(n1).not.toBe(n2)
+    // K3: another counterparty, another seed and modulus.
+    expect(derive.mock.calls[2][2]).toBe(vectors.parameters.walletBIdentity)
     expect(k1.derivation.seed).toBe(k2.derivation.seed)
-    expect(k1.key.n).not.toBe(k2.key.n)
     expect(k1.derivation.seed).not.toBe(k3.derivation.seed)
-    expect(k1.key.n).not.toBe(k3.key.n)
+    expect(n3).not.toBe(n1)
     expect(seedOf('K3 2048 counterparty B')).toHaveLength(32)
-  })
+  }, 30_000)
 
   it('produces the normative padding encodings', () => {
     for (const { padding, scriptNum: expected } of vectors.paddingEncodings) {
       expect(toHex(scriptNum(BigInt(padding)))).toBe(expected)
       expect(scriptNumToBigInt(fromHex(expected))).toBe(BigInt(padding))
     }
-  })
+  }, 30_000)
 
   it('signs directly with the vector primes', () => {
     const key = keyOf('K1 2048 self')
