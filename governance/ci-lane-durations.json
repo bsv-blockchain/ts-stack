@@ -41,7 +41,7 @@
         "@bsv/wallet-toolbox-client": 3,
         "@bsv/wallet-toolbox-examples": 11,
         "@bsv/wallet-toolbox-mobile": 3,
-        "@bsv/webrtpay": 45,
+        "@bsv/webrtpay": 102,
         "create-bsv-app": 10
       }
     },
@@ -206,7 +206,7 @@
         "@bsv/wallet-helper": 6,
         "@bsv/wallet-relay": 63,
         "@bsv/wallet-toolbox-examples": 9,
-        "@bsv/webrtpay": 45,
+        "@bsv/webrtpay": 103,
         "lch-reference-app": 6
       }
     }
