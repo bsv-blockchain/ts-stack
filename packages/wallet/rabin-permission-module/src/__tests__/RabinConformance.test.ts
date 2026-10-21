@@ -86,21 +86,21 @@ function spend(lockingScript: LockingScript, unlocking: Uint8Array): boolean {
 
 describe('BRC-206 Rabin conformance', () => {
   it('matches the independent Python checker for every committed vector', () => {
-    const output = execFileSync('python3', [CHECKER, '--vectors', VECTOR_PATH], {
+    const output = execFileSync('python3', [CHECKER, '--vectors'], {
       encoding: 'utf8'
     })
     expect(output).toContain('checked 3 keys')
     expect(vectors.salt).toBe('BRC-206 p rabin v1')
   })
 
-  it('refuses a checker path outside the package', () => {
+  it('does not open a caller-supplied checker path', () => {
     const outside = join(process.cwd(), '..', '..', '..', '..', 'etc', 'passwd')
     expect(() =>
       execFileSync('python3', [CHECKER, '--vectors', outside], { encoding: 'utf8' })
-    ).toThrow(/outside the package/)
+    ).toThrow(/usage:/)
     expect(() =>
       execFileSync('python3', [CHECKER, '--generate', outside], { encoding: 'utf8' })
-    ).toThrow(/outside the package/)
+    ).toThrow(/usage:/)
   })
 
   it('re-derives the 2048-bit vector in TypeScript and verifies every size on chain', async () => {

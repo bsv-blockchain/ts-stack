@@ -12,7 +12,6 @@ import hmac
 import json
 import os
 import sys
-from typing import TextIO
 
 SALT = b"BRC-206 p rabin v1"
 PADDING_LIMIT = 65536
@@ -216,18 +215,8 @@ def key_ciphertext_hex(modulus: int) -> str:
     return encode_push(encode_script_number(modulus)).hex()
 
 
-def open_package_file(path: str, mode: str) -> TextIO:
-    """Open `path` only when it resolves inside this package.
-
-    The CLI receives the path from argv. Joining it to the package root and
-    rejecting anything that realpath resolves outside that root keeps the
-    checker from reading or writing an arbitrary file.
-    """
-    base_dir = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
-    filepath = os.path.realpath(os.path.join(base_dir, path))
-    if os.path.commonpath((base_dir, filepath)) != base_dir:
-        raise SystemExit("Rabin checker path is outside the package")
-    return open(filepath, mode, encoding="utf-8")
+# The checker reads and writes only this file. A caller-supplied path is not accepted.
+VECTORS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vectors.json")
 
 
 def require(condition: bool, message: str) -> None:
@@ -273,8 +262,8 @@ def check_padding_encodings(rows: list) -> None:
         )
 
 
-def check_vectors(path: str) -> None:
-    with open_package_file(path, "r") as handle:
+def check_vectors() -> None:
+    with open(VECTORS, encoding="utf-8") as handle:
         document = json.load(handle)
     require(document.get("salt") == SALT.decode(), "salt mismatch")
     for key in document["keys"]:
@@ -299,7 +288,7 @@ def check_seed(seed_hex: str, bits: int, message_hex: str) -> None:
     )
 
 
-def generate_vectors(path: str) -> None:
+def generate_vectors() -> None:
     messages = [b"", b"rabin", bytes(range(32))]
     document = {
         "salt": SALT.decode(),
@@ -339,23 +328,23 @@ def generate_vectors(path: str) -> None:
             }
         )
         print(f"derived {bits} padding={[row['padding'] for row in signatures]}", flush=True)
-    with open_package_file(path, "w") as handle:
+    with open(VECTORS, "w", encoding="utf-8") as handle:
         json.dump(document, handle, indent=2)
         handle.write("\n")
 
 
 def main() -> None:
-    if len(sys.argv) == 3 and sys.argv[1] == "--vectors":
-        check_vectors(sys.argv[2])
+    if sys.argv[1:] == ["--vectors"]:
+        check_vectors()
         return
-    if len(sys.argv) == 3 and sys.argv[1] == "--generate":
-        generate_vectors(sys.argv[2])
+    if sys.argv[1:] == ["--generate"]:
+        generate_vectors()
         return
     if len(sys.argv) == 5 and sys.argv[1] == "--seed":
         check_seed(sys.argv[2], int(sys.argv[3]), sys.argv[4])
         return
     raise SystemExit(
-        "usage: rabin_check.py --vectors <file> | --generate <file> | --seed <hex> <bits> <messageHex>"
+        "usage: rabin_check.py --vectors | --generate | --seed <hex> <bits> <messageHex>"
     )
 
 
