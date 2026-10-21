@@ -98,6 +98,22 @@ values come from a hosted full-scope run on 2026-10-21. Against round-robin on
 the same runners, the slowest shard fell from 410 to 161 seconds while total
 shard time rose from 608 to 774 seconds.
 
+## Duration-balanced test-file shards
+
+The wallet-toolbox and SDK coverage lanes shard by test file with
+`scripts/jest-duration-sequencer.cjs` instead of Jest's path-hash sharding. The
+sequencer assigns files longest first to the least-loaded shard from the
+governed per-file seconds in `governance/ci-lane-durations.json`; every file
+still runs in exactly one shard. The SDK shards disable Jest's per-run threshold
+check because each sees part of the coverage; `Coverage / SDK thresholds` merges
+their Istanbul maps with the library Jest uses and enforces the SDK's configured
+global thresholds, so the result matches one unsharded run. The packed SDK
+browser and UMD contract checks run beside the coverage shards.
+
+The wallet-toolbox synced-header test restores a cached mainnet header store,
+keyed on the chaintracks storage code that writes it, instead of downloading
+about 75 MB from the header CDN into a fresh store on every run.
+
 ## Execution ledger across outcomes and attempts
 
 The weekly trend also writes `ci-execution-ledger.json`. This separate ledger

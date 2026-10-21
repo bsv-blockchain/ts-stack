@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Measured CI seconds used only to decide which shard runs a package or test file, never whether it runs. coverage-other holds test:coverage seconds per package (refresh from coverage-other-duration lines); wallet-toolbox-coverage holds Jest seconds per test file (refresh from the per-file times in the wallet-toolbox coverage shard logs; files under five seconds are omitted and use the sequencer default).",
+  "description": "Measured CI seconds used only to decide which shard runs a package or test file, never whether it runs. coverage-other holds test:coverage seconds per package (refresh from coverage-other-duration lines); wallet-toolbox-coverage and sdk-coverage hold Jest seconds per test file (refresh from the per-file times in those coverage shard logs; files under five seconds are omitted and use the sequencer default).",
   "lanes": {
     "coverage-other": {
       "source": "Hosted coverage-other-duration lines from full-scope CI run https://github.com/imranterranode/ts-stack/actions/runs/39518760031 on 2026-10-21.",
@@ -104,6 +104,20 @@
         "test/wallet/list/listCertificates.test.ts": 13,
         "test/wallet/list/listOutputs.test.ts": 45,
         "test/wallet/sync/Wallet.sync.test.ts": 36
+      }
+    },
+    "sdk-coverage": {
+      "source": "Per-file Jest times from the SDK coverage job of hosted CI run https://github.com/imranterranode/ts-stack/actions/runs/39675025433 on 2026-10-21.",
+      "seconds": {
+        "src/auth/__tests/Peer.messageValidation.security.test.ts": 78,
+        "src/auth/__tests/Peer.test.ts": 5,
+        "src/overlay-tools/__tests/LookupResolver.evidence.test.ts": 79,
+        "src/script/__tests/NormativeVectors.test.ts": 5,
+        "src/storage/__tests/StorageDownloader.test.ts": 24,
+        "src/transaction/__tests/MerklePath.bench.test.ts": 28,
+        "src/transaction/__tests/Transaction.test.ts": 21,
+        "src/wallet/__tests/WalletResultValidation.security.test.ts": 12,
+        "src/wallet/substrates/__tests/WalletWire.integration.test.ts": 44
       }
     }
   }

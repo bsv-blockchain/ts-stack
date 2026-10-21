@@ -79,6 +79,8 @@ export function validateCiResults(needs, event) {
     ['wallet-browser-platform', 'wallet_client', 'boolean'],
     ['wallet-mobile-platform', 'wallet_mobile', 'boolean'],
     ['coverage-sdk', 'sdk', 'boolean'],
+    ['coverage-sdk-thresholds', 'sdk', 'boolean'],
+    ['sdk-browser-contract', 'sdk', 'boolean'],
     ['coverage-did', 'did', 'boolean'],
     ['coverage-wallet', 'wallet', 'boolean'],
     ['coverage-wallet-monitor', 'wallet', 'boolean'],

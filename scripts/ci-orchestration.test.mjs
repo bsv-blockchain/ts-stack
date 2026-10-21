@@ -168,7 +168,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   const selected = jobs.filter(
     job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
   )
-  assert.equal(selected.length, 14)
+  assert.equal(selected.length, 15)
   for (const job of selected) {
     if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
     assert.match(

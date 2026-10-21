@@ -22,6 +22,8 @@ function evidence(selected = true) {
     'wallet-browser-platform',
     'wallet-mobile-platform',
     'coverage-sdk',
+    'coverage-sdk-thresholds',
+    'sdk-browser-contract',
     'coverage-did',
     'coverage-wallet',
     'coverage-wallet-monitor',
