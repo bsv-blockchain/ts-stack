@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Measured CI seconds used only to decide which shard runs a package or test file, never whether it runs. coverage-other holds test:coverage seconds per package (refresh from coverage-other-duration lines); wallet-toolbox-coverage and sdk-coverage hold Jest seconds per test file (refresh from the per-file times in those coverage shard logs; files under five seconds are omitted and use the sequencer default).",
+  "description": "Measured CI seconds used only to decide which shard runs a package or test file, never whether it runs. coverage-other holds test:coverage seconds per package (refresh from coverage-other-duration lines); package-artifacts holds pack:check seconds per package (refresh from package-artifact-duration lines); wallet-toolbox-coverage and sdk-coverage hold Jest seconds per test file (refresh from the per-file times in those coverage shard logs; files under five seconds are omitted and use the sequencer default).",
   "lanes": {
     "coverage-other": {
       "source": "Hosted coverage-other-duration lines from full-scope CI run https://github.com/imranterranode/ts-stack/actions/runs/39518760031 on 2026-10-21.",
@@ -118,6 +118,52 @@
         "src/transaction/__tests/Transaction.test.ts": 21,
         "src/wallet/__tests/WalletResultValidation.security.test.ts": 12,
         "src/wallet/substrates/__tests/WalletWire.integration.test.ts": 44
+      }
+    },
+    "package-artifacts": {
+      "source": "Local pack:check seconds per package at concurrency 4 against the prebuilt workspace on 2026-10-21; relative weights only.",
+      "plan": {
+        "targetSeconds": 120,
+        "maxPackagesPerShard": 12,
+        "maxShards": 4,
+        "defaultSeconds": 20
+      },
+      "seconds": {
+        "@bsv/402-pay": 10,
+        "@bsv/air-gap": 11,
+        "@bsv/amountinator": 11,
+        "@bsv/auth": 10,
+        "@bsv/auth-express-middleware": 55,
+        "@bsv/authsocket": 16,
+        "@bsv/authsocket-client": 13,
+        "@bsv/btms": 15,
+        "@bsv/btms-permission-module": 13,
+        "@bsv/chirp": 10,
+        "@bsv/color-permission-module": 12,
+        "@bsv/did": 19,
+        "@bsv/ecpm-permission-module": 11,
+        "@bsv/fund-wallet": 29,
+        "@bsv/gasp": 12,
+        "@bsv/lch": 12,
+        "@bsv/message-box-client": 14,
+        "@bsv/overlay": 26,
+        "@bsv/overlay-discovery-services": 20,
+        "@bsv/overlay-express": 28,
+        "@bsv/overlay-topics": 21,
+        "@bsv/paymail": 54,
+        "@bsv/payment-express-middleware": 37,
+        "@bsv/sdk": 24,
+        "@bsv/simple": 36,
+        "@bsv/templates": 11,
+        "@bsv/teranode-listener": 33,
+        "@bsv/verifast": 10,
+        "@bsv/wallet-helper": 12,
+        "@bsv/wallet-relay": 39,
+        "@bsv/wallet-toolbox": 34,
+        "@bsv/wallet-toolbox-client": 14,
+        "@bsv/wallet-toolbox-mobile": 14,
+        "@bsv/webrtpay": 11,
+        "create-bsv-app": 11
       }
     }
   }

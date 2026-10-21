@@ -65,7 +65,8 @@ manual full campaigns allow only the intentional skip of the PR-only analyzer
 gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
 normal mutation launch; suppressed selected mutation is not qualified evidence.
 Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
-result. They pack the restored shared build instead of rebuilding each package,
+result. They are sharded by measured per-package check time (the
+`package-artifacts` lane), pack the restored shared build instead of rebuilding each package,
 resolve all of a package's public entrypoints in one process per module system
 (the SDK has 459), and reuse an npm download cache that npm verifies against
 each tarball's integrity hash. Matrix siblings finish after a failure so acceptance
