@@ -982,6 +982,21 @@ describe('live-socket reconnection', () => {
       await client.disconnectWebSocket()
     })
 
+    /** A leave sent after the join undoes it, so joining again must ask again. */
+    it('sends a join again after leaving while the first was in flight', async () => {
+      const client = await connected()
+      const socket = latest()
+      await client.joinRoom(BOX)
+      await client.leaveRoom(BOX)
+      await client.joinRoom(BOX)
+
+      const order = socket.emit.mock.calls
+        .filter(call => call[0] === 'joinRoom' || call[0] === 'leaveRoom')
+        .map(call => call[0])
+      expect(order).toEqual(['joinRoom', 'leaveRoom', 'joinRoom'])
+      await client.disconnectWebSocket()
+    })
+
     it('frees the slot of a refused join', async () => {
       const client = await onHundredBoxes()
       const socket = latest()

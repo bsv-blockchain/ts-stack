@@ -2266,6 +2266,10 @@ export class MessageBoxClient {
 
     Logger.log('[MB CLIENT] Leaving WebSocket room')
     this.socket.emit('leaveRoom', roomId)
+    // Free this room's in-flight slot: an answer to the join sent before the leave
+    // says nothing about a later one. The next queued room goes out; this one is
+    // no longer requested, so it is not re-sent.
+    this.settleJoin(this.socket, roomId)
   }
 
   /**
