@@ -1,4 +1,4 @@
-import type { KeyDeriverApi, PubKeyHex, SecurityLevel, WalletProtocol } from '@bsv/sdk'
+import type { PubKeyHex, SecurityLevel, WalletProtocol } from '@bsv/sdk'
 
 export type RabinOperation = 'key' | 'sign'
 
@@ -6,7 +6,20 @@ export type RabinBits = 2048 | 3072 | 4096
 
 export type RabinCounterparty = PubKeyHex | 'self' | 'anyone'
 
-export type RabinKeyDeriver = Pick<KeyDeriverApi, 'derivePrivateKey'>
+/**
+ * The part of a BRC-42/43 key deriver the module uses; any `KeyDeriverApi` satisfies it. It is
+ * structural rather than `Pick<KeyDeriverApi, 'derivePrivateKey'>` so that a host whose
+ * TypeScript resolves @bsv/sdk to different declaration files than this package does (ESM and
+ * CJS typings of the same SDK) can still pass its deriver: SDK classes with private fields are
+ * not assignable across two declaration copies.
+ */
+export interface RabinKeyDeriver {
+  derivePrivateKey: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: RabinCounterparty
+  ) => { toArray: (endian: 'be', length: number) => number[] }
+}
 
 export type RabinPrivilegedKeyDeriver = (
   reason: string
