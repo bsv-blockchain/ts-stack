@@ -9,7 +9,10 @@ import type {
   PermissionsModuleRequest
 } from '@bsv/wallet-toolbox-client'
 import { encodeKeyResult, encodeSignResult } from './encoding.js'
-import { generateKey, sign, type RabinKey } from './rabin.js'
+import { GenerationRateLimiter, GenerationScheduler } from './generation.js'
+import { forgetKey, KeyCache } from './keyCache.js'
+import { generateKeySteps, signSteps, type RabinKey } from './rabin.js'
+import { drivers } from './scheduling.js'
 import type {
   ParsedRabinRequest,
   RabinAuthorizationRequest,
@@ -37,6 +40,20 @@ const DEFAULT_AUTHORIZATION_TTL = 5 * 60 * 1000
 const MAX_AUTHORIZATION_TTL = 24 * 60 * 60 * 1000
 const DEFAULT_MAX_CACHED_KEYS = 32
 const MAX_MAX_CACHED_KEYS = 1024
+const DEFAULT_MAX_CACHED_KEYS_PER_ORIGINATOR = 8
+const DEFAULT_MAX_PENDING_GENERATIONS = 8
+const MAX_MAX_PENDING_GENERATIONS = 64
+const DEFAULT_GENERATION_QUEUE_TIMEOUT = 60 * 1000
+const MAX_GENERATION_QUEUE_TIMEOUT = 10 * 60 * 1000
+const DEFAULT_ORIGINATOR_GENERATION_BURST = 4
+const DEFAULT_ORIGINATOR_GENERATION_INTERVAL = 15 * 1000
+const DEFAULT_GLOBAL_GENERATION_BURST = 10
+const DEFAULT_GLOBAL_GENERATION_INTERVAL = 6 * 1000
+const MAX_GENERATION_BURST = 1000
+const MAX_GENERATION_INTERVAL = 24 * 60 * 60 * 1000
+const BUSY = 'RABIN: key generation is busy'
+const RATE_LIMITED = 'RABIN: key generation rate limit exceeded'
+const RESET = 'RABIN: the module was reset during key generation'
 const MIN_MESSAGE_BYTES = 1024 * 1024
 const MAX_MESSAGE_BYTES = 256 * 1024 * 1024
 const MAX_CACHED_GRANTS = 1024
@@ -101,14 +118,6 @@ function toHex(bytes: ArrayLike<number>): string {
   return hex
 }
 
-function forget(key: RabinKey): void {
-  // Best effort: bigints are immutable, so this only drops the cache's references.
-  key.p = 0n
-  key.q = 0n
-  key.n = 0n
-  key.pInvModQ = 0n
-}
-
 /**
  * Implements the BRC-206 `p rabin` semantic permission module: wallet-held Rabin keys and
  * signatures carried over BRC-100 `encrypt`.
@@ -118,13 +127,13 @@ export class RabinPermissionModule implements PermissionsModule {
   readonly #privilegedKeyDeriver: RabinPermissionModuleOptions['privilegedKeyDeriver']
   readonly #authorize: RabinPermissionModuleOptions['authorize']
   readonly #authorizationTTL: number
-  readonly #maxCachedKeys: number
   readonly #maxMessageBytes: number
   readonly #grants = new Map<string, number>()
   readonly #pendingGrants = new Map<string, Promise<boolean>>()
   readonly #pendingByOriginator = new Map<string, number>()
-  readonly #keys = new Map<string, RabinKey>()
-  readonly #generating = new Map<string, Promise<RabinKey>>()
+  readonly #keys: KeyCache
+  readonly #generations: GenerationScheduler<RabinKey>
+  readonly #rateLimiter: GenerationRateLimiter
   #epoch = 0
 
   constructor(options: RabinPermissionModuleOptions) {
@@ -148,13 +157,79 @@ export class RabinPermissionModule implements PermissionsModule {
       MAX_AUTHORIZATION_TTL,
       'RABIN: authorizationTTL must be between 1 ms and 24 hours'
     )
-    this.#maxCachedKeys = integerOption(
+    const maxCachedKeys = integerOption(
       ownedOptions.maxCachedKeys,
       DEFAULT_MAX_CACHED_KEYS,
       1,
       MAX_MAX_CACHED_KEYS,
       'RABIN: maxCachedKeys must be between 1 and 1024'
     )
+    const maxCachedKeysPerOriginator = integerOption(
+      ownedOptions.maxCachedKeysPerOriginator,
+      Math.min(DEFAULT_MAX_CACHED_KEYS_PER_ORIGINATOR, maxCachedKeys),
+      1,
+      maxCachedKeys,
+      'RABIN: maxCachedKeysPerOriginator must be between 1 and maxCachedKeys'
+    )
+    const maxPendingGenerations = integerOption(
+      ownedOptions.maxPendingGenerations,
+      DEFAULT_MAX_PENDING_GENERATIONS,
+      1,
+      MAX_MAX_PENDING_GENERATIONS,
+      'RABIN: maxPendingGenerations must be between 1 and 64'
+    )
+    const generationQueueTimeout = integerOption(
+      ownedOptions.generationQueueTimeout,
+      DEFAULT_GENERATION_QUEUE_TIMEOUT,
+      1,
+      MAX_GENERATION_QUEUE_TIMEOUT,
+      'RABIN: generationQueueTimeout must be between 1 ms and 10 minutes'
+    )
+    const burst = (value: unknown, fallback: number, name: string) =>
+      integerOption(
+        value,
+        fallback,
+        1,
+        MAX_GENERATION_BURST,
+        `RABIN: ${name} must be between 1 and 1000`
+      )
+    const interval = (value: unknown, fallback: number, name: string) =>
+      integerOption(
+        value,
+        fallback,
+        1,
+        MAX_GENERATION_INTERVAL,
+        `RABIN: ${name} must be between 1 ms and 24 hours`
+      )
+    const limits = {
+      originatorBurst: burst(
+        ownedOptions.originatorGenerationBurst,
+        DEFAULT_ORIGINATOR_GENERATION_BURST,
+        'originatorGenerationBurst'
+      ),
+      originatorInterval: interval(
+        ownedOptions.originatorGenerationInterval,
+        DEFAULT_ORIGINATOR_GENERATION_INTERVAL,
+        'originatorGenerationInterval'
+      ),
+      globalBurst: burst(
+        ownedOptions.globalGenerationBurst,
+        DEFAULT_GLOBAL_GENERATION_BURST,
+        'globalGenerationBurst'
+      ),
+      globalInterval: interval(
+        ownedOptions.globalGenerationInterval,
+        DEFAULT_GLOBAL_GENERATION_INTERVAL,
+        'globalGenerationInterval'
+      )
+    }
+    this.#keys = new KeyCache(maxCachedKeys, maxCachedKeysPerOriginator)
+    this.#generations = new GenerationScheduler<RabinKey>(
+      maxPendingGenerations,
+      generationQueueTimeout,
+      () => new Error(BUSY)
+    )
+    this.#rateLimiter = new GenerationRateLimiter(limits, Date.now())
     this.#maxMessageBytes = integerOption(
       ownedOptions.maxMessageBytes,
       MIN_MESSAGE_BYTES,
@@ -168,14 +243,16 @@ export class RabinPermissionModule implements PermissionsModule {
     this.#authorize = authorize as RabinPermissionModuleOptions['authorize']
   }
 
-  /** Clears grants, pending prompts, in-flight generations and every cached key. */
+  /**
+   * Clears grants, pending prompts, queued generations and every cached key; a running generation
+   * stops at its next slice.
+   */
   dispose(): void {
     this.#epoch++
     this.#grants.clear()
     this.#pendingGrants.clear()
     this.#pendingByOriginator.clear()
-    this.#generating.clear()
-    for (const key of this.#keys.values()) forget(key)
+    this.#generations.clear(() => new Error(RESET))
     this.#keys.clear()
   }
 
@@ -205,9 +282,13 @@ export class RabinPermissionModule implements PermissionsModule {
     }
     await this.#ensureAuthorized(parsed, originator)
     const keyDeriver = await this.#selectKeyDeriver(parsed)
-    const key = await this.#getKey(parsed, keyDeriver)
+    const epoch = this.#epoch
+    const key = await this.#getKey(parsed, keyDeriver, originator)
     if (parsed.operation === 'key') return { ciphertext: encodeKeyResult(key.n) }
-    const { sig, padding } = sign(parsed.message, key)
+    const { sig, padding } = await drivers.runCooperatively(signSteps(parsed.message, key), {
+      isCancelled: () => epoch !== this.#epoch,
+      cancelledError: () => new Error('RABIN: the module was reset during signing')
+    })
     return { ciphertext: encodeSignResult(sig, padding) }
   }
 
@@ -452,83 +533,74 @@ export class RabinPermissionModule implements PermissionsModule {
     return deriver
   }
 
-  #generate(parsed: ParsedRabinRequest, keyDeriver: RabinKeyDeriver): RabinKey {
+  /**
+   * A copy of the key for the request: from the cache, by joining a generation that is running or
+   * queued for the same key, or by admitting a new generation. A new generation must fit the
+   * queue and the rate limits; both are checked after authorization and before derivation.
+   * Privileged keys are never cached or joined.
+   */
+  async #getKey(
+    parsed: ParsedRabinRequest,
+    keyDeriver: RabinKeyDeriver,
+    originator: string
+  ): Promise<RabinKey> {
+    const epoch = this.#epoch
+    const identity = parsed.privileged
+      ? undefined
+      : JSON.stringify([
+          'primary',
+          parsed.derivationProtocolID[0],
+          parsed.logicalProtocolID,
+          parsed.keyID,
+          parsed.counterparty,
+          parsed.bits
+        ])
+    let pending: Promise<RabinKey> | undefined
+    if (identity !== undefined) {
+      const cached = this.#keys.get(identity)
+      if (cached !== undefined) return cached
+      pending = this.#generations.joinable(identity)
+    }
+    if (pending === undefined) {
+      if (!this.#generations.hasCapacity()) throw new Error(BUSY)
+      if (!this.#rateLimiter.tryAcquire(originator, Date.now())) throw new Error(RATE_LIMITED)
+      pending = this.#generations.submit(identity, async () => {
+        const key = await this.#generate(parsed, keyDeriver, epoch)
+        // The cache owns its own copy; the generation's result object is never zeroed by it.
+        if (identity !== undefined) this.#keys.set(identity, { ...key }, originator)
+        return key
+      })
+    }
+    const key = await pending
+    if (epoch !== this.#epoch) throw new Error(RESET)
+    return { ...key }
+  }
+
+  async #generate(
+    parsed: ParsedRabinRequest,
+    keyDeriver: RabinKeyDeriver,
+    epoch: number
+  ): Promise<RabinKey> {
+    if (epoch !== this.#epoch) throw new Error(RESET)
     const derived = keyDeriver.derivePrivateKey(
       parsed.derivationProtocolID,
       parsed.keyID,
       parsed.counterparty
     )
     const seed = derived.toArray('be', 32)
+    let key: RabinKey
     try {
-      return generateKey(seed, parsed.bits)
+      key = await drivers.runCooperatively(generateKeySteps(seed, parsed.bits), {
+        isCancelled: () => epoch !== this.#epoch,
+        cancelledError: () => new Error(RESET)
+      })
     } finally {
       seed.fill(0)
     }
-  }
-
-  /** Returns a private copy, so a concurrent eviction cannot alter the key mid-signature. */
-  async #getKey(parsed: ParsedRabinRequest, keyDeriver: RabinKeyDeriver): Promise<RabinKey> {
-    // Privileged keys are never cached: the host's privileged-key policy owns their lifetime.
-    if (parsed.privileged) return this.#generate(parsed, keyDeriver)
-
-    const cacheKey = JSON.stringify([
-      'primary',
-      parsed.derivationProtocolID[0],
-      parsed.logicalProtocolID,
-      parsed.keyID,
-      parsed.counterparty,
-      parsed.bits
-    ])
-    const cached = this.#keys.get(cacheKey)
-    if (cached != null) {
-      this.#keys.delete(cacheKey)
-      this.#keys.set(cacheKey, cached)
-      return { ...cached }
+    if (epoch !== this.#epoch) {
+      forgetKey(key)
+      throw new Error(RESET)
     }
-
-    const epoch = this.#epoch
-    let pending = this.#generating.get(cacheKey)
-    if (pending == null) {
-      pending = this.#generateAndRemember(cacheKey, parsed, keyDeriver, epoch)
-      this.#generating.set(cacheKey, pending)
-    }
-    const key = await pending
-    // The generation's own result object is never zeroed (the cache holds a separate copy), so a
-    // concurrent eviction cannot reach it; only a reset by dispose() invalidates the request.
-    if (epoch !== this.#epoch) throw new Error('RABIN: the module was reset during key generation')
-    return { ...key }
-  }
-
-  async #generateAndRemember(
-    cacheKey: string,
-    parsed: ParsedRabinRequest,
-    keyDeriver: RabinKeyDeriver,
-    epoch: number
-  ): Promise<RabinKey> {
-    // Yield once so concurrent equivalent requests find this promise and share it. Generation
-    // itself is synchronous, so at most one key is generated at a time per wallet.
-    await Promise.resolve()
-    try {
-      const key = this.#generate(parsed, keyDeriver)
-      if (epoch !== this.#epoch) {
-        forget(key)
-        throw new Error('RABIN: the module was reset during key generation')
-      }
-      this.#remember(cacheKey, { ...key })
-      return key
-    } finally {
-      // Within one epoch a cache key has at most one generation; dispose() starts a new epoch.
-      if (epoch === this.#epoch) this.#generating.delete(cacheKey)
-    }
-  }
-
-  #remember(cacheKey: string, key: RabinKey): void {
-    this.#keys.delete(cacheKey)
-    while (this.#keys.size >= this.#maxCachedKeys) {
-      const [oldestKey, oldest] = this.#keys.entries().next().value as [string, RabinKey]
-      this.#keys.delete(oldestKey)
-      forget(oldest)
-    }
-    this.#keys.set(cacheKey, key)
+    return key
   }
 }

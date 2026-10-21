@@ -57,6 +57,23 @@ export interface RabinPermissionModuleOptions {
   authorizationTTL?: number
   /** Ordinary keys kept in memory. Defaults to 32; between 1 and 1024. */
   maxCachedKeys?: number
+  /**
+   * Cached keys one originator's requests may occupy; at the cap its own least recently used key
+   * is evicted. Defaults to 8 (or `maxCachedKeys` if smaller); at most `maxCachedKeys`.
+   */
+  maxCachedKeysPerOriginator?: number
+  /** Generations admitted at once, the running one included. Defaults to 8; between 1 and 64. */
+  maxPendingGenerations?: number
+  /** A queued generation waiting longer fails as busy. Defaults to 60 s; at most 10 minutes. */
+  generationQueueTimeout?: number
+  /** Uncached generations an originator may start in a burst. Defaults to 4. */
+  originatorGenerationBurst?: number
+  /** Milliseconds per regained originator generation. Defaults to 15 s (4 per minute). */
+  originatorGenerationInterval?: number
+  /** Uncached generations all originators together may start in a burst. Defaults to 10. */
+  globalGenerationBurst?: number
+  /** Milliseconds per regained global generation. Defaults to 6 s (10 per minute). */
+  globalGenerationInterval?: number
   /** Largest accepted `sign` message. Defaults to 1 MiB, the spec minimum; at most 256 MiB. */
   maxMessageBytes?: number
 }

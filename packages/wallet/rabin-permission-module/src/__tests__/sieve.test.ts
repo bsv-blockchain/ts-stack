@@ -14,7 +14,7 @@ describe('incremental trial division', () => {
     // 7 ≡ 1 (mod 3): stepping by 4 reaches a multiple of 3 every third candidate.
     const starts = [7n, 11n, 65539n, start('a', 64), start('b', 512), start('c', 1024)]
     for (const x0 of starts) {
-      const sieve = new IncrementalSieve(x0)
+      const sieve = IncrementalSieve.from(x0)
       for (let step = 0, x = x0; step < 300; step++, x += 4n) {
         expect([x, sieve.hasSmallFactor()]).toEqual([x, hasSmallFactor(x)])
         sieve.advance()

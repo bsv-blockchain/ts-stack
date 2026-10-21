@@ -140,7 +140,9 @@ describe('RabinPermissionModule requests', () => {
     const instance = new RabinPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(11)),
       authorize: async () => true,
-      privilegedKeyDeriver: async () => new CachedKeyDeriver(new PrivateKey(12))
+      privilegedKeyDeriver: async () => new CachedKeyDeriver(new PrivateKey(12)),
+      // Seven distinct keys from one app: lift the generation rate limit for this test.
+      originatorGenerationBurst: 100
     })
     const longest = 'a'.repeat(272)
     for (const [operation, length] of [

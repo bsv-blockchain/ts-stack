@@ -53,13 +53,13 @@ derivation, so `key` and `sign` address the same key.
 
 ```typescript
 const key = await wallet.encrypt({
-  protocolID: [2, 'p rabin key 3072 price oracle'],
+  protocolID: [2, 'p rabin key 2048 price oracle'],
   keyID: 'btc usd',
   plaintext: []
 })
 
 const signed = await wallet.encrypt({
-  protocolID: [2, 'p rabin sign 3072 price oracle'],
+  protocolID: [2, 'p rabin sign 2048 price oracle'],
   keyID: 'btc usd',
   plaintext: message
 })
@@ -106,8 +106,17 @@ Call `rabin.dispose()` when the wallet locks.
   `seekPermission: false` fails unless an applicable grant is already cached.
 - Keys are derived and generated only after authorization. Generation takes
   about 0.4 s (2048), 1.2–1.8 s (3072) and 3.5 s (4096) median, with
-  outliers several times longer, so ordinary keys are cached in a bounded
-  in-memory LRU and concurrent first requests share one generation.
+  outliers several times longer. It runs in slices of a few milliseconds
+  between which the event loop runs, one generation at a time with at most 8
+  admitted; further requests fail at once with `RABIN: key generation is busy`.
+- Uncached generations are rate-limited per originator (4, then one per 15 s)
+  and overall (10, then one per 6 s), after authorization and before
+  derivation: `RABIN: key generation rate limit exceeded`. Cached keys and
+  signing are not limited.
+- Keys are cached in memory, 32 in all and at most 8 per originator, so one
+  application cannot evict every other application's keys.
+- Forgery resistance is about 2^112 for every key size, because verification
+  uses the unreduced 256-bit digest; use 2048 or 3072 bits.
 - `p rabin` baskets and labels are refused: the scheme defines none, and the
   toolbox would otherwise route them past its basket and label checks.
 - The application receives only `n` or `(sig, padding)`, never the seed, a

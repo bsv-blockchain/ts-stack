@@ -15,8 +15,9 @@ Applications call the existing `encrypt` method with:
 p rabin <key|sign> <2048|3072|4096> <logicalProtocolID>
 ```
 
-The logical protocol ID is 5–272 lowercase ASCII bytes. The complete dispatch
-envelope is at most 289 bytes for `key` and 290 bytes for `sign`. The security
+The logical protocol ID is 5–272 lowercase ASCII bytes and the key ID 1–800
+UTF-8 bytes. The complete dispatch envelope is at most 289 bytes for `key` and
+290 bytes for `sign`. The security
 level stays in the normal BRC-43 tuple; the key ID, counterparty, privileged
 selection, privileged reason, and permission behavior stay in their existing
 `encrypt` fields. `plaintext` must be empty for `key` and is the message for
@@ -24,13 +25,13 @@ selection, privileged reason, and permission behavior stay in their existing
 
 ```ts
 const key = await wallet.encrypt({
-  protocolID: [2, 'p rabin key 3072 price oracle'],
+  protocolID: [2, 'p rabin key 2048 price oracle'],
   keyID: 'btc usd',
   plaintext: []
 })
 
 const signed = await wallet.encrypt({
-  protocolID: [2, 'p rabin sign 3072 price oracle'],
+  protocolID: [2, 'p rabin sign 2048 price oracle'],
   keyID: 'btc usd',
   plaintext: message
 })
@@ -52,6 +53,15 @@ const n = decodeKeyResult(key.ciphertext)
 const { sig, padding } = decodeSignResult(signed.ciphertext)
 verify(message, sig, padding, n) // (sig² + padding) mod n == LE(SHA-256(message))
 ```
+
+### Choosing a key size
+
+Use 2048 bits, or 3072 if you want more margin against factoring. Forgery
+resistance does not grow with the key: verification compares against the
+unreduced 256-bit digest and allows a padding below 2^16, so a forger who
+ignores the key needs about 2^112 hash evaluations whatever the size. 2048 bits
+matches that bound; 4096 bits adds only factoring margin, at about 3.5 s median
+key generation and twice the on-chain data.
 
 ## Installation
 
@@ -84,6 +94,11 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 })
 ```
 
+The logical protocol, key ID and privileged reason in the request are chosen by
+the app. A prompt that shows them should neutralise control, format and
+bidirectional-override characters, truncate long values and set them apart from
+the wallet's own words, so an app cannot write text that reads as the wallet's.
+
 Call `rabin.dispose()` when the wallet locks or the host tears it down. The
 method clears grants, pending prompts, in-flight key generations, and cached
 keys.
@@ -97,26 +112,58 @@ authorization regardless of security level, and privileged grants are scoped to
 the exact `privilegedReason`. Without a `privilegedKeyDeriver`, privileged
 requests fail before any prompt. `seekPermission: false` fails unless an
 applicable grant is already cached. Concurrent requests with the same scope
-share one prompt. Grants are capped at 1,024 entries and pending prompts at 64.
+share one prompt. Grants are capped at 1,024 entries and pending prompts at 64
+overall and 4 per originator.
 
-## Key generation and caching
+## Scheduling, caching and resource use
 
 Key generation is deterministic: HKDF-SHA256 expands the 32-byte derived
 scalar, and each prime is the first candidate `x, x + 4, x + 8, …` that has no
 factor below 2^16 and passes Miller–Rabin for the first 32 prime bases. Measured
-on an Apple M-series machine with Node 24, generation takes about 0.4 s median
-(2 s worst seen) for 2048 bits, 1.2–1.8 s median (3.5 s) for 3072 bits and
-3.5 s median (16 s) for 4096 bits. Ordinary keys are therefore cached in
-memory (32 by default, `maxCachedKeys` up to 1,024) under the full derivation
-identity, and concurrent first requests for one key share a single generation.
-Privileged keys are never cached.
+on an Apple M-series machine with Node 24 it takes about 0.4 s median (2 s worst
+seen) for 2048 bits, 1.2–1.8 s median (3.5 s) for 3072 bits and 3.5 s median
+(16 s) for 4096 bits. Because a level-0 request needs no prompt, an app can ask
+for fresh keys at will, so the module bounds the work:
 
-Key material is derived only after authorization succeeds.
+- **Responsiveness.** Generation and signing run cooperatively: the
+  arithmetic pauses every few dozen exponent bits, and control returns to the
+  event loop whenever a slice has used about 4 ms (`scheduler.yield()` where
+  available, `setImmediate` in Node, otherwise a `MessageChannel` message;
+  never `setTimeout`). Measured slices stay under 10 ms, and the results are
+  identical to synchronous generation.
+- **Concurrency.** One generation runs at a time; at most 8 keys
+  (`maxPendingGenerations`) are admitted, the running one included, and
+  served in order. A request for a key that is already being generated or
+  waiting joins it. A request that cannot be admitted fails at once, and one
+  that waits longer than 60 s (`generationQueueTimeout`) fails, with
+  `RABIN: key generation is busy`.
+- **Rate limits.** Only cache misses count; cached keys, joined requests and
+  signing are free. Each originator may start 4 generations in a burst and
+  regains one every 15 s; all originators together may start 10 and regain one
+  every 6 s (`originatorGenerationBurst`, `originatorGenerationInterval`,
+  `globalGenerationBurst`, `globalGenerationInterval`). The limits are checked
+  after authorization and before derivation, so a throttled request derives
+  nothing, caches nothing and costs no prompt; it fails with
+  `RABIN: key generation rate limit exceeded`.
+- **Caching.** Ordinary keys are cached in memory under the full derivation
+  identity: 32 keys (`maxCachedKeys`, up to 1,024), of which the keys one
+  originator's requests generated may hold at most 8
+  (`maxCachedKeysPerOriginator`). At that share the originator's own least
+  recently used key is evicted; at capacity the overall least recently used
+  key is. Evicted keys are overwritten. Privileged keys are never cached.
 
-Memory hygiene: `dispose()` drops the cached primes, but the host's key
-deriver is outside the module's reach. A `CachedKeyDeriver` keeps every
-derived child key, including each Rabin seed, for the wallet session; only
-discarding the deriver releases them.
+Per-originator limits trust the originator the host reports. Where that is an
+unauthenticated claim, such as the HTTP `Origin` header on a local port, a
+local process can present a new originator for every request; the global limit,
+the queue and the cache share are what protect the wallet then.
+
+Key material is derived only after authorization succeeds. `dispose()` fails
+waiting generations, stops a running generation or signature at its next
+slice, and overwrites and drops the cached keys.
+
+Memory hygiene: the host's key deriver is outside the module's reach. A
+`CachedKeyDeriver` keeps every derived child key, including each Rabin seed,
+for the wallet session; only discarding the deriver releases them.
 
 ## Baskets and labels
 
@@ -131,9 +178,12 @@ only `encrypt`.
 ## Errors
 
 Every error the module raises starts with `RABIN:` and names the rejected
-field or capability without key material. Errors thrown by the host's key
-deriver, privileged key provider or authorization callback propagate
-unchanged.
+field or capability without key material, and never reveals whether a key was
+cached. Busy (`RABIN: key generation is busy`) and rate-limited
+(`RABIN: key generation rate limit exceeded`) are distinct from denial
+(`RABIN: user denied permission`) and from invalid input, so an app can retry
+the first two later. Errors thrown by the host's key deriver, privileged key
+provider or authorization callback propagate unchanged.
 
 ## Security model
 
