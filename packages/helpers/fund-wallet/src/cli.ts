@@ -90,6 +90,7 @@ export async function createDestinationWallet(
     { basket: '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8' },
     'admin.com'
   )
+  if (typeof totalOutputs !== 'number') throw new Error('Wallet returned an invalid balance')
   return { wallet, balance: totalOutputs }
 }
 

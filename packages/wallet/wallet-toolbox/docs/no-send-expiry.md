@@ -54,8 +54,8 @@ cannot be overridden by a custom permission module or asserted through
 
 Before returning the protected action, Wallet Toolbox:
 
-1. calculates the exact wallet funding required by its requested outputs,
-   explicit inputs, and fee;
+1. calculates an anchor large enough for both the wallet funding required by
+   its requested outputs, explicit inputs, and fee, and an economic reclaim;
 2. creates and immediately broadcasts a normal funding transaction containing
    a dedicated managed-change output;
 3. requires processor acceptance of that funding transaction;
@@ -63,6 +63,11 @@ Before returning the protected action, Wallet Toolbox:
    automatically selected wallet input and with no wallet change; and
 5. signs and durably stores a one-input reclaim transaction to a fresh
    `default`-basket output.
+
+When the reclaim floor exceeds the protected action's delivery need, the
+protected action pays that difference as miner fee. It still creates no wallet
+change and selects no managed input beyond its named anchor. Ordinary action
+change planning is unchanged.
 
 The wallet returns the protected transaction to the caller but never
 broadcasts it. The funding transaction may have ordinary change because it is

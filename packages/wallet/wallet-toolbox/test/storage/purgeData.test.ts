@@ -44,6 +44,16 @@ describe('purgeData tests', () => {
       )
     }
 
+    if (env.runPostgres) {
+      storages.push(
+        new StorageKnex({
+          ...StorageKnex.defaultOptions(),
+          chain,
+          knex: await _tu.createLocalPostgres(`${databaseName}_pg`)
+        })
+      )
+    }
+
     for (const storage of storages) {
       await storage.dropAllData()
       await storage.migrate('purgeData tests', '1'.repeat(64))

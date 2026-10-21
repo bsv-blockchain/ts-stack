@@ -133,6 +133,41 @@ describe('BulkFileDataManager metadata boundaries', () => {
     expect(() => selectBulkHeaderFiles([short, file({ fileHash: FILE_HASH_B })], 'main', 1)).toThrow('unambiguous')
   })
 
+  test('never selects a file labelled with another chain, so regtest rules cannot reach a mainnet tracker', () => {
+    const regtestFile = file({ chain: 'regtest', fileName: 'regtestNet_0.headers' })
+    expect(selectBulkHeaderFiles([regtestFile], 'main', 1)).toEqual([])
+    expect(selectBulkHeaderFiles([regtestFile], 'regtest', 1)).toEqual([expect.objectContaining({ chain: 'regtest' })])
+  })
+
+  test('a manager refuses to validate data labelled with another chain', async () => {
+    const validate = jest.fn(async ({ data, fileHash }: { data: Uint8Array; fileHash: string }) => ({
+      data,
+      fileHash,
+      lastHeaderHash: ONE_HASH,
+      lastChainWork: ONE_HASH
+    }))
+    const manager = new BulkFileDataManager({ chain: 'main', maxPerFile: 1, validator: { validate } })
+    const data = new Uint8Array(80)
+
+    const regtestFile = file({ chain: 'regtest', fileName: 'regtestNet_0.headers', data })
+
+    // Incoming metadata is refused on merge...
+    await expect(manager.merge([regtestFile])).rejects.toThrow('chain')
+    // ...and header validation itself independently refuses data labelled with another
+    // chain, which covers held data reloaded from storage, cache or a remote source.
+    const validateBfdHeaders = (
+      manager as unknown as { validateBfdHeaders: (bfd: unknown) => Promise<Uint8Array> }
+    ).validateBfdHeaders.bind(manager)
+    await expect(validateBfdHeaders({ ...regtestFile, validated: false, mru: 0 })).rejects.toThrow('chain')
+    // Both are rejected before the validator, so regtest's proof-of-work limit is never applied.
+    expect(validate).not.toHaveBeenCalled()
+
+    // Control: the same data under the manager's own chain reaches the validator with that chain.
+    await manager.merge([file({ data })])
+    expect(validate).toHaveBeenCalledTimes(1)
+    expect(validate.mock.calls[0][0]).toMatchObject({ chain: 'main' })
+  })
+
   test.each([
     ['options', null],
     ['chain', { chain: 'invalid', maxPerFile: 1 }],

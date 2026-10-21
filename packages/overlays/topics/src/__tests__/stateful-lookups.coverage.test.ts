@@ -1,77 +1,83 @@
 import { jest } from '@jest/globals'
-import { LockingScript, Transaction } from '@bsv/sdk'
+import { LockingScript, Transaction, Utils } from '@bsv/sdk'
 import type { Db } from 'mongodb'
 import { KVStoreLookupService } from '../kvstore/KVStoreLookupService.js'
 import {
   createMandalaLookupService,
   MandalaLookupService
 } from '../mandala/MandalaLookupService.js'
+import { encodeAdminDetails } from '../mandala/details.js'
 
 const txid = 'ab'.repeat(32)
-const assetId = `${'cd'.repeat(32)}.1`
+const tokenId = `${'cd'.repeat(32)}_0`
+
+const freezeRow = {
+  tokenId,
+  txid: 'ef'.repeat(32),
+  outputIndex: 1,
+  kind: 'freezeOutput',
+  detailsHex: Utils.toHex(encodeAdminDetails({ kind: 'freezeOutput', outpoint: `${txid}.2` })),
+  height: 10,
+  offset: 3,
+  admitSeq: 4
+}
 
 function mandalaStorage(methods: Record<string, jest.Mock> = {}): Record<string, jest.Mock> {
   return {
-    findAdminHistoryByAssetId: jest.fn(async () => []),
+    findAdminHistory: jest.fn(async () => []),
+    findMetadata: jest.fn(async () => null),
     getTokenRow: jest.fn(async () => null),
+    getAuthorityRow: jest.fn(async () => null),
     putAssetState: jest.fn(),
     takeToken: jest.fn(async () => null),
+    takeAuthority: jest.fn(async () => null),
     adjustBalance: jest.fn(),
     deleteMetadata: jest.fn(),
-    findByOutpoint: jest.fn(async () => [{ txid, outputIndex: 2 }]),
     ...methods
   }
 }
 
+const serviceOn = (storage: Record<string, jest.Mock>): MandalaLookupService =>
+  new MandalaLookupService({ storage: storage as never, verifierWallet: {} as never })
+
 describe('stateful lookup coverage', () => {
   it('rebuilds frozen Mandala state from authoritative token ownership', async () => {
     const storage = mandalaStorage({
-      findAdminHistoryByAssetId: jest.fn(async () => [
-        { actionDetails: { kind: 'freezeOutput', outpoint: `${txid}.2` } }
-      ]),
-      getTokenRow: jest.fn(async () => ({ amount: 7, identityKey: 'OwnerKey' }))
-    })
-    const service = new MandalaLookupService({
-      storage: storage as never,
-      verifierWallet: {} as never
+      findAdminHistory: jest.fn(async () => [freezeRow]),
+      getTokenRow: jest.fn(async () => ({ tokenId, amount: 7, identityKey: 'OwnerKey' }))
     })
 
-    await expect(service.rebuildState(assetId)).resolves.toMatchObject({
-      assetId,
-      frozenOutpoints: [{ outpoint: `${txid}.2`, amount: 7, owner: 'ownerkey' }]
-    })
+    await serviceOn(storage).rebuildState(tokenId)
+
     expect(storage.getTokenRow).toHaveBeenCalledWith(txid, 2)
     expect(storage.putAssetState).toHaveBeenCalledTimes(1)
+    expect(storage.putAssetState.mock.calls[0][0]).toMatchObject({
+      tokenId,
+      frozenOutpoints: [{ outpoint: `${txid}.2`, amount: 7, owner: 'ownerkey' }],
+      lastProcessedHeight: 10,
+      lastProcessedOffset: 3,
+      lastAdmitSeq: 4
+    })
   })
 
   it('uses empty freeze metadata when the referenced Mandala token is absent', async () => {
-    const storage = mandalaStorage({
-      findAdminHistoryByAssetId: jest.fn(async () => [
-        { actionDetails: { kind: 'freezeOutput', outpoint: `${txid}.2` } }
-      ])
-    })
-    const service = new MandalaLookupService({
-      storage: storage as never,
-      verifierWallet: {} as never
-    })
+    const storage = mandalaStorage({ findAdminHistory: jest.fn(async () => [freezeRow]) })
 
-    await expect(service.rebuildState(assetId)).resolves.toMatchObject({
+    await serviceOn(storage).rebuildState(tokenId)
+
+    expect(storage.putAssetState.mock.calls[0][0]).toMatchObject({
       frozenOutpoints: [{ outpoint: `${txid}.2`, amount: 0, owner: '' }]
     })
   })
 
-  it('debits an evicted Mandala token exactly once and always removes metadata', async () => {
+  it('debits an evicted Mandala token exactly once and removes metadata only for vout 0', async () => {
     const storage = mandalaStorage({
       takeToken: jest
-        .fn()
+        .fn<() => Promise<unknown>>()
         .mockResolvedValueOnce({ identityKey: 'owner', amount: 7 })
-        .mockResolvedValueOnce({ identityKey: '', amount: 8 })
-        .mockResolvedValueOnce(null)
+        .mockResolvedValue(null)
     })
-    const service = new MandalaLookupService({
-      storage: storage as never,
-      verifierWallet: {} as never
-    })
+    const service = serviceOn(storage)
 
     await service.outputEvicted(txid, 0)
     await service.outputEvicted(txid, 1)
@@ -79,20 +85,25 @@ describe('stateful lookup coverage', () => {
 
     expect(storage.adjustBalance).toHaveBeenCalledTimes(1)
     expect(storage.adjustBalance).toHaveBeenCalledWith('owner', -7)
-    expect(storage.deleteMetadata).toHaveBeenCalledTimes(3)
+    expect(storage.takeAuthority.mock.calls).toEqual([
+      [txid, 1],
+      [txid, 2]
+    ])
+    expect(storage.deleteMetadata.mock.calls).toEqual([[`${txid}_0`]])
   })
 
   it('routes a canonical Mandala outpoint and exercises both factory storage paths', async () => {
-    const storage = mandalaStorage()
-    const service = new MandalaLookupService({
-      storage: storage as never,
-      verifierWallet: {} as never
-    })
+    const row = { txid, outputIndex: 2, tokenId, amount: 1, identityKey: 'k' }
+    const storage = mandalaStorage({ getTokenRow: jest.fn(async () => row) })
 
     await expect(
-      service.lookup({ service: 'ls_mandala', query: { txid, outputIndex: 2 } })
-    ).resolves.toEqual([{ txid, outputIndex: 2 }])
-    expect(storage.findByOutpoint).toHaveBeenCalledWith(txid, 2)
+      serviceOn(storage).lookup({
+        service: 'ls_mandala',
+        query: { txid: txid.toUpperCase(), outputIndex: 2 }
+      })
+    ).resolves.toEqual([row])
+    expect(storage.getTokenRow).toHaveBeenCalledWith(txid, 2)
+    expect(storage.getAuthorityRow).not.toHaveBeenCalled()
 
     const db = { collection: jest.fn(() => ({})) } as unknown as Db
     expect(createMandalaLookupService({} as never, storage as never)(db)).toBeInstanceOf(

@@ -8,6 +8,7 @@ describe('Wallet getVersion Tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('getVersionTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('getVersionTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('getVersionTests'))
   })
 

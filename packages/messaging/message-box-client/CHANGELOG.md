@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.6.0 candidate — live socket reconnection, room restoration and reported status
+### 2.7.0 candidate — live socket reconnection, room restoration and reported status
 
 - **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
   `connecting`, `live` with the rooms joined on it, `reconnecting` after a drop
@@ -75,6 +75,20 @@ All notable changes to this project will be documented in this file. The format 
   an encrypted message; now it always is, because the body is read before any
   subscriber is called. A consumer asserting synchronous delivery in a test
   needs to let the microtask run.
+
+### 2.6.0 candidate — list APIs keep payments the wallet did not store (#503)
+
+- `listMessages()` and `listMessagesLite()` now report `paymentOutcome` on each
+  message that carried a payment (`'internalized'`, `'failed'`, `'skipped'` or
+  `'no-wallet-outputs'`), and keep that `payment` on the returned message unless
+  the wallet accepted it. Before, the payment envelope was always removed and a
+  failed internalization was only logged, so a caller that acknowledged the
+  message deleted the only copy of the payment. Both fields are optional and
+  absent on messages without a payment. `listMessagesLite()` never internalizes,
+  so it now returns payments as `'skipped'`. A payment missing its transaction
+  or outputs is reported as `'failed'` instead of being skipped silently.
+  Migration: none required; to avoid losing payments, store any returned
+  `payment` before acknowledging its message.
 
 ### 2.5.4 candidate — require the BRC-29 acceptance fix
 

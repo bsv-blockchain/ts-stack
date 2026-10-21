@@ -16,6 +16,7 @@ describe('getHeaderForHeight tests', () => {
   beforeAll(async () => {
     if (includeTestChaintracks) {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('getHeaderForHeightTests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('getHeaderForHeightTests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('getHeaderForHeightTests'))
     }
   })

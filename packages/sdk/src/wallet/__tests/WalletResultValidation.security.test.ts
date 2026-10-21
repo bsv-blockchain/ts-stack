@@ -2283,3 +2283,34 @@ describe('wallet result trust boundary', () => {
     expect(() => assertSafeWalletValue(root, 'test')).not.toThrow()
   })
 })
+
+describe('BRC-112 module balance results', () => {
+  const request = { basket: 'p color balance aa' }
+
+  it('require decimal text with an empty outputs array and no BEEF', () => {
+    expect(
+      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [] }, request)
+    ).toEqual({
+      totalOutputs: '5',
+      outputs: []
+    })
+    const output = { outpoint: `${'ab'.repeat(32)}.0`, satoshis: 1, spendable: true }
+    expect(() =>
+      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [output] }, request)
+    ).toThrow('outputs')
+    expect(() => validateWalletResult('listOutputs', { totalOutputs: '5' }, request)).toThrow(
+      'outputs'
+    )
+    expect(() =>
+      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [], BEEF: [1] }, request)
+    ).toThrow('BEEF')
+  })
+
+  it('apply only to p <module> balance <basket> queries', () => {
+    for (const basket of ['p color assets', 'p color balances aa', 'balance savings']) {
+      expect(() =>
+        validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [] }, { basket })
+      ).toThrow('totalOutputs')
+    }
+  })
+})

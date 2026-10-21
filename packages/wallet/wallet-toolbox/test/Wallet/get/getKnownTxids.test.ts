@@ -10,6 +10,9 @@ describe('getKnownTxids Tests', () => {
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('getKnownTxidsTests'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('getKnownTxidsTests'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('getKnownTxidsTests'))
   })
 

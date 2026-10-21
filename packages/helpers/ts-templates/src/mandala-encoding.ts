@@ -1,5 +1,3 @@
-import { toArray, toHex } from '@bsv/sdk/primitives/utils'
-
 export const createMinimallyEncodedScriptChunk = (
   data: number[]
 ): { op: number; data?: number[] } => {
@@ -11,24 +9,6 @@ export const createMinimallyEncodedScriptChunk = (
   if (data.length <= 255) return { op: 0x4c, data }
   if (data.length <= 65535) return { op: 0x4d, data }
   return { op: 0x4e, data }
-}
-
-// Bitcoin script number: minimal little-endian, sign in the high bit of the last byte.
-export const encodeScriptNum = (value: number): number[] => {
-  if (value === 0) return []
-  const negative = value < 0
-  let abs = Math.abs(value)
-  const result: number[] = []
-  while (abs > 0) {
-    result.push(abs & 0xff)
-    abs = Math.floor(abs / 256)
-  }
-  if (((result.at(-1) ?? 0) & 0x80) !== 0) {
-    result.push(negative ? 0x80 : 0x00)
-  } else if (negative) {
-    result[result.length - 1] |= 0x80
-  }
-  return result
 }
 
 export const decodeScriptNum = (data: number[]): number => {
@@ -51,31 +31,4 @@ export const decodeScriptNumChunk = (chunk: { op: number; data?: number[] }): nu
   if (chunk.op === 0x4f) return -1 // OP_1NEGATE
   if (chunk.op >= 0x51 && chunk.op <= 0x60) return chunk.op - 0x50 // OP_1..OP_16
   return decodeScriptNum(chunk.data ?? [])
-}
-
-export const encodeAssetId = (assetId: string): number[] => {
-  const dot = assetId.lastIndexOf('.')
-  if (dot === -1) throw new Error('assetId must be "<txid>.<vout>"')
-  const txid = assetId.slice(0, dot)
-  const vout = Number(assetId.slice(dot + 1))
-  if (!/^[0-9a-fA-F]{64}$/.test(txid))
-    throw new Error('assetId txid must be 32 bytes (64 hex chars)')
-  if (!Number.isSafeInteger(vout) || vout < 0 || vout > 0xffffffff)
-    throw new Error('assetId vout must be an unsigned 32-bit integer')
-  // On-chain assetId bytes use outpoint format: the txid in internal (hash) byte
-  // order — i.e. the display hex reversed (tx.hash() vs tx.id('hex')) — followed by
-  // the 4-byte little-endian vout. This lets a contract compare the embedded assetId
-  // directly against the genesis transaction's outpoint as it appears in the tx.
-  const txidBytes = toArray(txid, 'hex').reverse()
-  const voutBytes = [vout & 0xff, (vout >> 8) & 0xff, (vout >> 16) & 0xff, (vout >> 24) & 0xff]
-  return [...txidBytes, ...voutBytes]
-}
-
-export const decodeAssetId = (bytes: number[]): string => {
-  if (bytes.length !== 36) throw new Error('assetId bytes must be exactly 36 bytes')
-  // Reverse the internal (hash) byte order back to display txid hex.
-  const txid = toHex(bytes.slice(0, 32).reverse())
-  const v = bytes.slice(32)
-  const vout = (v[0] + (v[1] << 8) + (v[2] << 16) + (v[3] << 24)) >>> 0
-  return `${txid}.${vout}`
 }

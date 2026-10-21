@@ -77,6 +77,54 @@ async function fund(manager: WalletAuthenticationManager, wallet: Record<string,
   await (manager as any).newWalletFunder(Array(32).fill(1), wallet, 'admin.example')
 }
 
+function internalizedFaucetFixture() {
+  const { paymentData, payment } = faucetFixture()
+  const label = `wab faucet ${payment.id('hex')}`
+  const redemption = new Transaction(
+    1,
+    [
+      {
+        sourceTransaction: payment,
+        sourceOutputIndex: 0,
+        sequence: 0xffffffff,
+        unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+      }
+    ],
+    [{ satoshis: 900, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+    0
+  )
+  const output = {
+    outpoint: `${redemption.id('hex')}.0`,
+    satoshis: 900,
+    spendable: true,
+    labels: [label]
+  }
+  const page = { totalOutputs: 1, outputs: [output] }
+  const proof = { ...page, BEEF: redemption.toAtomicBEEF() }
+  const wallet = {
+    listActions: jest.fn(async () => ({
+      totalActions: 1,
+      actions: [
+        {
+          txid: redemption.id('hex'),
+          status: 'unproven',
+          labels: [label],
+          inputs: [],
+          outputs: [{ outputIndex: 0, basket: 'default', spendable: true, satoshis: 900 }]
+        }
+      ]
+    })),
+    listOutputs: jest.fn(async (args: { basket: string; include?: string; offset?: number }) => {
+      if (args.basket !== 'default') return { totalOutputs: 0, outputs: [] }
+      return args.include === 'entire transactions' ? proof : page
+    }),
+    createAction: jest.fn(),
+    signAction: jest.fn(),
+    internalizeAction: jest.fn()
+  }
+  return { paymentData, redemption, output, page, proof, wallet }
+}
+
 describe('WalletAuthenticationManager faucet boundaries', () => {
   afterEach(() => jest.restoreAllMocks())
 
@@ -374,6 +422,201 @@ describe('WalletAuthenticationManager faucet boundaries', () => {
       const manager = managerFor(paymentData, wallet)
       await expect(fund(manager, wallet)).rejects.toThrow(expected)
     }
+  })
+
+  it('recognizes an already internalized faucet payment using wallet-visible output and transaction evidence', async () => {
+    const { paymentData, faucetOutpoint, payment } = faucetFixture()
+    const label = `wab faucet ${payment.id('hex')}`
+    const redemption = new Transaction(
+      1,
+      [
+        {
+          sourceTransaction: payment,
+          sourceOutputIndex: 0,
+          sequence: 0xffffffff,
+          unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+        }
+      ],
+      [{ satoshis: 900, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const wallet = {
+      // Real Wallet.listActions omits external inputs and strips customInstructions.
+      listActions: jest.fn(async () => ({
+        totalActions: 1,
+        actions: [
+          {
+            txid: redemption.id('hex'),
+            status: 'unproven',
+            labels: [label],
+            inputs: [],
+            outputs: [{ outputIndex: 0, basket: 'default', spendable: true, satoshis: 900 }]
+          }
+        ]
+      })),
+      listOutputs: jest.fn(async (args: { basket: string }) =>
+        args.basket === 'default'
+          ? {
+              totalOutputs: 1,
+              BEEF: redemption.toAtomicBEEF(),
+              outputs: [
+                {
+                  outpoint: `${redemption.id('hex')}.0`,
+                  satoshis: 900,
+                  spendable: true,
+                  labels: [label]
+                }
+              ]
+            }
+          : { totalOutputs: 0, outputs: [] }
+      )
+    }
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).resolves.toBeUndefined()
+    expect(wallet.listOutputs).toHaveBeenCalledWith(expect.objectContaining({ basket: 'default' }), 'admin.example')
+    expect(wallet.listActions).toHaveBeenCalledTimes(1)
+    expect(faucetOutpoint).toBe(`${payment.id('hex')}.0`)
+  })
+
+  it('rejects a labeled default output whose transaction spent a different faucet output', async () => {
+    const { paymentData, payment } = faucetFixture()
+    const otherPayment = faucetFixture(undefined, 1_000, 3).payment
+    const label = `wab faucet ${payment.id('hex')}`
+    const redemption = new Transaction(
+      1,
+      [
+        {
+          sourceTransaction: otherPayment,
+          sourceOutputIndex: 0,
+          sequence: 0xffffffff,
+          unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+        }
+      ],
+      [{ satoshis: 900, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const wallet = {
+      listActions: jest.fn(async () => ({
+        totalActions: 1,
+        actions: [
+          {
+            txid: redemption.id('hex'),
+            status: 'unproven',
+            labels: [label],
+            inputs: [],
+            outputs: [{ outputIndex: 0, basket: 'default', spendable: true, satoshis: 900 }]
+          }
+        ]
+      })),
+      listOutputs: jest.fn(async (args: { basket: string }) =>
+        args.basket === 'default'
+          ? {
+              totalOutputs: 1,
+              BEEF: redemption.toAtomicBEEF(),
+              outputs: [
+                {
+                  outpoint: `${redemption.id('hex')}.0`,
+                  satoshis: 900,
+                  spendable: true,
+                  labels: [label]
+                }
+              ]
+            }
+          : { totalOutputs: 0, outputs: [] }
+      )
+    }
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow(
+      'unrelated internalized faucet transaction evidence'
+    )
+  })
+
+  it.each([
+    ['missing outputs', { outputs: undefined }],
+    ['negative total', { totalOutputs: -1 }],
+    ['fractional total', { totalOutputs: 1.5 }],
+    ['more rows than the total', { totalOutputs: 0 }],
+    ['oversized page', { totalOutputs: 101, outputs: Array(101).fill({ outpoint: `${'f'.repeat(64)}.0` }) }]
+  ])('refuses %s when searching for an already redeemed faucet payment', async (_name, invalid) => {
+    const { paymentData, wallet, page } = internalizedFaucetFixture()
+    Object.assign(page, invalid)
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow('invalid faucet payment outputs')
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['unspendable output', { spendable: false }],
+    ['different amount', { satoshis: 899 }],
+    ['missing faucet label', { labels: [] }]
+  ])('refuses an already redeemed payment with %s', async (_name, invalid) => {
+    const { paymentData, wallet, output } = internalizedFaucetFixture()
+    Object.assign(output, invalid)
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow('unrelated internalized faucet output')
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['missing BEEF', { BEEF: undefined }],
+    ['empty BEEF', { BEEF: [] }],
+    ['oversized BEEF', { BEEF: Array(16 * 1024 * 1024 + 1).fill(0) }],
+    ['missing output', { outputs: [] }],
+    ['substituted output', { outputs: [{ outpoint: `${'f'.repeat(64)}.0` }] }],
+    ['changed spendability', { outputs: [{ spendable: false }] }],
+    ['changed amount', { outputs: [{ satoshis: 899 }] }],
+    ['removed label', { outputs: [{ labels: [] }] }]
+  ])('refuses %s in the second, transaction-evidence read without redeeming again', async (_name, invalid) => {
+    const { paymentData, wallet, proof, output } = internalizedFaucetFixture()
+    Object.assign(proof, invalid, {
+      outputs: 'outputs' in invalid ? invalid.outputs.map(row => ({ ...output, ...row })) : [output]
+    })
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow(
+      'omitted internalized faucet transaction evidence'
+    )
+    expect(wallet.listOutputs).toHaveBeenCalledTimes(3)
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  it('finds an internalized payment on a later page and proves the exact row', async () => {
+    const { paymentData, wallet, output, proof } = internalizedFaucetFixture()
+    wallet.listOutputs.mockImplementation(async args => {
+      if (args.basket !== 'default') return { totalOutputs: 0, outputs: [] }
+      if (args.include === 'entire transactions') return proof
+      return args.offset === 0
+        ? {
+            totalOutputs: 101,
+            outputs: Array.from({ length: 100 }, (_, index) => ({ ...output, outpoint: `${'f'.repeat(64)}.${index}` }))
+          }
+        : { totalOutputs: 101, outputs: [output] }
+    })
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).resolves.toBeUndefined()
+    expect(wallet.listOutputs).toHaveBeenLastCalledWith(
+      { basket: 'default', include: 'entire transactions', includeLabels: true, limit: 1, offset: 100 },
+      'admin.example'
+    )
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['empty incomplete page', { totalOutputs: 1, outputs: [] }, 'incomplete faucet output page'],
+    ['no matching output', { totalOutputs: 0, outputs: [] }, 'unrelated faucet recovery action evidence']
+  ])('fails closed for %s rather than constructing another redemption', async (_name, result, expected) => {
+    const { paymentData, wallet } = internalizedFaucetFixture()
+    wallet.listOutputs.mockResolvedValue(result)
+
+    await expect(fund(managerFor(paymentData, wallet), wallet)).rejects.toThrow(expected)
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
   })
 
   it('broadcasts a no-send recovery action only once before requiring reconciliation', async () => {

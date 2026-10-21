@@ -36,7 +36,7 @@ spec:
               service: web
       containers:
         # General image from infra-release.yaml (GHCR). Keep tag and digest together.
-        - image: ghcr.io/bsv-blockchain/wab:v1.4.26@sha256:60d81a18394d5dc31b252872c8940350128f517c086692b0d72e3672e8c96276
+        - image: ghcr.io/bsv-blockchain/wab:v1.8.2@sha256:0932523917343a29064f4e701d877fe342e7a64d7ef920dbbee478420eb1fc26
           imagePullPolicy: IfNotPresent
           env:
             - name: DB_CLIENT

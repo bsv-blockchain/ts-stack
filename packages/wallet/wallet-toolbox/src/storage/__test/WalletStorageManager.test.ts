@@ -15,6 +15,7 @@ describe('WalletStorageManager tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('walletStorageManagerTestSource', 'legacy'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('walletStorageManagerTestSource', 'legacy'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('walletStorageManagerTestSource', 'legacy'))
   })
 
@@ -251,6 +252,15 @@ describe('WalletStorageManager tests', () => {
         isValidRootForHeight: async (_root: string, _height: number) => true
       }))
       fred.services.getChainTracker = getChainTracker
+      // Receiving an unproven no-send payment now broadcasts it. Keep this
+      // writer-batch fixture independent of public transaction processors too.
+      const postBeef = jest.spyOn(fred.services, 'postBeef').mockImplementation(async (_beef, txids) => [
+        {
+          name: 'writer-batch-fixture',
+          status: 'success' as const,
+          txidResults: txids.map(txid => ({ txid, status: 'success' as const }))
+        }
+      ])
       const promises: Array<Promise<number>> = []
       const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
@@ -309,6 +319,8 @@ describe('WalletStorageManager tests', () => {
       for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
       await Promise.all(promises)
       expect(result).toHaveLength(maxI)
+      expect(new Set(postBeef.mock.calls.flatMap(call => call[1]))).toEqual(new Set(crs1.map(cr => cr.txid)))
+      postBeef.mockRestore()
       expect(getChainTracker).toHaveBeenCalled()
       await fred.wallet.destroy()
     }

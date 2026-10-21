@@ -405,10 +405,8 @@ export class KnexSessionManager implements AsyncSessionManager {
         // Authentication and certificate validation only advance during a
         // session. Merge those flags so two writes in the same millisecond
         // cannot downgrade stronger state merely because Date.now collided.
-        isAuthenticated: this.knex.raw('case when ?? = 1 or ? = 1 then 1 else 0 end', [
-          'isAuthenticated',
-          row.isAuthenticated === true || row.isAuthenticated === 1 ? 1 : 0
-        ]),
+        isAuthenticated:
+          row.isAuthenticated === true || row.isAuthenticated === 1 ? true : this.knex.raw('??', ['isAuthenticated']),
         certificatesRequired: this.mergeNullableBoolean('certificatesRequired', row.certificatesRequired),
         certificatesValidated: this.mergeNullableBoolean('certificatesValidated', row.certificatesValidated),
         lastUpdate: row.lastUpdate,
@@ -416,21 +414,12 @@ export class KnexSessionManager implements AsyncSessionManager {
       })
   }
 
-  private mergeNullableBoolean(column: string, value: NullableBoolean): Knex.Raw {
-    let incoming: 0 | 1 | null
-    if (value == null) {
-      incoming = null
-    } else if (value === true || value === 1) {
-      incoming = 1
-    } else {
-      incoming = 0
-    }
-    return this.knex.raw('case when ?? = 1 or ? = 1 then 1 when ?? is null and ? is null then null else 0 end', [
-      column,
-      incoming,
-      column,
-      incoming
-    ])
+  private mergeNullableBoolean(column: string, value: NullableBoolean): boolean | Knex.Raw {
+    // Resolve the incoming value here rather than in SQL: Postgres rejects
+    // integer comparisons against boolean columns and untyped null parameters.
+    if (value === true || value === 1) return true
+    if (value == null) return this.knex.raw('??', [column])
+    return this.knex.raw('coalesce(??, ?)', [column, false])
   }
 
   private toTableAuthSession(session: PeerSession): TableAuthSession {
@@ -489,6 +478,7 @@ function isDuplicateKeyError(error: unknown): boolean {
     databaseError.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
     databaseError.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
     databaseError.code === 'ER_DUP_ENTRY' ||
+    databaseError.code === '23505' ||
     databaseError.errno === 1062
   )
 }

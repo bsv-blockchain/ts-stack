@@ -177,19 +177,29 @@ export async function listActions(
   }
 
   const makeWithLabelsQueries = () => {
+    // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
     const cteq = k.raw(
       `
-            SELECT ${columns.map(c => 't.' + c).join(',')},
+            SELECT ${columns.map(() => '??').join(',')},
                     (SELECT COUNT(*)
                     FROM tx_labels_map AS m
-                    WHERE m.transactionId = t.transactionId
-                    AND m.txLabelId IN (${labelIds.map(() => '?').join(',')})
+                    WHERE ?? = ??
+                    AND ?? IN (${labelIds.map(() => '?').join(',')})
                     ) AS lc
             FROM transactions AS t
-            WHERE t.userId = ?
+            WHERE ?? = ?
             AND t.status in (${stati.map(() => '?').join(',')})
             `,
-      [...labelIds, userId, ...stati]
+      [
+        ...columns.map(c => 't.' + c),
+        'm.transactionId',
+        't.transactionId',
+        'm.txLabelId',
+        ...labelIds,
+        't.userId',
+        userId,
+        ...stati
+      ]
     )
 
     const q = k.with('tlc', cteq)

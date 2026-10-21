@@ -63,7 +63,7 @@ Before editing:
 4. inspect open issues and pull requests for overlapping work; and
 5. determine the project tier and required consumer profiles from governance.
 
-Maintainer-authorized agents for `sirdeggen` and `ty-everett` must also follow
+Maintainer-authorized agents for `sirdeggen`, `ty-everett`, and `BraydenLangley` must also follow
 the [BotBoard and per-turn Lockfile protocol](./AGENTS.md#maintainer-botboard-and-lockfile-protocol).
 Other contributors do not need a BotBoard handle.
 
@@ -184,7 +184,9 @@ pnpm test:mutation --target <target>
 
 Use the package’s declared `test:browser`, `test:mobile`, `test:consumers`, or
 other profile command when applicable. Root toolchain, SDK, CI, or governance
-changes may select the full workspace and mutation registry. Infrastructure or
+changes may select the full workspace test scope. Mutation testing does not run
+on pull requests; the full registry runs on a manual `CI` dispatch, the
+scheduled `Mutation quality` workflow, and release qualification. Infrastructure or
 container changes require their root CI matrix and runtime-contract evidence;
 do not substitute a macOS image build for hosted Linux/amd64 validation.
 
@@ -225,8 +227,9 @@ Do not introduce a broad override or suppression. If no compatible upstream
 fix exists, register the narrowest temporary exception with an owner, evidence,
 review date, objective removal condition, and tests. Rehearse removal after
 relevant upstream releases. Elapsed documentation and exception review dates
-are maintenance warnings in source CI, enforced by the separate weekly
-Maintenance review deadlines workflow. Passing time alone must not block a PR;
+are advisory maintenance warnings in all source and maintenance checks.
+Dependency release age never blocks resolution or merging; vulnerability audits,
+provenance checks, and lifecycle-script restrictions remain required. Passing time alone must not block a PR;
 structural errors, generated drift, security audits, and code checks still do.
 
 ## Versions, changelogs, and migrations

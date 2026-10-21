@@ -6,13 +6,13 @@ const makeService = (): jest.Mocked<LookupService> =>
   ({
     admissionMode: 'locking-script',
     spendNotificationMode: 'none',
-    outputAdmittedByTopic: jest.fn<any>().mockResolvedValue(undefined),
-    outputSpent: jest.fn<any>().mockResolvedValue(undefined),
-    outputNoLongerRetainedInHistory: jest.fn<any>().mockResolvedValue(undefined),
-    outputEvicted: jest.fn<any>().mockResolvedValue(undefined),
-    lookup: jest.fn<any>().mockResolvedValue([]),
-    getDocumentation: jest.fn<any>().mockResolvedValue('docs'),
-    getMetaData: jest.fn<any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
+    outputAdmittedByTopic: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    outputSpent: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    outputNoLongerRetainedInHistory: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    outputEvicted: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+    lookup: jest.fn<(...args: any[]) => any>().mockResolvedValue([]),
+    getDocumentation: jest.fn<(...args: any[]) => any>().mockResolvedValue('docs'),
+    getMetaData: jest.fn<(...args: any[]) => any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
   }) as any
 
 describe('ResourceBoundedLookupWrapper', () => {

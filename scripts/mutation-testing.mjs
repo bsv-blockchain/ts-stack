@@ -32,7 +32,14 @@ function normalized(value) {
 
 export function calculateMutationMetrics(mutants) {
   const counts = {}
-  for (const mutant of mutants) counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
+  let unexecuted = 0
+  for (const mutant of mutants) {
+    counts[mutant.status] = (counts[mutant.status] ?? 0) + 1
+    // A survivor that ran zero tests was never judged. Stryker always runs at
+    // least one covering test (or the whole suite for static mutants), so this
+    // means the runner silently selected nothing (stryker-js#6210, Vitest 5).
+    if (mutant.status === 'Survived' && mutant.testsCompleted === 0) unexecuted += 1
+  }
   const detected = (counts.Killed ?? 0) + (counts.Timeout ?? 0)
   const undetected = (counts.Survived ?? 0) + (counts.NoCoverage ?? 0)
   const valid = detected + undetected
@@ -41,6 +48,7 @@ export function calculateMutationMetrics(mutants) {
     detected,
     undetected,
     valid,
+    unexecuted,
     score: valid === 0 ? 100 : (detected / valid) * 100
   }
 }
@@ -202,6 +210,12 @@ export function evaluateMutationReport(targetName, metrics, policy, { requireSco
       `${targetName} has ${noCoverage} no-coverage mutants; maximum is ${targetPolicy.maximumNoCoverage}`
     )
   }
+  const unexecuted = metrics.unexecuted ?? 0
+  if (unexecuted > 0) {
+    errors.push(
+      `${targetName} has ${unexecuted} survived mutants that ran no tests; the test runner selected nothing, so the score is not evidence`
+    )
+  }
   const invalid = (metrics.counts.RuntimeError ?? 0) + (metrics.counts.CompileError ?? 0)
   if (invalid > targetPolicy.maximumInvalid) {
     errors.push(
@@ -209,6 +223,15 @@ export function evaluateMutationReport(targetName, metrics, policy, { requireSco
     )
   }
   return errors
+}
+
+export function strykerEnvironment(environment, overrides) {
+  const result = { ...environment, ...overrides }
+  // Vitest's auto-enabled github-actions reporter appends a job summary on every
+  // run. Under Stryker that is one "failing" report per killed mutant, which
+  // reads as real test failures on the workflow run page.
+  delete result.GITHUB_STEP_SUMMARY
+  return result
 }
 
 function runCommand(command, arguments_, options) {
@@ -244,12 +267,11 @@ async function runTarget(targetName, target, policy, partition = 'whole') {
   }
   const exitCode = await runCommand(stryker, ['run', CONFIG_PATH, '--reporters', reporters], {
     cwd: path.join(REPOSITORY_ROOT, target.packageDirectory),
-    env: {
-      ...process.env,
+    env: strykerEnvironment(process.env, {
       ...propertyEnvironment,
       TS_STACK_MUTATION_TARGET: targetName,
       TS_STACK_MUTATION_PARTITION: partition
-    }
+    })
   })
   if (exitCode !== 0) throw new Error(`${targetName} mutation process exited ${exitCode}`)
 

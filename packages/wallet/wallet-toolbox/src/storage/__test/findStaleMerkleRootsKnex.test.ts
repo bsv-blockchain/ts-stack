@@ -31,6 +31,16 @@ describe('findStaleMerkleRootsKnex test', () => {
         })
       )
     }
+    if (env.runPostgres) {
+      const knexPostgres = await _tu.createLocalPostgres('findstalemerkleroots')
+      storages.push(
+        new StorageKnex({
+          ...StorageKnex.defaultOptions(),
+          chain,
+          knex: knexPostgres
+        })
+      )
+    }
 
     for (const storage of storages) {
       await storage.dropAllData()

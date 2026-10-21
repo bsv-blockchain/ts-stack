@@ -14,8 +14,17 @@ describe('ProvenTxReq class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('ProvenTxReqTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('ProvenTxReqTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('ProvenTxReqTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('ProvenTxReqTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('ProvenTxReqTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('ProvenTxReqTests2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {

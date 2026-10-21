@@ -66,6 +66,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/authsocket](./messaging/authsocket.md) — WebSocket protocol for authenticated messaging
 - [@bsv/authsocket-client](./messaging/authsocket-client.md) — Client library for Authsocket
 - [@bsv/paymail](./messaging/paymail.md) — Paymail protocol (payment address discovery)
+- [@bsv/webrtpay](./messaging/webrtpay.md) — Direct wallet-to-wallet payments over WebRTC data channels, authenticated with BRC-100 identity keys
 
 ### Middleware
 

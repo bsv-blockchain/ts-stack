@@ -234,10 +234,21 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
       propertyTest: 'packages/overlays/topics/src/mandala/__tests/types.property.test.ts',
-      mutate: ['src/mandala/types.ts:72-97', 'src/admission/issuerPolicy.ts:36-39'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/mandala/__tests/types*.test.ts'], {
-        esm: true
-      })
+      mutate: [
+        'src/mandala/types.ts',
+        'src/mandala/details.ts',
+        'src/admission/issuerPolicy.ts:36-39'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/mandala/__tests/types*.test.ts',
+          '<rootDir>/src/mandala/__tests/details*.test.ts'
+        ],
+        {
+          esm: true
+        }
+      )
     },
     'did-codecs': {
       packageDirectory: 'packages/helpers/did',
@@ -319,8 +330,12 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/helpers/ts-templates',
       manifest: 'packages/helpers/ts-templates/package.json',
       propertyTest: 'packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts',
-      mutate: ['src/mandala-encoding.ts'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/mandala-encoding*.test.ts'])
+      mutate: ['src/mandala-encoding.ts', 'src/strictCbor.ts', 'src/Bsv21Binary.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests/mandala-encoding*.test.ts',
+        '<rootDir>/src/__tests/strictCbor*.test.ts',
+        '<rootDir>/src/__tests/Bsv21Binary*.test.ts'
+      ])
     },
     'paymail-address': {
       packageDirectory: 'packages/messaging/ts-paymail',
@@ -609,6 +624,20 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'color-permission': {
+      packageDirectory: 'packages/wallet/color-permission-module',
+      manifest: 'packages/wallet/color-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts',
+      mutate: [
+        'src/ColorPlan.ts',
+        'src/strictJson.ts',
+        'src/identifiers.ts',
+        'src/tokenOutputs.ts',
+        'src/overlay.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
+    },
     'ecpm-permission': {
       packageDirectory: 'packages/wallet/ecpm-permission-module',
       manifest: 'packages/wallet/ecpm-permission-module/package.json',
@@ -682,6 +711,42 @@ export function buildMutationTargets(repositoryRoot) {
         ['<rootDir>/test/cbor.property.test.ts', '<rootDir>/test/cbor.test.ts'],
         { esm: true }
       )
+    },
+    'webrtpay-codes': {
+      packageDirectory: 'packages/messaging/webrtpay',
+      manifest: 'packages/messaging/webrtpay/package.json',
+      propertyTest: 'packages/messaging/webrtpay/test/codec.property.test.ts',
+      mutate: ['src/codec/codes.ts', 'src/codec/sdp.ts'],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/codec*.test.ts'], { esm: true })
+    },
+    'webrtpay-frames': {
+      packageDirectory: 'packages/messaging/webrtpay',
+      manifest: 'packages/messaging/webrtpay/package.json',
+      propertyTest: 'packages/messaging/webrtpay/test/frames.property.test.ts',
+      // All of frames.ts but parseMessage's object check after JSON.parse, which cannot
+      // fail: assertBoundedObject has already required the text to open with `{`, so its
+      // mutants are only no-coverage or equivalent. The two block mutants that span a range
+      // end (the bodies of parseMessage and of append, the file's last method) drop out too.
+      // The helper needs an end marker, so the second range stops at append's last statement:
+      // code added after it, or a method added after append, is outside this target until the
+      // marker moves.
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/webrtpay',
+          'src/channel/frames.ts',
+          'export const FRAME_HEADER_BYTES',
+          "if (typeof value !== 'object'"
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/webrtpay',
+          'src/channel/frames.ts',
+          '  return value',
+          'this.length = needed'
+        )
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/frames*.test.ts'], { esm: true })
     }
   }
 }

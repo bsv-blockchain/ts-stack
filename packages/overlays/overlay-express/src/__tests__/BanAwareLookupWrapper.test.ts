@@ -15,8 +15,8 @@ jest.mock('@bsv/sdk', () => ({
 }))
 
 // After jest.mock hoisting, these imports reference the mocked versions
-const mockPushDropDecode = PushDrop.decode as unknown as jest.Mock<any>
-const mockToUTF8 = Utils.toUTF8 as unknown as jest.Mock<any>
+const mockPushDropDecode = PushDrop.decode as unknown as jest.Mock<(...args: any[]) => any>
+const mockToUTF8 = Utils.toUTF8 as unknown as jest.Mock<(...args: any[]) => any>
 
 describe('BanAwareLookupWrapper', () => {
   let wrapper: BanAwareLookupWrapper
@@ -30,20 +30,20 @@ describe('BanAwareLookupWrapper', () => {
     mockWrapped = {
       admissionMode: 'locking-script',
       spendNotificationMode: 'locking-script',
-      outputAdmittedByTopic: jest.fn<any>().mockResolvedValue(undefined),
-      outputSpent: jest.fn<any>().mockResolvedValue(undefined),
-      outputNoLongerRetainedInHistory: jest.fn<any>().mockResolvedValue(undefined),
-      outputEvicted: jest.fn<any>().mockResolvedValue(undefined),
-      lookup: jest.fn<any>().mockResolvedValue({ type: 'output-list', outputs: [] }),
-      getDocumentation: jest.fn<any>().mockResolvedValue('docs'),
-      getMetaData: jest.fn<any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
+      outputAdmittedByTopic: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      outputSpent: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      outputNoLongerRetainedInHistory: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      outputEvicted: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      lookup: jest.fn<(...args: any[]) => any>().mockResolvedValue({ type: 'output-list', outputs: [] }),
+      getDocumentation: jest.fn<(...args: any[]) => any>().mockResolvedValue('docs'),
+      getMetaData: jest.fn<(...args: any[]) => any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
     } as any
 
     mockBanService = {
-      isOutpointBanned: jest.fn<any>().mockResolvedValue(false),
-      isDomainBanned: jest.fn<any>().mockResolvedValue(false),
-      banDomain: jest.fn<any>().mockResolvedValue(undefined),
-      banOutpoint: jest.fn<any>().mockResolvedValue(undefined)
+      isOutpointBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false),
+      isDomainBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false),
+      banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      banOutpoint: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
     } as any
 
     mockLogger = {

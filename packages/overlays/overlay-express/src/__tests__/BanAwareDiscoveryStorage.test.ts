@@ -9,8 +9,8 @@ describe('BanAwareDiscoveryStorage', () => {
   beforeEach(() => {
     jest.clearAllMocks()
     mockBanService = {
-      isOutpointBanned: jest.fn<any>().mockResolvedValue(false),
-      isDomainBanned: jest.fn<any>().mockResolvedValue(false)
+      isOutpointBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false),
+      isDomainBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false)
     } as any
     mockLogger = {
       log: jest.fn()
@@ -20,7 +20,7 @@ describe('BanAwareDiscoveryStorage', () => {
   describe('BanAwareSHIPStorage', () => {
     it('should block banned outpoints', async () => {
       const wrapped = {
-        storeSHIPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSHIPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       mockBanService.isOutpointBanned.mockResolvedValue(true)
       const storage = new BanAwareSHIPStorage(wrapped as any, mockBanService, mockLogger)
@@ -33,7 +33,7 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should block banned domains', async () => {
       const wrapped = {
-        storeSHIPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSHIPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       mockBanService.isDomainBanned.mockResolvedValue(true)
       const storage = new BanAwareSHIPStorage(wrapped as any, mockBanService, mockLogger)
@@ -46,7 +46,7 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should delegate when not banned', async () => {
       const wrapped = {
-        storeSHIPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSHIPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       const storage = new BanAwareSHIPStorage(wrapped as any, mockBanService, mockLogger)
 
@@ -57,11 +57,11 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should delegate read and delete methods', async () => {
       const wrapped = {
-        ensureIndexes: jest.fn<any>().mockResolvedValue(undefined),
-        hasDuplicateRecord: jest.fn<any>().mockResolvedValue(true),
-        deleteSHIPRecord: jest.fn<any>().mockResolvedValue(undefined),
-        findRecord: jest.fn<any>().mockResolvedValue([{ txid: 'a', outputIndex: 1 }]),
-        findAll: jest.fn<any>().mockResolvedValue([{ txid: 'b', outputIndex: 2 }])
+        ensureIndexes: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        hasDuplicateRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(true),
+        deleteSHIPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        findRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ txid: 'a', outputIndex: 1 }]),
+        findAll: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ txid: 'b', outputIndex: 2 }])
       }
       const storage = new BanAwareSHIPStorage(wrapped as any, mockBanService, mockLogger)
 
@@ -76,7 +76,7 @@ describe('BanAwareDiscoveryStorage', () => {
   describe('BanAwareSLAPStorage', () => {
     it('should block banned outpoints', async () => {
       const wrapped = {
-        storeSLAPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSLAPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       mockBanService.isOutpointBanned.mockResolvedValue(true)
       const storage = new BanAwareSLAPStorage(wrapped as any, mockBanService, mockLogger)
@@ -89,7 +89,7 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should block banned domains', async () => {
       const wrapped = {
-        storeSLAPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSLAPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       mockBanService.isDomainBanned.mockResolvedValue(true)
       const storage = new BanAwareSLAPStorage(wrapped as any, mockBanService, mockLogger)
@@ -102,7 +102,7 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should delegate when not banned', async () => {
       const wrapped = {
-        storeSLAPRecord: jest.fn<any>().mockResolvedValue(undefined)
+        storeSLAPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
       const storage = new BanAwareSLAPStorage(wrapped as any, mockBanService, mockLogger)
 
@@ -113,11 +113,11 @@ describe('BanAwareDiscoveryStorage', () => {
 
     it('should delegate read and delete methods', async () => {
       const wrapped = {
-        ensureIndexes: jest.fn<any>().mockResolvedValue(undefined),
-        hasDuplicateRecord: jest.fn<any>().mockResolvedValue(true),
-        deleteSLAPRecord: jest.fn<any>().mockResolvedValue(undefined),
-        findRecord: jest.fn<any>().mockResolvedValue([{ txid: 'a', outputIndex: 1 }]),
-        findAll: jest.fn<any>().mockResolvedValue([{ txid: 'b', outputIndex: 2 }])
+        ensureIndexes: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        hasDuplicateRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(true),
+        deleteSLAPRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        findRecord: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ txid: 'a', outputIndex: 1 }]),
+        findAll: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ txid: 'b', outputIndex: 2 }])
       }
       const storage = new BanAwareSLAPStorage(wrapped as any, mockBanService, mockLogger)
 

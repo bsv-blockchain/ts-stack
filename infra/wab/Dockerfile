@@ -1,8 +1,8 @@
 # ------------------------------------------------------------------------------
 # 1) Builder Stage: builds TypeScript and compiles native modules
 # ------------------------------------------------------------------------------
-# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
-FROM public.ecr.aws/docker/library/node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
+FROM public.ecr.aws/docker/library/node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
 
 # Install build tools for native modules (sqlite3, etc.)
 RUN apk add --no-cache g++ make python3
@@ -25,13 +25,13 @@ RUN npm run build \
 # ------------------------------------------------------------------------------
 # 2) Production Stage: minimal runtime image
 # ------------------------------------------------------------------------------
-FROM public.ecr.aws/docker/library/node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM public.ecr.aws/docker/library/node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
-# that we don't need at runtime. The pinned base contains OpenSSL 3.5.7-r0;
-# retain the reviewed 3.5.8-r0 fix for CVE-2026-14456.
-RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+# that we don't need at runtime. Install the reviewed Alpine libcrypto3/libssl3
+# 3.5.9-r0 pin for CVE-2026-84782 in the same layer.
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 WORKDIR /app

@@ -223,6 +223,14 @@ export function requireTxid(value: string | undefined, field = 'txid'): string |
   return value.toLowerCase()
 }
 
+/** A Mandala token id is `<txid>_0` in display byte order, lowercase only (BRC-162 string form). */
+export function requireTokenId(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}_0$/.test(value)) {
+    invalid(`${field} must be a token id (<64 lowercase hex>_0)`)
+  }
+  return value
+}
+
 export function requireHex(
   value: string | undefined,
   field: string,

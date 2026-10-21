@@ -2,9 +2,9 @@
 id: release-operations
 title: 'Release and Operations Guide'
 kind: reference
-version: '1.1.3'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+version: '1.2.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, releases, operations, rollback, npm, containers]
@@ -106,6 +106,13 @@ Use one supported trigger:
 - legacy `vX.Y.Z` for a cascade; or
 - protected manual dispatch from `main`.
 
+The run has exactly one human gate, the `release-approval` environment on the
+`approve` job. It starts at t=0 beside preparation and mutation
+qualification. Approve it immediately after dispatch. The rest of the run then
+proceeds unattended, and publication still happens only if every automated
+gate passes. `npm-production` keeps its branch policy and npm trusted-publisher
+binding but has no required reviewers, so there is no late approval prompt.
+
 The workflow stages immutable tarballs in an uncredentialed job, emits package
 and aggregate CycloneDX SBOMs, audits licenses and vulnerabilities, verifies
 clean consumers, and then passes only those bytes into the protected
@@ -118,8 +125,17 @@ attestation results, and registry digests in the release evidence.
 
 ## 4. Post-publication reconciliation
 
-A successful cascade may open `automation/sync-published-versions`. Review that
-PR like source code:
+A successful cascade waits until every published version resolves from the
+registry, then creates one generated commit on
+`automation/sync-published-versions` directly on top of the released
+`github.sha`. That commit synchronizes workspace floors, updates every
+just-published first-party package found anywhere in each infrastructure lock
+(including transitive entries such as middleware reached through
+`wallet-toolbox`), and patch-bumps every infrastructure component whose
+manifest or lock changed. The same run then calls `infra-release.yaml` to build,
+scan, attest, sign, and push the images from that exact commit (section 5). It
+also opens the sync PR so `main` records the same bytes. Review that PR like
+source code:
 
 1. verify every first-party range corresponds to a published version;
 2. inspect `pnpm-lock.yaml` and every changed infrastructure lock;
@@ -151,9 +167,12 @@ and leave publication as a separate operator action.
 
 ## 5. Infrastructure images and deployment
 
-When published first-party versions affect a service:
+A cascade npm release publishes affected images automatically from its
+infra-sync commit. A cascade with no npm candidates still releases infra
+components already bumped on `main`. For infrastructure-only source changes, or
+after a single-package npm release:
 
-1. update and review its manifest and committed lock;
+1. update and review its manifest and committed lock, bumping its version;
 2. let the Linux/amd64 CI matrix build and scan the image;
 3. release with an `infra/v*` tag or the protected manual workflow;
 4. verify the immutable digest, SPDX SBOM, SLSA provenance, and signature;
@@ -266,8 +285,12 @@ See [npm Package Supply Chain](./npm-package-supply-chain.md),
 ## Complete mutation qualification before publication
 
 The publication candidate must complete the reusable `mutation-tests.yml`
-campaign at its exact `github.sha`. The npm publisher waits for preparation and
-full qualification; the OCI publisher waits for discovery and full qualification;
+campaign at its exact `github.sha`. In `release.yaml` the campaign starts at
+t=0 in parallel with preparation and runs every target concurrently, so the
+slowest single target bounds its wall time. The npm publisher waits for the
+up-front approval, preparation, and full qualification. The OCI publisher
+waits for discovery and full qualification, which a `release.yaml` call
+satisfies with that same-run campaign;
 the Marketplace publisher waits for credential-free source validation and full
 qualification. Each guard requires both a successful campaign and its nonempty
 `qualified-sha` equal to the candidate SHA before entering a job with publisher
@@ -284,17 +307,19 @@ the gate; rerun the complete workflow when a full attempt needs replacement.
 No mutation target is permanently removed by PR deferral. A failure at this final
 gate blocks publication and requires a source fix and newly qualified candidate;
 there is no label or manual input that converts failure into permission to publish.
-For npm and general OCI, a discovered empty publication set avoids a needless full
-campaign. Marketplace still verifies its existing-title condition within its
-credentialed read/publish lane after qualification.
+For a standalone general OCI run, a discovered empty publication set avoids a
+needless full campaign. `release.yaml` always runs its campaign because it also
+qualifies the infrastructure images published by the same run. Marketplace
+still verifies its existing-title condition within its credentialed
+read/publish lane after qualification.
 
-General OCI and Marketplace remain independent publication workflows. A shared
-infra tag can therefore perform two full campaigns, each bound to its own run and
-candidate, rather than trusting a different workflow's artifacts. This adds final
-qualification compute; it does not save that duplication. Consolidation or trusted
-cross-workflow reuse would need a separately reviewed orchestration/permission
-change. No release, tag, package, image or Marketplace publication is performed by
-this CI policy change itself.
+The npm and general OCI paths are consolidated for cascades: `release.yaml`
+calls `infra-release.yaml` with its qualified `github.sha` and image source.
+The called workflow accepts that call only from `release.yaml` and only for a
+caller-qualified `github.sha`. The image source must be that SHA or its direct
+infra-sync child limited to manifest, lock, and generated-facts paths. Product
+source therefore cannot change between qualification and image publication.
+Marketplace remains an independent `infra/v*` workflow with its own campaign.
 
 The full mutation preparation first validates current inventory-review dates and
 security advisories. An expired review or failed audit stops expensive campaign

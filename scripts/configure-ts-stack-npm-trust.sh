@@ -14,6 +14,7 @@ PKGS=(
   "@bsv/authsocket"
   "@bsv/message-box-client"
   "@bsv/paymail"
+  "@bsv/webrtpay"
   "@bsv/402-pay"
   "@bsv/auth-express-middleware"
   "@bsv/payment-express-middleware"

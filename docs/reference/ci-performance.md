@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.3.6'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+version: '1.4.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -213,48 +213,36 @@ package checks now overlap execution; the duplicate external reporting wait is
 outside the merge gate. Verify the new run timings before claiming a measured
 speedup. Shared CI changes still select the complete governed execution graph.
 
-## Required PR scope and complete final qualification
+## Mutation runs as a full campaign, not a PR gate
 
-`scripts/ci-mutation-scope.mjs` divides the canonical target registry into
-required premerge targets, demonstrably unaffected noncritical targets deferred
-to final qualification, and critical targets outside this PR's existing scope.
-Deferred means **not passed**. The final merge gate verifies a complete disjoint
-partition and permits only the existing `high` class to defer. Existing critical
-selection remains required, together with affected dependency closure; ordinary
-documentation changes do not create an all-critical campaign.
+Mutation testing no longer executes on ordinary pull requests or pushes.
+`scripts/ci-mutation-scope.mjs` selects no targets for a compared range and
+reports the complete registry as deferred (`high`) or outside (`critical`);
+both mean **not executed, not passed**. The merge gate still verifies that this
+is a complete disjoint canonical partition and that the executed matrix equals
+the `required` list, so an unexpectedly selected or missing job fails closed.
+The scope job needs no workspace install for this: it only reads the registry
+and policy with the pinned Node.js runtime.
 
-The selector uses both base and checked-out head package graphs, including
-runtime, dev, optional and peer dependencies, cross-package static imports,
-package helpers, fixtures and manifests. Removed dependency edges remain in the
-union. Computed module inputs, unresolved aliases, unknown ownership, unproved
-lock resolution and shared execution controls retain required qualification.
-The prepare build then adds the workspace dependency closure of every required
-mutation target. Those jobs restore only archived `dist` and `out` trees and
-load package entry points such as `@bsv/wallet-toolbox-client` and `@bsv/btms`.
-A target can be required while its package stays outside the test scope; the
-build still has to exist or the initial test run fails before any mutant
-executes. Test, typecheck, and coverage selection stay on the affected set.
-Results report newly deferred targets separately from targets the prior selector
-already omitted. Canonical registry order remains stable to avoid moving long
-jobs behind short work in the six-runner queue.
+The complete governed registry runs in three places: a manual `CI`
+`workflow_dispatch` on the reviewed commit (the all-scope path), the weekly
+scheduled or manually dispatched `Mutation quality` workflow (full campaign or
+one exact diagnostic target on any ref), and the release final qualification
+below. Run one of these before publication or when a change to a governed
+boundary needs assertion-strength evidence; `pnpm test:mutation --target <id>`
+remains available locally. The `ci:mutation-diagnostics` label and the
+`mutation-diagnostics` dispatch input keep their analyzer-eligibility meaning
+for those full campaigns.
 
-The reviewed air-gap loader is a specific bounded input exception, recorded in
-the selector by the complete helper-file SHA-256 and the exact shared corpus
-`conformance/vectors/transport/air-gap-optical.json`. The helper's parent walk
-selects that fixed relative corpus in ordinary and Stryker sandbox locations.
-Changed loader bytes, a missing corpus or another unknown runtime input remove
-the proof and retain the target. Corpus changes remain required. This exception
-is not permission to treat arbitrary filesystem reads as independent.
-
-The standalone scheduler is not an execution input to PR mutation. A scheduler-
-only change retains existing critical obligations while allowing a proved
-unaffected high target to defer. Other shared controls remain conservative.
-On current main's 33 targets, this demonstrates air-gap deferral for that narrow
-case; it does not promise a reduction for arbitrary code, lock or runner edits.
-Archived air-gap jobs consumed 16.4–18.17 runner-minutes at different heads.
-These are potential avoided execution minutes, neither billed cost nor a
-prediction of elapsed savings. Auth campaigns and other required jobs can still
-dominate the tail.
+This is a deliberate trade: before this change the compared-range selector
+required the whole registry on 49 of the previous 60 merged pull requests
+(release-notes and health-baseline metadata alone triggered 27 of them), so a
+documentation-only or single-package fix waited 25–40 minutes behind 33–37
+mutation jobs on six runners while every other lane finished in under five.
+Mutation results describe each target's own assertions against its own source;
+a dependency change is covered by the dependents' regular and compatibility
+test lanes, which still run on the affected graph. Record the measured
+`CI performance trend` after adoption before claiming an exact speedup.
 
 Complete final qualification runs every canonical target at the exact source
 candidate before npm, general OCI or Marketplace publication. Per-target raw

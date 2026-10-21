@@ -387,6 +387,7 @@ describe('WalletWire strict binary framing', () => {
     resultWriter.writeVarIntNum(0) // output index
     resultWriter.writeVarIntNum(1) // satoshis
     resultWriter.writeVarIntNum(-1) // lockingScript
+    resultWriter.writeInt8(1) // spendable
     resultWriter.writeVarIntNum(-1) // customInstructions
     resultWriter.writeVarIntNum(100_001) // tags
     resultWriter.write(new Uint8Array(100_001)) // empty tag lengths
@@ -398,6 +399,48 @@ describe('WalletWire strict binary framing', () => {
     await expect(
       client.listOutputs({ basket: 'default', includeTags: true, limit: 1 })
     ).rejects.toThrow('maximum collection size of 100000')
+  })
+
+  it('reads a module balance frame as exact text with nothing after it', async () => {
+    const frame = (text: string, trailing: number[] = []): number[] => {
+      const writer = new Utils.WriterUint8Array()
+      writer.writeUInt8(0) // success
+      const bytes = Utils.toArray(text, 'utf8')
+      writer.writeVarIntNum(bytes.length)
+      writer.write(bytes)
+      writer.write(trailing)
+      return Array.from(writer.toUint8Array())
+    }
+    const read = async (bytes: number[]) =>
+      await new WalletWireTransceiver({ transmitToWallet: async () => bytes }).listOutputs({
+        basket: 'p color balance aa'
+      })
+
+    await expect(read(frame('180'))).resolves.toEqual({ totalOutputs: '180', outputs: [] })
+    await expect(read(frame('05'))).rejects.toThrow('totalOutputs')
+    await expect(read(frame('180', [0]))).rejects.toThrow('module balance response')
+  })
+
+  it('rejects a listOutputs spendable byte other than 0 or 1', async () => {
+    const resultWriter = new Utils.WriterUint8Array()
+    resultWriter.writeUInt8(0) // success
+    resultWriter.writeVarIntNum(1) // totalOutputs
+    resultWriter.writeVarIntNum(-1) // BEEF
+    resultWriter.write(new Uint8Array(32)) // txid
+    resultWriter.writeVarIntNum(0) // output index
+    resultWriter.writeVarIntNum(1) // satoshis
+    resultWriter.writeVarIntNum(-1) // lockingScript
+    resultWriter.writeInt8(2) // spendable
+    resultWriter.writeVarIntNum(-1) // customInstructions
+    resultWriter.writeVarIntNum(-1) // tags
+    resultWriter.writeVarIntNum(-1) // labels
+    const client = new WalletWireTransceiver({
+      transmitToWallet: async () => Array.from(resultWriter.toUint8Array())
+    })
+
+    await expect(client.listOutputs({ basket: 'default', limit: 1 })).rejects.toThrow(
+      'Invalid listOutputs spendable flag: expected 0 or 1, received 2'
+    )
   })
 
   it('frames Unicode discovery attributes by UTF-8 byte length', async () => {

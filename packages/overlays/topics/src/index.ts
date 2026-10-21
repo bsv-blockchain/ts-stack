@@ -164,18 +164,61 @@ export type {
   UTXOReference as DstasUTXOReference
 } from './dstas/types.js'
 
-// mandala
-export { MandalaTopicManager } from './mandala/MandalaTopicManager.js'
+// mandala (BRC-162)
+export {
+  classifyOutputs,
+  classifyAdmittedInputs,
+  buildLedger,
+  specVerdicts
+} from './brc162/ledger.js'
+export type {
+  Brc162Output,
+  Brc162Input,
+  InvalidTokenOutput,
+  TokenLedger,
+  SpecVerdict,
+  Brc162Classification
+} from './brc162/ledger.js'
+export { MandalaTopicManager, MANDALA_TOPIC } from './mandala/MandalaTopicManager.js'
+export type { MandalaTopicManagerDeps } from './mandala/MandalaTopicManager.js'
 export { MandalaLookupService, createMandalaLookupService } from './mandala/MandalaLookupService.js'
 export { MandalaStorageManager } from './mandala/MandalaStorageManager.js'
-export { InMemoryScreeningProvider } from './mandala/types.js'
+export type { MandalaStateStore } from './mandala/MandalaStorageManager.js'
+export { reconcileOwnerIndex } from './mandala/reconcile.js'
+export type { ReconcileResult } from './mandala/reconcile.js'
+export { MandalaReject, isMandalaReject, Reasons } from './mandala/reject.js'
+export type { MandalaRejectCode } from './mandala/reject.js'
+export { InMemoryScreeningProvider, encodeEnvelope, decodeEnvelope } from './mandala/types.js'
+export type {
+  ScreeningProvider,
+  MembershipProvider,
+  EngineOutputReader,
+  SpecificLinkage,
+  MandalaEnvelope,
+  MandalaOwnerRecord,
+  MandalaTokenRecord,
+  MandalaAuthorityRecord,
+  MandalaMetadataRecord,
+  AdminHistoryEntry,
+  MandalaLinkageRecord
+} from './mandala/types.js'
+export {
+  encodeAdminDetails,
+  decodeAdminDetails,
+  deployMetadata,
+  commitmentOf
+} from './mandala/details.js'
+export type { AdminDetails, AdminKind, RegistryKind } from './mandala/details.js'
+export { deployDigest, verifyDeploySig } from './mandala/deploySig.js'
 export { verifyKeyLinkage } from './mandala/verifyKeyLinkage.js'
 export { foldAction, defaultAssetState } from './mandala/AssetStateReducer.js'
 export type { AssetAdminState, FoldContext, FrozenRef } from './mandala/AssetStateReducer.js'
-export type {
-  ScreeningProvider,
-  SpecificLinkage,
-  MandalaLinkagePayload,
-  MandalaTokenRecord,
-  MandalaLinkageRecord
-} from './mandala/types.js'
+
+// mandala registry (BRC-162)
+export { RegistryTopicManager, REGISTRY_TOPIC } from './mandala-registry/RegistryTopicManager.js'
+export {
+  RegistryLookupService,
+  createRegistryLookupService,
+  REGISTRY_LOOKUP
+} from './mandala-registry/RegistryLookupService.js'
+export { RegistryStorage, registryMembership } from './mandala-registry/RegistryStorage.js'

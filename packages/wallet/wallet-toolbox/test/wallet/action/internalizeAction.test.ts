@@ -1,5 +1,28 @@
-import { Beef, CreateActionArgs, InternalizeActionArgs, P2PKH, WalletProtocol } from '@bsv/sdk'
+import {
+  Beef,
+  CachedKeyDeriver,
+  CreateActionArgs,
+  InternalizeActionArgs,
+  InternalizeOutput,
+  MerklePath,
+  P2PKH,
+  PrivateKey,
+  Script,
+  Transaction,
+  WalletProtocol
+} from '@bsv/sdk'
+import { Knex, knex as makeKnex } from 'knex'
 import { sdk } from '../../../src/index.all'
+import { Wallet } from '../../../src/Wallet'
+import { MockServices } from '../../../src/mockchain/MockServices'
+import { PostBeefResult } from '../../../src/sdk/WalletServices.interfaces'
+import { WERR_UNAUTHORIZED } from '../../../src/sdk/WERR_errors'
+import { StorageKnex } from '../../../src/storage/StorageKnex'
+import { WalletStorageManager } from '../../../src/storage/WalletStorageManager'
+import { EntityProvenTx } from '../../../src/storage/schema/entities/EntityProvenTx'
+import { ScriptTemplateBRC29 } from '../../../src/utility/ScriptTemplateBRC29'
+import { randomBytesBase64, randomBytesHex, verifyOne } from '../../../src/utility/utilityHelpers'
+import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
 import { _tu, expectToThrowWERR, TestWalletNoSetup } from '../../utils/TestUtilsWalletStorage'
 
 const includeTestChaintracks = false
@@ -15,6 +38,7 @@ describe('internalizeAction tests', () => {
   beforeAll(async () => {
     if (includeTestChaintracks) {
       if (env.runMySQL) gctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeActionTests'))
+      if (env.runPostgres) gctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeActionTests'))
       gctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeActionTests'))
     }
   })
@@ -50,6 +74,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction1Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction1Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction1Tests'))
     }
     for (const { wallet } of ctxs) {
@@ -148,6 +173,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction2Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction2Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction2Tests'))
     }
     for (const { wallet } of ctxs) {
@@ -283,6 +309,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction3Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction3Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction3Tests'))
     }
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
@@ -374,6 +401,7 @@ describe('internalizeAction tests', () => {
     if (useSharedCtxs) ctxs.push(...gctxs)
     else {
       if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction4Tests'))
+      if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction4Tests'))
       ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction4Tests'))
     }
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
@@ -492,6 +520,7 @@ describe('internalizeAction tests', () => {
     if (!includeTestChaintracks) return
     const ctxs: TestWalletNoSetup[] = []
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('actionInternalizeAction5Tests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('actionInternalizeAction5Tests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('actionInternalizeAction5Tests'))
     for (const { wallet, identityKey: senderIdentityKey } of ctxs) {
       const fred = await _tu.createSQLiteTestWallet({
@@ -677,6 +706,846 @@ describe('internalizeAction tests', () => {
     }
     for (const ctx of ctxs) {
       await ctx.storage.destroy()
+    }
+  })
+})
+
+/**
+ * A transaction internalized without a mining proof for it must reach the network before its
+ * outputs are stored. On shared storage the proven_tx_req is shared by txid across users, so a
+ * recipient internalizing a sender's noSend transaction finds the sender's `nosend` req and must
+ * still broadcast it.
+ */
+describe('internalizeAction broadcast of transactions new to the user', () => {
+  jest.setTimeout(120_000)
+
+  const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
+
+  let chainDb: Knex
+  let services: MockServices
+
+  beforeAll(async () => {
+    chainDb = memoryKnex()
+    services = new MockServices(chainDb)
+    await services.initialize()
+    // Mature coinbases fund the payments each test builds.
+    for (let i = 0; i < 110; i++) await services.mineBlock()
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  afterAll(async () => {
+    await chainDb.destroy()
+  })
+
+  function memoryKnex(): Knex {
+    return makeKnex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+      pool: { min: 1, max: 1 }
+    })
+  }
+
+  interface StorageUser {
+    wallet: Wallet
+    userId: number
+  }
+
+  interface SharedStorage {
+    provider: StorageKnex
+    addUser: () => Promise<StorageUser>
+    destroy: () => Promise<void>
+  }
+
+  /** One StorageKnex serving every user added to it, as a hosted wallet storage server does. */
+  async function createSharedStorage(): Promise<SharedStorage> {
+    const db = memoryKnex()
+    const provider = new StorageKnex({
+      chain: 'mock',
+      knex: db,
+      commissionSatoshis: 0,
+      feeModel: { model: 'sat/kb', value: 100 }
+    })
+    await provider.migrate('internalizeActionBroadcast', randomBytesHex(33))
+    await provider.makeAvailable()
+    const wallets: Wallet[] = []
+    return {
+      provider,
+      async addUser() {
+        const rootKey = PrivateKey.fromHex(randomBytesHex(32))
+        const storage = new WalletStorageManager(rootKey.toPublicKey().toString(), provider)
+        await storage.makeAvailable()
+        storage.setServices(services)
+        // Per-action storage persists each noSend action and its proven_tx_req when createAction returns.
+        const wallet = new Wallet({
+          chain: 'mock',
+          keyDeriver: new CachedKeyDeriver(rootKey),
+          storage,
+          services,
+          actionBatchMode: 'legacy'
+        })
+        wallets.push(wallet)
+        return { wallet, userId: await storage.getUserId() }
+      },
+      async destroy() {
+        for (const wallet of wallets) await wallet.destroy()
+        await db.destroy()
+      }
+    }
+  }
+
+  /** A separate wallet manager for the same authenticated identity and SQL provider. */
+  async function secondWalletFor(recipient: Wallet, provider: StorageKnex): Promise<Wallet> {
+    const storage = new WalletStorageManager(recipient.identityKey, provider)
+    await storage.makeAvailable()
+    storage.setServices(services)
+    return new Wallet({
+      chain: 'mock',
+      keyDeriver: new CachedKeyDeriver(recipient.keyDeriver.rootKey),
+      storage,
+      services,
+      actionBatchMode: 'legacy'
+    })
+  }
+
+  interface CoinbasePayment {
+    txid: string
+    rawTx: number[]
+    sourceRawTx: number[]
+    sourceProof: MerklePath
+    output: InternalizeOutput
+  }
+
+  /** An unbroadcast BRC-29 payment to `recipient` spending a mature coinbase. */
+  async function coinbasePayment(recipient: Wallet): Promise<CoinbasePayment> {
+    const height = await services.getHeight()
+    const [utxo] = await services.storage
+      .knex('mockchain_utxos')
+      .where({ isCoinbase: true, spentByTxid: null })
+      .where('blockHeight', '<=', height - 100)
+      .orderBy('blockHeight', 'asc')
+      .limit(1)
+    expect(utxo).toBeDefined()
+
+    const sourceRawTx = asArray((await services.storage.getTransaction(utxo.txid))!.rawTx)
+    const derivationPrefix = randomBytesBase64(16)
+    const derivationSuffix = randomBytesBase64(16)
+    const keys = recipient.getClientChangeKeyPair()
+    const template = new ScriptTemplateBRC29({ derivationPrefix, derivationSuffix, keyDeriver: recipient.keyDeriver })
+    const payment = new Transaction()
+    payment.addInput({
+      sourceTransaction: Transaction.fromBinary(sourceRawTx),
+      sourceOutputIndex: 0,
+      unlockingScript: new Script(),
+      sequence: 0xffffffff
+    })
+    payment.addOutput({ satoshis: 1_000_000, lockingScript: template.lock(keys.privateKey, keys.publicKey) })
+
+    return {
+      txid: payment.id('hex'),
+      rawTx: payment.toBinary(),
+      sourceRawTx,
+      sourceProof: (await services.getMerklePath(utxo.txid)).merklePath!,
+      output: {
+        outputIndex: 0,
+        protocol: 'wallet payment',
+        paymentRemittance: { derivationPrefix, derivationSuffix, senderIdentityKey: recipient.identityKey }
+      }
+    }
+  }
+
+  /** AtomicBEEF carrying the payment's proven source but no proof for the payment itself. */
+  function unprovenBeef(payment: CoinbasePayment): Beef {
+    const beef = new Beef()
+    beef.mergeRawTx(payment.sourceRawTx, beef.mergeBump(payment.sourceProof))
+    beef.mergeRawTx(payment.rawTx)
+    return beef
+  }
+
+  /** Broadcasts and mines the payment, returning AtomicBEEF carrying its merkle proof. */
+  async function minedAtomicBeef(payment: CoinbasePayment): Promise<number[]> {
+    expect((await services.postBeef(unprovenBeef(payment), [payment.txid]))[0].status).toBe('success')
+    await services.mineBlock()
+    const proof = await services.getMerklePath(payment.txid)
+    const beef = new Beef()
+    beef.mergeRawTx(payment.rawTx, beef.mergeBump(proof.merklePath!))
+    return beef.toBinaryAtomic(payment.txid)
+  }
+
+  async function fundWallet(wallet: Wallet): Promise<void> {
+    const payment = await coinbasePayment(wallet)
+    await expect(
+      wallet.internalizeAction({
+        tx: await minedAtomicBeef(payment),
+        outputs: [payment.output],
+        description: 'Fund sender wallet'
+      })
+    ).resolves.toMatchObject({ accepted: true })
+  }
+
+  /** A signed noSend BRC-29 payment from `sender` to `recipient`. */
+  async function noSendPayment(
+    sender: Wallet,
+    recipient: Wallet,
+    satoshis: number,
+    labels: string[]
+  ): Promise<{ txid: string; tx: InternalizeActionArgs['tx']; output: InternalizeOutput }> {
+    const derivationPrefix = randomBytesBase64(16)
+    const derivationSuffix = randomBytesBase64(16)
+    const payee = sender.keyDeriver.derivePublicKey(
+      brc29ProtocolID,
+      `${derivationPrefix} ${derivationSuffix}`,
+      recipient.identityKey
+    )
+    const created = await sender.createAction({
+      description: 'noSend payment to recipient',
+      labels,
+      outputs: [
+        {
+          satoshis,
+          lockingScript: new P2PKH().lock(payee.toAddress()).toHex(),
+          outputDescription: 'BRC-29 payment'
+        }
+      ],
+      options: { noSend: true, randomizeOutputs: false }
+    })
+    expect(created.txid).toBeDefined()
+    expect(created.tx).toBeDefined()
+    return {
+      txid: created.txid!,
+      tx: created.tx!,
+      output: {
+        outputIndex: 0,
+        protocol: 'wallet payment',
+        paymentRemittance: { derivationPrefix, derivationSuffix, senderIdentityKey: sender.identityKey }
+      }
+    }
+  }
+
+  function postedTxids(postBeef: jest.SpyInstance): string[] {
+    return postBeef.mock.calls.flatMap(call => call[1] as string[])
+  }
+
+  async function reqStatus(shared: SharedStorage, txid: string): Promise<string> {
+    return verifyOne(await shared.provider.findProvenTxReqs({ partial: { txid } })).status
+  }
+
+  test('broadcasts a transaction whose BEEF carries no proof for it', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const postBeef = jest.spyOn(services, 'postBeef')
+
+      await expect(
+        recipient.wallet.internalizeAction({
+          tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+          outputs: [payment.output],
+          description: 'Receive unproven payment'
+        })
+      ).resolves.toMatchObject({ accepted: true })
+
+      expect(postedTxids(postBeef)).toContain(payment.txid)
+      expect(await services.storage.getTransaction(payment.txid)).toBeDefined()
+      expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  const noSendFlavors: Array<[string, string[]]> = [
+    ['noSend', []],
+    ['BRC-177 protected noSend', ['p nosend expiry seconds 3600']]
+  ]
+
+  test.each(noSendFlavors)(
+    "a recipient on shared storage broadcasts the sender's %s transaction",
+    async (_flavor, labels) => {
+      const shared = await createSharedStorage()
+      try {
+        const sender = await shared.addUser()
+        const recipient = await shared.addUser()
+        await fundWallet(sender.wallet)
+        const payment = await noSendPayment(sender.wallet, recipient.wallet, 5_000, labels)
+        expect(await reqStatus(shared, payment.txid)).toBe('nosend')
+        const postBeef = jest.spyOn(services, 'postBeef')
+
+        await expect(
+          recipient.wallet.internalizeAction({
+            tx: payment.tx,
+            outputs: [payment.output],
+            description: 'Receive noSend payment'
+          })
+        ).resolves.toMatchObject({ accepted: true })
+
+        expect(postedTxids(postBeef)).toContain(payment.txid)
+        expect(await services.storage.getTransaction(payment.txid)).toBeDefined()
+        expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+        const received = verifyOne(
+          await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+        )
+        expect(received.satoshis).toBe(5_000)
+        expect(received.spendable).toBe(true)
+        const senderTx = verifyOne(
+          await shared.provider.findTransactions({ partial: { userId: sender.userId, txid: payment.txid } })
+        )
+        expect(senderTx.status).toBe('unproven')
+      } finally {
+        await shared.destroy()
+      }
+    }
+  )
+
+  test.each(noSendFlavors)(
+    'a failed broadcast of a %s transaction rejects the internalize and stores no recipient outputs',
+    async (_flavor, labels) => {
+      const shared = await createSharedStorage()
+      try {
+        const sender = await shared.addUser()
+        const recipient = await shared.addUser()
+        await fundWallet(sender.wallet)
+        const payment = await noSendPayment(sender.wallet, recipient.wallet, 5_000, labels)
+        const postBeef = jest
+          .spyOn(services, 'postBeef')
+          .mockImplementation(async (_beef: Beef, txids: string[]): Promise<PostBeefResult[]> => [
+            { name: 'mock', status: 'error', txidResults: txids.map(txid => ({ txid, status: 'error' })) }
+          ])
+
+        await expectToThrowWERR(sdk.WERR_REVIEW_ACTIONS, () =>
+          recipient.wallet.internalizeAction({
+            tx: payment.tx,
+            outputs: [payment.output],
+            description: 'Receive noSend payment'
+          })
+        )
+
+        expect(postedTxids(postBeef)).toContain(payment.txid)
+        expect(await services.storage.getTransaction(payment.txid)).toBeUndefined()
+        expect(await reqStatus(shared, payment.txid)).toBe('invalid')
+        expect(
+          await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+        ).toEqual([])
+      } finally {
+        await shared.destroy()
+      }
+    }
+  )
+
+  test('first receipt succeeds after the sender already broadcast on shared storage; repeated receipt credits once', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const sender = await shared.addUser()
+      const recipient = await shared.addUser()
+      await fundWallet(sender.wallet)
+      const payment = await noSendPayment(sender.wallet, recipient.wallet, 5_000, [])
+      await sender.wallet.createAction({
+        description: 'Broadcast prepared payment',
+        options: { sendWith: [payment.txid], acceptDelayedBroadcast: false }
+      })
+      expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+      // Mockchain rejects a second spend of the same inputs; model the real
+      // broadcaster's successful already-known response for this exact txid.
+      const postBeef = jest.spyOn(services, 'postBeef').mockResolvedValue([
+        {
+          name: 'mock-already-known',
+          status: 'success',
+          txidResults: [{ txid: payment.txid, status: 'success' }]
+        }
+      ])
+      const args: InternalizeActionArgs = {
+        tx: payment.tx,
+        outputs: [payment.output],
+        description: 'Receive already broadcast payment'
+      }
+
+      await expect(recipient.wallet.internalizeAction(args)).resolves.toMatchObject({ accepted: true })
+      expect(postedTxids(postBeef)).toEqual([payment.txid])
+      expect(
+        await shared.provider
+          .knex('internalize_receipts')
+          .where({ userId: recipient.userId, txid: payment.txid })
+          .first()
+      ).toMatchObject({ state: 'complete', needsNewReceipt: 0 })
+      await expect(
+        recipient.wallet.internalizeAction({
+          ...args,
+          outputs: [{ ...payment.output, outputIndex: 999 }]
+        })
+      ).rejects.toThrow()
+      expect(
+        await shared.provider
+          .knex('internalize_receipts')
+          .where({ userId: recipient.userId, txid: payment.txid })
+          .first()
+      ).toMatchObject({ state: 'complete' })
+      // A validation failure on an earlier repeat could leave a retriable
+      // claim even though the output was already accepted. The next call
+      // must still follow the normal idempotent merge path.
+      await shared.provider
+        .knex('internalize_receipts')
+        .where({ userId: recipient.userId, txid: payment.txid })
+        .update({ ownerToken: 'abandoned-repeat', state: 'retryable', leaseUntil: 0, needsNewReceipt: true })
+      await expect(recipient.wallet.internalizeAction(args)).resolves.toMatchObject({ accepted: true })
+      expect(postedTxids(postBeef)).toEqual([payment.txid])
+      const received = verifyOne(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      )
+      expect(received).toMatchObject({ satoshis: 5_000, spendable: true })
+      expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('a retriable claim without a new recipient header preserves an existing noSend merge', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const user = await shared.addUser()
+      await fundWallet(user.wallet)
+      const payment = await noSendPayment(user.wallet, user.wallet, 5_000, [])
+      await shared.provider.knex('internalize_receipts').insert({
+        userId: user.userId,
+        txid: payment.txid,
+        ownerToken: 'abandoned-validation',
+        state: 'retryable',
+        leaseUntil: 0,
+        needsNewReceipt: false
+      })
+      const postBeef = jest.spyOn(services, 'postBeef')
+      await expect(
+        user.wallet.internalizeAction({
+          tx: payment.tx,
+          outputs: [payment.output],
+          description: 'Merge existing noSend after a harmless failed attempt'
+        })
+      ).resolves.toMatchObject({ accepted: true, isMerge: true })
+      expect(postBeef).not.toHaveBeenCalled()
+      expect(
+        await shared.provider.findOutputs({ partial: { userId: user.userId, txid: payment.txid, vout: 0 } })
+      ).toHaveLength(1)
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('SQL receipt ownership rejects an unauthenticated user before creating a claim', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      await expectToThrowWERR(WERR_UNAUTHORIZED, () =>
+        shared.provider.internalizeAction(
+          { identityKey: recipient.wallet.identityKey },
+          {
+            tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+            outputs: [payment.output],
+            description: 'Reject unauthenticated receive'
+          }
+        )
+      )
+      expect(await shared.provider.knex('internalize_receipts').select()).toEqual([])
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('an expired claim cannot commit a new recipient header or output', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const original = shared.provider.findOrInsertTransaction.bind(shared.provider)
+      jest.spyOn(shared.provider, 'findOrInsertTransaction').mockImplementation(async (transaction, trx) => {
+        const result = await original(transaction, trx)
+        if (transaction.txid === payment.txid) {
+          await (trx as Knex.Transaction)('internalize_receipts')
+            .where({ userId: recipient.userId, txid: payment.txid })
+            .update({ leaseUntil: 0 })
+        }
+        return result
+      })
+      await expect(
+        recipient.wallet.internalizeAction({
+          tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+          outputs: [payment.output],
+          description: 'Reject expired receipt writer'
+        })
+      ).rejects.toThrow(/claim expired or was superseded/)
+      expect(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toEqual([])
+      expect(await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })).toEqual(
+        []
+      )
+      expect(await shared.provider.knex('internalize_receipts').select()).toEqual([])
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test.each(['doubleSpend', 'invalidTx', 'serviceError'] as const)(
+    'a negative %s rebroadcast of an already-known payment does not credit the recipient',
+    async status => {
+      const shared = await createSharedStorage()
+      try {
+        const sender = await shared.addUser()
+        const recipient = await shared.addUser()
+        await fundWallet(sender.wallet)
+        const payment = await noSendPayment(sender.wallet, recipient.wallet, 5_000, [])
+        await sender.wallet.createAction({
+          description: 'Broadcast prepared payment',
+          options: { sendWith: [payment.txid], acceptDelayedBroadcast: false }
+        })
+        expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+        jest.spyOn(services, 'postBeef').mockResolvedValue([
+          {
+            name: 'mock',
+            status: 'error',
+            txidResults: [
+              {
+                txid: payment.txid,
+                status: 'error',
+                doubleSpend: status === 'doubleSpend',
+                serviceError: status === 'serviceError'
+              }
+            ]
+          }
+        ])
+
+        await expectToThrowWERR(sdk.WERR_REVIEW_ACTIONS, () =>
+          recipient.wallet.internalizeAction({
+            tx: payment.tx,
+            outputs: [payment.output],
+            description: 'Reject unsuccessful rebroadcast'
+          })
+        )
+        expect(
+          await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+        ).toEqual([])
+        expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+        const senderTx = verifyOne(
+          await shared.provider.findTransactions({ partial: { userId: sender.userId, txid: payment.txid } })
+        )
+        expect(senderTx.status).toBe('unproven')
+      } finally {
+        await shared.destroy()
+      }
+    }
+  )
+
+  test('receipt succeeds when another storage worker advances the request before result refresh', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const update = shared.provider.updateProvenTxReqDynamics.bind(shared.provider)
+      // Deterministic interleaving: broadcast history is saved, then a second worker
+      // records network acceptance before the foreground result refreshes storage.
+      jest.spyOn(shared.provider, 'updateProvenTxReqDynamics').mockImplementationOnce(async (id, changes, trx) => {
+        const result = await update(id, changes, trx)
+        await update(id, { status: 'unmined', wasBroadcast: true }, trx)
+        return result
+      })
+
+      await expect(
+        recipient.wallet.internalizeAction({
+          tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+          outputs: [payment.output],
+          description: 'Receive while background worker advances request'
+        })
+      ).resolves.toMatchObject({ accepted: true })
+      expect(await reqStatus(shared, payment.txid)).toBe('unmined')
+      const received = verifyOne(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      )
+      expect(received).toMatchObject({ satoshis: 1_000_000, spendable: true })
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('does not broadcast a transaction whose BEEF carries its merkle proof', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const tx = await minedAtomicBeef(payment)
+      const postBeef = jest.spyOn(services, 'postBeef')
+
+      await expect(
+        recipient.wallet.internalizeAction({ tx, outputs: [payment.output], description: 'Receive mined payment' })
+      ).resolves.toMatchObject({ accepted: true })
+
+      expect(postBeef).not.toHaveBeenCalled()
+      const received = verifyOne(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      )
+      expect(received.status).toBe('completed')
+      expect(await shared.provider.findProvenTxReqs({ partial: { txid: payment.txid } })).toEqual([])
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('concurrent mined receipts for one identity create one transaction and one balance credit', async () => {
+    const shared = await createSharedStorage()
+    let second: Wallet | undefined
+    try {
+      const recipient = await shared.addUser()
+      second = await secondWalletFor(recipient.wallet, shared.provider)
+      const payment = await coinbasePayment(recipient.wallet)
+      const args: InternalizeActionArgs = {
+        tx: await minedAtomicBeef(payment),
+        outputs: [payment.output],
+        description: 'Receive mined payment concurrently'
+      }
+      const results = await Promise.all([recipient.wallet.internalizeAction(args), second.internalizeAction(args)])
+      expect(results).toEqual([
+        expect.objectContaining({ accepted: true }),
+        expect.objectContaining({ accepted: true })
+      ])
+      expect(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(await recipient.wallet.balance()).toBe(1_000_000)
+    } finally {
+      await second?.destroy()
+      await shared.destroy()
+    }
+  })
+
+  test('a second receive cannot credit an output while the first broadcast is pending or fails', async () => {
+    const shared = await createSharedStorage()
+    let second: Wallet | undefined
+    let releaseBroadcast: (() => void) | undefined
+    try {
+      const recipient = await shared.addUser()
+      second = await secondWalletFor(recipient.wallet, shared.provider)
+      const payment = await coinbasePayment(recipient.wallet)
+      const args: InternalizeActionArgs = {
+        tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+        outputs: [payment.output],
+        description: 'Receive while first broadcast is pending'
+      }
+      let enteredBroadcast!: () => void
+      const entered = new Promise<void>(resolve => {
+        enteredBroadcast = resolve
+      })
+      const release = new Promise<void>(resolve => {
+        releaseBroadcast = resolve
+      })
+      jest.spyOn(services, 'postBeef').mockImplementation(async () => {
+        enteredBroadcast()
+        await release
+        return [
+          {
+            name: 'synthetic-rejection',
+            status: 'error',
+            txidResults: [{ txid: payment.txid, status: 'error', serviceError: true }]
+          }
+        ]
+      })
+
+      const first = recipient.wallet.internalizeAction(args)
+      await entered
+      const concurrent = second.internalizeAction(args)
+      const settledEarly = await Promise.race([
+        concurrent.then(
+          () => true,
+          () => true
+        ),
+        new Promise<false>(resolve => setTimeout(() => resolve(false), 100))
+      ])
+      expect(settledEarly).toBe(false)
+      expect(await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })).toEqual(
+        []
+      )
+      releaseBroadcast()
+      const outcomes = await Promise.allSettled([first, concurrent])
+      expect(outcomes.map(outcome => outcome.status)).toEqual(['rejected', 'rejected'])
+      expect(await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })).toEqual(
+        []
+      )
+      expect(await recipient.wallet.balance()).toBe(0)
+    } finally {
+      releaseBroadcast?.()
+      await second?.destroy()
+      await shared.destroy()
+    }
+  })
+
+  test('a failed first receipt rebroadcasts on retry before crediting the output', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const args: InternalizeActionArgs = {
+        tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+        outputs: [payment.output],
+        description: 'Retry first receipt after service failure'
+      }
+      const postBeef = jest.spyOn(services, 'postBeef')
+      postBeef
+        .mockResolvedValueOnce([
+          {
+            name: 'synthetic-service-error',
+            status: 'error',
+            txidResults: [{ txid: payment.txid, status: 'error', serviceError: true }]
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            name: 'synthetic-known-payment',
+            status: 'success',
+            txidResults: [{ txid: payment.txid, status: 'success' }]
+          }
+        ])
+      await expectToThrowWERR(sdk.WERR_REVIEW_ACTIONS, () => recipient.wallet.internalizeAction(args))
+      expect(await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })).toEqual(
+        []
+      )
+      await expect(recipient.wallet.internalizeAction(args)).resolves.toMatchObject({ accepted: true })
+      expect(postedTxids(postBeef)).toEqual([payment.txid, payment.txid])
+      expect(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(await recipient.wallet.balance()).toBe(1_000_000)
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('a failed first receipt can finish from a valid mining proof without rebroadcasting', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      const args: InternalizeActionArgs = {
+        tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+        outputs: [payment.output],
+        description: 'Retry first receipt after mining'
+      }
+      const broadcast = jest.spyOn(services, 'postBeef').mockResolvedValueOnce([
+        {
+          name: 'synthetic-service-error',
+          status: 'error',
+          txidResults: [{ txid: payment.txid, status: 'error', serviceError: true }]
+        }
+      ])
+      await expectToThrowWERR(sdk.WERR_REVIEW_ACTIONS, () => recipient.wallet.internalizeAction(args))
+      broadcast.mockRestore()
+      const mined = await minedAtomicBeef(payment)
+      const noRebroadcast = jest.spyOn(services, 'postBeef')
+      await expect(recipient.wallet.internalizeAction({ ...args, tx: mined })).resolves.toMatchObject({
+        accepted: true,
+        isMerge: false
+      })
+      expect(noRebroadcast).not.toHaveBeenCalled()
+      expect(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toEqual([expect.objectContaining({ status: 'completed' })])
+      expect(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(await recipient.wallet.balance()).toBe(1_000_000)
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('a proof already recorded by storage completes a proofless incoming receipt', async () => {
+    const shared = await createSharedStorage()
+    try {
+      const recipient = await shared.addUser()
+      const payment = await coinbasePayment(recipient.wallet)
+      await minedAtomicBeef(payment)
+      const found = await EntityProvenTx.fromTxid(payment.txid, services)
+      expect(found.proven).toBeDefined()
+      await shared.provider.insertProvenTx(found.proven!.toApi())
+      const noRebroadcast = jest.spyOn(services, 'postBeef')
+      await expect(
+        recipient.wallet.internalizeAction({
+          tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+          outputs: [payment.output],
+          description: 'Receive a payment already proven in storage'
+        })
+      ).resolves.toMatchObject({ accepted: true })
+      expect(noRebroadcast).not.toHaveBeenCalled()
+      expect(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toEqual([expect.objectContaining({ status: 'completed' })])
+      expect(await recipient.wallet.balance()).toBe(1_000_000)
+    } finally {
+      await shared.destroy()
+    }
+  })
+
+  test('an expired receipt claim can be recovered without letting the old owner credit again', async () => {
+    const shared = await createSharedStorage()
+    let second: Wallet | undefined
+    let releaseFirst: (() => void) | undefined
+    try {
+      const recipient = await shared.addUser()
+      second = await secondWalletFor(recipient.wallet, shared.provider)
+      const payment = await coinbasePayment(recipient.wallet)
+      const args: InternalizeActionArgs = {
+        tx: unprovenBeef(payment).toBinaryAtomic(payment.txid),
+        outputs: [payment.output],
+        description: 'Recover interrupted receipt'
+      }
+      let enteredFirst!: () => void
+      const entered = new Promise<void>(resolve => {
+        enteredFirst = resolve
+      })
+      const release = new Promise<void>(resolve => {
+        releaseFirst = resolve
+      })
+      let postCount = 0
+      jest.spyOn(services, 'postBeef').mockImplementation(async () => {
+        postCount++
+        if (postCount === 1) {
+          enteredFirst()
+          await release
+        }
+        return [
+          {
+            name: 'synthetic-known-payment',
+            status: 'success',
+            txidResults: [{ txid: payment.txid, status: 'success' }]
+          }
+        ]
+      })
+
+      const oldOwner = recipient.wallet.internalizeAction(args)
+      await entered
+      expect(await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })).toEqual(
+        []
+      )
+      await shared.provider
+        .knex('internalize_receipts')
+        .where({ userId: recipient.userId, txid: payment.txid })
+        .update({ leaseUntil: 0 })
+      await expect(second.internalizeAction(args)).resolves.toMatchObject({ accepted: true })
+      releaseFirst()
+      await expect(oldOwner).rejects.toThrow(/claim expired or was superseded/)
+      expect(postCount).toBe(2)
+      expect(
+        await shared.provider.findTransactions({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(
+        await shared.provider.findOutputs({ partial: { userId: recipient.userId, txid: payment.txid } })
+      ).toHaveLength(1)
+      expect(await recipient.wallet.balance()).toBe(1_000_000)
+    } finally {
+      releaseFirst?.()
+      await second?.destroy()
+      await shared.destroy()
     }
   })
 })

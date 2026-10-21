@@ -28,7 +28,7 @@
   },
   "freshness": {
     "scope": "changed-pages-and-direct-sources",
-    "rationale": "Ordinary source checks report elapsed review deadlines as maintenance warnings for changed pages and directly changed sources. The separate maintenance workflow enforces every review deadline. Structural, date-consistency, and generated-content checks remain blocking; passing time alone never blocks an ordinary PR.",
+    "rationale": "All source and maintenance checks report elapsed review deadlines as advisory warnings. Full audits select every page without promoting elapsed dates to errors. Structural field ordering, date formats, and generated-content checks remain blocking; clock-relative dates are always advisory; passing time alone never blocks a PR.",
     "sourcePaths": {
       "docs/about/contributing.md": ["CONTRIBUTING.md"],
       "docs/about/doc-agent.md": [

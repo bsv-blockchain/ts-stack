@@ -21,6 +21,9 @@ describe('listActions tests', () => {
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy(databaseName))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy(databaseName))
+    }
     ctxs.push(await _tu.createIdbLegacyWalletCopy(databaseName))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy(databaseName))
   })

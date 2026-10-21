@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { evaluateTestGovernance } from './test-governance.mjs'
 import { validateCiResults } from './ci-result-gate.mjs'
 
 function evidence(selected = true) {
@@ -155,4 +156,29 @@ test('deferred results form an honest complete partition and never impersonate r
   ]) {
     assert.ok(validateMutationClassification(value, ['changed'], targets, policy).length)
   }
+})
+
+test('expired test reviews cannot fail the PR aggregate; structural findings still do', () => {
+  const governance = evaluateTestGovernance({ today: '2099-01-01' })
+  assert.ok(governance.warnings.length > 0)
+  const needs = evidence()
+  needs['sonar-zero-findings'].result = 'success'
+  needs['dependency-review'].result = 'success'
+  needs['repository-health'].result = governance.errors.length === 0 ? 'success' : 'failure'
+  assert.deepEqual(validateCiResults(needs, 'pull_request'), [])
+
+  const malformed = evaluateTestGovernance({
+    today: '2099-01-01',
+    walletManualSuiteInventory: {
+      schemaVersion: 1,
+      owner: 'unregistered',
+      reviewBy: 'invalid',
+      suites: []
+    }
+  })
+  assert.ok(malformed.errors.length > 0)
+  needs['repository-health'].result = malformed.errors.length === 0 ? 'success' : 'failure'
+  assert.ok(
+    validateCiResults(needs, 'pull_request').some(item => item.startsWith('repository-health:'))
+  )
 })

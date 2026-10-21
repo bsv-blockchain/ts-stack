@@ -97,9 +97,9 @@ function reviewActionsEnvelope(obj: Record<string, unknown>): {
     throw new WERR_INTERNAL('Invalid remote wallet error reviewActionResults')
   }
   const reviewStatuses = new Set(['success', 'doubleSpend', 'serviceError', 'invalidTx'])
-  const reviewActionResults = obj.reviewActionResults.map((value, index) => {
+  const results = obj.reviewActionResults
+  const reviewActionResults = results.map((value, index) => {
     const item = dataRecord(value, `reviewActionResults[${index}]`, 8)
-    const txid = identifier(item.txid, `reviewActionResults[${index}].txid`)
     const status = boundedString(item.status, `reviewActionResults[${index}].status`, 32)
     if (!reviewStatuses.has(status)) throw new WERR_INTERNAL('Invalid remote wallet error review status')
     const competingTxs =
@@ -113,6 +113,29 @@ function reviewActionsEnvelope(obj: Record<string, unknown>): {
     if (status !== 'doubleSpend' && (competingTxs !== undefined || competingBeef !== undefined)) {
       throw new WERR_INTERNAL('Invalid remote wallet error competing transaction evidence')
     }
+    // Storage may detect a spent explicit input before an attempted transaction
+    // exists. Preserve that sentinel only for this bounded pre-construction case.
+    const preConstruction = item.txid === ''
+    if (
+      preConstruction &&
+      (status !== 'doubleSpend' ||
+        results.length !== 1 ||
+        !Array.isArray(obj.sendWithResults) ||
+        obj.sendWithResults.length !== 0 ||
+        obj.txid !== undefined ||
+        obj.tx !== undefined ||
+        obj.noSendChange !== undefined ||
+        obj.signableTransaction !== undefined ||
+        competingTxs === undefined ||
+        competingTxs.length === 0 ||
+        competingTxs.some(txid => !/^[0-9a-f]{64}$/i.test(txid)) ||
+        new Set(competingTxs.map(txid => txid.toLowerCase())).size !== competingTxs.length ||
+        competingBeef === undefined ||
+        competingBeef.length === 0)
+    ) {
+      throw new WERR_INTERNAL('Invalid remote wallet error pre-construction review')
+    }
+    const txid = preConstruction ? '' : identifier(item.txid, `reviewActionResults[${index}].txid`)
     return {
       txid,
       status,

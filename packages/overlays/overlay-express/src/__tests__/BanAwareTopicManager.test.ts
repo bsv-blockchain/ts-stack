@@ -16,9 +16,9 @@ jest.mock('@bsv/sdk', () => ({
   }
 }))
 
-const mockPushDropDecode = PushDrop.decode as unknown as jest.Mock<any>
-const mockTransactionFromBEEF = Transaction.fromBEEF as unknown as jest.Mock<any>
-const mockToUTF8 = Utils.toUTF8 as unknown as jest.Mock<any>
+const mockPushDropDecode = PushDrop.decode as unknown as jest.Mock<(...args: any[]) => any>
+const mockTransactionFromBEEF = Transaction.fromBEEF as unknown as jest.Mock<(...args: any[]) => any>
+const mockToUTF8 = Utils.toUTF8 as unknown as jest.Mock<(...args: any[]) => any>
 
 describe('BanAwareTopicManager', () => {
   let wrapper: BanAwareTopicManager
@@ -30,19 +30,19 @@ describe('BanAwareTopicManager', () => {
     jest.clearAllMocks()
 
     mockWrapped = {
-      identifyAdmissibleOutputs: jest.fn<any>().mockResolvedValue({
+      identifyAdmissibleOutputs: jest.fn<(...args: any[]) => any>().mockResolvedValue({
         outputsToAdmit: [0, 1],
         coinsToRetain: [0],
         coinsRemoved: [1]
       }),
-      identifyNeededInputs: jest.fn<any>().mockResolvedValue([{ txid: 'needed-txid', outputIndex: 0 }]),
-      getDocumentation: jest.fn<any>().mockResolvedValue('docs'),
-      getMetaData: jest.fn<any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
+      identifyNeededInputs: jest.fn<(...args: any[]) => any>().mockResolvedValue([{ txid: 'needed-txid', outputIndex: 0 }]),
+      getDocumentation: jest.fn<(...args: any[]) => any>().mockResolvedValue('docs'),
+      getMetaData: jest.fn<(...args: any[]) => any>().mockResolvedValue({ name: 'test', shortDescription: 'test' })
     } as any
 
     mockBanService = {
-      isOutpointBanned: jest.fn<any>().mockResolvedValue(false),
-      isDomainBanned: jest.fn<any>().mockResolvedValue(false)
+      isOutpointBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false),
+      isDomainBanned: jest.fn<(...args: any[]) => any>().mockResolvedValue(false)
     } as any
 
     mockLogger = {

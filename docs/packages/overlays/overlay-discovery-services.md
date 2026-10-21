@@ -4,7 +4,7 @@ title: '@bsv/overlay-discovery-services'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-discovery-services'
-version: '2.2.7'
+version: '2.2.8'
 last_updated: '2026-09-26'
 last_verified: '2026-09-26'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ tags: ['overlay', 'discovery']
 
 # @bsv/overlay-discovery-services
 
-This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

@@ -14,6 +14,9 @@ describe('getHeight tests', () => {
       if (env.runMySQL) {
         ctxs.push(await _tu.createMySQLTestWallet({ databaseName: 'getHeightTestsMySQL' }))
       }
+      if (env.runPostgres) {
+        ctxs.push(await _tu.createPostgresTestWallet({ databaseName: 'getHeightTestsMySQL' }))
+      }
     }
   })
 

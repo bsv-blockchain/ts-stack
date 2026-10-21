@@ -15,7 +15,7 @@ import { sha256 } from '@bsv/sdk/primitives/Hash'
 import { validateBufferOfHeaders, validateGenesisHeader } from '../util/blockHeaderUtilities'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk'
 
-const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 const SAFE_EXPORT_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._~-]*\.json$/
 
 export abstract class BulkStorageBase implements BulkStorageApi {
@@ -121,7 +121,7 @@ export abstract class BulkStorageBase implements BulkStorageApi {
           `bulk storage returned ${buffer?.length ?? 'non-binary'} bytes for ${count} headers at height ${height}`
         )
       }
-      const validation = validateBufferOfHeaders(buffer, prevHash, 0, count, prevChainWork)
+      const validation = validateBufferOfHeaders(buffer, prevHash, 0, count, prevChainWork, this.chain)
       if (height === 0) validateGenesisHeader(buffer, this.chain)
       file.fileHash = asString(sha256(asArray(buffer)), 'base64')
       file.lastHash = validation.lastHeaderHash

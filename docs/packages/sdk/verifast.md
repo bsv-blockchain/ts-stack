@@ -3,7 +3,7 @@ id: pkg-verifast
 title: '@bsv/verifast'
 kind: package
 domain: sdk
-version: '0.3.7'
+version: '0.3.8'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ tags: [sdk, verification, wasm, browser, worker]
 
 # @bsv/verifast
 
-This source candidate declares SDK peer `^2.1.8 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.8 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

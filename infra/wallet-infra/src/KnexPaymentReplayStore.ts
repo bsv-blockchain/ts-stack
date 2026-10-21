@@ -10,6 +10,7 @@ function isDuplicate(error: unknown): boolean {
     value.code === 'ER_DUP_ENTRY' ||
     value.code === 'SQLITE_CONSTRAINT_PRIMARYKEY' ||
     value.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+    value.code === '23505' ||
     value.errno === 1062
   )
 }

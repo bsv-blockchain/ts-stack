@@ -62,6 +62,9 @@ describe('listActions2 single action tests', () => {
     if (env.runMySQL) {
       ctxs.push(await _tu.createMySQLTestSetup2Wallet(args))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createPostgresTestSetup2Wallet(args))
+    }
     ctxs.push(await _tu.createSQLiteTestSetup2Wallet(args))
   })
 
@@ -1235,6 +1238,9 @@ describe('listActions2 two action tests', () => {
     }
     if (env.runMySQL) {
       ctxs.push(await _tu.createMySQLTestSetup2Wallet(args))
+    }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createPostgresTestSetup2Wallet(args))
     }
     ctxs.push(await _tu.createSQLiteTestSetup2Wallet(args))
   })

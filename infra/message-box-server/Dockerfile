@@ -1,6 +1,6 @@
 # ---- Build stage ----
-# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS builder
+# Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
 
 WORKDIR /app
 
@@ -28,17 +28,18 @@ RUN npm run build
 RUN cp out/knexfile.js ./knexfile.js
 
 # ---- Production stage ----
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
 
 WORKDIR /app
 
 # Copy package files and install production deps only.
 # better-sqlite3 compiles from source on Alpine; add the toolchain just for the
 # install, then remove it in the same layer to keep the image slim. Keep the
-# fixed OpenSSL runtime packages after removing the disposable toolchain.
+# reviewed Alpine libcrypto3/libssl3 3.5.9-r0 pin for CVE-2026-84782 after
+# removing the disposable toolchain.
 COPY --chown=root:root --chmod=0444 package*.json ./
 RUN apk add --no-cache --virtual .build-deps g++ make python3 \
- && apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+ && apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && npm ci --omit=dev --ignore-scripts \
  && npm rebuild better-sqlite3 \
  && apk del .build-deps \

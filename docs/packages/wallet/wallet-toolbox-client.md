@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.14.5'
-last_updated: '2026-09-29'
-last_verified: '2026-09-29'
+version: '2.15.0'
+last_updated: '2026-10-13'
+last_verified: '2026-10-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/client'
@@ -24,6 +24,11 @@ expiry monitoring, synchronized lifecycle state, and pre-signed reclaim
 submission.
 IndexedDB `listOutputs` results keep `totalOutputs` equal to the full matching
 count across short final and out-of-range pages.
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
+
 Prepared BEEF persistence remains a server-side Knex capability. Browser
 IndexedDB uses the canonical path, and compatible remote servers can enable
 the optimization without a browser configuration or wire change.
@@ -60,12 +65,47 @@ new account even if other hosts fail or return malformed records.
 
 The browser build includes the fetch-based, credential-free ChainTracks v2
 client and reconnecting SSE adapter without Node-only modules. Public defaults
-cover mainnet, testnet, and TerraTestNet; STN/TSTN use an injected or configured
-endpoint.
+cover mainnet, testnet, and TerraTestNet; STN/TSTN and regtest use an injected
+or configured endpoint.
 
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
+
+BEEF requests and schema-declared storage response bytes use the existing
+negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
+and identical transaction/proof bytes. Authentication and payload ceilings
+remain unchanged; upgrade both clients and active storage for the savings.
+
+IndexedDB treats empty certificate certifier/type, transaction status and
+output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
+arrays, partial predicates and user ownership remain enforced. No API, wire
+or database migration is required.
+
+Internalizing an unproven transaction new to a user attempts broadcast before
+storing recipient outputs, including a sender's no-send transaction already
+known to shared storage. Rejected broadcasts return a review-actions error
+and store no recipient outputs. Transactions backed by a mining proof are
+not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+IndexedDB writer opens. A valid mined AtomicBEEF is stored after an
+asynchronous header lookup. A missing or malformed header, or an invalid
+proof, still rejects and leaves no proven transaction, transaction, or
+requested output. Upgrade this client; no API, wire or schema migration is required.
+
+Broadcast result completion in the 2.14.9 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. Remote SQL storage adds a durable user/TXID
+receipt claim while preserving historical rows; back up and preflight before
+coordinating all serving storage instances in the
+rollout. Browser IndexedDB does not use the SQL claim. This candidate does not
+deploy hosted storage or repair older partial receipts automatically.
 
 ## Backup and recovery
 
@@ -132,3 +172,14 @@ for complete remote and IndexedDB setup.
 
 Open BSV License Version 6. See the
 [package license](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/client/LICENSE.txt).
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).
