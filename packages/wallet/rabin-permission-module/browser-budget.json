@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/rabin-permission-module",
+  "entry": ".",
+  "requiredExports": ["RabinPermissionModule", "createRabinModule", "verify"],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": { "raw": 148000, "gzip": 50000, "brotli": 43000 },
+    "esbuild": { "raw": 115000, "gzip": 46000, "brotli": 40000 }
+  }
+}
