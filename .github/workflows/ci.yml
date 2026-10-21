@@ -199,9 +199,10 @@ jobs:
             --projects-json .ci-dependent-packages.json \
             --mode test)
           echo "dependent-test-packages=$DEPENDENT_TEST_PACKAGES" >> "$GITHUB_OUTPUT"
-          DEPENDENT_TEST_MATRIX=$(jq -c \
-            'if length > 12 then {include:[{shard:1,total:4},{shard:2,total:4},{shard:3,total:4},{shard:4,total:4}]} elif length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$DEPENDENT_TEST_PACKAGES")
+          DEPENDENT_TEST_MATRIX=$(node scripts/ci-shard-plan.mjs \
+            --packages-json "$DEPENDENT_TEST_PACKAGES" \
+            --durations governance/ci-lane-durations.json \
+            --lane dependent-tests)
           echo "dependent-test-matrix=$DEPENDENT_TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
           STANDARD_PACKAGES=$(node scripts/run-ci-tests.mjs \
@@ -831,18 +832,14 @@ jobs:
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Run affected dependent regressions without regenerating coverage
         env:
-          DEPENDENT_TEST_PACKAGES: ${{ needs.prepare.outputs.dependent-test-packages }}
+          SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
           PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
-          index=0
           while IFS= read -r package; do
-            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
-              packages+=("$package")
-            fi
-            index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$DEPENDENT_TEST_PACKAGES")
+            packages+=("$package")
+          done < <(jq -r '.[]' <<<"$SHARD_PACKAGES")
 
           if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/wallet-toolbox'; then
             pnpm --filter @bsv/wallet-toolbox rebuild better-sqlite3
@@ -852,17 +849,19 @@ jobs:
               "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
           fi
 
-          filters=()
           echo "Affected dependent test shard ${{ matrix.shard }}/${{ matrix.total }}:"
           for package in "${packages[@]}"; do
             echo "  - $package"
-            filters+=(--filter "$package")
           done
-          if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
+          # Serial and timed, so governance/ci-lane-durations.json can be
+          # refreshed from hosted runs.
+          for package in "${packages[@]}"; do
+            started=$SECONDS
+            pnpm --filter "$package" exec node \
               "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
               --script test
-          fi
+            echo "dependent-test-duration $package $((SECONDS - started))s"
+          done
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
