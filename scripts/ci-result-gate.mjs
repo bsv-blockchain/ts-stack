@@ -62,6 +62,8 @@ export function validateCiResults(needs, event) {
   for (const name of [
     'repository-health',
     'scope',
+    'build',
+    'policy',
     'prepare',
     'package-artifacts',
     'infra-scope',

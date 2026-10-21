@@ -97,6 +97,20 @@ jobs:
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
       conformance: ${{ steps.scope.outputs.conformance }}
+      standard-packages: ${{ steps.lanes.outputs.standard-packages }}
+      dependent-test-packages: ${{ steps.lanes.outputs.dependent-test-packages }}
+      dependent-test-matrix: ${{ steps.lanes.outputs.dependent-test-matrix }}
+      coverage-other-packages: ${{ steps.lanes.outputs.coverage-other-packages }}
+      coverage-other-matrix: ${{ steps.lanes.outputs.coverage-other-matrix }}
+      browser-packages: ${{ steps.lanes.outputs.browser-packages }}
+      browser-matrix: ${{ steps.lanes.outputs.browser-matrix }}
+      coverage-required: ${{ steps.lanes.outputs.coverage-required }}
+      sdk: ${{ steps.lanes.outputs.sdk }}
+      did: ${{ steps.lanes.outputs.did }}
+      wallet: ${{ steps.lanes.outputs.wallet }}
+      wallet_client: ${{ steps.lanes.outputs.wallet_client }}
+      wallet_mobile: ${{ steps.lanes.outputs.wallet_mobile }}
+      verifast: ${{ steps.lanes.outputs.verifast }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -160,135 +174,15 @@ jobs:
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  sonar-zero-findings:
-    name: Quality gate — zero new Sonar findings
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Use Node.js 24.x
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.x
-
-      - name: Require the exact Sonar analysis to contain no new findings
-        run: >-
-          node scripts/sonar-pr-gate.mjs
-          --project bsv-blockchain_ts-stack
-          --pull-request "${{ github.event.pull_request.number }}"
-          --revision "${{ github.event.pull_request.head.sha }}"
-
-  early-gates:
-    name: Early policy gates
-    if: always()
-    needs:
-      - repository-health
-      - scope
-      - dependency-review
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Stop before installing or building when a cheap gate failed
-        env:
-          HEALTH_RESULT: ${{ needs.repository-health.result }}
-          SCOPE_RESULT: ${{ needs.scope.result }}
-          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
-        run: |
-          if [[ "$HEALTH_RESULT" != "success" ||
-                "$SCOPE_RESULT" != "success" ||
-                ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
-            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT dependency=$DEPENDENCY_RESULT"
-            exit 1
-          fi
-
-  prepare:
-    name: Build, lint, and policy
-    needs:
-      - early-gates
-      - scope
-    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      direct-projects: ${{ needs.scope.outputs.direct-projects }}
-      affected-projects: ${{ needs.scope.outputs.affected-projects }}
-      build-projects: ${{ needs.scope.outputs.build-projects }}
-      standard-packages: ${{ steps.scope.outputs.standard-packages }}
-      dependent-test-packages: ${{ steps.scope.outputs.dependent-test-packages }}
-      dependent-test-matrix: ${{ steps.scope.outputs.dependent-test-matrix }}
-      coverage-other-packages: ${{ steps.scope.outputs.coverage-other-packages }}
-      coverage-other-matrix: ${{ steps.scope.outputs.coverage-other-matrix }}
-      browser-packages: ${{ steps.scope.outputs.browser-packages }}
-      browser-matrix: ${{ steps.scope.outputs.browser-matrix }}
-      coverage-required: ${{ steps.scope.outputs.coverage-required }}
-      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
-      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
-      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
-      partition-targets: ${{ needs.scope.outputs.partition-targets }}
-      sdk: ${{ steps.scope.outputs.sdk }}
-      did: ${{ steps.scope.outputs.did }}
-      wallet: ${{ steps.scope.outputs.wallet }}
-      wallet_client: ${{ steps.scope.outputs.wallet_client }}
-      wallet_mobile: ${{ steps.scope.outputs.wallet_mobile }}
-      verifast: ${{ steps.scope.outputs.verifast }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Use Node.js 24.18.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          # Exact pin: package-release-artifacts dry-run enforces
-          # governance/npm-package-supply-chain.json buildRuntime.node.
-          node-version: 24.18.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Rebuild the audited workspace build tool
-        run: pnpm rebuild esbuild
-
-      - name: Reject high and critical dependency advisories
-        run: pnpm audit:security
-
-      - name: Enforce the service operations contract
-        run: pnpm ops:check
-
-      - name: Check cross-package version references
-        # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
-        # downstream deps can't reference the new versions until publish) will always
-        # report stale refs in CI. Sync-versions.mjs runs at release time to reconcile.
-        continue-on-error: true
-        run: node scripts/check-versions.mjs
-
-      - name: Check @bsv/sdk peer-dependency contract
-        # Blocking. Published packages/** libraries must declare @bsv/sdk as a
-        # peerDependency (wide range), never a regular dependency — duplicate SDK
-        # copies become incompatible nominal types for downstream consumers.
-        run: node scripts/check-sdk-peer.mjs
-
-      - name: Determine changed scope
+      - name: Plan test lanes
         # Coverage suites run only for directly changed package importers.
         # Regression/type compatibility expands through dependents; builds also
-        # include their prerequisites.
-        # The preceding repository-health dependency prevents expensive work
-        # from starting behind a predictable policy or PR-evidence failure.
-        id: scope
+        # include their prerequisites. Planning needs only Node and jq, so it
+        # runs here instead of behind the install and build.
+        id: lanes
         env:
-          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
-          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
+          DIRECT_PROJECTS: ${{ steps.scope.outputs.direct-projects }}
+          AFFECTED_PROJECTS: ${{ steps.scope.outputs.affected-projects }}
         run: |
           DIRECT=$(jq -r '.[].name' <<<"$DIRECT_PROJECTS")
           AFFECTED=$(jq -r '.[].name' <<<"$AFFECTED_PROJECTS")
@@ -365,8 +259,82 @@ jobs:
             fi
           done
 
-      - name: Verify installed CI qualification integration
-        run: node --test scripts/ci-integration/*.test.mjs
+  sonar-zero-findings:
+    name: Quality gate — zero new Sonar findings
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.x
+
+      - name: Require the exact Sonar analysis to contain no new findings
+        run: >-
+          node scripts/sonar-pr-gate.mjs
+          --project bsv-blockchain_ts-stack
+          --pull-request "${{ github.event.pull_request.number }}"
+          --revision "${{ github.event.pull_request.head.sha }}"
+
+  early-gates:
+    name: Early policy gates
+    if: always()
+    needs:
+      - repository-health
+      - scope
+      - dependency-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Stop before installing or building when a cheap gate failed
+        env:
+          HEALTH_RESULT: ${{ needs.repository-health.result }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          if [[ "$HEALTH_RESULT" != "success" ||
+                "$SCOPE_RESULT" != "success" ||
+                ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
+            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT dependency=$DEPENDENCY_RESULT"
+            exit 1
+          fi
+
+  build:
+    name: Build workspace
+    # The build overlaps the repository-health contract instead of waiting for
+    # it; test lanes still start only after every early gate has passed.
+    needs: scope
+    if: always() && !cancelled() && needs.scope.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Use Node.js 24.18.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Exact pin: package-release-artifacts dry-run enforces
+          # governance/npm-package-supply-chain.json buildRuntime.node.
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
 
       - name: Build workspace
         env:
@@ -396,6 +364,75 @@ jobs:
             pnpm -r --if-present "${filters[@]}" run typecheck
           fi
 
+      - name: Archive build outputs
+        run: |
+          {
+            find packages -type d \( -name dist -o -name out \) -prune -print0
+            find packages -type f -name '*.tsbuildinfo' -print0
+          } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
+
+      - name: Share build outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-outputs
+          path: build-outputs.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  policy:
+    name: Lint and policy
+    needs:
+      - early-gates
+      - scope
+    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Use Node.js 24.18.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Exact pin: package-release-artifacts dry-run enforces
+          # governance/npm-package-supply-chain.json buildRuntime.node.
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - name: Reject high and critical dependency advisories
+        run: pnpm audit:security
+
+      - name: Enforce the service operations contract
+        run: pnpm ops:check
+
+      - name: Check cross-package version references
+        # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
+        # downstream deps can't reference the new versions until publish) will always
+        # report stale refs in CI. Sync-versions.mjs runs at release time to reconcile.
+        continue-on-error: true
+        run: node scripts/check-versions.mjs
+
+      - name: Check @bsv/sdk peer-dependency contract
+        # Blocking. Published packages/** libraries must declare @bsv/sdk as a
+        # peerDependency (wide range), never a regular dependency — duplicate SDK
+        # copies become incompatible nominal types for downstream consumers.
+        run: node scripts/check-sdk-peer.mjs
+
+      - name: Verify installed CI qualification integration
+        run: node --test scripts/ci-integration/*.test.mjs
+
       - name: Lint all authored code with zero warnings
         run: pnpm lint
 
@@ -412,20 +449,48 @@ jobs:
             pnpm -r --if-present "${filters[@]}" run format:check
           fi
 
-      - name: Archive build outputs
+  prepare:
+    name: Start test lanes
+    # Test lanes fan out from here once the early gates pass and the shared
+    # build exists. Lint and policy run beside them and gate the merge.
+    needs:
+      - early-gates
+      - scope
+      - build
+    if: >-
+      always() && !cancelled() && needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      direct-projects: ${{ needs.scope.outputs.direct-projects }}
+      affected-projects: ${{ needs.scope.outputs.affected-projects }}
+      build-projects: ${{ needs.scope.outputs.build-projects }}
+      standard-packages: ${{ needs.scope.outputs.standard-packages }}
+      dependent-test-packages: ${{ needs.scope.outputs.dependent-test-packages }}
+      dependent-test-matrix: ${{ needs.scope.outputs.dependent-test-matrix }}
+      coverage-other-packages: ${{ needs.scope.outputs.coverage-other-packages }}
+      coverage-other-matrix: ${{ needs.scope.outputs.coverage-other-matrix }}
+      browser-packages: ${{ needs.scope.outputs.browser-packages }}
+      browser-matrix: ${{ needs.scope.outputs.browser-matrix }}
+      coverage-required: ${{ needs.scope.outputs.coverage-required }}
+      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
+      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
+      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
+      partition-targets: ${{ needs.scope.outputs.partition-targets }}
+      sdk: ${{ needs.scope.outputs.sdk }}
+      did: ${{ needs.scope.outputs.did }}
+      wallet: ${{ needs.scope.outputs.wallet }}
+      wallet_client: ${{ needs.scope.outputs.wallet_client }}
+      wallet_mobile: ${{ needs.scope.outputs.wallet_mobile }}
+      verifast: ${{ needs.scope.outputs.verifast }}
+    steps:
+      - name: Record the selected lanes
+        env:
+          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
         run: |
-          {
-            find packages -type d \( -name dist -o -name out \) -prune -print0
-            find packages -type f -name '*.tsbuildinfo' -print0
-          } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
-
-      - name: Share build outputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: build-outputs
-          path: build-outputs.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          echo "Direct packages: $DIRECT_PROJECTS"
 
   package-artifacts:
     name: Package artifacts and documentation consumers
@@ -446,6 +511,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm rebuild esbuild
+      - name: Restore the npm download cache for clean consumer installs
+        # npm verifies every cached tarball against its integrity hash, so the
+        # consumers stay clean installs without re-downloading the registry.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-consumers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: npm-consumers-${{ runner.os }}-
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
@@ -461,6 +534,7 @@ jobs:
       - name: Verify changed package artifacts
         env:
           DIRECT_PROJECTS: ${{ needs.prepare.outputs.direct-projects }}
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           filters=()
           while IFS= read -r package; do filters+=(--filter "$package"); done < <(
@@ -469,7 +543,11 @@ jobs:
           if [ "${#filters[@]}" -eq 0 ]; then
             echo "No changed package artifact requires verification."
           else
-            pnpm -r --if-present "${filters[@]}" run pack:check
+            # Pack the outputs restored from the shared build instead of
+            # rebuilding each package; packing runs no build lifecycle script.
+            pnpm -r --no-sort "${filters[@]}" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --if-present --script pack:check
           fi
 
       - name: Dry-run the npm artifact supply-chain boundary
@@ -1401,6 +1479,7 @@ jobs:
     if: always()
     needs:
       - prepare
+      - policy
       - standard-tests
       - dependent-tests
       - browser-packages
@@ -1414,6 +1493,7 @@ jobs:
       - name: Verify parallel build, test, and coverage lanes
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
+          POLICY_RESULT: ${{ needs.policy.result }}
           TEST_RESULT: ${{ needs.standard-tests.result }}
           DEPENDENT_TEST_RESULT: ${{ needs.dependent-tests.result }}
           PACKAGE_BROWSER_RESULT: ${{ needs.browser-packages.result }}
@@ -1422,13 +1502,14 @@ jobs:
           MOBILE_RESULT: ${{ needs.wallet-mobile-platform.result }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
+                "$POLICY_RESULT" != "success" ||
                 ( "$TEST_RESULT" != "success" && "$TEST_RESULT" != "skipped" ) ||
                 ( "$DEPENDENT_TEST_RESULT" != "success" && "$DEPENDENT_TEST_RESULT" != "skipped" ) ||
                 ( "$PACKAGE_BROWSER_RESULT" != "success" && "$PACKAGE_BROWSER_RESULT" != "skipped" ) ||
                 ( "$COVERAGE_RESULT" != "success" && "$COVERAGE_RESULT" != "skipped" ) ||
                 ( "$BROWSER_RESULT" != "success" && "$BROWSER_RESULT" != "skipped" ) ||
                 ( "$MOBILE_RESULT" != "success" && "$MOBILE_RESULT" != "skipped" ) ]]; then
-            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT direct-tests=$TEST_RESULT dependent-tests=$DEPENDENT_TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
+            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT policy=$POLICY_RESULT direct-tests=$TEST_RESULT dependent-tests=$DEPENDENT_TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
             exit 1
           fi
 
@@ -1659,6 +1740,8 @@ jobs:
     if: always()
     needs:
       - scope
+      - build
+      - policy
       - prepare
       - package-artifacts
       - infra-scope

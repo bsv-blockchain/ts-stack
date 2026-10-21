@@ -30,7 +30,7 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
   assert.equal(workflow.match(/- name: Build workspace/g)?.length, 1)
   assert.match(
     workflow,
-    /^      browser-packages: \$\{\{ steps\.scope\.outputs\.browser-packages \}\}$/m
+    /^      browser-packages: \$\{\{ steps\.lanes\.outputs\.browser-packages \}\}$/m
   )
   assert.match(workflow, /^  browser-packages:$/m)
   assert.match(
@@ -106,8 +106,20 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const directGateCondition =
     "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
-  assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
+  assert.ok(jobs.policy.includes(`    if: ${directGateCondition}\n`))
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
+  // The build overlaps the repository-health contract; test lanes still wait
+  // for every early gate and the shared build before they start.
+  assert.match(jobs.build, /^    needs: scope$/m)
+  assert.ok(
+    jobs.build.includes("    if: always() && !cancelled() && needs.scope.result == 'success'\n")
+  )
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.prepare, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.prepare, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.prepare, /needs\.build\.result == 'success'$/m)
+  for (const gate of ['merge-gate', 'build-and-test'])
+    assert.match(jobs[gate], /^      - policy$/m, gate)
   for (const jobName of ['docs-validate', 'conformance']) {
     assert.match(jobs[jobName], /^    if: >-$/m)
     assert.match(jobs[jobName], /^      always\(\) && !cancelled\(\) &&$/m)

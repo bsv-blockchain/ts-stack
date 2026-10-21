@@ -7,6 +7,8 @@ function evidence(selected = true) {
   const required = [
     'repository-health',
     'scope',
+    'build',
+    'policy',
     'prepare',
     'package-artifacts',
     'infra-scope',
