@@ -352,7 +352,14 @@ test('every HTTP latency scenario retains its own required coverage execution', 
     latencies
   )
   assert.ok(selected.every(match => match[1] === match[2]))
-  assert.equal(wallet.match(/id: shard-\d, shard: \d/g).length, 4)
+  // Every planned shard has a matrix row, so no test file can go unrun.
+  const shardRows = wallet.match(/id: shard-\d+, shard: \d+/g).length
+  assert.equal(Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]), shardRows)
+  assert.match(
+    wallet,
+    /--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(wallet, /JEST_SHARD_LANE=wallet-toolbox-coverage/)
   assert.match(
     wallet,
     /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/

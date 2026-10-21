@@ -1059,6 +1059,8 @@ jobs:
           - { id: shard-2, shard: 2 }
           - { id: shard-3, shard: 3 }
           - { id: shard-4, shard: 4 }
+          - { id: shard-5, shard: 5 }
+          - { id: shard-6, shard: 6 }
           - { id: sync-http-0, latency: 0 }
           - { id: sync-http-1000, latency: 1000 }
     services:
@@ -1090,6 +1092,16 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Restore the synced mainnet header store
+        # ChaintracksStorageKnex's synced-store test assumes stored headers; a
+        # fresh store first downloads about 75 MB of mainnet headers from the
+        # header CDN. The key follows the storage code that writes the store.
+        if: matrix.shard
+        id: header-store
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite
+          key: chaintracks-mainnet-${{ hashFiles('packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Storage/**', 'packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/util/**') }}
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}
@@ -1105,7 +1117,11 @@ jobs:
               '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
             export POSTGRES_CONNECTION
             args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts')
-            args+=(--shard="$WALLET_SHARD/4")
+            # Shards follow measured per-file durations, longest first.
+            export JEST_SHARD_DURATIONS="$GITHUB_WORKSPACE/governance/ci-lane-durations.json"
+            export JEST_SHARD_LANE=wallet-toolbox-coverage
+            args+=(--shard="$WALLET_SHARD/6")
+            args+=(--testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs")
           else
             args+=(--runInBand --runTestsByPath src/storage/sync/syncTransferHttp.test.ts)
             args+=(--testNamePattern="with $SYNC_LATENCY ms request latency")
@@ -1117,6 +1133,14 @@ jobs:
           mkdir -p .coverage-output
           cp packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
             .coverage-output/wallet-${{ matrix.id }}.lcov.info
+      - name: Save the synced mainnet header store
+        if: >-
+          matrix.shard && steps.header-store.outputs.cache-hit != 'true' &&
+          hashFiles('packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite
+          key: ${{ steps.header-store.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-wallet-${{ matrix.id }}
