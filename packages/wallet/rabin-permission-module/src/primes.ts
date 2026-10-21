@@ -60,34 +60,43 @@ export function modPow(base: bigint, exponent: bigint, modulus: bigint): bigint 
  * Strong probable-prime test. A candidate is accepted only after trial division by every prime
  * through 4096 and Miller-Rabin at the fixed witnesses above. The same test is the Python checker.
  */
-export function isProbablePrime(value: bigint): boolean {
-  if (value < 2n) return false
+function passesTrialDivision(value: bigint): boolean {
   for (const prime of TRIAL_PRIMES) {
     const small = BigInt(prime)
     if (value === small) return true
     if (value % small === 0n) return false
   }
-  let odd = value - 1n
+  return true
+}
+
+function splitTwos(even: bigint): { odd: bigint; powers: number } {
+  let odd = even
   let powers = 0
   while ((odd & 1n) === 0n) {
     odd >>= 1n
     powers++
   }
+  return { odd, powers }
+}
+
+function witnessAccepts(value: bigint, odd: bigint, powers: number, witness: bigint): boolean {
+  const base = witness % value
+  if (base === 0n) return true
+  let power = modPow(base, odd, value)
+  if (power === 1n || power === value - 1n) return true
+  for (let round = 1; round < powers; round++) {
+    power = (power * power) % value
+    if (power === value - 1n) return true
+    if (power === 1n) return false
+  }
+  return false
+}
+
+export function isProbablePrime(value: bigint): boolean {
+  if (value < 2n || !passesTrialDivision(value)) return false
+  const { odd, powers } = splitTwos(value - 1n)
   for (const witness of RABIN_MR_WITNESSES) {
-    const base = witness % value
-    if (base === 0n) continue
-    let power = modPow(base, odd, value)
-    if (power === 1n || power === value - 1n) continue
-    let witnessed = false
-    for (let round = 1; round < powers; round++) {
-      power = (power * power) % value
-      if (power === value - 1n) {
-        witnessed = true
-        break
-      }
-      if (power === 1n) return false
-    }
-    if (!witnessed) return false
+    if (!witnessAccepts(value, odd, powers, witness)) return false
   }
   return true
 }

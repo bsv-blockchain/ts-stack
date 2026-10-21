@@ -74,6 +74,7 @@ describe('RabinPermissionModule', () => {
           'p rabin key 2048 rabin oracle feed'
         ] as unknown as WalletEncryptArgs['protocolID']
       },
+      { protocolID: [0, 1] as unknown as WalletEncryptArgs['protocolID'] },
       { protocolID: 'p rabin' as unknown as WalletEncryptArgs['protocolID'] },
       { keyID: '' },
       { keyID: 'x'.repeat(801) },
@@ -85,7 +86,8 @@ describe('RabinPermissionModule', () => {
       { counterparty: 'not-a-key' },
       { identityKey: true } as Partial<WalletEncryptArgs>,
       { forSelf: true } as Partial<WalletEncryptArgs>,
-      { seekPermission: 'yes' as unknown as boolean }
+      { seekPermission: 'yes' as unknown as boolean },
+      { privilegedReason: 'notes', plaintext: [256] } as Partial<WalletEncryptArgs>
     ]
     for (const override of rejected) {
       await expect(execute(module, args(override))).rejects.toThrow('Rabin:')

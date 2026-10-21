@@ -1,4 +1,4 @@
-import type { PubKeyHex } from '@bsv/sdk'
+import type { PubKeyHex, SecurityLevel } from '@bsv/sdk'
 import PublicKey from '@bsv/sdk/primitives/PublicKey'
 import type {
   PermissionsModule,
@@ -99,17 +99,140 @@ function readBytes(value: unknown, label: string, maximum: number): Uint8Array {
   const out = new Uint8Array(value.length)
   for (let i = 0; i < value.length; i++) {
     const byte = value[i]
-    if (
-      !Object.prototype.hasOwnProperty.call(value, i) ||
-      !Number.isInteger(byte) ||
-      byte < 0 ||
-      byte > 255
-    ) {
+    if (!Object.hasOwn(value, i) || !Number.isInteger(byte) || byte < 0 || byte > 255) {
       throw new Error(`Rabin: ${label} must be a dense array of bytes`)
     }
     out[i] = byte
   }
   return out
+}
+
+function rejectProhibitedFields(args: Record<string, unknown>): void {
+  if (args.identityKey !== undefined) throw new Error('Rabin: identityKey is prohibited')
+  if (args.forSelf !== undefined) throw new Error('Rabin: forSelf is not defined for this module')
+}
+
+function readSecurityLevel(value: unknown): SecurityLevel {
+  if (value === 0 || value === 1 || value === 2) return value
+  throw new Error('Rabin: invalid protocolID')
+}
+
+function readProtocolName(protocolID: unknown): {
+  securityLevel: SecurityLevel
+  protocolName: string
+} {
+  if (!Array.isArray(protocolID) || protocolID.length !== 2) {
+    throw new Error('Rabin: protocolID is required')
+  }
+  const securityLevel = readSecurityLevel(protocolID[0])
+  const protocolName = protocolID[1]
+  if (typeof protocolName !== 'string') throw new Error('Rabin: invalid protocolID')
+  const protocolBytes = UTF8.encode(protocolName).length
+  if (protocolBytes < 5 || protocolBytes > MAX_PROTOCOL_BYTES) {
+    throw new Error('Rabin: outer protocol ID must be between 5 and 400 bytes')
+  }
+  return { securityLevel, protocolName }
+}
+
+function readGrammar(protocolName: string): {
+  operation: RabinOperation
+  modulusBits: RabinModulusBits
+  logicalProtocolID: string
+} {
+  const match = RABIN_PATTERN.exec(protocolName)
+  if (match == null) {
+    throw new Error(
+      'Rabin: protocol must be p rabin <key|sign> <2048|3072|4096> <logicalProtocolID>'
+    )
+  }
+  const logicalProtocolID = match[3] as string
+  const logicalBytes = UTF8.encode(logicalProtocolID).length
+  if (logicalBytes < MIN_LOGICAL_PROTOCOL_BYTES || logicalBytes > MAX_LOGICAL_PROTOCOL_BYTES) {
+    throw new Error(
+      `Rabin: logical protocol ID must be between ${MIN_LOGICAL_PROTOCOL_BYTES} and ${MAX_LOGICAL_PROTOCOL_BYTES} bytes`
+    )
+  }
+  if (logicalProtocolID.endsWith(' protocol')) {
+    throw new Error('Rabin: invalid logical protocol ID')
+  }
+  return {
+    operation: match[1] as RabinOperation,
+    modulusBits: Number(match[2]) as RabinModulusBits,
+    logicalProtocolID
+  }
+}
+
+function readKeyID(value: unknown): string {
+  if (typeof value !== 'string' || UTF8.encode(value).length < 1) {
+    throw new Error('Rabin: keyID is required')
+  }
+  if (UTF8.encode(value).length > 800) throw new Error('Rabin: keyID exceeds 800 bytes')
+  return value
+}
+
+function readCounterparty(value: unknown): PubKeyHex | 'self' | 'anyone' {
+  const counterparty = (value ?? 'self') as PubKeyHex | 'self' | 'anyone'
+  if (counterparty === 'self' || counterparty === 'anyone') return counterparty
+  if (typeof counterparty !== 'string') {
+    throw new TypeError('Rabin: counterparty must be self, anyone, or a compressed public key')
+  }
+  assertCompressedKey(counterparty)
+  return counterparty
+}
+
+function readPrivilegedReason(reason: unknown): string {
+  if (typeof reason !== 'string') {
+    throw new TypeError('Rabin: privilegedReason is required for privileged operations')
+  }
+  const reasonBytes = UTF8.encode(reason).length
+  if (reasonBytes < 5 || reasonBytes > 50) {
+    throw new Error('Rabin: privilegedReason must be between 5 and 50 bytes')
+  }
+  return reason
+}
+
+function readPrivilege(args: Record<string, unknown>): {
+  privileged: boolean
+  privilegedReason: string | undefined
+} {
+  if (args.privileged === true) {
+    return { privileged: true, privilegedReason: readPrivilegedReason(args.privilegedReason) }
+  }
+  const reason = args.privilegedReason
+  if (reason !== undefined && typeof reason !== 'string') {
+    throw new TypeError('Rabin: privilegedReason must be a string')
+  }
+  return { privileged: false, privilegedReason: typeof reason === 'string' ? reason : undefined }
+}
+
+function assertSeekPermission(value: unknown): void {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new TypeError('Rabin: seekPermission must be a boolean')
+  }
+}
+
+function readPlaintext(operation: RabinOperation, plaintext: unknown): Uint8Array {
+  const message = readBytes(plaintext, 'plaintext', MAX_MESSAGE_BYTES)
+  if (operation === 'key' && message.length !== 0) {
+    throw new Error('Rabin: key requests require an empty plaintext')
+  }
+  return message
+}
+
+function authorizationScope(authorization: RabinAuthorizationRequest): string {
+  const levelTwo = authorization.securityLevel === 2
+  const privileged = authorization.privileged
+  return JSON.stringify([
+    authorization.originator,
+    authorization.securityLevel,
+    authorization.logicalProtocolID,
+    authorization.keyID,
+    authorization.modulusBits,
+    authorization.operation,
+    levelTwo ? authorization.counterparty : '*',
+    privileged ? 'privileged' : 'primary',
+    privileged ? authorization.privilegedReason : null
+  ])
 }
 
 /**
@@ -215,12 +338,12 @@ export class RabinPermissionModule implements PermissionsModule {
     return { ciphertext: await this.#carry(parsed, factors) }
   }
 
-  async onRequest(request: PermissionsModuleRequest): Promise<{ args: object }> {
-    return { args: request.args }
+  onRequest(request: PermissionsModuleRequest): Promise<{ args: object }> {
+    return Promise.resolve({ args: request.args })
   }
 
-  async onResponse(result: unknown): Promise<unknown> {
-    return result
+  onResponse(result: unknown): Promise<unknown> {
+    return Promise.resolve(result)
   }
 
   #clearSecrets(): void {
@@ -234,133 +357,46 @@ export class RabinPermissionModule implements PermissionsModule {
 
   #parseRequest(rawArgs: unknown): ParsedRabinRequest {
     const args = dataRecord(rawArgs, 'Rabin: encrypt arguments')
-    if (args.identityKey !== undefined) throw new Error('Rabin: identityKey is prohibited')
-    if (args.forSelf !== undefined) throw new Error('Rabin: forSelf is not defined for this module')
-    if (!Array.isArray(args.protocolID) || args.protocolID.length !== 2) {
-      throw new Error('Rabin: protocolID is required')
-    }
-    const [securityLevel, protocolName] = args.protocolID as [unknown, unknown]
-    if (
-      (securityLevel !== 0 && securityLevel !== 1 && securityLevel !== 2) ||
-      typeof protocolName !== 'string'
-    ) {
-      throw new Error('Rabin: invalid protocolID')
-    }
-    const protocolBytes = UTF8.encode(protocolName).length
-    if (protocolBytes < 5 || protocolBytes > MAX_PROTOCOL_BYTES) {
-      throw new Error('Rabin: outer protocol ID must be between 5 and 400 bytes')
-    }
-    const match = RABIN_PATTERN.exec(protocolName)
-    if (match == null) {
-      throw new Error(
-        'Rabin: protocol must be p rabin <key|sign> <2048|3072|4096> <logicalProtocolID>'
-      )
-    }
-    const operation = match[1] as RabinOperation
-    const modulusBits = Number(match[2]) as RabinModulusBits
-    const logicalProtocolID = match[3] as string
-    const logicalBytes = UTF8.encode(logicalProtocolID).length
-    if (logicalBytes < MIN_LOGICAL_PROTOCOL_BYTES || logicalBytes > MAX_LOGICAL_PROTOCOL_BYTES) {
-      throw new Error(
-        `Rabin: logical protocol ID must be between ${MIN_LOGICAL_PROTOCOL_BYTES} and ${MAX_LOGICAL_PROTOCOL_BYTES} bytes`
-      )
-    }
-    if (logicalProtocolID.endsWith(' protocol')) {
-      throw new Error('Rabin: invalid logical protocol ID')
-    }
-
-    const keyID = args.keyID
-    if (typeof keyID !== 'string' || UTF8.encode(keyID).length < 1) {
-      throw new Error('Rabin: keyID is required')
-    }
-    if (UTF8.encode(keyID).length > 800) throw new Error('Rabin: keyID exceeds 800 bytes')
-
-    const counterparty = (args.counterparty ?? 'self') as PubKeyHex | 'self' | 'anyone'
-    if (counterparty !== 'self' && counterparty !== 'anyone') {
-      if (typeof counterparty !== 'string') {
-        throw new TypeError('Rabin: counterparty must be self, anyone, or a compressed public key')
-      }
-      assertCompressedKey(counterparty)
-    }
-
-    const privileged = args.privileged === true
-    const privilegedReason = args.privilegedReason
-    if (privileged) {
-      if (typeof privilegedReason !== 'string') {
-        throw new TypeError('Rabin: privilegedReason is required for privileged operations')
-      }
-      const reasonBytes = UTF8.encode(privilegedReason).length
-      if (reasonBytes < 5 || reasonBytes > 50) {
-        throw new Error('Rabin: privilegedReason must be between 5 and 50 bytes')
-      }
-    } else if (privilegedReason !== undefined && typeof privilegedReason !== 'string') {
-      throw new TypeError('Rabin: privilegedReason must be a string')
-    }
-
-    if (args.seekPermission !== undefined && typeof args.seekPermission !== 'boolean') {
-      throw new TypeError('Rabin: seekPermission must be a boolean')
-    }
-
-    const message = readBytes(args.plaintext, 'plaintext', MAX_MESSAGE_BYTES)
-    if (operation === 'key' && message.length !== 0) {
-      throw new Error('Rabin: key requests require an empty plaintext')
-    }
-
+    rejectProhibitedFields(args)
+    const protocol = readProtocolName(args.protocolID)
+    const grammar = readGrammar(protocol.protocolName)
+    const keyID = readKeyID(args.keyID)
+    const counterparty = readCounterparty(args.counterparty)
+    const privilege = readPrivilege(args)
+    assertSeekPermission(args.seekPermission)
     return {
       args: args as unknown as ParsedRabinRequest['args'],
-      operation,
-      modulusBits,
-      logicalProtocolID,
-      derivationProtocolID: [securityLevel, `p rabin ${logicalProtocolID}`],
+      operation: grammar.operation,
+      modulusBits: grammar.modulusBits,
+      logicalProtocolID: grammar.logicalProtocolID,
+      derivationProtocolID: [protocol.securityLevel, `p rabin ${grammar.logicalProtocolID}`],
       keyID,
       counterparty,
-      privileged,
-      privilegedReason: typeof privilegedReason === 'string' ? privilegedReason : undefined,
-      message
+      privileged: privilege.privileged,
+      privilegedReason: privilege.privilegedReason,
+      message: readPlaintext(grammar.operation, args.plaintext)
     }
   }
 
-  async #ensureAuthorized(parsed: ParsedRabinRequest, originator: string): Promise<void> {
-    const authorization: RabinAuthorizationRequest = {
-      originator,
-      securityLevel: parsed.derivationProtocolID[0],
-      logicalProtocolID: parsed.logicalProtocolID,
-      keyID: parsed.keyID,
-      counterparty: parsed.counterparty,
-      privileged: parsed.privileged,
-      privilegedReason: parsed.privilegedReason,
-      operation: parsed.operation,
-      modulusBits: parsed.modulusBits
-    }
-    if (authorization.securityLevel === 0 && !authorization.privileged) return
-
-    const scope = JSON.stringify([
-      authorization.originator,
-      authorization.securityLevel,
-      authorization.logicalProtocolID,
-      authorization.keyID,
-      authorization.modulusBits,
-      authorization.operation,
-      authorization.securityLevel === 2 ? authorization.counterparty : '*',
-      authorization.privileged ? 'privileged' : 'primary',
-      authorization.privileged ? authorization.privilegedReason : null
-    ])
-    const now = Date.now()
+  #dropExpiredGrants(now: number): void {
     for (const [cachedScope, cachedExpiry] of this.#grants) {
       if (cachedExpiry > now) break
       this.#grants.delete(cachedScope)
     }
-    const expiry = this.#grants.get(scope)
-    if (expiry != null && expiry > now) return
-    this.#grants.delete(scope)
+  }
 
-    if (parsed.args.seekPermission === false) {
-      throw new Error('Rabin: permission is required and seekPermission is false')
+  #rememberGrant(scope: string): void {
+    this.#grants.delete(scope)
+    if (this.#grants.size >= MAX_CACHED_GRANTS) {
+      this.#grants.delete(this.#grants.keys().next().value as string)
     }
+    this.#grants.set(scope, Date.now() + this.#authorizationTTL)
+  }
+
+  async #requestApproval(scope: string, authorization: RabinAuthorizationRequest): Promise<void> {
     if (this.#authorize == null) {
       throw new Error('Rabin: no authorization handler is configured')
     }
-
     let pending = this.#pendingGrants.get(scope)
     if (pending == null) {
       if (this.#pendingGrants.size >= MAX_PENDING_GRANTS) {
@@ -376,11 +412,32 @@ export class RabinPermissionModule implements PermissionsModule {
       if (this.#pendingGrants.get(scope) === pending) this.#pendingGrants.delete(scope)
     }
     if (approved !== true) throw new Error('Rabin: user denied permission')
-    this.#grants.delete(scope)
-    if (this.#grants.size >= MAX_CACHED_GRANTS) {
-      this.#grants.delete(this.#grants.keys().next().value as string)
+    this.#rememberGrant(scope)
+  }
+
+  async #ensureAuthorized(parsed: ParsedRabinRequest, originator: string): Promise<void> {
+    const authorization: RabinAuthorizationRequest = {
+      originator,
+      securityLevel: parsed.derivationProtocolID[0],
+      logicalProtocolID: parsed.logicalProtocolID,
+      keyID: parsed.keyID,
+      counterparty: parsed.counterparty,
+      privileged: parsed.privileged,
+      privilegedReason: parsed.privilegedReason,
+      operation: parsed.operation,
+      modulusBits: parsed.modulusBits
     }
-    this.#grants.set(scope, Date.now() + this.#authorizationTTL)
+    if (authorization.securityLevel === 0 && !authorization.privileged) return
+    const scope = authorizationScope(authorization)
+    const now = Date.now()
+    this.#dropExpiredGrants(now)
+    const expiry = this.#grants.get(scope)
+    if (expiry != null && expiry > now) return
+    this.#grants.delete(scope)
+    if (parsed.args.seekPermission === false) {
+      throw new Error('Rabin: permission is required and seekPermission is false')
+    }
+    await this.#requestApproval(scope, authorization)
   }
 
   async #selectKeyDeriver(parsed: ParsedRabinRequest): Promise<RabinKeyDeriver> {

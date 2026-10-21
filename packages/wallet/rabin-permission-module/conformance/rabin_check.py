@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import sys
+from typing import TextIO
 
 SALT = b"BRC-206 p rabin v1"
 PADDING_LIMIT = 65536
@@ -56,35 +58,46 @@ def sieve(limit: int) -> list[int]:
 TRIAL_PRIMES = sieve(TRIAL_LIMIT)
 
 
-def is_probable_prime(value: int) -> bool:
-    if value < 2:
-        return False
+def passes_trial_division(value: int) -> bool:
     for prime in TRIAL_PRIMES:
         if value == prime:
             return True
         if value % prime == 0:
             return False
-    odd = value - 1
+    return True
+
+
+def split_twos(even: int) -> tuple[int, int]:
+    odd = even
     powers = 0
     while odd % 2 == 0:
         odd //= 2
         powers += 1
+    return odd, powers
+
+
+def witness_accepts(value: int, odd: int, powers: int, witness: int) -> bool:
+    base = witness % value
+    if base == 0:
+        return True
+    power = pow(base, odd, value)
+    if power == 1 or power == value - 1:
+        return True
+    for _ in range(powers - 1):
+        power = pow(power, 2, value)
+        if power == value - 1:
+            return True
+        if power == 1:
+            return False
+    return False
+
+
+def is_probable_prime(value: int) -> bool:
+    if value < 2 or not passes_trial_division(value):
+        return False
+    odd, powers = split_twos(value - 1)
     for witness in WITNESSES:
-        base = witness % value
-        if base == 0:
-            continue
-        power = pow(base, odd, value)
-        if power == 1 or power == value - 1:
-            continue
-        witnessed = False
-        for _ in range(powers - 1):
-            power = pow(power, 2, value)
-            if power == value - 1:
-                witnessed = True
-                break
-            if power == 1:
-                return False
-        if not witnessed:
+        if not witness_accepts(value, odd, powers, witness):
             return False
     return True
 
@@ -144,7 +157,7 @@ def principal_crt_root(root_p: int, p: int, root_q: int, q: int) -> int:
 
 
 def rabin_sign(message: bytes, p: int, q: int) -> tuple[int, int, int]:
-    if not p < q:
+    if p >= q:
         raise SystemExit("primes must satisfy p < q")
     modulus = p * q
     digest = int.from_bytes(hashlib.sha256(message).digest(), "little")
@@ -203,28 +216,70 @@ def key_ciphertext_hex(modulus: int) -> str:
     return encode_push(encode_script_number(modulus)).hex()
 
 
+def open_package_file(path: str, mode: str) -> TextIO:
+    """Open `path` only when it resolves inside this package.
+
+    The CLI receives the path from argv. Joining it to the package root and
+    rejecting anything that realpath resolves outside that root keeps the
+    checker from reading or writing an arbitrary file.
+    """
+    base_dir = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+    filepath = os.path.realpath(os.path.join(base_dir, path))
+    if os.path.commonpath((base_dir, filepath)) != base_dir:
+        raise SystemExit("Rabin checker path is outside the package")
+    return open(filepath, mode, encoding="utf-8")
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise SystemExit(message)
+
+
+def check_signature(key_id: str, p: int, q: int, signature: dict) -> None:
+    got_sig, got_pad, _ = rabin_sign(bytes.fromhex(signature["messageHex"]), p, q)
+    require(
+        got_sig == int(signature["sigHex"], 16) and got_pad == signature["padding"],
+        f"signature mismatch for {key_id} {signature['messageHex']}",
+    )
+    require(
+        ciphertext_hex(got_sig, got_pad) == signature["ciphertextHex"],
+        f"signature ciphertext mismatch for {key_id}",
+    )
+    require(
+        encode_script_number(got_pad).hex() == signature["paddingScriptHex"],
+        f"padding encoding mismatch for {key_id}",
+    )
+
+
+def check_key(key: dict) -> None:
+    p, q, modulus = derive_factors(bytes.fromhex(key["seedHex"]), key["bits"])
+    require(
+        f"{p:x}" == key["pHex"] and f"{q:x}" == key["qHex"] and f"{modulus:x}" == key["nHex"],
+        f"factor mismatch for {key['id']}",
+    )
+    require(
+        key_ciphertext_hex(modulus) == key["keyCiphertextHex"],
+        f"key ciphertext mismatch for {key['id']}",
+    )
+    for signature in key["signatures"]:
+        check_signature(key["id"], p, q, signature)
+
+
+def check_padding_encodings(rows: list) -> None:
+    for row in rows:
+        require(
+            encode_script_number(row["value"]).hex() == row["scriptHex"],
+            f"padding encoding mismatch for {row['value']}",
+        )
+
+
 def check_vectors(path: str) -> None:
-    with open(path, encoding="utf-8") as handle:
+    with open_package_file(path, "r") as handle:
         document = json.load(handle)
-    if document.get("salt") != SALT.decode():
-        raise SystemExit("salt mismatch")
+    require(document.get("salt") == SALT.decode(), "salt mismatch")
     for key in document["keys"]:
-        p, q, modulus = derive_factors(bytes.fromhex(key["seedHex"]), key["bits"])
-        if f"{p:x}" != key["pHex"] or f"{q:x}" != key["qHex"] or f"{modulus:x}" != key["nHex"]:
-            raise SystemExit(f"factor mismatch for {key['id']}")
-        if key_ciphertext_hex(modulus) != key["keyCiphertextHex"]:
-            raise SystemExit(f"key ciphertext mismatch for {key['id']}")
-        for signature in key["signatures"]:
-            got_sig, got_pad, _ = rabin_sign(bytes.fromhex(signature["messageHex"]), p, q)
-            if got_sig != int(signature["sigHex"], 16) or got_pad != signature["padding"]:
-                raise SystemExit(f"signature mismatch for {key['id']} {signature['messageHex']}")
-            if ciphertext_hex(got_sig, got_pad) != signature["ciphertextHex"]:
-                raise SystemExit(f"signature ciphertext mismatch for {key['id']}")
-            if encode_script_number(got_pad).hex() != signature["paddingScriptHex"]:
-                raise SystemExit(f"padding encoding mismatch for {key['id']}")
-    for row in document["paddingEncodings"]:
-        if encode_script_number(row["value"]).hex() != row["scriptHex"]:
-            raise SystemExit(f"padding encoding mismatch for {row['value']}")
+        check_key(key)
+    check_padding_encodings(document["paddingEncodings"])
     print(f"checked {len(document['keys'])} keys")
 
 
@@ -284,7 +339,7 @@ def generate_vectors(path: str) -> None:
             }
         )
         print(f"derived {bits} padding={[row['padding'] for row in signatures]}", flush=True)
-    with open(path, "w", encoding="utf-8") as handle:
+    with open_package_file(path, "w") as handle:
         json.dump(document, handle, indent=2)
         handle.write("\n")
 

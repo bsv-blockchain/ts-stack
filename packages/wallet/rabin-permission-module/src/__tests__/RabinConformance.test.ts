@@ -93,6 +93,16 @@ describe('BRC-206 Rabin conformance', () => {
     expect(vectors.salt).toBe('BRC-206 p rabin v1')
   })
 
+  it('refuses a checker path outside the package', () => {
+    const outside = join(process.cwd(), '..', '..', '..', '..', 'etc', 'passwd')
+    expect(() =>
+      execFileSync('python3', [CHECKER, '--vectors', outside], { encoding: 'utf8' })
+    ).toThrow(/outside the package/)
+    expect(() =>
+      execFileSync('python3', [CHECKER, '--generate', outside], { encoding: 'utf8' })
+    ).toThrow(/outside the package/)
+  })
+
   it('re-derives the 2048-bit vector in TypeScript and verifies every size on chain', async () => {
     for (const key of vectors.keys) {
       const modulus = BigInt(`0x${key.nHex}`)

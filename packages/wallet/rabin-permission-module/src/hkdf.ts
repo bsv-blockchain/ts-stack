@@ -36,6 +36,28 @@ export async function hkdfExtract(salt: Uint8Array, ikm: Uint8Array): Promise<Ui
   return hmacSha256(salt, ikm)
 }
 
+/**
+ * Writes HKDF blocks in order. Each block depends on the previous one, so the
+ * expansion is a chain of HMAC calls rather than a parallel loop.
+ */
+async function expandInto(
+  prk: Uint8Array,
+  info: Uint8Array,
+  blocks: number,
+  counter: number,
+  previous: Uint8Array,
+  out: Uint8Array
+): Promise<void> {
+  if (counter > blocks) {
+    wipe(previous)
+    return
+  }
+  const block = await hmacSha256(prk, concatBytes([previous, info, Uint8Array.of(counter)]))
+  if (previous.length > 0) wipe(previous)
+  out.set(block, (counter - 1) * 32)
+  await expandInto(prk, info, blocks, counter + 1, block, out)
+}
+
 /** RFC 5869 HKDF-Expand with SHA-256. */
 export async function hkdfExpand(
   prk: Uint8Array,
@@ -47,14 +69,7 @@ export async function hkdfExpand(
   }
   const blocks = Math.ceil(length / 32)
   const out = new Uint8Array(blocks * 32)
-  let previous: Uint8Array = new Uint8Array()
-  for (let counter = 1; counter <= blocks; counter++) {
-    const block = await hmacSha256(prk, concatBytes([previous, info, Uint8Array.of(counter)]))
-    if (previous.length > 0) wipe(previous)
-    previous = block
-    out.set(block, (counter - 1) * 32)
-  }
-  wipe(previous)
+  await expandInto(prk, info, blocks, 1, new Uint8Array(), out)
   const result = out.slice(0, length)
   wipe(out)
   return result
