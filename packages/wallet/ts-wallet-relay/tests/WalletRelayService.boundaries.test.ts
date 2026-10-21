@@ -317,6 +317,66 @@ describe('WalletRelayService boundary and state enforcement', () => {
     }
   })
 
+  it('ignores non-response mobile messages and settles error and custom responses', async () => {
+    const { service, wallet } = createService()
+    try {
+      const session = await connectedSession(service)
+      const disconnect = jest.spyOn((service as any).relay, 'disconnectMobile')
+      const reject = jest.fn()
+      const resolve = jest.fn()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 3,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+
+      plaintext(wallet, { id: RPC_ID, seq: 3, method: 'custom', params: {} })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(true)
+
+      const error = { code: 42, message: 'wallet rejected' }
+      plaintext(wallet, { id: RPC_ID, seq: 3, error })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: RPC_ID, error }))
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+
+      resolve.mockClear()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 4,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+      plaintext(wallet, { id: RPC_ID, seq: 4, result: { ok: true } })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(
+        expect.objectContaining({ id: RPC_ID, result: { ok: true } })
+      )
+      expect(reject).not.toHaveBeenCalled()
+      expect(disconnect).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+    } finally {
+      service.stop()
+    }
+  })
+
   it('disconnects pairing attempts that cannot prove the claimed identity and permissions', async () => {
     const { service, wallet } = createService()
     try {
