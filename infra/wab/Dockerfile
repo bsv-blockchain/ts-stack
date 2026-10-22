@@ -2,7 +2,7 @@
 # 1) Builder Stage: builds TypeScript and compiles native modules
 # ------------------------------------------------------------------------------
 # Base version 24.20.0-alpine3.24; the digest is the authoritative build input.
-FROM public.ecr.aws/docker/library/node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS builder
 
 # Install build tools for native modules (sqlite3, etc.)
 RUN apk add --no-cache g++ make python3
@@ -25,7 +25,7 @@ RUN npm run build \
 # ------------------------------------------------------------------------------
 # 2) Production Stage: minimal runtime image
 # ------------------------------------------------------------------------------
-FROM public.ecr.aws/docker/library/node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
+FROM node@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf
 
 # Strip npm from the runtime image: the app runs via `node` (see CMD) and
 # node:24-alpine's bundled npm ships its own HIGH-CVE deps (picomatch/undici)
