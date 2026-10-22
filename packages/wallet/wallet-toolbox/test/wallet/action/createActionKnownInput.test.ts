@@ -24,7 +24,7 @@ describe('createAction known input without inputBEEF', () => {
   test('0_signableTransaction carries the source transaction of a named wallet input', async () => {
     for (const { wallet } of ctxs) {
       const lo = await wallet.listOutputs({ basket: 'tokens', limit: 1 })
-      expect(lo.outputs.length).toBe(1)
+      expect(lo.outputs).toHaveLength(1)
       const outpoint = lo.outputs[0].outpoint
       const [txid] = outpoint.split('.')
 
@@ -32,7 +32,11 @@ describe('createAction known input without inputBEEF', () => {
         description: 'spend known input',
         inputs: [{ outpoint, inputDescription: 'known input', unlockingScriptLength: 108 }],
         outputs: [
-          { satoshis: 1, lockingScript: _tu.getLockP2PKH(_tu.getKeyPair().address).toHex(), outputDescription: 'pay test' }
+          {
+            satoshis: 1,
+            lockingScript: _tu.getLockP2PKH(_tu.getKeyPair().address).toHex(),
+            outputDescription: 'pay test'
+          }
         ],
         options: { randomizeOutputs: false, noSend: true }
       }
