@@ -403,7 +403,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.equal(policy.releaseEnvironment, 'npm-production')
   assert.deepEqual(policy.buildRuntime, {
     runner: 'ubuntu-24.04',
-    node: '24.18.0',
+    node: '24.22.1',
     npmMinimum: '11.5.1',
     pnpm: '10.33.2'
   })
@@ -439,7 +439,7 @@ test('npm release workflow preserves scan, attestation, verification, and exact-
   assert.doesNotMatch(workflow, /pnpm\s+-r[\s\S]{0,100}\spublish\b/)
   assert.doesNotMatch(workflow, /NODE_AUTH_TOKEN|NPM_TOKEN/)
   assert.equal(workflow.match(/runs-on: ubuntu-24\.04/g)?.length, 4)
-  assert.equal(workflow.match(/node-version: 24\.18\.0/g)?.length, 3)
+  assert.equal(workflow.match(/node-version: 24\.22\.1/g)?.length, 3)
   assert.equal(workflow.match(/persist-credentials: false/g)?.length, 3)
   assert.match(workflow, /candidate: \$\{\{ steps\.artifacts\.outputs\.candidate \}\}/)
   assert.match(workflow, /name: \$\{\{ needs\.prepare\.outputs\.candidate \}\}/)
