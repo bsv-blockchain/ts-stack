@@ -240,18 +240,18 @@ function parseLockfileGraph(source) {
 // resolution (tarball integrity) changed under the same version.
 function changedSnapshots(base, head) {
   const changed = new Set()
-  for (const [from, to] of [
-    [base, head],
-    [head, base]
-  ]) {
-    for (const [key, body] of from.snapshots) if (to.snapshots.get(key) !== body) changed.add(key)
-    for (const [key, body] of from.packages) {
-      if (to.packages.get(key) === body) continue
-      for (const snapshot of from.snapshots.keys())
-        if (snapshot === key || snapshot.startsWith(`${key}(`)) changed.add(snapshot)
-    }
-  }
+  addSnapshotsChangedFrom(base, head, changed)
+  addSnapshotsChangedFrom(head, base, changed)
   return changed
+}
+
+function addSnapshotsChangedFrom(from, to, changed) {
+  for (const [key, body] of from.snapshots) if (to.snapshots.get(key) !== body) changed.add(key)
+  for (const [key, body] of from.packages) {
+    if (to.packages.get(key) === body) continue
+    for (const snapshot of from.snapshots.keys())
+      if (snapshot === key || snapshot.startsWith(`${key}(`)) changed.add(snapshot)
+  }
 }
 
 // Package importers whose dependency graph reaches a changed snapshot. The root
