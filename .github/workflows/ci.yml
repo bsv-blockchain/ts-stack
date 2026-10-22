@@ -1503,14 +1503,26 @@ jobs:
       - name: Build Linux image
         if: matrix.run && matrix.component != 'uhrp-server-cloud-bucket/notifier'
         run: |
-          for attempt in 1 2 3; do
-            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}"; then
+          # Anonymous base-image pulls can be throttled (HTTP 429). Back off
+          # longer only for that; any other build failure keeps the short retry.
+          set -o pipefail
+          log="$RUNNER_TEMP/docker-build-${{ strategy.job-index }}.log"
+          for attempt in 1 2 3 4 5; do
+            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}" 2>&1 | tee "$log"; then
               exit 0
             fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "::warning::Docker build attempt $attempt failed; retrying after $((attempt * 5)) seconds."
-              sleep $((attempt * 5))
+            if grep -qiE '429 Too Many Requests|toomanyrequests' "$log"; then
+              limit=5
+              delay=$((15 * (1 << (attempt - 1))))
+            else
+              limit=3
+              delay=$((attempt * 5))
             fi
+            if [ "$attempt" -ge "$limit" ]; then
+              exit 1
+            fi
+            echo "::warning::Docker build attempt $attempt failed; retrying after $delay seconds."
+            sleep "$delay"
           done
           exit 1
 
