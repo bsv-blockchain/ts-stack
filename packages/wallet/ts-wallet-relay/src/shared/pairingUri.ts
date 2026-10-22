@@ -232,10 +232,16 @@ export function buildPairingUri(params: {
  * Returns `false` when `params.sig` is absent or on any verification failure,
  * including an `http://` private-network origin without `allowLocalNetworkHttp`.
  */
-export async function verifyPairingSignature(
+export function verifyPairingSignature(
   params: PairingParams,
   options: LocalNetworkHttpOptions = {}
 ): Promise<boolean> {
+  // The check is synchronous; the executor keeps async-function semantics
+  // (a throw from bad input still becomes a rejection, not a sync throw).
+  return new Promise(resolve => resolve(checkPairingSignature(params, options)))
+}
+
+function checkPairingSignature(params: PairingParams, options: LocalNetworkHttpOptions): boolean {
   if (!params.sig) return false
   try {
     validatePairingParams(params, options)

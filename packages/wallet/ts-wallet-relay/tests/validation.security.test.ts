@@ -6,10 +6,13 @@ import {
   parseRpcMessage,
   parseWireEnvelope,
   requireOptionalBoolean,
+  validatePairingParams,
   validateSessionInfo
 } from '../src/shared/validation.js'
 import { base64urlToBytes } from '../src/shared/encoding.js'
+import { PROTOCOL_ID } from '../src/types.js'
 import {
+  ipv4,
   LOCAL_NETWORK_AUTHORITIES,
   LOOPBACK_AUTHORITIES,
   PUBLIC_AUTHORITIES
@@ -141,6 +144,21 @@ describe('wallet relay untrusted-data boundaries', () => {
     }
   )
 
+  it('validates pairing params under the loopback-only policy when no options are given', () => {
+    const params = {
+      topic: SESSION_ID,
+      // Compressed public key of private key 1 (the secp256k1 generator point).
+      backendIdentityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+      protocolID: JSON.stringify(PROTOCOL_ID),
+      origin: 'http://localhost:5173',
+      expiry: String(Math.floor(Date.now() / 1_000) + 60)
+    }
+    expect(validatePairingParams(params)).toBe(params)
+    expect(() =>
+      validatePairingParams({ ...params, origin: `http://${ipv4(192, 168, 1, 20)}:5173` })
+    ).toThrow(/^pairing origin must be HTTPS, except for loopback development$/u)
+  })
+
   it.each(PUBLIC_AUTHORITIES)(
     'requires HTTPS and WSS for public or ambiguous host %s even with allowLocalNetworkHttp',
     authority => {
@@ -196,7 +214,12 @@ describe('wallet relay untrusted-data boundaries', () => {
     for (const hostname of ['localhost', 'a.localhost', '127.0.0.1', '127.255.0.1', '[::1]']) {
       expect(developmentHostKind(hostname)).toBe('loopback')
     }
-    for (const hostname of ['192.168.1.20', '10.0.0.1', '172.16.0.1', '[fd00::1]']) {
+    for (const hostname of [
+      ipv4(192, 168, 1, 20),
+      ipv4(10, 0, 0, 1),
+      ipv4(172, 16, 0, 1),
+      '[fd00::1]'
+    ]) {
       expect(developmentHostKind(hostname)).toBe('local-network')
     }
     for (const hostname of [

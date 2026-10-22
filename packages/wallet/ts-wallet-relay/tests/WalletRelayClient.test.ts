@@ -1,6 +1,7 @@
 import { WalletRelayClient, WalletRelayError } from '../src/client/WalletRelayClient.js'
 import type { SessionInfo } from '../src/types.js'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
+import * as validation from '../src/shared/validation.js'
 import { LOCAL_NETWORK_AUTHORITIES, PUBLIC_AUTHORITIES } from './fixtures/localDevelopmentHosts.js'
 
 const SESSION_ID = 'A'.repeat(43)
@@ -222,6 +223,34 @@ describe('WalletRelayClient session lifecycle', () => {
     expect(sessionStorage.getItem('resume-key')).toBeNull()
     await jest.advanceTimersByTimeAsync(1_000)
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a generic message when session validation throws a non-Error value', async () => {
+    sessionStorage.setItem(
+      'resume-key',
+      JSON.stringify({
+        sessionId: SESSION_ID,
+        desktopToken: DESKTOP_TOKEN,
+        status: 'pending',
+        savedAt: Date.now()
+      })
+    )
+    const onError = jest.fn()
+    fetchMock.mockImplementation(async () => response({ sessionId: SESSION_ID, status: 'pending' }))
+    const notAnError: unknown = 'not an Error'
+    const validate = jest.spyOn(validation, 'validateSessionInfo').mockImplementationOnce(() => {
+      throw notAnError
+    })
+    const client = new WalletRelayClient({ sessionStorageKey: 'resume-key', onError })
+
+    try {
+      await expect(client.resumeSession()).resolves.toBeNull()
+      expect(onError).toHaveBeenCalledWith('Invalid session response')
+      expect(client.error).toBe('Invalid session response')
+      expect(sessionStorage.getItem('resume-key')).toBeNull()
+    } finally {
+      validate.mockRestore()
+    }
   })
 
   it('returns null without reporting when resume hits a transient network error', async () => {

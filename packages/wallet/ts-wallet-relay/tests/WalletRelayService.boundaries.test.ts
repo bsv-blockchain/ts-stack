@@ -129,12 +129,20 @@ describe('WalletRelayService boundary and state enforcement', () => {
     }
   )
 
-  it('keeps loopback plain transport available by default', () => {
+  it('keeps loopback plain transport available by default', async () => {
     const { service } = createService({
       relayUrl: 'ws://127.0.0.1:3000',
       origin: 'http://wallet.localhost:5173'
     })
-    service.stop()
+    try {
+      const parsed = parsePairingUri((await service.createSession()).pairingUri)
+      expect(parsed.error).toBeNull()
+      expect(parsed.params?.origin).toBe('http://wallet.localhost:5173')
+      expect(await verifyPairingSignature(parsed.params!)).toBe(true)
+      expect(service.getSession(parsed.params!.topic)?.relay).toBe('ws://127.0.0.1:3000')
+    } finally {
+      service.stop()
+    }
   })
 
   it('rejects a non-boolean allowLocalNetworkHttp', () => {
