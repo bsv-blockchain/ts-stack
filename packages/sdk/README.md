@@ -636,5 +636,6 @@ No BRC-100 call or storage-schema migration is required.
 The 4.0.0 source candidate restores bounded historical certificate types through
 existing listing, proof, discovery, relinquishment and authentication APIs. New
 signing and acquisition still require exactly 32 type bytes. Legacy binary
-operations require upgraded adapters at both endpoints; ordinary encodings are
-unchanged. See [the protocol and rollout contract](../../specs/wallet/legacy-certificate-wire.md).
+operations require upgraded adapters at both endpoints, including registration
+of the internal HTTP transport endpoint when using `HTTPWalletWire`; ordinary
+encodings are unchanged. See [the protocol and rollout contract](../../specs/wallet/legacy-certificate-wire.md).

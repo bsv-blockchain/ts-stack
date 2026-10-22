@@ -1,6 +1,7 @@
 import {
   validateListCertificatesArgs,
   validateRelinquishCertificateArgs,
+  validateProveCertificateArgs,
   validateAcquireDirectCertificateArgs
 } from '../validationHelpers'
 import { toBase64 } from '../../primitives/utils'
@@ -18,3 +19,24 @@ test('stored-certificate relinquishment accepts the original legacy reference', 
 test('new direct acquisition remains strict', () => {
   expect(() => validateAcquireDirectCertificateArgs({ type } as any)).toThrow()
 })
+
+test.each([16, 32])(
+  'existing %i-byte references retain surrounding-whitespace normalization',
+  length => {
+    const canonical = toBase64(Array.from({ length }, () => 3))
+    const padded = ` \t${canonical}\n`
+    expect(validateListCertificatesArgs({ types: [padded], certifiers: [] }).types).toEqual([
+      canonical
+    ])
+    expect(validateRelinquishCertificateArgs({ type: padded, serialNumber, certifier }).type).toBe(
+      canonical
+    )
+    expect(
+      validateProveCertificateArgs({
+        certificate: { type: padded },
+        verifier: certifier,
+        fieldsToReveal: []
+      }).type
+    ).toBe(canonical)
+  }
+)

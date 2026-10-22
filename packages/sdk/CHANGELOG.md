@@ -9,7 +9,9 @@ All notable changes to this project will be documented in this file. The format 
   New signing and both acquisition protocols still require exactly 32 bytes.
 - Add an opt-in binary substrate profile with sentinel type slots and phantom
   certificate metadata; original signed objects and ordinary encodings remain
-  unchanged. Both adapters must upgrade for legacy binary use. No new BRC-100
+  unchanged. Binary HTTP includes a dedicated internal capability endpoint and
+  explicit missing-route probe fallback; wallet routers must register the new
+  transport route. Both adapters must upgrade for legacy binary use. No new BRC-100
   app API or storage schema/RPC is required; strict remote relinquishment servers
   must upgrade their SDK reference validator.
 - Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier

@@ -606,3 +606,11 @@ test('canonical verification retains the public serialization hook', async () =>
   await expect(certificate.verify()).resolves.toBe(true)
   expect(serialize).toHaveBeenCalledWith(false)
 })
+
+test.each([16, 32])('request type slots retain whitespace normalization for %i bytes', length => {
+  const writer = new WriterUint8Array()
+  writeCertificateType(writer, ` \t${typeOf(length)}\n`, true)
+  expect(readCertificateType(new ReaderUint8Array(writer.toUint8Array()), true)).toBe(
+    typeOf(length)
+  )
+})

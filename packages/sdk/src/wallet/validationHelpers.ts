@@ -479,6 +479,8 @@ function validateDecodedBase64Length(
 /** Validate an existing certificate reference without weakening new issuance. */
 export function validateExistingCertificateType(value: string, name: string): string {
   try {
+    // Preserve reference-argument normalization without rewriting signed types.
+    if (typeof value === 'string') value = value.trim()
     existingCertificateTypeBytes(value)
     return value
   } catch {

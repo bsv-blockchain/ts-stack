@@ -21,6 +21,9 @@ export function writeCertificateType(
   type: string,
   compatibility: boolean
 ): void {
+  // Request references retain the existing argument validator's trimming.
+  // Signed certificate types and response metadata are never normalized.
+  type = type.trim()
   const bytes = existingCertificateTypeBytes(type)
   if (compatibility && (bytes.length !== 32 || type === CERTIFICATE_TYPE_MARKER)) {
     writer.write(base64ToBytes(CERTIFICATE_TYPE_MARKER))

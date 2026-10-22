@@ -62,6 +62,23 @@ fails explicitly instead of hiding it, inventing pagination counts, or sending
 metadata the reader cannot interpret. Existing all-canonical responses retain
 their bytes. JSON substrates use original logical objects directly.
 
+## Binary HTTP adapters
+
+`HTTPWalletWire` maps internal call 29 to `POST /certificateCompatibility`,
+with the usual `Origin` header and only the mode/version/operation/params in
+the body. Wallet HTTP routers must register this internal transport endpoint
+and reconstruct call code 29 plus the validated originator before passing the
+frame to `WalletWireProcessor`. It is not a `WalletInterface` method. Registering
+only the existing method-name routes is insufficient to enable this profile.
+
+A 404 or 405 on the exact version-1 probe means the old router has no extension
+endpoint; canonical operations continue on their original routes. Other HTTP
+errors, malformed capability replies and transport failures propagate. A failed
+invoke is never downgraded or retried. Legacy binary traffic requires both the
+SDK processor and the wallet HTTP router update; installing only an app SDK
+cannot add that server route. JSON listing continues to use its existing route
+and original certificate objects.
+
 ## Constants
 
 The marker is SHA-256 of UTF-8 `BSV wallet wire legacy certificate type v1`:
