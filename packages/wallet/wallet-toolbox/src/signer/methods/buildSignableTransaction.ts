@@ -116,15 +116,22 @@ function addPlannedOutputs(
 function addRequestedInput(
   tx: Transaction,
   argsInput: ValidCreateActionInput,
+  storageInput: StorageCreateTransactionSdkInput,
   args: ValidCreateActionArgs,
   inputBeef: Beef | undefined
 ): void {
   const unlockingScript =
     typeof argsInput.unlockingScript === 'string' ? asBsvSdkScript(argsInput.unlockingScript) : new Script()
+  // The caller's inputBEEF takes precedence. Inputs known to the wallet may be
+  // named without it (trustSelf 'known'); storage then supplies the source
+  // transaction when includeAllSourceTransactions is set.
+  const sourceTransaction = args.isSignAction
+    ? (inputBeef?.findTxid(argsInput.outpoint.txid)?.tx ?? sourceTransactionForStorageInput(storageInput))
+    : undefined
   tx.addInput({
     sourceTXID: argsInput.outpoint.txid,
     sourceOutputIndex: argsInput.outpoint.vout,
-    sourceTransaction: args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined,
+    sourceTransaction,
     unlockingScript,
     sequence: argsInput.sequenceNumber
   })
@@ -183,7 +190,7 @@ function addPlannedInputs(
   let totalChangeInputs = 0
   for (const { storageInput, argsInput } of inputs) {
     if (argsInput != null) {
-      addRequestedInput(tx, argsInput, args, inputBeef)
+      addRequestedInput(tx, argsInput, storageInput, args, inputBeef)
       continue
     }
     totalChangeInputs += addStorageInput(tx, storageInput, pendingStorageInputs)

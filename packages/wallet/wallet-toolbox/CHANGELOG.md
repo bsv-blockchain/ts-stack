@@ -68,6 +68,12 @@ attention to changes that materially alter behavior or extend functionality.
   so of two concurrent actions spending the same input, the second sees it spent
   and fails with the existing double-spend or unspendable-input error instead of
   overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
+- A signable transaction carries the source transaction storage returns for a
+  caller-named input the wallet already knows, when the caller supplied no
+  `inputBEEF` for it (`trustSelf` `'known'`, `includeAllSourceTransactions`).
+  Such a `createAction` previously failed with `WERR_INTERNAL` "Every
+  signableTransaction input must have a sourceTransaction". A transaction in the
+  caller's `inputBEEF` still takes precedence.
 - Callers that count `listOutputs` results narrow `totalOutputs` to a number
   with the exported `numericTotalOutputs`, following the `@bsv/sdk` change that
   lets BRC-112 module balance queries return decimal text.
