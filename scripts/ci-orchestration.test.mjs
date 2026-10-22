@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
@@ -386,4 +387,69 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
     env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
   })
   assert.notEqual(failedBuild.status, 0)
+})
+
+// Extract one step's `run: |` block from the raw workflow text, as the other
+// checks here read the workflow without a YAML dependency.
+function stepScript(workflow, name) {
+  const lines = workflow.split('\n')
+  const at = lines.findIndex(line => line.trim() === `- name: ${name}`)
+  assert.ok(at >= 0, name)
+  const run = lines.findIndex((line, index) => index > at && line.trim() === 'run: |')
+  const indent = lines[run + 1].match(/^ */)[0].length
+  const body = []
+  for (const line of lines.slice(run + 1)) {
+    if (line.trim() !== '' && line.match(/^ */)[0].length < indent) break
+    body.push(line.slice(indent))
+  }
+  return body.join('\n')
+}
+
+test('infra image builds back off longer only for registry rate limits', () => {
+  const script = stepScript(readFileSync(CI_PATH, 'utf8'), 'Build Linux image')
+    .replaceAll('${{ strategy.job-index }}', '0')
+    .replaceAll('${{ matrix.component }}', 'wab')
+  const scenario = outcomes => {
+    const directory = mkdtempSync(join(tmpdir(), 'ts-stack-image-retry-'))
+    writeFileSync(join(directory, 'outcomes'), outcomes.join('\n') + '\n')
+    // Each docker call consumes one scripted outcome; sleep only records.
+    writeFileSync(
+      join(directory, 'docker'),
+      `#!/bin/bash\noutcome=$(head -n1 "${directory}/outcomes"); sed -i.bak 1d "${directory}/outcomes"\n` +
+        `echo call >> "${directory}/calls"\n` +
+        `case "$outcome" in ok) exit 0;; 429) echo "429 Too Many Requests" >&2; exit 1;; *) echo "error: build failed" >&2; exit 1;; esac\n`
+    )
+    writeFileSync(join(directory, 'sleep'), `#!/bin/bash\necho "$1" >> "${directory}/sleeps"\n`)
+    chmodSync(join(directory, 'docker'), 0o755)
+    chmodSync(join(directory, 'sleep'), 0o755)
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: { PATH: `${directory}:${process.env.PATH}`, RUNNER_TEMP: directory },
+      encoding: 'utf8'
+    })
+    const lines = file => {
+      try {
+        return readFileSync(join(directory, file), 'utf8').trim().split('\n').filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    return { status: run.status, calls: lines('calls').length, sleeps: lines('sleeps').map(Number) }
+  }
+  assert.deepEqual(scenario(['ok']), { status: 0, calls: 1, sleeps: [] })
+  assert.deepEqual(scenario(['429', '429', '429', 'ok']), {
+    status: 0,
+    calls: 4,
+    sleeps: [15, 30, 60]
+  })
+  assert.deepEqual(scenario(['429', '429', '429', '429', '429']), {
+    status: 1,
+    calls: 5,
+    sleeps: [15, 30, 60, 120]
+  })
+  // A genuine build failure keeps the short retry and does not wait minutes.
+  assert.deepEqual(scenario(['fail', 'fail', 'fail', 'ok']), {
+    status: 1,
+    calls: 3,
+    sleeps: [5, 10]
+  })
 })

@@ -129,3 +129,17 @@ See [Dependency and Release Policy](../reference/dependency-policy.md),
 [npm Package Supply Chain](../reference/npm-package-supply-chain.md), and
 [Release and Operations Guide](../reference/release-operations.md) for the
 complete gates, failure handling, and rollback path.
+
+### Held first publication during registry verification
+
+A governed `publishedVersion: "0.0.0"` identifies a candidate awaiting its first
+publication. The verifier records an explicit initial-release hold only when
+the public npm registry returns a completed `E404`. It retains that package in
+the complete report and creates no fictional published consumer for it.
+Authentication, transport, timeout and malformed responses remain errors; a
+missing package with any previously published baseline remains an error.
+Every actually published package still requires its integrity, provenance and
+isolated consumer install. The hold does not authorize npm publication.
+
+Release and CI interpreters use patched Node24.22.1; historical resource-profile
+measurements retain their original runtime identities.
