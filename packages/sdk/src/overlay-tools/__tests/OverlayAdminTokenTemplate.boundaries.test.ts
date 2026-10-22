@@ -99,6 +99,46 @@ describe('OverlayAdminTokenTemplate boundary validation', () => {
     expect(() => OverlayAdminTokenTemplate.decode(truncated)).toThrow('signature is invalid')
   })
 
+  it.each([
+    ['SHIP', `tm_color_${'0123456789abcdef'.repeat(4)}_0`],
+    ['SHIP', 'tm_uhrp_files'],
+    ['SLAP', `ls_color_${'0123456789abcdef'.repeat(4)}_0`],
+    ['SLAP', 'ls_uhrp_files']
+  ] as const)('round-trips a %s advertisement for %s', async (protocol, name) => {
+    const wallet = new CompletedProtoWallet(new PrivateKey(29))
+    const script = await new OverlayAdminTokenTemplate(wallet).lock(
+      protocol,
+      'https://example.com',
+      name
+    )
+
+    await expect(
+      OverlayAdminTokenTemplate.decodeAndVerify(script, protocol)
+    ).resolves.toMatchObject({ protocol, topicOrService: name })
+  })
+
+  it.each([
+    ['SHIP', 'tm__x'],
+    ['SHIP', 'tm_x_'],
+    ['SHIP', 'tm_Color'],
+    ['SHIP', 'tm_' + 'a'.repeat(297)],
+    ['SHIP', `color_${'0123456789abcdef'.repeat(4)}_0`],
+    ['SHIP', `ls_color_${'0123456789abcdef'.repeat(4)}_0`],
+    ['SLAP', 'ls_'],
+    ['SLAP', 'ls__x'],
+    ['SLAP', 'ls_x_'],
+    ['SLAP', 'ls_Color'],
+    ['SLAP', 'ls_' + 'a'.repeat(297)],
+    ['SLAP', `tm_color_${'0123456789abcdef'.repeat(4)}_0`]
+  ] as const)('refuses to lock a %s advertisement for %s', async (protocol, name) => {
+    const wallet = new CompletedProtoWallet(new PrivateKey(30))
+    const identityCall = jest.spyOn(wallet, 'getPublicKey')
+    await expect(
+      new OverlayAdminTokenTemplate(wallet).lock(protocol, 'https://example.com', name)
+    ).rejects.toThrow('topic or service name is invalid')
+    expect(identityCall).not.toHaveBeenCalled()
+  })
+
   it('rejects invalid runtime protocols and malformed names before wallet use', async () => {
     const wallet = new CompletedProtoWallet(new PrivateKey(27))
     const identityCall = jest.spyOn(wallet, 'getPublicKey')
