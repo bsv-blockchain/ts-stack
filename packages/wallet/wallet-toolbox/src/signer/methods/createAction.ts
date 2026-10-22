@@ -270,14 +270,16 @@ function makeSignableTransactionResult(
 }
 
 function makeSignableTransactionBeef(tx: Transaction): number[] {
-  // This is a special case beef for transaction signing.
-  // We only need the transaction being signed, and for each input, the raw source transaction.
+  // This is a special case beef for transaction signing: the transaction being
+  // signed and, for each input, its source transaction. A source carrying a
+  // merkle path or its own linked sources merges them too, so the BEEF is
+  // valid wherever the input BEEF storage returned was complete.
   const beef = new Beef()
   for (const input of tx.inputs) {
     if (input.sourceTransaction == null) {
       throw new WERR_INTERNAL('Every signableTransaction input must have a sourceTransaction')
     }
-    beef.mergeRawTx(input.sourceTransaction.toUint8Array())
+    beef.mergeTransaction(input.sourceTransaction)
   }
   beef.mergeRawTx(tx.toUint8Array())
   // BRC-100 historically returns number[] here. Keep that observable shape;

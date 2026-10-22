@@ -24,7 +24,8 @@ describe('legacy createAction input-resolution compatibility', () => {
       outputs: [
         {
           satoshis: 100,
-          lockingScript: '51',
+          // '00' then OP_DROP OP_TRUE: the unlocking script below satisfies it.
+          lockingScript: '7551',
           basket: 'legacy external outputs',
           outputDescription: 'locally stored unmanaged source'
         }
@@ -209,6 +210,15 @@ describe('legacy createAction input-resolution compatibility', () => {
       proven: undefined,
       rawTx: source.toBinary()
     })
+    // The returned BEEF must prove the trusted input: storage supplies its
+    // proven BEEF, as it would for a transaction it holds.
+    const getBeefForTransactions = ctx.activeStorage.getBeefForTransactions.bind(ctx.activeStorage)
+    jest.spyOn(ctx.activeStorage, 'getBeefForTransactions').mockImplementation(async (txids, options) => {
+      if (!txids.includes(txid)) return await getBeefForTransactions(txids, options)
+      const proven = new Beef()
+      proven.mergeTransaction(source)
+      return proven
+    })
     const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
 
     const spending = await ctx.wallet.createAction({
@@ -245,6 +255,8 @@ describe('legacy createAction input-resolution compatibility', () => {
     const storedBeef = Beef.fromBinary(stored!.inputBEEF!)
     expect(storedBeef.findTxid(txid)).toBeDefined()
     expect(storedBeef.findTxid(unrelated.id('hex'))).toBeUndefined()
+    const resultBeef = Beef.fromBinary(spending.tx!)
+    expect(resultBeef.findTxid(txid)?.bumpIndex).toBeDefined()
   })
 
   test('continues to reject wallet-managed change as an explicit input', async () => {

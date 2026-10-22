@@ -68,12 +68,16 @@ attention to changes that materially alter behavior or extend functionality.
   so of two concurrent actions spending the same input, the second sees it spent
   and fails with the existing double-spend or unspendable-input error instead of
   overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
-- A signable transaction carries the source transaction storage returns for a
-  caller-named input the wallet already knows, when the caller supplied no
-  `inputBEEF` for it (`trustSelf` `'known'`, `includeAllSourceTransactions`).
-  Such a `createAction` previously failed with `WERR_INTERNAL` "Every
+- `createAction` returns BEEF that validates on its own for inputs the caller
+  names without supplying their transaction (`trustSelf` `'known'`). Storage
+  merges the wallet's proven BEEF for those inputs into the input BEEF it
+  returns, as it does for change, instead of a txid-only entry; signable
+  transactions take their source transactions, with merkle paths, from that
+  BEEF, so the signable BEEF and the `signAction` result validate. Such a
+  `createAction` previously failed with `WERR_INTERNAL` "Every
   signableTransaction input must have a sourceTransaction". A transaction in the
-  caller's `inputBEEF` still takes precedence.
+  caller's `inputBEEF` still takes precedence, and txids in `knownTxids` are
+  still returned txid-only.
 - Callers that count `listOutputs` results narrow `totalOutputs` to a number
   with the exported `numericTotalOutputs`, following the `@bsv/sdk` change that
   lets BRC-112 module balance queries return decimal text.
