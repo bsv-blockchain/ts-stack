@@ -121,6 +121,15 @@ describe('RabinPermissionModule requests', () => {
     )
   }, 30_000)
 
+  it('treats an absent or null counterparty as self', async () => {
+    const instance = module()
+    const self = await execute(instance, encryptArgs('key'))
+    expect(await execute(instance, encryptArgs('key', { counterparty: undefined }))).toEqual(self)
+    expect(await execute(instance, encryptArgs('key', { counterparty: null as never }))).toEqual(
+      self
+    )
+  })
+
   it('addresses one key with key and sign, and separates level, protocol, key ID and size', async () => {
     const instance = module()
     const n = decodeKeyResult((await execute(instance, encryptArgs('key'))).ciphertext)

@@ -209,8 +209,7 @@ function parseKeyID(keyID: unknown): string {
   return keyID
 }
 
-function parseCounterparty(value: unknown): RabinCounterparty {
-  const counterparty = value ?? 'self'
+function parseCounterparty(counterparty: unknown = 'self'): RabinCounterparty {
   if (counterparty === 'self' || counterparty === 'anyone') return counterparty
   if (typeof counterparty !== 'string') {
     throw new TypeError('RABIN: counterparty must be self, anyone, or a compressed public key')
@@ -484,7 +483,8 @@ export class RabinPermissionModule implements PermissionsModule {
     const args = dataRecord(rawArgs, 'RABIN: encrypt arguments')
     const { securityLevel, operation, bits, logicalProtocolID } = parseProtocol(args.protocolID)
     const keyID = parseKeyID(args.keyID)
-    const counterparty = parseCounterparty(args.counterparty)
+    // BRC-100 clients may send null for an omitted counterparty; both mean self.
+    const counterparty = parseCounterparty(args.counterparty ?? undefined)
     const { privileged, privilegedReason } = parsePrivileged(args.privileged, args.privilegedReason)
     if (args.seekPermission !== undefined && typeof args.seekPermission !== 'boolean') {
       throw new TypeError('RABIN: seekPermission must be a boolean')
