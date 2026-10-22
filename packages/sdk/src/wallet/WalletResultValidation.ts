@@ -1476,20 +1476,29 @@ function stringRecord(
   return values as Record<string, string>
 }
 
+function certificateIdentifierLength(
+  certificate: UnknownRecord,
+  name: 'type' | 'serialNumber',
+  call: string,
+  field: string
+): number {
+  const encoded = base64(certificate[name], call, `${field}.${name}`)
+  if (name === 'type' && call !== 'acquireCertificate') {
+    return existingCertificateTypeBytes(encoded).length
+  }
+  const decoded = base64ToBytes(encoded)
+  if (decoded.length !== 32 || bytesToBase64(decoded) !== encoded) {
+    throw new Error(`Certificate ${name} must canonically encode exactly 32 bytes`)
+  }
+  return decoded.length
+}
+
 function validateCertificate(value: unknown, call: string, field: string): UnknownRecord {
   const certificate = record(value, call, field)
   try {
-    let encodedLength = 0
-    const encodedFieldNames = ['type', 'serialNumber'] as const
-    for (let index = 0; index < encodedFieldNames.length; index++) {
-      const name = encodedFieldNames[index]
-      const encoded = base64(certificate[name], call, `${field}.${name}`)
-      const legacyType = name === 'type' && call !== 'acquireCertificate'
-      const decoded = legacyType ? existingCertificateTypeBytes(encoded) : base64ToBytes(encoded)
-      if (!legacyType && (decoded.length !== 32 || bytesToBase64(decoded) !== encoded))
-        throw new Error()
-      encodedLength += decoded.length
-    }
+    let encodedLength =
+      certificateIdentifierLength(certificate, 'type', call, field) +
+      certificateIdentifierLength(certificate, 'serialNumber', call, field)
     const publicKeyFieldNames = ['subject', 'certifier'] as const
     for (let index = 0; index < publicKeyFieldNames.length; index++) {
       const name = publicKeyFieldNames[index]

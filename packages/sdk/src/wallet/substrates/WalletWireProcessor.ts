@@ -1,7 +1,7 @@
 import {
   CERTIFICATE_COMPATIBILITY_CALL,
   CERTIFICATE_COMPATIBILITY_VERSION,
-  COMPATIBLE_CERTIFICATE_CALLS,
+  readCertificateCompatibility,
   readCertificateType,
   encodeWireCertificate
 } from './CertificateWireCompatibility.js'
@@ -282,7 +282,6 @@ export default class WalletWireProcessor implements WalletWire {
     try {
       // Read call code
       const callCode = messageReader.readUInt8()
-      let compatibility = false
 
       // Map call code to call name
       let callName = calls[callCode] // calls is enum
@@ -307,22 +306,10 @@ export default class WalletWireProcessor implements WalletWire {
 
       // Read parameters
       const paramsReader = messageReader // Remaining bytes
-      if (callCode === CERTIFICATE_COMPATIBILITY_CALL) {
-        const mode = paramsReader.readUInt8()
-        const version = paramsReader.readUInt8()
-        if (version !== CERTIFICATE_COMPATIBILITY_VERSION)
-          throw new Error('Unsupported certificate compatibility version')
-        if (mode === 0) {
-          this.#assertRequestConsumed(paramsReader, 'certificate compatibility probe')
-          return Uint8Array.from([0, CERTIFICATE_COMPATIBILITY_VERSION])
-        }
-        if (mode !== 1) throw new Error('Invalid certificate compatibility mode')
-        const operation = paramsReader.readUInt8()
-        if (!COMPATIBLE_CERTIFICATE_CALLS.has(operation))
-          throw new Error('Invalid certificate compatibility operation')
-        callName = calls[operation]
-        compatibility = true
-      }
+      const profile = readCertificateCompatibility(paramsReader, callCode)
+      if (profile.probe) return Uint8Array.from([0, CERTIFICATE_COMPATIBILITY_VERSION])
+      callName = calls[profile.operation]
+      const compatibility = profile.compatibility
 
       switch (callName) {
         case 'createAction':

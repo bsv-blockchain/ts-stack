@@ -98,3 +98,27 @@ export function decodeWireCertificate(
   )
   return certificate
 }
+
+/** Parse profile selection before dispatch, without connection-global state. */
+export function readCertificateCompatibility(
+  reader: ReaderUint8Array,
+  callCode: number
+): { operation: number; compatibility: boolean; probe: boolean } {
+  if (callCode !== CERTIFICATE_COMPATIBILITY_CALL) {
+    return { operation: callCode, compatibility: false, probe: false }
+  }
+  const mode = reader.readUInt8()
+  const version = reader.readUInt8()
+  if (version !== CERTIFICATE_COMPATIBILITY_VERSION)
+    throw new Error('Unsupported certificate compatibility version')
+  if (mode === 0) {
+    if (!reader.eof())
+      throw new Error('Wallet Wire certificate compatibility probe request contains trailing data')
+    return { operation: callCode, compatibility: false, probe: true }
+  }
+  if (mode !== 1) throw new Error('Invalid certificate compatibility mode')
+  const operation = reader.readUInt8()
+  if (!COMPATIBLE_CERTIFICATE_CALLS.has(operation))
+    throw new Error('Invalid certificate compatibility operation')
+  return { operation, compatibility: true, probe: false }
+}

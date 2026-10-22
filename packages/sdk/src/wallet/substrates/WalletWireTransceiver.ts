@@ -95,7 +95,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.wire = wire
   }
 
-  #certificateProfiles = new WeakMap<WalletWire, Promise<boolean>>()
+  readonly #certificateProfiles = new WeakMap<WalletWire, Promise<boolean>>()
 
   async #supportsCertificateCompatibility(
     originator?: OriginatorDomainNameStringUnder250Bytes,
@@ -153,9 +153,8 @@ export default class WalletWireTransceiver implements WalletInterface {
     const normalizedOriginator = originator === '' ? '' : validateOriginator(originator)!
     const originatorArray = UtilsToUint8Array(normalizedOriginator, 'utf8')
     const frameWriter = new WriterUint8Array(undefined, 2 + originatorArray.length + params.length)
-    frameWriter.writeUInt8(
-      compatibility ? CERTIFICATE_COMPATIBILITY_CALL : typeof call === 'number' ? call : calls[call]
-    )
+    const callCode = typeof call === 'number' ? call : calls[call]
+    frameWriter.writeUInt8(compatibility ? CERTIFICATE_COMPATIBILITY_CALL : callCode)
     frameWriter.writeUInt8(originatorArray.length)
     frameWriter.write(originatorArray)
     if (compatibility) {
