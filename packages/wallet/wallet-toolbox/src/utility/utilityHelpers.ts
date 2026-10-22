@@ -1,3 +1,4 @@
+import { awaitFromSync } from './promiseFromSync'
 import { HexString, PubKeyHex, WalletNetwork, Beef, PrivateKey, PublicKey, Random, Script, Transaction } from '@bsv/sdk'
 import { SHA256 } from '@bsv/sdk/primitives/Hash'
 import { toBase64, toHex } from '@bsv/sdk/primitives/utils'
@@ -186,19 +187,21 @@ export function verifyOne<T>(results: T[], errorDescrition?: string): T {
  * Must be greater than zero and less than 2 minutes (120,000 msecs)
  * @publicbody
  */
-export async function wait(msecs: number): Promise<void> {
-  const MIN_WAIT = 0
-  const MAX_WAIT = 2 * 60 * 1000 // maximum allowed wait in ms (2 minutes)
-  if (
-    typeof msecs !== 'number' ||
-    !Number.isFinite(msecs) ||
-    Number.isNaN(msecs) ||
-    msecs < MIN_WAIT ||
-    msecs > MAX_WAIT
-  ) {
-    throw new WERR_INVALID_PARAMETER('msecs', `a number between ${MIN_WAIT} and ${MAX_WAIT} msecs, not ${msecs}.`)
-  }
-  return await new Promise(resolve => setTimeout(resolve, msecs))
+export function wait(msecs: number): Promise<void> {
+  return awaitFromSync(() => {
+    const MIN_WAIT = 0
+    const MAX_WAIT = 2 * 60 * 1000 // maximum allowed wait in ms (2 minutes)
+    if (
+      typeof msecs !== 'number' ||
+      !Number.isFinite(msecs) ||
+      Number.isNaN(msecs) ||
+      msecs < MIN_WAIT ||
+      msecs > MAX_WAIT
+    ) {
+      throw new WERR_INVALID_PARAMETER('msecs', `a number between ${MIN_WAIT} and ${MAX_WAIT} msecs, not ${msecs}.`)
+    }
+    return new Promise<void>(resolve => setTimeout(resolve, msecs))
+  })
 }
 
 /**

@@ -316,6 +316,14 @@ Its SDK peer accepts both historical `number[]` and binary Wallet Wire
 `Uint8Array` transaction results, while payment messages retain a portable JSON
 byte-array representation. Receipt remains compatible with pending messages
 whose typed-array bytes were already serialized as contiguous numeric keys.
+PeerPay receipt also accepts the canonical standard-base64 Atomic BEEF string
+described by BRC-29. This receive-only compatibility applies to inbox lists,
+indexed reloads, and live payments; senders keep the existing portable JSON
+byte array. Empty, unpadded, URL-safe, whitespace-bearing, noncanonical pad-bit,
+and malformed base64 strings are rejected before wallet work. Both encodings
+retain the 64 MiB decoded transaction ceiling; base64 length is checked before
+decoding. This does not raise relay request limits or provide delivery-limit
+discovery, pre-broadcast sizing, or a durable retry/refund journal.
 The same compatibility contract covers paid-message fees, batch delivery,
 token settlements, live-message fallback, and generic remittance transport.
 In a multi-recipient send, the quoted server delivery fee applies to every

@@ -1,5 +1,5 @@
 import { PrivateKey, PublicKey, KeyDeriverApi } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import type { ManagedChangePolicyOptions } from './storage/methods/managedChangePolicy'
 
 import { Wallet } from './Wallet'
@@ -100,7 +100,7 @@ export interface SetupClientWalletArgs {
    * Optional high-performance verifier for internal wallet and locally hosted
    * storage validation. This does not alter the BRC-100 interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /** Optional operator tuning for local wallet-managed liquidity shaping. */
   managedChangePolicy?: ManagedChangePolicyOptions
 }

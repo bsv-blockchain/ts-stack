@@ -1,3 +1,7 @@
+import { awaitFromSync, awaitVoidFromSync, promiseFromSync } from '../../utility/promiseFromSync'
+import type { StorageActiveWrite, StorageWriterAdmission } from '../StorageActiveWrite'
+import { StorageReqWrite } from '../StorageReqWrite'
+import { WalletError } from '../../sdk/WalletError'
 import { Transaction } from '@bsv/sdk'
 import { ProvenTxReqStatus, TrxToken } from '../../sdk'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
@@ -138,128 +142,143 @@ async function quarantineTransactionOutputs(
   }
 }
 
-async function markObservedTarget(
+function markObservedTarget(
   storage: StorageProvider,
   transaction: TableTransaction,
-  final: boolean
+  final: boolean,
+  write: LifecycleWrite
 ): Promise<boolean> {
-  return await storage.transaction(async trx => {
-    const current = verifyOne(
-      await storage.findTransactions({
-        partial: { transactionId: verifyId(transaction.transactionId) },
-        trx
-      })
-    )
-    if (current.noSendExpiryState === 'reclaimed' || current.noSendExpiryState === 'cancelled') return false
-
-    if (final) {
-      return await finishTargetWinner(storage, current, trx)
-    }
-    if (
-      current.noSendExpiryState !== 'signed' &&
-      current.noSendExpiryState !== 'revocation-requested' &&
-      current.noSendExpiryState !== 'broadcast' &&
-      current.noSendExpiryState !== 'conflicted'
-    ) {
-      return false
-    }
-    // Claim even an existing broadcast state. Besides making conflicted ->
-    // broadcast monotonic, the conditional write holds this row for the rest
-    // of the transaction so a concurrent reclaim/proof winner cannot be
-    // overwritten by the observation metadata update below.
-    if (
-      !(await storage.compareAndSetNoSendExpiryState(
-        current.transactionId,
-        current.noSendExpiryState,
-        'broadcast',
-        trx
-      ))
-    ) {
-      return false
-    }
-    await storage.updateTransaction(
-      current.transactionId,
-      {
-        noSendExpiryObservedAt: Date.now(),
-        ...(current.status === 'nosend' ? { status: 'unproven' as const } : {})
-      },
-      trx
-    )
-    await updateReqStatus(storage, current.txid, 'unmined', 'brc177-target-observed', trx)
-    return true
-  })
-}
-
-async function noteTargetObservedDuringRace(storage: StorageProvider, transaction: TableTransaction): Promise<boolean> {
-  return await storage.transaction(async trx => {
-    const current = verifyOne(
-      await storage.findTransactions({
-        partial: { transactionId: verifyId(transaction.transactionId) },
-        trx
-      })
-    )
-    if (current.noSendExpiryState !== 'reclaiming') return false
-    // Lock the lifecycle row before changing transaction/request metadata. If
-    // a proof winner committed after our read, this self-transition fails and
-    // prevents stale observation data from reviving the losing transaction.
-    if (!(await storage.compareAndSetNoSendExpiryState(current.transactionId, 'reclaiming', 'reclaiming', trx))) {
-      return false
-    }
-    let changed = false
-    if (current.status === 'nosend') {
-      await storage.updateTransaction(
-        current.transactionId,
-        {
-          status: 'unproven',
-          noSendExpiryObservedAt: current.noSendExpiryObservedAt ?? Date.now()
-        },
-        trx
-      )
-      changed = true
-    }
-    if (current.txid != null) {
-      const req = await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
-      if (req?.status === 'nosend') {
-        req.status = 'unmined'
-        req.addHistoryNote({ what: 'brc177-target-observed-during-reclaim-race' })
-        await req.updateStorageDynamicProperties(storage, trx)
-        changed = true
-      }
-    }
-    if (current.noSendExpiryReclaimTxid != null) {
-      const reclaim = verifyOneOrNone(
+  return awaitFromSync(() => {
+    return write.transaction(async trx => {
+      const current = verifyOne(
         await storage.findTransactions({
-          partial: { userId: current.userId, txid: current.noSendExpiryReclaimTxid },
+          partial: { transactionId: verifyId(transaction.transactionId) },
           trx
         })
       )
-      const reclaimReq = await EntityProvenTxReq.fromStorageTxid(storage, current.noSendExpiryReclaimTxid, trx)
-      // Once the target is positively observed, BRC-177 stops future reclaim
-      // submissions. Keep the request in proof tracking because a prior send
-      // may still have reached a processor and either side can win the race.
-      if (reclaimReq != null && (reclaimReq.status === 'unsent' || reclaimReq.status === 'sending')) {
-        reclaimReq.status = 'unmined'
-        reclaimReq.addHistoryNote({ what: 'brc177-reclaim-retry-suppressed-target-observed' })
-        await reclaimReq.updateStorageDynamicProperties(storage, trx)
-        if (reclaim != null && (reclaim.status === 'unprocessed' || reclaim.status === 'sending')) {
-          await storage.updateTransaction(reclaim.transactionId, { status: 'unproven' }, trx)
-        }
-        changed = true
+      if (current.noSendExpiryState === 'reclaimed' || current.noSendExpiryState === 'cancelled') return false
+
+      if (final) {
+        return await finishTargetWinner(storage, current, trx)
       }
-    }
-    return changed
+      if (
+        current.noSendExpiryState !== 'signed' &&
+        current.noSendExpiryState !== 'revocation-requested' &&
+        current.noSendExpiryState !== 'broadcast' &&
+        current.noSendExpiryState !== 'conflicted'
+      ) {
+        return false
+      }
+      // Claim even an existing broadcast state. Besides making conflicted ->
+      // broadcast monotonic, the conditional write holds this row for the rest
+      // of the transaction so a concurrent reclaim/proof winner cannot be
+      // overwritten by the observation metadata update below.
+      if (
+        !(await storage.compareAndSetNoSendExpiryState(
+          current.transactionId,
+          current.noSendExpiryState,
+          'broadcast',
+          trx
+        ))
+      ) {
+        return false
+      }
+      await storage.updateTransaction(
+        current.transactionId,
+        {
+          noSendExpiryObservedAt: Date.now(),
+          ...(current.status === 'nosend' ? { status: 'unproven' as const } : {})
+        },
+        trx
+      )
+      await updateReqStatus(storage, current.txid, 'unmined', 'brc177-target-observed', trx)
+      return true
+    })
   })
 }
 
-async function cancelUnsigned(storage: StorageProvider, transaction: TableTransaction): Promise<boolean> {
-  return await storage.transaction(async trx => {
-    const expected = transaction.noSendExpiryState
-    if (expected !== 'preparing' && expected !== 'unsigned') return false
-    if (!(await storage.compareAndSetNoSendExpiryState(transaction.transactionId, expected, 'cancelled', trx))) {
-      return false
-    }
-    await storage.updateTransactionStatus('failed', transaction.transactionId, undefined, undefined, trx)
-    return true
+function noteTargetObservedDuringRace(
+  storage: StorageProvider,
+  transaction: TableTransaction,
+  write: LifecycleWrite
+): Promise<boolean> {
+  return awaitFromSync(() => {
+    return write.transaction(async trx => {
+      const current = verifyOne(
+        await storage.findTransactions({
+          partial: { transactionId: verifyId(transaction.transactionId) },
+          trx
+        })
+      )
+      if (current.noSendExpiryState !== 'reclaiming') return false
+      // Lock the lifecycle row before changing transaction/request metadata. If
+      // a proof winner committed after our read, this self-transition fails and
+      // prevents stale observation data from reviving the losing transaction.
+      if (!(await storage.compareAndSetNoSendExpiryState(current.transactionId, 'reclaiming', 'reclaiming', trx))) {
+        return false
+      }
+      let changed = false
+      if (current.status === 'nosend') {
+        await storage.updateTransaction(
+          current.transactionId,
+          {
+            status: 'unproven',
+            noSendExpiryObservedAt: current.noSendExpiryObservedAt ?? Date.now()
+          },
+          trx
+        )
+        changed = true
+      }
+      if (current.txid != null) {
+        const req = await EntityProvenTxReq.fromStorageTxid(storage, current.txid, trx)
+        if (req?.status === 'nosend') {
+          req.status = 'unmined'
+          req.addHistoryNote({ what: 'brc177-target-observed-during-reclaim-race' })
+          await req.updateStorageDynamicProperties(storage, trx)
+          changed = true
+        }
+      }
+      if (current.noSendExpiryReclaimTxid != null) {
+        const reclaim = verifyOneOrNone(
+          await storage.findTransactions({
+            partial: { userId: current.userId, txid: current.noSendExpiryReclaimTxid },
+            trx
+          })
+        )
+        const reclaimReq = await EntityProvenTxReq.fromStorageTxid(storage, current.noSendExpiryReclaimTxid, trx)
+        // Once the target is positively observed, BRC-177 stops future reclaim
+        // submissions. Keep the request in proof tracking because a prior send
+        // may still have reached a processor and either side can win the race.
+        if (reclaimReq != null && (reclaimReq.status === 'unsent' || reclaimReq.status === 'sending')) {
+          reclaimReq.status = 'unmined'
+          reclaimReq.addHistoryNote({ what: 'brc177-reclaim-retry-suppressed-target-observed' })
+          await reclaimReq.updateStorageDynamicProperties(storage, trx)
+          if (reclaim != null && (reclaim.status === 'unprocessed' || reclaim.status === 'sending')) {
+            await storage.updateTransaction(reclaim.transactionId, { status: 'unproven' }, trx)
+          }
+          changed = true
+        }
+      }
+      return changed
+    })
+  })
+}
+
+function cancelUnsigned(
+  storage: StorageProvider,
+  transaction: TableTransaction,
+  write: LifecycleWrite
+): Promise<boolean> {
+  return awaitFromSync(() => {
+    return write.transaction(async trx => {
+      const expected = transaction.noSendExpiryState
+      if (expected !== 'preparing' && expected !== 'unsigned') return false
+      if (!(await storage.compareAndSetNoSendExpiryState(transaction.transactionId, expected, 'cancelled', trx))) {
+        return false
+      }
+      await storage.updateTransactionStatus('failed', transaction.transactionId, undefined, undefined, trx)
+      return true
+    })
   })
 }
 
@@ -379,16 +398,41 @@ async function insertReclaim(
   return await req.insertOrMerge(storage, trx)
 }
 
-async function activateReclaim(
+function activateReclaim(
   storage: StorageProvider,
   transaction: TableTransaction,
   anchor: TableOutput,
-  expected: 'signed' | 'revocation-requested' | 'conflicted'
+  expected: 'signed' | 'revocation-requested' | 'conflicted',
+  write: LifecycleWrite
 ): Promise<EntityProvenTxReq | undefined> {
-  return await storage.transaction(async trx => {
-    if (!(await storage.compareAndSetNoSendExpiryState(transaction.transactionId, expected, 'reclaiming', trx)))
-      return undefined
-    return await insertReclaim(storage, transaction, anchor, trx)
+  return awaitFromSync(() => {
+    return write.transaction(async trx => {
+      const current = verifyOne(
+        await storage.findTransactions({
+          partial: { transactionId: transaction.transactionId, userId: transaction.userId },
+          trx
+        })
+      )
+      const currentAnchor = verifyOne(
+        await storage.findOutputs({ partial: { outputId: anchor.outputId, userId: transaction.userId }, trx })
+      )
+      if (
+        current.noSendExpiryState !== expected ||
+        current.status === 'completed' ||
+        current.provenTxId != null ||
+        current.noSendExpiryReclaimTxid !== transaction.noSendExpiryReclaimTxid ||
+        current.noSendExpiryAnchorTxid !== anchor.txid ||
+        current.noSendExpiryAnchorVout !== anchor.vout ||
+        currentAnchor.txid !== anchor.txid ||
+        currentAnchor.vout !== anchor.vout ||
+        currentAnchor.satoshis !== anchor.satoshis ||
+        currentAnchor.spentBy !== current.transactionId
+      )
+        return undefined
+      if (!(await storage.compareAndSetNoSendExpiryState(current.transactionId, expected, 'reclaiming', trx)))
+        return undefined
+      return await insertReclaim(storage, current, currentAnchor, trx)
+    })
   })
 }
 
@@ -529,7 +573,8 @@ async function finishTargetWinner(storage: StorageProvider, target: TableTransac
 
 async function reconcileRace(
   storage: StorageProvider,
-  target: TableTransaction
+  target: TableTransaction,
+  write: LifecycleWrite
 ): Promise<'reclaimed' | 'target' | 'deferred'> {
   const reclaim =
     target.noSendExpiryReclaimTxid == null
@@ -540,11 +585,11 @@ async function reconcileRace(
           })
         )
   if (target.status === 'completed' || target.provenTxId != null) {
-    const won = await storage.transaction(async trx => await finishTargetWinner(storage, target, trx))
+    const won = await write.transaction(trx => awaitFromSync(() => finishTargetWinner(storage, target, trx)))
     return won ? 'target' : 'deferred'
   }
   if (reclaim?.status === 'completed' || reclaim?.provenTxId != null) {
-    const won = await storage.transaction(async trx => await finishReclaimWinner(storage, target, reclaim, trx))
+    const won = await write.transaction(trx => awaitFromSync(() => finishReclaimWinner(storage, target, reclaim, trx)))
     return won ? 'reclaimed' : 'deferred'
   }
   return 'deferred'
@@ -575,13 +620,10 @@ type RejectedReclaimRecovery = 'not-applicable' | 'deferred' | 'retried'
 async function retryRejectedReclaim(
   storage: StorageProvider,
   target: TableTransaction,
-  targetStatus: StatusForTxidResult['status'] | undefined
+  targetStatus: StatusForTxidResult['status'] | undefined,
+  write: LifecycleWrite
 ): Promise<RejectedReclaimRecovery> {
-  if (
-    targetStatus !== 'unknown' ||
-    target.noSendExpiryObservedAt != null ||
-    target.noSendExpiryReclaimTxid == null
-  ) {
+  if (targetStatus !== 'unknown' || target.noSendExpiryObservedAt != null || target.noSendExpiryReclaimTxid == null) {
     return 'not-applicable'
   }
 
@@ -620,7 +662,7 @@ async function retryRejectedReclaim(
   }
   if (!anchorIsUtxo) return 'deferred'
 
-  const sendable = await storage.transaction(async trx => {
+  const sendable = await write.transaction(async trx => {
     if (!(await storage.compareAndSetNoSendExpiryState(target.transactionId, 'reclaiming', 'reclaiming', trx))) {
       return undefined
     }
@@ -685,7 +727,7 @@ async function retryRejectedReclaim(
   })
   if (sendable == null) return 'deferred'
 
-  await storage.attemptToPostReqsToNetwork([sendable]).catch(() => undefined)
+  await write.post(sendable).catch(() => undefined)
   return 'retried'
 }
 
@@ -693,17 +735,18 @@ async function processReclaimRace(
   storage: StorageProvider,
   transaction: TableTransaction,
   targetStatus: StatusForTxidResult['status'] | undefined,
-  result: NoSendExpiryLifecycleResult
+  result: NoSendExpiryLifecycleResult,
+  write: LifecycleWrite
 ): Promise<void> {
-  if (isKnownOrMined(targetStatus) && (await noteTargetObservedDuringRace(storage, transaction))) {
+  if (isKnownOrMined(targetStatus) && (await noteTargetObservedDuringRace(storage, transaction, write))) {
     result.observed++
   }
-  const race = await reconcileRace(storage, transaction)
+  const race = await reconcileRace(storage, transaction, write)
   if (race !== 'deferred') {
     recordRaceResult(result, race)
     return
   }
-  const recovery = await retryRejectedReclaim(storage, transaction, targetStatus)
+  const recovery = await retryRejectedReclaim(storage, transaction, targetStatus, write)
   if (recovery === 'retried') result.reclaimRetried++
   else result.deferred++
 }
@@ -712,17 +755,18 @@ async function processObservationOrRace(
   storage: StorageProvider,
   transaction: TableTransaction,
   targetStatus: StatusForTxidResult['status'] | undefined,
-  result: NoSendExpiryLifecycleResult
+  result: NoSendExpiryLifecycleResult,
+  write: LifecycleWrite
 ): Promise<boolean> {
   // A service's `mined` verdict is useful evidence that reclaim must stop,
   // but it is not a locally verified Merkle proof. Only storage's proven
   // state may finalize the target as the winner.
   if (transaction.status === 'completed' || transaction.provenTxId != null) {
-    if (await markObservedTarget(storage, transaction, true)) result.targetWon++
+    if (await markObservedTarget(storage, transaction, true, write)) result.targetWon++
     return true
   }
   if (transaction.noSendExpiryState === 'reclaiming') {
-    await processReclaimRace(storage, transaction, targetStatus, result)
+    await processReclaimRace(storage, transaction, targetStatus, result, write)
     return true
   }
   const stateCanObserve =
@@ -731,7 +775,7 @@ async function processObservationOrRace(
     transaction.noSendExpiryState === 'broadcast' ||
     transaction.noSendExpiryState === 'conflicted'
   if (stateCanObserve && isKnownOrMined(targetStatus)) {
-    if (await markObservedTarget(storage, transaction, false)) result.observed++
+    if (await markObservedTarget(storage, transaction, false, write)) result.observed++
     return true
   }
   return false
@@ -739,17 +783,18 @@ async function processObservationOrRace(
 
 async function requestRevocation(
   storage: StorageProvider,
-  transaction: TableTransaction
+  transaction: TableTransaction,
+  write: LifecycleWrite
 ): Promise<'revocation-requested' | undefined> {
   if (transaction.noSendExpiryState === 'revocation-requested') return 'revocation-requested'
   if (transaction.noSendExpiryState !== 'signed') return undefined
   // Persist that the deadline has triggered before consulting fallible
   // services. A clock correction or block-height reorganization must not
   // reactivate a transaction after its expiry was already observed.
-  const changed = await storage.compareAndSetNoSendExpiryState(
-    transaction.transactionId,
-    'signed',
-    'revocation-requested'
+  const changed = await write.transaction(trx =>
+    awaitFromSync(() =>
+      storage.compareAndSetNoSendExpiryState(transaction.transactionId, 'signed', 'revocation-requested', trx)
+    )
   )
   return changed ? 'revocation-requested' : undefined
 }
@@ -758,6 +803,7 @@ async function attemptReclaim(
   storage: StorageProvider,
   transaction: TableTransaction,
   result: NoSendExpiryLifecycleResult,
+  write: LifecycleWrite,
   expected: 'revocation-requested' | 'conflicted' = 'revocation-requested'
 ): Promise<void> {
   const anchor = verifyOne(
@@ -778,16 +824,20 @@ async function attemptReclaim(
   }
   if (!anchorIsUtxo) {
     if (expected === 'revocation-requested') {
-      await storage.compareAndSetNoSendExpiryState(transaction.transactionId, expected, 'conflicted')
+      await write.transaction(trx =>
+        awaitFromSync(() =>
+          storage.compareAndSetNoSendExpiryState(transaction.transactionId, expected, 'conflicted', trx)
+        )
+      )
     }
     result.deferred++
     return
   }
 
-  const reclaim = await activateReclaim(storage, transaction, anchor, expected)
+  const reclaim = await activateReclaim(storage, transaction, anchor, expected, write)
   if (reclaim == null) return
   result.reclaimActivated++
-  await storage.attemptToPostReqsToNetwork([reclaim]).catch(() => undefined)
+  await write.post(reclaim).catch(() => undefined)
 }
 
 async function processTransaction(
@@ -796,12 +846,13 @@ async function processTransaction(
   targetStatus: StatusForTxidResult['status'] | undefined,
   nowSeconds: number,
   height: number | undefined,
-  result: NoSendExpiryLifecycleResult
+  result: NoSendExpiryLifecycleResult,
+  write: LifecycleWrite
 ): Promise<void> {
-  if (await processObservationOrRace(storage, transaction, targetStatus, result)) return
+  if (await processObservationOrRace(storage, transaction, targetStatus, result, write)) return
   if (!isDue(transaction, nowSeconds, height)) return
   if (transaction.noSendExpiryState === 'preparing' || transaction.noSendExpiryState === 'unsigned') {
-    if (await cancelUnsigned(storage, transaction)) result.cancelled++
+    if (await cancelUnsigned(storage, transaction, write)) result.cancelled++
     return
   }
   if (transaction.noSendExpiryState === 'conflicted') {
@@ -813,10 +864,10 @@ async function processTransaction(
       result.deferred++
       return
     }
-    await attemptReclaim(storage, transaction, result, 'conflicted')
+    await attemptReclaim(storage, transaction, result, write, 'conflicted')
     return
   }
-  if ((await requestRevocation(storage, transaction)) == null) return
+  if ((await requestRevocation(storage, transaction, write)) == null) return
   // Absence of a successful, explicit "unknown" verdict is not evidence
   // that the protected transaction is absent. A service outage must never
   // turn into authorization to double spend the anchor.
@@ -824,13 +875,63 @@ async function processTransaction(
     result.deferred++
     return
   }
-  await attemptReclaim(storage, transaction, result)
+  await attemptReclaim(storage, transaction, result, write)
+}
+
+interface LifecycleWrite {
+  transaction: StorageActiveWrite['transaction']
+  assertCurrent: () => Promise<void>
+  post: (req: EntityProvenTxReq) => Promise<void>
+}
+
+async function captureLifecycleWrite(
+  storage: StorageProvider,
+  transaction: TableTransaction,
+  context: LifecycleContext,
+  profiles: Map<number, StorageActiveWrite>
+): Promise<LifecycleWrite> {
+  if (!context.fenced)
+    return {
+      transaction: (scope, trx) => awaitFromSync(() => storage.transaction(scope, trx)),
+      assertCurrent: () => promiseFromSync(() => {}),
+      post: req => awaitVoidFromSync(() => storage.attemptToPostReqsToNetwork([req]))
+    }
+  let captured = profiles.get(transaction.userId)
+  if (captured == null) {
+    const user = verifyOne(await storage.findUsers({ partial: { userId: transaction.userId } }))
+    captured = await storage.activeWriteTransaction(user)
+    profiles.set(transaction.userId, captured)
+  }
+  const write = captured
+  const txids = [transaction.txid, transaction.noSendExpiryReclaimTxid].filter((txid): txid is string => txid != null)
+  const requests = await StorageReqWrite.capture(
+    storage,
+    txids,
+    { userId: transaction.userId, write },
+    context.admission
+  )
+  return {
+    transaction: async (scope, trx) =>
+      context.admission == null
+        ? await write.transaction(scope, trx)
+        : await context.admission(() => awaitFromSync(() => write.transaction(scope, trx))),
+    assertCurrent: () => awaitFromSync(() => write.assertCurrent()),
+    post: async req => {
+      await write.assertCurrent()
+      // Activation may just have inserted this declared, pre-signed reclaim.
+      // Keep the original actor/peer captures; never recapture after I/O.
+      await requests.refreshCommittedActorTransactions(req.txid)
+      await storage.attemptToPostReqsToNetwork([req], undefined, undefined, requests)
+    }
+  }
 }
 
 interface LifecycleContext {
   nowSeconds: number
   height?: number
   heightAttempted: boolean
+  fenced: boolean
+  admission?: StorageWriterAdmission
 }
 
 async function processPage(
@@ -839,8 +940,20 @@ async function processPage(
   context: LifecycleContext,
   result: NoSendExpiryLifecycleResult
 ): Promise<void> {
-  const transactions = await activeTransactionsOnPage(storage, page)
-  result.inspected += transactions.length
+  const selected = await activeTransactionsOnPage(storage, page)
+  result.inspected += selected.length
+  const writes = new Map<number, LifecycleWrite>()
+  const profiles = new Map<number, StorageActiveWrite>()
+  const transactions: TableTransaction[] = []
+  for (const transaction of selected) {
+    try {
+      writes.set(transaction.transactionId, await captureLifecycleWrite(storage, transaction, context, profiles))
+      transactions.push(transaction)
+    } catch (error) {
+      result.deferred++
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') result.errors++
+    }
+  }
 
   const needsHeight = transactions.some(transaction => transaction.noSendExpiryMode === 'blockheight')
   if (!context.heightAttempted && needsHeight) {
@@ -852,13 +965,15 @@ async function processPage(
   const statuses = await getStatuses(storage, transactions)
   for (const transaction of transactions) {
     try {
+      const write = writes.get(transaction.transactionId)!
+      await write.assertCurrent()
       const targetStatus = transaction.txid ? statuses.get(transaction.txid) : undefined
-      await processTransaction(storage, transaction, targetStatus, context.nowSeconds, context.height, result)
-    } catch {
+      await processTransaction(storage, transaction, targetStatus, context.nowSeconds, context.height, result, write)
+    } catch (error) {
       // A damaged row needs operator repair, but it must not block unrelated
       // users or later deadlines in this multi-user monitor pass.
       result.deferred++
-      result.errors++
+      if (WalletError.fromUnknown(error).code !== 'WERR_NOT_ACTIVE') result.errors++
     }
   }
 }
@@ -882,11 +997,16 @@ async function processState(
   }
 }
 
-export async function processNoSendExpiryLifecycle(storage: StorageProvider): Promise<NoSendExpiryLifecycleResult> {
+export async function processNoSendExpiryLifecycle(
+  storage: StorageProvider,
+  admission?: StorageWriterAdmission
+): Promise<NoSendExpiryLifecycleResult> {
   const result = emptyResult()
   const context: LifecycleContext = {
     nowSeconds: Math.floor(Date.now() / 1000),
-    heightAttempted: false
+    heightAttempted: false,
+    fenced: typeof storage.supportsPrimaryWriteFences === 'function' && (await storage.supportsPrimaryWriteFences()),
+    admission
   }
 
   for (const state of ACTIVE_STATES) {

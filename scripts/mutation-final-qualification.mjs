@@ -12,12 +12,22 @@ import { calculateMutationMetrics, evaluateMutationReport } from './mutation-tes
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const INPUTS = [
   'governance/mutation-testing/targets.mjs',
+  'governance/mutation-testing/stop-on-kill-environment.cjs',
+  'governance/mutation-testing/durations.json',
+  'governance/mutation-testing/wallet-component-tests.json',
+  'scripts/provision-wallet-native-browser.mjs',
+  'scripts/wallet-native-browser.json',
   'governance/mutation-testing/policy.json',
   'governance/mutation-testing/stryker.config.mjs',
   'scripts/mutation-testing.mjs',
   'scripts/mutation-final-qualification.mjs',
   'scripts/mutation-partitions.mjs',
+  'scripts/mutation-execution-partitions.mjs',
+  'governance/mutation-testing/execution-partitions.json',
   'scripts/mutation-partition-evidence.mjs',
+  'scripts/wallet-journal-ci.mjs',
+  'scripts/wallet-composed-native-ci.mjs',
+  '.github/workflows/ci.yml',
   '.github/workflows/mutation-tests.yml',
   'package.json',
   'pnpm-lock.yaml',
@@ -240,7 +250,7 @@ function requireConfiguration(actual, expected, key = 'config') {
   }
 }
 
-function mutantTuple(file, mutant) {
+export function mutantTuple(file, mutant) {
   return JSON.stringify([
     file,
     mutant.location.start.line,

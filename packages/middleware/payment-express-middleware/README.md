@@ -1,5 +1,17 @@
 # @bsv/payment-express-middleware
 
+The unpublished candidate ships receiver-owned payload decoding and multipart
+format checks, preserving its previous SDK2 peer floor without importing new
+SDK3-only helper modules. Strict packed SDK2.8.11 and SDK3 installations use their
+actual original wallet, peer and cryptographic classes. Authentication, fatal
+UTF8 decoding, exact signed content types, resource bounds and payment/replay
+checks remain unchanged. Multipart separators and closing framing compare exact
+bytes, preserving binary payload prefixes and refusing non-ASCII lookalikes.
+Optional new AuthFetch payment APIs require the SDK3.3.0
+candidate; supported SDK2 receivers do not require an unpublished SDK2.9 release.
+The original large numeric-array requests above legacy structural limits still
+refuse; this fix does not claim a complete compatibility or platform gate.
+
 Express middleware for the legacy authenticated `x-bsv-payment` JSON flow. It
 runs after `@bsv/auth-express-middleware`, issues an HTTP `402` challenge,
 validates an Atomic BEEF transaction, atomically rejects reused transaction
@@ -8,6 +20,19 @@ IDs, internalizes output zero, and exposes a verified payment receipt.
 This protocol is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Choose one protocol deliberately; their headers and client
 contracts are not interchangeable.
+
+## BRC-118 multipart payments
+
+Set `enableMultipart: true` behind `createAuthMiddleware({ wallet,
+captureRawBody: true })`, installed before any body parser. Negotiation advertises
+`header,multipart` only when exact-byte authentication is active. Small payments
+retain `x-bsv-payment`; multipart payments share the same amount, BRC-29, BEEF,
+internalization and replay validation. The route receives only the original
+payload/media type, with exact bytes in `req.rawBody`. Defaults bound payment JSON
+to 4 MiB and the complete body to 7 MiB; configure `maxPaymentBytes` and
+`maxPaymentBodyBytes` to match the proxy and auth collector. See the
+[BRC-118 guide](../../../docs/guides/brc118-payments.md) for receiver-first rollout,
+parser policy, browser headers and uncertain payment recovery.
 
 Version 2.1.8 removes middleware payment-header size ceilings. A header already
 received from the client is parsed and its payment validated regardless of size.

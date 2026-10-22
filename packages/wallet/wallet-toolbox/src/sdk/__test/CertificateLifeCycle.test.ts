@@ -113,8 +113,8 @@ function makeSampleCert(
   const certifier = certifierKeyHex ? PrivateKey.fromString(certifierKeyHex) : PrivateKey.fromRandom()
   const _verifier = verifierKeyHex ? PrivateKey.fromString(verifierKeyHex) : PrivateKey.fromRandom()
   const cert: WalletCertificate = {
-    type: Utils.toBase64(Array.from({ length: 32 }).fill(1)),
-    serialNumber: Utils.toBase64(Array.from({ length: 32 }).fill(2)),
+    type: Utils.toBase64(Array.from({ length: 32 }, () => 1)),
+    serialNumber: Utils.toBase64(Array.from({ length: 32 }, () => 2)),
     revocationOutpoint: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef.1',
     subject: subject.toPublicKey().toString(),
     certifier: certifier.toPublicKey().toString(),

@@ -25,3 +25,11 @@ the final site's links.
 Package versions, runtime support, conformance facts, and release instructions
 should come from repository-owned manifests and generated data rather than
 being duplicated manually in this application.
+
+The Mermaid 12 dependency graph resolves DOMPurify 3.4.17, which fixes the
+upstream shadow-root template and detached-node sanitization advisories.
+This compatible lockfile refresh also updates Mermaid's parser, diagram layout,
+UUID and package-detection dependencies within their existing declared ranges.
+It changes no Mermaid configuration or wallet dependency. The governed bundle
+inventory tracks the actual client components and their license hashes; the
+ordinary site build verifies that inventory and generates deployment notices.

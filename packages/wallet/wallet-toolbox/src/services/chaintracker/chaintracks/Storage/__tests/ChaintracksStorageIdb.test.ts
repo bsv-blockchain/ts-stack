@@ -24,7 +24,7 @@ describe('ChaintracksStorageIdb tests', () => {
   let _logSpy: jest.SpyInstance
   const capturedLogs: string[] = []
   beforeAll(async () => {
-    logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
+    _logSpy = jest.spyOn(console, 'log').mockImplementation((...args: any[]) => {
       capturedLogs.push(args.map(String).join(' '))
     })
   })

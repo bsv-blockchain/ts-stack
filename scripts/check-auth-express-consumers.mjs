@@ -134,6 +134,11 @@ try {
     }
     const challengeCount = challenges.length
     let paymentAttempted = false
+    let paymentAborted = false
+    // The candidate SDK requires prepare/submit/abort capabilities before it
+    // calls createAction. This probe refuses preparation, so nothing is spent
+    // or reserved and abortAction must remain unused.
+    wallet.abortAction = async () => { paymentAborted = true; return { aborted: true } }
     wallet.createAction = async () => { paymentAttempted = true; throw new Error('TEST_PAYMENT_DISABLED') }
     await assert.rejects(auth.fetch(base + '/paid'), /TEST_PAYMENT_DISABLED/)
     assert.equal(challenges.length, challengeCount + 1)
@@ -142,6 +147,7 @@ try {
     assert.equal(challenge.headers['x-bsv-payment-satoshis-required'], '25')
     assert.ok(challenge.headers['x-bsv-auth-signature'])
     assert.equal(paymentAttempted, true)
+    assert.equal(paymentAborted, false)
     for (const config of [
       {},
       { headers: { 'content-type': 'application/json' } },

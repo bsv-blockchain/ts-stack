@@ -12,7 +12,7 @@ describe('Wallet validation telemetry', () => {
   it('binds normalized arguments to a validation span and reports rejection', () => {
     const events: TelemetryEvent[] = []
     const telemetry = new Telemetry({
-      sink: { capture: event => events.push(event) },
+      sink: { capture: event => void events.push(event) },
       traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       spanIdFactory: () => 'bbbbbbbbbbbbbbbb'
     })

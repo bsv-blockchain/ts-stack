@@ -125,7 +125,9 @@ describe('update2 tests', () => {
             })
           )
           verifyValues(updatedTx, testValues, referenceTime)
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             if (key === primaryKey) {
               continue
             }
@@ -166,7 +168,9 @@ describe('update2 tests', () => {
                   partial: { [primaryKey]: record[primaryKey] }
                 })
               )
-              expect(new Date(updatedRow[key]).toISOString()).toBe(validDate.toISOString())
+              expect(new Date(updatedRow[key as 'created_at' | 'updated_at']).toISOString()).toBe(
+                validDate.toISOString()
+              )
             }
             if (Array.isArray(value)) {
               const validArray = value.map(v => v + 1)
@@ -319,7 +323,9 @@ describe('update2 tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -328,6 +334,7 @@ describe('update2 tests', () => {
               continue
             }
             if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+              if (typeof actualValue !== 'string') throw new Error('Stored JSON fixture field must remain a string')
               expect(JSON.parse(actualValue)).toStrictEqual(JSON.parse(value))
               continue
             }
@@ -335,8 +342,13 @@ describe('update2 tests', () => {
               expect(actualValue).toBe(value)
               continue
             }
-            if (typeof actualValue === 'object' && actualValue?.type === 'Buffer') {
-              const actualArray = actualValue.data || actualValue
+            if (
+              typeof actualValue === 'object' &&
+              actualValue !== null &&
+              'type' in actualValue &&
+              actualValue.type === 'Buffer'
+            ) {
+              const actualArray = 'data' in actualValue ? actualValue.data || actualValue : actualValue
               const expectedArray =
                 Buffer.isBuffer(value) || Array.isArray(value) ? Array.from(value as ArrayLike<number>) : value
               expect(actualArray).toStrictEqual(expectedArray)
@@ -484,7 +496,9 @@ describe('update2 tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -713,7 +727,9 @@ describe('update2 tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -722,6 +738,7 @@ describe('update2 tests', () => {
               continue
             }
             if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+              if (typeof actualValue !== 'string') throw new Error('Stored JSON fixture field must remain a string')
               expect(JSON.parse(actualValue)).toStrictEqual(JSON.parse(value))
               continue
             }
@@ -739,8 +756,13 @@ describe('update2 tests', () => {
               expect(actualValue).toBe(value)
               continue
             }
-            if (typeof actualValue === 'object' && actualValue?.type === 'Buffer') {
-              const actualArray = actualValue.data || actualValue
+            if (
+              typeof actualValue === 'object' &&
+              actualValue !== null &&
+              'type' in actualValue &&
+              actualValue.type === 'Buffer'
+            ) {
+              const actualArray = 'data' in actualValue ? actualValue.data || actualValue : actualValue
               const expectedArray =
                 Buffer.isBuffer(value) || Array.isArray(value) ? Array.from(value as ArrayLike<number>) : value
               expect(actualArray).toStrictEqual(expectedArray)

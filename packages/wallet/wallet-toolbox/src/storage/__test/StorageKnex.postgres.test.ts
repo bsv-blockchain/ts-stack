@@ -109,7 +109,8 @@ describePostgres('StorageKnex on Postgres', () => {
       await lock('outputs')
         .where({ outputId: output.outputId })
         .update({ spendable: false, spentBy: first.transactionId })
-      const spending = markKnownInputsSpent(storage, [{ i: input, o: { ...output } }], second.transactionId)
+      const write = await storage.activeWriteTransaction({ userId: output.userId })
+      const spending = markKnownInputsSpent(storage, [{ i: input, o: { ...output } }], second.transactionId, write)
       await waitForLockWait(locker, 'markKnownInputsSpent')
       await lock.commit()
 

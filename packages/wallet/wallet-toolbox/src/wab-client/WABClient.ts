@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../utility/promiseFromSync'
 import { PrivateKey } from '@bsv/sdk'
 import {
   AuthMethodInteractor,
@@ -73,12 +74,17 @@ export class WABClient {
     this.transport = new WABTransport(serverUrl, options)
   }
 
-  public async getInfo(): Promise<WABServerInfo> {
-    const response = await this.transport.request<unknown>('/info', {
-      method: 'GET',
-      operation: 'get-info'
-    })
-    return validateWABServerInfo(response)
+  public getInfo(): Promise<WABServerInfo> {
+    return mapAwaitFromSync(
+      () =>
+        this.transport.request<unknown>('/info', {
+          method: 'GET',
+          operation: 'get-info'
+        }),
+      response => {
+        return validateWABServerInfo(response)
+      }
+    )
   }
 
   public generateRandomPresentationKey(): string {

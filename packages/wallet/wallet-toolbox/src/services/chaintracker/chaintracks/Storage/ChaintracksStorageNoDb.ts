@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../../../utility/promiseFromSync'
 import { ChaintracksStorageBaseOptions, InsertHeaderResult } from '../Api/ChaintracksStorageApi'
 import { ChaintracksStorageBase } from '../Storage/ChaintracksStorageBase'
 import { LiveBlockHeader } from '../Api/BlockHeaderApi'
@@ -103,8 +104,10 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     }
   }
 
-  override async destroy(): Promise<void> {
-    /* intentional no-op: in-memory storage has no cleanup */
+  override destroy(): Promise<void> {
+    return promiseFromSync(() => {
+      /* intentional no-op: in-memory storage has no cleanup */
+    })
   }
 
   private getMutableData(): ChaintracksNoDbData {
@@ -125,152 +128,178 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
   }
 
   /** Returns an isolated diagnostic snapshot; mutating it never changes tracker state. */
-  async getData(): Promise<ChaintracksNoDbData> {
-    const data = this.getMutableData()
-    return {
-      chain: data.chain,
-      liveHeaders: new Map(Array.from(data.liveHeaders, ([id, header]) => [id, { ...header }])),
-      maxHeaderId: data.maxHeaderId,
-      tipHeaderId: data.tipHeaderId,
-      hashToHeaderId: new Map(data.hashToHeaderId)
-    }
+  getData(): Promise<ChaintracksNoDbData> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      return {
+        chain: data.chain,
+        liveHeaders: new Map(Array.from(data.liveHeaders, ([id, header]) => [id, { ...header }])),
+        maxHeaderId: data.maxHeaderId,
+        tipHeaderId: data.tipHeaderId,
+        hashToHeaderId: new Map(data.hashToHeaderId)
+      }
+    })
   }
 
-  override async deleteLiveBlockHeaders(): Promise<void> {
-    const data = this.getMutableData()
-    data.liveHeaders.clear()
-    data.maxHeaderId = 0
-    data.tipHeaderId = 0
-    data.hashToHeaderId.clear()
+  override deleteLiveBlockHeaders(): Promise<void> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      data.liveHeaders.clear()
+      data.maxHeaderId = 0
+      data.tipHeaderId = 0
+      data.hashToHeaderId.clear()
+    })
   }
 
-  override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
-    this.validateHeight(maxHeight, 'maxHeight')
-    const data = this.getMutableData()
-    let deletedCount = 0
+  override deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
+    return promiseFromSync(() => {
+      this.validateHeight(maxHeight, 'maxHeight')
+      const data = this.getMutableData()
+      let deletedCount = 0
 
-    // Clear previousHeaderId references
-    for (const [headerId, header] of data.liveHeaders) {
-      if (header.previousHeaderId) {
-        const prevHeader = data.liveHeaders.get(header.previousHeaderId)
-        if (prevHeader != null && prevHeader.height <= maxHeight) {
-          data.liveHeaders.set(headerId, { ...header, previousHeaderId: null })
+      // Clear previousHeaderId references
+      for (const [headerId, header] of data.liveHeaders) {
+        if (header.previousHeaderId) {
+          const prevHeader = data.liveHeaders.get(header.previousHeaderId)
+          if (prevHeader != null && prevHeader.height <= maxHeight) {
+            data.liveHeaders.set(headerId, { ...header, previousHeaderId: null })
+          }
         }
       }
-    }
 
-    // Delete headers up to maxHeight
-    const headersToDelete = new Set<number>()
-    for (const [headerId, header] of data.liveHeaders) {
-      if (header.height <= maxHeight) {
-        headersToDelete.add(headerId)
-        data.hashToHeaderId.delete(header.hash)
+      // Delete headers up to maxHeight
+      const headersToDelete = new Set<number>()
+      for (const [headerId, header] of data.liveHeaders) {
+        if (header.height <= maxHeight) {
+          headersToDelete.add(headerId)
+          data.hashToHeaderId.delete(header.hash)
+        }
       }
-    }
-    deletedCount = headersToDelete.size
-    for (const headerId of headersToDelete) {
-      data.liveHeaders.delete(headerId)
-    }
+      deletedCount = headersToDelete.size
+      for (const headerId of headersToDelete) {
+        data.liveHeaders.delete(headerId)
+      }
 
-    // Update tipHeaderId if necessary
-    if (data.liveHeaders.size > 0) {
-      const tip = Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
-      data.tipHeaderId = tip?.headerId ?? 0
-    } else {
-      data.tipHeaderId = 0
-    }
+      // Update tipHeaderId if necessary
+      if (data.liveHeaders.size > 0) {
+        const tip = Array.from(data.liveHeaders.values()).find(h => h.isActive && h.isChainTip)
+        data.tipHeaderId = tip?.headerId ?? 0
+      } else {
+        data.tipHeaderId = 0
+      }
 
-    return deletedCount
+      return deletedCount
+    })
   }
 
-  override async findChainTipHeader(): Promise<LiveBlockHeader> {
-    const data = this.getMutableData()
-    const tips = Array.from(data.liveHeaders.values()).filter(h => h.isActive && h.isChainTip)
-    if (tips.length > 1) throw new WERR_INVALID_OPERATION('multiple active chain tips exist in memory')
-    const [tip] = tips
-    if (tip == null) throw new Error('Database contains no active chain tip header.')
-    return { ...tip }
+  override findChainTipHeader(): Promise<LiveBlockHeader> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      const tips = Array.from(data.liveHeaders.values()).filter(h => h.isActive && h.isChainTip)
+      if (tips.length > 1) throw new WERR_INVALID_OPERATION('multiple active chain tips exist in memory')
+      const [tip] = tips
+      if (tip == null) throw new Error('Database contains no active chain tip header.')
+      return { ...tip }
+    })
   }
 
-  override async findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> {
-    const data = this.getMutableData()
-    const tips = Array.from(data.liveHeaders.values()).filter(h => h.isActive && h.isChainTip)
-    if (tips.length > 1) throw new WERR_INVALID_OPERATION('multiple active chain tips exist in memory')
-    const [tip] = tips
-    return tip == null ? undefined : { ...tip }
+  override findChainTipHeaderOrUndefined(): Promise<LiveBlockHeader | undefined> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      const tips = Array.from(data.liveHeaders.values()).filter(h => h.isActive && h.isChainTip)
+      if (tips.length > 1) throw new WERR_INVALID_OPERATION('multiple active chain tips exist in memory')
+      const [tip] = tips
+      return tip == null ? undefined : { ...tip }
+    })
   }
 
-  override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
-    this.validateHash(hash)
-    const data = this.getMutableData()
-    const headerId = data.hashToHeaderId.get(hash)
-    const header = headerId ? data.liveHeaders.get(headerId) : undefined
-    return header == null ? null : { ...header }
+  override findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
+    return promiseFromSync(() => {
+      this.validateHash(hash)
+      const data = this.getMutableData()
+      const headerId = data.hashToHeaderId.get(hash)
+      const header = headerId ? data.liveHeaders.get(headerId) : undefined
+      return header == null ? null : { ...header }
+    })
   }
 
-  override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
-    if (!Number.isSafeInteger(headerId) || headerId < 1) {
-      throw new WERR_INVALID_PARAMETER('headerId', 'a positive safe integer')
-    }
-    const data = this.getMutableData()
-    const header = data.liveHeaders.get(headerId)
-    if (header == null) throw new Error(`HeaderId ${headerId} not found in live header database.`)
-    return { ...header }
+  override findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
+    return promiseFromSync(() => {
+      if (!Number.isSafeInteger(headerId) || headerId < 1) {
+        throw new WERR_INVALID_PARAMETER('headerId', 'a positive safe integer')
+      }
+      const data = this.getMutableData()
+      const header = data.liveHeaders.get(headerId)
+      if (header == null) throw new Error(`HeaderId ${headerId} not found in live header database.`)
+      return { ...header }
+    })
   }
 
-  override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
-    this.validateHeight(height)
-    const data = this.getMutableData()
-    const headers = Array.from(data.liveHeaders.values()).filter(h => h.height === height && h.isActive)
-    if (headers.length > 1) throw new WERR_INVALID_OPERATION(`multiple active headers exist at height ${height}`)
-    const [header] = headers
-    return header == null ? null : { ...header }
+  override findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
+    return promiseFromSync(() => {
+      this.validateHeight(height)
+      const data = this.getMutableData()
+      const headers = Array.from(data.liveHeaders.values()).filter(h => h.height === height && h.isActive)
+      if (headers.length > 1) throw new WERR_INVALID_OPERATION(`multiple active headers exist at height ${height}`)
+      const [header] = headers
+      return header == null ? null : { ...header }
+    })
   }
 
-  override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
-    this.validateHash(merkleRoot, 'merkleRoot')
-    const data = this.getMutableData()
-    const headers = Array.from(data.liveHeaders.values()).filter(h => h.merkleRoot === merkleRoot)
-    const header = headers.find(h => h.isActive) ?? headers[0]
-    return header == null ? null : { ...header }
+  override findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
+    return promiseFromSync(() => {
+      this.validateHash(merkleRoot, 'merkleRoot')
+      const data = this.getMutableData()
+      const headers = Array.from(data.liveHeaders.values()).filter(h => h.merkleRoot === merkleRoot)
+      const header = headers.find(h => h.isActive) ?? headers[0]
+      return header == null ? null : { ...header }
+    })
   }
 
-  override async findLiveHeightRange(): Promise<HeightRange> {
-    const data = this.getMutableData()
-    const activeHeaders = Array.from(data.liveHeaders.values()).filter(h => h.isActive)
-    if (activeHeaders.length === 0) {
-      return HeightRange.empty
-    }
-    const minHeight = Math.min(...activeHeaders.map(h => h.height))
-    const maxHeight = Math.max(...activeHeaders.map(h => h.height))
-    return new HeightRange(minHeight, maxHeight)
+  override findLiveHeightRange(): Promise<HeightRange> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      const activeHeaders = Array.from(data.liveHeaders.values()).filter(h => h.isActive)
+      if (activeHeaders.length === 0) {
+        return HeightRange.empty
+      }
+      const minHeight = Math.min(...activeHeaders.map(h => h.height))
+      const maxHeight = Math.max(...activeHeaders.map(h => h.height))
+      return new HeightRange(minHeight, maxHeight)
+    })
   }
 
-  override async findMaxHeaderId(): Promise<number> {
-    const data = this.getMutableData()
-    return data.maxHeaderId
+  override findMaxHeaderId(): Promise<number> {
+    return promiseFromSync(() => {
+      const data = this.getMutableData()
+      return data.maxHeaderId
+    })
   }
 
-  override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
-    if (!Number.isSafeInteger(count) || count < 1 || count > 100_000) {
-      throw new WERR_INVALID_PARAMETER('count', 'an integer from 1 through 100000')
-    }
-    const data = this.getMutableData()
-    return Array.from(data.liveHeaders.values())
-      .filter(h => h.isActive)
-      .sort((a, b) => a.height - b.height)
-      .slice(0, count)
-      .map(header => ({ ...header }))
+  override liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
+    return promiseFromSync(() => {
+      if (!Number.isSafeInteger(count) || count < 1 || count > 100_000) {
+        throw new WERR_INVALID_PARAMETER('count', 'an integer from 1 through 100000')
+      }
+      const data = this.getMutableData()
+      return Array.from(data.liveHeaders.values())
+        .filter(h => h.isActive)
+        .sort((a, b) => a.height - b.height)
+        .slice(0, count)
+        .map(header => ({ ...header }))
+    })
   }
 
-  override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
-    this.validateRange(range)
-    if (range.isEmpty) return []
-    const data = this.getMutableData()
-    const headers = Array.from(data.liveHeaders.values())
-      .filter(h => h.isActive && h.height >= range.minHeight && h.height <= range.maxHeight)
-      .sort((a, b) => a.height - b.height)
-    return headers.map(header => ({ ...header }))
+  override getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
+    return promiseFromSync(() => {
+      this.validateRange(range)
+      if (range.isEmpty) return []
+      const data = this.getMutableData()
+      const headers = Array.from(data.liveHeaders.values())
+        .filter(h => h.isActive && h.height >= range.minHeight && h.height <= range.maxHeight)
+        .sort((a, b) => a.height - b.height)
+      return headers.map(header => ({ ...header }))
+    })
   }
 
   private async insertFirstHeader(

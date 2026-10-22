@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { HeightRange } from '../../services/chaintracker/chaintracks/util/HeightRange'
 import { Monitor } from '../Monitor'
 import {
@@ -212,14 +213,17 @@ export class TaskReviewProvenTxs extends WalletMonitorTask {
     if (checkpoint?.reviewedThroughHeight != null) return checkpoint.reviewedThroughHeight
 
     let lastReviewedHeight: number | undefined
-    await this.storage.runAsStorageProvider(async sp => {
-      // Start at height of first proven tx when it appears...
-      const ptxs = await sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false })
-      if (ptxs.length > 0) {
-        const firstHeight = optionalMonitorInteger(ptxs[0].height, 0, MAX_MONITOR_HEIGHT)
-        if (firstHeight !== undefined) lastReviewedHeight = firstHeight - 1
-      }
-    })
+    await this.storage.runAsStorageProvider(sp =>
+      mapAwaitFromSync(
+        () => sp.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 }, orderDescending: false }),
+        ptxs => {
+          if (ptxs.length > 0) {
+            const firstHeight = optionalMonitorInteger(ptxs[0].height, 0, MAX_MONITOR_HEIGHT)
+            if (firstHeight !== undefined) lastReviewedHeight = firstHeight - 1
+          }
+        }
+      )
+    )
 
     return lastReviewedHeight
   }

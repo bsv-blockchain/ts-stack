@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync, promiseFromSync, mapAwaitFromSync } from '../../../utility/promiseFromSync'
 import { Chain } from '../../../sdk/types'
 import { asArray, asString } from '../../../utility/utilityHelpers.noBuffer'
 import { BaseBlockHeader, BlockHeader } from './Api/BlockHeaderApi'
@@ -71,7 +72,7 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     const fetchImpl = this.options.fetch ?? fetch
     if (typeof fetchImpl !== 'function') throw new Error('fetch must be a function.')
     // Call fetch with no receiver: browsers refuse it on anything but the window.
-    this.fetcher = async (input, init) => await fetchImpl(input, init)
+    this.fetcher = (input, init) => awaitFromSync(() => fetchImpl(input, init))
     this.requestTimeoutMsecs = this.positiveInteger(
       this.options.requestTimeoutMsecs ?? 30_000,
       'requestTimeoutMsecs',
@@ -91,27 +92,37 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
 
   readonly serviceUrl: string
 
-  async subscribeHeaders(_listener: HeaderListener): Promise<string> {
-    throw new Error('Method not implemented.')
+  subscribeHeaders(_listener: HeaderListener): Promise<string> {
+    return promiseFromSync(() => {
+      throw new Error('Method not implemented.')
+    })
   }
 
-  async subscribeReorgs(_listener: ReorgListener): Promise<string> {
-    throw new Error('Method not implemented.')
+  subscribeReorgs(_listener: ReorgListener): Promise<string> {
+    return promiseFromSync(() => {
+      throw new Error('Method not implemented.')
+    })
   }
 
-  async unsubscribe(_subscriptionId: string): Promise<boolean> {
-    throw new Error('Method not implemented.')
+  unsubscribe(_subscriptionId: string): Promise<boolean> {
+    return promiseFromSync(() => {
+      throw new Error('Method not implemented.')
+    })
   }
 
-  async currentHeight(): Promise<number> {
-    return await this.getPresentHeight()
+  currentHeight(): Promise<number> {
+    return awaitFromSync(() => this.getPresentHeight())
   }
 
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
-    const r = await this.findHeaderForHeight(height)
-    if (r == null) return false
-    const isValid = root === asString(r.merkleRoot)
-    return isValid
+  isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    return mapAwaitFromSync(
+      () => this.findHeaderForHeight(height),
+      r => {
+        if (r == null) return false
+        const isValid = root === asString(r.merkleRoot)
+        return isValid
+      }
+    )
   }
 
   async getJsonOrUndefined<T>(path: string): Promise<T | undefined> {
@@ -138,10 +149,14 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     if (e != null) throw e
   }
 
-  async getJson<T>(path: string): Promise<T> {
-    const r = await this.getJsonOrUndefined<T>(path)
-    if (r === undefined) throw new Error('Value was undefined. Requested object may not exist.')
-    return r
+  getJson<T>(path: string): Promise<T> {
+    return mapAwaitFromSync(
+      () => this.getJsonOrUndefined<T>(path),
+      r => {
+        if (r === undefined) throw new Error('Value was undefined. Requested object may not exist.')
+        return r
+      }
+    )
   }
 
   async postJsonVoid<T>(path: string, params: T): Promise<void> {
@@ -178,24 +193,28 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     if (typeof r === 'string') throw new Error(r)
   }
 
-  async startListening(): Promise<void> {
-    await this.getPresentHeight()
+  startListening(): Promise<void> {
+    return awaitVoidFromSync(() => this.getPresentHeight())
   }
 
-  async listening(): Promise<void> {
-    await this.getPresentHeight()
+  listening(): Promise<void> {
+    return awaitVoidFromSync(() => this.getPresentHeight())
   }
 
-  async getChain(): Promise<Chain> {
-    const value = await this.getJson<unknown>('/getChain')
-    if (typeof value !== 'string' || value.length > 64 || containsControlCharacter(value)) {
-      throw new Error('ChainTracks service returned an invalid chain.')
-    }
-    const actual = this.normalizeChain(value)
-    if (actual !== this.chain) {
-      throw new Error(`ChainTracks service chain '${actual}' does not match configured chain '${this.chain}'.`)
-    }
-    return actual
+  getChain(): Promise<Chain> {
+    return mapAwaitFromSync(
+      () => this.getJson<unknown>('/getChain'),
+      value => {
+        if (typeof value !== 'string' || value.length > 64 || containsControlCharacter(value)) {
+          throw new Error('ChainTracks service returned an invalid chain.')
+        }
+        const actual = this.normalizeChain(value)
+        if (actual !== this.chain) {
+          throw new Error(`ChainTracks service chain '${actual}' does not match configured chain '${this.chain}'.`)
+        }
+        return actual
+      }
+    )
   }
 
   async isListening(): Promise<boolean> {
@@ -207,34 +226,42 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     }
   }
 
-  async isSynchronized(): Promise<boolean> {
-    return await this.isListening()
+  isSynchronized(): Promise<boolean> {
+    return awaitFromSync(() => this.isListening())
   }
 
   async getPresentHeight(): Promise<number> {
     return this.validateHeight(await this.getJson('/getPresentHeight'), 'service height')
   }
 
-  async getInfo(): Promise<ChaintracksInfoApi> {
-    const value = await this.getJson<unknown>('/getInfo')
-    if (!this.isPlainRecord(value) || this.normalizeChainValue(value.chain) !== this.chain) {
-      throw new Error('ChainTracks service returned invalid or mismatched service information.')
-    }
-    this.validateInfoHeight(value.heightBulk, 'bulk height')
-    this.validateInfoHeight(value.heightLive, 'live height')
-    return value as unknown as ChaintracksInfoApi
+  getInfo(): Promise<ChaintracksInfoApi> {
+    return mapAwaitFromSync(
+      () => this.getJson<unknown>('/getInfo'),
+      value => {
+        if (!this.isPlainRecord(value) || this.normalizeChainValue(value.chain) !== this.chain) {
+          throw new Error('ChainTracks service returned invalid or mismatched service information.')
+        }
+        this.validateInfoHeight(value.heightBulk, 'bulk height')
+        this.validateInfoHeight(value.heightLive, 'live height')
+        return value as unknown as ChaintracksInfoApi
+      }
+    )
   }
 
   async findChainTipHeader(): Promise<BlockHeader> {
     return this.validateRemoteHeader(await this.getJson('/findChainTipHeaderHex'), 'chain tip')
   }
 
-  async findChainTipHash(): Promise<string> {
-    const hash = await this.getJson<unknown>('/findChainTipHashHex')
-    if (typeof hash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hash)) {
-      throw new Error('ChainTracks service returned an invalid chain-tip hash.')
-    }
-    return hash
+  findChainTipHash(): Promise<string> {
+    return mapAwaitFromSync(
+      () => this.getJson<unknown>('/findChainTipHashHex'),
+      hash => {
+        if (typeof hash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hash)) {
+          throw new Error('ChainTracks service returned an invalid chain-tip hash.')
+        }
+        return hash
+      }
+    )
   }
 
   async getHeaders(height: number, count: number): Promise<string> {
@@ -347,25 +374,30 @@ export class ChaintracksServiceClient implements ChaintracksClientApi {
     return result
   }
 
-  private async readStreamChunk(
+  private readStreamChunk(
     reader: ReadableStreamDefaultReader<Uint8Array>,
     signal: AbortSignal
   ): Promise<ReadableStreamReadResult<Uint8Array>> {
-    if (signal.aborted) throw this.abortError()
-    return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
-      let settled = false
-      const finish = (callback: (value: never) => void, value: ReadableStreamReadResult<Uint8Array> | Error): void => {
-        if (settled) return
-        settled = true
-        signal.removeEventListener('abort', onAbort)
-        callback(value as never)
-      }
-      const onAbort = () => finish(reject, this.abortError())
-      signal.addEventListener('abort', onAbort, { once: true })
-      reader.read().then(
-        value => finish(resolve, value),
-        error => finish(reject, error instanceof Error ? error : new Error(String(error)))
-      )
+    return awaitFromSync(() => {
+      if (signal.aborted) throw this.abortError()
+      return new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+        let settled = false
+        const finish = (
+          callback: (value: never) => void,
+          value: ReadableStreamReadResult<Uint8Array> | Error
+        ): void => {
+          if (settled) return
+          settled = true
+          signal.removeEventListener('abort', onAbort)
+          callback(value as never)
+        }
+        const onAbort = () => finish(reject, this.abortError())
+        signal.addEventListener('abort', onAbort, { once: true })
+        reader.read().then(
+          value => finish(resolve, value),
+          error => finish(reject, error instanceof Error ? error : new Error(String(error)))
+        )
+      })
     })
   }
 

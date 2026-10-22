@@ -33,10 +33,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.x
+
+      - name: Install locked repository, wallet and mobile control dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack --filter @bsv/wallet-toolbox --filter @bsv/wallet-toolbox-mobile
+
+      - name: Rebuild the audited control compiler
+        run: pnpm rebuild esbuild
 
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
@@ -167,6 +175,7 @@ jobs:
     timeout-minutes: 12
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -175,12 +184,23 @@ jobs:
         with:
           node-version: 24.x
 
-      - name: Require the exact Sonar analysis to contain no new findings
+      - name: Enforce the exact-head repository Sonar policy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: >-
           node scripts/sonar-pr-gate.mjs
           --project bsv-blockchain_ts-stack
           --pull-request "${{ github.event.pull_request.number }}"
           --revision "${{ github.event.pull_request.head.sha }}"
+
+      - name: Retain complete PR569 Sonar inventories and both policy verdicts
+        if: always() && hashFiles('.sonar-policy/**/*.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sonar-policy-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: .sonar-policy/
+          include-hidden-files: true
+          if-no-files-found: error
 
   early-gates:
     name: Early policy gates
@@ -236,6 +256,7 @@ jobs:
       sdk: ${{ steps.scope.outputs.sdk }}
       did: ${{ steps.scope.outputs.did }}
       wallet: ${{ steps.scope.outputs.wallet }}
+      wallet-test-matrix: ${{ steps.wallet-matrix.outputs.matrix }}
       wallet_client: ${{ steps.scope.outputs.wallet_client }}
       wallet_mobile: ${{ steps.scope.outputs.wallet_mobile }}
       verifast: ${{ steps.scope.outputs.verifast }}
@@ -256,6 +277,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Verify pinned mutation partition inventory
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
 
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
@@ -280,7 +304,7 @@ jobs:
         run: node scripts/check-sdk-peer.mjs
 
       - name: Determine changed scope
-        # Coverage suites run only for directly changed package importers.
+        # Coverage suites run for direct importers and every affected wallet.
         # Regression/type compatibility expands through dependents; builds also
         # include their prerequisites.
         # The preceding repository-health dependency prevents expensive work
@@ -294,10 +318,12 @@ jobs:
           AFFECTED=$(jq -r '.[].name' <<<"$AFFECTED_PROJECTS")
           printf '%s\n' "$DIRECT_PROJECTS" > .ci-direct-packages.json
           printf '%s\n' "$AFFECTED_PROJECTS" > .ci-affected-packages.json
+          WALLET_SELECTED=$(jq -r 'any(.[]; .name == "@bsv/wallet-toolbox")' <<<"$AFFECTED_PROJECTS")
           DEPENDENT_PROJECTS=$(jq -n -c \
             --argjson affected "$AFFECTED_PROJECTS" \
             --argjson direct "$DIRECT_PROJECTS" \
-            '$direct | map(.name) as $directNames | $affected | map(select(.name as $name | ($directNames | index($name) | not)))')
+            --argjson walletSelected "$WALLET_SELECTED" \
+            '$direct | map(.name) as $directNames | $affected | map(select(.name as $name | ($directNames | index($name) | not)) | select($walletSelected == false or .name != "@bsv/wallet-toolbox"))')
           printf '%s\n' "$DEPENDENT_PROJECTS" > .ci-dependent-packages.json
 
           DEPENDENT_TEST_PACKAGES=$(node scripts/run-ci-tests.mjs \
@@ -330,16 +356,16 @@ jobs:
           echo "browser-matrix=$BROWSER_MATRIX" >> "$GITHUB_OUTPUT"
 
           COVERAGE_REQUIRED=false
-          if [ "$COVERAGE_OTHER_PACKAGES" != "[]" ] ||
+          if [ "$WALLET_SELECTED" = "true" ] || [ "$COVERAGE_OTHER_PACKAGES" != "[]" ] ||
              grep -Eq '^(@bsv/did|@bsv/sdk|@bsv/verifast|@bsv/wallet-toolbox)$' <<<"$DIRECT"; then
             COVERAGE_REQUIRED=true
           fi
           echo "coverage-required=$COVERAGE_REQUIRED" >> "$GITHUB_OUTPUT"
+          echo "wallet=$WALLET_SELECTED" >> "$GITHUB_OUTPUT"
 
           for entry in \
             "sdk:@bsv/sdk" \
             "did:@bsv/did" \
-            "wallet:@bsv/wallet-toolbox" \
             "verifast:@bsv/verifast"; do
             key="${entry%%:*}"
             package="${entry#*:}"
@@ -361,6 +387,10 @@ jobs:
               echo "$key=false" >> "$GITHUB_OUTPUT"
             fi
           done
+
+      - name: Select every original wallet coverage cohort
+        id: wallet-matrix
+        run: echo "matrix=$(node scripts/wallet-composed-native-ci.mjs matrix)" >> "$GITHUB_OUTPUT"
 
       - name: Verify installed CI qualification integration
         run: node --test scripts/ci-integration/*.test.mjs
@@ -495,10 +525,12 @@ jobs:
     needs:
       - prepare
       - sonar-zero-findings
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.wallet_native && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     # The governed air-gap codec target currently instruments 352 mutants and
     # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
+    # Complete snapshot source-guard service qualification took 58m35s locally,
+    # before hosted checkout/install. Preserve the 45-minute default elsewhere.
+    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-journal","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-remote-reader","wallet-snapshot-remote-service"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -520,6 +552,25 @@ jobs:
           path: .ci-artifacts
       - name: Restore build outputs
         run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+
+      - name: Deliver the pinned native browser for selected wallet component tests
+        if: matrix.wallet_native
+        run: node scripts/provision-wallet-native-browser.mjs --target "${{ matrix.target }}"
+
+      - name: Provision the qualified native wallet test executable
+        if: matrix.wallet_native
+        run: bash scripts/provision-wallet-native-tests.sh
+
+      - name: Preserve native component delivery evidence
+        if: always() && matrix.wallet_native
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-native-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}-${{ matrix.partition }}
+          path: |
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-delivery.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Enforce the affected mutation-quality ratchet
         run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
       - name: Capture complete execution-partition evidence
@@ -528,6 +579,9 @@ jobs:
           node scripts/mutation-partition-evidence.mjs capture --mode diagnostic \
             --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
             --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
+      - name: Release the exact native browser sandbox attachment
+        if: always() && matrix.wallet_native
+        run: node scripts/provision-wallet-native-browser.mjs --cleanup
       - name: Preserve the machine-readable mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -966,20 +1020,21 @@ jobs:
     name: Coverage / wallet-toolbox (${{ matrix.id }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.wallet == 'true'
     needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04-arm
+    # Keep both original COMPLETED cases together, each with its finite bound.
+    # One pair case fits the existing40m limit:660s plus two600s delivery steps.
+    # Include bounded native provisioning and dependency installation overhead.
+    # Full merge contracts each keep their own one-hour admission; proof lanes40m.
+    # Authenticated public-entry lanes retain1200s owners/1230s cases plus setup.
+    timeout-minutes: ${{ matrix.native_cohort == 'completed' && 265 || matrix.native_cohort != '' && 145 || matrix.native_merge_minutes || matrix.native_auth_minutes || 40 }}
+    env:
+      NODE_OPTIONS: --max-old-space-size=1536
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { id: shard-1, shard: 1 }
-          - { id: shard-2, shard: 2 }
-          - { id: shard-3, shard: 3 }
-          - { id: shard-4, shard: 4 }
-          - { id: sync-http-0, latency: 0 }
-          - { id: sync-http-1000, latency: 1000 }
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.prepare.outputs.wallet-test-matrix) }}
     services:
       # The Knex storage suites also run against Postgres (RUNPOSTGRES).
       postgres:
@@ -998,7 +1053,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build allowlisted better-sqlite3 binding
@@ -1009,24 +1064,176 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify native snapshot crash recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        run: node test/storage/snapshotArchiveCrash.cjs
+      - name: Provision pinned native snapshot MySQL fixture
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/snapshotArchiveDocker.cjs provision-hosted-image
+      - name: Verify native snapshot MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 5
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotArchiveMysql.cjs
+      - name: Verify native journal SQLite recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 3
+        run: node test/storage/snapshotJournalSqliteCrash.cjs
+      - name: Verify native journal MySQL recovery
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 10
+        env:
+          TS_STACK_SNAPSHOT_HOSTED_MYSQL: '1'
+        run: node test/storage/runSnapshotJournalMysql.cjs
+      - name: Deliver the pinned native browser for the serial browser cases
+        if: matrix.id == 'shard-4'
+        run: node scripts/provision-wallet-native-browser.mjs
+      - name: Deliver the exactly pinned qualified native test executable
+        run: bash scripts/provision-wallet-native-tests.sh
+      - name: Qualify the original privileged native root-copy fixtures
+        if: matrix.id == 'shard-1'
+        working-directory: packages/wallet/wallet-toolbox
+        timeout-minutes: 3
+        run: |
+          native_node="$(command -v node)"
+          jest_entry="$(node -p "require.resolve('jest/bin/jest')")"
+          mkdir -p coverage/native-root-copy
+          sudo --preserve-env=TS_STACK_NATIVE_TEST_EXECUTABLE env CI=true NODE_OPTIONS=--max-old-space-size=1536 \
+            "$native_node" "$jest_entry" --coverage --coverageDirectory=coverage/native-root-copy \
+            --runInBand --watchman=false --testPathIgnorePatterns=man.test.ts --runTestsByPath \
+            src/storage/portable/native/RootNativeCopyContracts.test.cjs \
+            --json --outputFile="$GITHUB_WORKSPACE/native-root-copy-result.json"
+          cd "$GITHUB_WORKSPACE"
+          node scripts/wallet-native-root-copy-ci.mjs < native-root-copy-result.json
+          sudo "$native_node" scripts/normalize-lcov-paths.mjs \
+            packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
+            packages/wallet/wallet-toolbox
+          mkdir -p .coverage-output
+          cp packages/wallet/wallet-toolbox/coverage/native-root-copy/lcov.info \
+            .coverage-output/wallet-native-root-copy.lcov.info
+          cp native-root-copy-result.json .coverage-output/native-root-copy-result.json
+      - name: Preserve native component delivery evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: native-delivery-${{ matrix.id }}
+          path: |
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-delivery.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Run every original browser case serially before ordinary shard-4
+        if: matrix.id == 'shard-4'
+        env:
+          RUNPOSTGRES: '1'
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
+            '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
+          export POSTGRES_CONNECTION
+          pnpm --filter @bsv/wallet-toolbox exec jest \
+            --coverage --coverageDirectory=coverage/browser --runInBand --watchman=false \
+            --runTestsByPath src/storage/portable/Brc38NativeBrowserComponents.test.cjs \
+            src/storage/snapshot/PackedIdbCurrentStructuredRead.test.ts \
+            src/utility/BrowserArgon2idWorker.native.test.cjs \
+            --json --outputFile="$GITHUB_WORKSPACE/wallet-browser-result.json"
+          node scripts/normalize-lcov-paths.mjs \
+            packages/wallet/wallet-toolbox/coverage/browser/lcov.info \
+            packages/wallet/wallet-toolbox
+          mkdir -p .coverage-output
+          cp packages/wallet/wallet-toolbox/coverage/browser/lcov.info \
+            .coverage-output/wallet-browser.lcov.info
+          node scripts/wallet-browser-ci.mjs capture wallet-browser-result.json \
+            .coverage-output/wallet-browser.lcov.info .coverage-output/wallet.wallet-browser.json
+      - name: Run every original journal case serially before ordinary shard-2
+        if: matrix.id == 'shard-2'
+        run: |
+          pnpm --filter @bsv/wallet-toolbox exec jest \
+            --coverage --coverageDirectory=coverage/journal --runInBand --watchman=false \
+            --runTestsByPath src/storage/__test/WalletStorageManager.journal.test.ts \
+            --json --outputFile="$GITHUB_WORKSPACE/wallet-journal-result.json"
+          node scripts/normalize-lcov-paths.mjs \
+            packages/wallet/wallet-toolbox/coverage/journal/lcov.info \
+            packages/wallet/wallet-toolbox
+          mkdir -p .coverage-output
+          cp packages/wallet/wallet-toolbox/coverage/journal/lcov.info \
+            .coverage-output/wallet-journal.lcov.info
+          node scripts/wallet-journal-ci.mjs capture wallet-journal-result.json \
+            .coverage-output/wallet-journal.lcov.info .coverage-output/wallet.wallet-journal.json
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}
           SYNC_LATENCY: ${{ matrix.latency }}
+          NATIVE_COHORT: ${{ matrix.native_cohort }}
+          NATIVE_PAIR_COHORT: ${{ matrix.native_pair_cohort }}
+          NATIVE_MERGE_COHORT: ${{ matrix.native_merge_cohort }}
+          NATIVE_AUTH_COHORT: ${{ matrix.native_auth_cohort }}
+          NATIVE_READ_COHORT: ${{ matrix.native_read_cohort }}
+          NATIVE_USER_COHORT: ${{ matrix.native_user_cohort }}
+          NATIVE_INTEGRITY_COHORT: ${{ matrix.native_integrity_cohort }}
           POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           # The two real-HTTP latency scenarios run in independent processes;
           # their global transport spies must never overlap in one Jest worker.
-          args=(--coverage --coverageDirectory=coverage/${{ matrix.id }})
-          if [ -n "$WALLET_SHARD" ]; then
+          args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --maxWorkers=3)
+          if [ -n "$NATIVE_COHORT" ]; then
+            # Every report must retain the original complete21-case inventory.
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/portable/Brc39ComposedNativeRecoveryNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs pattern "$NATIVE_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/composed-native-result.json")
+          elif [ -n "$NATIVE_PAIR_COHORT" ]; then
+            # Preserve all18 original names; every lane runs one original case.
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/snapshot/NativeSnapshotMergeContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs pair-pattern "$NATIVE_PAIR_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-pair-result.json")
+          elif [ -n "$NATIVE_MERGE_COHORT" ]; then
+            # Retain all six original names and verify every lane in the union.
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/portable/Brc38NativeMergeContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs merge-pattern "$NATIVE_MERGE_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-merge-result.json")
+          elif [ -n "$NATIVE_AUTH_COHORT" ]; then
+            # Preserve the complete six-case inventory and original case limits.
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/portable/Brc38NativeAuthenticatedMergeContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs auth-pattern "$NATIVE_AUTH_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-auth-result.json")
+          elif [ -n "$NATIVE_READ_COHORT" ]; then
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/snapshot/NativeSnapshotReadContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs read-pattern "$NATIVE_READ_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-read-result.json")
+          elif [ -n "$NATIVE_USER_COHORT" ]; then
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/portable/Brc38NativeUserInventoryContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs user-pattern "$NATIVE_USER_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-user-result.json")
+          elif [ -n "$NATIVE_INTEGRITY_COHORT" ]; then
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/portable/Brc38NativeComposedIntegrityContractsNode.test.ts
+              --testNamePattern="$(node scripts/wallet-composed-native-ci.mjs integrity-pattern "$NATIVE_INTEGRITY_COHORT")"
+              --json --outputFile="$GITHUB_WORKSPACE/native-integrity-result.json")
+          elif [ -n "$WALLET_SHARD" ]; then
             export RUNPOSTGRES=1
             POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
               '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
             export POSTGRES_CONNECTION
-            args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts')
+            args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts|src/storage/portable/Brc39ComposedNativeRecoveryNode.test.ts|src/storage/snapshot/NativeSnapshotMergeContractsNode.test.ts|src/storage/portable/Brc38NativeMergeContractsNode.test.ts|src/storage/portable/Brc38NativeAuthenticatedMergeContractsNode.test.ts|src/storage/snapshot/NativeSnapshotReadContractsNode.test.ts|src/storage/portable/Brc38NativeUserInventoryContractsNode.test.ts|src/storage/portable/native/RootNativeCopyContracts.test.cjs|src/storage/portable/Brc38NativeBrowserComponents.test.cjs|src/storage/snapshot/PackedIdbCurrentStructuredRead.test.ts|src/utility/BrowserArgon2idWorker.native.test.cjs|src/storage/portable/Brc38NativeComposedIntegrityContractsNode.test.ts|src/storage/__test/WalletStorageManager\.journal\.test\.ts$')
             args+=(--shard="$WALLET_SHARD/4")
           else
-            args+=(--runInBand --runTestsByPath src/storage/sync/syncTransferHttp.test.ts)
+            args=(--coverage --coverageDirectory=coverage/${{ matrix.id }} --runInBand
+              --runTestsByPath src/storage/sync/syncTransferHttp.test.ts)
             args+=(--testNamePattern="with $SYNC_LATENCY ms request latency")
           fi
           pnpm --filter @bsv/wallet-toolbox exec jest "${args[@]}"
@@ -1034,8 +1241,33 @@ jobs:
             packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
             packages/wallet/wallet-toolbox
           mkdir -p .coverage-output
+          if [ -n "$NATIVE_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs capture "$NATIVE_COHORT" \
+              composed-native-result.json ".coverage-output/${{ matrix.id }}.composed-native.json"
+          elif [ -n "$NATIVE_PAIR_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs pair-capture "$NATIVE_PAIR_COHORT" \
+              native-pair-result.json ".coverage-output/${{ matrix.id }}.native-pair.json"
+          elif [ -n "$NATIVE_MERGE_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs merge-capture "$NATIVE_MERGE_COHORT" \
+              native-merge-result.json ".coverage-output/${{ matrix.id }}.native-merge.json"
+          elif [ -n "$NATIVE_AUTH_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs auth-capture "$NATIVE_AUTH_COHORT" \
+              native-auth-result.json ".coverage-output/${{ matrix.id }}.native-auth.json"
+          elif [ -n "$NATIVE_READ_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs read-capture "$NATIVE_READ_COHORT" \
+              native-read-result.json ".coverage-output/${{ matrix.id }}.native-read.json"
+          elif [ -n "$NATIVE_USER_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs user-capture "$NATIVE_USER_COHORT" \
+              native-user-result.json ".coverage-output/${{ matrix.id }}.native-user.json"
+          elif [ -n "$NATIVE_INTEGRITY_COHORT" ]; then
+            node scripts/wallet-composed-native-ci.mjs integrity-capture "$NATIVE_INTEGRITY_COHORT" \
+              native-integrity-result.json ".coverage-output/${{ matrix.id }}.native-integrity.json"
+          fi
           cp packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
             .coverage-output/wallet-${{ matrix.id }}.lcov.info
+      - name: Release the exact native browser sandbox attachment
+        if: always() && matrix.id == 'shard-4'
+        run: node scripts/provision-wallet-native-browser.mjs --cleanup
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-wallet-${{ matrix.id }}
@@ -1261,7 +1493,6 @@ jobs:
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         if: github.event_name == 'pull_request'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name == 'pull_request'
         with:
           node-version: 24.18.0
       - name: Install the locked patch-coverage compiler
@@ -1275,6 +1506,33 @@ jobs:
           pattern: coverage-*
           path: .coverage-artifacts
           merge-multiple: true
+      - name: Verify all original composed native cases at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs verify .coverage-artifacts
+      - name: Verify all original native pair cases at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs pair-verify .coverage-artifacts
+      - name: Verify all original native merge contracts at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs merge-verify .coverage-artifacts
+      - name: Verify all original authenticated native merge contracts at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs auth-verify .coverage-artifacts
+      - name: Verify all original native read cases at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs read-verify .coverage-artifacts
+      - name: Verify all original native user cases at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs user-verify .coverage-artifacts
+      - name: Verify all original native integrity cases at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-composed-native-ci.mjs integrity-verify .coverage-artifacts
+      - name: Verify all original browser cases and their coverage at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-browser-ci.mjs verify .coverage-artifacts
+      - name: Verify all original journal cases and their coverage at this exact head
+        if: needs.prepare.outputs.wallet == 'true'
+        run: node scripts/wallet-journal-ci.mjs verify .coverage-artifacts
       - name: Compose Codecov inputs
         id: cov
         run: |
@@ -1726,7 +1984,7 @@ jobs:
             exit 1
           fi
           if [[ "$SONAR_RESULT" != "success" && "$SONAR_RESULT" != "skipped" ]]; then
-            echo "::error::Repository quality gate failed: exact-head Sonar analysis must contain zero new findings; sonar=$SONAR_RESULT"
+            echo "::error::Repository quality gate failed: exact-head repository Sonar policy must pass; sonar=$SONAR_RESULT"
             exit 1
           fi
           if [[ "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ]]; then

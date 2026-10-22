@@ -16,7 +16,7 @@ divert the funds: the payer connects before it creates the transaction.
   (node-datachannel in Node, react-native-webrtc in React Native).
 - `@bsv/sdk` is the only (peer) dependency of the root entry. `@bsv/webrtpay/server` (Node) adds
   a small relay and depends on `ws`.
-- Status: 0.2.1, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
+- Status: 0.2.2, experimental. The byte-level protocol is in [docs/protocol.md](docs/protocol.md).
 
 ## Why there is still a signaling step
 
@@ -276,6 +276,11 @@ An offer code carries the payee's identity key, network, optional amount and exp
 SDP in a compact binary form (roughly 250 characters for a typical browser offer, a QR code of
 version 10 or so). An answer code carries only the session id and the SDP: the payer's
 identity comes from the handshake.
+
+An offer's expiry is rounded down to the whole second carried in the code. The
+expiry timer rechecks that deadline before closing; an early wake does not close
+an unexpired offer. Beginning a valid `complete` handshake cancels that timer, and `cancel` closes
+the offer explicitly.
 
 A runnable version of the remote flow is [examples/demo-node.ts](examples/demo-node.ts): two
 wallets in one process, a real WebRTC channel, an in-memory signaler. It uses node-datachannel,
@@ -780,7 +785,7 @@ Node tests run real WebRTC with node-datachannel bound to `127.0.0.1`.
 
 ## Verification
 
-What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0, 925 at 0.2.1; `pnpm test:turn` adds 3 TURN
+What the test suite exercises (`pnpm test`: 768 tests at 0.1.0, 914 at 0.2.0, 925 at 0.2.1, 926 at 0.2.2; `pnpm test:turn` adds 3 TURN
 tests):
 
 - codes, compact SDP, frames: unit tests plus fast-check property suites with hostile input

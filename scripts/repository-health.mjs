@@ -17,6 +17,7 @@ const IGNORED_DIRECTORIES = new Set([
   '.git',
   '.next',
   '.pagefind',
+  '.stryker-tmp',
   'coverage',
   'dist',
   'node_modules',

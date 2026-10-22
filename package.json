@@ -2,7 +2,7 @@
   "name": "@bsv/ts-stack",
   "author": "BSV Association",
   "private": true,
-  "description": "BSV TypeScript monorepo — SDK, Wallet, Network, Overlay, Messaging, Middleware, Helpers",
+  "description": "BSV TypeScript monorepo \u2014 SDK, Wallet, Network, Overlay, Messaging, Middleware, Helpers",
   "scripts": {
     "build": "pnpm -r --filter '!@bsv/ts-stack' run build",
     "typecheck": "pnpm -r --workspace-concurrency=4 --filter '!@bsv/ts-stack' --if-present run typecheck",

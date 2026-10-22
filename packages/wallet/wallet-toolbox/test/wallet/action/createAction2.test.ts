@@ -30,6 +30,7 @@ describe('createAction2 nosend transactions', () => {
   jest.setTimeout(99999999)
 
   let ctxs: TestWalletNoSetup[] = []
+  let restoreServices: Array<() => void> = []
   const env = _tu.getEnv('test')
   // Also the database and storage name: keep it within MySQL and Postgres identifier limits,
   // without the trailing space MySQL rejects.
@@ -37,6 +38,7 @@ describe('createAction2 nosend transactions', () => {
 
   beforeEach(async () => {
     ctxs = []
+    restoreServices = []
 
     if (env.runMySQL) {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy(testName()))
@@ -46,9 +48,19 @@ describe('createAction2 nosend transactions', () => {
     }
 
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy(testName()))
+    for (const ctx of ctxs) {
+      const tracker = await ctx.services.getChainTracker()
+      const root = jest.spyOn(tracker, 'isValidRootForHeight').mockResolvedValue(true)
+      const storageServices = jest.spyOn(ctx.activeStorage, 'getServices').mockReturnValue(ctx.services)
+      restoreServices.push(() => {
+        storageServices.mockRestore()
+        root.mockRestore()
+      })
+    }
   })
 
   afterEach(async () => {
+    for (const restore of restoreServices) restore()
     for (const { wallet } of ctxs) await wallet.destroy()
   })
 
@@ -1073,7 +1085,8 @@ export function createActionResultToTxLogString(
 ): { log: string; logColor: string } {
   const BEEF_V1 = 4022206465
 
-  const beef = Beef.fromBinary(createActionResult?.tx)
+  if (createActionResult.tx === undefined) throw new Error('Created action did not return transaction bytes')
+  const beef = Beef.fromBinary(createActionResult.tx)
   beef.version = BEEF_V1
   const mainTxid = beef.txs.slice(-1)[0].txid
 

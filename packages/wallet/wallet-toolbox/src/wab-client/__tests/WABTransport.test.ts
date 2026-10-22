@@ -25,7 +25,7 @@ describe('WAB transport hardening', () => {
     expect(() => new WABClient('https://wab.example', { maxResponseBytes: Number.MAX_SAFE_INTEGER })).toThrow(
       'maxResponseBytes'
     )
-    expect(() => new WABClient('https://wab.example', { fetch: 1 as unknown as typeof fetch })).toThrow(
+    expect(() => new WABClient('https://wab.example', { fetch: 1 as unknown as typeof globalThis.fetch })).toThrow(
       'fetch implementation'
     )
   })
@@ -37,11 +37,15 @@ describe('WAB transport hardening', () => {
   })
 
   it('normalizes root and repeated trailing slashes without hanging or duplicating separators', async () => {
-    const rootFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const rootFetch = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     await new WABClient('https://wab.example/', { fetch: rootFetch }).getInfo()
     expect(rootFetch).toHaveBeenCalledWith('https://wab.example/info', expect.any(Object))
 
-    const nestedFetch = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const nestedFetch = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     await new WABClient('https://wab.example/customer///', { fetch: nestedFetch }).getInfo()
     expect(nestedFetch).toHaveBeenCalledWith('https://wab.example/customer/info', expect.any(Object))
   })
@@ -49,7 +53,9 @@ describe('WAB transport hardening', () => {
   it.each(['https://wab.example', 'https://wab.example/', 'https://wab.example///'])(
     'never duplicates the path separator for auth requests to %s',
     async serverUrl => {
-      const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+      const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+        jsonResponse({ success: true })
+      )
       const client = new WABClient(serverUrl, { fetch: fetchClient })
 
       await client.startAuthMethod(new TwilioPhoneInteractor(), 'a'.repeat(64), { phoneNumber: '+15555550123' })
@@ -59,7 +65,9 @@ describe('WAB transport hardening', () => {
   )
 
   it('requires canonical E.164 phone identity before sending authentication', async () => {
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
     const twilio = new TwilioPhoneInteractor()
 
@@ -78,9 +86,11 @@ describe('WAB transport hardening', () => {
   })
 
   it('enforces a hard timeout and a bounded response', async () => {
-    const stalledFetch = jest.fn(async () => await new Promise<Response>(() => {}))
+    const stalledFetch = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+      async () => await new Promise<Response>(() => {})
+    )
     const stalled = new WABClient('https://wab.example', {
-      fetch: stalledFetch as typeof fetch,
+      fetch: stalledFetch,
       timeoutMs: 5
     })
 
@@ -90,7 +100,9 @@ describe('WAB transport hardening', () => {
     })
 
     const oversized = new WABClient('https://wab.example', {
-      fetch: jest.fn(async () => jsonResponse({ data: 'x'.repeat(200) })) as typeof fetch,
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+        jsonResponse({ data: 'x'.repeat(200) })
+      ),
       maxResponseBytes: 64
     })
     await expect(oversized.getInfo()).rejects.toMatchObject({
@@ -99,14 +111,18 @@ describe('WAB transport hardening', () => {
     })
 
     const arrayResponse = new WABClient('https://wab.example', {
-      fetch: jest.fn(async () => jsonResponse([])) as typeof fetch
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+        jsonResponse([])
+      )
     })
     await expect(arrayResponse.getInfo()).rejects.toMatchObject({
       code: 'WAB_INVALID_RESPONSE',
       retryable: true
     })
 
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     const oversizedRequest = new WABClient('https://wab.example', {
       fetch: fetchClient,
       maxRequestBytes: 64
@@ -122,12 +138,12 @@ describe('WAB transport hardening', () => {
 
   it('rejects declared and buffered response sizes before parsing', async () => {
     const declared = new WABClient('https://wab.example', {
-      fetch: jest.fn(
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
         async () =>
           new Response('{"success":true}', {
             headers: { 'content-length': '1000' }
           })
-      ) as typeof fetch,
+      ),
       maxResponseBytes: 64
     })
     await expect(declared.getInfo()).rejects.toMatchObject({ code: 'WAB_RESPONSE_TOO_LARGE' })
@@ -140,7 +156,9 @@ describe('WAB transport hardening', () => {
       arrayBuffer: async () => new Uint8Array(100).buffer
     } as unknown as Response
     const buffered = new WABClient('https://wab.example', {
-      fetch: jest.fn(async () => bufferedResponse) as typeof fetch,
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+        async () => bufferedResponse
+      ),
       maxResponseBytes: 64
     })
     await expect(buffered.getInfo()).rejects.toMatchObject({ code: 'WAB_RESPONSE_TOO_LARGE' })
@@ -148,9 +166,9 @@ describe('WAB transport hardening', () => {
 
   it('normalizes network failures and timeouts while reading a response body', async () => {
     const networkFailure = new WABClient('https://wab.example', {
-      fetch: jest.fn(async () => {
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () => {
         throw new TypeError('network unavailable')
-      }) as typeof fetch
+      })
     })
     await expect(networkFailure.getInfo()).rejects.toMatchObject({
       code: 'WAB_NETWORK_ERROR',
@@ -159,17 +177,19 @@ describe('WAB transport hardening', () => {
     })
 
     const stalledBody = new WABClient('https://wab.example', {
-      fetch: jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal
-        const body = new ReadableStream<Uint8Array>({
-          start: controller => {
-            signal?.addEventListener('abort', () => {
-              controller.error(new Error('response body aborted'))
-            })
-          }
-        })
-        return new Response(body)
-      }) as typeof fetch,
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+        async (_input: RequestInfo | URL, init?: RequestInit) => {
+          const signal = init?.signal
+          const body = new ReadableStream<Uint8Array>({
+            start: controller => {
+              signal?.addEventListener('abort', () => {
+                controller.error(new Error('response body aborted'))
+              })
+            }
+          })
+          return new Response(body)
+        }
+      ),
       timeoutMs: 5
     })
     await expect(stalledBody.getInfo()).rejects.toMatchObject({
@@ -180,7 +200,9 @@ describe('WAB transport hardening', () => {
   })
 
   it('rejects every non-serializable request and malformed response form', async () => {
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
     const circular: Record<string, unknown> = {}
     circular.self = circular
@@ -206,12 +228,12 @@ describe('WAB transport hardening', () => {
     expect(fetchClient).not.toHaveBeenCalled()
 
     const malformedJson = new WABClient('https://wab.example', {
-      fetch: jest.fn(
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
         async () =>
           new Response('{not-json', {
             headers: { 'Content-Type': 'application/json' }
           })
-      ) as typeof fetch
+      )
     })
     await expect(malformedJson.getInfo()).rejects.toMatchObject({
       code: 'WAB_INVALID_RESPONSE',
@@ -219,7 +241,7 @@ describe('WAB transport hardening', () => {
     })
 
     const failedBody = new WABClient('https://wab.example', {
-      fetch: jest.fn(
+      fetch: jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
         async () =>
           new Response(
             new ReadableStream<Uint8Array>({
@@ -228,7 +250,7 @@ describe('WAB transport hardening', () => {
               }
             })
           )
-      ) as typeof fetch
+      )
     })
     await expect(failedBody.getInfo()).rejects.toMatchObject({
       code: 'WAB_INVALID_RESPONSE',
@@ -238,7 +260,9 @@ describe('WAB transport hardening', () => {
 
   it('serializes typed request bytes without rewriting opaque response objects', async () => {
     const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
-    const fetchClient = jest.fn(async () => jsonResponse({ tx: historicalTx })) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ tx: historicalTx })
+    )
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
 
     const result = await client.transport.request<{ tx: Record<string, number> }>('/test', {
@@ -251,7 +275,9 @@ describe('WAB transport hardening', () => {
   })
 
   it('sends correlation IDs without telemetry and preserves request context on errors', async () => {
-    const fetchClient = jest.fn(async () => jsonResponse({ message: 'not found' }, 404)) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ message: 'not found' }, 404)
+    )
     const client = new WABClient('https://wab.example/customer', { fetch: fetchClient })
 
     await expect(client.getInfo()).rejects.toMatchObject({
@@ -270,7 +296,9 @@ describe('WAB transport hardening', () => {
   })
 
   it('replaces an unsafe correlation ID produced by a custom factory', async () => {
-    const fetchClient = jest.fn(async () => jsonResponse({ success: true })) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(async () =>
+      jsonResponse({ success: true })
+    )
     const client = new WABClient('https://wab.example', {
       fetch: fetchClient,
       telemetry: {
@@ -286,14 +314,16 @@ describe('WAB transport hardening', () => {
 
   it('distinguishes a WAB application 404 from an incompatible endpoint', async () => {
     let requestCorrelationId = ''
-    const fetchClient = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const headers = init?.headers as Record<string, string>
-      requestCorrelationId = headers['X-Correlation-ID']
-      return jsonResponse({ error: { code: 'WAB_ROUTE_NOT_FOUND' } }, 404, {
-        'X-WAB-Service': 'wab-server',
-        'X-Correlation-ID': requestCorrelationId
-      })
-    }) as typeof fetch
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const headers = init?.headers as Record<string, string>
+        requestCorrelationId = headers['X-Correlation-ID']
+        return jsonResponse({ error: { code: 'WAB_ROUTE_NOT_FOUND' } }, 404, {
+          'X-WAB-Service': 'wab-server',
+          'X-Correlation-ID': requestCorrelationId
+        })
+      }
+    )
     const client = new WABClient('https://wab.example', { fetch: fetchClient })
 
     const request = client.getInfo()
@@ -316,19 +346,21 @@ describe('WAB transport hardening', () => {
     const existingPresentationKey = 'b'.repeat(64)
     let temporaryPresentationKey = ''
 
-    const fetchClient = jest.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      const request = JSON.parse(String(init?.body)) as {
-        presentationKey: string
+    const fetchClient = jest.fn<ReturnType<typeof globalThis.fetch>, Parameters<typeof globalThis.fetch>>(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const request = JSON.parse(String(init?.body)) as {
+          presentationKey: string
+        }
+        if (temporaryPresentationKey.length === 0) {
+          temporaryPresentationKey = request.presentationKey
+          return jsonResponse({ success: true })
+        }
+        return jsonResponse({
+          success: true,
+          presentationKey: existingPresentationKey
+        })
       }
-      if (temporaryPresentationKey.length === 0) {
-        temporaryPresentationKey = request.presentationKey
-        return jsonResponse({ success: true })
-      }
-      return jsonResponse({
-        success: true,
-        presentationKey: existingPresentationKey
-      })
-    }) as typeof fetch
+    )
 
     const telemetry = {
       sink: {
@@ -506,7 +538,7 @@ describe('WAB transport hardening', () => {
       } as unknown as WABClient,
       new DevConsoleInteractor(),
       undefined,
-      { telemetry: { sink: { capture: event => events.push(event) }, minimumSeverity: 'debug' } }
+      { telemetry: { sink: { capture: event => void events.push(event) }, minimumSeverity: 'debug' } }
     )
     manager.authenticationFlow = 'new-user'
     ;(manager as any).pendingRegistrationPresentationKey = 'a'.repeat(64)
@@ -538,7 +570,7 @@ describe('WAB transport hardening', () => {
       { finalizeRegistration } as unknown as WABClient,
       new DevConsoleInteractor(),
       undefined,
-      { telemetry: { sink: { capture: event => events.push(event) }, minimumSeverity: 'debug' } }
+      { telemetry: { sink: { capture: event => void events.push(event) }, minimumSeverity: 'debug' } }
     )
     jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValue()
 

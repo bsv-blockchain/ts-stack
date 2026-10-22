@@ -1,0 +1,25 @@
+{
+  "status": "approved",
+  "owner": "ty-everett",
+  "repository": "bsv-blockchain/ts-stack",
+  "project": "bsv-blockchain_ts-stack",
+  "pullRequest": 569,
+  "branch": "codex/wallet-sync-interop-reliability",
+  "base": "main",
+  "expiresAt": "2026-10-24T23:59:59Z",
+  "maintainabilityRating": 1,
+  "maximumDuplicationPercent": 6,
+  "unresolvedBugs": 0,
+  "unresolvedVulnerabilities": 0,
+  "unreviewedHotspots": 0,
+  "removalCondition": "Remove after full implementation and qualification. The gate automatically returns to the strict policy at expiresAt; any extension requires new explicit maintainer approval.",
+  "activation": "Repository-owned gate gathers trusted Actions/live GitHub PR context and complete revision-bracketed Sonar evidence. No caller-provided snapshot activates this policy.",
+  "approvedAt": "2026-10-18",
+  "approval": "Maintainer ty-everett explicitly approved the prepared scoped budget in the private operator task.",
+  "compatibilityRationale": "Ordered async operations and explicit portable/native implementations can create maintainability-only findings and measured duplication. Keep maintainability A and a bounded 6% duplication ceiling while preserving every correctness, reliability, security and hotspot requirement. This does not waive full implementation, validation or final maintainer review.",
+  "evidence": [
+    "docs/reviews/sonar-pr569-budget.md",
+    "https://github.com/bsv-blockchain/ts-stack/pull/569"
+  ],
+  "reviewBy": "2026-10-24"
+}

@@ -15,7 +15,7 @@ describe('StorageKnex telemetry', () => {
       knex,
       telemetry: {
         sink: {
-          capture: event => events.push(event)
+          capture: event => void events.push(event)
         },
         traceIdFactory: () => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         spanIdFactory: () => (nextSpanId++).toString(16).padStart(16, '0')
@@ -82,7 +82,7 @@ describe('StorageKnex telemetry', () => {
       chain: 'test',
       knex,
       telemetry: {
-        sink: { capture: event => events.push(event) }
+        sink: { capture: event => void events.push(event) }
       }
     })
 

@@ -1,3 +1,11 @@
+import type { PrimaryHandoffPlan } from '../PrimaryHandoffControl'
+import {
+  isPrimaryHandoffMethod,
+  primaryHandoffCapabilities,
+  primaryHandoffRequestBytes,
+  primaryHandoffResponseBytes,
+  type PrimaryHandoffMethod
+} from './PrimaryHandoffProtocol'
 import { StorageKnex } from '../StorageKnex'
 import { KnexSyncTransferStore } from './KnexSyncTransferStore'
 import {
@@ -30,8 +38,8 @@ import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_INTERNAL, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
-import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
+import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { AuthId, SyncChunk, type RequestSyncChunkArgs } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
 import { WalletError } from '../../sdk/WalletError'
@@ -67,6 +75,18 @@ import {
 } from '../../utility/actionBatchPack'
 import { ACTION_BATCH_MAX_PACK_BYTES, ACTION_BATCH_MAX_PACK_ITEMS } from '../methods/actionBatchBlobs'
 import { validateSyncProofs } from './validateRpcSyncProofs'
+import {
+  KnexSnapshotArchiveRpc,
+  snapshotArchiveRpcMethods,
+  type SnapshotArchiveRpcMethod
+} from '../snapshot/archive/KnexSnapshotArchiveRpc'
+import {
+  KnexRemoteSnapshotSyncRpc,
+  remoteSnapshotDestinationRpcMethods,
+  type RemoteSnapshotDestinationRpcMethod
+} from '../snapshot/KnexRemoteSnapshotSyncRpc'
+import { remoteSnapshotSyncRequestBytes, remoteSnapshotSyncResponseBytes } from '../snapshot/RemoteSnapshotSyncProtocol'
+import { snapshotArchiveRequestBytes, snapshotArchiveResponseBytes } from '../snapshot/archive/SnapshotArchiveProtocol'
 
 const storageRpcMethods = new Set([
   'abortAction',
@@ -282,12 +302,20 @@ export interface WalletStorageServerOptions {
   maxRpcResponseBytes?: number
   /** Disable the additive durable transfer transport during a mixed-version rollout. Knex only. */
   syncTransfers?: boolean
+  /** Disable immutable snapshot archives during a mixed-version rollout. Requires migrated WAL/MySQL storage and snapshotSync. */
+  snapshotArchives?: boolean
   /** Durable BRC-105 replay claims for monetized multi-replica deployments. */
   paymentReplayStore?: PaymentReplayStore
 }
 
 export class StorageServer {
   private readonly syncTransfers?: KnexSyncTransferStore
+  private readonly snapshotArchivesEnabled: boolean
+  private snapshotArchives?: KnexSnapshotArchiveRpc
+  private readonly remoteSnapshotSyncEnabled: boolean
+  private remoteSnapshotSync?: KnexRemoteSnapshotSyncRpc
+  private closing?: Promise<void>
+  private closed = false
   private readonly app = express()
   private readonly host?: string
   private readonly port: number
@@ -408,6 +436,17 @@ export class StorageServer {
         highThroughput: 32 * 1024 * 1024
       })
     )
+    this.snapshotArchivesEnabled =
+      options.snapshotArchives !== false &&
+      jsonBodyLimit >= snapshotArchiveRequestBytes &&
+      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= snapshotArchiveResponseBytes)
+    this.snapshotArchives = this.createSnapshotArchiveRpc()
+    this.remoteSnapshotSyncEnabled =
+      options.snapshotArchives !== false &&
+      options.syncTransfers !== false &&
+      jsonBodyLimit >= remoteSnapshotSyncRequestBytes &&
+      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= remoteSnapshotSyncResponseBytes)
+    this.remoteSnapshotSync = this.createRemoteSnapshotSyncRpc()
     // Keep legacy configurations working when their envelopes cannot fit even a minimum part.
     if (
       options.syncTransfers !== false &&
@@ -644,6 +683,35 @@ export class StorageServer {
     if (useBinary) res.set(BINARY_ENCODING_HEADER, BINARY_ENCODING)
 
     const { jsonrpc, method, id } = req.body
+    // Compact decoding mutates nested request values. Measure the encoded
+    // envelope before decoding; serializing decoded byte buffers would create
+    // number-key JSON amplification and reject legitimate bounded parts.
+    const snapshotRequestBytes = remoteSnapshotDestinationRpcMethods.includes(
+      method as RemoteSnapshotDestinationRpcMethod
+    )
+      ? Buffer.byteLength(JSON.stringify(req.body), 'utf8')
+      : undefined
+    const primaryRequestBytes = isPrimaryHandoffMethod(method)
+      ? Buffer.byteLength(JSON.stringify(req.body), 'utf8')
+      : undefined
+    if (primaryRequestBytes !== undefined && primaryRequestBytes > primaryHandoffRequestBytes)
+      return this.sendRpc(
+        res,
+        useBinary,
+        { jsonrpc: '2.0', id, error: { code: -32600, message: 'Primary control request exceeds its transport bound' } },
+        400
+      )
+    if (snapshotRequestBytes !== undefined && snapshotRequestBytes > remoteSnapshotSyncRequestBytes)
+      return this.sendRpc(
+        res,
+        useBinary,
+        {
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32600, message: 'Remote snapshot request exceeds its encoded transport bound' }
+        },
+        400
+      )
     const params = (requestUsesBinary ? decodeBinaryJsonValue(req.body.params) : req.body.params) as any[]
     if (jsonrpc !== '2.0' || !method || typeof method !== 'string' || !Array.isArray(params)) {
       return this.sendRpc(res, useBinary, { error: { code: -32600, message: 'Invalid Request' } }, 400)
@@ -652,10 +720,25 @@ export class StorageServer {
     const logObj = this.createRpcLog(req, method, id, params)
     try {
       this.enforceRpcRequestBudgets(method, params)
-      const dispatch =
-        method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
-          ? await this.dispatchSyncTransfer(method, params, req)
-          : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      let dispatch: RpcDispatchResult
+      if (isPrimaryHandoffMethod(method)) {
+        dispatch = await this.dispatchPrimaryHandoff(method, params, req, useBinary, id)
+      } else if (snapshotArchiveRpcMethods.includes(method as SnapshotArchiveRpcMethod)) {
+        dispatch = await this.dispatchSnapshotArchive(method as SnapshotArchiveRpcMethod, params, req, useBinary, id)
+      } else if (remoteSnapshotDestinationRpcMethods.includes(method as RemoteSnapshotDestinationRpcMethod)) {
+        dispatch = await this.dispatchRemoteSnapshotSync(
+          method as RemoteSnapshotDestinationRpcMethod,
+          params,
+          req,
+          useBinary,
+          id,
+          snapshotRequestBytes
+        )
+      } else if (method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')) {
+        dispatch = await this.dispatchSyncTransfer(method, params, req)
+      } else {
+        dispatch = await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      }
       if (!dispatch.found) {
         return this.sendRpc(
           res,
@@ -674,6 +757,19 @@ export class StorageServer {
       // JSON.stringify silently omit an undefined result.
       const payload = { jsonrpc: '2.0', result: result ?? null, id }
       const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
+      if (
+        snapshotArchiveRpcMethods.includes(method as SnapshotArchiveRpcMethod) &&
+        Buffer.byteLength(serialized, 'utf8') > snapshotArchiveResponseBytes
+      ) {
+        throw new WERR_INVALID_OPERATION('Snapshot archive response exceeds its transport limit')
+      }
+      if (
+        remoteSnapshotDestinationRpcMethods.includes(method as RemoteSnapshotDestinationRpcMethod) &&
+        Buffer.byteLength(serialized, 'utf8') > remoteSnapshotSyncResponseBytes
+      )
+        throw new WERR_INVALID_OPERATION('Remote snapshot destination response exceeds its transport limit')
+      if (isPrimaryHandoffMethod(method) && Buffer.byteLength(serialized, 'utf8') > primaryHandoffResponseBytes)
+        throw new WERR_INVALID_OPERATION('Primary control response exceeds its transport bound')
       // Apply the response bound before consulting any client transport preference.
       if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
         return await this.sendOversizedSyncResponse(req, res, useBinary, method, params, payload)
@@ -943,7 +1039,8 @@ export class StorageServer {
         result = {
           ...result,
           syncCheckpointVersion: 1,
-          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities })
+          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities }),
+          ...(await this.snapshotArchiveSettings())
         }
       }
       this.finishRpcLogging(logger, result)
@@ -952,6 +1049,44 @@ export class StorageServer {
       logWalletError(error, logger, 'error executing requested method')
       logger?.flush?.()
       throw error
+    }
+  }
+
+  private async snapshotArchiveSettings(): Promise<Record<string, unknown>> {
+    const snapshotArchive = await this.snapshotArchives?.capabilities()
+    const snapshotJournalArchive = await this.snapshotArchives?.journalCapabilities()
+    const snapshotJournalFieldArchive = await this.snapshotArchives?.journalFieldCapabilities()
+    const snapshotSyncDestination = await this.remoteSnapshotSync?.capabilities()
+    const snapshotSyncContent = await this.remoteSnapshotSync?.contentCapabilities()
+    const snapshotJournalData = await this.remoteSnapshotSync?.journalDataCapabilities()
+    const snapshotJournalDataContent = await this.remoteSnapshotSync?.journalDataContentCapabilities()
+    const snapshotJournalFields = await this.remoteSnapshotSync?.journalFieldCapabilities()
+    const snapshotJournalFieldArchiveRecoveryVersion = await this.snapshotArchives?.journalFieldRecoveryVersion()
+    const snapshotJournalFieldRecoveryVersion = await this.remoteSnapshotSync?.journalFieldRecoveryVersion()
+    const primaryHandoff =
+      this.remoteSnapshotSyncEnabled &&
+      snapshotJournalDataContent !== undefined &&
+      snapshotJournalArchive !== undefined &&
+      this.storage instanceof StorageKnex &&
+      (await this.storage.getPrimaryHandoffControl()) !== undefined
+        ? primaryHandoffCapabilities
+        : undefined
+    return {
+      ...(primaryHandoff === undefined ? {} : { primaryHandoff }),
+      ...(snapshotArchive === undefined ? {} : { snapshotArchive, snapshotArchiveReaderVersion: 1 }),
+      ...(snapshotJournalArchive === undefined
+        ? {}
+        : { snapshotJournalArchive, snapshotJournalArchiveContentVersion: 1 }),
+      ...(snapshotJournalFieldArchive === undefined ? {} : { snapshotJournalFieldArchive }),
+      ...(snapshotSyncDestination === undefined ? {} : { snapshotSyncDestination }),
+      ...(snapshotSyncContent === undefined ? {} : { snapshotSyncContent }),
+      ...(snapshotJournalData === undefined ? {} : { snapshotJournalData }),
+      ...(snapshotJournalDataContent === undefined ? {} : { snapshotJournalDataContent }),
+      ...(snapshotJournalFields === undefined ? {} : { snapshotJournalFields }),
+      ...(snapshotJournalFieldArchiveRecoveryVersion === undefined
+        ? {}
+        : { snapshotJournalFieldArchiveRecoveryVersion }),
+      ...(snapshotJournalFieldRecoveryVersion === undefined ? {} : { snapshotJournalFieldRecoveryVersion })
     }
   }
 
@@ -1007,9 +1142,31 @@ export class StorageServer {
         // Mark only the reconstructed request: old peers retain their existing wire contract.
         payload.args.requireMatchingCheckpoint = true
         this.enforceRpcRequestBudgets('processSyncChunk', [payload.args, payload.chunk])
-        const dispatch = await this.dispatchRpcCall('processSyncChunk', [payload.args, payload.chunk], req)
-        result = dispatch.result
-        await transfers.complete(identityKey, input.transferId, result)
+        // Authenticate and finish active-chain proof preparation before opening
+        // the destination writer. Transfer staging uses this same Knex store.
+        if (!(this.storage instanceof StorageKnex))
+          throw new WERR_INVALID_OPERATION('Atomic sync transfer requires its actual Knex provider')
+        await this.authorizeRpcCall('processSyncChunk', [payload.args, payload.chunk], req)
+        const logger = this.createRpcLogger('processSyncChunk', [payload.args, payload.chunk])
+        try {
+          const apply = await this.storage.prepareSyncChunk(
+            payload.args as unknown as RequestSyncChunkArgs,
+            payload.chunk
+          )
+          result = await transfers.commitPreparedWrite(
+            identityKey,
+            input.transferId,
+            syncTransferDigest(staged.bytes),
+            apply
+          )
+          // Logger sinks run after the native writer settles. The durable ACK
+          // contains wallet outcome/checkpoint data, independently of logging.
+          this.finishRpcLogging(logger, result)
+        } catch (error) {
+          logWalletError(error, logger, 'error executing requested method')
+          logger?.flush?.()
+          throw error
+        }
         break
       }
       case 'releaseSyncTransfer':
@@ -1020,6 +1177,127 @@ export class StorageServer {
         return { found: false }
     }
     return { found: true, result }
+  }
+
+  private createSnapshotArchiveRpc(): KnexSnapshotArchiveRpc | undefined {
+    return this.snapshotArchivesEnabled && this.storage instanceof StorageKnex
+      ? new KnexSnapshotArchiveRpc(this.storage)
+      : undefined
+  }
+
+  private createRemoteSnapshotSyncRpc(): KnexRemoteSnapshotSyncRpc | undefined {
+    return this.remoteSnapshotSyncEnabled && this.storage instanceof StorageKnex
+      ? new KnexRemoteSnapshotSyncRpc(this.storage)
+      : undefined
+  }
+
+  private async dispatchPrimaryHandoff(
+    method: PrimaryHandoffMethod,
+    params: unknown[],
+    req: Request,
+    useBinary: boolean,
+    id: unknown
+  ): Promise<RpcDispatchResult> {
+    if (
+      !this.remoteSnapshotSyncEnabled ||
+      this.closing !== undefined ||
+      (await this.remoteSnapshotSync?.journalDataContentCapabilities()) === undefined ||
+      (await this.snapshotArchives?.journalCapabilities()) === undefined
+    )
+      return { found: false }
+    if (
+      !useBinary ||
+      req.header(BINARY_REQUEST_ENCODING_HEADER) !== BINARY_ENCODING ||
+      !Number.isSafeInteger(id) ||
+      Number(id) < 1
+    )
+      throw new WERR_INVALID_OPERATION('Primary control requires bounded compact-binary authenticated RPC')
+    const identityKey = requiredAuthenticatedIdentityKey(req)
+    const expected = method === 'primaryHandoffStatus' ? 1 : method === 'preparePrimaryHandoffSource' ? 3 : 2
+    if (params.length !== expected || params[0] !== identityKey)
+      throw new WERR_UNAUTHORIZED('Primary control identity must match authentication')
+    const control = await this.storage.getPrimaryHandoffControl()
+    if (control === undefined) return { found: false }
+    const auth = await this.authenticatedAuth(req, false)
+    let result: unknown
+    switch (method) {
+      case 'primaryHandoffStatus':
+        result = (await control.status(auth)) ?? null
+        break
+      case 'preparePrimaryHandoffSource':
+        result = await control.prepareSource(auth, params[1] as string, params[2] as string)
+        break
+      case 'preparePrimaryHandoffTarget':
+        result = await control.prepareTarget(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'retirePrimaryHandoffSource':
+        result = await control.retireSource(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'activatePrimaryHandoffTarget':
+        result = await control.activateTarget(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'completePrimaryHandoffSource':
+        result = await control.completeSource(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'completePrimaryHandoffTarget':
+        result = await control.completeTarget(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'followPrimaryHandoffTarget':
+        result = await control.followTarget(auth, params[1] as PrimaryHandoffPlan)
+        break
+      case 'cancelPrimaryHandoff':
+        result = await control.cancel(auth, params[1] as string)
+        break
+    }
+    return { found: true, result }
+  }
+
+  private async dispatchRemoteSnapshotSync(
+    method: RemoteSnapshotDestinationRpcMethod,
+    params: unknown[],
+    req: Request,
+    useBinary: boolean,
+    id: unknown,
+    encodedRequestBytes: number | undefined
+  ): Promise<RpcDispatchResult> {
+    if (this.remoteSnapshotSync === undefined) return { found: false }
+    if (
+      !useBinary ||
+      req.header(BINARY_REQUEST_ENCODING_HEADER) !== BINARY_ENCODING ||
+      !Number.isSafeInteger(id) ||
+      Number(id) < 1 ||
+      encodedRequestBytes === undefined ||
+      encodedRequestBytes > remoteSnapshotSyncRequestBytes
+    )
+      throw new WERR_INVALID_OPERATION('Remote snapshot commits require bounded compact-binary authenticated RPC')
+    return {
+      found: true,
+      result: await this.remoteSnapshotSync.dispatch(method, params, requiredAuthenticatedIdentityKey(req))
+    }
+  }
+
+  private async dispatchSnapshotArchive(
+    method: SnapshotArchiveRpcMethod,
+    params: unknown[],
+    req: Request,
+    useBinary: boolean,
+    id: unknown
+  ): Promise<RpcDispatchResult> {
+    if (this.snapshotArchives === undefined) return { found: false }
+    // The shared JSON parser already bounds ingress. This smaller post-parse
+    // envelope check is an additional protocol bound, not a pre-parse claim.
+    if (
+      !useBinary ||
+      !Number.isSafeInteger(id) ||
+      Number(id) < 1 ||
+      Buffer.byteLength(JSON.stringify(req.body), 'utf8') > snapshotArchiveRequestBytes
+    ) {
+      throw new WERR_INVALID_OPERATION('Snapshot archive requests require bounded compact-binary RPC framing')
+    }
+    return {
+      found: true,
+      result: await this.snapshotArchives.dispatch(method, params, requiredAuthenticatedIdentityKey(req))
+    }
   }
 
   private async traceRpcStep<T>(
@@ -1176,6 +1454,13 @@ export class StorageServer {
   server: any
 
   public start(): void {
+    if (this.closing !== undefined) {
+      if (!this.closed) throw new WERR_INVALID_OPERATION('Storage server is closing')
+      this.closing = undefined
+      this.closed = false
+      this.snapshotArchives = this.createSnapshotArchiveRpc()
+      this.remoteSnapshotSync = this.createRemoteSnapshotSyncRpc()
+    }
     const listening = (): void => {
       console.log(`WalletStorageServer listening at http://${this.host ?? 'localhost'}:${this.port}`)
     }
@@ -1184,12 +1469,26 @@ export class StorageServer {
     configureHttpServer(this.server, 'WALLET_STORAGE', this.httpPolicy)
   }
 
-  public async close(): Promise<void> {
-    if (this.server) {
-      await this.server.close(() => {
-        // console.log('WalletStorageServer closed')
+  public close(): Promise<void> {
+    if (this.closing !== undefined) return this.closing
+    // Fence capture admission synchronously, then await BOTH physical drains.
+    const captures = this.snapshotArchives?.close() ?? Promise.resolve()
+    const commits = this.remoteSnapshotSync?.close() ?? Promise.resolve()
+    const http = new Promise<void>((resolve, reject) => {
+      if (!this.server) {
+        resolve()
+        return
+      }
+      this.server.close((error?: NodeJS.ErrnoException) => {
+        if (error !== undefined && error.code !== 'ERR_SERVER_NOT_RUNNING') reject(error)
+        else resolve()
       })
-    }
+    })
+    this.closing = Promise.allSettled([captures, commits, http]).then(results => {
+      for (const result of results) if (result.status === 'rejected') throw result.reason
+      this.closed = true
+    })
+    return this.closing
   }
 
   /** @see {@link validateDate} */

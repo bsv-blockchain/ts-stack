@@ -16,7 +16,8 @@ import {
   inspectMutationEvidence,
   makeTargetReceipt,
   qualificationIdentity,
-  targetEvidence
+  targetEvidence,
+  mutantTuple
 } from './mutation-final-qualification.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -74,26 +75,25 @@ function checkedPartition(identity, targetId, expected, seen, packet, policy, mo
   const execution = JSON.parse(executionBytes)
   return { part, checked, execution }
 }
-// A line-split file appears in several partition reports. Merge its mutants only
-// when every part reports the identical source and language; the combined
-// inventory is then rechecked against the canonical whole-target inventory, so
-// a duplicated or missing mutant still fails.
-function addPartitionFiles(files, partitionId, reportBytes) {
+function addPartitionFiles(files, owners, partitionId, reportBytes) {
   for (const [file, value] of Object.entries(JSON.parse(reportBytes).files)) {
-    const mutants = value.mutants.map(mutant => ({ ...mutant, id: `${partitionId}/${mutant.id}` }))
-    if (!Object.hasOwn(files, file)) {
-      files[file] = { ...value, mutants }
-      continue
+    const { mutants, ...metadata } = value
+    if (Object.hasOwn(files, file)) {
+      const previous = { ...files[file] }
+      delete previous.mutants
+      if (!isDeepStrictEqual(previous, metadata))
+        throw new Error(
+          'Partition source files overlap with different complete metadata or source bytes'
+        )
+    } else files[file] = { ...metadata, mutants: [] }
+    for (const mutant of mutants) {
+      const tuple = mutantTuple(file, mutant)
+      const previous = owners.get(tuple)
+      if (previous !== undefined && previous !== partitionId)
+        throw new Error('Partition canonical mutant ownership overlaps')
+      owners.set(tuple, partitionId)
+      files[file].mutants.push({ ...mutant, id: `${partitionId}/${mutant.id}` })
     }
-    const existing = files[file]
-    if (existing.source !== value.source || existing.language !== value.language)
-      throw new Error('Partition source files overlap with different content')
-    // Order by partition so the aggregate never depends on packet arrival order;
-    // the stable sort keeps each part's own mutant order.
-    const partOf = mutant => mutant.id.slice(0, mutant.id.indexOf('/'))
-    existing.mutants = [...existing.mutants, ...mutants].sort((left, right) =>
-      compare(partOf(left), partOf(right))
-    )
   }
 }
 
@@ -111,6 +111,7 @@ export function combinePartitionEvidence(
     throw new Error('Missing disjoint execution partition plan')
   const seen = new Set()
   const files = {}
+  const owners = new Map()
   let properties
   const bindings = []
   for (const packet of packets) {
@@ -131,7 +132,7 @@ export function combinePartitionEvidence(
       reportDigest: checked.reportDigest,
       executionDigest: checked.executionDigest
     })
-    addPartitionFiles(files, part.id, packet.reportBytes)
+    addPartitionFiles(files, owners, part.id, packet.reportBytes)
   }
   if (seen.size !== expected.size) throw new Error('Missing canonical execution partition')
   // Normalize execution ordering only; the original canonical inventory/config
@@ -141,7 +142,14 @@ export function combinePartitionEvidence(
     framework: { name: 'StrykerJS', version: '9.6.1' },
     projectRoot: canonical.projectRoot,
     config: canonical.config,
-    files: Object.fromEntries(Object.entries(files).sort(([left], [right]) => compare(left, right)))
+    files: Object.fromEntries(
+      Object.entries(files)
+        .sort(([left], [right]) => compare(left, right))
+        .map(([file, value]) => [
+          file,
+          { ...value, mutants: value.mutants.toSorted((left, right) => compare(left.id, right.id)) }
+        ])
+    )
   })
   bindings.sort((left, right) => compare(left.partitionId, right.partitionId))
   const executionBytes = JSON.stringify({
@@ -236,8 +244,11 @@ async function main(argv) {
     const { seconds } = JSON.parse(
       fs.readFileSync(path.join(ROOT, 'governance/mutation-testing/durations.json'), 'utf8')
     )
-    const matrix = mutationExecutionMatrix(JSON.parse(options.selected), targets)
-    console.log(JSON.stringify(longestFirst(matrix, seconds)))
+    console.log(
+      JSON.stringify(
+        longestFirst(mutationExecutionMatrix(JSON.parse(options.selected), targets), seconds)
+      )
+    )
     return
   }
   if (options.command === 'targets') {

@@ -1,3 +1,4 @@
+import { awaitFromSync } from './promiseFromSync'
 import { toHex, toUint8Array } from '@bsv/sdk/primitives/utils'
 import type { ActionBatchPackEncoding, ActionBatchPackItem } from '../sdk/ActionBatch.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
@@ -81,8 +82,12 @@ export function encodeActionBatchPack(items: ActionBatchPackItem[], maxBytes: nu
   return bytes
 }
 
-/** Decode a transport frame without copying its individual blob payloads. */
-export function decodeActionBatchPack(bytes: Uint8Array, maxBytes: number, maxItems: number): ActionBatchPackItem[] {
+/** Decode a transport frame into Uint8Array views without copying its individual blob payloads. */
+export function decodeActionBatchPack(
+  bytes: Uint8Array,
+  maxBytes: number,
+  maxItems: number
+): Array<ActionBatchPackItem & { bytes: Uint8Array }> {
   if (
     bytes.length < PACK_HEADER_BYTES ||
     bytes.length > maxBytes ||
@@ -95,7 +100,7 @@ export function decodeActionBatchPack(bytes: Uint8Array, maxBytes: number, maxIt
   if (itemCount < 1 || itemCount > maxItems) {
     throw new WERR_INVALID_PARAMETER('pack', `between 1 and ${String(maxItems)} blobs`)
   }
-  const items: ActionBatchPackItem[] = []
+  const items: Array<ActionBatchPackItem & { bytes: Uint8Array }> = []
   let offset = PACK_HEADER_BYTES
   for (let index = 0; index < itemCount; index++) {
     if (offset + ITEM_HEADER_BYTES > bytes.length) {
@@ -189,11 +194,8 @@ async function transform(
   return result
 }
 
-export async function compressActionBatchPack(
-  bytes: Uint8Array,
-  encoding: ActionBatchPackEncoding
-): Promise<Uint8Array> {
-  return await transform(bytes, encoding, false)
+export function compressActionBatchPack(bytes: Uint8Array, encoding: ActionBatchPackEncoding): Promise<Uint8Array> {
+  return awaitFromSync(() => transform(bytes, encoding, false))
 }
 
 /**
@@ -226,10 +228,10 @@ export async function compressActionBatchPackItems(
   return result
 }
 
-export async function decompressActionBatchPack(
+export function decompressActionBatchPack(
   bytes: Uint8Array,
   encoding: ActionBatchPackEncoding,
   maxBytes: number
 ): Promise<Uint8Array> {
-  return await transform(bytes, encoding, true, maxBytes)
+  return awaitFromSync(() => transform(bytes, encoding, true, maxBytes))
 }

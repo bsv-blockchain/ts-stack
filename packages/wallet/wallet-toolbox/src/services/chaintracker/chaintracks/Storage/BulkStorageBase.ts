@@ -1,3 +1,4 @@
+import { promiseFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 // /* eslint-disable @typescript-eslint/no-empty-function */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { BulkStorageApi, BulkStorageBaseOptions } from '../Api/BulkStorageApi'
@@ -43,8 +44,10 @@ export abstract class BulkStorageBase implements BulkStorageApi {
     this.fs = options.fs
   }
 
-  async shutdown(): Promise<void> {
-    /* intentional no-op: subclasses override when needed */
+  shutdown(): Promise<void> {
+    return promiseFromSync(() => {
+      /* intentional no-op: subclasses override when needed */
+    })
   }
 
   abstract appendHeaders(minHeight: number, count: number, newBulkHeaders: Uint8Array): Promise<void>
@@ -61,16 +64,22 @@ export abstract class BulkStorageBase implements BulkStorageApi {
     return header
   }
 
-  async getHeightRange(): Promise<HeightRange> {
-    const maxHeight = await this.getMaxHeight()
-    if (!Number.isSafeInteger(maxHeight) || maxHeight < -1 || maxHeight > 0x7fffffff) {
-      throw new WERR_INVALID_OPERATION('bulk storage returned an invalid maximum height')
-    }
-    return new HeightRange(0, maxHeight)
+  getHeightRange(): Promise<HeightRange> {
+    return mapAwaitFromSync(
+      () => this.getMaxHeight(),
+      maxHeight => {
+        if (!Number.isSafeInteger(maxHeight) || maxHeight < -1 || maxHeight > 0x7fffffff) {
+          throw new WERR_INVALID_OPERATION('bulk storage returned an invalid maximum height')
+        }
+        return new HeightRange(0, maxHeight)
+      }
+    )
   }
 
-  async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
-    /* intentional no-op: subclasses override when needed */
+  setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
+    return promiseFromSync(() => {
+      /* intentional no-op: subclasses override when needed */
+    })
   }
 
   async exportBulkHeaders(rootFolder: string, jsonFilename: string, maxPerFile: number): Promise<void> {

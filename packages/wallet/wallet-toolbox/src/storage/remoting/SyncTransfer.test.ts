@@ -101,6 +101,52 @@ describe('bounded durable sync transport', () => {
     expect((await store.beginWrite('alice', digest, bytes.length)).receivedBytes).toBe(0)
   })
 
+  test('wallet effects and transfer ACK roll back together and reopen recovers without reapplying', async () => {
+    await knex.schema.createTable('sync_atomic_wallet_fixture', table => {
+      table.integer('value')
+    })
+    const bytes = encodeSyncTransfer({ data: 'independent atomic transfer fixture' }),
+      digest = syncTransferDigest(bytes),
+      manifest = await store.beginWrite('alice', digest, bytes.length)
+    try {
+      for (let offset = 0; offset < bytes.length; offset += capabilities.partBytes)
+        await store.write('alice', manifest.transferId, offset, bytes.subarray(offset, offset + capabilities.partBytes))
+      await expect(
+        store.commitPreparedWrite('alice', manifest.transferId, digest, async trx => {
+          await trx('sync_atomic_wallet_fixture').insert({ value: 1 })
+          throw new Error('Independent failure after wallet effects')
+        })
+      ).rejects.toThrow('after wallet effects')
+      expect(await knex('sync_atomic_wallet_fixture')).toEqual([])
+      expect((await store.loadWrite('alice', manifest.transferId)).bytes).toEqual(bytes)
+      await expect(
+        store.commitPreparedWrite('alice', manifest.transferId, digest, async trx => {
+          await trx('sync_atomic_wallet_fixture').insert({ value: 2 })
+          return { invalidAcknowledgement: 'x'.repeat(65537) }
+        })
+      ).rejects.toThrow('result budget')
+      expect(await knex('sync_atomic_wallet_fixture')).toEqual([])
+      const apply = jest.fn(async (trx: typeof knex) => {
+        await trx('sync_atomic_wallet_fixture').insert({ value: 3 })
+        return { done: false, inserts: 1, nextCheckpoint: { sequence: 1 } }
+      })
+      const result = await store.commitPreparedWrite('alice', manifest.transferId, digest, apply)
+      // Discard the caller's ACK, then reopen the actual destination store.
+      store = new KnexSyncTransferStore(knex, capabilities)
+      expect(await store.commitPreparedWrite('alice', manifest.transferId, digest, apply)).toEqual(result)
+      expect(apply).toHaveBeenCalledTimes(1)
+      expect(await knex('sync_atomic_wallet_fixture')).toEqual([{ value: 3 }])
+      expect(await knex('sync_transfer_parts')).toEqual([])
+      await expect(store.commitPreparedWrite('bob', manifest.transferId, digest, apply)).rejects.toThrow('expired')
+      await expect(store.commitPreparedWrite('alice', manifest.transferId, 'f'.repeat(64), apply)).rejects.toThrow(
+        'current staging'
+      )
+      expect(apply).toHaveBeenCalledTimes(1)
+    } finally {
+      await knex.schema.dropTable('sync_atomic_wallet_fixture')
+    }
+  })
+
   test('rejects corrupted and out-of-order parts without accepting a complete record', async () => {
     const bytes = encodeSyncTransfer({ bytes: new Uint8Array(2000).fill(53) })
     const m = await store.beginWrite('alice', syncTransferDigest(bytes), bytes.length)
@@ -138,6 +184,28 @@ describe('bounded durable sync transport', () => {
     new DataView(badHeader.buffer).setUint32(0, frame.length + 1)
     expect(() => decodeSyncTransfer(badHeader)).toThrow('frame')
     expect(() => decodeSyncTransfer(new Uint8Array(3))).toThrow('frame')
+  })
+
+  test('framing restores reserved own binary properties and numeric array indices without prototype effects', () => {
+    const names = ['__proto__', 'constructor', 'prototype']
+    const before = Object.getOwnPropertyDescriptors(Object.prototype)
+    const value = Object.fromEntries(names.map((name, index) => [name, new Uint8Array([31 + index])]))
+    const restored = decodeSyncTransfer(encodeSyncTransfer({ value, nested: [new Uint8Array([44])] })) as {
+      value: Record<string, Uint8Array>
+      nested: Uint8Array[]
+    }
+    expect(Object.getPrototypeOf(restored.value)).toBe(Object.prototype)
+    for (const [index, name] of names.entries()) {
+      expect(Object.hasOwn(restored.value, name)).toBe(true)
+      expect(Object.getOwnPropertyDescriptor(restored.value, name)).toEqual({
+        value: new Uint8Array([31 + index]),
+        enumerable: true,
+        configurable: true,
+        writable: true
+      })
+    }
+    expect(restored.nested).toEqual([new Uint8Array([44])])
+    expect(Object.getOwnPropertyDescriptors(Object.prototype)).toEqual(before)
   })
 
   test('rejects malformed field paths, duplicate fields and trailing bytes', () => {

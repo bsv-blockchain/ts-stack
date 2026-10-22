@@ -50,6 +50,8 @@ export interface StorageIdbSchema {
     indexes: {
       userId: number
       userId_type_certifier_serialNumber: [number, Base64String, PubKeyHex, Base64String]
+      /** Fresh unpublished packed namespaces only; no released v6 migration. */
+      userId_certifier_serialNumber: [number, PubKeyHex, Base64String]
     }
   }
   certificateFields: {

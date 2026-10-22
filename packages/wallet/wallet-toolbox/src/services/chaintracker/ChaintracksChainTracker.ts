@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { ChainTracker, Telemetry, TelemetryConfig, TelemetrySpan } from '@bsv/sdk'
 import { ChaintracksServiceClient } from './chaintracks/ChaintracksServiceClient'
 import { Chain } from '../../sdk/types'
@@ -85,7 +86,8 @@ export class ChaintracksChainTracker implements ChainTracker {
     const events = provider as ChaintracksClientApi & {
       subscribeReorgs?: (listener: unknown) => Promise<string>
     }
-    if (typeof events.subscribeReorgs === 'function') return async listener => await events.subscribeReorgs!(listener)
+    if (typeof events.subscribeReorgs === 'function')
+      return listener => awaitFromSync(() => events.subscribeReorgs!(listener))
     if (provider.supportsReorgEvents === true) {
       throw new Error('Chaintracks provider promised reorg events but subscribeReorgs is not implemented')
     }
@@ -142,13 +144,16 @@ export class ChaintracksChainTracker implements ChainTracker {
     this.throwIfAborted(signal)
     const chaintracks = this.chaintracks
     const context = this.verificationContext
-    const currentHeight = async (): Promise<number> => {
-      const height = await chaintracks.getPresentHeight()
-      this.throwIfAborted(signal)
-      if (this.chaintracks !== chaintracks || this.verificationContext !== context)
-        throw new Error('Chaintracks provider changed during height lookup')
-      return height
-    }
+    const currentHeight = (): Promise<number> =>
+      mapAwaitFromSync(
+        () => chaintracks.getPresentHeight(),
+        height => {
+          this.throwIfAborted(signal)
+          if (this.chaintracks !== chaintracks || this.verificationContext !== context)
+            throw new Error('Chaintracks provider changed during height lookup')
+          return height
+        }
+      )
     if (!this.telemetry.enabled) return await currentHeight()
     return await this.telemetry.withSpan(
       'wallet.chaintracks.current_height',
@@ -156,7 +161,7 @@ export class ChaintracksChainTracker implements ChainTracker {
         component: 'chaintracks-chain-tracker',
         kind: 'client'
       },
-      async () => await currentHeight()
+      () => awaitFromSync(() => currentHeight())
     )
   }
 
@@ -169,38 +174,36 @@ export class ChaintracksChainTracker implements ChainTracker {
         component: 'chaintracks-chain-tracker',
         kind: 'client'
       },
-      async span => await this.isValidRootForHeightCore(root, height, span, signal)
+      span => awaitFromSync(() => this.isValidRootForHeightCore(root, height, span, signal))
     )
   }
 
-  private async isValidRootForHeightCore(
+  private isValidRootForHeightCore(
     root: string,
     height: number,
     parent?: TelemetrySpan,
     signal?: AbortSignal
   ): Promise<boolean> {
-    const header = await this.fetchCanonicalHeader(
-      this.chaintracks,
-      this.verificationContext,
-      height,
-      parent,
-      signal
-    )
-    if (header == null) return false
+    return mapAwaitFromSync(
+      () => this.fetchCanonicalHeader(this.chaintracks, this.verificationContext, height, parent, signal),
+      header => {
+        if (header == null) return false
 
-    // Diagnostic only: a root is always freshly read from the current canonical source above.
-    this.cache[height] = header.merkleRoot
-    this.cacheUpdatedAt[height] = Date.now()
-    this.pruneDiagnosticCache()
+        // Diagnostic only: a root is always freshly read from the current canonical source above.
+        this.cache[height] = header.merkleRoot
+        this.cacheUpdatedAt[height] = Date.now()
+        this.pruneDiagnosticCache()
 
-    const valid = header.merkleRoot === root
-    parent?.end({
-      attributes: {
-        'chaintracks.cache_hit': false,
-        'chaintracks.valid': valid
+        const valid = header.merkleRoot === root
+        parent?.end({
+          attributes: {
+            'chaintracks.cache_hit': false,
+            'chaintracks.valid': valid
+          }
+        })
+        return valid
       }
-    })
-    return valid
+    )
   }
 
   private assertProviderUnchanged(chaintracks: ChaintracksClientApi, context: number): void {
@@ -226,7 +229,7 @@ export class ChaintracksChainTracker implements ChainTracker {
           'retry.attempt': tryCount
         }
       },
-      async () => await chaintracks.findHeaderForHeight(height)
+      () => awaitFromSync(() => chaintracks.findHeaderForHeight(height))
     )
   }
 

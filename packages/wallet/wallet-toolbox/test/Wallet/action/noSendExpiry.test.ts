@@ -1,6 +1,8 @@
+import { TaskNoSendExpiry } from '../../../src/monitor/tasks/TaskNoSendExpiry'
 import {
   Beef,
   CachedKeyDeriver,
+  type CreateActionArgs,
   PrivateKey,
   Script,
   Transaction,
@@ -190,7 +192,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   }
 
-  function protectedArgs(seconds: number, signAndProcess = true) {
+  function protectedArgs(seconds: number, signAndProcess = true): CreateActionArgs {
     return {
       description: 'BRC-177 protected payment',
       labels: [`p nosend expiry seconds ${seconds}`],
@@ -206,7 +208,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
         randomizeOutputs: false,
         signAndProcess
       }
-    } as const
+    }
   }
 
   // Mirrors noSendExpiry.ts: P2PKH reclaim (107-byte unlock, 25-byte lock)
@@ -1421,7 +1423,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
         await expect(
           ctx.wallet.createAction({
             ...protectedArgs(3600),
-            options
+            options: options as NonNullable<CreateActionArgs['options']>
           })
         ).rejects.toThrow()
       }
@@ -1482,6 +1484,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       )
 
       const knownSpy = jest.spyOn(services, 'getStatusForTxids').mockResolvedValueOnce({
+        name: 'independent lifecycle status fixture',
         status: 'success',
         results: [{ txid: created.txid!, status: 'known', depth: 0 }]
       })
@@ -1554,6 +1557,157 @@ describe('BRC-177 noSend expiry reference implementation', () => {
         ).noSendExpiryState
       ).toBe('signed')
     } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test.each([false, true])(
+    'lifecycle retains the actual original epoch through preparation, signed=%s',
+    async signed => {
+      const ctx = await createHarness()
+      try {
+        const created = await ctx.wallet.createAction(protectedArgs(3600, signed))
+        const target = verifyOne(
+          await ctx.active.findTransactions({
+            partial: signed ? { txid: created.txid } : { reference: created.signableTransaction!.reference }
+          })
+        )
+        await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+        const user = verifyOne(await ctx.active.findUsers({ partial: { identityKey: ctx.wallet.identityKey } }))
+        const changeRole = async () => {
+          await ctx.active.updateUser(user.userId, { activeStorage: 'another-primary' })
+          await ctx.active.updateUser(user.userId, { activeStorage: ctx.activeKey })
+        }
+        if (signed) {
+          const status = services.getStatusForTxids.bind(services)
+          jest.spyOn(services, 'getStatusForTxids').mockImplementationOnce(async txids => {
+            const observed = await status(txids)
+            await changeRole()
+            return observed
+          })
+        } else {
+          const capture = ctx.active.activeWriteTransaction.bind(ctx.active)
+          jest.spyOn(ctx.active, 'activeWriteTransaction').mockImplementationOnce(async auth => {
+            const write = await capture(auth)
+            await changeRole()
+            return write
+          })
+        }
+        const before = verifyOne(
+          await ctx.active.findOutputs({
+            partial: { userId: target.userId, txid: target.noSendExpiryAnchorTxid, vout: target.noSendExpiryAnchorVout }
+          })
+        )
+        const run = await processNoSendExpiryLifecycle(ctx.active)
+        expect(run).toMatchObject({ cancelled: 0, reclaimActivated: 0, deferred: 1, errors: 0 })
+        const current = verifyOne(
+          await ctx.active.findTransactions({ partial: { transactionId: target.transactionId } })
+        )
+        expect(current.noSendExpiryState).toBe(signed ? 'signed' : 'unsigned')
+        expect(current.status).toBe(target.status)
+        expect(verifyOne(await ctx.active.findOutputs({ partial: { outputId: before.outputId } })).spentBy).toBe(
+          before.spentBy
+        )
+        if (target.noSendExpiryReclaimTxid != null)
+          expect(await services.storage.getTransaction(target.noSendExpiryReclaimTxid)).toBeUndefined()
+        const fresh = await processNoSendExpiryLifecycle(ctx.active)
+        expect(signed ? fresh.reclaimActivated : fresh.cancelled).toBe(1)
+      } finally {
+        jest.restoreAllMocks()
+        await ctx.destroy()
+      }
+    }
+  )
+
+  test('reclaim activation cannot cross a primary ABA during the actual anchor observation', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const anchor = await anchorOf(ctx, created.txid!)
+      const user = verifyOne(await ctx.active.findUsers({ partial: { identityKey: ctx.wallet.identityKey } }))
+      const isUtxo = services.isUtxo.bind(services)
+      jest.spyOn(services, 'isUtxo').mockImplementationOnce(async output => {
+        const actual = await isUtxo(output)
+        await ctx.active.updateUser(user.userId, { activeStorage: 'another-primary' })
+        await ctx.active.updateUser(user.userId, { activeStorage: ctx.activeKey })
+        return actual
+      })
+      const post = jest.spyOn(services, 'postBeef')
+      const stale = await processNoSendExpiryLifecycle(ctx.active)
+      expect(stale).toMatchObject({ reclaimActivated: 0, deferred: 1, errors: 0 })
+      expect(post).not.toHaveBeenCalled()
+      expect(
+        verifyOne(await ctx.active.findTransactions({ partial: { transactionId: target.transactionId } }))
+          .noSendExpiryState
+      ).toBe('revocation-requested')
+      expect(verifyOne(await ctx.active.findOutputs({ partial: { outputId: anchor.outputId } })).spentBy).toBe(
+        anchor.spentBy
+      )
+      expect(await ctx.active.findTransactions({ partial: { txid: target.noSendExpiryReclaimTxid } })).toEqual([])
+      expect((await processNoSendExpiryLifecycle(ctx.active)).reclaimActivated).toBe(1)
+      expect(await services.storage.getTransaction(target.noSendExpiryReclaimTxid!)).toBeDefined()
+    } finally {
+      jest.restoreAllMocks()
+      await ctx.destroy()
+    }
+  })
+
+  test('actual lifecycle status work yields manager ownership to foreground SQL', async () => {
+    const ctx = await createHarness()
+    let release!: () => void
+    const gate = new Promise<void>(resolve => {
+      release = resolve
+    })
+    let entered!: () => void
+    const reached = new Promise<void>(resolve => {
+      entered = resolve
+    })
+    let pending: Promise<string> | undefined
+    let foreground: Promise<unknown> | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const status = services.getStatusForTxids.bind(services)
+      jest.spyOn(services, 'getStatusForTxids').mockImplementationOnce(async txids => {
+        entered()
+        await gate
+        return await status(txids)
+      })
+      pending = new TaskNoSendExpiry(ctx.monitor).runTask()
+      await Promise.race([
+        reached,
+        pending.then(() => {
+          throw new Error('Lifecycle did not reach actual status observation')
+        })
+      ])
+      const user = verifyOne(await ctx.active.findUsers({ partial: { identityKey: ctx.wallet.identityKey } }))
+      const basket = verifyOne(
+        await ctx.active.findOutputBaskets({ partial: { userId: user.userId, name: 'default' } })
+      )
+      foreground = ctx.storage.runAsStorageProvider(async sp => {
+        await sp.updateOutputBasket(basket.basketId, { numberOfDesiredUTXOs: 8 })
+        return verifyOne(await sp.findOutputBaskets({ partial: { basketId: basket.basketId } })).numberOfDesiredUTXOs
+      })
+      await expect(
+        Promise.race([
+          foreground,
+          new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => reject(new Error('Foreground SQL blocked by expiry status observation')), 1500)
+          })
+        ])
+      ).resolves.toBe(8)
+      release()
+      expect(await pending).toContain('activated=1')
+      expect(await services.storage.getTransaction(target.noSendExpiryReclaimTxid!)).toBeDefined()
+    } finally {
+      if (timer != null) clearTimeout(timer)
+      release()
+      await Promise.allSettled([pending, foreground])
+      jest.restoreAllMocks()
       await ctx.destroy()
     }
   })

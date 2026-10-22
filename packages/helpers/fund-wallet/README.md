@@ -161,3 +161,10 @@ The recovered pre-monorepo ISC notice is retained in
 - [@bsv/sdk](https://www.npmjs.com/package/@bsv/sdk) - Bitcoin SV SDK
 - [@bsv/wallet-toolbox](https://www.npmjs.com/package/@bsv/wallet-toolbox) - Wallet management tools
 - [Metanet Desktop](https://metanet.bsvb.tech) - Local BSV wallet application
+
+## Next dependency release candidate
+
+This candidate refreshes the packed first-party dependency ranges for the next
+wallet interoperability release. It adds no independent API or wire-format
+change. Adopt after the new dependency graph is published; current wallet
+releases retain their existing published pins.

@@ -33,11 +33,11 @@ test('current required, manual, live, resource, and conformance tests are govern
 
   assert.deepEqual(result.errors, [])
   assert.equal(result.summary.requiredDirectSkips, 2)
-  assert.equal(result.summary.propertySuites, 40)
+  assert.equal(result.summary.propertySuites, 100)
   assert.equal(result.summary.propertyPackages, 33)
   assert.equal(result.summary.propertyExcludedPackages, 5)
   assert.equal(result.summary.propertyClassifiedPackages, 38)
-  assert.equal(result.summary.mutationTargets, 40)
+  assert.equal(result.summary.mutationTargets, 100)
   assert.equal(result.summary.manualAndLiveFiles, 32)
   assert.equal(result.summary.walletManualSuites, 30)
   assert.equal(result.summary.conformanceSkipFiles, 19)
@@ -265,4 +265,26 @@ test('PR workflows keep strict maintenance audits outside their aggregate gates'
     assert.doesNotMatch(workflow, /test-governance\.mjs[^\n]*\|/, file)
   }
   assert.ok(checked > 0)
+})
+
+test('wallet property command keeps every registered suite after its runner options', () => {
+  const manifest = 'packages/wallet/wallet-toolbox/package.json'
+  const packageDirectory = path.dirname(path.join(REPOSITORY_ROOT, manifest))
+  const wallet = JSON.parse(fs.readFileSync(path.join(REPOSITORY_ROOT, manifest), 'utf8'))
+  const prefix = 'pnpm build && node ../../../scripts/check-wallet-property-command.mjs && jest '
+  assert.ok(wallet.scripts['test:property'].startsWith(prefix))
+  const tokens = wallet.scripts['test:property'].slice(prefix.length).split(' ')
+  const options = [
+    '--testPathIgnorePatterns=man.test.ts',
+    '--runInBand',
+    '--watchman=false',
+    '--runTestsByPath'
+  ]
+  assert.deepEqual(tokens.slice(0, options.length), options)
+  const declared = tokens.slice(options.length)
+  const registered = policy.propertyTesting.suites
+    .filter(suite => suite.manifest === manifest)
+    .map(suite => path.relative(packageDirectory, path.join(REPOSITORY_ROOT, suite.path)))
+  assert.ok(declared.every(value => value.startsWith('src/') && value.endsWith('.test.ts')))
+  assert.deepEqual([...declared].sort(), [...registered].sort())
 })

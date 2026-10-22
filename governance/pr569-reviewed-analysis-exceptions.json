@@ -1,0 +1,59 @@
+{
+  "status": "approved",
+  "owner": "BraydenLangley",
+  "repository": "bsv-blockchain/ts-stack",
+  "project": "bsv-blockchain_ts-stack",
+  "pullRequest": 569,
+  "branch": "codex/wallet-sync-interop-reliability",
+  "base": "main",
+  "approvedAt": "2026-10-19T18:28:00Z",
+  "expiresAt": "2026-10-24T23:59:59Z",
+  "approval": "The operator delegated judgment after reviewing the exact three-operation proposal in the private PR569 remediation task. Maintainer BraydenLangley reviewed these intentional operations; this approval does not authorize other findings or artifact budget changes.",
+  "removeWhen": "Remove when improved analysis recognizes these constrained operations. Changed source, expired approval or any different alert requires fresh review and strict enforcement.",
+  "findings": [
+    {
+      "analyzer": "CodeQL",
+      "alert": 353,
+      "rule": "js/http-to-file-access",
+      "file": "scripts/sonar-policy-gate.mjs",
+      "sha256": "3aba1f218aa36a86a584448c53c6c5682978bba046dbf5f1ed28d2d2d56cb8c9",
+      "rationale": "Remote JSON is evidence data written to controller-selected private JSON paths, never executed. Validated fixed names, exact revision, exclusive creation and modes 0700/0600 prevent remote path selection or replacement."
+    },
+    {
+      "analyzer": "Sonar",
+      "key": "AaExP-k5m5nztHJVpve2",
+      "rule": "javascript:S2612",
+      "file": "packages/wallet/wallet-toolbox/tools/Brc38RootNativeInstallation.cjs",
+      "sha256": "c22043383de5f7846aaf99f442390f7210b0b0d236a9d4d7b63e1afc0d3cb893",
+      "line": 188,
+      "type": "VULNERABILITY",
+      "message": "Make sure this permission is safe.",
+      "impacts": [
+        {
+          "softwareQuality": "SECURITY",
+          "severity": "MEDIUM"
+        }
+      ],
+      "rationale": "0555 grants required read/execute, never write, on the exact hash-pinned executable under a checked root-owned non-writable directory. Descriptor/path identities, content and modes are rechecked. Retaining failed 0500 artifacts is an existing recovery contract."
+    },
+    {
+      "analyzer": "Sonar",
+      "key": "AaExP751m5nztHJVpurV",
+      "rule": "javascript:S2612",
+      "file": "packages/wallet/wallet-toolbox/src/storage/portable/native/copy_artifacts.cjs",
+      "sha256": "71d00b7d5c4cb677122ec8c84e16939d5d053a29ffe3aeaa0f8833f5a2e94535",
+      "line": 78,
+      "type": "VULNERABILITY",
+      "message": "Make sure this permission is safe.",
+      "impacts": [
+        {
+          "softwareQuality": "SECURITY",
+          "severity": "MEDIUM"
+        }
+      ],
+      "rationale": "0644 gives public npm code assets read access without public write or execute. Assets use private 0700 staging, atomic rename and a hashed, reread artifact receipt."
+    }
+  ],
+  "reportedSecurityRating": 3,
+  "securityRatingRationale": "The two exact reviewed MEDIUM security permission findings produce Sonar security C (3). Only that original reported rating, with both exact source-bound findings present and no other correctness/security finding, is covered. The original metric and failed verdict remain unchanged and visible."
+}

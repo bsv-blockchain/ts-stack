@@ -4,6 +4,15 @@ All notable changes to this package are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and the package adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.2
+
+### Fixed
+
+- The offer expiry timer rechecks the whole-second deadline encoded in the offer
+  before closing its link. An early timer wake no longer closes an unexpired
+  offer; expiry validation and completion/cancellation cleanup retain their
+  existing behavior.
+
 ## 0.2.1
 
 The relay can run as a governed container image: it now answers the readiness and CORS probes

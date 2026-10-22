@@ -37,10 +37,10 @@ const chunk = (): SyncChunk => ({
 
 class TransferClient extends StorageClientBase {
   readonly request = jest.fn<Promise<unknown>, [string, unknown[]]>()
-  constructor() {
-    super({} as WalletInterface, 'https://storage.example.test', { binaryRequests: true })
+  constructor(binaryRequests = true, serverSupportsBinary = true) {
+    super({} as WalletInterface, 'https://storage.example.test', { binaryRequests })
     Reflect.set(this, 'settings', { syncTransfer: capabilities })
-    this.serverSupportsBinary = true
+    this.serverSupportsBinary = serverSupportsBinary
   }
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
     return (await this.request(method, params)) as T
@@ -137,3 +137,55 @@ test.each(['userIdentityKey', 'fromStorageIdentityKey', 'toStorageIdentityKey'] 
     expect(client.request.mock.calls.at(-1)?.[0]).toBe('releaseSyncTransfer')
   }
 )
+
+test('omitted inline capability retains the six MiB default without staging a small encoded page', async () => {
+  const client = new TransferClient()
+  Reflect.set(client, 'settings', {
+    syncTransfer: { version: 1, maxBytes: capabilities.maxBytes, partBytes: capabilities.partBytes }
+  })
+  const result = { done: true, inserts: 1, updates: 0 }
+  client.request.mockImplementation(async method => {
+    expect(method).toBe('processSyncChunk')
+    return result
+  })
+  await expect(client.processSyncChunk(args(), chunk())).resolves.toEqual(result)
+  expect(client.request).toHaveBeenCalledTimes(1)
+})
+
+test.each([
+  { requestBinary: true, serverBinary: true },
+  { requestBinary: false, serverBinary: true },
+  { requestBinary: true, serverBinary: false },
+  { requestBinary: false, serverBinary: false }
+])('wire bytes require both binary negotiation flags %#', async ({ requestBinary, serverBinary }) => {
+  const client = new TransferClient(requestBinary, serverBinary),
+    page = chunk()
+  page.transactions![0].inputBEEF = Array(128).fill(173)
+  Reflect.set(client, 'settings', { syncTransfer: undefined })
+  client.request.mockResolvedValue({ done: true, inserts: 1, updates: 0 })
+  await client.processSyncChunk(args(), page)
+  const [method, params] = client.request.mock.calls[0],
+    wire = params[1] as SyncChunk
+  expect(method).toBe('processSyncChunk')
+  const binary = wire.transactions![0].inputBEEF
+  expect(Array.isArray(binary)).toBe(!(requestBinary && serverBinary))
+  expect(Array.from(binary!)).toEqual(page.transactions![0].inputBEEF)
+})
+
+test('binary negotiation applies the one-byte expansion rather than legacy numeric-array overhead', async () => {
+  const client = new TransferClient(),
+    page = chunk()
+  const expectedPage = {
+    ...page,
+    transactions: [{ ...page.transactions![0], inputBEEF: Uint8Array.from(page.transactions![0].inputBEEF!) }]
+  }
+  const length = encodeSyncTransfer({ args: args(), chunk: expectedPage }).length
+  Reflect.set(client, 'settings', { syncTransfer: { ...capabilities, inlineBytes: 2 * length } })
+  const result = { done: true, inserts: 1, updates: 0 }
+  client.request.mockImplementation(async method => {
+    expect(method).toBe('processSyncChunk')
+    return result
+  })
+  await expect(client.processSyncChunk(args(), page)).resolves.toEqual(result)
+  expect(client.request).toHaveBeenCalledTimes(1)
+})

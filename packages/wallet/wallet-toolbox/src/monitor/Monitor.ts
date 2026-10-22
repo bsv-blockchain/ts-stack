@@ -1,3 +1,4 @@
+import { awaitFromSync, awaitVoidFromSync } from '../utility/promiseFromSync'
 import { wait } from '../utility/utilityHelpers'
 
 import { WalletMonitorTask } from './tasks/WalletMonitorTask'
@@ -267,7 +268,7 @@ export class Monitor {
       await Promise.all(
         subscriptions
           .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')
-          .map(async result => await c.unsubscribe(result.value).catch(() => false))
+          .map(result => awaitFromSync(() => c.unsubscribe(result.value).catch(() => false)))
       )
     }
     await this.reorgInvalidationPromise
@@ -553,15 +554,17 @@ export class Monitor {
       throw new WERR_INVALID_PARAMETER('event', 'a bounded control-free monitor event name')
     }
     const boundedDetails = details == null ? undefined : safeDiagnostic(details, 8192)
-    await this.storage.runAsStorageProvider(async sp => {
-      await sp.insertMonitorEvent({
-        created_at: new Date(),
-        updated_at: new Date(),
-        id: 0,
-        event,
-        details: boundedDetails
-      })
-    })
+    await this.storage.runAsStorageProvider(sp =>
+      awaitVoidFromSync(() =>
+        sp.insertMonitorEvent({
+          created_at: new Date(),
+          updated_at: new Date(),
+          id: 0,
+          event,
+          details: boundedDetails
+        })
+      )
+    )
   }
 
   stopTasks(): void {
@@ -618,7 +621,9 @@ export class Monitor {
    */
   callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void {
     if (this.onTransactionBroadcasted != null) {
-      this.invokeCallback('onTransactionBroadcasted', async () => await this.onTransactionBroadcasted!(broadcastResult))
+      this.invokeCallback('onTransactionBroadcasted', () =>
+        awaitFromSync(() => this.onTransactionBroadcasted!(broadcastResult))
+      )
     }
   }
 
@@ -631,7 +636,7 @@ export class Monitor {
    */
   callOnProvenTransaction(txStatus: ProvenTransactionStatus): void {
     if (this.onTransactionProven != null) {
-      this.invokeCallback('onTransactionProven', async () => await this.onTransactionProven!({ ...txStatus }))
+      this.invokeCallback('onTransactionProven', () => awaitFromSync(() => this.onTransactionProven!({ ...txStatus })))
     }
   }
 
@@ -640,9 +645,8 @@ export class Monitor {
    */
   callOnTransactionStatusChanged(txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged != null) {
-      this.invokeCallback(
-        'onTransactionStatusChanged',
-        async () => await this.onTransactionStatusChanged!(txid, newStatus)
+      this.invokeCallback('onTransactionStatusChanged', () =>
+        awaitFromSync(() => this.onTransactionStatusChanged!(txid, newStatus))
       )
     }
   }
@@ -650,9 +654,11 @@ export class Monitor {
   private invokeCallback(name: string, callback: () => Promise<void>): void {
     void Promise.resolve()
       .then(callback)
-      .catch(async error => {
-        await this.logEvent('error1', `monitor ${name} callback error ${safeDiagnostic(error)}`).catch(() => {})
-      })
+      .catch(error =>
+        awaitVoidFromSync(() =>
+          this.logEvent('error1', `monitor ${name} callback error ${safeDiagnostic(error)}`).catch(() => {})
+        )
+      )
   }
 
   /**

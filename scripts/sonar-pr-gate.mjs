@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { enforceRepositorySonarGate } from './sonar-policy-gate.mjs'
 
 const DEFAULT_BASE_URL = 'https://sonarcloud.io'
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
@@ -47,7 +48,11 @@ export function parseArguments(argv) {
     throw new Error('--project is required')
   }
   if (options.pullRequest === undefined) throw new Error('--pull-request is required')
-  if (!/^[0-9a-f]{40}$/i.test(options.revision ?? '')) {
+  if (
+    typeof options.revision !== 'string' ||
+    options.revision.length !== 40 ||
+    !/^[0-9a-f]{40}$/i.test(options.revision)
+  ) {
     throw new Error('--revision must be a full 40-character commit SHA')
   }
   const baseUrl = new URL(options.baseUrl)
@@ -211,7 +216,7 @@ const invokedDirectly =
 if (invokedDirectly) {
   try {
     const options = parseArguments(process.argv.slice(2))
-    await enforceSonarPullRequestGate(options)
+    await enforceRepositorySonarGate(options)
   } catch (error) {
     console.error(error instanceof Error ? error.message : error)
     process.exitCode = 1

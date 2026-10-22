@@ -258,13 +258,42 @@ shortcut may speed iteration but cannot replace the remote merge gate.
 - “Quality gate passed” means the complete repository gate passed for the
   exact head. SonarCloud’s aggregate badge alone is not evidence. New Sonar
   issues—including accepted or false-positive classifications—new unreviewed
-  hotspots, and new CodeQL alerts must be resolved before review.
+  hotspots, and new CodeQL alerts must be resolved before review, subject only
+  to the exact approved PR569 Sonar budget below.
 - One qualified maintainer approval is sufficient. Maintainers and
   administrators may facilitate a merge after required checks and review
   threads are complete; no independent last-pusher rule is assumed.
 - Re-read the final diff and verify the head SHA before review or merge. After
   merge, verify `main` when the change affects shared controls, releases, or
   deployed behavior.
+
+## Approved PR569 Sonar budget
+
+The maintainer approved the narrow exception recorded in
+[`governance/sonar-pr569-budget.json`](./governance/sonar-pr569-budget.json) and
+[its review record](./docs/reviews/sonar-pr569-budget.md). Only PR569 from
+`codex/wallet-sync-interop-reliability` to `main` in this repository may use
+maintainability A and duplication ≤6% until `2026-10-24T23:59:59Z`.
+The repository gate independently checks Actions and live GitHub PR context,
+exact Sonar revision, stable analysis and complete inventories. All findings
+remain visible. Bugs, vulnerabilities, reliability/security impacts (including
+mixed CODE_SMELL impacts), unknown findings and unreviewed hotspots still block;
+accepted or false-positive states do not waive them. Every other context and
+expired approval uses the original zero-findings gate. This does not waive
+CodeQL, implementation, platform, mutation, security, CI or final review gates,
+or authorize merging, publishing or deployment. The PR569 merge hold remains.
+
+The separately reviewed PR569 analysis operations in
+[`governance/pr569-reviewed-analysis-exceptions.json`](./governance/pr569-reviewed-analysis-exceptions.json)
+are the sole additional exception: CodeQL353 intentional private JSON evidence
+storage and two exact Sonar S2612 required public artifact permissions. Owner
+BraydenLangley reviewed the operator-delegated decision on October 19. Exact
+alert identities and SHA-256 source checks apply only to PR569 before October 24
+at 23:59:59 UTC. The Sonar inventory and original failed verdict remain visible;
+reviewed permission keys are reported separately. Their original security C
+metric is covered only when both exact findings are present; all other
+security ratings and findings retain strict enforcement. Every other finding, metric,
+platform and merge gate remains required. Changed source requires fresh review.
 
 ## Versions, notes, and releases
 

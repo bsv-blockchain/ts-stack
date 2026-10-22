@@ -15,7 +15,7 @@ import {
   ScriptTemplateUnlock,
   WalletInterface
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { fundWalletFromP2PKHOutpoints as _fundWalletFromP2PKHOutpoints } from './fundWalletP2PKH'
 import { Chain } from './sdk/types'
 import { randomBytesHex, verifyTruthy } from './utility/utilityHelpers'
@@ -197,7 +197,7 @@ DEV_KEYS = '{
     rootKeyHex: string
     storageUrl?: string
     privilegedKeyGetter?: () => Promise<PrivateKey>
-    scriptVerifier?: SpendVerifierInterface
+    scriptVerifier?: WalletScriptVerifier
   }): Promise<Wallet> {
     const chain = args.chain
     const endpointUrl = args.storageUrl || `https://${args.chain !== 'main' ? 'staging-' : ''}storage.babbage.systems`
@@ -493,7 +493,7 @@ export interface SetupWalletArgs {
    * Optional high-performance verifier for internal wallet and locally hosted
    * storage validation. This does not alter the BRC-100 interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /** Optional operator tuning for wallet-managed liquidity shaping. */
   managedChangePolicy?: ManagedChangePolicyOptions
   /** Optional prepared-BEEF (COOK) rollout controls for Knex storage. */

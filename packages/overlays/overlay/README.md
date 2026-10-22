@@ -297,6 +297,12 @@ durable recovery completion. See [BASM details](./docs/BRC-136-BASM.md).
 
 ## Development
 
+The Mongo test fixture retains each actual member before startup, including a
+failed lower process whose automatic shutdown is still pending. Cleanup drains
+that owner and every sibling start before retrying a genuine port collision.
+All three real members, the pinned MongoDB version, cache sizes and existing
+startup, setup and cleanup deadlines remain unchanged.
+
 From the repository root:
 
 ```bash
