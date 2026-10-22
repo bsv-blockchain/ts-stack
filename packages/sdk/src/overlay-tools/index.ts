@@ -1,6 +1,7 @@
 export * from './LookupResolver.js'
 export * from './SHIPBroadcaster.js'
 export * from './withDoubleSpendRetry.js'
+export * from './OverlayNames.js'
 export {
   default as OverlayAdminTokenTemplate,
   type OverlayDiscoveryAdvertisement,
