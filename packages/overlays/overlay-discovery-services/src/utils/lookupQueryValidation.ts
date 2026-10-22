@@ -4,6 +4,8 @@ export const MAX_DISCOVERY_LOOKUP_RESULTS = 1000
 export const MAX_DISCOVERY_LOOKUP_SKIP = 1_000_000
 const MAX_QUERY_STRING_BYTES = 2048
 const MAX_QUERY_NAMES = 100
+/** Upper bound for a topic or service name in a query; matches isValidTopicOrServiceName. */
+export const MAX_QUERY_NAME_BYTES = 256
 const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
 export interface PaginationQuery {
@@ -146,7 +148,7 @@ export function validateOptionalStringArray(value: unknown, path: string): strin
       !('value' in descriptor) ||
       typeof descriptor.value !== 'string' ||
       utf8Length(descriptor.value) < 1 ||
-      utf8Length(descriptor.value) > 50
+      utf8Length(descriptor.value) > MAX_QUERY_NAME_BYTES
     ) {
       throw new Error(`${path} must contain only dense, bounded strings`)
     }
