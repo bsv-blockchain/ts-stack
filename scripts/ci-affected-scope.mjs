@@ -220,21 +220,26 @@ const LOCKFILE_GRAPH_SECTIONS = new Set([
 // Importers whose installed dependency graph differs between the lockfiles:
 // their own entries changed, or anything they reach, directly or not, did.
 // Frozen installs make the lockfile the whole truth about what is installed.
-export function lockfileAffectedImporters(baseSource, headSource) {
-  const baseSections = topLevelSections(baseSource)
-  const headSections = topLevelSections(headSource)
-  for (const key of new Set([...baseSections.keys(), ...headSections.keys()])) {
-    if (!LOCKFILE_GRAPH_SECTIONS.has(key) && baseSections.get(key) !== headSections.get(key))
-      return ['.']
-  }
+function settingsChanged(baseSource, headSource) {
+  const base = topLevelSections(baseSource)
+  const head = topLevelSections(headSource)
+  return [...new Set([...base.keys(), ...head.keys()])].some(
+    key => !LOCKFILE_GRAPH_SECTIONS.has(key) && base.get(key) !== head.get(key)
+  )
+}
 
-  const changed = new Set()
-  const lockfiles = [baseSource, headSource].map(source => ({
+function parseLockfileGraph(source) {
+  return {
     importers: lockfileEntries(source, 'importers:'),
     packages: lockfileEntries(source, 'packages:'),
     snapshots: lockfileEntries(source, 'snapshots:')
-  }))
-  const [base, head] = lockfiles
+  }
+}
+
+// Snapshots added, removed or edited, plus every snapshot of a package whose
+// resolution (tarball integrity) changed under the same version.
+function changedSnapshots(base, head) {
+  const changed = new Set()
   for (const [from, to] of [
     [base, head],
     [head, base]
@@ -246,28 +251,40 @@ export function lockfileAffectedImporters(baseSource, headSource) {
         if (snapshot === key || snapshot.startsWith(`${key}(`)) changed.add(snapshot)
     }
   }
+  return changed
+}
 
-  const affected = new Set(changedLockfileImporters(baseSource, headSource))
-  for (const lockfile of lockfiles) {
-    // Walk "is depended on by" edges from the changed snapshots once.
-    const dependents = new Map()
-    for (const [key, body] of lockfile.snapshots) {
-      for (const dependency of snapshotDependencies(body)) {
-        const set = dependents.get(dependency) ?? new Set()
-        set.add(key)
-        dependents.set(dependency, set)
-      }
-    }
-    const reaching = closure(changed, dependents)
-    for (const [importer, body] of lockfile.importers) {
-      // The root importer's own changes select the workspace above. Its tools
-      // reached only indirectly (formatters, linters, mutation) run in the
-      // lint, build and artifact jobs on every pull request, while each
-      // package's own test toolchain sits in that package's closure.
-      if (importer === '.') continue
-      if (importerDependencies(body).some(key => reaching.has(key))) affected.add(importer)
+// Package importers whose dependency graph reaches a changed snapshot. The root
+// importer's own changes select the workspace separately; its tools reached
+// only indirectly (formatters, linters, mutation) run in the lint, build and
+// artifact jobs on every pull request, while each package's own test toolchain
+// sits in that package's closure.
+function importersReaching(lockfile, changed) {
+  const dependents = new Map()
+  for (const [key, body] of lockfile.snapshots) {
+    for (const dependency of snapshotDependencies(body)) {
+      const set = dependents.get(dependency) ?? new Set()
+      set.add(key)
+      dependents.set(dependency, set)
     }
   }
+  const reaching = closure(changed, dependents)
+  return [...lockfile.importers]
+    .filter(([importer]) => importer !== '.')
+    .filter(([, body]) => importerDependencies(body).some(key => reaching.has(key)))
+    .map(([importer]) => importer)
+}
+
+export function lockfileAffectedImporters(baseSource, headSource) {
+  if (settingsChanged(baseSource, headSource)) return ['.']
+  const base = parseLockfileGraph(baseSource)
+  const head = parseLockfileGraph(headSource)
+  const changed = changedSnapshots(base, head)
+  const affected = new Set([
+    ...changedLockfileImporters(baseSource, headSource),
+    ...importersReaching(base, changed),
+    ...importersReaching(head, changed)
+  ])
   return sortedNames(affected)
 }
 

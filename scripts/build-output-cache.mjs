@@ -35,7 +35,7 @@ const DEPENDENCY_FIELDS = [
 const OUTPUT_DIRECTORIES = new Set(['dist', 'out'])
 
 function git(arguments_) {
-  return execFileSync('git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
+  return execFileSync('/usr/bin/git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
 }
 
 function treeListing(paths) {
@@ -142,7 +142,9 @@ function restore(projects, names, directory) {
   for (const name of names) {
     const file = path.join(directory, cacheFileName(name, keys.get(name)))
     if (existsSync(file)) {
-      execFileSync('tar', ['--extract', '--gzip', '--file', file], { cwd: REPOSITORY_ROOT })
+      execFileSync('/usr/bin/tar', ['--extract', '--gzip', '--file', file], {
+        cwd: REPOSITORY_ROOT
+      })
       restored.push(name)
     } else {
       build.push(name)
@@ -159,7 +161,7 @@ function save(projects, names, directory) {
     const file = path.join(directory, cacheFileName(name, keys.get(name)))
     if (existsSync(file)) continue
     const outputs = packageOutputs(projects, name)
-    execFileSync('tar', ['--create', '--gzip', '--file', file, '--files-from', '-'], {
+    execFileSync('/usr/bin/tar', ['--create', '--gzip', '--file', file, '--files-from', '-'], {
       cwd: REPOSITORY_ROOT,
       input: outputs.map(output => `${output}\n`).join('')
     })

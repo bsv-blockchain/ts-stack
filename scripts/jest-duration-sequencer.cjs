@@ -69,7 +69,11 @@ class DurationSequencer {
     return tests
   }
 
-  cacheResults() {}
+  // Jest calls this after a run to persist timings in its cache; this
+  // sequencer reads governed durations instead, so there is nothing to store.
+  cacheResults() {
+    return undefined
+  }
 }
 
 module.exports = DurationSequencer

@@ -69,7 +69,7 @@ export function planShards(packages, seconds, options = {}) {
     include: shards.map((shard, index) => ({
       shard: index + 1,
       total: count,
-      packages: shard.packages.sort((left, right) => left.localeCompare(right))
+      packages: shard.packages.toSorted((left, right) => left.localeCompare(right))
     }))
   }
 }

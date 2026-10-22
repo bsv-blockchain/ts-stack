@@ -561,7 +561,7 @@ export function resolutionProbe(resolver, specifiers) {
     `  try { resolve(specifier) } catch (error) { failures.push(\`\${specifier}: \${error.message}\`) }`,
     `}`,
     `if (failures.length > 0) {`,
-    `  console.error(failures.join('\\n'))`,
+    String.raw`  console.error(failures.join('\n'))`,
     `  process.exit(1)`,
     `}`
   ].join('\n')
