@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from './CertificateType.js'
 import { CallType } from './substrates/WalletWireCalls.js'
 import { MAXIMUM_SEND_WITH_TRANSACTIONS } from './validationHelpers.js'
 import { MAX_WALLET_WIRE_FRAME_BYTES } from './substrates/WalletWire.js'
@@ -1483,8 +1484,10 @@ function validateCertificate(value: unknown, call: string, field: string): Unkno
     for (let index = 0; index < encodedFieldNames.length; index++) {
       const name = encodedFieldNames[index]
       const encoded = base64(certificate[name], call, `${field}.${name}`)
-      const decoded = base64ToBytes(encoded)
-      if (decoded.length !== 32 || bytesToBase64(decoded) !== encoded) throw new Error()
+      const legacyType = name === 'type' && call !== 'acquireCertificate'
+      const decoded = legacyType ? existingCertificateTypeBytes(encoded) : base64ToBytes(encoded)
+      if (!legacyType && (decoded.length !== 32 || bytesToBase64(decoded) !== encoded))
+        throw new Error()
       encodedLength += decoded.length
     }
     const publicKeyFieldNames = ['subject', 'certifier'] as const
