@@ -94,12 +94,19 @@ Pass `options.origin` to embed a per-session origin in the QR — used by multi-
 **`getSession(id)`**
 
 ```ts
-getSession(id: string): { sessionId: string; status: string; relay: string } | null
+getSession(id: string): {
+  sessionId: string
+  status: string
+  relay: string
+  backendIdentityKey?: string
+} | null
 ```
 
 Returns the current status and relay URL of a session, or `null` if the session does not exist. Status values: `'pending'` | `'connected'` | `'disconnected'` | `'expired'`.
 
 The `relay` field is the `ws://` or `wss://` address the mobile should connect to. This is how the mobile resolves the relay without it being embedded in the QR — it calls this endpoint over HTTPS and reads `relay` from the response.
+
+`backendIdentityKey` is the backend identity key embedded in the session's QR (since 0.6.0; it is already public in the QR). `WalletPairingSession.resolveRelay()` rejects the pairing when it differs from the QR's key, which binds the QR key to the origin. Custom route handlers must return this object unchanged.
 
 ---
 
@@ -152,7 +159,7 @@ Dispatches a WebSocket upgrade to the relay. Use when the service is constructed
 | Method   | Path               | Body / Auth                                            | Response                                                     |
 | -------- | ------------------ | ------------------------------------------------------ | ------------------------------------------------------------ |
 | `GET`    | `/api/session`     | —                                                      | `{ sessionId, status, qrDataUrl, pairingUri, desktopToken }` |
-| `GET`    | `/api/session/:id` | —                                                      | `{ sessionId, status, relay }`                               |
+| `GET`    | `/api/session/:id` | —                                                      | `{ sessionId, status, relay, backendIdentityKey }`           |
 | `POST`   | `/api/request/:id` | Body: `{ method, params }` · Header: `X-Desktop-Token` | `RpcResponse`                                                |
 | `DELETE` | `/api/session/:id` | Header: `X-Desktop-Token`                              | `204 No Content`                                             |
 
@@ -160,7 +167,7 @@ Dispatches a WebSocket upgrade to the relay. Use when the service is constructed
 
 Both session routes emit `Cache-Control: no-store` and `Pragma: no-cache`. Preserve those headers through reverse proxies and CDNs: the creation response contains the wallet-equivalent `desktopToken`. Custom framework adapters must apply the same response policy and a strict bounded request-body parser (the bundled Express scaffold uses 64 KiB).
 
-`GET /api/session/:id` is called by the mobile app after scanning the QR to resolve the relay WebSocket URL. The mobile trusts this response because it is served over HTTPS from the origin embedded in the QR.
+`GET /api/session/:id` is called by the mobile app after scanning the QR to resolve the relay WebSocket URL. The mobile trusts this response because it is served over HTTPS from the origin embedded in the QR. Its `backendIdentityKey` must equal the key in the QR; the mobile rejects the pairing otherwise.
 
 `DELETE /api/session/:id` closes the mobile's WebSocket connection server-side. The mobile app receives a close event and knows the session has ended. Returns `401` if the token is missing or wrong, `404` if the session does not exist.
 
@@ -370,12 +377,13 @@ new WalletPairingSession(
 
 #### WalletPairingSessionOptions
 
-| Option               | Type                                   | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| -------------------- | -------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `implementedMethods` | `Set<string>`                          | `DEFAULT_IMPLEMENTED_METHODS`  | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `listCertificates`, `createAction`, `signAction`, `createSignature`, `verifySignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`, `createHmac`, `verifyHmac`, `encrypt`, `decrypt`. |
-| `autoApproveMethods` | `Set<string>`                          | `DEFAULT_AUTO_APPROVE_METHODS` | Subset of `implementedMethods` executed without calling `onApprovalRequired`. Defaults to `{ 'getPublicKey' }`.                                                                                                                                                                                                                                                                                                                                                                                        |
-| `onApprovalRequired` | `(method, params) => Promise<boolean>` | `undefined`                    | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, methods outside `autoApproveMethods` fail closed with `4001`; they are never auto-approved.                                                                                                                                                                                                                                                    |
-| `walletMeta`         | `Record<string, unknown>`              | `{}`                           | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`).                                                                                                                                                                                                                                                                                                                                                      |
+| Option                  | Type                                   | Default                        | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------- | -------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `implementedMethods`    | `Set<string>`                          | `DEFAULT_IMPLEMENTED_METHODS`  | Methods your handler actually implements. Requests for any other method receive a `501` response without invoking `onApprovalRequired` or `onRequest`. The default covers the full BSV Browser method set: `getPublicKey`, `listOutputs`, `listCertificates`, `createAction`, `signAction`, `createSignature`, `verifySignature`, `listActions`, `internalizeAction`, `acquireCertificate`, `relinquishCertificate`, `revealCounterpartyKeyLinkage`, `createHmac`, `verifyHmac`, `encrypt`, `decrypt`. |
+| `autoApproveMethods`    | `Set<string>`                          | `DEFAULT_AUTO_APPROVE_METHODS` | Subset of `implementedMethods` executed without calling `onApprovalRequired`. Defaults to `{ 'getPublicKey' }`.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `onApprovalRequired`    | `(method, params) => Promise<boolean>` | `undefined`                    | Called for every implemented method not in `autoApproveMethods`. Return `true` to approve, `false` to send a `4001 User Rejected` response. If omitted, methods outside `autoApproveMethods` fail closed with `4001`; they are never auto-approved.                                                                                                                                                                                                                                                    |
+| `walletMeta`            | `Record<string, unknown>`              | `{}`                           | Additional metadata sent inside the `pairing_approved` payload. Useful for identifying the wallet on the desktop side (e.g. `{ name, version }`).                                                                                                                                                                                                                                                                                                                                                      |
+| `requireOriginBoundKey` | `boolean`                              | `false`                        | Require the origin's session response to report `backendIdentityKey`. A reported key that differs from the QR's key is always rejected. Servers older than 0.6.0 do not report the key; by default their responses are accepted for compatibility. Set `true` to reject them. A future minor release will default it to `true`.                                                                                                                                                                        |
 
 `DEFAULT_IMPLEMENTED_METHODS` and `DEFAULT_AUTO_APPROVE_METHODS` are exported from `@bsv/wallet-relay/client` so you can reference or extend them:
 
@@ -399,6 +407,8 @@ Fetches the relay WebSocket URL from the origin server. **Must be called before 
 
 Makes a `GET` request to `{params.origin}/api/session/{params.topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself may be on any domain. Redirects are not followed; the request has a 10-second deadline and a 256 KiB response limit. The returned session identifier must match the requested topic, and production relay URLs must use `wss://`.
 
+When the response reports `backendIdentityKey`, it must equal `params.backendIdentityKey`; otherwise `resolveRelay()` throws and the session cannot connect. This binds the QR's key to the origin shown to the user. A response without the key (servers older than 0.6.0) is accepted unless `requireOriginBoundKey` is set. A future minor release will default it to `true`.
+
 Returns the resolved relay URL so the app can display it for user inspection before connecting.
 
 ```ts
@@ -408,7 +418,7 @@ const relay = await session.resolveRelay()
 await session.connect()
 ```
 
-Throws if the origin server returns a non-2xx status or does not include a `relay` field.
+Throws if the origin server returns a non-2xx status, does not include a `relay` field, or reports a `backendIdentityKey` that is malformed or differs from the QR's key.
 
 ---
 
@@ -809,17 +819,19 @@ interface WebSocketRelayOptions {
   noServer?:       boolean          // when true, attach no upgrade listener — dispatch via handleUpgrade
   heartbeatIntervalMs?: number      // ping period in ms, integer 1–2147483647 (default 30000)
   maxMissedHeartbeats?: number      // consecutive missed pongs tolerated, integer >= 1 (default 2)
+  holdDesktopTrafficUntilAccepted?: boolean // deliver desktop messages only after acceptMobile (default false)
 }
 
 Both heartbeat options throw `RangeError` when given anything other than an integer >= 1. `NaN` and `Infinity` are rejected rather than clamped, because Node coerces either to a 1 ms timer.
 ```
 
-| Option           | Type             | Description                                                                                                                                                                                                                                                                                                          |
-| ---------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `allowedOrigins` | `AllowedOrigins` | Origin allowlist for browser WS upgrades (`role=desktop`). Accepts a `string`, `string[]`, `RegExp`, or `(origin: string) => boolean` predicate. Connections whose `Origin` header does not match are rejected with close code `1008`. Native clients (React Native, server-to-server) omit `Origin` and are exempt. |
-| `allowedOrigin`  | `string`         | Legacy single-value form, kept for backward compatibility. Equivalent to passing the same string as `allowedOrigins`. If both are set, `allowedOrigins` takes precedence.                                                                                                                                            |
-| `path`           | `string`         | Path this relay claims. Default `'/ws'`. In default mode the relay's `upgrade` listener claims only this path (exact match) and ignores others, so other WebSocket services can share the server.                                                                                                                    |
-| `noServer`       | `boolean`        | When `true`, attach no `upgrade` listener. Route upgrades yourself and call `handleUpgrade(req, socket, head)`. Use when running several WebSocket services from one dispatcher. Default `false`.                                                                                                                    |
+| Option                            | Type             | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allowedOrigins`                  | `AllowedOrigins` | Origin allowlist for browser WS upgrades (`role=desktop`). Accepts a `string`, `string[]`, `RegExp`, or `(origin: string) => boolean` predicate. Connections whose `Origin` header does not match are rejected with close code `1008`. Native clients (React Native, server-to-server) omit `Origin` and are exempt.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `allowedOrigin`                   | `string`         | Legacy single-value form, kept for backward compatibility. Equivalent to passing the same string as `allowedOrigins`. If both are set, `allowedOrigins` takes precedence.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `path`                            | `string`         | Path this relay claims. Default `'/ws'`. In default mode the relay's `upgrade` listener claims only this path (exact match) and ignores others, so other WebSocket services can share the server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `noServer`                        | `boolean`        | When `true`, attach no `upgrade` listener. Route upgrades yourself and call `handleUpgrade(req, socket, head)`. Use when running several WebSocket services from one dispatcher. Default `false`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `holdDesktopTrafficUntilAccepted` | `boolean`        | When `true`, messages from a `role=desktop` socket, live or buffered, reach a mobile socket only after `acceptMobile(topic, connectionId)` accepted that socket. Held messages are delivered on acceptance and discarded when an unaccepted mobile socket leaves; every new mobile socket starts unaccepted. `sendToMobile` is never held. Default `false` (plain forwarding). `WalletRelayService` enables it and accepts a mobile socket once its `pairing_approved` decrypts. Held messages arrive after anything the backend sent before acceptance (such as `pairing_ack`), so they need sequence numbers above the backend's. A `role=desktop` socket that connects while messages are held receives the buffer, its own held messages included, and those are then not delivered to the phone. |
 
 When neither origin option is set, no origin validation runs.
 
@@ -828,10 +840,37 @@ When neither origin option is set, no origin validation runs.
 **`onIncoming(handler)`**
 
 ```ts
-onIncoming(handler: (topic: string, envelope: WireEnvelope, role: 'desktop' | 'mobile') => void): void
+onIncoming(
+  handler: (
+    topic: string,
+    envelope: WireEnvelope,
+    role: 'desktop' | 'mobile',
+    connectionId: number
+  ) => void
+): void
 ```
 
-Called for every inbound message from either side. The relay forwards the message to the other side _before_ invoking this handler.
+Called for every inbound message from either side. The relay forwards the message to the other side _before_ invoking this handler (or holds it, see `holdDesktopTrafficUntilAccepted`). `connectionId` identifies the sending socket. Handlers declared with three parameters keep working.
+
+---
+
+**`acceptMobile(topic, connectionId)`**
+
+```ts
+acceptMobile(topic: string, connectionId: number): boolean
+```
+
+Accepts the mobile socket that sent a message with this `connectionId` and delivers the desktop messages held for it. Returns `false`, and accepts nothing, when that socket is no longer the topic's open mobile socket. Only meaningful with `holdDesktopTrafficUntilAccepted`.
+
+---
+
+**`isCurrentMobile(topic, connectionId)`**
+
+```ts
+isCurrentMobile(topic: string, connectionId: number): boolean
+```
+
+Returns `true` while the socket that sent a message with this `connectionId` is the topic's open mobile socket. Check it after any asynchronous work started by a mobile message (such as decrypting `pairing_approved`) and before acting on the topic: the socket may have closed, and another taken its place, in the meantime. `WalletRelayService` does this before it marks a session connected.
 
 ---
 
@@ -998,6 +1037,16 @@ setMobileIdentityKey(id: string, key: string): void
 ```
 
 Stores the mobile's identity public key on the session. Called once on `pairing_approved`.
+
+---
+
+**`setBackendIdentityKey(id, key)`**
+
+```ts
+setBackendIdentityKey(id: string, key: string): void
+```
+
+Stores the backend identity key embedded in the session's QR (since 0.6.0). A custom `GET /api/session/:id` route must return it as `backendIdentityKey`; the phone rejects the pairing when it differs from the QR's key.
 
 ---
 
@@ -1319,6 +1368,7 @@ interface Session {
   expiresAt: number // Unix ms (short pending lifetime; extended to 24 h when connected)
   desktopToken: string // Random secret required for role=desktop WS connections
   mobileIdentityKey?: string // Set once on pairing_approved
+  backendIdentityKey?: string // Key embedded in the session's QR; reported by GET /api/session/:id (0.6.0+)
 }
 
 type SessionStatus = 'pending' | 'connected' | 'disconnected' | 'expired'
@@ -1334,13 +1384,15 @@ The shape returned by `GET /api/session` (session creation) and polled via `GET 
 interface SessionInfo {
   sessionId: string
   status: SessionStatus
+  relay?: string // present on status resolution
+  backendIdentityKey?: string // present on status resolution from 0.6.0 — must equal the QR key
   qrDataUrl?: string // present on session creation — base64 PNG data URL
   pairingUri?: string // present on session creation — pass to QRPairingCode / useQRPairing
   desktopToken?: string // present on creation — use X-Desktop-Token or the documented WS subprotocol
 }
 ```
 
-`qrDataUrl`, `pairingUri`, and `desktopToken` are only present on the initial `GET /api/session` response. Status-poll responses (`GET /api/session/:id`) return `sessionId`, `status`, and `relay`.
+`qrDataUrl`, `pairingUri`, and `desktopToken` are only present on the initial `GET /api/session` response. Status-poll responses (`GET /api/session/:id`) return `sessionId`, `status`, `relay`, and `backendIdentityKey`.
 
 ---
 

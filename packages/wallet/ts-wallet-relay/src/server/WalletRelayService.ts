@@ -187,7 +187,7 @@ const MAX_DECLARED_MOBILE_METHODS = 100
  *
  * Express auto-registered routes:
  *   GET    /api/session        — create session, return { sessionId, status, qrDataUrl }
- *   GET    /api/session/:id    — return { sessionId, status, relay }
+ *   GET    /api/session/:id    — return { sessionId, status, relay, backendIdentityKey }
  *   POST   /api/request/:id    — body { method, params } — relay to mobile, return RpcResponse
  *   DELETE /api/session/:id    — terminate session; closes mobile WebSocket, marks expired
  */
@@ -265,7 +265,9 @@ export class WalletRelayService {
       noServer: opts.noServer,
       heartbeatIntervalMs: opts.heartbeatIntervalMs,
       maxMissedHeartbeats: opts.maxMissedHeartbeats,
-      maxTopics: opts.maxSessions
+      maxTopics: opts.maxSessions,
+      // Desktop-role socket traffic reaches a phone only after its pairing_approved decrypts.
+      holdDesktopTrafficUntilAccepted: true
     })
 
     if (opts.onSocketClosed) this.relay.onSocketClose(opts.onSocketClosed)
@@ -304,9 +306,9 @@ export class WalletRelayService {
       this.mobileAuthTimers.set(topic, timer)
     })
 
-    this.relay.onIncoming((topic, envelope, role) => {
+    this.relay.onIncoming((topic, envelope, role, connectionId) => {
       if (role === 'mobile') {
-        void this.handleMobileMessage(topic, envelope).catch(() => {
+        void this.handleMobileMessage(topic, envelope, connectionId).catch(() => {
           this.relay.disconnectMobile(topic)
         })
       }
@@ -365,6 +367,7 @@ export class WalletRelayService {
         { identityKey: true }
       )
       const backendIdentityKey = publicKeyResult.publicKey
+      this.sessions.setBackendIdentityKey(session.id, backendIdentityKey)
 
       // Pre-compute expiry so the same value is used in both the signature and the URI.
       const expiry = Math.floor((Date.now() + 120_000) / 1000)
@@ -409,10 +412,20 @@ export class WalletRelayService {
     }
   }
 
-  /** Return session status and relay URL, or null if not found. */
-  getSession(id: string): { sessionId: string; status: string; relay: string } | null {
+  /**
+   * Return session status, relay URL and the backend identity key embedded in the
+   * session's QR, or null if not found. Serve this unchanged from `GET /api/session/:id`:
+   * the phone requires `backendIdentityKey` to equal the key in the QR it scanned.
+   */
+  getSession(
+    id: string
+  ): { sessionId: string; status: string; relay: string; backendIdentityKey?: string } | null {
     const s = this.sessions.getSession(id)
-    return s ? { sessionId: s.id, status: s.status, relay: this.relayUrl } : null
+    if (!s) return null
+    const info: { sessionId: string; status: string; relay: string; backendIdentityKey?: string } =
+      { sessionId: s.id, status: s.status, relay: this.relayUrl }
+    if (s.backendIdentityKey !== undefined) info.backendIdentityKey = s.backendIdentityKey
+    return info
   }
 
   /**
@@ -731,7 +744,11 @@ export class WalletRelayService {
 
   // ── Inbound message handling ──────────────────────────────────────────────────
 
-  private async handleMobileMessage(topic: string, envelope: WireEnvelope): Promise<void> {
+  private async handleMobileMessage(
+    topic: string,
+    envelope: WireEnvelope,
+    connectionId: number
+  ): Promise<void> {
     const session = this.sessions.getSession(topic)
     if (!session) return
 
@@ -742,18 +759,25 @@ export class WalletRelayService {
         this.relay.disconnectMobile(topic)
         return
       }
-      await this.handlePairingApproved(topic, envelope)
+      await this.handlePairingApproved(topic, envelope, connectionId)
       return
     }
 
     if (!session.mobileIdentityKey) return
+    await this.handleMobileResponse(topic, session.mobileIdentityKey, envelope)
+  }
 
-    // RPC response from mobile
+  /** Decrypts an RPC response from a paired mobile and settles its pending request. */
+  private async handleMobileResponse(
+    topic: string,
+    mobileIdentityKey: string,
+    envelope: WireEnvelope
+  ): Promise<void> {
     let plaintext: string
     try {
       plaintext = await decryptEnvelope(
         this.wallet,
-        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: session.mobileIdentityKey },
+        { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
         envelope.ciphertext
       )
     } catch {
@@ -766,49 +790,52 @@ export class WalletRelayService {
     } catch {
       return
     }
-    if (this.handler.isResponse(msg)) {
-      const pending = this.pending.get(msg.id)
-      if (!pending) return
-      if (pending.sessionId !== topic || msg.seq !== pending.seq) {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet response was not bound to its request'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
-      try {
-        if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
-          normalizeBRC100WalletByteFields(msg.result)
-          const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
-            ? validateWalletResult(
-                pending.method as (typeof WALLET_METHOD_NAMES)[number],
-                msg.result,
-                pending.params
-              )
-            : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
-          msg = { ...msg, result: ownedResult }
-        }
-      } catch {
-        clearTimeout(pending.timer)
-        this.pending.delete(msg.id)
-        pending.reject(new Error('Wallet returned an invalid result'))
-        this.relay.disconnectMobile(topic)
-        return
-      }
+    if (!this.handler.isResponse(msg)) return
+    const pending = this.pending.get(msg.id)
+    if (!pending) return
+    if (pending.sessionId !== topic || msg.seq !== pending.seq) {
       clearTimeout(pending.timer)
       this.pending.delete(msg.id)
-      pending.resolve(msg)
+      pending.reject(new Error('Wallet response was not bound to its request'))
+      this.relay.disconnectMobile(topic)
+      return
     }
+    try {
+      if (Object.prototype.hasOwnProperty.call(msg, 'result')) {
+        normalizeBRC100WalletByteFields(msg.result)
+        const ownedResult = (WALLET_METHOD_NAMES as readonly string[]).includes(pending.method)
+          ? validateWalletResult(
+              pending.method as (typeof WALLET_METHOD_NAMES)[number],
+              msg.result,
+              pending.params
+            )
+          : assertSafeWalletValue(msg.result, 'wallet relay custom RPC result')
+        msg = { ...msg, result: ownedResult }
+      }
+    } catch {
+      clearTimeout(pending.timer)
+      this.pending.delete(msg.id)
+      pending.reject(new Error('Wallet returned an invalid result'))
+      this.relay.disconnectMobile(topic)
+      return
+    }
+    clearTimeout(pending.timer)
+    this.pending.delete(msg.id)
+    pending.resolve(msg)
   }
 
-  private async handlePairingApproved(topic: string, envelope: WireEnvelope): Promise<void> {
+  private async handlePairingApproved(
+    topic: string,
+    envelope: WireEnvelope,
+    connectionId: number
+  ): Promise<void> {
     const mobileIdentityKey = requirePublicKey(
       envelope.mobileIdentityKey,
       'pairing mobile identity key'
     )
 
     // Decrypt and verify inner payload — failure means the mobile can't prove ECDH ownership
-    let plaintext: string
+    let plaintext: string | null = null
     try {
       plaintext = await decryptEnvelope(
         this.wallet,
@@ -816,6 +843,11 @@ export class WalletRelayService {
         envelope.ciphertext
       )
     } catch {
+      // Handled below, once this socket is known to still hold the topic.
+    }
+    // A socket that closed while its proof decrypted must not act on the topic's next socket.
+    if (!this.relay.isCurrentMobile(topic, connectionId)) return
+    if (plaintext === null) {
       this.relay.disconnectMobile(topic)
       return
     }
@@ -857,6 +889,16 @@ export class WalletRelayService {
       }
     }
 
+    // Encrypt pairing_ack before changing any state, so no await separates the socket
+    // check below from the state it guards.
+    const ack = this.handler.createProtocolMessage('pairing_ack', { topic })
+    const ciphertext = await encryptEnvelope(
+      this.wallet,
+      { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
+      stringifyBRC100(ack)
+    )
+    if (!this.relay.isCurrentMobile(topic, connectionId)) return
+
     // Auth succeeded — cancel the proof timer
     const timer = this.mobileAuthTimers.get(topic)
     if (timer) {
@@ -869,12 +911,8 @@ export class WalletRelayService {
     this.opts.onSessionConnected?.(topic)
 
     // Send pairing_ack to confirm the session is live
-    const ack = this.handler.createProtocolMessage('pairing_ack', { topic })
-    const ciphertext = await encryptEnvelope(
-      this.wallet,
-      { protocolID: PROTOCOL_ID, keyID: topic, counterparty: mobileIdentityKey },
-      stringifyBRC100(ack)
-    )
     this.relay.sendToMobile(topic, { topic, ciphertext })
+    // Only now may desktop-role socket traffic reach this mobile socket.
+    this.relay.acceptMobile(topic, connectionId)
   }
 }

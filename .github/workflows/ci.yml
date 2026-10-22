@@ -593,21 +593,32 @@ jobs:
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'sdk-auth-http')
+        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         with:
-          pattern: mutation-sdk-auth-http-*
-          path: .mutation-parts/sdk-auth-http
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-retained-snapshot')
-        with:
-          pattern: mutation-wallet-retained-snapshot-*
-          path: .mutation-parts/wallet-retained-snapshot
+          pattern: mutation-*
+          path: .mutation-parts-raw
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
+          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
         run: |
+          # Stage each target's parts by their exact matrix artifact names, so a
+          # target whose ID prefixes another can never pick up foreign evidence.
           TARGET_LINES=$(jq -er '.[]' <<<"$PARTITION_TARGETS")
+          while IFS= read -r target; do
+            mkdir -p ".mutation-parts/$target"
+            while IFS= read -r partition; do
+              artifact=".mutation-parts-raw/mutation-$target-$partition"
+              if [ ! -d "$artifact" ]; then
+                echo "::error::Missing mutation partition evidence $target/$partition"
+                exit 1
+              fi
+              cp -R "$artifact" ".mutation-parts/$target/"
+            done < <(jq -er --arg target "$target" \
+              '.include[] | select(.target == $target and .partition != "whole") | .partition' \
+              <<<"$MUTATION_MATRIX")
+          done <<<"$TARGET_LINES"
           while IFS= read -r target; do
             node scripts/mutation-partition-evidence.mjs verify --mode diagnostic \
               --target "$target" --directory ".mutation-parts/$target" \

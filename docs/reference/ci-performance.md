@@ -3,8 +3,8 @@ id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
 version: '1.4.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-20'
+last_verified: '2026-10-20'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -290,13 +290,13 @@ defect yield or an optimal percentage threshold by itself.
 ### SDKAuth execution partitions
 
 The existing `sdk-auth-http` target remains one canonical policy/property
-registration. Its source specifications are grouped by file into core validation
-and Peer, AuthFetch client, and SimplifiedFetchTransport. Every range of a file
-stays in one part; a new canonical helper defaults to core, and unsupported
-wildcard/unknown partition inputs fail. Each part retains the complete original
+registration. Its source specifications are grouped by file into Peer, AuthFetch
+client and SimplifiedFetchTransport parts, and AuthMessageValidation is cut at
+line markers into core, snapshot and policy parts. A new canonical helper
+defaults to core, and unsupported wildcard/unknown partition inputs fail. Each part retains the complete original
 Jest test selection, four workers and governed property inputs. The current pinned
-inventory replays to 95 + 137 + 91 = 323 mutants, exactly matching the unpartitioned
-canonical inventory.
+inventory replays to 37 + 16 + 20 + 22 + 137 + 91 = 323 mutants, exactly matching the
+unpartitioned canonical inventory.
 
 A part's score is diagnostic. It still requires complete actual source/config/
 mutant evidence and zero uncovered/invalid outcomes. Only the combined original
@@ -341,3 +341,103 @@ This source proof cannot qualify a newer wallet head: its owner must compare
 the full pinned inventory/configuration on the final source before adoption.
 Registry, runtime, assertions, workers, deadlines and thresholds remain owned
 and unchanged by the partition facility.
+
+### Line-split execution partitions
+
+Full qualification wall time is bounded by its slowest target. Before line
+splitting, `brc52-envelope` took 22–32 minutes in every release campaign: all 358
+mutants of one file share almost the complete 291-test selection, so a file
+partition cannot divide it. A line plan in `scripts/mutation-partitions.mjs`
+cuts a file at explicit declaration markers instead. Each marker must start
+exactly one source line, in order, so an edit that moves, removes or duplicates
+one fails closed. The segments are contiguous from line 1 to the last line, and
+every original specification is intersected with each segment, so overlapping
+canonical ranges keep their original union.
+
+The canonical registry, inventory, tests, workers, property inputs and score
+gate are unchanged. The combined report merges a split file's mutants only when
+every part carries the identical source, orders them by partition, and must
+then equal the canonical whole-target inventory exactly; a dropped or
+double-tested mutant fails. `scripts/ci-integration/sdk-auth-partitions.test.mjs`
+replays every partitioned target against the pinned instrumenter on each PR.
+
+Current pinned inventories:
+
+| Target             | Parts                                                  | Mutants |
+| ------------------ | ------------------------------------------------------ | ------- |
+| `brc52-envelope`   | 64 + 64 + 64 + 50 + 70 + 46 (lines)                    | 358     |
+| `brc52-status`     | 201 + 164 (lines)                                      | 365     |
+| `brc52-disclosure` | 192 + 134 (lines)                                      | 326     |
+| `air-gap-codec`    | decoder 94 + 105 (lines), encoder 75, coding/base64 80 | 354     |
+| `webrtpay-frames`  | 110 + 119 (lines)                                      | 229     |
+| `mandala-encoding` | mandala 93, strict CBOR 352, BSV-21 336                | 781     |
+| `webrtpay-codes`   | codes 273, SDP 532                                     | 805     |
+
+Each extra part repeats the target's dry run and job setup, so total compute
+rises while the campaign tail falls. The matrix grows from 41 to 56 jobs under
+the unchanged 20-job limit.
+
+### Automatic file partitions
+
+Hand-written plans cannot keep up with new targets: `color-permission`, added
+with 1,072 mutants on 2026-10-20, ran alone for more than 25 minutes in the next
+full campaign while every planned part had finished within 6m15s.
+
+A target without an explicit plan now splits automatically when it is slow.
+Mutant count does not predict time, because tests dominate (676 `auth`
+mutants take under two minutes; 358 `brc52-envelope` mutants took fifteen), so
+the estimate is the target's measured seconds in
+`governance/mutation-testing/durations.json`. A target never measured uses a
+deliberately pessimistic one second per code line. A file whose share of the
+estimate exceeds one 240-second part is cut inside at top-level declaration
+lines (`function`, `class`, `const`, `export …` at column zero) that are unique
+line prefixes, balanced by code lines; a mutant cannot span two top-level
+statements. Whole files and file segments are then grouped heaviest first into
+the estimate over 240 seconds parts. Explicit plans, including hand-placed line
+cuts, keep priority. Today only `color-permission` splits automatically, into
+eight parts; the exhaustiveness replay covers every target that executes in
+parts, so an automatic cut that dropped or duplicated a mutant fails CI.
+
+### Stop-on-kill Jest environment
+
+StrykerJS treats a mutant as killed by its first failing test and bails for its
+other runners; the Vitest runner sets `bail: 1`. The Jest runner instead forces
+`bail: false`, because Jest's own bail exits the process, so every later test
+covering an already-killed mutant still ran. In the 2026-10-19 `brc52-envelope`
+release report, 330 of 358 mutants were killed, yet each mutant ran 139.6 tests
+on average.
+
+`governance/mutation-testing/stop-on-kill-environment.cjs` extends the package's
+Node environment. While Stryker has an active mutant and one of its tests has
+failed, it marks each remaining test as skipped at `test_start`, which
+jest-circus dispatches before reading the skip mode. It does nothing without an
+active mutant, so the initial coverage run and plain `jest` runs execute every
+test, and a surviving mutant still runs every covering test. Every governed Jest
+target uses it.
+
+Verdicts cannot change: a mutant with a failing test is Killed regardless of
+later tests. A local same-machine run of `brc52-envelope/envelope-2` produced
+identical verdicts for all 64 mutants (61 Killed, 3 Survived) while tests run
+per mutant fell from 138.8 to 19.2 and wall time from 117 to 50 seconds.
+
+### Longest-first campaign scheduling
+
+GitHub starts matrix jobs in listed order up to the concurrency limit. With the
+registry order, long parts could start last and run alone at the end. The
+`matrix` command now lists parts longest first from
+`governance/mutation-testing/durations.json` (measured hosted job seconds), the
+longest-processing-time-first heuristic for parallel machine scheduling. Order
+changes only when a part starts, never which parts run; an unmeasured part sorts
+first. Refresh the durations after a campaign whose part timings changed.
+
+Fork benchmark, same runners, about six concurrent jobs, every gate passing:
+
+| Campaign                  | Wall   | Longest part                | Total part time |
+| ------------------------- | ------ | --------------------------- | --------------- |
+| Unchanged main            | 26m36s | 23m44s `brc52-envelope`     | 167m39s         |
+| Partitions only           | 35m17s | 14m51s `sdk-auth-http/core` | 164m49s         |
+| Partitions + stop-on-kill | 17m01s | 6m10s `sdk-auth-http/core`  | 105m48s         |
+
+Partitions alone were slower there because long parts queued behind short ones,
+which longest-first ordering addresses. With twenty slots the campaign is bounded
+by its longest part or total part time divided by twenty.
