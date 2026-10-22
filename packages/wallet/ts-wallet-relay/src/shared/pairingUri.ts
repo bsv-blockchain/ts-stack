@@ -236,9 +236,13 @@ export function verifyPairingSignature(
   params: PairingParams,
   options: LocalNetworkHttpOptions = {}
 ): Promise<boolean> {
-  // The check is synchronous; the executor keeps async-function semantics
-  // (a throw from bad input still becomes a rejection, not a sync throw).
-  return new Promise(resolve => resolve(checkPairingSignature(params, options)))
+  // The check is synchronous; a throw from bad input still becomes a
+  // rejection, as it was when this function was async.
+  try {
+    return Promise.resolve(checkPairingSignature(params, options))
+  } catch (error) {
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)))
+  }
 }
 
 function checkPairingSignature(params: PairingParams, options: LocalNetworkHttpOptions): boolean {

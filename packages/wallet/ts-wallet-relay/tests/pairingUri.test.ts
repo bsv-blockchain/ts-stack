@@ -6,7 +6,7 @@ import {
   verifyPairingSignature
 } from '../src/shared/pairingUri.js'
 import { bytesToBase64url } from '../src/shared/encoding.js'
-import { PROTOCOL_ID } from '../src/types.js'
+import { PROTOCOL_ID, type PairingParams } from '../src/types.js'
 import {
   LOCAL_NETWORK_AUTHORITIES,
   LOOPBACK_AUTHORITIES,
@@ -268,6 +268,14 @@ describe('verifyPairingSignature', () => {
 
   it('returns true for a valid signature', async () => {
     expect(await verifyPairingSignature(await makeSignedParams())).toBe(true)
+  })
+
+  it('rejects rather than throwing synchronously when params are missing', async () => {
+    let result: Promise<boolean> | undefined
+    expect(() => {
+      result = verifyPairingSignature(null as unknown as PairingParams)
+    }).not.toThrow()
+    await expect(result).rejects.toThrow(TypeError)
   })
 
   it('returns false when backendIdentityKey is tampered', async () => {
