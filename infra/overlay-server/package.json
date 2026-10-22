@@ -1,7 +1,7 @@
 {
   "name": "@bsv/overlay-express-examples",
   "private": true,
-  "version": "2.1.49",
+  "version": "2.1.50",
   "overrides": {
     "gaxios": "7.3.0"
   },
