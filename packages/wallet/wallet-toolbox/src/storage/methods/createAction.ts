@@ -173,13 +173,7 @@ async function createActionCore(
     }
   )
   const { storageBeef, beef, xinputs, xoutputs, changeBasket, noSendChangeIn, walletSourcedInputTxids } = validated
-  // Validation leaves wallet-sourced inputs absent, txid-only, or as a raw
-  // transaction without its proof. Drop those entries so the result BEEF
-  // assembly below loads them from storage with proofs, as it does for change.
-  // A txid the caller lists in knownTxids is returned txid-only.
-  const declaredSourceTxids = withoutKnownTxids(walletSourcedInputTxids, vargs.options.knownTxids ?? [])
-  for (const txid of declaredSourceTxids) beef.removeExistingTxid(txid)
-  for (const txid of walletSourcedInputTxids) if (!declaredSourceTxids.includes(txid)) beef.mergeTxidOnly(txid)
+  const declaredSourceTxids = prepareDeclaredSourceBeef(beef, walletSourcedInputTxids, vargs)
 
   const feeModel = validateStorageFeeModel(storage.feeModel)
   logger?.log(`validated fee model ${JSON.stringify(feeModel)}`)
@@ -200,8 +194,7 @@ async function createActionCore(
     storage,
     userId,
     vargs,
-    initialFundingPlan.selected,
-    declaredSourceTxids,
+    { allocatedChange: initialFundingPlan.selected, declaredSourceTxids },
     beef,
     parent
   )
@@ -283,8 +276,7 @@ async function createActionCore(
       storage,
       userId,
       vargs,
-      allocatedChange,
-      declaredSourceTxids,
+      { allocatedChange, declaredSourceTxids },
       beef,
       allocatedBeefPrefetch,
       parent
@@ -1875,6 +1867,30 @@ async function loadAllocatedChangeBeef(
   }
 }
 
+/**
+ * Validation leaves wallet-sourced inputs absent, txid-only, or as a raw
+ * transaction without its proof. Drop those entries so the result BEEF
+ * assembly loads them from storage with proofs, as it does for change.
+ * A txid the caller lists in knownTxids is returned txid-only.
+ * @returns the txids the result BEEF assembly must load from storage.
+ */
+function prepareDeclaredSourceBeef(
+  beef: Beef,
+  walletSourcedInputTxids: string[],
+  vargs: ValidCreateActionArgs
+): string[] {
+  const declaredSourceTxids = withoutKnownTxids(walletSourcedInputTxids, vargs.options.knownTxids ?? [])
+  for (const txid of declaredSourceTxids) beef.removeExistingTxid(txid)
+  for (const txid of walletSourcedInputTxids) if (!declaredSourceTxids.includes(txid)) beef.mergeTxidOnly(txid)
+  return declaredSourceTxids
+}
+
+/** Roots whose BEEF the result input BEEF needs from storage. */
+interface WalletSourcedRoots<T> {
+  allocatedChange: T[]
+  declaredSourceTxids: string[]
+}
+
 function withoutKnownTxids(txids: string[], knownTxids: string[]): string[] {
   const hasKnownTxid = makeKnownTxidLookup(knownTxids)
   return txids.filter(txid => !hasKnownTxid(txid))
@@ -1904,8 +1920,7 @@ function startAllocatedChangeBeefPrefetch(
   storage: StorageProvider,
   userId: number,
   vargs: ValidCreateActionArgs,
-  allocatedChange: ManagedChangeInputCandidate[],
-  declaredSourceTxids: string[],
+  { allocatedChange, declaredSourceTxids }: WalletSourcedRoots<ManagedChangeInputCandidate>,
   beef: Beef,
   parent?: TelemetrySpan
 ): Promise<AllocatedChangeBeefPrefetchResult> {
@@ -1963,8 +1978,7 @@ async function mergeAllocatedChangeBeefs(
   storage: StorageProvider,
   userId: number,
   vargs: ValidCreateActionArgs,
-  allocatedChange: TableOutput[],
-  declaredSourceTxids: string[],
+  { allocatedChange, declaredSourceTxids }: WalletSourcedRoots<TableOutput>,
   beef: Beef,
   prefetch: Promise<AllocatedChangeBeefPrefetchResult>,
   parent?: TelemetrySpan
