@@ -72,6 +72,17 @@ describe('BRC-162 token outputs', () => {
     ).toBeUndefined()
   })
 
+  it('fails a token-shaped script whose prefix is not canonical BRC-162', () => {
+    const valid = new OneColor().lock(`${TXID}_0`, 500n, PKH)
+    const shortId = new LockingScript([
+      { op: 31, data: Array(31).fill(0xcd) },
+      ...valid.chunks.slice(1)
+    ])
+    expect(() => readTokenOutput(shortId, { txid: TXID, vout: 4 })).toThrow(
+      `BRC-207: ${TXID}.4 is not a supported BRC-162 output (token id must be a direct 32- or 36-byte push)`
+    )
+  })
+
   it('accepts payloads that declare no required profiles, including display arrays and opaque bytes', () => {
     for (const payload of [
       undefined,
@@ -239,6 +250,23 @@ describe('BRC-161 JSON token outputs', () => {
     expect(() =>
       readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op: 'auth', id: ASSET, amt: '5' }), at)
     ).toThrow('malformed BRC-161 inscription')
+  })
+
+  it('fails an unterminated ord envelope as a malformed inscription', () => {
+    const unterminated = new LockingScript()
+      .writeOpCode(OP.OP_FALSE)
+      .writeOpCode(OP.OP_IF)
+      .writeBin(toArray('ord', 'utf8'))
+      .writeOpCode(OP.OP_1)
+    expect(() => readJsonTokenOutput(unterminated, at)).toThrow(
+      `BRC-207: ${at.txid}.2 is a malformed BRC-161 inscription (not a BSV-21 script: unterminated ord envelope)`
+    )
+  })
+
+  it.each(['transfer', 'mint', 'deploy+mint'])('fails a %s of amount zero', op => {
+    expect(() =>
+      readJsonTokenOutput(jsonTokenScript({ p: 'bsv-20', op, id: ASSET, amt: '0' }), at)
+    ).toThrow(`BRC-207: ${at.txid}.2 is a malformed BRC-161 inscription (amt must be positive)`)
   })
 
   it('refuses the burn operation', () => {

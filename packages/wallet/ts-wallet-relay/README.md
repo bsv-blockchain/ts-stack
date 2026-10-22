@@ -314,6 +314,7 @@ export async function GET() {
 import { relay } from '@/lib/relay'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  // Return the object unchanged: the phone checks its backendIdentityKey against the QR.
   const info = relay.getSession(params.id)
   if (!info) return Response.json({ error: 'Session not found' }, { status: 404 })
   return Response.json(info)
@@ -449,7 +450,7 @@ await session.resolveRelay()
 await session.connect()
 ```
 
-The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` verifies the required QR signature, then calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere. Plain HTTP origins, cleartext non-loopback WebSockets, redirects, unsigned QR codes, malformed session responses, and unbounded responses are rejected; loopback HTTP/WS remains available for same-device development.
+The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` verifies the required QR signature, then calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere. The response also reports the origin's `backendIdentityKey`; `resolveRelay()` rejects the pairing when it differs from the key in the QR, so the key the phone encrypts to is the one the displayed origin vouches for. Servers older than 0.6.0 do not report the key and are accepted for compatibility; pass `requireOriginBoundKey: true` to reject them. A future minor release will make that the default. Plain HTTP origins, cleartext non-loopback WebSockets, redirects, unsigned QR codes, malformed session responses, and unbounded responses are rejected; loopback HTTP/WS remains available for same-device development.
 
 The short-lived QR is also a bearer pairing invitation. Its signature authenticates the backend to the phone; it does not identify which phone is expected. Anyone who can copy or scan an unexpired QR can pair their own wallet first, after which the relay pins that mobile identity key. Scanning normally requires physical proximity to the displayed code, but a copied image, screen share, support transcript, log, or exposed raw pairing URI removes that proximity barrier. Keep those values confidential and require explicit per-operation approval on the phone. The current security model intentionally relies on possession of the short-lived invitation plus the phone's later approvals; deployments that need a pre-identified phone must add that assurance at the application level.
 
@@ -524,15 +525,29 @@ import {
 } from '@bsv/wallet-relay'
 
 const sessions = new QRSessionManager()
-const relay = new WebSocketRelay(server)
+const relay = new WebSocketRelay(server, { holdDesktopTrafficUntilAccepted: true })
 const handler = new WalletRequestHandler()
 
 relay.onValidateTopic(topic => sessions.getSession(topic) !== null)
-relay.onIncoming((topic, envelope, role) => {
-  /* custom logic */
+relay.onIncoming((topic, envelope, role, connectionId) => {
+  if (role !== 'mobile' || !envelope.mobileIdentityKey) return
+  // verifyPairing is yours: decrypt pairing_approved and check its mobileIdentityKey.
+  void verifyPairing(topic, envelope)
+    .then(ok => {
+      if (!relay.isCurrentMobile(topic, connectionId)) return // socket left meanwhile
+      if (ok) relay.acceptMobile(topic, connectionId)
+      else relay.disconnectMobile(topic)
+    })
+    .catch(() => {
+      if (relay.isCurrentMobile(topic, connectionId)) relay.disconnectMobile(topic)
+    })
 })
 sessions.onSessionExpired(id => relay.removeTopic(id))
 ```
+
+A standalone `WebSocketRelay` forwards desktop and mobile messages as soon as both sides are connected. Pass `holdDesktopTrafficUntilAccepted: true` to deliver `role=desktop` messages to a mobile socket only after you call `relay.acceptMobile(topic, connectionId)` for it (the `connectionId` is the fourth `onIncoming` argument); `WalletRelayService` does this once the phone's `pairing_approved` decrypts. Accept only after your own pairing check passes, and use `relay.isCurrentMobile(topic, connectionId)` after any asynchronous step so a result for a socket that has since left never acts on its replacement.
+
+A custom `GET /api/session/:id` route must also return `backendIdentityKey`, the key embedded in the session's QR: record it with `sessions.setBackendIdentityKey(id, key)` when you build the pairing URI. The phone rejects a reported key that differs from the QR's.
 
 `WebSocketRelay` accepts the same `path` and `noServer` options as the facade (see [Sharing the server with other WebSocket services](#sharing-the-server-with-other-websocket-services)); in `noServer` mode, dispatch upgrades to `relay.handleUpgrade(req, socket, head)`.
 

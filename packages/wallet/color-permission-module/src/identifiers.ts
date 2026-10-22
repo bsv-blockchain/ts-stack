@@ -23,6 +23,7 @@ const IDENTITY_KEY = /^0[23][0-9a-f]{64}$/
 const WHITESPACE = /\s/u
 const UINT32_MAX = 0xffffffff
 const MAX_PROTOCOL_NAME_LENGTH = 280
+// Stryker disable next-line StringLiteral: TextDecoder('') throws ERR_ENCODING_NOT_SUPPORTED at module load, so the mutant can only be a RuntimeError, never a behavior change a test could observe
 const UTF8_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
 
 export interface Outpoint {

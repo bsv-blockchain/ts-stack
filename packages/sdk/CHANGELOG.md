@@ -214,6 +214,21 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Overlay topic and lookup service names (4.0.0 candidate)
+
+- `TopicBroadcaster` (`SHIPBroadcaster`) topics and `OverlayAdminTokenTemplate`
+  SHIP/SLAP names accept the `tm_` or `ls_` prefix followed by lowercase
+  letters and digits in segments joined by single underscores, up to 256 bytes
+  (the overlay engine's topic limit). The previous grammar allowed letters only
+  and 50 characters, which refused the BRC-207 per-asset names
+  `tm_color_<txid>_<vout>` and `ls_color_<txid>_<vout>`. Leading, trailing and
+  consecutive underscores, uppercase, other characters and a missing prefix are
+  still rejected.
+- Adds `isOverlayTopicName`, `isOverlayLookupServiceName`,
+  `OVERLAY_TOPIC_NAME_PATTERN`, `OVERLAY_LOOKUP_SERVICE_NAME_PATTERN` and
+  `MAX_OVERLAY_NAME_BYTES` to the overlay tools exports.
+- Migration: none. Every name accepted before is still accepted.
+
 ### BRC-112 module balances and listOutputs spendability (4.0.0 candidate)
 
 - `ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`.
