@@ -29,6 +29,7 @@ PKGS=(
   "@bsv/sdk"
   "@bsv/btms-permission-module"
   "@bsv/btms"
+  "@bsv/rabin-permission-module"
   "@bsv/wallet-relay"
   "@bsv/wallet-toolbox-client"
   "@bsv/wallet-toolbox-mobile"

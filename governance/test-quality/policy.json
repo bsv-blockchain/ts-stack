@@ -43,6 +43,7 @@
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
       "packages/wallet/color-permission-module/package.json",
+      "packages/wallet/rabin-permission-module/package.json",
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/messaging/webrtpay/package.json"
@@ -452,6 +453,19 @@
         "invariants": [
           "Every valid plan round-trips through its labels in any order among unrelated labels.",
           "The strict JSON reader returns the same value as JSON.parse for every serialized JSON value."
+        ]
+      },
+      {
+        "path": "packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts",
+        "manifest": "packages/wallet/rabin-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Wallet-derived Rabin private keys signing arbitrary caller-supplied messages",
+        "target": "BRC-206 canonical signing and Script-number result encoding across generated messages and integers",
+        "invariants": [
+          "Every generated message yields a deterministic signature that verifies under the module's key result.",
+          "The returned padding is the smallest residue padding and the root is the CRT of the principal roots.",
+          "Neither the derived seed nor a prime factor is exposed in the wallet result.",
+          "Every non-negative integer round-trips through the minimal Script-number encoding."
         ]
       },
       {

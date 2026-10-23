@@ -132,6 +132,13 @@
       "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled. The reviewed security candidate remains one chunk: Vite 100044/35203/29547 raw/gzip/Brotli bytes across 15 modules and two packages, and esbuild 78035/32862/27909 across 18 modules. The rounded Vite limits retain roughly 14-15% headroom; the existing esbuild limits retain more."
     },
     {
+      "name": "@bsv/rabin-permission-module",
+      "path": "packages/wallet/rabin-permission-module",
+      "budget": "packages/wallet/rabin-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1, BigNumber and SHA-256/HMAC primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, worker, or privileged-key adapter is bundled. Rabin arithmetic uses native BigInt and yields to the event loop cooperatively without a worker. The reviewed candidate is one chunk: Vite 136604/45678/38991 raw/gzip/Brotli bytes across 16 modules and two packages, and esbuild 105387/42168/36767 across 18 modules. The rounded limits retain roughly 9-12% headroom."
+    },
+    {
       "name": "@bsv/wallet-toolbox-client",
       "path": "packages/wallet/wallet-toolbox/client",
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",

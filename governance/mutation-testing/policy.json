@@ -338,6 +338,16 @@
       "maximumInvalid": 0
     },
     {
+      "id": "rabin-permission",
+      "manifest": "packages/wallet/rabin-permission-module/package.json",
+      "propertyTest": "packages/wallet/rabin-permission-module/src/__tests__/RabinPermissionModule.property.test.ts",
+      "risk": "critical",
+      "boundary": "Wallet-derived Rabin private keys signing arbitrary caller-supplied messages",
+      "minimumScore": 85,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
+    },
+    {
       "id": "chirp-codec",
       "manifest": "packages/network/chirp/package.json",
       "propertyTest": "packages/network/chirp/test/codec.property.test.ts",

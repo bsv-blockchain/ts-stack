@@ -112,6 +112,12 @@ diff --git a/packages/sdk/scripts/run-benchmarks.js b/packages/sdk/scripts/run-b
 diff --git a/packages/content/lch/scripts/regenerate-brc170-vectors.mjs b/packages/content/lch/scripts/regenerate-brc170-vectors.mjs
 +++ b/packages/content/lch/scripts/regenerate-brc170-vectors.mjs
 @@ -0,0 +1,220 @@
+diff --git a/packages/wallet/rabin-permission-module/scripts/verify-runar.mjs b/packages/wallet/rabin-permission-module/scripts/verify-runar.mjs
++++ b/packages/wallet/rabin-permission-module/scripts/verify-runar.mjs
+@@ -0,0 +1,140 @@
+diff --git a/packages/wallet/rabin-permission-module/scripts/RabinCheck.runar.ts b/packages/wallet/rabin-permission-module/scripts/RabinCheck.runar.ts
++++ b/packages/wallet/rabin-permission-module/scripts/RabinCheck.runar.ts
+@@ -0,0 +1,16 @@
 diff --git a/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts b/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts
 +++ b/packages/wallet/wallet-toolbox/src/storage/schema/StorageIdbSchema.ts
 @@ -0,0 +1,12 @@
@@ -132,6 +138,9 @@ diff --git a/packages/wallet/btms/src/types.ts b/packages/wallet/btms/src/types.
 @@ -0,0 +1,12 @@
 diff --git a/packages/wallet/ecpm-permission-module/src/types.ts b/packages/wallet/ecpm-permission-module/src/types.ts
 +++ b/packages/wallet/ecpm-permission-module/src/types.ts
+@@ -0,0 +1,12 @@
+diff --git a/packages/wallet/rabin-permission-module/src/types.ts b/packages/wallet/rabin-permission-module/src/types.ts
++++ b/packages/wallet/rabin-permission-module/src/types.ts
 @@ -0,0 +1,12 @@
 diff --git a/packages/network/chirp/src/index.ts b/packages/network/chirp/src/index.ts
 +++ b/packages/network/chirp/src/index.ts

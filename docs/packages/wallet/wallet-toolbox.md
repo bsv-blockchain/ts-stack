@@ -343,6 +343,8 @@ if it needs the underlying wallet operation, `next` is guarded to one call.
 The separate [@bsv/ecpm-permission-module](./ecpm-permission-module.md) uses
 this hook to implement point multiplication under `p ecpm` while keeping
 `getPublicKey` as the public wallet method.
+[@bsv/rabin-permission-module](./rabin-permission-module.md) uses it to
+return Rabin keys and signatures under `p rabin` through `encrypt`.
 
 ## Action Flow
 
