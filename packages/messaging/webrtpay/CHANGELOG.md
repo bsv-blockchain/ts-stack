@@ -15,6 +15,16 @@ All notable changes to this package are documented here. The format is based on
   the session as before. `AuthenticatedPeer` and `AuthenticateOptions` take the message type as
   a type parameter defaulting to `WireMessage`; `SessionCodec` is exported. The wire is
   unchanged (`docs/protocol.md` §6).
+- `connect(recipient, { knock: false })`: a dial without a knock, for a caller that already
+  knows the recipient is there. The offer is sent once gathered; no knock, no ring, no presence
+  clock; the dial clock (`dialTimeoutMs`, 6 s) starts when the carrier takes the offer and
+  running out of it is `timeout`; the whole-dial cap and a reject are as before. The payee is
+  unchanged (it answers a bare offer), and so is the wire (`docs/protocol.md` §7.5). The default
+  dial still knocks.
+- `connect(recipient, { codec })`: the dial passes a session codec to `authenticate`, so a
+  consumer can dial (with or without a knock) into a session that carries its own messages. The
+  default is the payments wire; `connect` and `DialOptions` take the message type as a type
+  parameter defaulting to `WireMessage`.
 
 ## 0.2.2
 
