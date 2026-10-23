@@ -6,7 +6,7 @@
 // the Mandala overlay copies into its reject reasons.
 //
 // The spec sets no size or nesting limit. STRICT_CBOR_MAX_DEPTH bounds container nesting only,
-// so hostile input cannot exhaust the stack.
+// and a chain of tags is walked without recursion, so hostile input cannot exhaust the stack.
 //
 // Integers decode to bigint and floats to number. A float with an integral value (1.0) decodes
 // to a number that re-encodes as an integer, as JS cannot keep the distinction; a canonical
@@ -291,8 +291,23 @@ const decodeSimpleOrFloat = (info: number, v: bigint): StrictCborValue => {
 
 const decodeLink = (r: Reader, tag: bigint, depth: number): StrictCborLink => {
   if (tag !== CID_TAG) fail('only tag 42 is allowed')
+  // Tags do not nest containers, so the depth bound does not reach them: a chain of tag heads is
+  // walked here instead of recursively, with the recursive outcome. The first tag other than 42
+  // fails; otherwise the innermost content is decoded (its own error wins), and a chain of two or
+  // more tags then fails, since a link's content must be a byte string.
+  let chained = false
+  for (;;) {
+    const start = r.pos
+    const [major, , inner] = r.head()
+    if (major !== 6) {
+      r.pos = start
+      break
+    }
+    if (inner !== CID_TAG) fail('only tag 42 is allowed')
+    chained = true
+  }
   const content = decodeValue(r, depth)
-  if (!(content instanceof Uint8Array) || !isCid(content)) fail('invalid CID')
+  if (chained || !(content instanceof Uint8Array) || !isCid(content)) fail('invalid CID')
   return new StrictCborLink(content as Uint8Array)
 }
 

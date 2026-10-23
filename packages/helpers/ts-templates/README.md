@@ -30,6 +30,7 @@ tx.addOutput({
 | Name                                    | Description                                           |
 | --------------------------------------- | ----------------------------------------------------- |
 | [Bsv21Binary](./src/Bsv21Binary.ts)     | Lock and decode BRC-162 (BSV-21 binary) token outputs |
+| [OneColor](./src/OneColor.ts)           | Lock, decode and read BRC-162 1Color token outputs    |
 | [OpReturn](./src/OpReturn.ts)           | Tag data in a non-spendable script                    |
 | [Metant](./src/Metanet.ts)              | Create transactions that follow the Metanet protocol  |
 | [MultiPushDrop](./src/MultiPushDrop.ts) | Create data tokens with multiple trusted owners       |
@@ -107,6 +108,79 @@ same bytes reads the same token output:
   throws `Bsv21BinaryError` for a token-shaped script that is not canonical
   (for example amount `5` pushed as `01 05`), so it is never silently read as
   "not a token".
+
+### 1Color payload attributes
+
+`readOneColorAttributes(payload)` reads the payload of a 1Color output under
+the BRC-207 wallet rules. It is pure and never throws, whatever it is given.
+`payload` says what the output carries:
+
+- `'absent'`: no payload push;
+- `'empty'`: a zero-byte payload (`OP_0 OP_DROP`);
+- `'opaque'`: nonzero bytes that are not a strictly valid DAG-CBOR map
+  (trailing bytes, unsorted or duplicate keys, a non-map, bytes outside
+  0..255). Nothing is recovered from it;
+- `'map'`: a strictly valid DAG-CBOR map, also returned as `map`.
+
+Each reserved field (`dec`, `sym`, `icon`, `req`, `ext`) is
+`{ status: 'absent' }`, `{ status: 'valid', value }` or
+`{ status: 'malformed', reason }`. Every field is `'absent'` unless `payload`
+is `'map'`. In a map, a reserved key that is present but ill-shaped is
+`'malformed'`, never `'absent'`:
+
+- `dec`: a CBOR unsigned integer `0` to `18`. A float, even `2.0`, is malformed;
+- `sym`: text;
+- `icon`: exactly `[mediaType text, bytes]`. A display treats a malformed icon
+  as absent;
+- `req`: a map from processing-profile ids (`isProfileId`) to exactly
+  `{ params, version }`, `version` a CBOR unsigned integer `1` to `2^32 - 1`
+  and `params` any value, including `null`. `reqBytes` is the exact wire span
+  of the `req` value, set only when `req` is valid;
+- `ext`: a map from processing-profile ids to any value.
+
+`reqMatchesDeploy(deploy, later)` checks that a later output repeats the
+deploy's `req`. It fails closed, in this order: a malformed deploy `req` gives
+`false` for every later output; a later output without `req` gives `true`; a
+malformed later `req` gives `false`; otherwise the canonical DAG-CBOR bytes
+must be equal, and a deploy without `req` counts as the empty map `a0`. Bytes
+are compared as written, so `params: 1.0` never matches `params: 1`.
+
+`OneColor.lockRemainder(tokenId, amount, remainder, payload?)` puts the 1Color
+prefix in front of any locking script. With no payload and a remainder that
+starts with `<push> OP_DROP`, it writes the empty-payload marker
+`OP_0 OP_DROP` first (BRC-162), so the remainder's first push is never read as
+a payload. A push here is `OP_0`, `OP_1NEGATE`, `OP_1` to `OP_16` or any data
+push. `needsEmptyPayloadMarker(remainder.chunks)` tells whether it will.
+
+New 1Color code should prefer `oneColorTokenIdFromString` and
+`oneColorTokenIdToString`, which accept 32- and 36-byte ids.
+`tokenIdFromString` and `tokenIdToString` accept 32-byte (`_0`) ids only.
+
+```ts
+import { PrivateKey } from '@bsv/sdk'
+import {
+  OneColor,
+  encodeStrictCbor,
+  oneColorTokenIdFromString,
+  readOneColorAttributes,
+  reqMatchesDeploy
+} from '@bsv/templates'
+
+const pubKeyHash = PrivateKey.fromRandom().toPublicKey().toHash() as number[]
+const template = new OneColor()
+
+const deployScript = template.lock(null, 0n, pubKeyHash, encodeStrictCbor({ sym: 'USD', dec: 2n }))
+const deploy = readOneColorAttributes(OneColor.decode(deployScript).payload)
+if (deploy.dec.status === 'valid') console.log(deploy.dec.value) // 2
+
+const tokenId = `${'ab'.repeat(32)}_1` // a BRC-161 asset deployed at output 1
+console.log(oneColorTokenIdFromString(tokenId).length) // 36
+const later = readOneColorAttributes(
+  OneColor.decode(template.lock(tokenId, 5n, pubKeyHash)).payload
+)
+console.log(later.payload) // 'absent'
+console.log(reqMatchesDeploy(deploy, later)) // true: the later output omits req
+```
 
 ### Strict CBOR payloads
 

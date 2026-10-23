@@ -20,6 +20,7 @@ import {
   splitPayload,
   type Bsv21BinaryDecoded
 } from './Bsv21Binary.js'
+import { needsEmptyPayloadMarker } from './OneColorAttributes.js'
 
 /** A decoded 1Color output; `tokenId` is 32 bytes, or 36 for a legacy nonzero-index deploy. */
 export type OneColorDecoded = Bsv21BinaryDecoded
@@ -47,6 +48,22 @@ const readTokenId = (chunk: ScriptChunk): number[] | undefined => {
     fail('a 36-byte token id with vout 0 is non-canonical')
   }
   return tokenId
+}
+
+// `<id|OP_0> <amount> OP_2DROP`; validates the id and the amount.
+const prefixChunks = (tokenId: string | null, amount: bigint): ScriptChunk[] => {
+  const id = tokenId === null ? null : OneColor.tokenIdFromString(tokenId)
+  return [
+    id === null ? { op: OP.OP_0 } : { op: id.length, data: id },
+    encodeAmountChunk(amount),
+    { op: OP.OP_2DROP }
+  ]
+}
+
+const copyChunk = (c: ScriptChunk): ScriptChunk => {
+  const copy: ScriptChunk = { ...c }
+  if (c.data !== undefined) copy.data = [...c.data]
+  return copy
 }
 
 export class OneColor implements ScriptTemplate {
@@ -107,12 +124,7 @@ export class OneColor implements ScriptTemplate {
     payload?: readonly number[]
   ): LockingScript {
     if (pubKeyHash.length !== PKH_BYTES) fail('pubKeyHash must be 20 bytes')
-    const id = tokenId === null ? null : OneColor.tokenIdFromString(tokenId)
-    const chunks: ScriptChunk[] = [
-      id === null ? { op: OP.OP_0 } : { op: id.length, data: id },
-      encodeAmountChunk(amount),
-      { op: OP.OP_2DROP }
-    ]
+    const chunks = prefixChunks(tokenId, amount)
     if (payload !== undefined) chunks.push(payloadChunk(payload), { op: OP.OP_DROP })
     chunks.push(
       { op: OP.OP_DUP },
@@ -121,6 +133,31 @@ export class OneColor implements ScriptTemplate {
       { op: OP.OP_EQUALVERIFY },
       { op: OP.OP_CHECKSIG }
     )
+    return new LockingScript(chunks)
+  }
+
+  /**
+   * Builds `<id|OP_0> <amount> OP_2DROP [<payload> OP_DROP | OP_0 OP_DROP] <remainder>`.
+   * With no payload, writes the empty-payload marker `OP_0 OP_DROP` iff the remainder
+   * starts with `<push> OP_DROP` (0162:101/105), so the remainder's first push is never
+   * read back as a payload. The remainder's chunks are copied unchanged (byte-exact,
+   * non-minimal pushes kept) and never aliased. A remainder with a truncated push is
+   * refused, since `decode` would refuse the result.
+   */
+  static lockRemainder(
+    tokenId: string | null,
+    amount: bigint,
+    remainder: LockingScript,
+    payload?: readonly number[]
+  ): LockingScript {
+    if (remainder.chunks.some(chunk => chunk.invalidLength === true)) fail('truncated push')
+    const chunks = prefixChunks(tokenId, amount)
+    if (payload !== undefined) {
+      chunks.push(payloadChunk(payload), { op: OP.OP_DROP })
+    } else if (needsEmptyPayloadMarker(remainder.chunks)) {
+      chunks.push({ op: OP.OP_0 }, { op: OP.OP_DROP })
+    }
+    for (const c of remainder.chunks) chunks.push(copyChunk(c))
     return new LockingScript(chunks)
   }
 
@@ -153,3 +190,17 @@ export class OneColor implements ScriptTemplate {
     return new Bsv21Binary().unlock(privateKey, signOutputs, anyoneCanPay)
   }
 }
+
+/**
+ * Parses `<64 lowercase hex, display order>_<vout>` into the canonical 32- or 36-byte wire id
+ * (= `OneColor.tokenIdFromString`). Prefer this to `tokenIdFromString`, which accepts only
+ * 32-byte (`_0`) ids.
+ */
+export const oneColorTokenIdFromString = (id: string): number[] => OneColor.tokenIdFromString(id)
+
+/**
+ * Formats a canonical 32- or 36-byte wire id as `<64 hex, display order>_<vout>`
+ * (= `OneColor.tokenIdToString`). Prefer this to `tokenIdToString`, which accepts only 32-byte ids.
+ */
+export const oneColorTokenIdToString = (tokenId: readonly number[]): string =>
+  OneColor.tokenIdToString(tokenId)

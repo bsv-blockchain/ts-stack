@@ -3,15 +3,18 @@ import {
   Bsv21Token,
   isTokenShaped,
   OneColor,
+  readOneColorAttributes,
   StrictCborLink,
   tryDecodeStrictCbor
 } from '@bsv/templates'
 import type {
   Bsv21Envelope,
   Bsv21TokenDecoded,
+  OneColorAttributes,
   StrictCborMap,
   StrictCborValue
 } from '@bsv/templates'
+import { ProfileParamsError } from './errors.js'
 import { parseAssetId, type Outpoint, type TokenRole } from './identifiers.js'
 
 export interface TokenOutput {
@@ -26,7 +29,22 @@ export interface TokenOutput {
   pubKeyHash?: number[]
   /** A JSON output's operation; a `mint` is funded by an authority input, not by value inputs. */
   jsonOperation?: JsonOperation
+  /**
+   * The BRC-162 payload attributes, set by `readProfiledTokenOutput` for every BRC-162 output
+   * (`payload: 'absent'` when the output has no payload push). Never set by `readTokenOutput`.
+   */
+  attributes?: OneColorAttributes
 }
+
+/**
+ * Reads one BRC-162 output: undefined for a script without the token layout, a throw for an
+ * invalid or (for this reader) unsupported one. `readTokenOutput` is the 0.1.0 reader;
+ * `readProfiledTokenOutput` is the profile-aware one.
+ */
+export type TokenReader = (
+  lockingScript: LockingScript,
+  outpoint: Outpoint
+) => TokenOutput | undefined
 
 /** The BRC-161 operations this module reads: value outputs, and the authority outputs. */
 export type JsonOperation = 'transfer' | 'mint' | 'deploy+mint' | 'auth' | 'deploy+auth'
@@ -73,8 +91,10 @@ function readPayloadMaps(payload: number[] | undefined): {
  * script as plain satoshis let this error through.
  */
 export class UnsupportedProfileError extends Error {
-  constructor() {
-    super('BRC-207: the asset requires processing profiles this wallet does not support')
+  constructor(
+    message = 'BRC-207: the asset requires processing profiles this wallet does not support'
+  ) {
+    super(message)
     this.name = 'UnsupportedProfileError'
   }
 }
@@ -97,15 +117,29 @@ export function readTokenOutput(
   outpoint: Outpoint
 ): TokenOutput | undefined {
   if (!isTokenShaped(lockingScript)) return undefined
-  let decoded: ReturnType<typeof OneColor.decode>
+  const decoded = decodeOneColor(lockingScript, outpoint)
+  assertNoRequiredProfiles(decoded.payload)
+  return tokenFromDecoded(decoded, outpoint)
+}
+
+/** Decodes a token-shaped script, wrapping a decoder failure in the module's message. */
+function decodeOneColor(
+  lockingScript: LockingScript,
+  outpoint: Outpoint
+): ReturnType<typeof OneColor.decode> {
   try {
-    decoded = OneColor.decode(lockingScript)
+    return OneColor.decode(lockingScript)
   } catch (error) {
     throw new Error(
       `BRC-207: ${outpoint.txid}.${outpoint.vout} is not a supported BRC-162 output (${(error as Error).message})`
     )
   }
-  assertNoRequiredProfiles(decoded.payload)
+}
+
+function tokenFromDecoded(
+  decoded: ReturnType<typeof OneColor.decode>,
+  outpoint: Outpoint
+): TokenOutput {
   const deploy = decoded.role === 'deploy'
   if (deploy && outpoint.vout !== 0) throw new Error('BRC-207: a BRC-162 deploy must be output 0')
   return {
@@ -115,6 +149,34 @@ export function readTokenOutput(
     deploy,
     encoding: 'brc162',
     pubKeyHash: decoded.restPubKeyHash
+  }
+}
+
+/**
+ * The profile-aware BRC-162 reader. Like `readTokenOutput`, but it accepts outputs that declare
+ * required processing profiles and returns their payload attributes, leaving the support check
+ * to `resolveRequirements`. A valid payload map with a malformed `req` or `ext` fails
+ * (0207:88-91) rather than reading as absent.
+ */
+export function readProfiledTokenOutput(
+  lockingScript: LockingScript,
+  outpoint: Outpoint
+): TokenOutput | undefined {
+  if (!isTokenShaped(lockingScript)) return undefined
+  const decoded = decodeOneColor(lockingScript, outpoint)
+  const attributes = readOneColorAttributes(decoded.payload)
+  assertWellFormedProfileMaps(attributes)
+  return { ...tokenFromDecoded(decoded, outpoint), attributes }
+}
+
+/** Throws ProfileParamsError for a valid payload map whose `req` or `ext` is malformed. */
+export function assertWellFormedProfileMaps(attributes: OneColorAttributes): void {
+  if (attributes.payload !== 'map') return
+  if (attributes.req.status === 'malformed') {
+    throw new ProfileParamsError('BRC-207: malformed required processing profile map')
+  }
+  if (attributes.ext.status === 'malformed') {
+    throw new ProfileParamsError('BRC-207: malformed processing profile extension map')
   }
 }
 
@@ -179,18 +241,27 @@ export function readJsonTokenOutput(
   return { assetId: decoded.id, role, amount, deploy: false, encoding: 'brc161', jsonOperation }
 }
 
-/** Reads a token output in either encoding; binary wins when a script parses as both (BRC-162). */
+/**
+ * Reads a token output in either encoding; binary wins when a script parses as both (BRC-162).
+ * `read` is the BRC-162 reader (the 0.1.0 `readTokenOutput` by default).
+ */
 export function readAnyTokenOutput(
   lockingScript: LockingScript,
-  outpoint: Outpoint
+  outpoint: Outpoint,
+  read: TokenReader = readTokenOutput
 ): TokenOutput | undefined {
-  return readTokenOutput(lockingScript, outpoint) ?? readJsonTokenOutput(lockingScript, outpoint)
+  return read(lockingScript, outpoint) ?? readJsonTokenOutput(lockingScript, outpoint)
 }
 
 /**
- * True when the script is an asset's deploy: a BRC-162 binary deploy, whose `req` must be
- * empty here, or a BRC-161 JSON deploy+mint, which carries no processing profiles.
+ * True when the script is an asset's deploy: a BRC-162 binary deploy (whose `req` must be
+ * empty under the default reader), or a BRC-161 JSON deploy+mint, which carries no processing
+ * profiles.
  */
-export function isDeployOutput(lockingScript: LockingScript, outpoint: Outpoint): boolean {
-  return readAnyTokenOutput(lockingScript, outpoint)?.deploy === true
+export function isDeployOutput(
+  lockingScript: LockingScript,
+  outpoint: Outpoint,
+  read: TokenReader = readTokenOutput
+): boolean {
+  return readAnyTokenOutput(lockingScript, outpoint, read)?.deploy === true
 }

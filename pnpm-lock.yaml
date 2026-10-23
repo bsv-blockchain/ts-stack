@@ -1632,6 +1632,9 @@ importers:
       '@bsv/wallet-toolbox-client':
         specifier: workspace:^
         version: link:../wallet-toolbox/client
+      '@bsv/wallet-toolbox-mobile':
+        specifier: workspace:^
+        version: link:../wallet-toolbox/mobile
       '@jest/globals':
         specifier: ^30.5.1
         version: 30.5.1

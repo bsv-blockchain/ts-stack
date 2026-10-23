@@ -37,18 +37,27 @@ which overlays it trusts:
 | ---------------------------------- | ------------------------------------------------------------------------------ |
 | `spendability(assetId, outpoints)` | `color-spendability`: outputs currently admitted and unspent                   |
 | `admission(assetId, outpoints)`    | `color-admission`: outputs ever admitted, used to read the asset's deploy      |
-| `submit(topics, beef)`             | Submits to each topic: `tm_color_<assetId>` per asset, `tm_color` for a deploy |
+| `submit(topics, beef, offChain?)`  | Submits to each topic: `tm_color_<assetId>` per asset, `tm_color` for a deploy |
+
+`submit` receives a third argument, the raw BRC-22 `offChainValues` bytes, only
+for assets whose required profiles supply submission data; every other call
+passes two arguments, so a 0.1.0 provider keeps working unchanged. A submit
+returns each topic's admittance.
 
 `requestTokenAccess` receives a JSON message whose `type` is `color_send`,
-`color_signature`, `color_access` (a read) or `color_relinquish`,
-and returns true to approve. A `color_access` names the `basket` read (with
-`assetId` and `role` for a balance or holdings basket) or the `p color`
-`labels` of a `listActions`, and the caller's `seekPermission`. The module asks
+`color_signature`, `color_access` (a read) or `color_relinquish`, and returns
+true to approve. Every message
+carries `seekPermission` (false only when the caller passed
+`seekPermission: false`), and a `color_send` for a plain-noSend hand-over
+carries `handoff: true`. A declined request throws `ColorConsentDeclinedError`.
+A `color_access` names the `basket` read (with `assetId` and `role` for a
+balance or holdings basket) or the `p color` `labels` of a `listActions`. The
+module asks
 on every operation and keeps no grants; the host decides whether an existing
 grant covers a request and when to prompt the user.
 
 Call `color.dispose()` when the host tears down the wallet. Registered on a
-`WalletPermissionsManager`, the module advertises `brc207-color=5` (BRC-205) in
+`WalletPermissionsManager`, the module advertises `brc207-color=4` (BRC-205) in
 the manager's `getVersion` string.
 
 ## Application calls
@@ -75,7 +84,7 @@ the manager's `getVersion` string.
   other same-tag outputs are neither spent nor credited. An output without its suffix tag is not selected, and an app-named
   input without it is refused, so outputs filed without the tag are not spent
   through the module. Suffix tags are
-  left out of the `p color assets` view. A selected output whose transaction
+  left out of the `p color assets` view and of the balance views' tag filters. A selected output whose transaction
   the wallet does not return in full fails the call, naming the outpoint. The
   module stages its record of each input it signs for (outpoint, script,
   satoshis, asset and decrypted custody) when `createAction` funds the action,
@@ -110,21 +119,28 @@ the manager's `getVersion` string.
   then submitted to `tm_color`; `tm_color_<assetId>` must admit it before it
   can be spent. A deploy cannot be a `noSend` action.
 - **Handoff**: the same call with a BRC-177 `p nosend expiry` label and
-  `noSend`; this is the only `noSend` token action, since a plain `noSend`
-  sent later with `sendWith` would never reach the token overlay. When the
-  inputs exceed the amount, the module first broadcasts a
-  split to the exact amount. The split pays the wallet itself and, like
-  BRC-177's revocation anchor, gets no separate consent.
+  `noSend`. For assets without a `plain-nosend` profile this is the only
+  `noSend` token action, since a plain `noSend` sent later with `sendWith`
+  would never reach the token overlay (see [Required profiles](#required-profiles)
+  for plain-noSend hand-overs). When the inputs exceed the amount, the module
+  first broadcasts a split to the exact amount. The split pays the wallet
+  itself and, like BRC-177's revocation anchor, gets no separate consent.
 - **Receive**: `internalizeAction` with `basket insertion` into the asset's
-  value or authority basket and the BRC-207 receipt instructions. The caller
-  must already have submitted the transaction; the received output must be
-  admitted and unspent, and every input must unlock its source. The module
-  relies on that admission for the transaction's token amounts rather than
-  re-evaluating them.
+  value or authority basket and the BRC-207 receipt instructions. For assets
+  without required profiles, the caller must already have submitted the
+  transaction; the received output must be admitted and unspent, and every
+  input must unlock its source. The module relies on that admission for the
+  transaction's token amounts rather than re-evaluating them. A receipt carries
+  BRC-207 custody instructions only (`version`, `assetId`, `derivationPrefix`,
+  `derivationSuffix`, `senderIdentityKey`, at most 1000 bytes). For an asset
+  whose required profile defines `admitReceipt`, that hook decides admission
+  instead (see [Required profiles](#required-profiles)).
 - **App-built transactions**: `createSignature` with a `p color` protocol ID
   and a BRC-207 signature envelope in `data`. The whole transaction is
   evaluated as a send is: every input needs its source, every token input must
-  be admitted and unspent in its overlay, and the user approves the same facts
+  be admitted and unspent in its overlay, every source and output of a profile
+  asset must conform to its deploy (`req` and each profile's own `ext`), and the
+  user approves the same facts
   (`color_signature`: every asset leg, destinations, satoshi totals and fee,
   the signature released) before the module signs.
 - **Reads**: `listOutputs` with `p color assets`, `p color balance <assetTag>`
@@ -133,6 +149,107 @@ the manager's `getVersion` string.
   inventory tags each output `color_state_available` or `color_state_reserved`
   (an input of a pending action). Overlay spendability is checked only when
   spending.
+
+## Required profiles
+
+A deploy may require BRC-207 processing profiles in its `req` map. Without
+registered handlers the module refuses every such asset, exactly as 0.1.0 did,
+and never touches a store. A host that supports profiles registers one handler
+per profile id and injects a durable store:
+
+```ts
+import { createColorModule } from '@bsv/color-permission-module'
+
+const color = createColorModule({
+  wallet: underlyingWallet,
+  provider: defaultProvider,
+  requestTokenAccess,
+  store, // ColorModuleStore: durable get/set/delete/keys
+  profiles: {
+    [issuerProfile.id]: issuerProfile // every profile the host's assets require
+  }
+})
+```
+
+Each `profiles` key must equal its handler's `id`, and `store` is required when
+`profiles` is non-empty; the constructor throws a `TypeError` otherwise. Every
+store key the module writes starts with `color.v1.`: the deploy cache and the
+settled records `markSettled` writes. The layout under that prefix is internal
+to the module, and hosts never read or write it.
+
+The registry fails closed: an asset is supported only when every profile in its
+deploy's `req` is registered with a matching version (`versions`), otherwise
+`UnsupportedProfileError`, checked for every entry before any handler code runs.
+Handlers only restrict what the module would otherwise do. The deploy is
+resolved, each source checked against its transaction id, from the `color.v1.`
+cache, then the default provider, then each handler's `deployProviders()` in
+registration order. A `RequiredProfileHandler` (`ProfileDescriptor`,
+`ProfileAssetContext`, `ProfileTxView`, `ProfileReceipt` and `ReceiptAdmission`
+are exported types) defines:
+
+| Member            | When it runs and what it decides                                                                                                                                                                                                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`, `versions`  | The profile URI and the exact versions it supports                                                                                                                                                                                                                                                                                   |
+| `checkDescriptor` | Synchronously, at asset resolution: validates its `req` entry against the whole `req`; throws `ProfileParamsError`                                                                                                                                                                                                                   |
+| `checkExt`        | At asset resolution and for every token of the asset: validates the profile's own `ext` entry; without it that entry must be absent                                                                                                                                                                                                  |
+| `provider`        | Routes every spendability, admission and submit call for the asset; two handlers of one asset returning different providers fail with `ProfileParamsError`                                                                                                                                                                           |
+| `deployProviders` | Asked in order for an unknown asset's deploy after the default provider                                                                                                                                                                                                                                                              |
+| `sendPolicy`      | `'plain-nosend'`: every token `createAction` moving the asset must be `noSend` without a BRC-177 expiry label; token change stays in the transaction, tagged `color_offline`, and the module never submits the action. `signAction` refuses `options.noSend: false` or a `sendWith` batch and returns `noSend: true`, `sendWith: []` |
+| `operations`      | The operations a holder may declare for the asset; absent means all                                                                                                                                                                                                                                                                  |
+| `checkPlanData`   | In `createAction` and again in `signAction`: checks the plan's `profileData` leaf for the asset (undefined when absent); throws `ProfileDataError`. A profile without it accepts no plan leaf                                                                                                                                        |
+| `submissionData`  | In `signAction` of an action the module submits, before signing: the non-empty `offChainValues` bytes submitted to `tm_color_<assetId>`; at most one handler per asset. Not called for a plain-noSend hand-over                                                                                                                      |
+| `admitReceipt`    | For every receipt of the asset, after the custody, basket, ownership and deploy-conformance checks, in place of the overlay spendability check: `{ credit: 'settled' }` credits it, `{ credit: 'pending' }` credits it tagged `color_offline`, a throw credits nothing; at most one handler per asset                                |
+
+Plan `profileData` may name only profiles in the asset's `req` and assets in
+`plan.assets` (`ProfileDataError` otherwise). A receipt never carries
+`profileData`: any non-empty receipt `profileData` fails with the 0.1.0 error,
+and the wallet always receives the 5-member custody JSON.
+
+Every token of a profile asset the module reads, as a source or an output, in
+`createAction` (requested outputs and explicit inputs), `signAction` (the final
+transaction), `createSignature` and receipts, must conform to the deploy: a
+repeated `req` must be byte-identical to the deploy's, and each required
+profile's `checkExt` must accept its own `ext` entry. A BRC-161 JSON leg
+supplies no `ext` state, so `checkExt` sees an absent entry and may reject it.
+
+### Receipts admitted by a profile
+
+`admitReceipt(ctx, receipt)` receives the asset's `ProfileAssetContext` (the
+underlying wallet, this wallet's identity key, the authenticated deploy and the
+profile's descriptor) and `{ assetId, txid, outputIndex, tx, beef }`, where `tx`
+is the received `Transaction` and `beef` the caller's `internalizeAction` bytes.
+It runs once per receipt output, in order, independent of any other profile.
+The module never parses, stores or submits evidence for it: a token issuer's
+own library, running in the host, verifies whatever the parties exchanged and
+records its decision where an app cannot write, and the hook reads that record
+or asks the issuer's overlay itself.
+
+### Pending outputs and `markSettled`
+
+A receipt admitted as `pending`, and the token change of a plain-noSend
+hand-over, carry the stored tag `color_offline`. Views (`p color assets`,
+balances and tag filters) show it, so `p color balance <assetTag>` with
+`tags: ['color_offline']` is the pending balance. A `color_offline` output is
+spendable only once its overlay lists it: the module never resubmits it, and
+never resubmits any output of an asset whose profiles declare a `sendPolicy` or
+`submissionData`, since the wallet's copy carries no off-chain values.
+
+The host submits plain-noSend hand-overs and pending receipts, then calls
+`color.markSettled(txid)` once the overlay admitted the transaction.
+`markSettled` is an in-process method of the module object, not a BRC-100 call,
+so no app can reach it. It writes `color.v1.settled.<txid>` once (a second call
+writes nothing), and views then hide `color_offline` for that transaction's
+outputs. A lost store shows them as pending again. Without profiles it does
+nothing; a txid that is not lowercase hex throws a `TypeError`.
+Caller-supplied `color_*` tags are stripped whenever profiles are registered.
+
+### Errors
+
+`ProfileParamsError`, `ProfileDataError` and `ColorConsentDeclinedError` are
+exported runtime values. Each sets `name` to its class name and starts its
+message with `[ClassName] `. Hosts and bridges match on `name`, then on that
+prefix, never on `instanceof`, since the module can be loaded more than once.
+`UnsupportedProfileError` keeps its 0.1.0 messages.
 
 ## Limits of this version
 
@@ -145,10 +262,25 @@ The module fails explicitly, rather than falling back, on:
   envelope may sit anywhere in the script (BRC-160). Only value inputs can fund
   JSON transfer outputs; a JSON mint needs an authority input. Assets first
   deployed as BRC-161, at any output index, are supported in BRC-162 form;
-- assets whose deploy declares required processing profiles;
-- `profileData` entries;
+- assets whose deploy declares required processing profiles that no
+  registered handler supports, among them BRC-209;
+- `profileData` in receipts, and plan `profileData` for profiles the asset does
+  not require;
+- receipt `customInstructions` above 1000 bytes;
+- building a deploy that declares a non-empty `req`, and `ISSUE` leaves in plan
+  `profileData`: such deploys are built outside the module;
+- `createSignature` for assets whose profiles define `sendPolicy`,
+  `submissionData` or `checkPlanData`, since a released signature cannot carry
+  submission data, stay off the wire or pass through a plan whose transition a
+  profile checks;
 - satoshi change positions (`changePositions` with a null `assetId`): wallet-toolbox
   adds satoshi change while funding and does not position it.
+
+A plain-noSend hand-over still needs its asset overlay reachable at
+`createAction` and `signAction`: every input, including a `color_offline` one,
+must be listed as admitted and unspent. The module carries no token history and
+validates none; a profile whose tokens move through chains of unsettled
+hand-overs relies on its own library for that.
 
 Explicit inputs are supported: this wallet's `p color` outputs are signed by the
 module, and foreign token inputs count only once their asset's overlay admits
@@ -176,7 +308,9 @@ members are `protected`, so a derivative can override, for example, `approve`
 the module evaluates transactions with are exported too: the token readers
 (`readTokenOutput`, `tryReadTokenOutput`, `readSentToken`), `transactionTokens`,
 `requiredOperations`, `supplyChange`, and the consent builders `actionConsent`
-and `transactionConsent`.
+and `transactionConsent`. Their 0.1.0 positional calls are unchanged; the hand-over flag and
+the token reader go in a trailing options object (`ActionConsentOptions`, or
+`TransactionConsentOptions` in place of the `deployOwned` boolean).
 
 ## Verification
 
