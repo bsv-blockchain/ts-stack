@@ -214,6 +214,28 @@ function isTopLevelDeclaration(line) {
   return DECLARATION_KEYWORDS.has(words[index])
 }
 
+const MEMBER_DECLARATION =
+  /^ {2}(?:(?:public|private|protected|static|readonly|async|override|get|set) +)*(?:\* ?)?[#A-Za-z_$][\w$]* ?[(<]/
+
+// Member declarations of top-level classes: Prettier indents a class body by
+// two spaces and a class body holds only members, so no mutant spans two of
+// them. Lines inside functions or nested blocks are never candidates.
+function classMemberLines(lines) {
+  const members = new Set()
+  let inClass = false
+  lines.forEach((line, index) => {
+    if (isTopLevelDeclaration(line)) {
+      const words = line.split(/[\s(<{=:]+/).filter(word => !DECLARATION_MODIFIERS.has(word))
+      inClass = words[0] === 'class' && line.trimEnd().endsWith('{')
+      return
+    }
+    if (!inClass) return
+    if (line.startsWith('}')) inClass = false
+    else if (MEMBER_DECLARATION.test(line)) members.add(index)
+  })
+  return members
+}
+
 function isCode(line) {
   const text = line.trim()
   return text !== '' && !text.startsWith('//') && !text.startsWith('*') && !text.startsWith('/*')
@@ -232,19 +254,21 @@ function fileLineWeights(target, file, specifications) {
   return { lines, weights }
 }
 
-// Cut a file into `pieces` contiguous segments at top-level declaration lines,
-// balancing code weight. A mutant cannot span two top-level statements, and a
-// cut line must be a unique line prefix so lineSegments can re-find it.
+// Cut a file into `pieces` contiguous segments at top-level declaration or
+// class member lines, balancing code weight. A mutant cannot span two
+// top-level statements or two class members, and a cut line must be a unique
+// line prefix so lineSegments can re-find it.
 function fileSegments(lines, weights, pieces) {
   const before = [0]
   for (const weight of weights) before.push(before.at(-1) + weight)
   const total = before.at(-1)
+  const members = classMemberLines(lines)
   const candidates = lines
     .map((line, index) => index)
     .filter(
       index =>
         index > 0 &&
-        isTopLevelDeclaration(lines[index]) &&
+        (isTopLevelDeclaration(lines[index]) || members.has(index)) &&
         lines.filter(other => other.startsWith(lines[index])).length === 1
     )
   // For each boundary pick the candidate whose preceding weight is nearest its

@@ -457,12 +457,17 @@ the estimate is the target's measured seconds in
 `governance/mutation-testing/durations.json`. A target never measured uses a
 deliberately pessimistic one second per code line. A file whose share of the
 estimate exceeds one 240-second part is cut inside at top-level declaration
-lines (`function`, `class`, `const`, `export …` at column zero) that are unique
-line prefixes, balanced by code lines; a mutant cannot span two top-level
-statements. Whole files and file segments are then grouped heaviest first into
+lines (`function`, `class`, `const`, `export …` at column zero), or at member
+declarations of a top-level class (methods, constructor and accessors at the
+two-space Prettier indent), that are unique line prefixes, balanced by code
+lines; a mutant cannot span two top-level statements or two class members, and
+a two-space line inside a function is never a cut point. Whole files and file segments are then grouped heaviest first into
 the estimate over 240 seconds parts. Explicit plans, including hand-placed line
 cuts, keep priority. Today only `color-permission` splits automatically, into
-eight parts; the exhaustiveness replay covers every target that executes in
+ten parts. Before class member cuts its slowest part held the whole
+`strictJson.ts` `Parser` class and ran 7m37s in release run
+[39845676503](https://github.com/bsv-blockchain/ts-stack/actions/runs/39845676503);
+the class is now cut at `hex4()`; the exhaustiveness replay covers every target that executes in
 parts, so an automatic cut that dropped or duplicated a mutant fails CI.
 
 ### Stop-on-kill Jest environment
@@ -506,5 +511,12 @@ Fork benchmark, same runners, about six concurrent jobs, every gate passing:
 | Partitions + stop-on-kill | 17m01s | 6m10s `sdk-auth-http/core`  | 105m48s         |
 
 Partitions alone were slower there because long parts queued behind short ones,
-which longest-first ordering addresses. With twenty slots the campaign is bounded
-by its longest part or total part time divided by twenty.
+which longest-first ordering addresses.
+
+The full campaign has since grown to 68 parts. With twenty slots, release run
+[39845676503](https://github.com/bsv-blockchain/ts-stack/actions/runs/39845676503)
+queued parts for up to 7 minutes and spent 11m54s in mutation although its
+longest part ran 7m37s. `mutation-tests.yml` now allows 100 parallel parts, so
+the whole campaign starts at once and its longest part bounds wall time; total
+runner time is unchanged. The PR diagnostic campaign in `ci.yml` keeps its
+6-part limit.

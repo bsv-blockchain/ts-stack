@@ -108,8 +108,10 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Run the whole campaign at once; the slowest single target bounds wall time.
-      max-parallel: 20
+      # Run the whole campaign at once; the slowest single part bounds wall time.
+      # The full campaign is 68 parts; a 20-job cap queued parts for up to
+      # 7 minutes behind a 7.6-minute longest part.
+      max-parallel: 100
       matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

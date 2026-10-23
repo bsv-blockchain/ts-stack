@@ -302,3 +302,45 @@ test('automatic plans cut a slow single file at unique top-level declarations', 
   for (let index = 1; index < ranges.length; index += 1)
     assert.equal(ranges[index][0], ranges[index - 1][1] + 1)
 })
+
+test('automatic plans cut a slow class between members but never inside a method', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ts-stack-auto-members-'))
+  mkdirSync(join(directory, 'src'), { recursive: true })
+  const methods = Array.from({ length: 6 }, (_, method) => [
+    `  private step${method}(value: number): number {`,
+    ...Array.from({ length: 20 }, (_, line) => `    if (value > ${method * 100 + line}) value--`),
+    `    helper${method}(value)`,
+    '    return value',
+    '  }'
+  ]).flat()
+  const lines = [
+    'class Parser {',
+    '  constructor(private readonly text: string) {}',
+    ...methods,
+    '}'
+  ]
+  writeFileSync(join(directory, 'src/parser.ts'), lines.join('\n'))
+  const target = { packageDirectory: directory, mutate: ['src/parser.ts'] }
+  const plan = automaticPlan('t', target, 1000)
+  const cuts = plan.lines.get('src/parser.ts')
+  assert.ok(cuts.length >= 2)
+  // Every cut starts a class member at exactly two spaces, never a statement
+  // inside a method body.
+  for (const [, marker] of cuts.slice(1)) assert.match(marker, /^ {2}private step\d\(/)
+
+  // Two-space lines outside a class (function bodies) are never cut points.
+  const functions = Array.from({ length: 6 }, (_, block) => [
+    `function run${block}(value: number): number {`,
+    ...Array.from({ length: 20 }, (_, line) => `  check${block}x${line}(value)`),
+    '  return value',
+    '}'
+  ]).flat()
+  writeFileSync(join(directory, 'src/functions.ts'), functions.join('\n'))
+  const functionPlan = automaticPlan(
+    't',
+    { packageDirectory: directory, mutate: ['src/functions.ts'] },
+    1000
+  )
+  for (const [, marker] of functionPlan.lines.get('src/functions.ts').slice(1))
+    assert.match(marker, /^function run\d\(/)
+})
