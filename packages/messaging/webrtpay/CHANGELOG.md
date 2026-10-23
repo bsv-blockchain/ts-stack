@@ -4,6 +4,16 @@ All notable changes to this package are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and the package adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.2
+
+- Publishes the already merged React Native answerer compatibility fix: reliable channels
+  may report unlimited retransmission/lifetime limits as `-1` or `65535`, as well as DOM
+  `null`. Ordering and the remaining protocol checks are preserved.
+- Repairs the missing provenance on the earlier 0.2.1 registry artifact by preparing this
+  patch for the protected trusted-publisher workflow. Publication and attestation remain
+  gated on that workflow's successful qualification; no verifier requirement is waived.
+- No consumer migration is required. Exports, dependency ranges and relay behavior remain.
+
 ## 0.2.1
 
 The relay can run as a governed container image: it now answers the readiness and CORS probes

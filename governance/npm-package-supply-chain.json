@@ -6,7 +6,7 @@
   "releaseEnvironment": "npm-production",
   "buildRuntime": {
     "runner": "ubuntu-24.04",
-    "node": "24.18.0",
+    "node": "24.22.1",
     "npmMinimum": "11.5.1",
     "pnpm": "10.33.2"
   },

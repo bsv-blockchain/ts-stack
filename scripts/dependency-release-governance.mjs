@@ -428,13 +428,33 @@ function dependencyDeclarations() {
   return declarations
 }
 
-async function npmView(name, fields) {
-  const { stdout } = await execFileAsync('npm', ['view', `${name}@latest`, ...fields, '--json'], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 4 * 1024 * 1024,
-    timeout: 60_000
-  })
+export function isRegistryNotFound(error) {
+  if (error?.code !== 1 || error.killed || error.signal || typeof error.stdout !== 'string')
+    return false
+  try {
+    return JSON.parse(error?.stdout)?.error?.code === 'E404'
+  } catch {
+    return false
+  }
+}
+
+async function npmView(name, fields, allowUnpublished = false) {
+  let stdout
+  try {
+    ;({ stdout } = await execFileAsync(
+      'npm',
+      ['view', `${name}@latest`, ...fields, '--json', '--registry', 'https://registry.npmjs.org'],
+      {
+        cwd: ROOT,
+        encoding: 'utf8',
+        maxBuffer: 4 * 1024 * 1024,
+        timeout: 60_000
+      }
+    ))
+  } catch (error) {
+    if (allowUnpublished && isRegistryNotFound(error)) return { registryNotFound: true }
+    throw error
+  }
   return JSON.parse(stdout)
 }
 
@@ -547,16 +567,24 @@ export async function verifyPublishedPackages() {
   const baselines = publishedBaselines(notes)
   const packages = await mapWithConcurrency(projects, 8, async project => {
     const manifest = readJson(path.join(ROOT, project.path, 'package.json'))
-    const metadata = await npmView(project.name, [
-      'name',
-      'version',
-      'dist.integrity',
-      'dist.attestations',
-      'gitHead'
-    ])
+    const baseline = baselines.get(project.name)
+    const metadata = await npmView(
+      project.name,
+      ['name', 'version', 'dist.integrity', 'dist.attestations', 'gitHead'],
+      baseline === '0.0.0'
+    )
+    if (metadata.registryNotFound === true) {
+      return {
+        name: project.name,
+        sourceVersion: manifest.version,
+        publishedLatest: null,
+        recordedPublishedBaseline: baseline,
+        status: 'first-party-initial-release-held',
+        registryNotFound: true
+      }
+    }
     const latest = metadata.version
     const source = manifest.version
-    const baseline = baselines.get(project.name)
     return {
       name: project.name,
       sourceVersion: source,
@@ -573,6 +601,7 @@ export async function verifyPublishedPackages() {
   })
   const errors = []
   for (const item of packages) {
+    if (item.status === 'first-party-initial-release-held') continue
     if (item.status === 'diverged') {
       errors.push(
         `${item.name} source ${item.sourceVersion}, npm latest ${item.publishedLatest}, and recorded baseline ${item.recordedPublishedBaseline} diverge`
@@ -589,7 +618,9 @@ export async function verifyPublishedPackages() {
     generatedAt: new Date().toISOString(),
     packages,
     heldCandidates: packages
-      .filter(item => item.status === 'first-party-release-held')
+      .filter(item =>
+        ['first-party-release-held', 'first-party-initial-release-held'].includes(item.status)
+      )
       .map(item => `${item.name}@${item.sourceVersion}`),
     errors
   }
@@ -688,7 +719,10 @@ export function publishedInstallContexts(
   report,
   expectedNames = readJson(PROJECTS_PATH)
     .projects.filter(project => project.release === 'npm-oidc')
-    .map(project => project.name)
+    .map(project => project.name),
+  initialReleaseNames = readJson(RELEASE_NOTES_PATH)
+    .entries.filter(entry => entry.publishedVersion === '0.0.0')
+    .map(entry => entry.name)
 ) {
   if (
     report?.schemaVersion !== 1 ||
@@ -700,40 +734,65 @@ export function publishedInstallContexts(
     throw new Error('Published install requires a complete successful verification report')
   }
   const expected = new Set(expectedNames)
+  const initialReleases = new Set(initialReleaseNames)
   const seen = new Set()
   const exactVersion =
     /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
   const packages = [...report.packages].sort((left, right) =>
     compareText(left?.name ?? '', right?.name ?? '')
   )
-  return packages.map((item, index) => {
-    if (
-      typeof item?.name !== 'string' ||
-      !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(item.name) ||
-      item.name.length > 214 ||
-      !expected.has(item.name) ||
-      seen.has(item.name) ||
-      typeof item.publishedLatest !== 'string' ||
-      item.publishedLatest.length > 100 ||
-      !exactVersion.test(item.publishedLatest) ||
-      !isNonEmptyString(item.integrity) ||
-      item.provenance !== true ||
-      !['current', 'first-party-release-held'].includes(item.status)
-    ) {
-      throw new Error('Published install report contains an invalid or duplicate package')
-    }
-    seen.add(item.name)
-    return {
-      name: item.name,
-      version: item.publishedLatest,
-      directory: `${String(index).padStart(2, '0')}-${item.name.replace(/^@/, '').replace('/', '-')}`,
-      manifest: {
-        name: 'ts-stack-published-verification',
-        private: true,
-        dependencies: { [item.name]: item.publishedLatest }
+  return packages
+    .map((item, index) => {
+      if (
+        typeof item?.name !== 'string' ||
+        !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(item.name) ||
+        item.name.length > 214 ||
+        !expected.has(item.name) ||
+        seen.has(item.name)
+      ) {
+        throw new Error('Published install report contains an invalid or duplicate package')
       }
-    }
-  })
+      seen.add(item.name)
+      if (item.status === 'first-party-initial-release-held') {
+        if (
+          !initialReleases.has(item.name) ||
+          item.recordedPublishedBaseline !== '0.0.0' ||
+          item.registryNotFound !== true ||
+          item.publishedLatest !== null ||
+          typeof item.sourceVersion !== 'string' ||
+          !exactVersion.test(item.sourceVersion) ||
+          item.sourceVersion === '0.0.0' ||
+          item.integrity !== undefined ||
+          item.provenance !== undefined
+        ) {
+          throw new Error(
+            'Initial publication hold requires an explicit zero baseline and registry absence'
+          )
+        }
+        return null
+      }
+      if (
+        typeof item.publishedLatest !== 'string' ||
+        item.publishedLatest.length > 100 ||
+        !exactVersion.test(item.publishedLatest) ||
+        !isNonEmptyString(item.integrity) ||
+        item.provenance !== true ||
+        !['current', 'first-party-release-held'].includes(item.status)
+      ) {
+        throw new Error('Published install report contains an invalid or duplicate package')
+      }
+      return {
+        name: item.name,
+        version: item.publishedLatest,
+        directory: `${String(index).padStart(2, '0')}-${item.name.replace(/^@/, '').replace('/', '-')}`,
+        manifest: {
+          name: 'ts-stack-published-verification',
+          private: true,
+          dependencies: { [item.name]: item.publishedLatest }
+        }
+      }
+    })
+    .filter(item => item !== null)
 }
 
 async function preparePublishedInstall(args) {

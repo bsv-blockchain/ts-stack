@@ -9,7 +9,6 @@ overrides:
   brace-expansion@<5.0.11: 5.0.11
   engine.io@<6.6.10: 6.6.10
   nanoid@<3.3.18: 3.3.18
-  toml@<4.2.0: 4.2.0
   qs@<6.16.0: 6.16.0
   js-yaml@<3.15.2: 3.15.2
   lodash-es@<4.18.0: 4.18.1
@@ -213,8 +212,8 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
       remark-mdx-frontmatter:
-        specifier: ^5.2.0
-        version: 5.2.0
+        specifier: ^6.0.0
+        version: 6.0.0
       rollup:
         specifier: ^4.63.3
         version: 4.63.3
@@ -657,7 +656,7 @@ importers:
         version: 5.111.0(esbuild@0.28.2)(webpack-cli@7.2.3)
       webpack-cli:
         specifier: ^7.2.3
-        version: 7.2.3(json5@2.2.3)(toml@4.2.0)(webpack@5.111.0)
+        version: 7.2.3(json5@2.2.3)(webpack@5.111.0)
 
   packages/messaging/message-box-client:
     dependencies:
@@ -703,7 +702,7 @@ importers:
         version: 5.111.0(esbuild@0.28.2)(webpack-cli@7.2.3)
       webpack-cli:
         specifier: ^7.2.3
-        version: 7.2.3(json5@2.2.3)(toml@4.2.0)(webpack@5.111.0)
+        version: 7.2.3(json5@2.2.3)(webpack@5.111.0)
 
   packages/messaging/ts-paymail:
     dependencies:
@@ -4369,8 +4368,8 @@ packages:
   '@types/d3-transition@3.0.9':
     resolution: {integrity: sha512-uZS5shfxzO3rGlu0cC3bjmMFKsXv+SmZZcgp0KD22ts4uGXp5EVYGzu/0YdwZeKmddhcAccYtREJKkPfXkZuCg==}
 
-  '@types/d3-zoom@3.0.8':
-    resolution: {integrity: sha512-iqMC4/YlFCSlO8+2Ii1GGGliCAY4XdeG748w5vQUbevlbDu0zSjH/+jojorQVBK/se0j6DUFNPBGSqD3YWYnDw==}
+  '@types/d3-zoom@3.0.9':
+    resolution: {integrity: sha512-0sE1406XBYJGiqD3AusTl9ZqC//2mIXix51tbom25gDCA8ri4xnSZg28CaSE8Srl6FClqABUKfsn0qghgdepMA==}
 
   '@types/d3@7.4.3':
     resolution: {integrity: sha512-lZXZ9ckh5R8uiFVt8ogUNf+pIrK4EsWrx2Np75WvF/eTpJ0FMHNhjXk8CKEx/+gpHbNQyJWehbFaTvqmHWB3ww==}
@@ -5603,8 +5602,8 @@ packages:
     peerDependencies:
       cytoscape: ^3.2.0
 
-  cytoscape@3.34.3:
-    resolution: {integrity: sha512-yfYGhRcGAntq6YBD583j4n0Eg3jIxvWmZtz/5uz9UYkeIStSlMxuUja+ec5j3iBD8nv1rwaOAYMW09tBdkSeaQ==}
+  cytoscape@3.34.4:
+    resolution: {integrity: sha512-msY99tMY8iWTg+sIPGfSqDcPNOt4xcj+v/K/7qUFaCUxxlqnMkUYLBjRUzn9W5CU/R2hrmtJa5+UtovrEM2ctg==}
     engines: {node: '>=0.10'}
 
   d3-array@2.12.1:
@@ -5881,8 +5880,8 @@ packages:
   dom-accessibility-api@0.6.3:
     resolution: {integrity: sha512-7ZgogeTnjuHbo+ct10G9Ffp0mif17idi0IyWNVA/wcwcm7NPOD/WEHVP3n7n3MhXqxoIYm8d6MuZohYWIZ4T3w==}
 
-  dompurify@3.4.15:
-    resolution: {integrity: sha512-EUBjM+B+lkDE41iE82DDSCfkoPGfXx8IxFxPMjNzm/Uk4xDet77rTN9wqlxlVg71kK7XGuUMv6wUxJUwwv+Xyw==}
+  dompurify@3.4.17:
+    resolution: {integrity: sha512-B/pSlYVHQ58kqISD/yDjuJ1yfzI34m1gF4lAod2bwSRhiN4K5Cl3H8Af7hqB2PmTL911tdEudnnXn5FnhRoz0w==}
 
   dotenv@17.4.2:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
@@ -7783,6 +7782,9 @@ packages:
   package-manager-detector@1.8.0:
     resolution: {integrity: sha512-yQA4H19AmPEoMUeavPMDIe1higySl/gH/yaQrkT/s07Qp+7pp2hYz30N3z2l5BkjVkF9Ow6o0wjJamm2y7Sn0A==}
 
+  package-manager-detector@1.9.0:
+    resolution: {integrity: sha512-zAMfbta9nPA8AKkA4WdmNAT8R8s6Dk0/xwPsqNnRidMFcLo1YkLuPDTgs2f64XdzS8vbLNnoJ+uUIkgbz7oRHA==}
+
   pagefind@1.5.2:
     resolution: {integrity: sha512-XTUaK0hXMCu2jszWE584JGQT7y284TmMV9l/HX3rnG5uo3rHI/uHU56XTyyyPFjeWEBxECbAi0CaFDJOONtG0Q==}
     hasBin: true
@@ -8058,8 +8060,8 @@ packages:
   react-is@18.3.1:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
 
-  react-is@19.3.0:
-    resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
+  react-is@19.3.1:
+    resolution: {integrity: sha512-RRieF6IyxQBkcK6pP8xOHprLTPW6QjRkbGdImtqNme+/hYVwCZkLQLdlZGOhUqXwkS9IEynaGvPJtv6XB/cz0Q==}
 
   react-refresh@0.14.2:
     resolution: {integrity: sha512-jCvmsr+1IUSMUyzOkRcvnVbX3ZYC6g9TDrDbFuFmRDq7PD4yaGbLKNQL6k2jnArV8hjYxh7hVhAZB6s9HDGpZA==}
@@ -8147,8 +8149,8 @@ packages:
   remark-gfm@4.0.1:
     resolution: {integrity: sha512-1quofZ2RQ9EWdeN34S79+KExV1764+wCUGop5CPL1WGdD0ocPpu91lzPGbwWMECpEpd42kJGQwzRfyov9j4yNg==}
 
-  remark-mdx-frontmatter@5.2.0:
-    resolution: {integrity: sha512-U/hjUYTkQqNjjMRYyilJgLXSPF65qbLPdoESOkXyrwz2tVyhAnm4GUKhfXqOOS9W34M3545xEMq+aMpHgVjEeQ==}
+  remark-mdx-frontmatter@6.0.0:
+    resolution: {integrity: sha512-Rz7oaxWwaKpWn/c+iqWOq5wQWPt8TdPyfUIZWBCGqwSqNZ7X8heHkPviy7/UHUXjtd8QTnEV6LXb+CKn9A+ZFA==}
 
   remark-mdx@3.1.1:
     resolution: {integrity: sha512-Pjj2IYlUY3+D8x00UJsIOg5BEvfMyeI+2uLPn9VO9Wg4MEtN/VTIq2NEJQfde9PnX15KgtHyl9S0BcTnWrIuWg==}
@@ -8364,6 +8366,10 @@ packages:
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
+
+  smol-toml@1.9.1:
+    resolution: {integrity: sha512-j7WyPdf0CJoutMzMoPLF/bVXHtKZIT9Rb4eGeEbWw8X2t5oirjPgpL+OpaENZrILYaXqYwnVH+qgUwVbl+pUJQ==}
+    engines: {node: '>= 18'}
 
   socket.io-adapter@2.5.8:
     resolution: {integrity: sha512-6Oy52pbg+kvdCVvjcN+FnY7BvxZ7cIHNScbvztT/It5d0vbwoJoVZmF2gjJmnV0/4WlXRfG15zc45ySk9Ah8bw==}
@@ -8623,10 +8629,6 @@ packages:
   toidentifier@1.0.1:
     resolution: {integrity: sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==}
     engines: {node: '>=0.6'}
-
-  toml@4.2.0:
-    resolution: {integrity: sha512-TvAJjbHZlYmI323+srtqHQFyJsoWy6mI09ppkuj9+iRsqsVKG9fvTcOP7FHF2UCb0QSYtjEavffrKzdd0XgClg==}
-    engines: {node: '>=20'}
 
   tough-cookie@5.1.2:
     resolution: {integrity: sha512-FVDYdxtnj0G6Qm/DhNPSb8Ju59ULcup3tuJxkFb5K8Bv2pUXILbf0xZWU8PX8Ov19OXljbUyveOFwRMwkXzO+A==}
@@ -8927,6 +8929,10 @@ packages:
     resolution: {integrity: sha512-xZe/16rV4aa+HGSOCiY2YeLT1OybRLrrkL/Rqaq7p7GMVXjFh+6wN4oMYgjFmnSnhY8t6Xpdl2l9qmnHYuMHwQ==}
     hasBin: true
 
+  uuid@14.0.3:
+    resolution: {integrity: sha512-Sc5u1VVln93y1Xnz4R+CunOZc7R9LUcTmhj7Rc7Eg3HVcf7rVn2FOoa812fe0W8p3jD7xeoGSYbfqCGGH2B6xw==}
+    hasBin: true
+
   v8-compile-cache-lib@3.0.1:
     resolution: {integrity: sha512-wa7YjyUGfNZngI/vtK0UHAN+lgDCxBPCylVXGp0zu59Fz5aiGtNXaq3DhIov063MorB+VfufLh3JlF2KdTK3xg==}
 
@@ -9114,7 +9120,7 @@ packages:
     peerDependencies:
       js-yaml: ^4.0.0 || ^5.0.0
       json5: ^2.2.3
-      toml: 4.2.0
+      toml: ^3.0.0 || ^4.0.0 || ^5.0.0
       webpack: ^5.101.0
       webpack-bundle-analyzer: ^4.0.0 || ^5.0.0
       webpack-dev-server: ^5.0.0 || ^6.0.0
@@ -9342,7 +9348,7 @@ snapshots:
 
   '@antfu/install-pkg@2.1.0':
     dependencies:
-      package-manager-detector: 1.8.0
+      package-manager-detector: 1.9.0
       tinyexec: 1.3.1
 
   '@arethetypeswrong/core@0.18.5':
@@ -11967,7 +11973,7 @@ snapshots:
     dependencies:
       '@types/d3-selection': 3.0.12
 
-  '@types/d3-zoom@3.0.8':
+  '@types/d3-zoom@3.0.9':
     dependencies:
       '@types/d3-interpolate': 3.0.4
       '@types/d3-selection': 3.0.12
@@ -12003,7 +12009,7 @@ snapshots:
       '@types/d3-time-format': 4.0.3
       '@types/d3-timer': 3.0.2
       '@types/d3-transition': 3.0.9
-      '@types/d3-zoom': 3.0.8
+      '@types/d3-zoom': 3.0.9
 
   '@types/debug@4.1.13':
     dependencies:
@@ -13084,17 +13090,17 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  cytoscape-cose-bilkent@4.1.0(cytoscape@3.34.3):
+  cytoscape-cose-bilkent@4.1.0(cytoscape@3.34.4):
     dependencies:
       cose-base: 1.0.3
-      cytoscape: 3.34.3
+      cytoscape: 3.34.4
 
-  cytoscape-fcose@2.2.0(cytoscape@3.34.3):
+  cytoscape-fcose@2.2.0(cytoscape@3.34.4):
     dependencies:
       cose-base: 2.2.0
-      cytoscape: 3.34.3
+      cytoscape: 3.34.4
 
-  cytoscape@3.34.3: {}
+  cytoscape@3.34.4: {}
 
   d3-array@2.12.1:
     dependencies:
@@ -13370,7 +13376,7 @@ snapshots:
 
   dom-accessibility-api@0.6.3: {}
 
-  dompurify@3.4.15:
+  dompurify@3.4.17:
     optionalDependencies:
       '@types/trusted-types': 2.0.7
 
@@ -15133,14 +15139,14 @@ snapshots:
       '@types/d3': 7.4.3
       '@upsetjs/venn.js': 2.0.0
       chevrotain: 11.1.2
-      cytoscape: 3.34.3
-      cytoscape-cose-bilkent: 4.1.0(cytoscape@3.34.3)
-      cytoscape-fcose: 2.2.0(cytoscape@3.34.3)
+      cytoscape: 3.34.4
+      cytoscape-cose-bilkent: 4.1.0(cytoscape@3.34.4)
+      cytoscape-fcose: 2.2.0(cytoscape@3.34.4)
       d3: 7.9.0
       d3-sankey: 0.12.3
       dagre-d3-es: 7.0.14
       dayjs: 1.11.23
-      dompurify: 3.4.15
+      dompurify: 3.4.17
       elkjs: 0.9.3
       es-toolkit: 1.52.0
       katex: 0.16.47
@@ -15149,7 +15155,7 @@ snapshots:
       roughjs: 4.6.6
       stylis: 4.4.0
       ts-dedent: 2.3.0
-      uuid: 14.0.2
+      uuid: 14.0.3
 
   methods@1.1.2: {}
 
@@ -15950,6 +15956,8 @@ snapshots:
 
   package-manager-detector@1.8.0: {}
 
+  package-manager-detector@1.9.0: {}
+
   pagefind@1.5.2:
     optionalDependencies:
       '@pagefind/darwin-arm64': 1.5.2
@@ -16121,12 +16129,12 @@ snapshots:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: react-is@18.3.1
-      react-is-19: react-is@19.3.0
+      react-is-19: react-is@19.3.1
 
   pretty-format@30.5.1:
     dependencies:
       '@jest/react-is-18': react-is@18.3.1
-      '@jest/react-is-19': react-is@19.3.0
+      '@jest/react-is-19': react-is@19.3.1
       '@jest/schemas': 30.5.0
       ansi-styles: 5.2.0
 
@@ -16242,7 +16250,7 @@ snapshots:
 
   react-is@18.3.1: {}
 
-  react-is@19.3.0: {}
+  react-is@19.3.1: {}
 
   react-refresh@0.14.2: {}
 
@@ -16376,11 +16384,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  remark-mdx-frontmatter@5.2.0:
+  remark-mdx-frontmatter@6.0.0:
     dependencies:
       '@types/mdast': 4.0.4
       estree-util-value-to-estree: 3.5.0
-      toml: 4.2.0
+      smol-toml: 1.9.1
       unified: 11.0.5
       unist-util-mdx-define: 1.1.2
       yaml: 2.9.1
@@ -16690,6 +16698,8 @@ snapshots:
 
   slash@3.0.0: {}
 
+  smol-toml@1.9.1: {}
+
   socket.io-adapter@2.5.8:
     dependencies:
       debug: 4.4.3
@@ -16989,8 +16999,6 @@ snapshots:
       tldts-core: 6.1.86
 
   toidentifier@1.0.1: {}
-
-  toml@4.2.0: {}
 
   tough-cookie@5.1.2:
     dependencies:
@@ -17329,6 +17337,8 @@ snapshots:
 
   uuid@14.0.2: {}
 
+  uuid@14.0.3: {}
+
   v8-compile-cache-lib@3.0.1: {}
 
   v8-to-istanbul@9.3.0:
@@ -17456,7 +17466,7 @@ snapshots:
 
   webidl-conversions@7.0.0: {}
 
-  webpack-cli@7.2.3(json5@2.2.3)(toml@4.2.0)(webpack@5.111.0):
+  webpack-cli@7.2.3(json5@2.2.3)(webpack@5.111.0):
     dependencies:
       '@discoveryjs/json-ext': 1.1.0
       commander: 14.0.3
@@ -17469,7 +17479,6 @@ snapshots:
       webpack-merge: 6.0.1
     optionalDependencies:
       json5: 2.2.3
-      toml: 4.2.0
 
   webpack-merge@6.0.1:
     dependencies:
@@ -17536,7 +17545,7 @@ snapshots:
       watchpack: 2.5.2
       webpack-sources: 3.5.1
     optionalDependencies:
-      webpack-cli: 7.2.3(json5@2.2.3)(toml@4.2.0)(webpack@5.111.0)
+      webpack-cli: 7.2.3(json5@2.2.3)(webpack@5.111.0)
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@napi-rs/image'
