@@ -273,13 +273,25 @@ try {
   const sdkTarball = await pack(path.join(repositoryRoot, 'packages/sdk'), temporaryDirectory)
   let paymentTarball
   if (packageName === '@bsv/auth-express-middleware') {
-    await run('pnpm', ['--filter', '@bsv/payment-express-middleware', 'build'], {
-      cwd: repositoryRoot
-    })
-    paymentTarball = await pack(
-      path.join(repositoryRoot, 'packages/middleware/payment-express-middleware'),
-      temporaryDirectory
+    const paymentDirectory = path.join(
+      repositoryRoot,
+      'packages/middleware/payment-express-middleware'
     )
+    // CI restores the shared build. When the payment package is in it, its own
+    // artifact check may be running alongside this one, and rebuilding here
+    // would replace its dist mid-check.
+    const prebuilt =
+      process.env.PREBUILT_PACKAGE_OUTPUTS === '1' &&
+      (await fs
+        .access(path.join(paymentDirectory, 'dist', 'mod.cjs'))
+        .then(() => true)
+        .catch(() => false))
+    if (!prebuilt) {
+      await run('pnpm', ['--filter', '@bsv/payment-express-middleware', 'build'], {
+        cwd: repositoryRoot
+      })
+    }
+    paymentTarball = await pack(paymentDirectory, temporaryDirectory)
   }
   for (const profile of profiles) {
     await verifyProfile(

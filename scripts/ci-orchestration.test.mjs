@@ -31,7 +31,7 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
   assert.equal(workflow.match(/- name: Build workspace/g)?.length, 1)
   assert.match(
     workflow,
-    /^      browser-packages: \$\{\{ steps\.scope\.outputs\.browser-packages \}\}$/m
+    /^      browser-packages: \$\{\{ steps\.lanes\.outputs\.browser-packages \}\}$/m
   )
   assert.match(workflow, /^  browser-packages:$/m)
   assert.match(
@@ -107,8 +107,23 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const directGateCondition =
     "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
-  assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
+  // Lint, policy and typecheck wait for every early gate and the shared build.
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.policy, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.policy, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.policy, /name: Typecheck workspace/)
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
+  // The build overlaps the repository-health contract; test lanes still wait
+  // for every early gate and the shared build before they start.
+  // The build waits for nothing; it builds every package from the cache.
+  assert.doesNotMatch(jobs.build, /^    needs:/m)
+  assert.match(jobs.build, /scripts\/build-output-cache\.mjs names/)
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.prepare, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.prepare, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.prepare, /needs\.build\.result == 'success'$/m)
+  for (const gate of ['merge-gate', 'build-and-test'])
+    assert.match(jobs[gate], /^      - policy$/m, gate)
   for (const jobName of ['docs-validate', 'conformance']) {
     assert.match(jobs[jobName], /^    if: >-$/m)
     assert.match(jobs[jobName], /^      always\(\) && !cancelled\(\) &&$/m)
@@ -157,7 +172,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   const selected = jobs.filter(
     job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
   )
-  assert.equal(selected.length, 14)
+  assert.equal(selected.length, 15)
   for (const job of selected) {
     if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
     assert.match(
@@ -341,7 +356,14 @@ test('every HTTP latency scenario retains its own required coverage execution', 
     latencies
   )
   assert.ok(selected.every(match => match[1] === match[2]))
-  assert.equal(wallet.match(/id: shard-\d, shard: \d/g).length, 4)
+  // Every planned shard has a matrix row, so no test file can go unrun.
+  const shardRows = wallet.match(/id: shard-\d+, shard: \d+/g).length
+  assert.equal(Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]), shardRows)
+  assert.match(
+    wallet,
+    /--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(wallet, /JEST_SHARD_LANE=wallet-toolbox-coverage/)
   assert.match(
     wallet,
     /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/

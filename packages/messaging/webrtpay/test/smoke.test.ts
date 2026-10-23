@@ -6,7 +6,7 @@ import { VERSION } from '../src/index.js'
 
 describe('package scaffold', () => {
   it('exports the package version', () => {
-    expect(VERSION).toBe('0.2.1')
+    expect(VERSION).toBe('0.2.2')
     const pkg = JSON.parse(
       readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')
     ) as { version: string }

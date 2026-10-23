@@ -7,6 +7,8 @@ function evidence(selected = true) {
   const required = [
     'repository-health',
     'scope',
+    'build',
+    'policy',
     'prepare',
     'package-artifacts',
     'infra-scope',
@@ -20,6 +22,8 @@ function evidence(selected = true) {
     'wallet-browser-platform',
     'wallet-mobile-platform',
     'coverage-sdk',
+    'coverage-sdk-thresholds',
+    'sdk-browser-contract',
     'coverage-did',
     'coverage-wallet',
     'coverage-wallet-monitor',

@@ -841,7 +841,7 @@ describe('types', () => {
 
 describe('root entry', () => {
   it('re-exports the shared types, constants and utilities', () => {
-    expect(barrel.VERSION).toBe('0.2.1')
+    expect(barrel.VERSION).toBe('0.2.2')
     expect(barrel.WebRTPayError).toBe(WebRTPayError)
     expect(barrel.Emitter).toBe(Emitter)
     expect(barrel.isIdentityKey).toBe(isIdentityKey)
