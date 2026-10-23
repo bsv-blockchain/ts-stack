@@ -244,10 +244,10 @@ test('automatic plans split slow multi-file targets by file and leave fast or si
     mutate: ['src/a.ts', 'src/b.ts:1-150', 'src/b.ts:120-200', 'src/c.ts', 'src/d.ts']
   }
   // Measured as fast: one job, whatever the size.
-  assert.equal(automaticPlan('t', target, 200), undefined)
+  assert.equal(automaticPlan('t', target, 150), undefined)
   // Never measured: the pessimistic estimate (680 code lines) splits it.
   const unmeasured = automaticPlan('t', target, undefined)
-  assert.equal(new Set(unmeasured.files.values()).size, 3)
+  assert.equal(new Set(unmeasured.files.values()).size, 4)
   // Measured slow: parts by time, capped by the number of files.
   const plan = automaticPlan('t', target, 5000)
   assert.equal(new Set(plan.files.values()).size, 4)
@@ -299,6 +299,97 @@ test('automatic plans cut a slow single file at unique top-level declarations', 
     .sort((left, right) => left[0] - right[0])
   assert.equal(ranges[0][0], 1)
   assert.equal(ranges.at(-1)[1], blocks.length)
+  for (let index = 1; index < ranges.length; index += 1)
+    assert.equal(ranges[index][0], ranges[index - 1][1] + 1)
+})
+
+test('automatic plans cut a slow class between members but never inside a method', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'ts-stack-auto-members-'))
+  mkdirSync(join(directory, 'src'), { recursive: true })
+  const methods = Array.from({ length: 6 }, (_, method) => [
+    `  private step${method}(value: number): number {`,
+    ...Array.from({ length: 20 }, (_, line) => `    if (value > ${method * 100 + line}) value--`),
+    `    helper${method}(value)`,
+    '    return value',
+    '  }'
+  ]).flat()
+  const lines = [
+    'class Parser {',
+    '  constructor(private readonly text: string) {}',
+    ...methods,
+    '}'
+  ]
+  writeFileSync(join(directory, 'src/parser.ts'), lines.join('\n'))
+  const target = { packageDirectory: directory, mutate: ['src/parser.ts'] }
+  const plan = automaticPlan('t', target, 1000)
+  const cuts = plan.lines.get('src/parser.ts')
+  assert.ok(cuts.length >= 2)
+  // Every cut starts a class member at exactly two spaces, never a statement
+  // inside a method body.
+  for (const [, marker] of cuts.slice(1)) assert.match(marker, /^ {2}private step\d\(/)
+
+  // Two-space lines outside a class (function bodies) are never cut points.
+  const functions = Array.from({ length: 6 }, (_, block) => [
+    `function run${block}(value: number): number {`,
+    ...Array.from({ length: 20 }, (_, line) => `  check${block}x${line}(value)`),
+    '  return value',
+    '}'
+  ]).flat()
+  writeFileSync(join(directory, 'src/functions.ts'), functions.join('\n'))
+  const functionPlan = automaticPlan(
+    't',
+    { packageDirectory: directory, mutate: ['src/functions.ts'] },
+    1000
+  )
+  for (const [, marker] of functionPlan.lines.get('src/functions.ts').slice(1))
+    assert.match(marker, /^function run\d\(/)
+
+  // A template and a two-space call inside a method look like members. They
+  // must not be cuts, and the method's regex braces must not hide later members.
+  const traps = [
+    'class Parser {',
+    '  constructor(private readonly text: string) {}',
+    '  private step0(value: number): number {',
+    ...Array.from({ length: 90 }, (_, line) => `    value = value + ${line}`),
+    '    const source = `}',
+    '  private nested0(value: number): number {',
+    '    return value',
+    '  }`',
+    '  helper0(value)',
+    '    if (/^[0-9a-f]{4}$/.test(String(value))) value++',
+    ...Array.from({ length: 90 }, (_, line) => `    value = value + ${line + 90}`),
+    '    return value',
+    '  }',
+    ...Array.from({ length: 3 }, (_, method) => [
+      `  private step${method + 1}(value: number): number {`,
+      ...Array.from({ length: 40 }, (_, line) => `    value = value + ${method * 100 + line}`),
+      '    return value',
+      '  }'
+    ]).flat(),
+    '}'
+  ]
+  writeFileSync(join(directory, 'src/traps.ts'), traps.join('\n'))
+  const trapPlan = automaticPlan(
+    't',
+    { packageDirectory: directory, mutate: ['src/traps.ts'] },
+    1000
+  )
+  const trapCuts = trapPlan.lines.get('src/traps.ts')
+  assert.ok(trapCuts.length >= 2)
+  for (const [, marker] of trapCuts.slice(1)) {
+    assert.match(marker, /^ {2}(?:constructor\(|private step\d\()/)
+    assert.doesNotMatch(marker, /nested|helper/)
+  }
+  const trapParts = partitionMutationTarget('t', {
+    packageDirectory: directory,
+    mutate: ['src/traps.ts']
+  })
+  const ranges = trapParts
+    .flatMap(part => part.target.mutate)
+    .map(spec => spec.split(':')[1].split('-').map(Number))
+    .sort((left, right) => left[0] - right[0])
+  assert.equal(ranges[0][0], 1)
+  assert.equal(ranges.at(-1)[1], traps.length)
   for (let index = 1; index < ranges.length; index += 1)
     assert.equal(ranges[index][0], ranges[index - 1][1] + 1)
 })

@@ -181,7 +181,7 @@ function lineSegments(target, file, cuts) {
 // estimate is the target's measured hosted seconds. A target never measured
 // uses a deliberately pessimistic code-line estimate: an unneeded split costs
 // one job's setup, a missed split holds the whole campaign.
-const AUTO_PART_SECONDS = 240
+const AUTO_PART_SECONDS = 180
 const UNMEASURED_SECONDS_PER_CODE_LINE = 1
 let measuredSeconds
 function measuredTargetSeconds(targetId) {
@@ -214,6 +214,286 @@ function isTopLevelDeclaration(line) {
   return DECLARATION_KEYWORDS.has(words[index])
 }
 
+const MEMBER_MODIFIERS = new Set([
+  'public',
+  'private',
+  'protected',
+  'static',
+  'readonly',
+  'async',
+  'override',
+  'get',
+  'set'
+])
+
+// A method, constructor or accessor at exactly the class body indent.
+function isMemberDeclaration(line) {
+  if (!/^ {2}\S/.test(line)) return false
+  const words = line.trim().split(/ +/)
+  let index = 0
+  while (MEMBER_MODIFIERS.has(words[index])) index += 1
+  return /^(?:\* ?)?[#A-Za-z_$][\w$]* ?[(<]/.test(words.slice(index).join(' '))
+}
+
+// Keywords after which `/` starts a regular expression rather than division.
+const EXPRESSION_KEYWORDS = new Set([
+  'abstract',
+  'as',
+  'async',
+  'await',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'declare',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'for',
+  'from',
+  'function',
+  'get',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'of',
+  'override',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+  'return',
+  'set',
+  'static',
+  'switch',
+  'throw',
+  'type',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'yield'
+])
+
+function declarationKeyword(line) {
+  return line.split(/[\s(<{=:]+/).find(word => !DECLARATION_MODIFIERS.has(word))
+}
+
+function scanState() {
+  return {
+    depth: 0,
+    classDepth: 0,
+    pendingClass: false,
+    expectExpression: true,
+    lineComment: false,
+    modes: ['code'],
+    interpolations: [],
+    regexClass: false
+  }
+}
+
+const currentMode = state => state.modes.at(-1)
+
+function isClassBodyMember(state, line) {
+  return (
+    currentMode(state) === 'code' &&
+    state.classDepth > 0 &&
+    state.depth === state.classDepth &&
+    isMemberDeclaration(line)
+  )
+}
+
+// A block mutant covers its whole method, including a template that looks like
+// another member, so a cut is safe only while the braces are still at the
+// class body.
+function classMemberLines(lines) {
+  const members = new Set()
+  const state = scanState()
+  lines.forEach((line, index) => {
+    if (isClassBodyMember(state, line)) members.add(index)
+    scanLine(state, line)
+  })
+  return members
+}
+
+function scanLine(state, line) {
+  if (currentMode(state) === 'code' && state.depth === 0 && isTopLevelDeclaration(line))
+    state.pendingClass = declarationKeyword(line) === 'class'
+  let index = 0
+  while (index < line.length && !state.lineComment) index = scanAt(state, line, index) + 1
+  state.lineComment = false
+}
+
+function scanAt(state, line, index) {
+  const mode = currentMode(state)
+  if (mode === 'block') return scanBlock(state, line, index)
+  if (mode === 'single' || mode === 'double') return scanQuoted(state, line, index)
+  if (mode === 'template') return scanTemplate(state, line, index)
+  if (mode === 'regex') return scanRegex(state, line, index)
+  return scanCode(state, line, index)
+}
+
+function scanCode(state, line, index) {
+  const char = line[index]
+  const next = line[index + 1]
+  if (char === '/' && next === '/') {
+    state.lineComment = true
+    return index + 1
+  }
+  if (char === '/' && next === '*') {
+    state.modes.push('block')
+    return index + 1
+  }
+  if (char === '/' && state.expectExpression) {
+    state.modes.push('regex')
+    state.regexClass = false
+    return index
+  }
+  if (char === '/') {
+    state.expectExpression = true
+    return index
+  }
+  if (char === "'" || char === '"') {
+    pushQuote(state, char)
+    return index
+  }
+  if (char === '`') {
+    state.modes.push('template')
+    return index
+  }
+  if (char === '{') return openBrace(state, index)
+  if (char === '}') return closeBrace(state, index)
+  if (/[A-Za-z_$]/.test(char)) return scanWord(state, line, index)
+  if (/\d/.test(char)) return scanNumber(state, line, index)
+  if (char === ' ' || char === '\t') return index
+  return scanPunctuation(state, char, next, index)
+}
+
+function pushQuote(state, char) {
+  state.modes.push(char === "'" ? 'single' : 'double')
+}
+
+function openBrace(state, index) {
+  state.depth += 1
+  if (state.pendingClass && state.depth === 1) {
+    state.classDepth = state.depth
+    state.pendingClass = false
+  }
+  state.expectExpression = true
+  return index
+}
+
+function closeBrace(state, index) {
+  const interpolation = state.interpolations.at(-1)
+  if (interpolation !== undefined && state.depth === interpolation) {
+    state.depth -= 1
+    state.interpolations.pop()
+    state.modes.pop()
+    return index
+  }
+  state.depth -= 1
+  if (state.classDepth > 0 && state.depth < state.classDepth) state.classDepth = 0
+  state.expectExpression = false
+  return index
+}
+
+function scanWord(state, line, index) {
+  let end = index + 1
+  while (end < line.length && /[A-Za-z0-9_$]/.test(line[end])) end += 1
+  state.expectExpression = EXPRESSION_KEYWORDS.has(line.slice(index, end))
+  return end - 1
+}
+
+function scanNumber(state, line, index) {
+  let end = index + 1
+  while (end < line.length && /[0-9A-Za-z_.]/.test(line[end])) end += 1
+  state.expectExpression = false
+  return end - 1
+}
+
+function scanPunctuation(state, char, next, index) {
+  if ((char === '+' && next === '+') || (char === '-' && next === '-')) return index + 1
+  if (char === '(' || char === '[') {
+    state.expectExpression = true
+    return index
+  }
+  if (char === ')' || char === ']') {
+    state.expectExpression = false
+    return index
+  }
+  if (char === '.') {
+    state.expectExpression = false
+    return index
+  }
+  if ('=+-*%&|^~!?:;,<>'.includes(char)) state.expectExpression = true
+  return index
+}
+
+function scanBlock(state, line, index) {
+  if (line[index] === '*' && line[index + 1] === '/') {
+    state.modes.pop()
+    return index + 1
+  }
+  return index
+}
+
+function scanQuoted(state, line, index) {
+  const char = line[index]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  const quote = currentMode(state) === 'single' ? "'" : '"'
+  if (char === quote) {
+    state.modes.pop()
+    state.expectExpression = false
+  }
+  return index
+}
+
+function scanTemplate(state, line, index) {
+  const char = line[index]
+  const next = line[index + 1]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  if (char === '`') {
+    state.modes.pop()
+    state.expectExpression = false
+    return index
+  }
+  if (char === '$' && next === '{') {
+    state.modes.push('code')
+    state.depth += 1
+    state.interpolations.push(state.depth)
+    state.expectExpression = true
+    return index + 1
+  }
+  return index
+}
+
+function scanRegex(state, line, index) {
+  const char = line[index]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  if (char === '[' && !state.regexClass) {
+    state.regexClass = true
+    return index
+  }
+  if (char === ']' && state.regexClass) {
+    state.regexClass = false
+    return index
+  }
+  if (char === '/' && !state.regexClass) {
+    state.modes.pop()
+    state.expectExpression = false
+  }
+  return index
+}
+
 function isCode(line) {
   const text = line.trim()
   return text !== '' && !text.startsWith('//') && !text.startsWith('*') && !text.startsWith('/*')
@@ -232,19 +512,21 @@ function fileLineWeights(target, file, specifications) {
   return { lines, weights }
 }
 
-// Cut a file into `pieces` contiguous segments at top-level declaration lines,
-// balancing code weight. A mutant cannot span two top-level statements, and a
-// cut line must be a unique line prefix so lineSegments can re-find it.
+// Cut a file into `pieces` contiguous segments at top-level declaration or
+// class member lines, balancing code weight. A mutant cannot span two
+// top-level statements or two class members, and a cut line must be a unique
+// line prefix so lineSegments can re-find it.
 function fileSegments(lines, weights, pieces) {
   const before = [0]
   for (const weight of weights) before.push(before.at(-1) + weight)
   const total = before.at(-1)
+  const members = classMemberLines(lines)
   const candidates = lines
     .map((line, index) => index)
     .filter(
       index =>
         index > 0 &&
-        isTopLevelDeclaration(lines[index]) &&
+        (isTopLevelDeclaration(lines[index]) || members.has(index)) &&
         lines.filter(other => other.startsWith(lines[index])).length === 1
     )
   // For each boundary pick the candidate whose preceding weight is nearest its
