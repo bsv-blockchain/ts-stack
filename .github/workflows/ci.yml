@@ -36,7 +36,7 @@ jobs:
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
 
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
@@ -121,7 +121,7 @@ jobs:
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
 
       - name: Resolve package, mutation, documentation, conformance, and image scope
         id: scope
@@ -282,7 +282,7 @@ jobs:
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
 
       - name: Require the exact Sonar analysis to contain no new findings
         run: >-
@@ -332,12 +332,12 @@ jobs:
 
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
-      - name: Use Node.js 24.18.0
+      - name: Use Node.js 24.22.1
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Exact pin: package-release-artifacts dry-run enforces
           # governance/npm-package-supply-chain.json buildRuntime.node.
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
 
       - name: Install dependencies
@@ -769,7 +769,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -815,7 +815,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Restore the immutable MongoDB test binary
@@ -877,7 +877,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Rebuild the audited browser bundler
@@ -938,7 +938,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -972,7 +972,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1015,7 +1015,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1072,7 +1072,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/sdk
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1099,7 +1099,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1137,7 +1137,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1198,7 +1198,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build allowlisted better-sqlite3 binding
@@ -1289,7 +1289,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build allowlisted better-sqlite3 binding
@@ -1334,7 +1334,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1389,7 +1389,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Restore the immutable MongoDB test binary
@@ -1702,7 +1702,7 @@ jobs:
         if: matrix.run
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: infra/${{ matrix.component }}/package-lock.json
 
@@ -1803,7 +1803,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -1848,7 +1848,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
@@ -1941,7 +1941,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
       - name: Reject missing or skipped selected work
         env:
           CI_NEEDS: ${{ toJSON(needs) }}
