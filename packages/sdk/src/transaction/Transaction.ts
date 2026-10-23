@@ -1931,8 +1931,6 @@ export default class Transaction {
    * @throws Error if there are any missing sourceTransactions unless `allowPartial` is true.
    */
   toBEEF(allowPartial?: boolean): number[] {
-    // Serialize into contiguous bytes, then convert once: growing a number[]
-    // writer is many times slower for large BEEFs. The bytes are identical.
     return toArray(this.toBEEFBytes(allowPartial))
   }
 

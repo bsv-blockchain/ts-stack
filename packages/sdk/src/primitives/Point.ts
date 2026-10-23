@@ -117,16 +117,24 @@ export const GY_BIGINT = BigInt(
   '0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'
 )
 
-// Precomputed windowed tables keyed by 'window:x:y'. The generator's tables
-// are kept for the life of the process. Every other point (each public key a
-// verifier sees) goes into a small least-recently-used cache: unbounded, it
-// grew by about 2.7 KiB per distinct key, and building a table costs only one
-// doubling and a few additions.
+// Windowed tables keyed by `window:x:y`. Generator tables stay for the
+// process lifetime. Every other point shares one recency-ordered cache.
 const GENERATOR_WNAF_TABLES: Map<string, JacobianPointBI[]> = new Map()
 const WNAF_TABLE_CACHE: Map<string, JacobianPointBI[]> = new Map()
-export const WNAF_TABLE_CACHE_LIMIT = 64
-/** Internal: cached non-generator table keys, oldest first (for tests). */
-export const wnafTableCacheKeys = (): string[] => [...WNAF_TABLE_CACHE.keys()]
+const WNAF_TABLE_CACHE_LIMIT = 64
+const wnafTableCacheKeys = (): string[] => [...WNAF_TABLE_CACHE.keys()]
+
+// Every named export of this module is published through `./primitives/*`.
+// Jest sets JEST_WORKER_ID, so tests can observe eviction without an export
+// that would publish the cached public-point coordinates.
+if (typeof process !== 'undefined' && process.env.JEST_WORKER_ID !== undefined) {
+  Object.assign(globalThis, {
+    __bsvSdkWnafTableCacheTest: {
+      limit: WNAF_TABLE_CACHE_LIMIT,
+      keys: wnafTableCacheKeys
+    }
+  })
+}
 
 export interface JacobianPointBI {
   X: bigint

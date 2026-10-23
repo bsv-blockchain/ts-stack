@@ -80,10 +80,6 @@ export const toUint8Array = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): Uint8Ar
   return new Uint8Array(toArray(msg, enc))
 }
 
-/**
- * Copies bytes into a plain number array. A presized indexed loop is about
- * ten times faster than Array.from or spreading for byte arrays.
- */
 const MAX_ARRAY_LENGTH = 2 ** 32 - 1
 
 const bytesToNumbers = (bytes: Uint8Array): number[] => {

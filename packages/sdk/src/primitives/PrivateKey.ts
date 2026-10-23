@@ -130,7 +130,7 @@ export class KeyShares {
 // Public key per PrivateKey instance, with a SHA-256 fingerprint of the scalar
 // it was derived from, so the cache never holds a copy of the secret. A
 // WeakMap keeps it off the BigNumber instance and frees it with the key.
-// x and y are null for the point at infinity (a key that is zero mod n).
+// x and y are null when mulCT returned the point at infinity for this scalar.
 const PUBLIC_KEY_CACHE = new WeakMap<
   PrivateKey,
   { fingerprint: string, x: BigNumber | null, y: BigNumber | null }
@@ -323,11 +323,6 @@ export default class PrivateKey extends BigNumber {
    * const publicKey = privateKey.toPublicKey();
    */
   toPublicKey(): PublicKey {
-    // k·G is the cost of a whole signature and callers such as P2PKH ask for
-    // it once per input. Cache it against a fingerprint of the scalar it was
-    // computed for: a PrivateKey is a mutable BigNumber, so any in-place change
-    // recomputes. Each call returns fresh coordinates, so a caller mutating the
-    // returned key cannot affect later calls.
     const fingerprint = scalarFingerprint(this)
     let cached = PUBLIC_KEY_CACHE.get(this)
     if (cached?.fingerprint !== fingerprint) {

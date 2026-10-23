@@ -230,7 +230,7 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### Performance (3.2.1 candidate)
+### Performance (4.0.0 candidate)
 
 - Bound the windowed point-multiplication table cache. Every distinct public
   key verified added a table that was never released (about 3 KiB per key);

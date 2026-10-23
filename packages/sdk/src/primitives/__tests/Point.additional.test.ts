@@ -1,4 +1,4 @@
-import Point, { WNAF_TABLE_CACHE_LIMIT, wnafTableCacheKeys } from '../../primitives/Point'
+import Point from '../../primitives/Point'
 import BigNumber from '../../primitives/BigNumber'
 import Curve from '../../primitives/Curve'
 import PrivateKey from '../../primitives/PrivateKey'
@@ -579,6 +579,19 @@ describe('Point – additional coverage', () => {
     })
   })
 })
+
+const wnafTableCacheTest = (
+  globalThis as typeof globalThis & {
+    __bsvSdkWnafTableCacheTest?: { limit: number; keys: () => string[] }
+  }
+).__bsvSdkWnafTableCacheTest
+
+if (wnafTableCacheTest === undefined) {
+  throw new Error('Point windowed-table cache test hook is missing')
+}
+
+const WNAF_TABLE_CACHE_LIMIT = wnafTableCacheTest.limit
+const wnafTableCacheKeys = wnafTableCacheTest.keys
 
 describe('Point windowed table cache', () => {
   const scalar = new BigNumber(12345)
