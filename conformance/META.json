@@ -58,7 +58,8 @@
     "BRC-121": ["payments.brc121"],
     "BRC-26": ["storage.uhrp-http"],
     "BRC-167": ["storage.chirp-v1"],
-    "BRC-62": ["overlay.submit"],
+    "BRC-62": ["overlay.submit", "sdk.transactions.atomic-beef"],
+    "BRC-95": ["sdk.transactions.atomic-beef"],
     "BRC-22": ["overlay.lookup", "overlay.topicmanagement"],
     "BRC-20": ["broadcast.arcsubmit", "broadcast.merklepath"],
     "BRC-21": ["sync.gasprotocol"],
@@ -72,9 +73,9 @@
     "BRC-104": ["auth.brc31-handshake"]
   },
   "stats": {
-    "total_files": 77,
-    "total_vectors": 6706,
-    "last_updated": "2026-10-07"
+    "total_files": 78,
+    "total_vectors": 6714,
+    "last_updated": "2026-10-22"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",
