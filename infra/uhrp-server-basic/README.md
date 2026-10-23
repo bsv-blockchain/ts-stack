@@ -124,3 +124,11 @@ and keeps any existing inspector configuration. Production startup, database
 migrations, public routes and data formats are unchanged. Install the committed
 lock with `npm ci` before using the updated development command. This removes
 the unpatched `braces` path without an advisory exclusion or dependency override.
+
+
+## SDK 4 wallet counts
+
+Advertisement queries use an ordinary wallet basket and require a numeric,
+non-negative safe-integer `totalOutputs` count. SDK 4 also permits decimal text
+for BRC-112 module-balance queries; those values are rejected rather than coerced
+into pagination counts. No advertisement, wallet-data, or API migration is needed.

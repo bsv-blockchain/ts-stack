@@ -57,3 +57,18 @@ test('preserves signature, owner-selector, descriptive-tag, and duplicate checks
   mockListOutputs.mockResolvedValue({ outputs: [f.legacy, f.legacy], totalOutputs: 2, BEEF: f.BEEF })
   await expect(listVerifiedAdvertisements({ limit: 2, offset: 0 })).rejects.toThrow('duplicate')
 })
+
+
+test.each(['0', '1.25', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+  'rejects a non-count wallet totalOutputs value %p before reading advertisements', async totalOutputs => {
+    mockListOutputs.mockResolvedValue({ outputs: [], totalOutputs })
+    await expect(listVerifiedAdvertisements({ limit: 2, offset: 0 })).rejects.toThrow('malformed UHRP output list')
+  }
+)
+
+test('accepts an empty numeric-count wallet page', async () => {
+  mockListOutputs.mockResolvedValue({ outputs: [], totalOutputs: 0 })
+  await expect(listVerifiedAdvertisements({ limit: 2, offset: 0 })).resolves.toEqual({
+    advertisements: [], legacyAdvertisementsPending: 0
+  })
+})

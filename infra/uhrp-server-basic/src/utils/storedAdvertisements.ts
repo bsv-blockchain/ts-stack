@@ -99,6 +99,7 @@ export async function listVerifiedAdvertisements(options: {
     !Array.isArray(result.outputs) ||
     result.outputs.length > options.limit ||
     result.outputs.length > MAX_WALLET_OUTPUTS ||
+    typeof result.totalOutputs !== 'number' ||
     !Number.isSafeInteger(result.totalOutputs) ||
     result.totalOutputs < result.outputs.length
   ) {
