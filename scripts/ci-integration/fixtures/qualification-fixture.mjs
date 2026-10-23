@@ -4,7 +4,7 @@ export const identity = {
   sourceSha: 'a'.repeat(40),
   runId: '17',
   runAttempt: '2',
-  nodeVersion: 'v24.18.0',
+  nodeVersion: 'v24.22.1',
   inputsDigest: 'inputs',
   targetsDigest: 'targets',
   targetIds: ['one', 'two']

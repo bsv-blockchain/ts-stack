@@ -133,6 +133,7 @@ import {
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
@@ -1410,7 +1411,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
         r.utxos.push({ satoshis: o.satoshis, outpoint: o.outpoint })
       }
       offset += change.outputs.length
-      if (offset >= change.totalOutputs) break
+      if (offset >= numericTotalOutputs(change)) break
     }
     return r
   }
@@ -1426,8 +1427,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (args.basket !== specOpWalletBalance) {
       args.tags = [...(args.tags || []), specOpWalletBalance]
     }
-    const r = await this.listOutputs(args)
-    return r.totalOutputs
+    return numericTotalOutputs(await this.listOutputs(args))
   }
 
   /**
@@ -1591,6 +1591,14 @@ function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
   const balancePrefix = 'balance '
   if (vargs.basket.startsWith(balancePrefix)) {
     vargs.basket = vargs.basket.slice(balancePrefix.length)
+    // BRC-112: `balance p <module> <basket>` is never allowed; a module may offer
+    // `p <module> balance <basket>` instead.
+    if (vargs.basket.startsWith('p ')) {
+      throw new WERR_INVALID_PARAMETER(
+        'basket',
+        `not a BRC-99 module basket: BRC-112 rejects \`balance p <module> <basket>\`; use \`p <module> balance <basket>\` if the module offers it.`
+      )
+    }
     vargs.tags = [...vargs.tags, specOpWalletBalance]
   }
   return vargs

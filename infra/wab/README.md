@@ -389,7 +389,7 @@ for evidence requirements, commands, auditing, rollout, and rollback.
    yarn dev
    ```
 
-   This runs `ts-node-dev` or equivalent.
+   This runs `tsx watch` with the existing telemetry preload and watches both source files and `.env`.
 
    The server should start on `http://localhost:8080`.
 
@@ -658,3 +658,15 @@ To contribute:
 ## License
 
 This project is available under the [Open BSV License Version 6](./LICENSE.txt).
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

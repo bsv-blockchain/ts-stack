@@ -8,9 +8,9 @@ packages:
 
 # Supply-chain policy belongs in pnpm-workspace.yaml (pnpm 10 does not read
 # these settings from package.json). Keep native lifecycle scripts deny-by-
-# default, delay ordinary new releases for seven days, and reject provenance
-# downgrades. First-party @bsv/* releases are exempt from the delay so a
-# coordinated stack release can consume freshly published siblings.
+# default and reject provenance downgrades. Release age never blocks resolving
+# a dependency; vulnerability audits, provenance and lifecycle controls remain
+# required for every release, including newly published security fixes.
 allowBuilds:
   '@parcel/watcher': true
   '@scarf/scarf': false
@@ -25,9 +25,6 @@ blockExoticSubdeps: true
 # Require manifests to declare their runtime and build peers explicitly. This
 # keeps unused optional tooling peers out of the frozen dependency graph.
 autoInstallPeers: false
-minimumReleaseAge: 10080
-minimumReleaseAgeExclude:
-  - '@bsv/*'
 
 # Jest 30's current coverage/reporting graph still constrains minimatch to
 # brace-expansion 1.x/2.x. Keep this narrow, tested substitution on the latest
@@ -45,10 +42,6 @@ overrides:
   # Vite's PostCSS graph permits nanoid 3 releases older than the security
   # fix. Select the first patched 3.x release without changing its public API.
   nanoid@<3.3.18: 3.3.18
-  # remark-mdx-frontmatter 5.2.0 still constrains TOML to vulnerable 3.x even
-  # though it only consumes the compatible parse() API. webpack-cli already
-  # accepts TOML 4; keep both paths on the first release fixing the advisories.
-  toml@<4.2.0: 4.2.0
   # Express/body-parser, Superagent, and Stryker's typed-rest-client can retain
   # vulnerable qs releases. Select the first release fixing the bracket/comma
   # array-limit and attacker-controlled isBuffer advisories across every path.

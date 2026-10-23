@@ -54,6 +54,7 @@ export interface Session {
   connectedAt?: number // first successful pairing; the absolute session TTL is measured from here
   desktopToken: string // random secret — sent as X-Desktop-Token on POST /api/request/:id
   mobileIdentityKey?: string // set once on pairing_approved
+  backendIdentityKey?: string // key embedded in this session's QR; reported by the session lookup
   pairingStartedAt?: number // set when mobile WS first connects; prevents race-expiry
 }
 
@@ -61,6 +62,7 @@ export interface SessionInfo {
   sessionId: string
   status: SessionStatus
   relay?: string // present on status resolution; validated before WebSocket use
+  backendIdentityKey?: string // present on status resolution from 0.6.0; must equal the QR key
   qrDataUrl?: string // present on session creation
   pairingUri?: string // present on session creation — use with QRPairingCode / useQRPairing
   desktopToken?: string // present on session creation — send as X-Desktop-Token header on POST /api/request/:id

@@ -23,6 +23,7 @@ export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifac
 export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
+export const INTERNALIZE_RECEIPT_MIGRATION = '2026-10-13-001 coordinate wallet receipt ownership'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -82,6 +83,28 @@ export class KnexMigrations implements MigrationSource<string> {
     maxOutputScriptLength: number
   ): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
+
+    migrations[INTERNALIZE_RECEIPT_MIGRATION] = {
+      async up(knex) {
+        // Historical wallets can contain duplicate transaction identifiers.
+        // The receipt key serializes future internalizeAction calls without
+        // modifying or rejecting those existing financial records.
+        if (!(await knex.schema.hasTable('internalize_receipts'))) {
+          await knex.schema.createTable('internalize_receipts', table => {
+            table.integer('userId').unsigned().notNullable().references('userId').inTable('users')
+            table.string('txid', 64).notNullable()
+            table.string('ownerToken', 64).notNullable()
+            table.string('state', 16).notNullable()
+            table.bigInteger('leaseUntil').notNullable()
+            table.boolean('needsNewReceipt').notNullable().defaultTo(false)
+            table.primary(['userId', 'txid'])
+          })
+        }
+      },
+      async down(knex) {
+        await knex.schema.dropTableIfExists('internalize_receipts')
+      }
+    }
 
     const addTimeStamps = (knex: Knex<any, any[]>, table: Knex.CreateTableBuilder, dbtype: DBType) => {
       if (dbtype === 'MySQL') {

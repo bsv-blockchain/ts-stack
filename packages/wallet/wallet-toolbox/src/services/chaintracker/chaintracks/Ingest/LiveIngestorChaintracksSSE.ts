@@ -116,6 +116,6 @@ export class LiveIngestorChaintracksSSE extends LiveIngestorBase {
 
   private validateRemoteHeader(header: BlockHeader): void {
     validateHeaderFormat(header)
-    validateHeaderProofOfWork(header)
+    validateHeaderProofOfWork(header, this.chain)
   }
 }

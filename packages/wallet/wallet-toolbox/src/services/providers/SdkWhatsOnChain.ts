@@ -69,12 +69,16 @@ export default class SdkWhatsOnChain implements ChainTracker {
 
   /**
    * Constructs an instance of the WhatsOnChain ChainTracker.
+   * `tstn` and `regtest` have no WhatsOnChain service, so every request made for them is refused.
    *
-   * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
+   * @param {'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor(network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: LocalWhatsOnChainConfig = {}) {
-    if (!['main', 'test', 'stn', 'ttn', 'tstn'].includes(network)) {
+  constructor(
+    network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest' = 'main',
+    config: LocalWhatsOnChainConfig = {}
+  ) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest'].includes(network)) {
       throw new Error('WhatsOnChain network is invalid.')
     }
     const properties = plainDataProperties(config, 'WhatsOnChain config')
@@ -100,10 +104,10 @@ export default class SdkWhatsOnChain implements ChainTracker {
     this.network = network
     if (network === 'ttn') {
       this.URL = 'https://api.woc-ttn.bsvblockchain.tech/v1/bsv/test'
-    } else if (network === 'tstn') {
-      // tstn has no WhatsOnChain / explorer service. The instance is constructed for
-      // interface completeness but is not registered as a Services provider, so this URL
-      // is never used for requests.
+    } else if (network === 'tstn' || network === 'regtest') {
+      // tstn and regtest have no WhatsOnChain / explorer service. The instance is constructed for
+      // interface completeness but is not registered as a Services provider, and `request`
+      // refuses to send anything for it, so a relative URL can never reach the page's origin.
       this.URL = ''
     } else {
       this.URL = `https://api.whatsonchain.com/v1/bsv/${network}`
@@ -113,10 +117,21 @@ export default class SdkWhatsOnChain implements ChainTracker {
     this.requestTimeoutMsecs = requestTimeoutMsecs as number
   }
 
+  /**
+   * False for networks with no WhatsOnChain service (tstn, regtest). Every request made by
+   * such an instance is refused.
+   */
+  get isAvailable(): boolean {
+    return this.URL !== ''
+  }
+
   protected async request<T, Data = unknown>(
     url: string,
     options: HttpClientRequestOptions<Data>
   ): Promise<HttpClientResponse<T>> {
+    if (!this.isAvailable) {
+      throw new Error(`WhatsOnChain has no service for network '${this.network}'.`)
+    }
     const timeoutSignal = AbortSignal.timeout(this.requestTimeoutMsecs)
     const signal = options.signal == null ? timeoutSignal : AbortSignal.any([options.signal, timeoutSignal])
     return await this.httpClient.request<T, Data>(url, { ...options, signal })

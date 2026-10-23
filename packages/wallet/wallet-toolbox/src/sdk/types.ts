@@ -14,7 +14,7 @@ export interface OutPoint {
   vout: number
 }
 
-export type Chain = 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'mock'
+export type Chain = 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest' | 'mock'
 
 /**
  * Initial status (attempts === 0):
@@ -179,13 +179,29 @@ export const specOpInvalidChange = '5a76fd430a311f8bc0553859061710a4475c19fed46e
 export const specOpSetWalletChangeParams = 'a4979d28ced8581e9c1c92f1001cc7cb3aabf8ea32e10888ad898f0a509a3929'
 
 /**
+ * `listOutputs` special operation basket name value.
+ *
+ * Lists outputs from every basket in the namespace given by tag 0 (a basket matches when its
+ * name is that tag followed by a space and more), for permission modules that keep one basket
+ * per asset, such as `p color`. Includes unspent outputs of signed transactions, including those
+ * awaiting broadcast, and outputs reserved as an input of a pending (`unsigned`, `unprocessed`,
+ * `nosend` or `sending`) action with `spendable` false. Spent outputs are excluded. Results are
+ * ordered by txid and vout and are not paged.
+ */
+export const specOpBasketPrefixOutputs = 'b9184a72141e6a4d3d148c67a6d0ad92864a4d85290579ea5bef8bd62eb01b6f'
+
+/**
  * @param basket Output basket name value.
  * @returns true iff the `basket` name is a reserved `listOutputs` special operation identifier.
  */
 export function isListOutputsSpecOp(basket: string): boolean {
-  return [specOpWalletBalance, specOpWalletManagedUtxos, specOpInvalidChange, specOpSetWalletChangeParams].includes(
-    basket
-  )
+  return [
+    specOpWalletBalance,
+    specOpWalletManagedUtxos,
+    specOpInvalidChange,
+    specOpSetWalletChangeParams,
+    specOpBasketPrefixOutputs
+  ].includes(basket)
 }
 
 /**

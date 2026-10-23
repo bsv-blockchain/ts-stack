@@ -66,6 +66,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
   /packages\/wallet\/btms\/src\/types\.ts$/,
   /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
+  /packages\/wallet\/color-permission-module\/src\/types\.ts$/,
   // CHIRP's package entry point is a pure re-export barrel and its types module
   // emits declarations only. The executable CLI remains instrumented and is
   // intentionally not part of this exact exclusion.
@@ -76,6 +77,15 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // patch-coverage boundary.
   /packages\/content\/lch\/src\/index\.ts$/,
   /packages\/content\/lch\/src\/types\.ts$/,
+  // WebRTPay's server entry point is a pure re-export barrel and its signaling
+  // types module emits declarations only. Executable source, the relay CLI
+  // included, remains in the patch-coverage boundary.
+  /packages\/messaging\/webrtpay\/server\/index\.ts$/,
+  /packages\/messaging\/webrtpay\/src\/signaling\/types\.ts$/,
+  // The WebRTPay demo is an example program, not package source: it imports the
+  // built package by name and is run by hand, so package coverage, collected
+  // from src/ and server/, never instruments it.
+  /packages\/messaging\/webrtpay\/examples\/demo-node\.ts$/,
   // These ChainTracks modules emit no executable statements: two contain
   // interfaces/type-only imports and the mobile entry point only re-exports
   // platform-safe implementations. Keep the exclusions exact so executable

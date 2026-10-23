@@ -4,7 +4,7 @@ title: '@bsv/lch'
 kind: package
 domain: content
 npm: '@bsv/lch'
-version: '0.2.1'
+version: '0.2.2'
 last_updated: '2026-09-18'
 last_verified: '2026-09-18'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ tags: ['content', 'licensing', 'brc-170', 'odrl', 'c2pa', 'chirp', 'uhrp']
 
 # @bsv/lch
 
-This source candidate declares SDK peer `^2.4.1 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

@@ -8,6 +8,7 @@ import {
   type WalletResultBEEF,
   type WalletResultTransaction
 } from './WalletResultBEEF.js'
+import { isCanonicalDecimal, isModuleBalanceQuery } from './moduleBalanceQuery.js'
 import { isCanonicalDERSignature, isValidCompressedPublicKey } from './Secp256k1Validation.js'
 import {
   base64ToBytes,
@@ -2078,9 +2079,19 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
 }
 
 function validateListOutputs(result: UnknownRecord, call: string, request?: unknown): void {
+  const requestArgs = requestRecord(request)
+  if (isModuleBalanceQuery(requestArgs?.basket)) {
+    if (!isCanonicalDecimal(result.totalOutputs)) {
+      invalid(call, 'totalOutputs', 'canonical decimal text for a module balance query')
+    }
+    if (!arrayIsArray(result.outputs) || result.outputs.length !== 0) {
+      invalid(call, 'outputs', 'an empty array for a module balance query')
+    }
+    if (result.BEEF !== undefined) invalid(call, 'BEEF', 'absent for a module balance query')
+    return
+  }
   const outputs = validateListResult(result, call, 'totalOutputs', 'outputs', request)
   const parsedBeef = result.BEEF === undefined ? undefined : beef(result.BEEF, call, 'BEEF')
-  const requestArgs = requestRecord(request)
   const requestedTags: string[] = []
   if (arrayIsArray(requestArgs?.tags)) {
     for (let index = 0; index < requestArgs.tags.length; index++) {

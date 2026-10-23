@@ -1349,10 +1349,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ##### Function: copyValidatedMonitorHeader
 
 ```ts
-export function copyValidatedMonitorHeader(value: unknown, name = "header", requireProofOfWork = true): BlockHeader
+export function copyValidatedMonitorHeader(value: unknown, name = "header", requireProofOfWork = true, chain?: Chain): BlockHeader
 ```
 
-See also: [BlockHeader](./client.md#interface-blockheader)
+See also: [BlockHeader](./client.md#interface-blockheader), [Chain](./client.md#type-chain)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 

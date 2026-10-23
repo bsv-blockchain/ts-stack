@@ -1,5 +1,11 @@
 import { mockUnderlyingWallet, MockedBSV_SDK } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager, PermissionsManagerConfig, PermissionsModule } from '../WalletPermissionsManager'
+import {
+  WalletPermissionsManager,
+  PermissionsManagerConfig,
+  PermissionsModule,
+  PermissionsModuleRequest
+} from '../WalletPermissionsManager'
+import { Utils, type CreateActionArgs } from '@bsv/sdk'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -739,6 +745,68 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(testModule.onResponse).toHaveBeenCalled()
     })
 
+    it('encrypts P-basket custom instructions once, after the module chain', async () => {
+      const seen: Array<string | undefined> = []
+      const testModule: PermissionsModule = {
+        onRequest: jest.fn(async req => {
+          const args = req.args as CreateActionArgs
+          seen.push(...(args.outputs ?? []).map(output => output.customInstructions))
+          return {
+            args: {
+              ...args,
+              outputs: [
+                ...(args.outputs ?? []),
+                {
+                  lockingScript: 'ef',
+                  satoshis: 1,
+                  basket: 'p bottle change',
+                  customInstructions: 'module',
+                  outputDescription: 'Module output'
+                }
+              ]
+            }
+          }
+        }),
+        onResponse: jest.fn(async res => res)
+      }
+      const manager = new WalletPermissionsManager(underlying, 'customToken.domain.com', {
+        permissionModules: { bottle: testModule },
+        seekSpendingPermissions: false,
+        seekBasketInsertionPermissions: false,
+        encryptWalletMetadata: true
+      })
+      const encrypted = (text: string): string => Utils.toBase64([0xee, ...Utils.toArray(text, 'utf8')])
+      underlying.encrypt.mockImplementation(async ({ plaintext }: { plaintext: number[] }) => ({
+        ciphertext: [0xee, ...plaintext]
+      }))
+      underlying.createAction.mockResolvedValue({ txid: 'abc123', tx: [] })
+
+      await manager.createAction(
+        {
+          description: 'Test action',
+          outputs: [
+            {
+              lockingScript: 'ab',
+              satoshis: 1,
+              basket: 'p bottle token-data',
+              customInstructions: 'caller',
+              outputDescription: 'Caller output'
+            },
+            { lockingScript: 'cd', satoshis: 1, customInstructions: 'plain', outputDescription: 'Plain output' }
+          ]
+        },
+        'app.com'
+      )
+
+      expect(seen).toEqual(['caller', encrypted('plain')])
+      const sent = underlying.createAction.mock.calls[0][0] as CreateActionArgs
+      expect(sent.outputs?.map(output => output.customInstructions)).toEqual([
+        encrypted('caller'),
+        encrypted('plain'),
+        encrypted('module')
+      ])
+    })
+
     it('should chain multiple P-modules in correct order: req1->req2->req3 then res3->res2->res1', async () => {
       const callOrder: string[] = []
 
@@ -1379,5 +1447,195 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       ).rejects.toThrow(/more than once/)
       expect(underlying.getPublicKey).toHaveBeenCalledTimes(1)
     })
+  })
+
+  describe('P-Module signAction Hooks', () => {
+    const TOKEN_UNLOCK = '5151'
+    const TOKEN_SPENDS = { 0: { unlockingScript: TOKEN_UNLOCK } }
+
+    /** Records each call; optionally adds a token input at createAction and unlocks it at signAction. */
+    function recordingModule(name: string, calls: string[], addsTokenInput = false) {
+      return {
+        onRequest: jest.fn(async (req: PermissionsModuleRequest) => {
+          calls.push(`${name} request ${req.method}`)
+          const args = req.args as any
+          if (addsTokenInput && req.method === 'createAction') {
+            const tokenInput = { outpoint: `${'cd'.repeat(32)}.0`, unlockingScriptLength: 2, inputDescription: 'Token' }
+            return { args: { ...args, inputs: [...(args.inputs ?? []), tokenInput] } }
+          }
+          if (addsTokenInput && req.method === 'signAction') {
+            return { args: { ...args, spends: { ...args.spends, ...TOKEN_SPENDS } } }
+          }
+          return { args }
+        }),
+        onResponse: jest.fn(async (res: unknown, context: { method: string; originator: string }) => {
+          calls.push(`${name} response ${context.method}`)
+          return res
+        })
+      }
+    }
+
+    function managerWith(permissionModules: Record<string, PermissionsModule>) {
+      return new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules,
+        seekSpendingPermissions: false,
+        seekPermissionWhenApplyingActionLabels: false
+      })
+    }
+
+    function sendArgs(labels: string[], options: Record<string, boolean> = {}) {
+      return {
+        description: 'Token send',
+        labels,
+        outputs: [{ lockingScript: '51', satoshis: 1, outputDescription: 'Recipient' }],
+        options
+      }
+    }
+
+    /** Signs inside a one-call createAction, or through a separate public signAction. */
+    async function sign(
+      manager: WalletPermissionsManager,
+      path: 'createAction' | 'signAction',
+      labels: string[],
+      options: Record<string, boolean> = {}
+    ) {
+      if (path === 'createAction') return await manager.createAction(sendArgs(labels, options), 'app.com')
+      const created = await manager.createAction(sendArgs(labels, { ...options, signAndProcess: false }), 'app.com')
+      return await manager.signAction({ reference: created.signableTransaction!.reference, spends: {} }, 'app.com')
+    }
+
+    it('passes a public signAction through the modules that handled its createAction', async () => {
+      const calls: string[] = []
+      const first = recordingModule('first', calls, true)
+      const second = recordingModule('second', calls)
+      const manager = managerWith({ first, second })
+      const created = await manager.createAction(
+        sendArgs(['p first plan', 'p second plan'], { signAndProcess: false }),
+        'app.com'
+      )
+      calls.length = 0
+
+      const result = await manager.signAction(
+        { reference: created.signableTransaction!.reference, spends: {} },
+        'app.com'
+      )
+
+      expect(calls).toEqual([
+        'first request signAction',
+        'second request signAction',
+        'second response signAction',
+        'first response signAction'
+      ])
+      const action = {
+        reference: created.signableTransaction!.reference,
+        transaction: expect.anything(),
+        noSend: false,
+        createArgs: expect.objectContaining({
+          labels: expect.arrayContaining(['p first plan', 'p second plan']),
+          outputs: [expect.objectContaining({ lockingScript: '51' })]
+        })
+      }
+      expect(second.onRequest).toHaveBeenLastCalledWith({
+        method: 'signAction',
+        args: expect.objectContaining({ spends: TOKEN_SPENDS }),
+        originator: 'app.com',
+        action
+      })
+      expect(underlying.signAction).toHaveBeenCalledWith(expect.objectContaining({ spends: TOKEN_SPENDS }), 'app.com')
+      expect(first.onResponse).toHaveBeenLastCalledWith(result, { method: 'signAction', originator: 'app.com', action })
+    })
+
+    it('tells signAction hooks the action is noSend', async () => {
+      const calls: string[] = []
+      const token = recordingModule('token', calls, true)
+      const manager = managerWith({ token })
+
+      await manager.createAction(sendArgs(['p token plan'], { noSend: true }), 'app.com')
+
+      expect(token.onRequest).toHaveBeenLastCalledWith(
+        expect.objectContaining({ method: 'signAction', action: expect.objectContaining({ noSend: true }) })
+      )
+      expect(token.onResponse).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ method: 'signAction', action: expect.objectContaining({ noSend: true }) })
+      )
+    })
+
+    it('runs the same hooks when createAction signs the action itself', async () => {
+      const calls: string[] = []
+      const token = recordingModule('token', calls, true)
+      const manager = managerWith({ token })
+
+      const result = await manager.createAction(sendArgs(['p token plan']), 'app.com')
+
+      expect(calls).toEqual([
+        'token request createAction',
+        'token response createAction',
+        'token request signAction',
+        'token response signAction'
+      ])
+      expect(underlying.signAction).toHaveBeenCalledWith(
+        expect.objectContaining({ spends: TOKEN_SPENDS, options: expect.objectContaining({ returnTXIDOnly: false }) }),
+        'app.com'
+      )
+      expect(result.txid).toBe('ab'.repeat(32))
+      expect(result.signableTransaction).toBeUndefined()
+    })
+
+    it('does not call modules when signing an action created without them', async () => {
+      const calls: string[] = []
+      const manager = managerWith({ token: recordingModule('token', calls, true) })
+
+      await sign(manager, 'signAction', [])
+
+      expect(calls).toEqual([])
+    })
+
+    it.each(['createAction', 'signAction'] as const)(
+      'aborts the action when a module rejects its signAction (%s path)',
+      async path => {
+        const token: PermissionsModule = {
+          onRequest: jest.fn(async req => {
+            if (req.method === 'signAction') throw new Error('Token input is no longer spendable')
+            return { args: req.args }
+          }),
+          onResponse: jest.fn(async res => res)
+        }
+        const manager = managerWith({ token })
+
+        await expect(sign(manager, path, ['p token plan'])).rejects.toThrow('Token input is no longer spendable')
+        expect(underlying.signAction).not.toHaveBeenCalled()
+        expect(underlying.abortAction).toHaveBeenCalledTimes(1)
+      }
+    )
+
+    it.each(['createAction', 'signAction'] as const)(
+      'reports a module response failure without aborting the signed action (%s path)',
+      async path => {
+        const token: PermissionsModule = {
+          onRequest: jest.fn(async req => ({ args: req.args })),
+          onResponse: jest.fn(async (res, context) => {
+            if (context.method === 'signAction') throw new Error('Overlay submission failed')
+            return res
+          })
+        }
+        const manager = managerWith({ token })
+
+        await expect(sign(manager, path, ['p token plan'])).rejects.toThrow('Overlay submission failed')
+        expect(underlying.signAction).toHaveBeenCalledTimes(1)
+        expect(underlying.abortAction).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each(['createAction', 'signAction'] as const)(
+      'signs a BRC-177 protected action through the built-in nosend module (%s path)',
+      async path => {
+        const manager = managerWith({})
+
+        const result = await sign(manager, path, ['p nosend expiry seconds 30'], { noSend: true })
+
+        expect(result.txid).toBe('ab'.repeat(32))
+      }
+    )
   })
 })

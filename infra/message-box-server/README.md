@@ -12,6 +12,22 @@ The service is distributed as a container; it is not a public npm package.
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for all runtime ceilings, BRC-105 pricing, capacity evidence, and HPA prerequisites.
 
+## Privacy Notice
+
+Message Box encrypts message content end to end between sender and recipient,
+so the host operator cannot read what you send. Private keys never leave your
+wallet, and the server returns messages only after it authenticates the
+recipient's identity key.
+
+To deliver messages, the operator can still see some metadata: when messages
+are sent and received, message size, and which identity keys (pseudonyms)
+exchange messages with each other, and the IP addresses that connect. Identity
+keys are not names, but repeated use can link activity over time.
+
+This balance keeps delivery simple and reliable while keeping content private.
+If unlinkability matters to you, use separate identity keys for each context
+or run your own Message Box server.
+
 ## Runtime model
 
 - Node.js 24

@@ -172,7 +172,7 @@ export default class LocalKVStore {
     return { protocolID: [2, this.context], keyID: key }
   }
 
-  private async getOutputs(key: string, limit?: number): Promise<ListOutputsResult> {
+  private async getOutputs(key: string, limit?: number): Promise<ListOutputsResult & { totalOutputs: number }> {
     validateKVStoreKey(key)
     const results = assertSafeWalletValue(
       await this.wallet.listOutputs(
@@ -187,12 +187,14 @@ export default class LocalKVStore {
       ),
       'listOutputs'
     )
+    const totalOutputs = results?.totalOutputs
     if (
       results == null ||
       !Array.isArray(results.outputs) ||
-      !Number.isSafeInteger(results.totalOutputs) ||
-      results.totalOutputs < results.outputs.length ||
-      results.totalOutputs > MAX_LOCAL_OUTPUTS ||
+      typeof totalOutputs !== 'number' ||
+      !Number.isSafeInteger(totalOutputs) ||
+      totalOutputs < results.outputs.length ||
+      totalOutputs > MAX_LOCAL_OUTPUTS ||
       results.outputs.length > MAX_LOCAL_OUTPUTS
     ) {
       throw new Error('Wallet returned an invalid KVStore output list')
@@ -200,7 +202,7 @@ export default class LocalKVStore {
     if (results.outputs.length > 0) {
       boundedBytes(results.BEEF, 'Wallet KVStore BEEF', MAX_LOCAL_BEEF_BYTES)
     }
-    return results
+    return { ...results, totalOutputs }
   }
 
   /**

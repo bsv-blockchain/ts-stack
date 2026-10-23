@@ -26,7 +26,7 @@
     {
       "id": "docs-site-bundled-materials",
       "path": "governance/docs-site-bundled-materials.json",
-      "sha256": "afe1bacd45b0bda408a1db3b19e1783805071938023d384a7ad1b071a0808e4a"
+      "sha256": "cad8f098c3aecea5530f956c356e15c03c4eb2438726fb9fb56c64b0a4d30564"
     },
     {
       "id": "license-continuity",
@@ -963,6 +963,11 @@
     },
     {
       "path": "infra/wallet-infra",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/webrtpay-relay",
       "materials": "all",
       "reason": "container distribution notice bundle"
     }

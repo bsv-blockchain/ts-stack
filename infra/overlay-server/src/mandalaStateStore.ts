@@ -1,23 +1,22 @@
-import type { MandalaStorageManager } from '@bsv/overlay-topics'
+import type { MandalaStateStore, MandalaStorageManager } from '@bsv/overlay-topics'
 
-type MandalaStore = Pick<
-  MandalaStorageManager,
-  'getAssetState' | 'getTokenRow' | 'findAdminHistoryByAssetId'
->
-
-/** Resolve lazily because Mongo lookup configuration initializes the shared store. */
-export function createMandalaStateStore(resolve: () => MandalaStore) {
+/**
+ * The topic manager is constructed before lookup configuration assigns the
+ * shared manager, so every call resolves that manager at use time.
+ */
+export function createMandalaStateStore(resolve: () => MandalaStorageManager): MandalaStateStore {
   return {
-    getAssetState: async (assetId: string) => await resolve().getAssetState(assetId),
-    getTokenRow: async (txid: string, outputIndex: number) =>
-      await resolve().getTokenRow(txid, outputIndex),
-    // Use the existing history API to support the currently published store.
-    isAdminOutpoint: async (assetId: string, txid: string, outputIndex: number) => {
-      const history = await resolve().findAdminHistoryByAssetId(assetId)
-      return history.some(
-        entry =>
-          entry.assetId === assetId && entry.txid === txid && entry.outputIndex === outputIndex
-      )
-    }
+    getAssetState: async tokenId => await resolve().getAssetState(tokenId),
+    getTokenRow: async (txid, outputIndex) => await resolve().getTokenRow(txid, outputIndex),
+    getAuthorityRow: async (txid, outputIndex) =>
+      await resolve().getAuthorityRow(txid, outputIndex),
+    getOwnerJournal: async (txid, outputIndex, topic) =>
+      await resolve().getOwnerJournal(txid, outputIndex, topic),
+    recordOwners: async rows => await resolve().recordOwners(rows),
+    repairOwnerRow: async journal => await resolve().repairOwnerRow(journal),
+    takeToken: async (txid, outputIndex) => await resolve().takeToken(txid, outputIndex),
+    takeAuthority: async (txid, outputIndex) => await resolve().takeAuthority(txid, outputIndex),
+    adjustBalance: async (identityKey, delta) => await resolve().adjustBalance(identityKey, delta),
+    circulatingSupply: async tokenId => await resolve().circulatingSupply(tokenId)
   }
 }

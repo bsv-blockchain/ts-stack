@@ -112,3 +112,15 @@ recreated the same pathname. Heartbeats keep live locks current, but an orphan
 left by a crashed process requires operator removal after every writer using
 the shared `CHIRP_DATA_DIR` has been stopped. Never delete a lock while any
 CHIRP replica may still be writing.
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

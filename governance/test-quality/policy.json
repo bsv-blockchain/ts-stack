@@ -42,8 +42,10 @@
       "packages/overlays/btms-backend/package.json",
       "packages/wallet/btms-permission-module/package.json",
       "packages/wallet/ecpm-permission-module/package.json",
+      "packages/wallet/color-permission-module/package.json",
       "packages/network/chirp/package.json",
-      "packages/content/lch/package.json"
+      "packages/content/lch/package.json",
+      "packages/messaging/webrtpay/package.json"
     ],
     "suites": [
       {
@@ -442,6 +444,17 @@
         ]
       },
       {
+        "path": "packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts",
+        "manifest": "packages/wallet/color-permission-module/package.json",
+        "risk": "critical",
+        "boundary": "Untrusted application plans, signature envelopes and receipt instructions that select and sign module-held token inputs",
+        "target": "BRC-207 plan label encoding and the strict JSON reader for every plan, envelope and receipt",
+        "invariants": [
+          "Every valid plan round-trips through its labels in any order among unrelated labels.",
+          "The strict JSON reader returns the same value as JSON.parse for every serialized JSON value."
+        ]
+      },
+      {
         "path": "packages/network/chirp/test/codec.property.test.ts",
         "manifest": "packages/network/chirp/package.json",
         "risk": "critical",
@@ -518,6 +531,33 @@
         ],
         "owner": "ts-stack-maintainers",
         "reviewBy": "2026-10-12"
+      },
+      {
+        "path": "packages/messaging/webrtpay/test/codec.property.test.ts",
+        "manifest": "packages/messaging/webrtpay/package.json",
+        "risk": "high",
+        "boundary": "Offer and answer codes and compact SDPs scanned from QR codes or pasted by strangers",
+        "target": "Code and compact-SDP round trips, and decoder totality on arbitrary, hostile or mutated input",
+        "invariants": [
+          "Arbitrary offer and answer fields round-trip through a code unchanged.",
+          "Arbitrary bytes, text, hostile TLVs and mutated valid codes only ever throw WebRTPayError.",
+          "Arbitrary candidate lists and transport parameters round-trip through the compact SDP form.",
+          "SDP text that cannot be compacted round-trips byte for byte through the fallback form."
+        ]
+      },
+      {
+        "path": "packages/messaging/webrtpay/test/frames.property.test.ts",
+        "manifest": "packages/messaging/webrtpay/package.json",
+        "risk": "critical",
+        "boundary": "Data channel frames from an unauthenticated or authenticated WebRTC peer",
+        "target": "Frame chunking round trips, and the decoder's sequence, size and JSON structure bounds on hostile streams",
+        "invariants": [
+          "Random message sequences survive chunking and reassembly whole and in order.",
+          "A stream that starts at any sequence number other than 0 is a protocol error.",
+          "The size cap fires on exactly the first frame whose running total passes it.",
+          "Random, corrupted, truncated, dropped, duplicated and reordered frames only ever throw WebRTPayError.",
+          "Exactly the JSON objects within the depth and structural-token limits are accepted, for any text."
+        ]
       }
     ],
     "exclusions": [

@@ -28,6 +28,28 @@ See [identity integration](../../docs/guides/identity-did-vc.md) and
 [migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
 This is a source candidate; publication and deployment are separate actions.
 
+## Module balances and listOutputs spendability (4.0 candidate)
+
+`ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`. A
+BRC-112 module balance query (`p <module> balance <basket>`) returns the exact
+balance as decimal text, with no outputs and no BEEF. Every other query still
+returns a count. The binary `listOutputs` response carries that text and each
+output's `spendable` byte, so both ends of a binary wallet connection must be
+on 4.0.
+
+Code that uses `totalOutputs` as a number narrows it first:
+
+```ts
+// 3.x
+const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
+const pages = Math.ceil(totalOutputs / 100)
+
+// 4.0
+const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
+if (typeof totalOutputs !== 'number') throw new Error('Expected an output count')
+const pages = Math.ceil(totalOutputs / 100)
+```
+
 ## Wallet integration
 
 For application-to-wallet integrations, the SDK exposes the BRC-100 `WalletClient` interface. BSV Desktop and BSV Browser are the BSV Association reference implementations for this interface; vendor distributions such as Babbage's Metanet Desktop / Metanet Explorer and Hudos Browser can implement the same interface with their own branding and service defaults.
@@ -325,6 +347,41 @@ than that the script is invalid.
 
 - **Identity**: Comprehensive identity management system supporting identity verification and certificate management.
 
+  `IdentityClient.resolveByAttributes({ attributes: { any: query } }, true)`
+  searches saved contact names and keys with case-insensitive substring matching.
+  Named contact selectors retain exact case-insensitive matching. All supplied
+  selectors must match; empty or malformed selectors never match a contact.
+  Sequential mode retains the contact-hit shortcut; `parallel: true` includes
+  matching contacts alongside fresh public results, with one local override per
+  matching identity key. Contacts are personal assertions, not proof of a
+  third-party certification.
+
+  Contacts are disabled by default. Existing boolean and object callers retain
+  their contact-error behavior. Search UIs can opt into bounded contact recovery:
+
+  ```ts
+  const identities = await client.resolveByAttributes(
+    { attributes: { any: query } },
+    {
+      useContacts: true,
+      contactErrorMode: 'fallback',
+      contactTimeoutMs: 2000,
+      onContactError: () => showContactWarning()
+    }
+  )
+  ```
+
+  Fallback uses a two-second contact deadline unless overridden by an integer
+  from 1 to 60000 milliseconds. It continues public discovery after a contact
+  error or timeout and preserves public-discovery errors and certificate checks.
+  The same options work with `resolveByIdentityKey`. A deadline bounds this
+  call's wait; it cannot cancel a wallet request or dismiss its permission prompt.
+  Render an error separately from a successful empty result, and use the callback
+  for a partial-result warning. Callback exceptions propagate. Omit recovery
+  options to retain strict legacy behavior; omit `useContacts` when contacts are
+  unnecessary. The options require this SDK candidate; upgrading a wallet does
+  not upgrade an application's bundled SDK or its React search component.
+
 - **Key Value Store**: Distributed key-value store for decentralized data storage and retrieval.
 
 Identity publication rejects a certificate unless its certifier signature
@@ -560,3 +617,16 @@ option; older SDKs retain their existing strict behavior. This additive API is
 included in the SDK 3.1 source candidate. The separate SDK3 identity migration
 still applies; SDK2 applications need an additive backport or a coordinated SDK3
 upgrade. No BRC-100 wire or wallet-data changes are introduced by this option.
+
+## Pre-construction wallet reviews
+
+The 3.2.1 candidate accepts a storage pre-construction double-spend review through
+`HTTPWalletJSON` only for `createAction` with explicit inputs. It requires one
+empty attempted-TXID result, no constructed-action fields, and complete competing
+transactions that spend those requested outpoints. Malformed, unrelated and
+ID-only evidence remains invalid. The existing bounded retry helper synchronizes
+the winning transactions before re-invoking the operation to read fresh state.
+Use a wallet with the matching Toolbox parser fix. The binary wire format is
+unchanged and cannot carry structured review evidence; choose a compatible
+transport before financial operations rather than retrying an ambiguous failure.
+No BRC-100 call or storage-schema migration is required.

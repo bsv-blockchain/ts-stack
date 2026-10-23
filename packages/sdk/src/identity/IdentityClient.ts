@@ -211,8 +211,28 @@ async function yieldToEventLoop(): Promise<void> {
   return await new Promise<void>(resolve => setTimeout(resolve, 0))
 }
 
+/** Optional recovery policy for personal contact enrichment, never for public discovery. */
+export interface ContactResolutionOptions {
+  /**
+   * Default `throw` preserves contact failures. Opt into `fallback` to continue public
+   * discovery without contact overrides after a contact failure or timeout.
+   */
+  contactErrorMode?: 'throw' | 'fallback'
+  /**
+   * Contact-only deadline, an integer from 1 to 60000 milliseconds. Default: 2000 in
+   * fallback mode, otherwise no deadline. This bounds the caller's wait; it cannot
+   * cancel an underlying wallet request or dismiss a pending wallet permission prompt.
+   */
+  contactTimeoutMs?: number
+  /**
+   * Receives the original contact failure (or a timeout Error) when fallback is used.
+   * Use it to display a partial-result warning. Callback exceptions propagate.
+   */
+  onContactError?: (error: unknown) => void
+}
+
 /** Options for {@link IdentityClient.resolveByIdentityKey}. */
-export interface ResolveByIdentityKeyOptions {
+export interface ResolveByIdentityKeyOptions extends ContactResolutionOptions {
   /**
    * Opt-in to consulting personal contacts before/alongside the overlay. Default `false`.
    *
@@ -240,7 +260,7 @@ export interface ResolveByIdentityKeyOptions {
 }
 
 /** Options for {@link IdentityClient.resolveByAttributes}. */
-export interface ResolveByAttributesOptions {
+export interface ResolveByAttributesOptions extends ContactResolutionOptions {
   /**
    * Opt-in to consulting personal contacts before/alongside the overlay. Default `false`.
    * See {@link ResolveByIdentityKeyOptions.useContacts}.
@@ -257,21 +277,71 @@ export interface ResolveByAttributesOptions {
   parallel?: boolean
 }
 
-/** Normalize either legacy boolean / new options object into a canonical { useContacts, parallel }. */
+interface NormalizedResolutionOptions {
+  useContacts: boolean
+  parallel: boolean
+  contactErrorMode: 'throw' | 'fallback'
+  contactTimeoutMs?: number
+  onContactError?: (error: unknown) => void
+}
+
+const RESOLUTION_OPTION_FIELDS = new Set([
+  'useContacts',
+  'overrideWithContacts',
+  'parallel',
+  'contactErrorMode',
+  'contactTimeoutMs',
+  'onContactError'
+])
+
+function normalizeContactPolicy(
+  options: Record<string, unknown>
+): Omit<NormalizedResolutionOptions, 'useContacts' | 'parallel'> {
+  const mode = identityData(options, 'contactErrorMode')
+  const contactErrorMode = mode === undefined ? 'throw' : mode
+  const contactTimeoutMs = identityData(options, 'contactTimeoutMs')
+  const onContactError = identityData(options, 'onContactError')
+  if (contactErrorMode !== 'throw' && contactErrorMode !== 'fallback') {
+    throw new Error('Invalid identity options: contactErrorMode must be throw or fallback')
+  }
+  if (
+    contactTimeoutMs !== undefined &&
+    (typeof contactTimeoutMs !== 'number' ||
+      !Number.isInteger(contactTimeoutMs) ||
+      contactTimeoutMs < 1 ||
+      contactTimeoutMs > 60000)
+  ) {
+    throw new Error('Invalid identity options: contactTimeoutMs must be an integer from 1 to 60000')
+  }
+  if (onContactError !== undefined && typeof onContactError !== 'function') {
+    throw new Error('Invalid identity options: onContactError must be a function')
+  }
+  return {
+    contactErrorMode,
+    contactTimeoutMs:
+      (contactTimeoutMs as number | undefined) ??
+      (contactErrorMode === 'fallback' ? 2000 : undefined),
+    onContactError: onContactError as ((error: unknown) => void) | undefined
+  }
+}
+
+/** Normalize legacy booleans and validate the additive contact recovery policy. */
 function normalizeOpts(
   raw: boolean | ResolveByIdentityKeyOptions | ResolveByAttributesOptions | undefined
-): { useContacts: boolean; parallel: boolean } {
-  if (raw === undefined) return { useContacts: false, parallel: false }
-  if (typeof raw === 'boolean') return { useContacts: raw, parallel: false }
+): NormalizedResolutionOptions {
+  if (raw === undefined || typeof raw === 'boolean') {
+    return { useContacts: raw === true, parallel: false, contactErrorMode: 'throw' }
+  }
   const options = identityRecord(raw, 'options')
   for (const key of Reflect.ownKeys(options)) {
-    if (key !== 'useContacts' && key !== 'overrideWithContacts' && key !== 'parallel') {
+    if (!RESOLUTION_OPTION_FIELDS.has(String(key))) {
       throw new Error(`Invalid identity options: unexpected field ${String(key)}`)
     }
   }
   const useContacts = identityData(options, 'useContacts')
   const overrideWithContacts = identityData(options, 'overrideWithContacts')
   const parallel = identityData(options, 'parallel')
+  const contactPolicy = normalizeContactPolicy(options)
   for (const [field, value] of [
     ['useContacts', useContacts],
     ['overrideWithContacts', overrideWithContacts],
@@ -283,7 +353,8 @@ function normalizeOpts(
   }
   return {
     useContacts: (overrideWithContacts ?? useContacts ?? false) as boolean,
-    parallel: parallel === true
+    parallel: parallel === true,
+    ...contactPolicy
   }
 }
 
@@ -304,6 +375,32 @@ export class IdentityClient {
     this.#wallet = wallet ?? new WalletClient()
     this.#originator = originator
     this.contactsManager = new ContactsManager(this.#wallet, this.#originator)
+  }
+
+  async #getResolutionContacts(
+    options: NormalizedResolutionOptions,
+    identityKey?: PubKeyHex
+  ): Promise<Contact[]> {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const contacts = this.contactsManager.getContacts(identityKey)
+      if (options.contactTimeoutMs === undefined) return await contacts
+      return await Promise.race([
+        contacts,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('Identity contact resolution timed out')),
+            options.contactTimeoutMs
+          )
+        })
+      ])
+    } catch (error) {
+      if (options.contactErrorMode === 'throw') throw error
+      options.onContactError?.(error)
+      return []
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+    }
   }
 
   /**
@@ -463,7 +560,8 @@ export class IdentityClient {
     args: DiscoverByIdentityKeyArgs,
     opts: boolean | ResolveByIdentityKeyOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const { useContacts, parallel } = normalizeOpts(opts)
+    const options = normalizeOpts(opts)
+    const { useContacts, parallel } = options
 
     // Fast path: skip contacts entirely. Default — straight overlay query,
     // no listOutputs / decrypt / cache churn.
@@ -474,7 +572,7 @@ export class IdentityClient {
     }
 
     if (!parallel) {
-      const contacts = await this.contactsManager.getContacts(args.identityKey)
+      const contacts = await this.#getResolutionContacts(options, args.identityKey)
       if (contacts.length > 0) return contacts
 
       const certificatesResult = await this.#wallet.discoverByIdentityKey(args, this.#originator)
@@ -483,7 +581,7 @@ export class IdentityClient {
     }
 
     const [contacts, certificatesResult] = await Promise.all([
-      this.contactsManager.getContacts(args.identityKey),
+      this.#getResolutionContacts(options, args.identityKey),
       this.#wallet.discoverByIdentityKey(args, this.#originator)
     ])
 
@@ -508,7 +606,8 @@ export class IdentityClient {
     args: DiscoverByAttributesArgs,
     opts: boolean | ResolveByAttributesOptions = false
   ): Promise<DisplayableIdentity[]> {
-    const { useContacts, parallel } = normalizeOpts(opts)
+    const options = normalizeOpts(opts)
+    const { useContacts, parallel } = options
 
     // Fast path: skip contacts entirely.
     if (!useContacts) {
@@ -518,7 +617,7 @@ export class IdentityClient {
     }
 
     if (!parallel) {
-      const contacts = await this.contactsManager.getContacts()
+      const contacts = await this.#getResolutionContacts(options)
       const matches = this.#matchContactsByAttributes(contacts, args)
       if (matches.length > 0) return matches
 
@@ -532,7 +631,7 @@ export class IdentityClient {
     }
 
     const [contacts, certificatesResult] = await Promise.all([
-      this.contactsManager.getContacts(),
+      this.#getResolutionContacts(options),
       this.#wallet.discoverByAttributes(args, this.#originator)
     ])
 
@@ -541,14 +640,26 @@ export class IdentityClient {
     const contactByKey = new Map<PubKeyHex, Contact>(
       contacts.map(contact => [contact.identityKey, contact] as const)
     )
-    return await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
+    const matches = this.#matchContactsByAttributes(contacts, args)
+    const matchedKeys = new Set(matches.map(contact => contact.identityKey))
+    const discovered = await IdentityClient.parseIdentitiesWithOverrides(certs, contactByKey)
+    const identities = [
+      ...matches,
+      ...discovered.filter(identity => !matchedKeys.has(identity.identityKey))
+    ]
+    if (identities.length > MAX_IDENTITY_RESULTS) {
+      throw new Error(`Identity resolution exceeded ${MAX_IDENTITY_RESULTS} results`)
+    }
+    return identities
   }
 
   /**
    * Best-effort match of contacts against a `DiscoverByAttributesArgs.attributes` shape.
    * Used by the contacts-first path of {@link resolveByAttributes} to decide whether the overlay
    * can be skipped. Compares string-valued attributes against same-named fields on the contact's
-   * decrypted record. Returns the subset of contacts that match every supplied attribute.
+   * decrypted record. The `any` selector matches a case-insensitive substring of name or
+   * identityKey. Named selectors retain exact case-insensitive matching; all supplied
+   * selectors must match. Contact assertions remain local, not certifier attestations.
    */
   #matchContactsByAttributes(contacts: Contact[], args: DiscoverByAttributesArgs): Contact[] {
     const attrs = args.attributes
@@ -570,7 +681,7 @@ export class IdentityClient {
         !hasUnsafeDisplayControl(value)
       ) {
         entries.push([key, value])
-      }
+      } else return []
     }
     if (entries.length === 0) return []
     return contacts.filter(contact => {
@@ -579,6 +690,14 @@ export class IdentityClient {
         identityKey: contact.identityKey
       }
       return entries.every(([k, v]) => {
+        if (k === 'any') {
+          const query = v.trim().toLowerCase()
+          return (
+            query.length > 0 &&
+            (contact.name.toLowerCase().includes(query) ||
+              contact.identityKey.toLowerCase().includes(query))
+          )
+        }
         const candidate = bag[k]
         return typeof candidate === 'string' && candidate.toLowerCase() === v.toLowerCase()
       })

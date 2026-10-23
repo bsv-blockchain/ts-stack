@@ -57,6 +57,11 @@ validated but is not itself proof that the intended payment policy is safe.
 
 ### BRC-162 tokens: `Bsv21Binary`
 
+`OneColor` is the BRC-162 1Color template. It reads and writes the same outputs
+as `Bsv21Binary` and also the 36-byte token id of an asset first deployed under
+BRC-161 at a nonzero output (`<txid>_<vout>`); a 36-byte id with vout 0 is
+rejected. `Bsv21Binary` is unchanged and still accepts only 32-byte ids.
+
 `Bsv21Binary` builds and reads [BRC-162](https://brc.dev/162) (BSV-21 binary)
 token outputs. A token output is a fixed prefix on an ordinary locking script:
 

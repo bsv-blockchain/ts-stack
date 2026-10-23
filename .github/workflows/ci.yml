@@ -36,7 +36,7 @@ jobs:
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
 
       - name: Test repository health controls
         run: node --test scripts/*.test.mjs
@@ -97,6 +97,21 @@ jobs:
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
       conformance: ${{ steps.scope.outputs.conformance }}
+      standard-packages: ${{ steps.lanes.outputs.standard-packages }}
+      dependent-test-packages: ${{ steps.lanes.outputs.dependent-test-packages }}
+      dependent-test-matrix: ${{ steps.lanes.outputs.dependent-test-matrix }}
+      coverage-other-packages: ${{ steps.lanes.outputs.coverage-other-packages }}
+      coverage-other-matrix: ${{ steps.lanes.outputs.coverage-other-matrix }}
+      browser-packages: ${{ steps.lanes.outputs.browser-packages }}
+      browser-matrix: ${{ steps.lanes.outputs.browser-matrix }}
+      pack-matrix: ${{ steps.lanes.outputs.pack-matrix }}
+      coverage-required: ${{ steps.lanes.outputs.coverage-required }}
+      sdk: ${{ steps.lanes.outputs.sdk }}
+      did: ${{ steps.lanes.outputs.did }}
+      wallet: ${{ steps.lanes.outputs.wallet }}
+      wallet_client: ${{ steps.lanes.outputs.wallet_client }}
+      wallet_mobile: ${{ steps.lanes.outputs.wallet_mobile }}
+      verifast: ${{ steps.lanes.outputs.verifast }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -106,7 +121,7 @@ jobs:
       - name: Use Node.js 24.x
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
 
       - name: Resolve package, mutation, documentation, conformance, and image scope
         id: scope
@@ -160,135 +175,15 @@ jobs:
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  sonar-zero-findings:
-    name: Quality gate — zero new Sonar findings
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Use Node.js 24.x
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.x
-
-      - name: Require the exact Sonar analysis to contain no new findings
-        run: >-
-          node scripts/sonar-pr-gate.mjs
-          --project bsv-blockchain_ts-stack
-          --pull-request "${{ github.event.pull_request.number }}"
-          --revision "${{ github.event.pull_request.head.sha }}"
-
-  early-gates:
-    name: Early policy gates
-    if: always()
-    needs:
-      - repository-health
-      - scope
-      - dependency-review
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Stop before installing or building when a cheap gate failed
-        env:
-          HEALTH_RESULT: ${{ needs.repository-health.result }}
-          SCOPE_RESULT: ${{ needs.scope.result }}
-          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
-        run: |
-          if [[ "$HEALTH_RESULT" != "success" ||
-                "$SCOPE_RESULT" != "success" ||
-                ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
-            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT dependency=$DEPENDENCY_RESULT"
-            exit 1
-          fi
-
-  prepare:
-    name: Build, lint, and policy
-    needs:
-      - early-gates
-      - scope
-    if: always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      direct-projects: ${{ needs.scope.outputs.direct-projects }}
-      affected-projects: ${{ needs.scope.outputs.affected-projects }}
-      build-projects: ${{ needs.scope.outputs.build-projects }}
-      standard-packages: ${{ steps.scope.outputs.standard-packages }}
-      dependent-test-packages: ${{ steps.scope.outputs.dependent-test-packages }}
-      dependent-test-matrix: ${{ steps.scope.outputs.dependent-test-matrix }}
-      coverage-other-packages: ${{ steps.scope.outputs.coverage-other-packages }}
-      coverage-other-matrix: ${{ steps.scope.outputs.coverage-other-matrix }}
-      browser-packages: ${{ steps.scope.outputs.browser-packages }}
-      browser-matrix: ${{ steps.scope.outputs.browser-matrix }}
-      coverage-required: ${{ steps.scope.outputs.coverage-required }}
-      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
-      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
-      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
-      partition-targets: ${{ needs.scope.outputs.partition-targets }}
-      sdk: ${{ steps.scope.outputs.sdk }}
-      did: ${{ steps.scope.outputs.did }}
-      wallet: ${{ steps.scope.outputs.wallet }}
-      wallet_client: ${{ steps.scope.outputs.wallet_client }}
-      wallet_mobile: ${{ steps.scope.outputs.wallet_mobile }}
-      verifast: ${{ steps.scope.outputs.verifast }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Use Node.js 24.18.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          # Exact pin: package-release-artifacts dry-run enforces
-          # governance/npm-package-supply-chain.json buildRuntime.node.
-          node-version: 24.18.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-
-      - name: Rebuild the audited workspace build tool
-        run: pnpm rebuild esbuild
-
-      - name: Reject high and critical dependency advisories
-        run: pnpm audit:security
-
-      - name: Enforce the service operations contract
-        run: pnpm ops:check
-
-      - name: Check cross-package version references
-        # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
-        # downstream deps can't reference the new versions until publish) will always
-        # report stale refs in CI. Sync-versions.mjs runs at release time to reconcile.
-        continue-on-error: true
-        run: node scripts/check-versions.mjs
-
-      - name: Check @bsv/sdk peer-dependency contract
-        # Blocking. Published packages/** libraries must declare @bsv/sdk as a
-        # peerDependency (wide range), never a regular dependency — duplicate SDK
-        # copies become incompatible nominal types for downstream consumers.
-        run: node scripts/check-sdk-peer.mjs
-
-      - name: Determine changed scope
+      - name: Plan test lanes
         # Coverage suites run only for directly changed package importers.
         # Regression/type compatibility expands through dependents; builds also
-        # include their prerequisites.
-        # The preceding repository-health dependency prevents expensive work
-        # from starting behind a predictable policy or PR-evidence failure.
-        id: scope
+        # include their prerequisites. Planning needs only Node and jq, so it
+        # runs here instead of behind the install and build.
+        id: lanes
         env:
-          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
-          AFFECTED_PROJECTS: ${{ needs.scope.outputs.affected-projects }}
+          DIRECT_PROJECTS: ${{ steps.scope.outputs.direct-projects }}
+          AFFECTED_PROJECTS: ${{ steps.scope.outputs.affected-projects }}
         run: |
           DIRECT=$(jq -r '.[].name' <<<"$DIRECT_PROJECTS")
           AFFECTED=$(jq -r '.[].name' <<<"$AFFECTED_PROJECTS")
@@ -304,9 +199,10 @@ jobs:
             --projects-json .ci-dependent-packages.json \
             --mode test)
           echo "dependent-test-packages=$DEPENDENT_TEST_PACKAGES" >> "$GITHUB_OUTPUT"
-          DEPENDENT_TEST_MATRIX=$(jq -c \
-            'if length > 12 then {include:[{shard:1,total:4},{shard:2,total:4},{shard:3,total:4},{shard:4,total:4}]} elif length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$DEPENDENT_TEST_PACKAGES")
+          DEPENDENT_TEST_MATRIX=$(node scripts/ci-shard-plan.mjs \
+            --packages-json "$DEPENDENT_TEST_PACKAGES" \
+            --durations governance/ci-lane-durations.json \
+            --lane dependent-tests)
           echo "dependent-test-matrix=$DEPENDENT_TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
           STANDARD_PACKAGES=$(node scripts/run-ci-tests.mjs \
@@ -316,9 +212,12 @@ jobs:
             --projects-json .ci-direct-packages.json \
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
-          COVERAGE_OTHER_MATRIX=$(jq -c \
-            'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
-            <<<"$COVERAGE_OTHER_PACKAGES")
+          # Packages run serially inside a shard, so plan shards from measured
+          # durations rather than package count.
+          COVERAGE_OTHER_MATRIX=$(node scripts/ci-shard-plan.mjs \
+            --packages-json "$COVERAGE_OTHER_PACKAGES" \
+            --durations governance/ci-lane-durations.json \
+            --lane coverage-other)
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
             --projects-json .ci-affected-packages.json \
@@ -328,6 +227,14 @@ jobs:
             'if length > 1 then {include:[{shard:1,total:2},{shard:2,total:2}]} else {include:[{shard:1,total:1}]} end' \
             <<<"$BROWSER_PACKAGES")
           echo "browser-matrix=$BROWSER_MATRIX" >> "$GITHUB_OUTPUT"
+          PACK_PACKAGES=$(node scripts/run-ci-tests.mjs \
+            --projects-json .ci-direct-packages.json \
+            --mode pack)
+          PACK_MATRIX=$(node scripts/ci-shard-plan.mjs \
+            --packages-json "$PACK_PACKAGES" \
+            --durations governance/ci-lane-durations.json \
+            --lane package-artifacts)
+          echo "pack-matrix=$PACK_MATRIX" >> "$GITHUB_OUTPUT"
 
           COVERAGE_REQUIRED=false
           if [ "$COVERAGE_OTHER_PACKAGES" != "[]" ] ||
@@ -362,22 +269,193 @@ jobs:
             fi
           done
 
-      - name: Verify installed CI qualification integration
-        run: node --test scripts/ci-integration/*.test.mjs
+  sonar-zero-findings:
+    name: Quality gate — zero new Sonar findings
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+
+      - name: Require the exact Sonar analysis to contain no new findings
+        run: >-
+          node scripts/sonar-pr-gate.mjs
+          --project bsv-blockchain_ts-stack
+          --pull-request "${{ github.event.pull_request.number }}"
+          --revision "${{ github.event.pull_request.head.sha }}"
+
+  early-gates:
+    name: Early policy gates
+    if: always()
+    needs:
+      - repository-health
+      - scope
+      - dependency-review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Stop before installing or building when a cheap gate failed
+        env:
+          HEALTH_RESULT: ${{ needs.repository-health.result }}
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          DEPENDENCY_RESULT: ${{ needs.dependency-review.result }}
+        run: |
+          if [[ "$HEALTH_RESULT" != "success" ||
+                "$SCOPE_RESULT" != "success" ||
+                ( "$DEPENDENCY_RESULT" != "success" && "$DEPENDENCY_RESULT" != "skipped" ) ]]; then
+            echo "::error::Early policy gate failed: health=$HEALTH_RESULT scope=$SCOPE_RESULT dependency=$DEPENDENCY_RESULT"
+            exit 1
+          fi
+
+  build:
+    name: Build workspace
+    # The build starts immediately, beside the scope job and the
+    # repository-health contract; test lanes still start only after every
+    # early gate has passed. It builds every workspace package, restoring the
+    # unchanged ones from the package build cache.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Use Node.js 24.22.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Exact pin: package-release-artifacts dry-run enforces
+          # governance/npm-package-supply-chain.json buildRuntime.node.
+          node-version: 24.22.1
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - name: Restore cached package build outputs
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build-cache
+          key: package-builds-${{ runner.os }}-${{ github.sha }}
+          restore-keys: package-builds-${{ runner.os }}-
 
       - name: Build workspace
-        env:
-          BUILD_PROJECTS: ${{ needs.scope.outputs.build-projects }}
+        # Packages whose own files, workspace dependencies and root toolchain
+        # inputs are unchanged restore their outputs; the rest build as before.
+        id: build
         run: |
+          names=$(node scripts/build-output-cache.mjs names)
+          plan=$(node scripts/build-output-cache.mjs restore --names-json "$names" --cache-directory .build-cache)
+          echo "Restored unchanged package builds: $(jq -c '.restored' <<<"$plan")"
           filters=()
-          while IFS= read -r package; do filters+=(--filter "$package"); done < <(
-            jq -r '.[].name | select(. != "docs-site" and . != "example-paymail")' <<<"$BUILD_PROJECTS"
-          )
+          while IFS= read -r package; do filters+=(--filter "$package"); done < <(jq -r '.build[]' <<<"$plan")
           if [ "${#filters[@]}" -eq 0 ]; then
             echo "No package build is affected."
           else
             pnpm -r --if-present "${filters[@]}" run build
           fi
+          saved=$(node scripts/build-output-cache.mjs save --names-json "$names" --cache-directory .build-cache)
+          echo "cache-changed=$(jq '.saved | length > 0' <<<"$saved")" >> "$GITHUB_OUTPUT"
+
+      - name: Save package build outputs
+        if: steps.build.outputs.cache-changed == 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build-cache
+          key: package-builds-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Archive build outputs
+        run: |
+          {
+            find packages -type d \( -name dist -o -name out \) -prune -print0
+            find packages -type f -name '*.tsbuildinfo' -print0
+          } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
+
+      - name: Share build outputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: build-outputs
+          path: build-outputs.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  policy:
+    name: Lint and policy
+    needs:
+      - early-gates
+      - scope
+      - build
+    if: >-
+      always() && !cancelled() && needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Use Node.js 24.22.1
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          # Exact pin: package-release-artifacts dry-run enforces
+          # governance/npm-package-supply-chain.json buildRuntime.node.
+          node-version: 24.22.1
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Rebuild the audited workspace build tool
+        run: pnpm rebuild esbuild
+
+      - name: Reject high and critical dependency advisories
+        run: pnpm audit:security
+
+      - name: Enforce the service operations contract
+        run: pnpm ops:check
+
+      - name: Check cross-package version references
+        # Non-blocking. Multi-package patch PRs (one bump touches several packages whose
+        # downstream deps can't reference the new versions until publish) will always
+        # report stale refs in CI. Sync-versions.mjs runs at release time to reconcile.
+        continue-on-error: true
+        run: node scripts/check-versions.mjs
+
+      - name: Check @bsv/sdk peer-dependency contract
+        # Blocking. Published packages/** libraries must declare @bsv/sdk as a
+        # peerDependency (wide range), never a regular dependency — duplicate SDK
+        # copies become incompatible nominal types for downstream consumers.
+        run: node scripts/check-sdk-peer.mjs
+
+      - name: Verify installed CI qualification integration
+        run: node --test scripts/ci-integration/*.test.mjs
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
 
       - name: Typecheck workspace
         env:
@@ -409,29 +487,61 @@ jobs:
             pnpm -r --if-present "${filters[@]}" run format:check
           fi
 
-      - name: Archive build outputs
+  prepare:
+    name: Start test lanes
+    # Test lanes fan out from here once the early gates pass and the shared
+    # build exists. Lint and policy run beside them and gate the merge.
+    needs:
+      - early-gates
+      - scope
+      - build
+    if: >-
+      always() && !cancelled() && needs.early-gates.result == 'success' &&
+      needs.scope.result == 'success' && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      direct-projects: ${{ needs.scope.outputs.direct-projects }}
+      affected-projects: ${{ needs.scope.outputs.affected-projects }}
+      build-projects: ${{ needs.scope.outputs.build-projects }}
+      standard-packages: ${{ needs.scope.outputs.standard-packages }}
+      dependent-test-packages: ${{ needs.scope.outputs.dependent-test-packages }}
+      dependent-test-matrix: ${{ needs.scope.outputs.dependent-test-matrix }}
+      coverage-other-packages: ${{ needs.scope.outputs.coverage-other-packages }}
+      coverage-other-matrix: ${{ needs.scope.outputs.coverage-other-matrix }}
+      browser-packages: ${{ needs.scope.outputs.browser-packages }}
+      browser-matrix: ${{ needs.scope.outputs.browser-matrix }}
+      pack-matrix: ${{ needs.scope.outputs.pack-matrix }}
+      coverage-required: ${{ needs.scope.outputs.coverage-required }}
+      mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
+      mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
+      mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
+      partition-targets: ${{ needs.scope.outputs.partition-targets }}
+      sdk: ${{ needs.scope.outputs.sdk }}
+      did: ${{ needs.scope.outputs.did }}
+      wallet: ${{ needs.scope.outputs.wallet }}
+      wallet_client: ${{ needs.scope.outputs.wallet_client }}
+      wallet_mobile: ${{ needs.scope.outputs.wallet_mobile }}
+      verifast: ${{ needs.scope.outputs.verifast }}
+    steps:
+      - name: Record the selected lanes
+        env:
+          DIRECT_PROJECTS: ${{ needs.scope.outputs.direct-projects }}
         run: |
-          {
-            find packages -type d \( -name dist -o -name out \) -prune -print0
-            find packages -type f -name '*.tsbuildinfo' -print0
-          } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
-
-      - name: Share build outputs
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: build-outputs
-          path: build-outputs.tar.gz
-          if-no-files-found: error
-          retention-days: 1
+          echo "Direct packages: $DIRECT_PROJECTS"
 
   package-artifacts:
-    name: Package artifacts and documentation consumers
+    name: Package artifacts and documentation consumers (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.pack-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -439,17 +549,25 @@ jobs:
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm rebuild esbuild
+      - name: Restore the npm download cache for clean consumer installs
+        # npm verifies every cached tarball against its integrity hash, so the
+        # consumers stay clean installs without re-downloading the registry.
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-consumers-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: npm-consumers-${{ runner.os }}-
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Compile documentation examples against exact package tarballs
-        if: needs.prepare.outputs.direct-projects != '[]'
+        if: matrix.shard == 1 && needs.prepare.outputs.direct-projects != '[]'
         env:
           DOC_EXAMPLE_DIRECT_PROJECTS: ${{ needs.prepare.outputs.direct-projects }}
           DOC_EXAMPLE_PREBUILT_PROJECTS: ${{ needs.prepare.outputs.build-projects }}
@@ -457,19 +575,25 @@ jobs:
 
       - name: Verify changed package artifacts
         env:
-          DIRECT_PROJECTS: ${{ needs.prepare.outputs.direct-projects }}
+          SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
+          PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           filters=()
           while IFS= read -r package; do filters+=(--filter "$package"); done < <(
-            jq -r '.[].name' <<<"$DIRECT_PROJECTS"
+            jq -r '.[]' <<<"$SHARD_PACKAGES"
           )
           if [ "${#filters[@]}" -eq 0 ]; then
-            echo "No changed package artifact requires verification."
+            echo "No changed package artifact requires verification in this shard."
           else
-            pnpm -r --if-present "${filters[@]}" run pack:check
+            # Pack the outputs restored from the shared build instead of
+            # rebuilding each package; packing runs no build lifecycle script.
+            pnpm -r --no-sort "${filters[@]}" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --if-present --script pack:check
           fi
 
       - name: Dry-run the npm artifact supply-chain boundary
+        if: matrix.shard == 1
         run: |
           output="$RUNNER_TEMP/npm-release-artifacts"
           node scripts/package-release-artifacts.mjs stage \
@@ -510,7 +634,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
       - name: Install frozen dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -587,27 +711,38 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
           cache: pnpm
       - name: Install pinned partition aggregate verifier
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'sdk-auth-http')
+        if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         with:
-          pattern: mutation-sdk-auth-http-*
-          path: .mutation-parts/sdk-auth-http
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        if: contains(fromJSON(needs.prepare.outputs.partition-targets || '[]'), 'wallet-retained-snapshot')
-        with:
-          pattern: mutation-wallet-retained-snapshot-*
-          path: .mutation-parts/wallet-retained-snapshot
+          pattern: mutation-*
+          path: .mutation-parts-raw
       - name: Require every selected canonical partition target gate
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
+          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
         run: |
+          # Stage each target's parts by their exact matrix artifact names, so a
+          # target whose ID prefixes another can never pick up foreign evidence.
           TARGET_LINES=$(jq -er '.[]' <<<"$PARTITION_TARGETS")
+          while IFS= read -r target; do
+            mkdir -p ".mutation-parts/$target"
+            while IFS= read -r partition; do
+              artifact=".mutation-parts-raw/mutation-$target-$partition"
+              if [ ! -d "$artifact" ]; then
+                echo "::error::Missing mutation partition evidence $target/$partition"
+                exit 1
+              fi
+              cp -R "$artifact" ".mutation-parts/$target/"
+            done < <(jq -er --arg target "$target" \
+              '.include[] | select(.target == $target and .partition != "whole") | .partition' \
+              <<<"$MUTATION_MATRIX")
+          done <<<"$TARGET_LINES"
           while IFS= read -r target; do
             node scripts/mutation-partition-evidence.mjs verify --mode diagnostic \
               --target "$target" --directory ".mutation-parts/$target" \
@@ -634,7 +769,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -680,7 +815,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Restore the immutable MongoDB test binary
@@ -695,18 +830,14 @@ jobs:
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Run affected dependent regressions without regenerating coverage
         env:
-          DEPENDENT_TEST_PACKAGES: ${{ needs.prepare.outputs.dependent-test-packages }}
+          SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
           PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
-          index=0
           while IFS= read -r package; do
-            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
-              packages+=("$package")
-            fi
-            index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$DEPENDENT_TEST_PACKAGES")
+            packages+=("$package")
+          done < <(jq -r '.[]' <<<"$SHARD_PACKAGES")
 
           if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/wallet-toolbox'; then
             pnpm --filter @bsv/wallet-toolbox rebuild better-sqlite3
@@ -716,17 +847,19 @@ jobs:
               "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
           fi
 
-          filters=()
           echo "Affected dependent test shard ${{ matrix.shard }}/${{ matrix.total }}:"
           for package in "${packages[@]}"; do
             echo "  - $package"
-            filters+=(--filter "$package")
           done
-          if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
+          # Serial and timed, so governance/ci-lane-durations.json can be
+          # refreshed from hosted runs.
+          for package in "${packages[@]}"; do
+            started=$SECONDS
+            pnpm --filter "$package" exec node \
               "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
               --script test
-          fi
+            echo "dependent-test-duration $package $((SECONDS - started))s"
+          done
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
@@ -744,7 +877,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Rebuild the audited browser bundler
@@ -805,7 +938,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -839,7 +972,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -866,19 +999,23 @@ jobs:
           retention-days: 1
 
   coverage-sdk:
-    name: Coverage / SDK
+    name: Coverage / SDK (${{ matrix.shard }}/2)
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -886,20 +1023,98 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Generate SDK coverage and verify the packed browser consumer
+      - name: Generate an SDK coverage shard
+        # Shards follow measured per-file durations. Each sees part of the
+        # coverage, so the SDK's global thresholds are enforced on the merged
+        # shards by coverage-sdk-thresholds.
+        env:
+          JEST_SHARD_DURATIONS: ${{ github.workspace }}/governance/ci-lane-durations.json
+          JEST_SHARD_LANE: sdk-coverage
+        run: |
+          pnpm --filter @bsv/sdk exec jest --coverage --watchman=false \
+            --coverageThreshold='{}' \
+            --coverageReporters=json --coverageReporters=lcov \
+            --shard="${{ matrix.shard }}/2" \
+            --testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs"
+          node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
+          mkdir -p .coverage-output .coverage-json
+          cp packages/sdk/coverage/lcov.info .coverage-output/sdk-${{ matrix.shard }}.lcov.info
+          cp packages/sdk/coverage/coverage-final.json .coverage-json/sdk-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: coverage-sdk-${{ matrix.shard }}
+          path: .coverage-output/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-coverage-map-${{ matrix.shard }}
+          path: .coverage-json/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  coverage-sdk-thresholds:
+    name: Coverage / SDK thresholds
+    if: >-
+      always() && !cancelled() && needs.prepare.result == 'success' &&
+      needs.prepare.outputs.sdk == 'true' && needs.coverage-sdk.result == 'success'
+    needs:
+      - prepare
+      - coverage-sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/sdk
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: sdk-coverage-map-*
+          path: .sdk-coverage
+          merge-multiple: true
+      - name: Enforce the SDK coverage thresholds on the merged shards
+        run: >-
+          node scripts/check-merged-coverage-thresholds.mjs
+          --package packages/sdk
+          --coverage-directory .sdk-coverage
+
+  sdk-browser-contract:
+    name: Platform / SDK browser contract
+    if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.sdk == 'true'
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.22.1
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: build-outputs
+          path: .ci-artifacts
+      - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Verify the packed SDK browser consumer and UMD contract
         env:
           BROWSER_COMPOSITION_DIRECTORY: ${{ github.workspace }}/.browser-composition
           PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           pnpm --filter @bsv/sdk exec node \
             "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
-            --script test:coverage
-          pnpm --filter @bsv/sdk exec node \
-            "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
             --script test:browser
-          node scripts/normalize-lcov-paths.mjs packages/sdk/coverage/lcov.info packages/sdk
-          mkdir -p .coverage-output
-          cp packages/sdk/coverage/lcov.info .coverage-output/sdk.lcov.info
       - name: Retain SDK browser composition evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -908,13 +1123,6 @@ jobs:
           path: .browser-composition/
           if-no-files-found: ignore
           retention-days: 30
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: coverage-sdk
-          path: .coverage-output/
-          if-no-files-found: error
-          include-hidden-files: true
-          retention-days: 1
 
   coverage-did:
     name: Coverage / DID
@@ -929,7 +1137,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -967,27 +1175,30 @@ jobs:
           - { id: shard-2, shard: 2 }
           - { id: shard-3, shard: 3 }
           - { id: shard-4, shard: 4 }
+          - { id: shard-5, shard: 5 }
+          - { id: shard-6, shard: 6 }
           - { id: sync-http-0, latency: 0 }
           - { id: sync-http-1000, latency: 1000 }
-    services:
-      # The Knex storage suites also run against Postgres (RUNPOSTGRES).
-      postgres:
-        image: postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef # 17-alpine
-        env:
-          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready --host 127.0.0.1 --username postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start Postgres for the Knex storage suites
+        # Postgres 17-alpine, pinned by digest. Runs in the background while the
+        # toolchain installs; the shard waits for it to report healthy before
+        # Jest starts. Only the storage shards (RUNPOSTGRES) use it.
+        if: matrix.shard
+        env:
+          POSTGRES_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: >-
+          docker run --detach --name postgres
+          --env POSTGRES_PASSWORD
+          --publish 5432:5432
+          --health-cmd "pg_isready --host 127.0.0.1 --username postgres"
+          --health-interval 2s --health-timeout 5s --health-retries 60
+          postgres@sha256:d5daad18926b71c3d663f358af0aea798670cb79fb550c106d19662a9d1627ef
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build allowlisted better-sqlite3 binding
@@ -998,6 +1209,16 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Restore the synced mainnet header store
+        # ChaintracksStorageKnex's synced-store test assumes stored headers; a
+        # fresh store first downloads about 75 MB of mainnet headers from the
+        # header CDN. The key follows the storage code that writes the store.
+        if: matrix.shard
+        id: header-store
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite
+          key: chaintracks-mainnet-${{ hashFiles('packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/Storage/**', 'packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/util/**') }}
       - name: Generate wallet-toolbox coverage shard
         env:
           WALLET_SHARD: ${{ matrix.shard }}
@@ -1008,12 +1229,26 @@ jobs:
           # their global transport spies must never overlap in one Jest worker.
           args=(--coverage --coverageDirectory=coverage/${{ matrix.id }})
           if [ -n "$WALLET_SHARD" ]; then
+            for attempt in $(seq 1 120); do
+              status=$(docker inspect --format '{{.State.Health.Status}}' postgres)
+              [ "$status" = healthy ] && break
+              if [ "$status" = unhealthy ] || [ "$attempt" -eq 120 ]; then
+                docker logs postgres
+                echo "::error::Postgres did not become healthy (status: $status)"
+                exit 1
+              fi
+              sleep 1
+            done
             export RUNPOSTGRES=1
             POSTGRES_CONNECTION="$(jq -cn --arg password "$POSTGRES_PASSWORD" \
               '{host: "127.0.0.1", port: 5432, user: "postgres", password: $password, database: "postgres"}')"
             export POSTGRES_CONNECTION
             args+=(--testPathIgnorePatterns='man.test.ts|bench.test.ts|test/monitor/Monitor.test.ts|client/test|mobile/test|src/storage/sync/syncTransferHttp.test.ts')
-            args+=(--shard="$WALLET_SHARD/4")
+            # Shards follow measured per-file durations, longest first.
+            export JEST_SHARD_DURATIONS="$GITHUB_WORKSPACE/governance/ci-lane-durations.json"
+            export JEST_SHARD_LANE=wallet-toolbox-coverage
+            args+=(--shard="$WALLET_SHARD/6")
+            args+=(--testSequencer="$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs")
           else
             args+=(--runInBand --runTestsByPath src/storage/sync/syncTransferHttp.test.ts)
             args+=(--testNamePattern="with $SYNC_LATENCY ms request latency")
@@ -1025,6 +1260,14 @@ jobs:
           mkdir -p .coverage-output
           cp packages/wallet/wallet-toolbox/coverage/${{ matrix.id }}/lcov.info \
             .coverage-output/wallet-${{ matrix.id }}.lcov.info
+      - name: Save the synced mainnet header store
+        if: >-
+          matrix.shard && steps.header-store.outputs.cache-hit != 'true' &&
+          hashFiles('packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite') != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/wallet/wallet-toolbox/src/services/chaintracker/chaintracks/__tests/data/mainNet_chaintracks.sqlite
+          key: ${{ steps.header-store.outputs.cache-primary-key }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: coverage-wallet-${{ matrix.id }}
@@ -1046,7 +1289,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build allowlisted better-sqlite3 binding
@@ -1091,7 +1334,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1146,7 +1389,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Restore the immutable MongoDB test binary
@@ -1161,36 +1404,39 @@ jobs:
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
       - name: Generate coverage for other affected packages
         env:
-          COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
+          SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
           PREBUILT_PACKAGE_OUTPUTS: '1'
         run: |
           packages=()
-          index=0
           while IFS= read -r package; do
-            if [ $((index % ${{ matrix.total }} + 1)) -eq "${{ matrix.shard }}" ]; then
-              packages+=("$package")
-            fi
-            index=$((index + 1))
-          done < <(jq -r '.[]' <<<"$COVERAGE_OTHER_PACKAGES")
+            packages+=("$package")
+          done < <(jq -r '.[]' <<<"$SHARD_PACKAGES")
 
-          filters=()
           echo "Coverage shard ${{ matrix.shard }}/${{ matrix.total }}:"
           for package in "${packages[@]}"; do
             echo "  - $package"
-            filters+=(--filter "$package")
           done
           if printf '%s\n' "${packages[@]}" | grep -Fxq '@bsv/overlay-topics'; then
             pnpm --filter @bsv/overlay-topics exec node --input-type=module -e \
               "import { MongoMemoryServer } from 'mongodb-memory-server'; const s = await MongoMemoryServer.create({ instance: { launchTimeout: 120000 } }); await s.stop(); console.log('mongodb-memory-server binary cache warmed');"
           fi
-          if [ "${#filters[@]}" -gt 0 ]; then
-            pnpm -r --workspace-concurrency=1 --no-sort "${filters[@]}" exec node \
-              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
-              --script test:coverage
-          else
+          if [ "${#packages[@]}" -eq 0 ]; then
             echo "No affected coverage packages in this shard."
           fi
+          # Serial, one package at a time, timed so the lane durations can be
+          # refreshed from hosted runs (governance/ci-lane-durations.json).
+          echo '| Package | Seconds |' >> "$GITHUB_STEP_SUMMARY"
+          echo '| --- | --- |' >> "$GITHUB_STEP_SUMMARY"
+          for package in "${packages[@]}"; do
+            started=$SECONDS
+            pnpm --filter "$package" exec node \
+              "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs" \
+              --script test:coverage
+            elapsed=$((SECONDS - started))
+            echo "coverage-other-duration $package ${elapsed}s"
+            echo "| \`$package\` | $elapsed |" >> "$GITHUB_STEP_SUMMARY"
+          done
 
           while IFS= read -r report; do
             package_dir="${report%/coverage/lcov.info}"
@@ -1252,7 +1498,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         if: github.event_name == 'pull_request'
         with:
-          node-version: 24.18.0
+          node-version: 24.22.1
       - name: Install the locked patch-coverage compiler
         if: github.event_name == 'pull_request'
         run: |
@@ -1384,6 +1630,7 @@ jobs:
     if: always()
     needs:
       - prepare
+      - policy
       - standard-tests
       - dependent-tests
       - browser-packages
@@ -1397,6 +1644,7 @@ jobs:
       - name: Verify parallel build, test, and coverage lanes
         env:
           PREPARE_RESULT: ${{ needs.prepare.result }}
+          POLICY_RESULT: ${{ needs.policy.result }}
           TEST_RESULT: ${{ needs.standard-tests.result }}
           DEPENDENT_TEST_RESULT: ${{ needs.dependent-tests.result }}
           PACKAGE_BROWSER_RESULT: ${{ needs.browser-packages.result }}
@@ -1405,13 +1653,14 @@ jobs:
           MOBILE_RESULT: ${{ needs.wallet-mobile-platform.result }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
+                "$POLICY_RESULT" != "success" ||
                 ( "$TEST_RESULT" != "success" && "$TEST_RESULT" != "skipped" ) ||
                 ( "$DEPENDENT_TEST_RESULT" != "success" && "$DEPENDENT_TEST_RESULT" != "skipped" ) ||
                 ( "$PACKAGE_BROWSER_RESULT" != "success" && "$PACKAGE_BROWSER_RESULT" != "skipped" ) ||
                 ( "$COVERAGE_RESULT" != "success" && "$COVERAGE_RESULT" != "skipped" ) ||
                 ( "$BROWSER_RESULT" != "success" && "$BROWSER_RESULT" != "skipped" ) ||
                 ( "$MOBILE_RESULT" != "success" && "$MOBILE_RESULT" != "skipped" ) ]]; then
-            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT direct-tests=$TEST_RESULT dependent-tests=$DEPENDENT_TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
+            echo "::error::Build/test lanes failed: prepare=$PREPARE_RESULT policy=$POLICY_RESULT direct-tests=$TEST_RESULT dependent-tests=$DEPENDENT_TEST_RESULT package-browser=$PACKAGE_BROWSER_RESULT coverage=$COVERAGE_RESULT wallet-browser=$BROWSER_RESULT mobile=$MOBILE_RESULT"
             exit 1
           fi
 
@@ -1453,7 +1702,7 @@ jobs:
         if: matrix.run
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: npm
           cache-dependency-path: infra/${{ matrix.component }}/package-lock.json
 
@@ -1492,14 +1741,26 @@ jobs:
       - name: Build Linux image
         if: matrix.run && matrix.component != 'uhrp-server-cloud-bucket/notifier'
         run: |
-          for attempt in 1 2 3; do
-            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}"; then
+          # Anonymous base-image pulls can be throttled (HTTP 429). Back off
+          # longer only for that; any other build failure keeps the short retry.
+          set -o pipefail
+          log="$RUNNER_TEMP/docker-build-${{ strategy.job-index }}.log"
+          for attempt in 1 2 3 4 5; do
+            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}" 2>&1 | tee "$log"; then
               exit 0
             fi
-            if [ "$attempt" -lt 3 ]; then
-              echo "::warning::Docker build attempt $attempt failed; retrying after $((attempt * 5)) seconds."
-              sleep $((attempt * 5))
+            if grep -qiE '429 Too Many Requests|toomanyrequests' "$log"; then
+              limit=5
+              delay=$((15 * (1 << (attempt - 1))))
+            else
+              limit=3
+              delay=$((attempt * 5))
             fi
+            if [ "$attempt" -ge "$limit" ]; then
+              exit 1
+            fi
+            echo "::warning::Docker build attempt $attempt failed; retrying after $delay seconds."
+            sleep "$delay"
           done
           exit 1
 
@@ -1542,7 +1803,7 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -1587,7 +1848,7 @@ jobs:
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24
+          node-version: 24.22.1
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile --ignore-scripts
@@ -1642,6 +1903,8 @@ jobs:
     if: always()
     needs:
       - scope
+      - build
+      - policy
       - prepare
       - package-artifacts
       - infra-scope
@@ -1651,6 +1914,8 @@ jobs:
       - wallet-browser-platform
       - wallet-mobile-platform
       - coverage-sdk
+      - coverage-sdk-thresholds
+      - sdk-browser-contract
       - coverage-did
       - coverage-wallet
       - coverage-wallet-monitor
@@ -1676,7 +1941,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 24.x
+          node-version: 24.22.1
       - name: Reject missing or skipped selected work
         env:
           CI_NEEDS: ${{ toJSON(needs) }}

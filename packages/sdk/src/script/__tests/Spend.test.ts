@@ -577,7 +577,7 @@ describe('Spend', () => {
     it('OP_SPLIT surfaces its range error for very large positions', () => {
       const spend = createSpendWithPushes('OP_SPLIT', [[0x01, 0x02], scriptNumBytes(1n << 60n)])
       expect(() => spend.validate()).toThrow(
-        'OP_SPLIT requires the first stack item to be a non-negative number less than or equal to the size of the second-from-top stack item.'
+        'OP_SPLIT requires the first stack item to be a non-negative number no greater than INT32_MAX and less than or equal to the size of the second-from-top stack item.'
       )
     })
 

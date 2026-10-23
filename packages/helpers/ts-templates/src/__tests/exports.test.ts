@@ -15,11 +15,16 @@ describe('@bsv/templates 2.0.0 public surface', () => {
       'decodeStrictCbor',
       'tryDecodeStrictCbor',
       'StrictCborError',
-      'STRICT_CBOR_MAX_BYTES',
+      'StrictCborLink',
       'STRICT_CBOR_MAX_DEPTH'
     ]) {
       expect(name in mod).toBe(true)
     }
+  })
+
+  it('exports the 1Color template', () => {
+    expect(typeof mod.OneColor.decode).toBe('function')
+    expect(mod.OneColorError).toBe(mod.Bsv21BinaryError)
   })
 
   it('no longer exports the Mandala templates', () => {

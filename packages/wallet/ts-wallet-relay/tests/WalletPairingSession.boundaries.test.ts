@@ -130,6 +130,68 @@ describe('WalletPairingSession hostile request boundaries', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  describe('origin-bound pairing key', () => {
+    const relay = 'ws://localhost:3000'
+    const lookup = (body: Record<string, unknown>) =>
+      jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+        new Response(JSON.stringify({ sessionId: TOPIC, status: 'pending', relay, ...body }), {
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+
+    it('rejects an origin response whose key does not match the pairing key', async () => {
+      const { session } = await fixture()
+      ;(session as any).pairingVerified = true
+      lookup({ backendIdentityKey: PrivateKey.fromRandom().toPublicKey().toString() })
+
+      await expect(session.resolveRelay()).rejects.toThrow('does not match the pairing key')
+      expect((session as any)._resolvedRelay).toBeNull()
+      await expect(session.connect()).rejects.toThrow('resolveRelay()')
+    })
+
+    it('accepts an origin response whose key matches the pairing key', async () => {
+      const { params, session } = await fixture()
+      ;(session as any).pairingVerified = true
+      lookup({ backendIdentityKey: params.backendIdentityKey })
+
+      await expect(session.resolveRelay()).resolves.toBe(relay)
+    })
+
+    it('compares the origin key case-insensitively', async () => {
+      const { params, session } = await fixture()
+      ;(session as any).pairingVerified = true
+      lookup({ backendIdentityKey: params.backendIdentityKey.toUpperCase() })
+
+      await expect(session.resolveRelay()).resolves.toBe(relay)
+    })
+
+    it('accepts an origin response without a key unless requireOriginBoundKey is set', async () => {
+      const lenient = await fixture()
+      ;(lenient.session as any).pairingVerified = true
+      lookup({})
+      await expect(lenient.session.resolveRelay()).resolves.toBe(relay)
+
+      const strict = await fixture({ requireOriginBoundKey: true })
+      ;(strict.session as any).pairingVerified = true
+      lookup({})
+      await expect(strict.session.resolveRelay()).rejects.toThrow(
+        'did not report its backend identity key'
+      )
+      expect((strict.session as any)._resolvedRelay).toBeNull()
+
+      lookup({ backendIdentityKey: strict.params.backendIdentityKey })
+      await expect(strict.session.resolveRelay()).resolves.toBe(relay)
+    })
+
+    it('rejects a malformed origin key', async () => {
+      const { params, session } = await fixture()
+      ;(session as any).pairingVerified = true
+      lookup({ backendIdentityKey: params.backendIdentityKey.slice(0, 64) })
+
+      await expect(session.resolveRelay()).rejects.toThrow('backendIdentityKey')
+    })
+  })
+
   it('returns a generic 400 without dispatching malformed standard wallet arguments', async () => {
     const ctx = await fixture({
       implementedMethods: new Set(['getPublicKey']),

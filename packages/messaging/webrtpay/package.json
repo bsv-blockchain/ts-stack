@@ -1,0 +1,103 @@
+{
+  "name": "@bsv/webrtpay",
+  "version": "0.2.2",
+  "description": "Direct wallet-to-wallet BSV payments over WebRTC data channels, authenticated with BRC-100 identity keys",
+  "author": "BSV Association",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "server": [
+        "dist/server/index.d.ts"
+      ]
+    }
+  },
+  "bin": {
+    "webrtpay-relay": "dist/server/cli.js"
+  },
+  "files": [
+    "dist",
+    "docs/protocol.md",
+    "examples",
+    "README.md",
+    "LICENSE.txt"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/webrtpay/**/*.{json,md,ts}\"",
+    "lint": "oxlint src server test examples --deny-warnings",
+    "test": "node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:coverage": "node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "test:property": "node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false test/codec.property.test.ts test/frames.property.test.ts",
+    "test:turn": "RUN_TURN_TESTS=1 node --disable-warning=ExperimentalWarning --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
+    "test:browser": "pnpm build && node ../../../scripts/check-browser-package.mjs .",
+    "pack:check": "pnpm build && node ../../../scripts/check-package-artifact.mjs . --modes esm --allow-source-prefixes examples --exports DirectPayClient,PeerLink,authenticate,decodeCode,encodeOfferCode,encodeAnswerCode,acceptDirectPayment,verifyDirectPayment,validatePaymentToken,MessageBoxSignaler,RelaySignaler,createMemoryHub,WebRTPayError --entry-exports \"./server=createRelayServer|turnCredentials|DEFAULT_RELAY_LIMITS|relayOptionsFromEnv|relayUsage\" --bin webrtpay-relay --bin-args --help",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "ws": "^8.21.3"
+  },
+  "peerDependencies": {
+    "@bsv/sdk": "^2.8.6 || ^3.0.0 || ^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@bsv/sdk": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@bsv/message-box-client": "workspace:^",
+    "@bsv/sdk": "workspace:^",
+    "@jest/globals": "^30.5.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.6.1",
+    "@types/ws": "^8.18.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "fast-check": "^4.9.0",
+    "jest": "^30.5.1",
+    "node-datachannel": "^0.33.4",
+    "oxlint": "^1.83.0",
+    "ts-jest": "^29.4.12",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bsv-blockchain/ts-stack.git",
+    "directory": "packages/messaging/webrtpay"
+  },
+  "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay#readme",
+  "bugs": {
+    "url": "https://github.com/bsv-blockchain/ts-stack/issues"
+  },
+  "keywords": [
+    "bsv",
+    "webrtc",
+    "p2p",
+    "payments",
+    "brc-100",
+    "peerpay"
+  ]
+}

@@ -212,14 +212,18 @@ test('partition jobs cannot replace each original canonical global gate or the f
   )
   assert.deepEqual(full.jobs['partition-aggregate'].needs, ['prepare', 'mutation-tests'])
   assert.match(full.jobs['partition-aggregate'].strategy.matrix.target, /partition-targets/)
-  for (const id of ['sdk-auth-http', 'wallet-retained-snapshot']) {
-    const download = ci.jobs['mutation-quality'].steps.find(
-      step => step.with?.pattern === `mutation-${id}-*`
-    )
-    assert.ok(download)
-    assert.match(download.if, /partition-targets/)
-    assert.equal(download.with.path, `.mutation-parts/${id}`)
-  }
+  const download = ci.jobs['mutation-quality'].steps.find(
+    step => step.with?.pattern === 'mutation-*'
+  )
+  assert.ok(download)
+  assert.match(download.if, /partition-targets/)
+  assert.equal(download.with.path, '.mutation-parts-raw')
+  const staging = ci.jobs['mutation-quality'].steps.find(
+    step => step.name === 'Require every selected canonical partition target gate'
+  )
+  assert.match(staging.env.MUTATION_MATRIX, /mutation-matrix/)
+  assert.match(staging.run, /\.mutation-parts-raw\/mutation-\$target-\$partition/)
+  assert.match(staging.run, /Missing mutation partition evidence/)
   for (const targets of ['[]', '', 'null']) {
     const run = spawnSync('/bin/bash', ['-e', '-c', script], {
       env: {

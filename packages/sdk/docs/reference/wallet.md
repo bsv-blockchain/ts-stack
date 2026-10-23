@@ -844,13 +844,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface ListOutputsResult {
-    totalOutputs: PositiveIntegerOrZero;
+    totalOutputs: PositiveIntegerOrZero | DecimalString;
     BEEF?: BEEF;
     outputs: WalletOutput[];
 }
 ```
 
-See also: [BEEF](./wallet.md#type-beef), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [WalletOutput](./wallet.md#interface-walletoutput)
+See also: [BEEF](./wallet.md#type-beef), [DecimalString](./wallet.md#type-decimalstring), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [WalletOutput](./wallet.md#interface-walletoutput)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4201,7 +4201,7 @@ export default class WindowCWISubstrate implements WalletInterface {
         limit?: PositiveIntegerDefault10Max10000;
         offset?: PositiveIntegerOrZero;
     }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalOutputs: PositiveIntegerOrZero;
+        totalOutputs: PositiveIntegerOrZero | DecimalString;
         outputs: Array<{
             outpoint: OutpointString;
             satoshis: SatoshiValue;
@@ -4451,7 +4451,7 @@ export default class WindowCWISubstrate implements WalletInterface {
 }
 ```
 
-See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [BEEF](./wallet.md#type-beef), [Base64String](./wallet.md#type-base64string), [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes), [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [Byte](./wallet.md#type-byte), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [EntityIconURLStringMax500Bytes](./wallet.md#type-entityiconurlstringmax500bytes), [EntityNameStringMax100Bytes](./wallet.md#type-entitynamestringmax100bytes), [HexString](./wallet.md#type-hexstring), [ISOTimestampString](./wallet.md#type-isotimestampstring), [KeyIDStringUnder800Bytes](./wallet.md#type-keyidstringunder800bytes), [LabelStringUnder300Bytes](./wallet.md#type-labelstringunder300bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [OutputTagStringUnder300Bytes](./wallet.md#type-outputtagstringunder300bytes), [PositiveInteger](./wallet.md#type-positiveinteger), [PositiveIntegerDefault10Max10000](./wallet.md#type-positiveintegerdefault10max10000), [PositiveIntegerMax10](./wallet.md#type-positiveintegermax10), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes), [ProveCertificateArgs](./wallet.md#interface-provecertificateargs), [ProveCertificateResult](./wallet.md#interface-provecertificateresult), [PubKeyHex](./wallet.md#type-pubkeyhex), [SatoshiValue](./wallet.md#type-satoshivalue), [SecurityLevel](./wallet.md#type-securitylevel), [SignActionArgs](./wallet.md#interface-signactionargs), [SignActionResult](./wallet.md#interface-signactionresult), [TXIDHexString](./wallet.md#type-txidhexstring), [VersionString7To30Bytes](./wallet.md#type-versionstring7to30bytes), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt), [string](./remittance.md#function-string)
+See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [BEEF](./wallet.md#type-beef), [Base64String](./wallet.md#type-base64string), [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes), [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [Byte](./wallet.md#type-byte), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [DecimalString](./wallet.md#type-decimalstring), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [EntityIconURLStringMax500Bytes](./wallet.md#type-entityiconurlstringmax500bytes), [EntityNameStringMax100Bytes](./wallet.md#type-entitynamestringmax100bytes), [HexString](./wallet.md#type-hexstring), [ISOTimestampString](./wallet.md#type-isotimestampstring), [KeyIDStringUnder800Bytes](./wallet.md#type-keyidstringunder800bytes), [LabelStringUnder300Bytes](./wallet.md#type-labelstringunder300bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [OutputTagStringUnder300Bytes](./wallet.md#type-outputtagstringunder300bytes), [PositiveInteger](./wallet.md#type-positiveinteger), [PositiveIntegerDefault10Max10000](./wallet.md#type-positiveintegerdefault10max10000), [PositiveIntegerMax10](./wallet.md#type-positiveintegermax10), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes), [ProveCertificateArgs](./wallet.md#interface-provecertificateargs), [ProveCertificateResult](./wallet.md#interface-provecertificateresult), [PubKeyHex](./wallet.md#type-pubkeyhex), [SatoshiValue](./wallet.md#type-satoshivalue), [SecurityLevel](./wallet.md#type-securitylevel), [SignActionArgs](./wallet.md#interface-signactionargs), [SignActionResult](./wallet.md#interface-signactionresult), [TXIDHexString](./wallet.md#type-txidhexstring), [VersionString7To30Bytes](./wallet.md#type-versionstring7to30bytes), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5734,21 +5734,22 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [AcquireCertificateResult](#type-acquirecertificateresult) | [EntityIconURLStringMax500Bytes](#type-entityiconurlstringmax500bytes) | [PositiveIntegerMax10](#type-positiveintegermax10) |
-| [AcquisitionProtocol](#type-acquisitionprotocol) | [EntityNameStringMax100Bytes](#type-entitynamestringmax100bytes) | [PositiveIntegerOrZero](#type-positiveintegerorzero) |
-| [ActionStatus](#type-actionstatus) | [ErrorCodeString10To40Bytes](#type-errorcodestring10to40bytes) | [ProtocolString5To400Bytes](#type-protocolstring5to400bytes) |
-| [AtomicBEEF](#type-atomicbeef) | [ErrorDescriptionString20To200Bytes](#type-errordescriptionstring20to200bytes) | [PubKeyHex](#type-pubkeyhex) |
-| [BEEF](#type-beef) | [HexString](#type-hexstring) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
-| [Base64String](#type-base64string) | [ISOTimestampString](#type-isotimestampstring) | [SatoshiValue](#type-satoshivalue) |
-| [BasketStringUnder300Bytes](#type-basketstringunder300bytes) | [KeyIDStringUnder800Bytes](#type-keyidstringunder800bytes) | [SecurityLevel](#type-securitylevel) |
-| [BooleanDefaultFalse](#type-booleandefaultfalse) | [KeyringRevealer](#type-keyringrevealer) | [SendWithResultStatus](#type-sendwithresultstatus) |
-| [BooleanDefaultTrue](#type-booleandefaulttrue) | [LabelStringUnder300Bytes](#type-labelstringunder300bytes) | [TXIDHexString](#type-txidhexstring) |
-| [Byte](#type-byte) | [MakeWalletLogger](#type-makewalletlogger) | [TrustSelf](#type-trustself) |
-| [CallType](#type-calltype) | [OriginatorDomainNameStringUnder250Bytes](#type-originatordomainnamestringunder250bytes) | [VersionString7To30Bytes](#type-versionstring7to30bytes) |
-| [CertificateFieldNameUnder50Bytes](#type-certificatefieldnameunder50bytes) | [OutpointString](#type-outpointstring) | [WalletCounterparty](#type-walletcounterparty) |
-| [Counterparty](#type-counterparty) | [OutputTagStringUnder300Bytes](#type-outputtagstringunder300bytes) | [WalletErrorCode](#type-walleterrorcode) |
-| [DescriptionString5to2000Bytes](#type-descriptionstring5to2000bytes) | [PositiveInteger](#type-positiveinteger) | [WalletNetwork](#type-walletnetwork) |
-| [DescriptionString5to50Bytes](#type-descriptionstring5to50bytes) | [PositiveIntegerDefault10Max10000](#type-positiveintegerdefault10max10000) | [WalletProtocol](#type-walletprotocol) |
+| [AcquireCertificateResult](#type-acquirecertificateresult) | [EntityIconURLStringMax500Bytes](#type-entityiconurlstringmax500bytes) | [PositiveIntegerOrZero](#type-positiveintegerorzero) |
+| [AcquisitionProtocol](#type-acquisitionprotocol) | [EntityNameStringMax100Bytes](#type-entitynamestringmax100bytes) | [ProtocolString5To400Bytes](#type-protocolstring5to400bytes) |
+| [ActionStatus](#type-actionstatus) | [ErrorCodeString10To40Bytes](#type-errorcodestring10to40bytes) | [PubKeyHex](#type-pubkeyhex) |
+| [AtomicBEEF](#type-atomicbeef) | [ErrorDescriptionString20To200Bytes](#type-errordescriptionstring20to200bytes) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
+| [BEEF](#type-beef) | [HexString](#type-hexstring) | [SatoshiValue](#type-satoshivalue) |
+| [Base64String](#type-base64string) | [ISOTimestampString](#type-isotimestampstring) | [SecurityLevel](#type-securitylevel) |
+| [BasketStringUnder300Bytes](#type-basketstringunder300bytes) | [KeyIDStringUnder800Bytes](#type-keyidstringunder800bytes) | [SendWithResultStatus](#type-sendwithresultstatus) |
+| [BooleanDefaultFalse](#type-booleandefaultfalse) | [KeyringRevealer](#type-keyringrevealer) | [TXIDHexString](#type-txidhexstring) |
+| [BooleanDefaultTrue](#type-booleandefaulttrue) | [LabelStringUnder300Bytes](#type-labelstringunder300bytes) | [TrustSelf](#type-trustself) |
+| [Byte](#type-byte) | [MakeWalletLogger](#type-makewalletlogger) | [VersionString7To30Bytes](#type-versionstring7to30bytes) |
+| [CallType](#type-calltype) | [OriginatorDomainNameStringUnder250Bytes](#type-originatordomainnamestringunder250bytes) | [WalletCounterparty](#type-walletcounterparty) |
+| [CertificateFieldNameUnder50Bytes](#type-certificatefieldnameunder50bytes) | [OutpointString](#type-outpointstring) | [WalletErrorCode](#type-walleterrorcode) |
+| [Counterparty](#type-counterparty) | [OutputTagStringUnder300Bytes](#type-outputtagstringunder300bytes) | [WalletNetwork](#type-walletnetwork) |
+| [DecimalString](#type-decimalstring) | [PositiveInteger](#type-positiveinteger) | [WalletProtocol](#type-walletprotocol) |
+| [DescriptionString5to2000Bytes](#type-descriptionstring5to2000bytes) | [PositiveIntegerDefault10Max10000](#type-positiveintegerdefault10max10000) |  |
+| [DescriptionString5to50Bytes](#type-descriptionstring5to50bytes) | [PositiveIntegerMax10](#type-positiveintegermax10) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5887,6 +5888,17 @@ export type Counterparty = PublicKey | PubKeyHex
 ```
 
 See also: [PubKeyHex](./wallet.md#type-pubkeyhex), [PublicKey](./primitives.md#class-publickey)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Type: DecimalString
+
+```ts
+export type DecimalString = string
+```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
