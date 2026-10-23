@@ -328,10 +328,8 @@ function classMemberLines(lines) {
 function scanLine(state, line) {
   if (currentMode(state) === 'code' && state.depth === 0 && isTopLevelDeclaration(line))
     state.pendingClass = declarationKeyword(line) === 'class'
-  for (let index = 0; index < line.length; index += 1) {
-    if (state.lineComment) break
-    index = scanAt(state, line, index)
-  }
+  let index = 0
+  while (index < line.length && !state.lineComment) index = scanAt(state, line, index) + 1
   state.lineComment = false
 }
 
@@ -365,7 +363,7 @@ function scanCode(state, line, index) {
     return index
   }
   if (char === "'" || char === '"') {
-    state.modes.push(char === "'" ? 'single' : 'double')
+    pushQuote(state, char)
     return index
   }
   if (char === '`') {
@@ -375,9 +373,13 @@ function scanCode(state, line, index) {
   if (char === '{') return openBrace(state, index)
   if (char === '}') return closeBrace(state, index)
   if (/[A-Za-z_$]/.test(char)) return scanWord(state, line, index)
-  if (/[0-9]/.test(char)) return scanNumber(state, line, index)
+  if (/\d/.test(char)) return scanNumber(state, line, index)
   if (char === ' ' || char === '\t') return index
   return scanPunctuation(state, char, next, index)
+}
+
+function pushQuote(state, char) {
+  state.modes.push(char === "'" ? 'single' : 'double')
 }
 
 function openBrace(state, index) {
