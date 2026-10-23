@@ -64,7 +64,8 @@ export async function listVerifiedAdvertisements(options: {
   })
   if (
     result == null || !Array.isArray(result.outputs) || result.outputs.length > options.limit ||
-    result.outputs.length > 10_000 || !Number.isSafeInteger(result.totalOutputs) ||
+    result.outputs.length > 10_000 || typeof result.totalOutputs !== 'number' ||
+    !Number.isSafeInteger(result.totalOutputs) ||
     result.totalOutputs < result.outputs.length
   ) throw new Error('Wallet returned a malformed UHRP output list')
   const nextOffset = options.offset + result.outputs.length < result.totalOutputs

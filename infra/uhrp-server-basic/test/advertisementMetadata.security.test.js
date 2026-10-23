@@ -18,6 +18,7 @@ const {
   verifyStoredAdvertisementMetadata
 } = require('../out/src/utils/advertisementMetadata')
 const { getMetadata } = require('../out/src/utils/getMetadata')
+const { listVerifiedAdvertisements } = require('../out/src/utils/storedAdvertisements')
 
 const serverWallet = new ProtoWallet(new PrivateKey(process.env.SERVER_PRIVATE_KEY, 'hex'))
 const uploaderIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
@@ -140,4 +141,21 @@ test('rejects a signed envelope whose uploader field was edited', async () => {
   await expect(verifyAdvertisementMetadata(JSON.stringify(envelope), value.script)).rejects.toThrow(
     'signature is invalid'
   )
+})
+
+
+test.each(['0', '1.25', -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])(
+  'rejects a non-count wallet totalOutputs value %p before reading advertisements', async totalOutputs => {
+    mockListResult = { totalOutputs, outputs: [] }
+    await expect(listVerifiedAdvertisements({ limit: 10, offset: 0 })).rejects.toThrow(
+      'malformed UHRP output list'
+    )
+  }
+)
+
+test('accepts an empty numeric-count wallet page', async () => {
+  mockListResult = { totalOutputs: 0, outputs: [] }
+  await expect(listVerifiedAdvertisements({ limit: 10, offset: 0 })).resolves.toEqual({
+    advertisements: []
+  })
 })

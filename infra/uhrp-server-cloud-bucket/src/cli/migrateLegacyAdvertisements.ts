@@ -17,13 +17,15 @@ function configuration() {
   return { apply, bucket: storage.bucket(GCP_BUCKET_NAME), hostingOrigin }
 }
 
-function validatePage(result: ListOutputsResult): void {
-  if (!Array.isArray(result.outputs) || result.outputs.length > 100 || !Number.isSafeInteger(result.totalOutputs)) {
+function validatePage(result: ListOutputsResult): number {
+  if (!Array.isArray(result.outputs) || result.outputs.length > 100 ||
+    typeof result.totalOutputs !== 'number' || !Number.isSafeInteger(result.totalOutputs)) {
     throw new Error('Wallet returned an invalid migration page')
   }
   if (result.outputs.length > 0 && (result.BEEF == null || result.BEEF.length > 256 * 1024 * 1024)) {
     throw new Error('Wallet migration BEEF is invalid')
   }
+  return result.totalOutputs
 }
 
 async function recoverPage(result: ListOutputsResult, wallet: WalletInterface, bucket: Bucket,
@@ -52,11 +54,11 @@ async function main(): Promise<void> {
         basket: 'uhrp advertisements', include: 'entire transactions',
         includeCustomInstructions: true, includeTags: true, limit: 100, offset
       })
-      validatePage(result)
+      const totalOutputs = validatePage(result)
       if (result.outputs.length === 0) break
       await recoverPage(result, wallet, bucket, hostingOrigin, apply, counts)
       console.log(JSON.stringify({ apply, offset, ...counts }))
-      if (offset + result.outputs.length >= result.totalOutputs) break
+      if (offset + result.outputs.length >= totalOutputs) break
       if (offset + 100 >= 10_000) throw new Error('Migration scan limit reached; review and resume with a bounded operator tool')
     }
     if (counts.failed > 0) process.exitCode = 1
