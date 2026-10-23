@@ -232,6 +232,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed (4.0.0 candidate)
 
+- `MerklePath` refuses a one-level proof whose only leaf is not at offset 0.
+  A block of one transaction contains only its coinbase, at index 0, so any
+  other offset is a missing sibling. `fromHex`, the constructor (including
+  deferred root validation), and root computation throw
+  `Missing hash for index <offset> at height 0`. `combine()` recomputes the
+  merged root and leaves the receiver unchanged when that root differs from
+  the paths it merged. Offset 0, including `fromCoinbaseTxidAndHeight`, is
+  unchanged. Valid proofs need no migration. Fixes #1083.
+
 - `verifyNonce` returns `false` when the wallet rejects an HMAC mismatch
   (`ERR_INVALID_HMAC`, or an error whose message is exactly `HMAC is not valid`)
   instead of propagating that rejection. `Peer` can then raise its own
