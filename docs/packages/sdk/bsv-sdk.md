@@ -557,3 +557,13 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

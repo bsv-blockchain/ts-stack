@@ -1224,3 +1224,11 @@ against the requested explicit inputs, synchronize the accepted winner, then
 read fresh state before rebuilding. Upgrade the application SDK alongside the
 wallet parser. Use the existing JSON wallet API for structured review errors;
 the binary wire format is unchanged. No database or call migration is required.
+
+### Existing certificate types
+
+With the compatibility SDK, existing BRC-100 methods can list, prove and relinquish
+historical certificates without rewriting them. Listing and proof use unchanged
+storage RPCs. For relinquishment, upgrade the storage server SDK as well: its
+existing reference validator must accept the historical type. New signing and
+acquisition remain strictly 32 bytes. See [the compatibility contract](../../../specs/wallet/legacy-certificate-wire.md).

@@ -1352,6 +1352,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
+    // Validate an existing reference, including historical types; acquisition remains strict.
     const vargs = validateRelinquishCertificateArgs(args)
     const cert = verifyOne(
       await this.findCertificates({

@@ -107,12 +107,20 @@ not already present in GHCR it:
 2. builds the image once with commit-derived metadata;
 3. rejects high and critical vulnerabilities;
 4. creates and retains an SPDX JSON SBOM;
-5. pushes that exact reviewed image under both version and source-commit tags;
+5. after the source is qualified, pushes that exact reviewed image under both
+   version and source-commit tags;
 6. publishes GitHub-signed SLSA provenance and SBOM attestations to GitHub and
    GHCR;
 7. keylessly signs the digest and attaches the reviewed SPDX SBOM with Cosign;
 8. verifies the digest, signature, provenance, and both SBOM attestations before
    declaring the release successful.
+
+Steps 2–4 run in a `build-image` job without publishing permissions while the
+mutation campaign qualifies the source. It hands the saved image, its tags,
+image ID and SBOM to the `release` job as a same-run artifact; `release` starts
+only after qualification, loads the image, refuses to publish unless every tag
+resolves to the reviewed image ID, and then performs steps 5–8. A component
+whose build or scan fails has no image to publish and blocks only itself.
 
 Concurrent releases are serialized and never cancelled midway. Existing
 version tags are treated as immutable and skipped rather than overwritten.

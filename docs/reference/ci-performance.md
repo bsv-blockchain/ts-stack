@@ -2,9 +2,9 @@
 id: ci-performance
 title: 'CI Performance Governance'
 kind: reference
-version: '1.4.0'
-last_updated: '2026-10-20'
-last_verified: '2026-10-20'
+version: '1.5.0'
+last_updated: '2026-10-21'
+last_verified: '2026-10-21'
 review_cadence_days: 30
 status: stable
 tags: [reference, ci, performance, github-actions]
@@ -29,9 +29,18 @@ suites; their reverse-dependency closure owns non-instrumented regression,
 compatibility, and browser checks; and the forward closure supplies every build
 prerequisite. This preserves behavioral coverage of possible consumers without
 paying to regenerate unchanged packages' coverage reports.
-A lockfile-only change selects the importers whose lock snapshots actually
-changed instead of treating the root lockfile as a global invalidation. Root
-compiler, workspace and shared CI execution controls select the complete graph deliberately.
+A lockfile change selects every package importer whose installed graph reaches
+a changed or republished package, directly or not, in either lockfile, instead
+of treating the root lockfile as a global invalidation. An indirect upgrade
+therefore tests the packages that install it even when no importer entry
+changed. Changes to the root importer's own dependencies or to lockfile settings
+select the complete graph; root tools reached only indirectly run in the lint,
+build and artifact jobs on every pull request. A `pnpm-workspace.yaml` change
+confined to resolution settings (overrides, patches, package extensions,
+catalogs, release age) defers to that lockfile analysis, and a project registry
+change confined to project entries selects only the changed or added projects.
+Root compiler, other workspace settings and shared CI execution controls select
+the complete graph deliberately.
 
 Mutation selection follows each target's exact implementation, property,
 regression, configuration, and policy inputs. Package-wide mutation suites
@@ -44,21 +53,79 @@ The main CI workflow builds the selected graph once and shares immutable
 outputs with isolated test lanes, skips empty lanes, installs through the
 setup-node pnpm cache, caches the immutable MongoDB test binary, and rebuilds
 native/build tools only in jobs that execute them. Browser lanes retain exact
-package-composition reports without rebuilding the workspace. The cheap
-repository-health, scope, and dependency-review gates complete before
-dependency installation. Exact-head Sonar analysis runs concurrently with the
+package-composition reports without rebuilding the workspace. The shared
+build starts immediately, beside the scope job and the repository-health
+contract, and builds every workspace package (unchanged ones restore from the
+package build cache); test lanes, lint and policy start only after the repository-health,
+scope and dependency-review gates pass. Lint and policy run beside the test
+lanes and gate `build-and-test` and the merge gate. The scope job also plans the
+test-lane matrices, since that needs only Node and jq. Exact-head Sonar analysis runs concurrently with the
 shared build and remains mandatory in the final merge gate. Expensive PR mutation waits for both a
 successful shared build and successful exact-head Sonar analysis. Main and
 manual full campaigns allow only the intentional skip of the PR-only analyzer
 gate. A failed, cancelled, missing or unexpectedly skipped analyzer stops the
 normal mutation launch; suppressed selected mutation is not qualified evidence.
 Package artifact checks and documentation consumers run beside the tests after the shared build, with their own required
-result. Matrix siblings finish after a failure so acceptance
+result. They are sharded by measured per-package check time (the
+`package-artifacts` lane), pack the restored shared build instead of rebuilding each package,
+resolve all of a package's public entrypoints in one process per module system
+(the SDK has 459), and reuse an npm download cache that npm verifies against
+each tarball's integrity hash. Matrix siblings finish after a failure so acceptance
 evidence includes every selected shard. Within a regression or coverage shard,
 packages execute serially because individual test runners already use worker
 pools; this prevents nested pools starving real-cryptography integration tests.
 These controls reduce repeated CPU, network, and setup work without weakening
 the tests selected by the dependency or registered trust-boundary graph.
+
+## Planned coverage shards
+
+The `coverage-other` lane runs each shard's packages serially, so a shard lasts
+as long as the sum of its packages and the lane lasts as long as its slowest
+shard. It previously used one shard for one package and two otherwise,
+assigning packages round-robin by name. On one long-running branch the first
+shard ran 855–1,503 seconds while the second finished in 117–211.
+
+`scripts/ci-shard-plan.mjs` now plans the matrix from
+`governance/ci-lane-durations.json`. The shard count is the larger of the
+estimated total divided by the per-shard target and the package count divided
+by six, capped at six shards. Packages are assigned longest first to the
+least-loaded shard that has not reached its even share of packages, so one
+package that becomes slow in a pull request shares its shard with only a few
+others. Planning decides only which shard runs a package; every selected
+package still runs exactly once and serially.
+
+Each shard prints `coverage-other-duration <package> <seconds>s` and a summary
+table. Refresh the lane durations from those hosted values; the initial
+values come from a hosted full-scope run on 2026-10-21. Against round-robin on
+the same runners, the slowest shard fell from 410 to 161 seconds while total
+shard time rose from 608 to 774 seconds.
+
+## Duration-balanced test-file shards
+
+The wallet-toolbox and SDK coverage lanes shard by test file with
+`scripts/jest-duration-sequencer.cjs` instead of Jest's path-hash sharding. The
+sequencer assigns files longest first to the least-loaded shard from the
+governed per-file seconds in `governance/ci-lane-durations.json`; every file
+still runs in exactly one shard. The SDK shards disable Jest's per-run threshold
+check because each sees part of the coverage; `Coverage / SDK thresholds` merges
+their Istanbul maps with the library Jest uses and enforces the SDK's configured
+global thresholds, so the result matches one unsharded run. The packed SDK
+browser and UMD contract checks run beside the coverage shards.
+
+The shared build restores each package's outputs from a cache keyed on the git
+blob ids of the package's own files, of every workspace package it depends on,
+and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
+packages whose inputs changed are built. Typecheck runs in the lint and policy
+job after the build, beside the test lanes.
+
+The affected-dependents lane plans its shards the same way from measured
+per-package test seconds (the `dependent-tests` lane). The wallet-toolbox
+storage shards start their pinned Postgres container in the background after
+checkout and wait for it to report healthy before Jest starts.
+
+The wallet-toolbox synced-header test restores a cached mainnet header store,
+keyed on the chaintracks storage code that writes it, instead of downloading
+about 75 MB from the header CDN into a fresh store on every run.
 
 ## Execution ledger across outcomes and attempts
 
@@ -389,14 +456,29 @@ mutants take under two minutes; 358 `brc52-envelope` mutants took fifteen), so
 the estimate is the target's measured seconds in
 `governance/mutation-testing/durations.json`. A target never measured uses a
 deliberately pessimistic one second per code line. A file whose share of the
-estimate exceeds one 240-second part is cut inside at top-level declaration
-lines (`function`, `class`, `const`, `export …` at column zero) that are unique
-line prefixes, balanced by code lines; a mutant cannot span two top-level
-statements. Whole files and file segments are then grouped heaviest first into
-the estimate over 240 seconds parts. Explicit plans, including hand-placed line
-cuts, keep priority. Today only `color-permission` splits automatically, into
-eight parts; the exhaustiveness replay covers every target that executes in
-parts, so an automatic cut that dropped or duplicated a mutant fails CI.
+estimate exceeds one 180-second part is cut inside at top-level declaration
+lines (`function`, `class`, `const`, `export …` at column zero), or at member
+declarations of a top-level class (methods, constructor and accessors at the
+two-space Prettier indent), that are unique line prefixes, balanced by code
+lines; a mutant cannot span two top-level statements or two class members, and
+a two-space line inside a function, method, string, template, or comment is
+never a cut. Whole files and file segments are then grouped heaviest first into
+the estimate over 180 seconds parts. Explicit plans, including hand-placed line
+cuts, keep priority. Today `color-permission` splits automatically into twelve
+parts and `reorg-stream` into two; the exhaustiveness replay covers every target
+that executes in parts, so an automatic cut that dropped or duplicated a mutant
+fails CI.
+
+In release run
+[39845676503](https://github.com/bsv-blockchain/ts-stack/actions/runs/39845676503)
+the slowest `color-permission` part held the whole `strictJson.ts` `Parser`
+class and ran 7m37s. With class member cuts and a 240-second part the slowest
+part was the head of `identifiers.ts` at 6m48s
+([39917134050](https://github.com/bsv-blockchain/ts-stack/actions/runs/39917134050)).
+The part target is now 180 seconds: estimated from that run's per-part times,
+the slowest of twelve parts takes about 4m40s, below the hand-planned
+`webrtpay-codes/sdp` (5m17s). An extra part costs only its own setup now that
+every part starts at once.
 
 ### Stop-on-kill Jest environment
 
@@ -439,5 +521,16 @@ Fork benchmark, same runners, about six concurrent jobs, every gate passing:
 | Partitions + stop-on-kill | 17m01s | 6m10s `sdk-auth-http/core`  | 105m48s         |
 
 Partitions alone were slower there because long parts queued behind short ones,
-which longest-first ordering addresses. With twenty slots the campaign is bounded
-by its longest part or total part time divided by twenty.
+which longest-first ordering addresses.
+
+The full campaign has since grown to about 70 parts. `mutation-tests.yml` now
+allows 100 parallel parts, so the whole campaign starts at once and its longest
+part bounds wall time; total runner time is unchanged. The canonical global
+gates that merge each partitioned target's parts ran two at a time and added
+about three minutes after the last part; they now all start together. The PR
+diagnostic campaign in `ci.yml` keeps its 6-part limit.
+
+| Campaign (org runners)                              | Parts | Global gates | Full campaign |
+| --------------------------------------------------- | ----- | ------------ | ------------- |
+| Release run 39845676503 (20 parts, 2 gates at once) | 7m42s | 3m30s        | 13m24s        |
+| Dispatch 39917134050 (all parts at once, 2 gates)   | 6m48s | 2m54s        | 11m48s        |

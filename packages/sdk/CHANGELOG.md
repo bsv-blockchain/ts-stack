@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
 
+## Legacy certificate compatibility (4.0.0 candidate)
+
+- Restore existing certificate listing, discovery, proof, relinquishment, signature
+  verification and BRC-103 requests for canonical Base64 types of 1–128 bytes.
+  New signing and both acquisition protocols still require exactly 32 bytes.
+- Add an opt-in binary substrate profile with sentinel type slots and phantom
+  certificate metadata; original signed objects and ordinary encodings remain
+  unchanged. Binary HTTP includes a dedicated internal capability endpoint and
+  explicit missing-route probe fallback; wallet routers must register the new
+  transport route. Both adapters must upgrade for legacy binary use. No new BRC-100
+  app API or storage schema/RPC is required; strict remote relinquishment servers
+  must upgrade their SDK reference validator.
+- Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier
+  signing/JSON paths. Those types never reliably round-tripped through the old
+  fixed-width binary parser. This profile restores their use without reissuance.
+
 ## Table of Contents
 
 - [Unreleased](#unreleased)

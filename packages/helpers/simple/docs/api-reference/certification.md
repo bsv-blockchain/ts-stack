@@ -68,12 +68,13 @@ New issuance uses its 32-byte SHA-256 digest. Passing a short historical
 canonical issuance type from its decoded bytes; it never issues a new short
 type.
 
-The current SDK deliberately rejects short certificate types in
-`WalletInterface` list, acquire, prove, and relinquish operations. The legacy
-values returned here are for an explicit offline storage migration, not wallet
-filter arrays or remote metadata. Export affected records through the storage
-version that created them, authenticate them with the matching local issuer or
-schema, then reissue/import them under `canonical`.
+The SDK 4.0.0 compatibility candidate permits bounded historical types in
+existing listing, proof and relinquishment calls, while signing/acquisition and
+remote issuance metadata remain strictly 32 bytes. Legacy binary use requires
+upgraded app and wallet adapters; storage servers must upgrade their SDK for
+legacy relinquishment. Older SDKs may reject these references. Do not hash,
+pad or rewrite an existing signed type. See the repository protocol contract
+at `specs/wallet/legacy-certificate-wire.md`.
 
 ### certifier.certify()
 
