@@ -4,6 +4,18 @@ All notable changes to this package are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and the package adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `authenticate(link, { codec })`: a session codec, the function that reads each value the peer
+  sends once the handshake is over. The default is `parseWireMessage`, so every existing caller
+  is unchanged; a consumer passing its own codec receives its own message kinds unparsed by the
+  payments layer, and a value its codec refuses is answered with `error` `protocol` and closes
+  the session as before. `AuthenticatedPeer` and `AuthenticateOptions` take the message type as
+  a type parameter defaulting to `WireMessage`; `SessionCodec` is exported. The wire is
+  unchanged (`docs/protocol.md` §6).
+
 ## 0.2.2
 
 - Publishes the already merged React Native answerer compatibility fix: reliable channels

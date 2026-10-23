@@ -517,6 +517,17 @@ field that is `null` as absent. A message that fails these checks, an unknown `t
 `hello`, `auth` or `ready` after the handshake is answered with
 `{ "t": "error", "code": "protocol" }` and the session closes with `protocol`.
 
+**The session codec (`authenticate`'s `codec` option).** What this section lists is the
+default reading of a session, `parseWireMessage`. A consumer that carries its own messages over
+the channel may pass `authenticate` a `codec`, a function from the received value to its own
+message type that throws on what it refuses; its session then hands that consumer's kinds (say
+`{ "t": "low.envelope", "v": 1, "wire": "..." }`) to the app unparsed by the payments layer. The
+wire does not change: framing (§4), the handshake (§5, always read as the payments wire) and
+the refusal are the same bytes, a value the codec throws on, or a `hello`, `auth` or `ready`
+after the handshake, is answered with `{ "t": "error", "code": "protocol" }` and the session
+closes with `protocol`. The codec is the session's, not the protocol's: both sides must agree on
+it out of band, and a default peer refuses any kind this section does not list.
+
 ### 6.1 `payment` (payer → payee)
 
 ```json
