@@ -72,13 +72,13 @@ function resolveName(raw: Record<string, unknown>): string {
   return name
 }
 
-function resolveBsvDir(raw: Record<string, unknown>): string {
+export function resolveBsvDir(raw: Record<string, unknown>): string {
   const bsvDir = typeof raw.bsvDir === 'string' && raw.bsvDir.length > 0 ? raw.bsvDir : 'src/bsv'
   if (!validBsvDir(bsvDir)) throw new ConfigError(`invalid bsvDir: ${bsvDir}`)
   return bsvDir
 }
 
-function requestedCapabilityIds(raw: Record<string, unknown>): string[] {
+export function requestedCapabilityIds(raw: Record<string, unknown>): string[] {
   const capsRaw = raw.capabilities === undefined ? [] : raw.capabilities
   if (!Array.isArray(capsRaw)) throw new ConfigError('capabilities must be an array')
   const capabilities: string[] = []

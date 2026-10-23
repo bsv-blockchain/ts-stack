@@ -30,7 +30,14 @@ export interface BaseBuilder {
   app: { imports: string[]; routes: RouteDef[] }
   // server.routes: express handlers on `app`. server.setup: code needing the raw
   // `http.Server` (e.g. a WebSocket upgrade) — runs after `const server = http.createServer(app)`.
-  server: { imports: string[]; routes: string[]; setup: string[] }
+  // server.config: values the glued entry imports from the generated bsv/config.ts; manual
+  // wiring (add mode / --no-glue) never writes that file, so it pastes `inline` instead.
+  server: {
+    imports: string[]
+    config: Array<{ import: string; inline: string }>
+    routes: string[]
+    setup: string[]
+  }
 }
 
 export interface Capability {
