@@ -230,6 +230,23 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### Performance (4.0.0 candidate)
+
+- Bound the windowed point-multiplication table cache. Every distinct public
+  key verified added a table that was never released (about 3 KiB per key);
+  the generator's tables are kept and other points share a 64-entry
+  least-recently-used cache.
+- `PrivateKey.toPublicKey()` caches its result, so P2PKH signing and key
+  derivation no longer recompute k·G per call. The cache checks a SHA-256
+  fingerprint of the key's current value, never a copy of the secret; each
+  call still returns an independent `PublicKey`, and an in-place change to
+  the key recomputes it. `KeyDeriver` reuses its `anyone` public key.
+- `toArray` from a `Uint8Array`, hex decoding to `number[]`, `Writer.toArray`,
+  `Transaction.toBEEF`/`fromHexBEEF`, `Beef.toBinary` and `Beef.mergeBeef(Beef)`
+  convert bytes with a presized loop instead of `Array.from` or a growing
+  `number[]` writer. Output bytes are unchanged.
+- Adds `benchmarks/key-cache-bench.js` and `benchmarks/beef-conversion-bench.js`.
+
 ### Fixed (4.0.0 candidate)
 
 - `MerklePath` refuses a one-level proof whose only leaf is not at offset 0.
