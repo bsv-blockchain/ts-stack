@@ -214,8 +214,26 @@ function isTopLevelDeclaration(line) {
   return DECLARATION_KEYWORDS.has(words[index])
 }
 
-const MEMBER_DECLARATION =
-  /^ {2}(?:(?:public|private|protected|static|readonly|async|override|get|set) +)*(?:\* ?)?[#A-Za-z_$][\w$]* ?[(<]/
+const MEMBER_MODIFIERS = new Set([
+  'public',
+  'private',
+  'protected',
+  'static',
+  'readonly',
+  'async',
+  'override',
+  'get',
+  'set'
+])
+
+// A method, constructor or accessor at exactly the class body indent.
+function isMemberDeclaration(line) {
+  if (!/^ {2}\S/.test(line)) return false
+  const words = line.trim().split(/ +/)
+  let index = 0
+  while (MEMBER_MODIFIERS.has(words[index])) index += 1
+  return /^(?:\* ?)?[#A-Za-z_$][\w$]* ?[(<]/.test(words.slice(index).join(' '))
+}
 
 // Member declarations of top-level classes: Prettier indents a class body by
 // two spaces and a class body holds only members, so no mutant spans two of
@@ -225,13 +243,13 @@ function classMemberLines(lines) {
   let inClass = false
   lines.forEach((line, index) => {
     if (isTopLevelDeclaration(line)) {
-      const words = line.split(/[\s(<{=:]+/).filter(word => !DECLARATION_MODIFIERS.has(word))
-      inClass = words[0] === 'class' && line.trimEnd().endsWith('{')
+      const keyword = line.split(/[\s(<{=:]+/).find(word => !DECLARATION_MODIFIERS.has(word))
+      inClass = keyword === 'class' && line.trimEnd().endsWith('{')
       return
     }
     if (!inClass) return
     if (line.startsWith('}')) inClass = false
-    else if (MEMBER_DECLARATION.test(line)) members.add(index)
+    else if (isMemberDeclaration(line)) members.add(index)
   })
   return members
 }
