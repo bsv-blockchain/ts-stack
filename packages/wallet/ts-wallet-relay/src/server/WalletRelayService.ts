@@ -39,6 +39,7 @@ import {
   normalizeRelayUrl,
   parseRpcMessage,
   requireBoundedString,
+  requireOptionalBoolean,
   requirePlainRecord,
   requirePublicKey,
   requireSessionId,
@@ -73,14 +74,16 @@ export interface WalletRelayServiceOptions {
    */
   wallet: WalletLike
   /**
-   * WebSocket base URL of this server. Production URLs require wss://;
-   * ws:// is accepted only for loopback development.
+   * WebSocket base URL of this server. Requires wss:// except on loopback
+   * (or private-network IP addresses with `allowLocalNetworkHttp`).
    * Defaults to the `RELAY_URL` environment variable, then `ws://localhost:3000`.
    */
   relayUrl?: string
   /**
    * Default http(s):// URL of the desktop frontend — embedded in the QR pairing
    * URI when `createSession()` is called without a per-session origin override.
+   * Requires https:// except on loopback (or private-network IP addresses with
+   * `allowLocalNetworkHttp`).
    * Defaults to the `ORIGIN` environment variable, then `http://localhost:5173`.
    *
    * For multi-app deployments (one relay shared by N webapps) leave this unset
@@ -102,6 +105,16 @@ export interface WalletRelayServiceOptions {
    * an allowlist.
    */
   allowedOrigins?: AllowedOrigins
+  /**
+   * Accept plain `http://` origins (constructor and `createSession({ origin })`)
+   * and a `ws://` relayUrl on private-network IP addresses (10.0.0.0/8,
+   * 172.16.0.0/12, 192.168.0.0/16, fc00::/7) for same-LAN development. Loopback
+   * is always accepted. The phone and desktop must opt in too
+   * (`WalletPairingSession`, `parsePairingUri`, `WalletRelayClient`). Such
+   * origins cannot be authenticated, so never enable it in production. There is
+   * deliberately no environment-variable fallback. Default: false.
+   */
+  allowLocalNetworkHttp?: boolean
   /** Called when a mobile completes pairing and the session transitions to 'connected'. */
   onSessionConnected?: (sessionId: string) => void
   /** Called when a connected mobile disconnects (session transitions to 'disconnected'). */
@@ -211,6 +224,9 @@ export class WalletRelayService {
   private readonly wallet: WalletLike
   private readonly relayUrl: string
   private readonly origin: string
+  private readonly allowLocalNetworkHttp: boolean
+  /** Transport policy for every server-side URL check; errors name the option. */
+  private readonly transport: { allowLocalNetworkHttp: boolean; developerHint: boolean }
   private readonly schema: string
   private readonly signQrCodes: boolean
   private readonly mobileAuthTimeoutMs: number
@@ -220,11 +236,20 @@ export class WalletRelayService {
 
   constructor(private readonly opts: WalletRelayServiceOptions) {
     this.wallet = opts.wallet
+    this.allowLocalNetworkHttp = requireOptionalBoolean(
+      opts.allowLocalNetworkHttp,
+      'allowLocalNetworkHttp'
+    )
+    this.transport = { allowLocalNetworkHttp: this.allowLocalNetworkHttp, developerHint: true }
     this.relayUrl = normalizeRelayUrl(
-      opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000'
+      opts.relayUrl ?? process.env['RELAY_URL'] ?? 'ws://localhost:3000',
+      'relay URL',
+      this.transport
     )
     this.origin = normalizeHttpOrigin(
-      opts.origin ?? process.env['ORIGIN'] ?? 'http://localhost:5173'
+      opts.origin ?? process.env['ORIGIN'] ?? 'http://localhost:5173',
+      'origin',
+      this.transport
     )
     this.schema = opts.schema ?? process.env['PAIRING_SCHEMA'] ?? 'bsv-browser'
     if (!/^[a-z][a-z0-9+.-]{0,31}$/iu.test(this.schema)) {
@@ -351,7 +376,7 @@ export class WalletRelayService {
     desktopToken: string
   }> {
     this.ensureRunning()
-    const origin = normalizeHttpOrigin(options?.origin ?? this.origin)
+    const origin = normalizeHttpOrigin(options?.origin ?? this.origin, 'origin', this.transport)
 
     // Validate caller-claimed origin against the allowlist (when set).
     if (options?.origin !== undefined && this.isOriginAllowed && !this.isOriginAllowed(origin)) {
@@ -396,7 +421,8 @@ export class WalletRelayService {
         origin,
         expiry,
         sig,
-        schema: this.schema
+        schema: this.schema,
+        allowLocalNetworkHttp: this.allowLocalNetworkHttp
       })
       const qrDataUrl = await this.whileRunning(this.sessions.generateQRCode(uri))
       return {
