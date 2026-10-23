@@ -30,6 +30,40 @@ SQL receipt claim. Source versions are candidates until published through the
 protected release workflow; upgrading an app alone does not upgrade its remote
 storage server.
 
+## Reorg proof recovery
+
+`TaskReorg` compares the latest 12 heights after each processed tip, including
+when ChainTracks events are unavailable. It journals pending ranges before
+remote work, retries unresolved heights every minute without requiring a new
+tip, and recovers observed gaps after monitor downtime. Each attempt reviews
+at most `recentDepth` fresh heights and `recentDepth` pending heights; the
+default is 12 and zero disables this fallback. Ranges are compacted without
+dropping pending work; compaction may recheck intervening heights.
+
+The lagged `TaskReviewProvenTxs` audit starts at the minimum stored proof
+height on the built-in SQL and IndexedDB providers, leaves an empty wallet
+uncheckpointed, repairs older checkpoints in empty history, and retains fair
+bounded retries through restart and tip retreat. Custom storage providers may
+override `getProvenTxsReviewStartHeight`; its safe default starts at zero when
+proofs exist, so custom providers can retain a longer initial audit.
+Recent rolling scans and these forward cursors do not establish detection of
+an arbitrary historical reorg below both cursors; deeper ancestry reconciliation
+remains separate work.
+
+Coordinate the upgrade of all monitor writers sharing a storage database:
+older versions do not understand compact retry checkpoints and may overwrite
+pending recovery work. The durability evidence covers one active Monitor owner
+with sequential restart; concurrent checkpoint writers are unqualified, and
+this change adds no ownership lock. Public Storage API serving topology is
+independent of the internal monitor worker's ownership.
+
+No SQL schema or manual data rewrite is required. IndexedDB automatically
+upgrades to version 7 to add a nonunique `proven_txs.height` index, avoiding a
+proof-blob scan during audit bootstrap. Close other connections using older
+code before upgrading, and retain a backup of browser wallet data. Reverting
+to code opening an older IndexedDB version requires a compatible restore or a
+forward fix. Source merge does not publish a package or upgrade a running wallet.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users

@@ -108,7 +108,7 @@ test('local Go-shaped HTTP/SSE reorg invalidates prepared proofs and schedules e
     expect(client.streamErrorCount).toBe(0)
     expect(invalidatePreparedBeefsForReorg).toHaveBeenCalledTimes(1)
     expect(monitor.deactivatedHeaders.map(item => item.header.hash)).toEqual(orphaned.map(item => item.hash))
-    const task = new TaskReorg(monitor, 0)
+    const task = new TaskReorg(monitor, 0, 3, 0)
     expect(task.trigger(Date.now() + 1)).toEqual({ run: true })
     await expect(task.runTask()).resolves.toBe('repaired\nrepaired\n')
     expect(reproveHeader.mock.calls).toEqual(orphaned.map(item => [item.hash]))
