@@ -1960,6 +1960,11 @@ describe('DirectPayClient payments and offers (audit hardening)', () => {
 
   it('will not complete an expired offer, and closes its link when it expires', async () => {
     const createOffer = jest.spyOn(PeerLink, 'createOffer')
+    // The expiry runs on the fake clock. Node arms a timer on its own millisecond-truncated
+    // monotonic time while Date.now() is a separately truncated wall clock, so a real timer can
+    // fire up to 1 ms before the wall-clock deadline it was computed from. The gathers meanwhile
+    // are real WebRTC; node-datachannel dispatches its events through setImmediate only.
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'queueMicrotask', 'setImmediate'] })
     try {
       const payee = await makeWallet()
       const offer = await client(payee).createOfferCode({
@@ -1971,12 +1976,23 @@ describe('DirectPayClient payments and offers (audit hardening)', () => {
       const answer = await client(await makeWallet()).answerOfferCode(offer.code)
       const decoded = decodeCode(offer.code, { now: 0 })
       const expiresAt = decoded.kind === 'offer' ? decoded.expiresAt! : 0
+      const closed = closeOf(link)
+      let closedAt: number | undefined
+      link.onClose(() => {
+        closedAt = Date.now()
+      })
 
-      expect((await closeOf(link))?.code).toBe('timeout')
+      // The clock stood still through the gathers, so the code's expiry is the delay armed.
+      await jest.advanceTimersByTimeAsync(expiresAt - Date.now() - 1)
+      expect(closedAt).toBeUndefined()
+      await jest.advanceTimersByTimeAsync(1)
+      expect((await closed)?.code).toBe('timeout')
+      expect(closedAt).toBe(expiresAt)
       expect(Date.now()).toBeGreaterThanOrEqual(expiresAt)
       expect((await failure(offer.complete(answer.answerCode))).code).toBe('invalid_code')
       answer.cancel()
     } finally {
+      jest.useRealTimers()
       createOffer.mockRestore()
     }
   })
