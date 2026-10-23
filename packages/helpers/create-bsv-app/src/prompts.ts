@@ -4,7 +4,7 @@ import type { ProjectManifest } from './config/project-manifest.js'
 import { configSchema, isFieldVisible } from './config/schema.js'
 import type { ConfigField, FieldOption } from './config/schema.js'
 import { seedDraft, resolveDraft } from './config/draft.js'
-import type { ConfigDraft } from './config/draft.js'
+import type { ConfigDraft, SeededDraft } from './config/draft.js'
 import type { ProjectConfig } from './config/model.js'
 
 /** Shown instead of an empty capabilities list (terminal and `--ui`). */
@@ -51,14 +51,14 @@ export function optionsFor(
 
 async function promptField(
   field: ConfigField,
-  draft: ConfigDraft,
+  draft: SeededDraft,
   existing: ProjectManifest | null,
   ask: Ask
 ): Promise<void> {
-  const values = draft as Record<string, unknown>
+  const values: Record<string, unknown> = draft
   if (field.key !== 'capabilities' && values[field.key] !== undefined) return // set by flags/seed
   if (!isFieldVisible(field, values)) return
-  const mode = draft.mode ?? 'new'
+  const mode = draft.mode
   const options = optionsFor(field, existing, mode)
   if (field.key !== 'capabilities') {
     values[field.key] = await ask(field, options, field.default)
@@ -67,14 +67,14 @@ async function promptField(
   // new mode pre-ticks every offered capability; add mode never pre-ticks onto an existing project
   const initial = mode === 'new' ? options.map(o => o.value) : []
   const value = (await ask(field, options, initial)) as string[]
-  draft.capabilities = mergeCapabilityIds(draft.capabilities ?? [], value)
+  draft.capabilities = mergeCapabilityIds(draft.capabilities, value)
 }
 
 export async function runPrompts(
   ctx: { existing: ProjectManifest | null; flags: ConfigDraft },
   ask: Ask
 ): Promise<ProjectConfig> {
-  const draft: ConfigDraft = seedDraft(ctx.existing, ctx.flags)
+  const draft = seedDraft(ctx.existing, ctx.flags)
   // one prompt at a time, in schema order: later fields' visibility depends on earlier answers
   await configSchema
     .flatMap(section => section.fields)

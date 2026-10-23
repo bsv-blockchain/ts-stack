@@ -81,11 +81,11 @@ server.listen(PORT, () => { console.log(\`server on http://localhost:\${PORT}\`)
 
 // SERVER_ORIGIN + RELAY_URL with their checks. Shared verbatim by the generated bsv/config.ts and
 // the manual (add-mode / --no-glue) server wiring snippet, which never gets that file.
-export const SERVER_ORIGIN_CONFIG = `// Plain HTTP/WS only for development on loopback or a private-network IP literal — the
+export const SERVER_ORIGIN_CONFIG = String.raw`// Plain HTTP/WS only for development on loopback or a private-network IP literal — the
 // hosts @bsv/wallet-relay accepts: localhost, 127/8, [::1], 10/8, 172.16/12, 192.168/16, fc00::/7.
 function isLocalDevelopmentHost (host: string): boolean {
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^\\[f[cd][0-9a-f]{2}:/.test(host)) return true
-  const ipv4 = /^(\\d+)\\.(\\d+)\\.\\d+\\.\\d+$/.exec(host)
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '[::1]' || /^\[f[cd][0-9a-f]{2}:/.test(host)) return true
+  const ipv4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host)
   if (ipv4 == null) return false
   const a = Number(ipv4[1])
   const b = Number(ipv4[2])

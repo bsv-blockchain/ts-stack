@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { serializeSchema, buildPage } from './ui-page.js'
 import { openBrowser as defaultOpenBrowser } from './open-browser.js'
 import { applyConfig, type RunResult } from '../pipeline.js'
-import { resolveDraft, seedDraft, type ConfigDraft } from '../config/draft.js'
+import { resolveDraft, seedDraft, type ConfigDraft, type SeededDraft } from '../config/draft.js'
 import { ConfigError, formatConfigError } from '../config/validate.js'
 import type { ProjectManifest } from '../config/project-manifest.js'
 import { MANIFEST_FILE, mergeCapabilityIds } from '../config/project-manifest.js'
@@ -197,12 +197,12 @@ export async function startUiServer(opts: {
   const offeredInNew =
     schema.flatMap(s => s.fields).find(f => f.key === 'capabilities')?.modeOptions?.new ?? []
   // new mode pre-selects every offered capability, matching the terminal flow
-  const preTick = (d: ConfigDraft): ConfigDraft =>
+  const preTick = (d: SeededDraft): ConfigDraft =>
     d.mode === 'new'
       ? {
           ...d,
           capabilities: mergeCapabilityIds(
-            d.capabilities ?? [],
+            d.capabilities,
             offeredInNew.map(o => o.value)
           )
         }
