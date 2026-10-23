@@ -282,6 +282,33 @@ for acknowledgements or live delivery.
 The in-memory connection map is process-local. Horizontally scaled deployments
 need sticky routing or an authenticated shared broker.
 
+A `joinRoom` is answered: `joinedRoom` with the room on success, `joinFailed`
+with a `reason` and a `code` on refusal. The refusal names the room it refused
+whenever the server could read one, because a client may have several joins in
+flight and this event is the only reply any of them gets.
+
+### Live delivery of a stored message
+
+A message stored over HTTP is announced on `sendMessage-<roomId>`, the same
+event a socket send broadcasts on. The room is the recipient's subscription,
+so how the sender transmitted is not something the recipient subscribed to.
+
+The announcement is best effort and never replaces `listMessages`:
+
+- It reaches only this process's sockets. A recipient joined on another
+  process of a scaled-out deployment is not reached, which is the same
+  constraint as the connection map above.
+- **A send carrying a payment is never announced.** The announcement carries
+  the request body, which holds no payment, while the stored row holds
+  `{ message, payment }`. A recipient that acknowledged on the announcement
+  would delete the row before its wallet internalized the output, and only
+  `listMessages` internalizes. Paid messages are therefore polled.
+- A send the route refused is never announced.
+
+The fan-out is bounded by `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`, the
+same limit the send route applies to push notifications over the same
+recipient list.
+
 ## Container
 
 The multi-stage Dockerfile uses a digest-pinned Node 24 Alpine base, installs
