@@ -30,6 +30,9 @@ export default {
         useESM: true,
         diagnostics: false,
         tsconfig: {
+          // Type errors are not reported here (diagnostics: false), so compile
+          // each file on its own instead of building a whole program per file.
+          isolatedModules: true,
           // Explicitly enable ES2020 to support BigInt literals
           target: 'ES2020',
           module: 'ESNext',

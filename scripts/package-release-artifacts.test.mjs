@@ -27,6 +27,16 @@ const RELEASE_WORKFLOW = path.join(REPOSITORY_ROOT, '.github/workflows/release.y
 const POLICY_PATH = path.join(REPOSITORY_ROOT, 'governance/npm-package-supply-chain.json')
 const PROJECTS_PATH = path.join(REPOSITORY_ROOT, 'governance/repository-health/projects.json')
 
+test('the workspace build uses the governed npm artifact runtime', () => {
+  const policy = JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'))
+  // Repository-health runs these contracts before installing dependencies.
+  const workflow = fs.readFileSync(path.join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8')
+  const build = workflow.split(/(?=^  [\w-]+:\n)/m).find(job => job.startsWith('  build:\n'))
+  assert.ok(build)
+  const versions = [...build.matchAll(/^\s+node-version: (.+)$/gm)].map(match => match[1])
+  assert.deepEqual(versions, [policy.buildRuntime.node])
+})
+
 test('deterministic UUIDs are stable RFC 9562 version 8 identifiers', () => {
   const first = deterministicUuid('release-artifact')
   assert.equal(first, deterministicUuid('release-artifact'))
