@@ -6,13 +6,19 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.0
 
+- `GoChaintracksServiceClient` accepts Go orphan-hash reorg announcements as well
+  as the existing TypeScript shape. Orphan headers are resolved sequentially under
+  one event deadline and validated before Monitor receives the ordered list.
+  Adds `streamErrorCount` and optional bounded `onStreamError` diagnostics.
+  Rejected events do not discard following complete events in the same chunk.
+  No listener, schema or consumer migration is required.
+
 - With the compatibility SDK, existing certificate references accept bounded
   historical types through the normal BRC-100 APIs. Storage listing and proof
   retain their existing queries; relinquishment inherits the updated SDK
   reference validator on both manager and provider. Upgrade the remote storage
   SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
   and new signing/acquisition remain strict at 32 bytes.
-
 
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
