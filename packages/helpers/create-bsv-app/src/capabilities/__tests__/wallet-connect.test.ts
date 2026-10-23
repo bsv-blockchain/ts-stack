@@ -1,7 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
 import ts from 'typescript'
 import { walletConnect } from '../wallet-connect'
-import { newBuilder } from '../../scaffold/base-app'
+import { assembleBaseFile, newBuilder, SERVER_TEMPLATE } from '../../scaffold/base-app'
 
 const ctx = {
   name: 'demo',
@@ -145,6 +145,89 @@ describe('wallet-connect', () => {
       'new WalletRelayService({ app, server, wallet: serverWallet'
     )
   })
+  test('server pairs phones via SERVER_ORIGIN: own /api/session registered before the relay', () => {
+    const b = newBuilder()
+    walletConnect.baseEdits?.({ builder: b, ctx })
+    expect(b.server.config.map(c => c.import)).toEqual([
+      "import { SERVER_ORIGIN, RELAY_URL } from './bsv/config.js'"
+    ])
+    const setup = b.server.setup.join('\n')
+    const route = setup.indexOf("app.get('/api/session',")
+    const relay = setup.indexOf('new WalletRelayService(')
+    expect(route).toBeGreaterThanOrEqual(0)
+    expect(route).toBeLessThan(relay) // Express matches the first registered route
+    expect(setup).toContain('relay.createSession({ origin: SERVER_ORIGIN })')
+    expect(setup).toContain("res.setHeader('Cache-Control', 'no-store, max-age=0')")
+    expect(setup).toMatch(/code === 429 \? 429/)
+    expect(setup).toMatch(/includes\('allowedOrigins'\) \? 403 : 500/)
+    expect(setup).toContain('origin: SERVER_ORIGIN, relayUrl: RELAY_URL')
+    expect(setup).not.toContain('CLIENT_ORIGIN')
+    expect(setup).toMatch(/console\.log\(.*SERVER_ORIGIN/)
+    const index = assembleBaseFile(SERVER_TEMPLATE, b, ctx)
+    const result = ts.transpileModule(index, {
+      fileName: 'index.ts',
+      reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
+    })
+    expect(result.diagnostics ?? []).toEqual([])
+    // Glued entry imports the values from the generated config.ts rather than inlining them.
+    expect(index).toContain("import { SERVER_ORIGIN, RELAY_URL } from './bsv/config.js'")
+    expect(index).not.toContain('isLocalDevelopmentHost')
+    expect(index.indexOf('const server = http.createServer(app)')).toBeLessThan(
+      index.indexOf("app.get('/api/session',")
+    )
+  })
+  test.each([
+    ['development', true],
+    ['production', false]
+  ])('startup log in %s: LAN pairing hint %s', (nodeEnv, hint) => {
+    const b = newBuilder()
+    walletConnect.baseEdits?.({ builder: b, ctx })
+    const js = ts.transpileModule(b.server.setup.join('\n'), {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
+    }).outputText
+    const logs: string[] = []
+    class WalletRelayService {}
+    new Function(
+      'app',
+      'server',
+      'serverWallet',
+      'WalletRelayService',
+      'SERVER_ORIGIN',
+      'RELAY_URL',
+      'process',
+      'console',
+      js
+    )(
+      { get: () => undefined },
+      {},
+      {},
+      WalletRelayService,
+      'https://api.example.com',
+      'wss://api.example.com',
+      { env: { NODE_ENV: nodeEnv } },
+      { log: (m: string) => logs.push(m) }
+    )
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toContain('https://api.example.com')
+    expect(logs[0].includes('LAN address')).toBe(hint)
+  })
+  test('server relay allows private-network HTTP only outside production', () => {
+    const b = newBuilder()
+    walletConnect.baseEdits?.({ builder: b, ctx })
+    const setup = b.server.setup.join('\n')
+    expect(setup).toMatch(
+      /new WalletRelayService\(\{[^)]*allowLocalNetworkHttp: process\.env\.NODE_ENV !== 'production'[^)]*\}\)/
+    )
+  })
+  test('relay client allows private-network HTTP only in the Vite dev build', () => {
+    const provider = (walletConnect.files(ctx).client ?? []).find(
+      f => f.path === 'WalletConnectionContext.tsx'
+    )
+    expect(provider?.content).toMatch(
+      /useWalletRelayClient\(\{[^)]*allowLocalNetworkHttp: import\.meta\.env\.DEV[^)]*\}\)/
+    )
+  })
   test('relay client points at the server via API_BASE_URL', () => {
     const provider = (walletConnect.files(ctx).client ?? []).find(
       f => f.path === 'WalletConnectionContext.tsx'
@@ -158,11 +241,16 @@ describe('wallet-connect', () => {
     const client = walletConnect.npmDependencies(ctx).client ?? {}
     expect(Object.keys(client)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'react']))
     expect(Object.keys(client)).not.toContain('@bsv/sdk')
-    // server gets the relay + its peer deps (qrcode, ws)
+    // server gets the relay + its qrcode peer (ws is the relay's own dependency since 0.5)
     const server = walletConnect.npmDependencies(ctx).server ?? {}
-    expect(Object.keys(server)).toEqual(
-      expect.arrayContaining(['@bsv/wallet-relay', 'qrcode', 'ws'])
-    )
+    expect(Object.keys(server)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'qrcode']))
+    expect(server).not.toHaveProperty('ws')
+  })
+  test('deps target @bsv/wallet-relay 0.6.0 (allowLocalNetworkHttp opt-in) and its @bsv/sdk peer floor', () => {
+    const deps = walletConnect.npmDependencies(ctx)
+    expect(deps.client?.['@bsv/wallet-relay']).toBe('^0.6.0')
+    expect(deps.server?.['@bsv/wallet-relay']).toBe('^0.6.0')
+    expect(deps.shared?.['@bsv/sdk']).toBe('^2.4.1')
   })
   test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
     const ctx2 = {

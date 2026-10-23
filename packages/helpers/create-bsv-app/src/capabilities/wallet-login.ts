@@ -116,7 +116,7 @@ Passwordless login: the connected wallet signs a proof with \`action: 'login'\`,
 
 ### Environment (in \`bsv/config.ts\`)
 - Client: \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).
-- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization). Production requires explicit stable key and HTTPS origin values.
+- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization), \`SERVER_ORIGIN\` (address a phone uses to reach the server for wallet pairing; set \`http://<your LAN IP>:<your server port>\` to pair on the same network). Production requires explicit stable key and HTTPS origin values.
 
 ### Future integrations — turn login into a session
 After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):
