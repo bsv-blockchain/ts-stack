@@ -343,4 +343,53 @@ test('automatic plans cut a slow class between members but never inside a method
   )
   for (const [, marker] of functionPlan.lines.get('src/functions.ts').slice(1))
     assert.match(marker, /^function run\d\(/)
+
+  // A template and a two-space call inside a method look like members. They
+  // must not be cuts, and the method's regex braces must not hide later members.
+  const traps = [
+    'class Parser {',
+    '  constructor(private readonly text: string) {}',
+    '  private step0(value: number): number {',
+    ...Array.from({ length: 90 }, (_, line) => `    value = value + ${line}`),
+    '    const source = `}',
+    '  private nested0(value: number): number {',
+    '    return value',
+    '  }`',
+    '  helper0(value)',
+    '    if (/^[0-9a-f]{4}$/.test(String(value))) value++',
+    ...Array.from({ length: 90 }, (_, line) => `    value = value + ${line + 90}`),
+    '    return value',
+    '  }',
+    ...Array.from({ length: 3 }, (_, method) => [
+      `  private step${method + 1}(value: number): number {`,
+      ...Array.from({ length: 40 }, (_, line) => `    value = value + ${method * 100 + line}`),
+      '    return value',
+      '  }'
+    ]).flat(),
+    '}'
+  ]
+  writeFileSync(join(directory, 'src/traps.ts'), traps.join('\n'))
+  const trapPlan = automaticPlan(
+    't',
+    { packageDirectory: directory, mutate: ['src/traps.ts'] },
+    1000
+  )
+  const trapCuts = trapPlan.lines.get('src/traps.ts')
+  assert.ok(trapCuts.length >= 2)
+  for (const [, marker] of trapCuts.slice(1)) {
+    assert.match(marker, /^ {2}(?:constructor\(|private step\d\()/)
+    assert.doesNotMatch(marker, /nested|helper/)
+  }
+  const trapParts = partitionMutationTarget('t', {
+    packageDirectory: directory,
+    mutate: ['src/traps.ts']
+  })
+  const ranges = trapParts
+    .flatMap(part => part.target.mutate)
+    .map(spec => spec.split(':')[1].split('-').map(Number))
+    .sort((left, right) => left[0] - right[0])
+  assert.equal(ranges[0][0], 1)
+  assert.equal(ranges.at(-1)[1], traps.length)
+  for (let index = 1; index < ranges.length; index += 1)
+    assert.equal(ranges[index][0], ranges[index - 1][1] + 1)
 })

@@ -235,23 +235,261 @@ function isMemberDeclaration(line) {
   return /^(?:\* ?)?[#A-Za-z_$][\w$]* ?[(<]/.test(words.slice(index).join(' '))
 }
 
-// Member declarations of top-level classes: Prettier indents a class body by
-// two spaces and a class body holds only members, so no mutant spans two of
-// them. Lines inside functions or nested blocks are never candidates.
+// Keywords after which `/` starts a regular expression rather than division.
+const EXPRESSION_KEYWORDS = new Set([
+  'abstract',
+  'as',
+  'async',
+  'await',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'declare',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'for',
+  'from',
+  'function',
+  'get',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'instanceof',
+  'interface',
+  'let',
+  'new',
+  'of',
+  'override',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+  'return',
+  'set',
+  'static',
+  'switch',
+  'throw',
+  'type',
+  'typeof',
+  'var',
+  'void',
+  'while',
+  'yield'
+])
+
+function declarationKeyword(line) {
+  return line.split(/[\s(<{=:]+/).find(word => !DECLARATION_MODIFIERS.has(word))
+}
+
+function scanState() {
+  return {
+    depth: 0,
+    classDepth: 0,
+    pendingClass: false,
+    expectExpression: true,
+    lineComment: false,
+    modes: ['code'],
+    interpolations: [],
+    regexClass: false
+  }
+}
+
+const currentMode = state => state.modes.at(-1)
+
+function isClassBodyMember(state, line) {
+  return (
+    currentMode(state) === 'code' &&
+    state.classDepth > 0 &&
+    state.depth === state.classDepth &&
+    isMemberDeclaration(line)
+  )
+}
+
+// A block mutant covers its whole method, including a template that looks like
+// another member, so a cut is safe only while the braces are still at the
+// class body.
 function classMemberLines(lines) {
   const members = new Set()
-  let inClass = false
+  const state = scanState()
   lines.forEach((line, index) => {
-    if (isTopLevelDeclaration(line)) {
-      const keyword = line.split(/[\s(<{=:]+/).find(word => !DECLARATION_MODIFIERS.has(word))
-      inClass = keyword === 'class' && line.trimEnd().endsWith('{')
-      return
-    }
-    if (!inClass) return
-    if (line.startsWith('}')) inClass = false
-    else if (isMemberDeclaration(line)) members.add(index)
+    if (isClassBodyMember(state, line)) members.add(index)
+    scanLine(state, line)
   })
   return members
+}
+
+function scanLine(state, line) {
+  if (currentMode(state) === 'code' && state.depth === 0 && isTopLevelDeclaration(line))
+    state.pendingClass = declarationKeyword(line) === 'class'
+  for (let index = 0; index < line.length; index += 1) {
+    if (state.lineComment) break
+    index = scanAt(state, line, index)
+  }
+  state.lineComment = false
+}
+
+function scanAt(state, line, index) {
+  const mode = currentMode(state)
+  if (mode === 'block') return scanBlock(state, line, index)
+  if (mode === 'single' || mode === 'double') return scanQuoted(state, line, index)
+  if (mode === 'template') return scanTemplate(state, line, index)
+  if (mode === 'regex') return scanRegex(state, line, index)
+  return scanCode(state, line, index)
+}
+
+function scanCode(state, line, index) {
+  const char = line[index]
+  const next = line[index + 1]
+  if (char === '/' && next === '/') {
+    state.lineComment = true
+    return index + 1
+  }
+  if (char === '/' && next === '*') {
+    state.modes.push('block')
+    return index + 1
+  }
+  if (char === '/' && state.expectExpression) {
+    state.modes.push('regex')
+    state.regexClass = false
+    return index
+  }
+  if (char === '/') {
+    state.expectExpression = true
+    return index
+  }
+  if (char === "'" || char === '"') {
+    state.modes.push(char === "'" ? 'single' : 'double')
+    return index
+  }
+  if (char === '`') {
+    state.modes.push('template')
+    return index
+  }
+  if (char === '{') return openBrace(state, index)
+  if (char === '}') return closeBrace(state, index)
+  if (/[A-Za-z_$]/.test(char)) return scanWord(state, line, index)
+  if (/[0-9]/.test(char)) return scanNumber(state, line, index)
+  if (char === ' ' || char === '\t') return index
+  return scanPunctuation(state, char, next, index)
+}
+
+function openBrace(state, index) {
+  state.depth += 1
+  if (state.pendingClass && state.depth === 1) {
+    state.classDepth = state.depth
+    state.pendingClass = false
+  }
+  state.expectExpression = true
+  return index
+}
+
+function closeBrace(state, index) {
+  const interpolation = state.interpolations.at(-1)
+  if (interpolation !== undefined && state.depth === interpolation) {
+    state.depth -= 1
+    state.interpolations.pop()
+    state.modes.pop()
+    return index
+  }
+  state.depth -= 1
+  if (state.classDepth > 0 && state.depth < state.classDepth) state.classDepth = 0
+  state.expectExpression = false
+  return index
+}
+
+function scanWord(state, line, index) {
+  let end = index + 1
+  while (end < line.length && /[A-Za-z0-9_$]/.test(line[end])) end += 1
+  state.expectExpression = EXPRESSION_KEYWORDS.has(line.slice(index, end))
+  return end - 1
+}
+
+function scanNumber(state, line, index) {
+  let end = index + 1
+  while (end < line.length && /[0-9A-Za-z_.]/.test(line[end])) end += 1
+  state.expectExpression = false
+  return end - 1
+}
+
+function scanPunctuation(state, char, next, index) {
+  if ((char === '+' && next === '+') || (char === '-' && next === '-')) return index + 1
+  if (char === '(' || char === '[') {
+    state.expectExpression = true
+    return index
+  }
+  if (char === ')' || char === ']') {
+    state.expectExpression = false
+    return index
+  }
+  if (char === '.') {
+    state.expectExpression = false
+    return index
+  }
+  if ('=+-*%&|^~!?:;,<>'.includes(char)) state.expectExpression = true
+  return index
+}
+
+function scanBlock(state, line, index) {
+  if (line[index] === '*' && line[index + 1] === '/') {
+    state.modes.pop()
+    return index + 1
+  }
+  return index
+}
+
+function scanQuoted(state, line, index) {
+  const char = line[index]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  const quote = currentMode(state) === 'single' ? "'" : '"'
+  if (char === quote) {
+    state.modes.pop()
+    state.expectExpression = false
+  }
+  return index
+}
+
+function scanTemplate(state, line, index) {
+  const char = line[index]
+  const next = line[index + 1]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  if (char === '`') {
+    state.modes.pop()
+    state.expectExpression = false
+    return index
+  }
+  if (char === '$' && next === '{') {
+    state.modes.push('code')
+    state.depth += 1
+    state.interpolations.push(state.depth)
+    state.expectExpression = true
+    return index + 1
+  }
+  return index
+}
+
+function scanRegex(state, line, index) {
+  const char = line[index]
+  if (char === '\\') return Math.min(index + 1, line.length - 1)
+  if (char === '[' && !state.regexClass) {
+    state.regexClass = true
+    return index
+  }
+  if (char === ']' && state.regexClass) {
+    state.regexClass = false
+    return index
+  }
+  if (char === '/' && !state.regexClass) {
+    state.modes.pop()
+    state.expectExpression = false
+  }
+  return index
 }
 
 function isCode(line) {

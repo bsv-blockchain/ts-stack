@@ -108,9 +108,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Run the whole campaign at once; the slowest single part bounds wall time.
-      # The full campaign is 68 parts; a 20-job cap queued parts for up to
-      # 7 minutes behind a 7.6-minute longest part.
+      # Above the full campaign, so the slowest part bounds wall time.
       max-parallel: 100
       matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
     steps:
@@ -170,8 +168,7 @@ jobs:
     needs: [prepare, mutation-tests]
     strategy:
       fail-fast: false
-      # Every partitioned target's gate at once (ten today); two at a time added
-      # about 3 minutes after the last part finished.
+      # Start every partitioned target's gate together.
       max-parallel: 20
       matrix:
         target: ${{ fromJSON(needs.prepare.outputs.partition-targets) }}

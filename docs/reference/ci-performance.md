@@ -461,7 +461,8 @@ lines (`function`, `class`, `const`, `export …` at column zero), or at member
 declarations of a top-level class (methods, constructor and accessors at the
 two-space Prettier indent), that are unique line prefixes, balanced by code
 lines; a mutant cannot span two top-level statements or two class members, and
-a two-space line inside a function is never a cut point. Whole files and file segments are then grouped heaviest first into
+a two-space line inside a function, method, string, template, or comment is
+never a cut. Whole files and file segments are then grouped heaviest first into
 the estimate over 180 seconds parts. Explicit plans, including hand-placed line
 cuts, keep priority. Today `color-permission` splits automatically into twelve
 parts and `reorg-stream` into two; the exhaustiveness replay covers every target
