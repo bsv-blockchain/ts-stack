@@ -108,8 +108,8 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      # Run the whole campaign at once; the slowest single target bounds wall time.
-      max-parallel: 20
+      # Above the full campaign, so the slowest part bounds wall time.
+      max-parallel: 100
       matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -168,7 +168,8 @@ jobs:
     needs: [prepare, mutation-tests]
     strategy:
       fail-fast: false
-      max-parallel: 2
+      # Start every partitioned target's gate together.
+      max-parallel: 20
       matrix:
         target: ${{ fromJSON(needs.prepare.outputs.partition-targets) }}
     runs-on: ubuntu-latest

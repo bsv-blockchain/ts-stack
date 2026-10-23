@@ -50,6 +50,7 @@ test('every publisher requires complete exact-source qualification before publis
             prepare: { outputs: { count: '1' } },
             discover: { result: 'success', outputs: { count: '1' } },
             source: { result: 'success' },
+            'build-image': { result: 'success' },
             [gate]: { result, outputs: { 'qualified-sha': qualified } }
           }
         }
@@ -172,8 +173,8 @@ test('partition jobs cannot replace each original canonical global gate or the f
   )
   const ci = parse(readFileSync(CI_PATH, 'utf8'))
   assert.equal(ci.jobs['mutation-tests'].strategy['max-parallel'], 6)
-  // Release qualification runs every target at once; one target bounds wall time.
-  assert.equal(full.jobs['mutation-tests'].strategy['max-parallel'], 20)
+  // Release qualification runs every part at once; one part bounds wall time.
+  assert.equal(full.jobs['mutation-tests'].strategy['max-parallel'], 100)
   for (const workflow of [ci, full]) {
     assert.match(workflow.jobs['mutation-tests'].strategy.matrix, /mutation-matrix/)
     assert.match(

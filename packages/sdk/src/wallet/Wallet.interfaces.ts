@@ -862,6 +862,7 @@ export interface AcquireCertificateArgs {
 }
 
 export interface WalletCertificate {
+  /** Exactly 32 decoded bytes for new acquisition; existing operations also support bounded historical types. */
   type: Base64String
   subject: PubKeyHex
   serialNumber: Base64String

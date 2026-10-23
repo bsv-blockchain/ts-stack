@@ -630,3 +630,12 @@ Use a wallet with the matching Toolbox parser fix. The binary wire format is
 unchanged and cannot carry structured review evidence; choose a compatible
 transport before financial operations rather than retrying an ambiguous failure.
 No BRC-100 call or storage-schema migration is required.
+
+### Existing certificate compatibility
+
+The 4.0.0 source candidate restores bounded historical certificate types through
+existing listing, proof, discovery, relinquishment and authentication APIs. New
+signing and acquisition still require exactly 32 type bytes. Legacy binary
+operations require upgraded adapters at both endpoints, including registration
+of the internal HTTP transport endpoint when using `HTTPWalletWire`; ordinary
+encodings are unchanged. See [the protocol and rollout contract](../../specs/wallet/legacy-certificate-wire.md).

@@ -6,6 +6,14 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.0
 
+- With the compatibility SDK, existing certificate references accept bounded
+  historical types through the normal BRC-100 APIs. Storage listing and proof
+  retain their existing queries; relinquishment inherits the updated SDK
+  reference validator on both manager and provider. Upgrade the remote storage
+  SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
+  and new signing/acquisition remain strict at 32 bytes.
+
+
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
   canonical regtest genesis header; `ChaintracksServiceClient` and

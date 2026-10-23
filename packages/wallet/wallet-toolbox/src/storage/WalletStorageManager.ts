@@ -516,6 +516,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
+    // Validate an existing reference, including historical types; acquisition remains strict.
     validateRelinquishCertificateArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)

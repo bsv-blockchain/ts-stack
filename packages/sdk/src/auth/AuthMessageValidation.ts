@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from '../wallet/CertificateType.js'
 import PublicKey from '../primitives/PublicKey.js'
 import { toArray } from '../primitives/utils.js'
 import type { AuthMessage, AuthMessageValidationOptions, RequestedCertificateSet } from './types.js'
@@ -142,7 +143,7 @@ export function assertRequestedCertificateSet(
   }
   for (const [type, fields] of entries) {
     if (isUnsafeRecordKey(type)) throw new Error('Unsafe requested certificate type key.')
-    assertCanonicalBase64(type, 'certificate type', 32)
+    existingCertificateTypeBytes(type)
     if (!Array.isArray(fields) || fields.length > MAX_CERTIFICATE_FIELDS) {
       throw new Error('Requested certificate fields exceed their limit.')
     }

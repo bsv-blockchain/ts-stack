@@ -552,6 +552,21 @@ function packageSpecifier(packageName, subpath) {
   return subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`
 }
 
+// Resolve every specifier and report each failure, exiting non-zero if any fail.
+export function resolutionProbe(resolver, specifiers) {
+  return [
+    `const resolve = ${resolver}`,
+    `const failures = []`,
+    `for (const specifier of ${JSON.stringify(specifiers)}) {`,
+    `  try { resolve(specifier) } catch (error) { failures.push(\`\${specifier}: \${error.message}\`) }`,
+    `}`,
+    `if (failures.length > 0) {`,
+    String.raw`  console.error(failures.join('\n'))`,
+    `  process.exit(1)`,
+    `}`
+  ].join('\n')
+}
+
 async function checkConsumer({
   tarballPath,
   manifest,
@@ -609,24 +624,37 @@ async function checkConsumer({
         )
       }
     }
-    for (const subpath of publicEntrypoints) {
-      const specifier = packageSpecifier(manifest.name, subpath)
-      if (modes.includes('esm')) {
-        await run(
-          'node',
-          [
-            '--input-type=module',
-            '--eval',
-            `await import.meta.resolve(${JSON.stringify(specifier)})`
-          ],
-          { cwd: consumerDirectory }
-        )
-      }
-      if (modes.includes('cjs') && !esmOnlyEntrypoints.includes(subpath)) {
-        await run('node', ['--eval', `require.resolve(${JSON.stringify(specifier)})`], {
-          cwd: consumerDirectory
-        })
-      }
+    // Resolution runs no package code, so one process per module system checks
+    // every public entrypoint; a process per entrypoint cost about two minutes
+    // for the SDK's 459 entrypoints.
+    if (modes.includes('esm')) {
+      await run(
+        'node',
+        [
+          '--input-type=module',
+          '--eval',
+          resolutionProbe(
+            'specifier => import.meta.resolve(specifier)',
+            publicEntrypoints.map(subpath => packageSpecifier(manifest.name, subpath))
+          )
+        ],
+        { cwd: consumerDirectory }
+      )
+    }
+    if (modes.includes('cjs')) {
+      await run(
+        'node',
+        [
+          '--eval',
+          resolutionProbe(
+            'specifier => require.resolve(specifier)',
+            publicEntrypoints
+              .filter(subpath => !esmOnlyEntrypoints.includes(subpath))
+              .map(subpath => packageSpecifier(manifest.name, subpath))
+          )
+        ],
+        { cwd: consumerDirectory }
+      )
     }
     await checkInstalledBin(consumerDirectory, manifest, binName, binArguments)
   } finally {
