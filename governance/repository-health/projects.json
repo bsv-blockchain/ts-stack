@@ -632,6 +632,17 @@
       "release": "none"
     },
     {
+      "path": "packages/overlays/eqc",
+      "name": "@bsv/eqc",
+      "owner": "ts-stack-maintainers",
+      "area": "overlays",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
+    },
+    {
       "path": "packages/overlays/gasp-core",
       "name": "@bsv/gasp",
       "owner": "ts-stack-maintainers",
