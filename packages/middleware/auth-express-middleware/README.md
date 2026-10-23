@@ -243,15 +243,15 @@ Do not hard-code a deployment-specific domain list in this middleware.
 Public errors are deliberately stable and do not include internal exception
 messages:
 
-| Status | Code                               | Meaning                                         |
-| ------ | ---------------------------------- | ----------------------------------------------- |
-| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers               |
-| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied         |
-| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent or failed             |
-| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out               |
-| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                 |
-| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed  |
-| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit |
+| Status | Code                               | Meaning                                                                              |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers                                                    |
+| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied                                              |
+| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent, or nonce, signature, session, or HMAC verification failed |
+| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out                                                    |
+| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                                                      |
+| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed                                       |
+| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit                                      |
 
 ## Security notes
 

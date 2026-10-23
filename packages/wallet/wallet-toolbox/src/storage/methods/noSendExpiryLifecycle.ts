@@ -577,11 +577,7 @@ async function retryRejectedReclaim(
   target: TableTransaction,
   targetStatus: StatusForTxidResult['status'] | undefined
 ): Promise<RejectedReclaimRecovery> {
-  if (
-    targetStatus !== 'unknown' ||
-    target.noSendExpiryObservedAt != null ||
-    target.noSendExpiryReclaimTxid == null
-  ) {
+  if (targetStatus !== 'unknown' || target.noSendExpiryObservedAt != null || target.noSendExpiryReclaimTxid == null) {
     return 'not-applicable'
   }
 
@@ -839,7 +835,12 @@ async function processPage(
   context: LifecycleContext,
   result: NoSendExpiryLifecycleResult
 ): Promise<void> {
-  const transactions = await activeTransactionsOnPage(storage, page)
+  // A `never` action has no deadline and no reclaim to cancel, so nothing in this lifecycle
+  // applies to it; ordinary noSend tracking notices when it is mined.
+  const transactions = await activeTransactionsOnPage(
+    storage,
+    page.filter(transaction => transaction.noSendExpiryMode !== 'never')
+  )
   result.inspected += transactions.length
 
   const needsHeight = transactions.some(transaction => transaction.noSendExpiryMode === 'blockheight')

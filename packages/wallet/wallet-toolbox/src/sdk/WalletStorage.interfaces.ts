@@ -340,7 +340,8 @@ export interface StorageActivateNoSendExpiryArgs {
 export interface StorageActivateNoSendExpiryResult {
   action: StorageCreateActionResult
   expiry: Brc177NoSendExpiry
-  deadline: number
+  /** Absolute deadline in the expiry mode's units; null for `never`. */
+  deadline: number | null
   anchorTxid: string
   anchorVout: number
 }

@@ -591,6 +591,14 @@ they do not encrypt the transport. Applications must use a confidential
 transport such as correctly verified TLS and must separately authorize the
 authenticated identity for every protected operation.
 
+`verifyNonce` reports a boolean. A wallet HMAC mismatch (`ERR_INVALID_HMAC`,
+or an error whose message is exactly `HMAC is not valid`) is `false`, not a
+rejection. Other wallet failures still reject. `Peer` treats `false` as an
+authentication failure so a server can return 401 and the client can replace a
+stale session. A `true` result still does not prove freshness or single use.
+Callers that previously used a thrown `ERR_INVALID_HMAC` as the invalid-nonce
+signal must branch on the returned boolean.
+
 ## Locally authorized outputs in completed actions
 
 `completeBoundAction` continues to reject an unrequested output funded by a

@@ -416,6 +416,28 @@ function safeOwnErrorMessage(error: unknown): string {
   }
 }
 
+function safeOwnErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+    return descriptor !== undefined && typeof descriptor.value === 'string'
+      ? descriptor.value.slice(0, 64)
+      : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * General-message failures that mean the presented session cannot be used.
+ * AuthFetch drops its cached peer and re-handshakes only after a 401.
+ */
+function isGeneralAuthenticationFailure(error: unknown): boolean {
+  if (safeOwnErrorCode(error) === 'ERR_INVALID_HMAC') return true
+  const message = safeOwnErrorMessage(error)
+  return /nonce|signature|session|auth version/i.test(message) || message === 'HMAC is not valid'
+}
+
 function canWriteResponse(res: Response): boolean {
   return !res.headersSent && !res.writableEnded && !res.destroyed
 }
@@ -1379,8 +1401,7 @@ export class ExpressTransport implements Transport {
         .then(async () => await messageCallback(message))
         .catch(err => {
           this.clearActiveGeneralRequest(expectedRequestId)
-          const msg = safeOwnErrorMessage(err)
-          const isAuthError = /nonce|signature|session|auth version/i.test(msg)
+          const isAuthError = isGeneralAuthenticationFailure(err)
           this.log('error', 'Error in messageCallback (general message)', {
             ...safeErrorDetails(err),
             isAuthError
