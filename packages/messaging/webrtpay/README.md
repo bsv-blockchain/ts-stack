@@ -287,6 +287,13 @@ repository root:
 pnpm build && node --experimental-strip-types examples/demo-node.ts
 ```
 
+## Session codec and knockless dial
+
+Two options for a consumer that carries its own messages over the channel, or that already knows the payee is there. Both default to today's behaviour, so an existing caller is unchanged.
+
+- `authenticate(link, { codec })`: `codec` is a function that reads each value the peer sends after the handshake and returns the consumer's message type, or throws. The default is `parseWireMessage`, the payments wire. A value the codec throws on is answered with `error` / `protocol` and closes the session, as before. The wire does not change (`docs/protocol.md`, section 6).
+- `connect(recipient, { knock: false, codec })`: a dial without a knock, for a caller that knows the recipient is present (the offer is sent once gathered, no knock and no ring, the dial clock starts when the carrier takes the offer); and the session codec passed through to `authenticate`. The payee is unchanged and answers a bare offer (`docs/protocol.md`, section 7.5). The default dial still knocks.
+
 ## Signalers
 
 A `Signaler` carries already-encrypted envelopes between identity keys; it never sees an SDP.
