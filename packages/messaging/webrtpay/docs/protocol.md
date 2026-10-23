@@ -517,6 +517,17 @@ field that is `null` as absent. A message that fails these checks, an unknown `t
 `hello`, `auth` or `ready` after the handshake is answered with
 `{ "t": "error", "code": "protocol" }` and the session closes with `protocol`.
 
+**The session codec (`authenticate`'s `codec` option).** What this section lists is the
+default reading of a session, `parseWireMessage`. A consumer that carries its own messages over
+the channel may pass `authenticate` a `codec`, a function from the received value to its own
+message type that throws on what it refuses; its session then hands that consumer's kinds (say
+`{ "t": "low.envelope", "v": 1, "wire": "..." }`) to the app unparsed by the payments layer. The
+wire does not change: framing (§4), the handshake (§5, always read as the payments wire) and
+the refusal are the same bytes, a value the codec throws on, or a `hello`, `auth` or `ready`
+after the handshake, is answered with `{ "t": "error", "code": "protocol" }` and the session
+closes with `protocol`. The codec is the session's, not the protocol's: both sides must agree on
+it out of band, and a default peer refuses any kind this section does not list.
+
 ### 6.1 `payment` (payer → payee)
 
 ```json
@@ -751,6 +762,17 @@ payer                                    payee (receiving)
   handshake then have their own 30 s.
 - A client that is dialing but not receiving answers knocks and offers with `reject`
   `not_receiving`.
+
+**A dial without a knock (`connect`'s `knock: false`).** A caller that already knows the payee
+is there (a relay's presence read for that identity, no older than the relay's join prove
+budget, say) may skip the knock: the offer goes out as soon as it is gathered (≤ 1.5 s, as
+above), and the payee's answer or reject is the only reply. No ring is asked for and the 2 s
+presence clock does not run. The clock rule: the 6 s dial clock starts when the carrier takes
+the offer (the post), not at a reply, and running out of it is `timeout`; the whole dial is
+still capped at 30 s, and a reject is `rejected` as above. The payee is unchanged: it answers a
+bare offer as it always has (above), so the envelopes, their plaintext and the handshake are
+the same bytes. Such a dial posts one signal, the offer, and saves the knock's round trip and
+the payee's ring.
 
 **Network binding.** An identity key is the same on every network, so a dial names the
 network too. A client given a network (`chain`) puts it in its knocks, rings, offers and
@@ -1085,6 +1107,7 @@ key is never sent to Cloudflare.
 | Signals that cannot be opened, reported to `onError`                            | 1 every 10 s                                    |
 | Rejects sent / rings sent                                                       | 1 a second / 20 a second (burst 20)             |
 | Signals per dial: payer → payee / payee → payer                                 | 2 (knock, offer) / 2 (ring, answer or reject)   |
+| Signals per dial without a knock: payer → payee / payee → payer                 | 1 (offer) / 1 (answer or reject)                |
 | Signal sdp / sid / ciphertext                                                   | 16384 / 64 / 24576 characters                   |
 | MessageBox poll: idle / dialing / deadline / max backoff                        | 2.5 s / 1 s / 10 s / 30 s                       |
 | Relay envelope / WebSocket message                                              | 24672 / 98688 bytes                             |
