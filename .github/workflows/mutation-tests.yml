@@ -170,7 +170,9 @@ jobs:
     needs: [prepare, mutation-tests]
     strategy:
       fail-fast: false
-      max-parallel: 2
+      # Every partitioned target's gate at once (ten today); two at a time added
+      # about 3 minutes after the last part finished.
+      max-parallel: 20
       matrix:
         target: ${{ fromJSON(needs.prepare.outputs.partition-targets) }}
     runs-on: ubuntu-latest

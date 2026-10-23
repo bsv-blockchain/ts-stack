@@ -244,10 +244,10 @@ test('automatic plans split slow multi-file targets by file and leave fast or si
     mutate: ['src/a.ts', 'src/b.ts:1-150', 'src/b.ts:120-200', 'src/c.ts', 'src/d.ts']
   }
   // Measured as fast: one job, whatever the size.
-  assert.equal(automaticPlan('t', target, 200), undefined)
+  assert.equal(automaticPlan('t', target, 150), undefined)
   // Never measured: the pessimistic estimate (680 code lines) splits it.
   const unmeasured = automaticPlan('t', target, undefined)
-  assert.equal(new Set(unmeasured.files.values()).size, 3)
+  assert.equal(new Set(unmeasured.files.values()).size, 4)
   // Measured slow: parts by time, capped by the number of files.
   const plan = automaticPlan('t', target, 5000)
   assert.equal(new Set(plan.files.values()).size, 4)

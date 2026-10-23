@@ -181,7 +181,7 @@ function lineSegments(target, file, cuts) {
 // estimate is the target's measured hosted seconds. A target never measured
 // uses a deliberately pessimistic code-line estimate: an unneeded split costs
 // one job's setup, a missed split holds the whole campaign.
-const AUTO_PART_SECONDS = 240
+const AUTO_PART_SECONDS = 180
 const UNMEASURED_SECONDS_PER_CODE_LINE = 1
 let measuredSeconds
 function measuredTargetSeconds(targetId) {
