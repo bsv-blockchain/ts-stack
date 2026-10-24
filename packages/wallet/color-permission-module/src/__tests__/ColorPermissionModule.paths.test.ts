@@ -892,7 +892,7 @@ describe('ColorPermissionModule boundaries', () => {
         },
         next
       )
-    ).resolves.toEqual({ totalOutputs: '0', outputs: [] })
+    ).resolves.toEqual({ totalOutputs: 0, outputs: [] })
     const unknown = `${'ee'.repeat(32)}_0`
     const missing = await tokenPayment(new FakeWallet(), wallet, unknown, 5n)
     provider.admit(unknown, missing.tx, 0)

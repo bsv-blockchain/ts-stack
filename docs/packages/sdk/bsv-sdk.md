@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '4.0.0'
+version: '4.0.1'
 npm: '@bsv/sdk'
-last_updated: '2026-10-19'
-last_verified: '2026-10-19'
+last_updated: '2026-10-23'
+last_verified: '2026-10-23'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,14 +15,13 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The 4.0.0 source candidate types `ListOutputsResult.totalOutputs` as
-`PositiveIntegerOrZero | DecimalString`. A BRC-112 module balance query
-(`p <module> balance <basket>`) returns the exact balance as decimal text with
-no outputs and no BEEF; every other query returns a count. The binary
-`listOutputs` response carries that text and each output's `spendable` byte, so
-both ends of a binary connection must update together. Code that uses
-`totalOutputs` as a number must check `typeof totalOutputs === 'number'` first.
-This candidate is not publication.
+The 4.0.1 source candidate types `ListOutputsResult.totalOutputs` as a number
+again, `PositiveInteger64OrZero` (a JSON Number of any magnitude; up to 2^64 - 1 on the binary wire). A BRC-112 balance query (`balance <basket>` or
+`p <module> balance <basket>`) returns the balance as a nonnegative integer
+with no outputs and no BEEF; it may exceed the 2^32 - 1 bound of a count, and a
+JavaScript number is exact to 2^53 and rounded above. The binary `listOutputs`
+encoding is the 3.x encoding again: 4.0.0's per-output `spendable` byte and
+decimal-text module balance are removed. This candidate is not publication.
 
 The isolated SDK3 retirement candidate removes the obsolete serial-DID token
 validation module. Native identity, certificate and authentication APIs remain.

@@ -4,9 +4,9 @@ title: '@bsv/color-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/color-permission-module'
-version: '0.1.0'
-last_updated: '2026-10-19'
-last_verified: '2026-10-19'
+version: '0.1.1'
+last_updated: '2026-10-23'
+last_verified: '2026-10-23'
 review_cadence_days: 30
 status: experimental
 tags: ['permissions', 'brc207', 'brc162', 'tokens']
@@ -61,7 +61,7 @@ to approve.
 | Receive tokens                | `internalizeAction` with `basket insertion` into `p color <assetTag>` and the BRC-207 receipt instructions                                                       |
 | Sign an app-built transaction | `createSignature` with a `p color` protocol ID and a BRC-207 signature envelope                                                                                  |
 | Discover holdings             | `listOutputs` on `p color assets`                                                                                                                                |
-| Exact balance                 | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a decimal string                                                                                |
+| Balance                       | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a number, exact to 2^53                                                                         |
 
 ## Limits
 

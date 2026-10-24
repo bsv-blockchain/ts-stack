@@ -28,27 +28,16 @@ See [identity integration](../../docs/guides/identity-did-vc.md) and
 [migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
 This is a source candidate; publication and deployment are separate actions.
 
-## Module balances and listOutputs spendability (4.0 candidate)
+## Balance queries (4.0.1 candidate)
 
-`ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`. A
-BRC-112 module balance query (`p <module> balance <basket>`) returns the exact
-balance as decimal text, with no outputs and no BEEF. Every other query still
-returns a count. The binary `listOutputs` response carries that text and each
-output's `spendable` byte, so both ends of a binary wallet connection must be
-on 4.0.
-
-Code that uses `totalOutputs` as a number narrows it first:
-
-```ts
-// 3.x
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-const pages = Math.ceil(totalOutputs / 100)
-
-// 4.0
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-if (typeof totalOutputs !== 'number') throw new Error('Expected an output count')
-const pages = Math.ceil(totalOutputs / 100)
-```
+`ListOutputsResult.totalOutputs` is a `PositiveInteger64OrZero` (a number; JSON
+carries any magnitude, the binary wire at most 2^64 - 1). For a BRC-112 balance query
+(`balance <basket>` or `p <module> balance <basket>`) it is the balance, a
+nonnegative integer with no outputs and no BEEF; it may exceed the 2^32 - 1
+bound of an output count. A JavaScript number is exact to 2^53 and rounded
+above, so code that moves coins sums the outputs instead. The binary
+`listOutputs` encoding is the 3.x encoding; 4.0.0's per-output `spendable` byte
+and decimal-text module balance are removed.
 
 ## Wallet integration
 

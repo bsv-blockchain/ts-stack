@@ -1515,11 +1515,9 @@ components:
           BEEF: [2, 0, 190, 239]
       properties:
         totalOutputs:
-          oneOf:
-            - type: number
-            - type: string
-              pattern: "^(0|[1-9][0-9]*)$"
-          description: The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as decimal text with no outputs and no BEEF.
+          type: integer
+          minimum: 0
+          description: PositiveInteger64OrZero, a non-negative integer (JSON carries any magnitude; the binary wire cannot carry 2^64 or more). The number of matching outputs, at most 2^32 - 1; for a BRC-112 balance query (balance <basket> or p <module> balance <basket>), the balance with no outputs and no BEEF. As a JavaScript number it is exact up to 2^53 and rounded above.
           examples:
             - 1
         BEEF:
