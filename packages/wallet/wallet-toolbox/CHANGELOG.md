@@ -4,6 +4,17 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.1
+
+- The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
+  what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
+  invalid, revoked or expired key, before it reads the transaction. Previously a refused
+  key was recorded as a transaction rejection, so a mistyped or revoked `arcadeApiKey`
+  marked broadcasts `invalid` and failed their transactions. The wallet now fails over
+  or keeps the transaction queued for retry, and the history note says whether the
+  configured key was refused or the endpoint requires one. No configuration or consumer
+  migration is required.
+
 ## wallet-toolbox 2.15.0
 
 - `GoChaintracksServiceClient` accepts Go orphan-hash reorg announcements as well
