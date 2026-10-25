@@ -19,6 +19,7 @@ import {
   COLOR_KEY_ID,
   colorProtocolID,
   colorTopic,
+  derivationSuffixTag,
   DISCOVERY_TOPIC,
   ISSUE
 } from '../identifiers.js'
@@ -127,7 +128,10 @@ describe('ColorPermissionModule token operations', () => {
 
   /** Runs the createAction and signAction hooks around the fake wallet, as the permissions manager does. */
   async function run(args: Partial<CreateActionArgs>): Promise<Transaction> {
-    const created: CreateActionResult = await wallet.createAction(await createAction(args))
+    const created = (await module.onResponse(await wallet.createAction(await createAction(args)), {
+      method: 'createAction',
+      originator: APP
+    })) as CreateActionResult
     const signable = created.signableTransaction!
     const action: PermissionsModuleAction = {
       reference: signable.reference,
@@ -262,6 +266,8 @@ describe('ColorPermissionModule token operations', () => {
     })
 
     it('burns an explicit input without change', async () => {
+      // The app names this input without its BEEF; the fake wallet resolves it from storage.
+      wallet.requireInputBEEF = false
       const tx = await run({
         labels: labels([assetId], [{ assetId, operation: 'burn' }]),
         inputs: [{ outpoint, unlockingScriptLength: 108, inputDescription: 'Burned' }],
@@ -275,6 +281,8 @@ describe('ColorPermissionModule token operations', () => {
     })
 
     it('burns the rest of an explicit input after a transfer', async () => {
+      // The app names this input without its BEEF; the fake wallet resolves it from storage.
+      wallet.requireInputBEEF = false
       const tx = await run({
         labels: labels(
           [assetId],
@@ -614,6 +622,7 @@ describe('ColorPermissionModule token operations', () => {
       expect(provider.submissions).toEqual([{ topics: [DISCOVERY_TOPIC], txid: tx.id('hex') }])
       const [outpoint, stored] = [...wallet.outputs].find(([, output]) => output.vout === 0)!
       expect(stored.basket).toBe(assetBasket(`${outpoint.slice(0, 64)}_0`, 'authority'))
+      expect(stored.tags).toEqual([derivationSuffixTag(deploy.remittance.derivationSuffix)])
       const inventory = (await module.handleRequest(
         {
           method: 'listOutputs',

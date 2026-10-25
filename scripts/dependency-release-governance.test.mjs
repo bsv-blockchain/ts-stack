@@ -31,7 +31,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 26)
+  assert.equal(overrides.length, 28)
   assert.equal(overrides.filter(entry => entry.selector === 'gaxios').length, 8)
   assert.equal(overrides.filter(entry => entry.selector === 'uuid').length, 3)
   assert.equal(overrides.filter(entry => entry.selector === 'brace-expansion').length, 4)
@@ -40,6 +40,11 @@ test('dependency and release governance is internally complete', () => {
     '5.0.11'
   )
   assert.equal(overrides.find(entry => entry.selector === 'engine.io@<6.6.10')?.value, '6.6.10')
+  assert.equal(
+    overrides.find(entry => entry.selector === 'puppeteer-core@25.11.0>chromium-bidi')?.value,
+    "'-'"
+  )
+  assert.equal(overrides.find(entry => entry.selector === 'zod@>=4.0.0 <4.6.6')?.value, '4.6.7')
   assert.equal(overrides.filter(entry => entry.selector.startsWith('toml')).length, 0)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)

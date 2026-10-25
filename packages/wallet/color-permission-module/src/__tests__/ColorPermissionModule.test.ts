@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals'
 import {
   Beef,
   LockingScript,
+  MerklePath,
   OP,
   Signature,
   Transaction,
@@ -11,6 +12,7 @@ import {
   type CreateActionResult,
   type InternalizeActionArgs,
   type ListOutputsResult,
+  type SignActionArgs,
   type SignActionResult
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
@@ -23,7 +25,14 @@ import {
 } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
 import { ColorPermissionModule } from '../ColorPermissionModule.js'
-import { assetBasket, assetTag, COLOR_KEY_ID, colorProtocolID, colorTopic } from '../identifiers.js'
+import {
+  assetBasket,
+  assetTag,
+  COLOR_KEY_ID,
+  colorProtocolID,
+  colorTopic,
+  derivationSuffixTag
+} from '../identifiers.js'
 import {
   createModule,
   deployAsset,
@@ -310,8 +319,9 @@ describe('ColorPermissionModule', () => {
           input.sourceTransaction!.id('hex')
         )
       ).toEqual([middle.id('hex')])
-      // The unreadable record, then the 200-unit output to select and to sign; never the 50.
-      expect(decrypt).toHaveBeenCalledTimes(3)
+      // The unreadable record, then the 200-unit output to select; signing uses the bound record.
+      // Never the 50.
+      expect(decrypt).toHaveBeenCalledTimes(2)
     })
 
     it('skips outputs the overlay no longer reports and fails on an insufficient balance', async () => {
@@ -469,7 +479,10 @@ describe('ColorPermissionModule', () => {
           originator: APP
         })
       ).args as CreateActionArgs
-      const created = await wallet.createAction(funded)
+      const created = (await module.onResponse(await wallet.createAction(funded), {
+        method: 'createAction',
+        originator: APP
+      })) as CreateActionResult
       await wallet.abortAction({ reference: created.signableTransaction!.reference })
       const result = await send({
         outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
@@ -588,6 +601,8 @@ describe('ColorPermissionModule', () => {
     })
 
     it('spends an exact-amount explicit input of this wallet in a handoff without a split', async () => {
+      // The app names this input without its BEEF; the fake wallet resolves it from storage.
+      wallet.requireInputBEEF = false
       const [held] = await holdTokens(wallet, provider, assetId, [100n])
       const result = await send({
         labels: handoffLabels(),
@@ -651,6 +666,784 @@ describe('ColorPermissionModule', () => {
       ).rejects.toThrow('signing failed')
       expect(wallet.pending.size).toBe(0)
       expect(provider.submissions).toEqual([])
+    })
+  })
+
+  describe('input records bound to the action reference', () => {
+    const internals = () =>
+      module as unknown as {
+        staged: Map<string, unknown>
+        bound: Map<string, Array<{ outpoint: string }>>
+        selected: Set<string>
+      }
+    const outpointOf = (tx: Transaction): string => `${tx.id('hex')}.0`
+
+    async function fund(amount = 100n): Promise<CreateActionArgs> {
+      return (
+        await module.onRequest({
+          method: 'createAction',
+          args: {
+            description: 'Send tokens',
+            labels: transferPlan(assetId),
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, amount)],
+            options: { randomizeOutputs: false }
+          },
+          originator: APP
+        })
+      ).args as CreateActionArgs
+    }
+
+    async function respond(funded: CreateActionArgs): Promise<CreateActionResult> {
+      return (await module.onResponse(await wallet.createAction(funded), {
+        method: 'createAction',
+        originator: APP
+      })) as CreateActionResult
+    }
+
+    async function fundAndCreate(
+      amount = 100n
+    ): Promise<{ funded: CreateActionArgs; created: CreateActionResult }> {
+      const funded = await fund(amount)
+      return { funded, created: await respond(funded) }
+    }
+
+    async function signHook(action: PermissionsModuleAction): Promise<SignActionArgs> {
+      return (
+        await module.onRequest({
+          method: 'signAction',
+          args: { reference: action.reference, spends: {} },
+          originator: APP,
+          action
+        })
+      ).args as SignActionArgs
+    }
+
+    it('binds the inputs of the returned transaction to its reference and signs them without listing', async () => {
+      const [selected] = await holdTokens(wallet, provider, assetId, [300n])
+      // The wallet hides the action's reserved inputs from every listing, as its auto mode does.
+      wallet.hideReserved = true
+      const { created } = await fundAndCreate()
+      const reference = created.signableTransaction!.reference
+      expect(internals().staged.size).toBe(0)
+      expect([...internals().bound.keys()]).toEqual([reference])
+      expect(
+        internals()
+          .bound.get(reference)!
+          .map(input => input.outpoint)
+      ).toEqual([outpointOf(selected)])
+      wallet.listOutputsCalls.length = 0
+      const signArgs = await signHook(signingAction(created))
+      expect(wallet.listOutputsCalls).toEqual([])
+      expect(Object.keys(signArgs.spends ?? {})).toEqual(['0'])
+      const signed = await wallet.signAction(signArgs)
+      expect(validInput(Transaction.fromAtomicBEEF(signed.tx!), 0)).toBe(true)
+      expect(internals().bound.size).toBe(0)
+    })
+
+    it('never signs one action’s inputs under another reference', async () => {
+      await holdTokens(wallet, provider, assetId, [300n, 200n])
+      const first = await fundAndCreate()
+      const second = await fundAndCreate()
+      const firstAction = signingAction(first.created)
+      // The second reference's records are not inputs of the first transaction.
+      await expect(
+        signHook({ ...firstAction, reference: second.created.signableTransaction!.reference })
+      ).rejects.toThrow('BRC-207: the signable transaction omits a token input')
+      // A reference with no records signs nothing; the wallet then refuses the unsigned input.
+      const unbound = await signHook({ ...firstAction, reference: 'not-bound' })
+      expect(unbound.spends).toEqual({})
+      // The first action's records were untouched by both.
+      const signArgs = await signHook(firstAction)
+      expect(Object.keys(signArgs.spends ?? {})).toEqual(['0'])
+    })
+
+    it('leaves a never-signed reference’s records unused when its outputs are selected again', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const first = await fundAndCreate()
+      const firstReference = first.created.signableTransaction!.reference
+      // The action dies without signAction; storage lists its input as spendable again.
+      await wallet.abortAction({ reference: firstReference })
+      const second = await fundAndCreate()
+      const secondReference = second.created.signableTransaction!.reference
+      expect(
+        internals()
+          .bound.get(secondReference)!
+          .map(input => input.outpoint)
+      ).toEqual([outpointOf(held)])
+      const signArgs = await signHook(signingAction(second.created))
+      const signed = await wallet.signAction(signArgs)
+      expect(validInput(Transaction.fromAtomicBEEF(signed.tx!), 0)).toBe(true)
+      expect(prompts.map(prompt => prompt.request.type)).toEqual(['color_send'])
+      expect([...internals().bound.keys()]).toEqual([firstReference])
+    })
+
+    it('binds nothing for a result without a signable transaction and unstages its inputs', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const funded = await fund()
+      expect(internals().staged.size).toBe(1)
+      const created = await wallet.createAction(funded)
+      await module.onResponse(
+        { txid: 'a'.repeat(64), tx: created.signableTransaction!.tx },
+        { method: 'createAction', originator: APP }
+      )
+      expect(internals().staged.size).toBe(0)
+      expect(internals().bound.size).toBe(0)
+    })
+
+    it.each(['absent', 'malformed', 'unrelated'] as const)(
+      'preserves staged inputs after an %s transaction response until the matching result arrives',
+      async kind => {
+        const [held] = await holdTokens(wallet, provider, assetId, [300n])
+        const funded = await fund()
+        const created = await wallet.createAction(funded)
+        const unrelated = new Transaction()
+        unrelated.addOutput({ lockingScript: LockingScript.fromASM('OP_TRUE'), satoshis: 1 })
+        const result =
+          kind === 'absent'
+            ? { txid: 'a'.repeat(64) }
+            : { tx: kind === 'malformed' ? [0] : unrelated.toAtomicBEEF() }
+
+        await expect(
+          module.onResponse(result, { method: 'createAction', originator: APP })
+        ).resolves.toBe(result)
+        expect([...internals().staged.keys()]).toEqual([outpointOf(held)])
+        expect(internals().bound.size).toBe(0)
+
+        await module.onResponse(created, { method: 'createAction', originator: APP })
+        expect(internals().staged.size).toBe(0)
+        const signed = await wallet.signAction(await signHook(signingAction(created)))
+        expect(validInput(Transaction.fromAtomicBEEF(signed.tx!), 0)).toBe(true)
+        expect(internals().bound.size).toBe(0)
+      }
+    )
+
+    it('defers to storage once the createAction has come back', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const { created } = await fundAndCreate()
+      expect(internals().staged.size).toBe(0)
+      // Storage reserves the input.
+      await expect(fund()).rejects.toThrow('insufficient spendable balance')
+      await wallet.abortAction({ reference: created.signableTransaction!.reference })
+      expect((await fund()).inputs).toHaveLength(1)
+    })
+
+    it('releases the records when signing is refused', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      module = createModule(wallet, provider, async () => false)
+      const { created } = await fundAndCreate()
+      expect(internals().bound.size).toBe(1)
+      await expect(signHook(signingAction(created))).rejects.toThrow(
+        'declined the color_send request'
+      )
+      expect(internals().bound.size).toBe(0)
+    })
+
+    it('clears staged and bound records on dispose', async () => {
+      await holdTokens(wallet, provider, assetId, [300n, 200n])
+      await fundAndCreate()
+      await fund()
+      expect(internals().bound.size).toBe(1)
+      expect(internals().staged.size).toBe(1)
+      module.dispose()
+      expect(internals().bound.size).toBe(0)
+      expect(internals().staged.size).toBe(0)
+    })
+
+    it('keeps nothing from a createAction that fails', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      wallet.editBEEF = () => undefined
+      await expect(fund()).rejects.toThrow('no source transaction for token input')
+      expect(internals().staged.size).toBe(0)
+      expect(internals().selected.size).toBe(0)
+      wallet.editBEEF = undefined
+      const { created } = await fundAndCreate()
+      expect(created.signableTransaction).toBeDefined()
+    })
+  })
+
+  describe('suffix tags on filed outputs', () => {
+    const tagFor = (customInstructions: string | undefined): string =>
+      derivationSuffixTag(
+        (JSON.parse(customInstructions!) as { derivationSuffix: string }).derivationSuffix
+      )
+
+    it('tags token change with its derivation suffix', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const funded = (
+        await module.onRequest({
+          method: 'createAction',
+          args: {
+            description: 'Send tokens',
+            labels: transferPlan(assetId),
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+            options: { randomizeOutputs: false }
+          },
+          originator: APP
+        })
+      ).args as CreateActionArgs
+      const change = funded.outputs![1]
+      expect(change.basket).toBe(assetBasket(assetId, 'value'))
+      expect(change.tags).toEqual([tagFor(change.customInstructions)])
+    })
+
+    it('tags a receipt with its derivation suffix', async () => {
+      const { tx, customInstructions } = await tokenPayment(new FakeWallet(), wallet, assetId, 50n)
+      provider.admit(assetId, tx, 0)
+      const received = (
+        await module.onRequest({
+          method: 'internalizeAction',
+          args: {
+            tx: tx.toAtomicBEEF(),
+            description: 'Receive tokens',
+            outputs: [
+              {
+                outputIndex: 0,
+                protocol: 'basket insertion',
+                insertionRemittance: {
+                  basket: assetBasket(assetId, 'value'),
+                  customInstructions,
+                  tags: ['app tag']
+                }
+              }
+            ]
+          },
+          originator: APP
+        })
+      ).args as InternalizeActionArgs
+      expect(received.outputs[0].insertionRemittance?.tags).toEqual([
+        'app tag',
+        tagFor(customInstructions)
+      ])
+    })
+
+    it('tags both outputs of a handoff split', async () => {
+      await holdTokens(wallet, provider, assetId, [300n])
+      const created: CreateActionArgs[] = []
+      const createAction = wallet.createAction.bind(wallet)
+      wallet.createAction = async args => {
+        created.push(args)
+        return await createAction(args)
+      }
+      await send({
+        labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+        options: { noSend: true }
+      })
+      const split = created[0].outputs!
+      expect(split).toHaveLength(2)
+      for (const output of split) {
+        const custody = await maybeDecryptMetadata(wallet.asWallet(), output.customInstructions!)
+        expect(output.tags).toEqual([tagFor(custody)])
+      }
+    })
+  })
+
+  describe('input BEEF', () => {
+    async function fund(args: Partial<CreateActionArgs>): Promise<CreateActionArgs> {
+      return (
+        await module.onRequest({
+          method: 'createAction',
+          args: {
+            description: 'Send tokens',
+            labels: transferPlan(assetId),
+            ...args,
+            options: { randomizeOutputs: false, ...args.options }
+          },
+          originator: APP
+        })
+      ).args as CreateActionArgs
+    }
+
+    const outpointOf = (tx: Transaction): string => `${tx.id('hex')}.0`
+    const sourceOf = (tx: Transaction): Transaction => tx.inputs[0].sourceTransaction!
+    const txids = (beef: number[] | Uint8Array | undefined): string[] =>
+      Beef.fromBinary(beef!)
+        .txs.map(tx => tx.txid)
+        .sort()
+
+    const tagOf = (tx: Transaction): string => {
+      const { derivationSuffix } = JSON.parse(
+        wallet.outputs.get(outpointOf(tx))!.customInstructions!
+      ) as { derivationSuffix: string }
+      return derivationSuffixTag(derivationSuffix)
+    }
+
+    it('supplies the selected inputs’ transactions with their proofs and nothing else', async () => {
+      const [, selected] = await holdTokens(wallet, provider, assetId, [60n, 300n])
+      const source = sourceOf(selected)
+      source.merklePath = new MerklePath(1, [
+        [
+          { offset: 0, hash: source.id('hex'), txid: true },
+          { offset: 1, duplicate: true }
+        ]
+      ])
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(selected)])
+      const beef = Beef.fromBinary(funded.inputBEEF!)
+      expect(txids(funded.inputBEEF)).toEqual([selected.id('hex'), source.id('hex')].sort())
+      expect(beef.bumps).toHaveLength(1)
+      expect(beef.findTxid(source.id('hex'))?.bumpIndex).toBe(0)
+      expect(beef.isValid()).toBe(true)
+    })
+
+    const beefListings = () =>
+      wallet.listOutputsCalls
+        .filter(call => call.include === 'entire transactions')
+        .map(({ basket, tags, tagQueryMode, limit, includeCustomInstructions }) => ({
+          basket,
+          tags,
+          tagQueryMode,
+          limit,
+          includeCustomInstructions
+        }))
+
+    it('reads the selected inputs of one basket in one listing by their suffix tags', async () => {
+      const [, first, second] = await holdTokens(wallet, provider, assetId, [60n, 300n, 200n, 20n])
+      const output = await recipientOutput(wallet, new FakeWallet(), assetId, 400n)
+      wallet.listOutputsCalls.length = 0
+      const funded = await fund({ outputs: [output] })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([
+        outpointOf(first),
+        outpointOf(second)
+      ])
+      expect(beefListings()).toEqual([
+        {
+          basket: assetBasket(assetId, 'value'),
+          tags: [tagOf(first), tagOf(second)],
+          tagQueryMode: 'any',
+          limit: 2,
+          includeCustomInstructions: undefined
+        }
+      ])
+      expect(txids(funded.inputBEEF)).toEqual(
+        [first, second, sourceOf(first), sourceOf(second)].map(tx => tx.id('hex')).sort()
+      )
+    })
+
+    it('reads each asset’s selected inputs in one listing per basket', async () => {
+      const other = (await deployAsset(new FakeWallet(), provider, 1_000n)).assetId
+      const [mine] = await holdTokens(wallet, provider, assetId, [300n])
+      const [theirs] = await holdTokens(wallet, provider, other, [300n])
+      wallet.listOutputsCalls.length = 0
+      const funded = await fund({
+        labels: ColorPlan.toLabels({
+          version: 1,
+          assets: [assetId, other],
+          ownedOutputs: [],
+          operations: [
+            { assetId, operation: 'transfer' },
+            { assetId: other, operation: 'transfer' }
+          ],
+          inputPositions: [],
+          changePositions: [],
+          sighashTypes: []
+        }),
+        outputs: [
+          await recipientOutput(wallet, new FakeWallet(), assetId, 100n),
+          await recipientOutput(wallet, new FakeWallet(), other, 100n)
+        ]
+      })
+      expect(beefListings().map(({ basket, tags, limit }) => ({ basket, tags, limit }))).toEqual([
+        { basket: assetBasket(assetId, 'value'), tags: [tagOf(mine)], limit: 1 },
+        { basket: assetBasket(other, 'value'), tags: [tagOf(theirs)], limit: 1 }
+      ])
+      expect(txids(funded.inputBEEF)).toEqual(
+        [mine, theirs, sourceOf(mine), sourceOf(theirs)].map(tx => tx.id('hex')).sort()
+      )
+    })
+
+    it('spends verified receipts with a shared suffix and different payment prefixes', async () => {
+      const sender = new FakeWallet()
+      async function payment(amount: bigint, prefix: string) {
+        const { tx, customInstructions } = await tokenPayment(sender, wallet, assetId, amount)
+        const custody = {
+          ...JSON.parse(customInstructions),
+          derivationPrefix: prefix,
+          derivationSuffix: 'Ag=='
+        }
+        const { publicKey } = await sender.getPublicKey({
+          protocolID: colorProtocolID(assetId, prefix, custody.derivationSuffix),
+          keyID: COLOR_KEY_ID,
+          counterparty: wallet.identityKey
+        })
+        tx.outputs[0].lockingScript = new OneColor().lock(
+          assetId,
+          amount,
+          hash160(toArray(publicKey, 'hex'))
+        )
+        return { tx, custody }
+      }
+      const small = await payment(100n, 'AQ==')
+      let large = await payment(300n, 'Aw==')
+      // Put the unselected receipt before the selected one in the wallet's canonical order.
+      for (let nonce = 0; large.tx.id('hex') < small.tx.id('hex'); nonce++) {
+        large = await payment(300n, `payment${nonce}`)
+      }
+      for (const { tx, custody } of [small, large]) {
+        provider.admit(assetId, tx, 0)
+        const received = await module.onRequest({
+          method: 'internalizeAction',
+          originator: APP,
+          args: {
+            tx: tx.toAtomicBEEF(),
+            outputs: [
+              {
+                outputIndex: 0,
+                protocol: 'basket insertion',
+                insertionRemittance: {
+                  basket: assetBasket(assetId, 'value'),
+                  customInstructions: JSON.stringify(custody)
+                }
+              }
+            ],
+            description: 'Receive tokens'
+          }
+        })
+        await expect(
+          wallet.internalizeAction(received.args as InternalizeActionArgs)
+        ).resolves.toEqual({ accepted: true })
+      }
+      expect(tagOf(small.tx)).toBe(tagOf(large.tx))
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 200n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(large.tx)])
+      expect(txids(funded.inputBEEF)).toEqual(
+        [large.tx.id('hex'), sourceOf(large.tx).id('hex')].sort()
+      )
+      const created = await wallet.createAction(funded)
+      await module.onResponse(created, { method: 'createAction', originator: APP })
+      const signed = await wallet.signAction(
+        (
+          await module.onRequest({
+            method: 'signAction',
+            args: { reference: created.signableTransaction!.reference, spends: {} },
+            action: signingAction(created),
+            originator: APP
+          })
+        ).args as SignActionArgs
+      )
+      expect(validInput(Transaction.fromAtomicBEEF(signed.tx!), 0)).toBe(true)
+    })
+
+    it('does not select an untagged output', async () => {
+      await holdTokens(wallet, provider, assetId, [300n], false)
+      const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
+      await expect(fund({ outputs: [output] })).rejects.toThrow('insufficient spendable balance')
+      const [tagged] = await holdTokens(wallet, provider, assetId, [200n])
+      expect((await fund({ outputs: [output] })).inputs?.map(input => input.outpoint)).toEqual([
+        outpointOf(tagged)
+      ])
+    })
+
+    it('refuses an untagged app-named input', async () => {
+      const [untagged] = await holdTokens(wallet, provider, assetId, [100n], false)
+      await expect(
+        fund({
+          inputs: [
+            { outpoint: outpointOf(untagged), unlockingScriptLength: 108, inputDescription: 'Mine' }
+          ],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+        })
+      ).rejects.toThrow(
+        `BRC-207: token output ${outpointOf(untagged)} was filed without its suffix tag and is not spendable through the module`
+      )
+    })
+
+    it.each(['reserved', 'staged'] as const)(
+      'refuses an app-named input already %s by another action',
+      async state => {
+        const [held] = await holdTokens(wallet, provider, assetId, [300n])
+        const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
+        const first = await fund({ outputs: [output] })
+        if (state === 'reserved') {
+          const created = await wallet.createAction(first)
+          await module.onResponse(created, { method: 'createAction', originator: APP })
+        }
+        await expect(
+          fund({
+            inputs: [
+              { outpoint: outpointOf(held), unlockingScriptLength: 108, inputDescription: 'Mine' }
+            ],
+            outputs: [output]
+          })
+        ).rejects.toThrow('BRC-207: an explicit p color input is reserved by another action')
+        expect(prompts).toEqual([])
+      }
+    )
+
+    it('refuses an app-named token input whose wallet record has no custody instructions', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      wallet.outputs.get(outpointOf(held))!.customInstructions = undefined
+      await expect(
+        fund({
+          inputs: [
+            { outpoint: outpointOf(held), unlockingScriptLength: 108, inputDescription: 'Mine' }
+          ],
+          outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+        })
+      ).rejects.toThrow('BRC-207: an explicit p color input is not a managed token output')
+      expect(prompts).toEqual([])
+    })
+
+    it('lists a selected output by the suffix tag it carries, whatever its value', async () => {
+      const [retagged] = await holdTokens(wallet, provider, assetId, [300n, 200n])
+      const tag = derivationSuffixTag('another suffix')
+      wallet.outputs.get(outpointOf(retagged))!.tags = [tag]
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(retagged)])
+      const listing = wallet.listOutputsCalls.find(call => call.include === 'entire transactions')
+      expect(listing?.tags).toEqual([tag])
+    })
+
+    it('pages past nonselected same-tag outputs without merging or crediting them', async () => {
+      // A suffix tag is an index, not an ownership or amount assertion. A matching unselected
+      // output may be legitimate (different payments can share a suffix) or merely retagged.
+      let selected: Transaction
+      let intruder: Transaction
+      do {
+        wallet.outputs.clear()
+        ;[selected, intruder] = await holdTokens(wallet, provider, assetId, [300n, 50n])
+      } while (outpointOf(intruder) > outpointOf(selected))
+      wallet.outputs.get(outpointOf(intruder))!.tags = [tagOf(selected)]
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(selected)])
+      expect(txids(funded.inputBEEF)).toEqual(
+        [selected.id('hex'), sourceOf(selected).id('hex')].sort()
+      )
+      expect(
+        OneColor.decode(LockingScript.fromHex(funded.outputs!.at(-1)!.lockingScript)).amount
+      ).toBe(200n)
+      expect(
+        wallet.listOutputsCalls
+          .filter(call => call.include === 'entire transactions')
+          .map(({ limit, offset }) => ({ limit, offset }))
+      ).toEqual([
+        { limit: 1, offset: undefined },
+        { limit: 1, offset: 1 }
+      ])
+    })
+
+    it.each([NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, '1'])(
+      'refuses an invalid matching source count %s',
+      async count => {
+        await holdTokens(wallet, provider, assetId, [300n])
+        const listOutputs = wallet.listOutputs.bind(wallet)
+        wallet.listOutputs = async args => {
+          const result = await listOutputs(args)
+          return args.include === 'entire transactions'
+            ? { ...result, totalOutputs: count }
+            : result
+        }
+        await expect(
+          fund({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
+        ).rejects.toThrow('the matching output count is not a nonnegative safe integer')
+        expect(prompts).toEqual([])
+      }
+    )
+
+    it('stops once all selected sources are found, without fetching other same-tag receipts', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const listOutputs = wallet.listOutputs.bind(wallet)
+      let sourceCalls = 0
+      wallet.listOutputs = async args => {
+        const result = await listOutputs(args)
+        if (args.include !== 'entire transactions') return result
+        sourceCalls++
+        if (sourceCalls > 1) throw new Error('unnecessary source page')
+        return { ...result, totalOutputs: 10_000 }
+      }
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(sourceCalls).toBe(1)
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(held)])
+      expect(txids(funded.inputBEEF)).toEqual([held.id('hex'), sourceOf(held).id('hex')].sort())
+    })
+
+    it.each([
+      'changed count',
+      'duplicate',
+      'empty page',
+      'oversized page',
+      'missing selected'
+    ] as const)('refuses contradictory source pagination: %s', async kind => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const listOutputs = wallet.listOutputs.bind(wallet)
+      let sourceCalls = 0
+      wallet.listOutputs = async args => {
+        if (args.include !== 'entire transactions') return await listOutputs(args)
+        sourceCalls++
+        // A coherent first page has one same-tag row, with one more matching row to inspect.
+        const result = await listOutputs({ ...args, offset: 0 })
+        const heldOutput = result.outputs[0]
+        const other = { ...heldOutput, outpoint: `${'a'.repeat(64)}.0` }
+        let outputs = sourceCalls === 1 ? [other] : [heldOutput]
+        if (sourceCalls === 2) {
+          switch (kind) {
+            case 'empty page':
+              outputs = []
+              break
+            case 'duplicate':
+              outputs = [other]
+              break
+            case 'oversized page':
+              outputs = [heldOutput, { ...other, outpoint: `${'b'.repeat(64)}.0` }]
+              break
+            case 'missing selected':
+              outputs = [{ ...other, outpoint: `${'b'.repeat(64)}.0` }]
+              break
+          }
+        }
+        return {
+          ...result,
+          totalOutputs: sourceCalls === 2 && kind === 'changed count' ? 3 : 2,
+          outputs
+        }
+      }
+      await expect(
+        fund({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
+      ).rejects.toThrow('BRC-207: the wallet returned other outputs than the selected token inputs')
+      expect(sourceCalls).toBe(2)
+      expect(prompts).toEqual([])
+      wallet.listOutputs = listOutputs
+      // Pagination failure returns the selection to the module's available pool.
+      expect(
+        (
+          await fund({
+            outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+          })
+        ).inputs?.map(input => input.outpoint)
+      ).toEqual([outpointOf(held)])
+    })
+
+    it('bounds source pages by the wallet limit and the initial matching count', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const listOutputs = wallet.listOutputs.bind(wallet)
+      const pages: Array<{ limit?: number; offset?: number }> = []
+      wallet.listOutputs = async args => {
+        if (args.include !== 'entire transactions') return await listOutputs(args)
+        pages.push({ limit: args.limit, offset: args.offset })
+        const result = await listOutputs({ ...args, offset: 0 })
+        return {
+          ...result,
+          totalOutputs: 10_002,
+          outputs:
+            pages.length === 3
+              ? result.outputs
+              : Array.from({ length: args.limit! }, (_, index) => ({
+                  ...result.outputs[0],
+                  outpoint: `${(index + (args.offset ?? 0)).toString(16).padStart(64, '0')}.0`
+                }))
+        }
+      }
+      const funded = await fund({
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(pages).toEqual([
+        { limit: 1, offset: undefined },
+        { limit: 10_000, offset: 1 },
+        { limit: 1, offset: 10_001 }
+      ])
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([outpointOf(held)])
+      expect(txids(funded.inputBEEF)).toEqual([held.id('hex'), sourceOf(held).id('hex')].sort())
+    })
+
+    it.each(['missing', 'duplicate'] as const)(
+      'refuses a source listing with a %s selected output even when no foreign output is returned',
+      async kind => {
+        const [held] = await holdTokens(wallet, provider, assetId, [300n])
+        const listOutputs = wallet.listOutputs.bind(wallet)
+        wallet.listOutputs = async args => {
+          const result = await listOutputs(args)
+          if (args.include === 'entire transactions') {
+            result.outputs = kind === 'missing' ? [] : [...result.outputs, result.outputs[0]]
+          }
+          return result
+        }
+        await expect(
+          fund({ outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)] })
+        ).rejects.toThrow(
+          `BRC-207: the wallet returned other outputs than the selected token inputs: missing ${
+            kind === 'missing' ? outpointOf(held) : 'none'
+          }; extra none`
+        )
+        expect(prompts).toEqual([])
+        wallet.listOutputs = listOutputs
+        // A refused listing must release the selection so a corrected response can fund it.
+        expect(
+          (
+            await fund({
+              outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+            })
+          ).inputs?.map(input => input.outpoint)
+        ).toEqual([outpointOf(held)])
+      }
+    )
+
+    it('merges the caller’s inputBEEF with the module’s', async () => {
+      const [selected] = await holdTokens(wallet, provider, assetId, [300n])
+      const other = new Transaction()
+      other.addOutput({ lockingScript: LockingScript.fromASM('OP_TRUE'), satoshis: 500 })
+      wallet.store(other, 0, 'foreign')
+      const funded = await fund({
+        inputs: [
+          { outpoint: outpointOf(other), unlockingScriptLength: 1, inputDescription: 'Fee' }
+        ],
+        inputBEEF: other.toBEEF(),
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)]
+      })
+      expect(funded.inputs?.map(input => input.outpoint)).toEqual([
+        outpointOf(other),
+        outpointOf(selected)
+      ])
+      expect(txids(funded.inputBEEF)).toEqual(
+        [other.id('hex'), selected.id('hex'), sourceOf(selected).id('hex')].sort()
+      )
+      // The wallet, which requires every input's transaction in inputBEEF, accepts the action.
+      await expect(wallet.createAction(funded)).resolves.toHaveProperty('signableTransaction')
+    })
+
+    it('names the input whose source transaction the wallet returns only by txid, or not at all', async () => {
+      const [selected] = await holdTokens(wallet, provider, assetId, [300n])
+      const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
+      wallet.editBEEF = beef => {
+        beef.makeTxidOnly(selected.id('hex'))
+        return beef
+      }
+      await expect(fund({ outputs: [output] })).rejects.toThrow(
+        `BRC-207: the wallet returned no source transaction for token input ${outpointOf(selected)}`
+      )
+      wallet.editBEEF = () => undefined
+      await expect(fund({ outputs: [output] })).rejects.toThrow(outpointOf(selected))
+    })
+
+    it('supplies the selected input for a handoff’s split, then the split for the handoff', async () => {
+      const [held] = await holdTokens(wallet, provider, assetId, [300n])
+      const created: CreateActionArgs[] = []
+      const createAction = wallet.createAction.bind(wallet)
+      wallet.createAction = async args => {
+        created.push(args)
+        return await createAction(args)
+      }
+      const result = await send({
+        labels: ['p nosend expiry seconds 30', ...transferPlan(assetId)],
+        outputs: [await recipientOutput(wallet, new FakeWallet(), assetId, 100n)],
+        options: { noSend: true }
+      })
+      const split = Transaction.fromAtomicBEEF(result.tx!).inputs[0].sourceTransaction!
+      expect(created).toHaveLength(2)
+      expect(txids(created[0].inputBEEF)).toEqual([held.id('hex'), sourceOf(held).id('hex')].sort())
+      expect(txids(created[1].inputBEEF)).toEqual(
+        [split.id('hex'), held.id('hex'), sourceOf(held).id('hex')].sort()
+      )
     })
   })
 
@@ -853,24 +1646,22 @@ describe('ColorPermissionModule', () => {
       )
       provider.admit(legacyId, tx, 0)
       const basket = assetBasket(legacyId, 'value')
-      await expect(
-        module.onRequest({
-          method: 'internalizeAction',
-          args: {
-            tx: tx.toAtomicBEEF(),
-            description: 'Receive tokens',
-            outputs: [
-              {
-                outputIndex: 0,
-                protocol: 'basket insertion',
-                insertionRemittance: { basket, customInstructions }
-              }
-            ]
-          },
-          originator: APP
-        })
-      ).resolves.toEqual(expect.objectContaining({ args: expect.anything() }))
-      wallet.store(tx, 0, basket, customInstructions)
+      const received = await module.onRequest({
+        method: 'internalizeAction',
+        args: {
+          tx: tx.toAtomicBEEF(),
+          description: 'Receive tokens',
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance: { basket, customInstructions }
+            }
+          ]
+        },
+        originator: APP
+      })
+      await wallet.internalizeAction(received.args as InternalizeActionArgs)
 
       const result = await send({
         labels: transferPlan(legacyId),

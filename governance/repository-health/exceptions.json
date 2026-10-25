@@ -410,6 +410,39 @@
       "created": "2026-10-03",
       "reviewBy": "2026-11-02",
       "removeWhen": "Remove the patch, exact-version package extension and parent-scoped removal together when an official compatible Metro/file-map release removes the affected dependency path. Require the complete independent watcher oracle, frozen graph, full unexcluded audit and packed Metro/Hermes platform checks before retirement."
+    },
+    {
+      "id": "verifast-cdp-only-browser-tooling",
+      "category": "override",
+      "target": "Exact puppeteer-core@25.11.0 chromium-bidi dependency removal in the private CDP browser test harness",
+      "owner": "ts-stack-maintainers",
+      "reason": "VeriFast browser qualification launches Chrome over CDP and does not use WebDriver BiDi. Puppeteer loads the BiDi implementation dynamically only for that protocol. Its unused chromium-bidi 17.0.2 path retains vulnerable Zod 3; available Puppeteer 25.13-25.16 upgrades select a chromium-bidi release without the provenance required by the existing no-downgrade policy. Remove only that unused exact-parent dependency and retain the unchanged harness and Chrome's existing CDP default. No public package contract, browser test assertion, audit threshold or provenance control changes.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+        "https://github.com/puppeteer/puppeteer/releases/tag/puppeteer-core-v25.13.0",
+        "https://github.com/bsv-blockchain/ts-stack/pull/1367",
+        "packages/verifast/browser/test.mjs",
+        "docs/reference/dependency-policy.md#temporary-cdp-browser-tooling-repair"
+      ],
+      "created": "2026-10-23",
+      "reviewBy": "2026-11-06",
+      "removeWhen": "Retire the exact-parent removal when a compatible official Puppeteer/Chromium-BiDi release has verified provenance and an advisory-clean frozen closure, or the private browser harness no longer depends on Puppeteer. Require the unchanged complete VeriFast browser/CSP/worker/fallback suite, typecheck, package consumers and full unexcluded audit to pass. Requalify and restore an explicit supported dependency before introducing any BiDi test."
+    },
+    {
+      "id": "zod4-mutation-protocol-security-floor",
+      "category": "override",
+      "target": "Zod 4 below 4.6.6 in the private Stryker mutation-server-protocol closure",
+      "owner": "ts-stack-maintainers",
+      "reason": "mutation-server-protocol 0.4.1 accepts Zod ^4.1.12 and retains vulnerable 4.6.5. Enforce the compatible patched 4.6.7 security floor until the upstream minimum excludes the advisory range. A broad root refresh also moves unrelated Babel, Inquirer, Node types and mutation tooling; the narrow security substitution preserves that reviewed graph. This does not substitute Zod 4 for Zod 3, change a public runtime contract, or suppress the unexcluded audit.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+        "https://github.com/colinhacks/zod/pull/6652",
+        "https://github.com/bsv-blockchain/ts-stack/pull/1367",
+        "docs/reference/dependency-policy.md#temporary-cdp-browser-tooling-repair"
+      ],
+      "created": "2026-10-23",
+      "reviewBy": "2026-11-06",
+      "removeWhen": "Remove when upstream mutation-server-protocol declares a minimum Zod version at least 4.6.6, a frozen regeneration without this selector contains no vulnerable Zod, and protocol schema, Stryker smoke/mutation, full audit and normal qualification pass."
     }
   ]
 }
