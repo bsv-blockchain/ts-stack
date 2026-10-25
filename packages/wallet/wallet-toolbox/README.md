@@ -30,6 +30,40 @@ SQL receipt claim. Source versions are candidates until published through the
 protected release workflow; upgrading an app alone does not upgrade its remote
 storage server.
 
+## Reorg proof recovery
+
+`TaskReorg` compares the latest 12 heights after each processed tip, including
+when ChainTracks events are unavailable. It journals pending ranges before
+remote work, retries unresolved heights every minute without requiring a new
+tip, and recovers observed gaps after monitor downtime. Each attempt reviews
+at most `recentDepth` fresh heights and `recentDepth` pending heights; the
+default is 12 and zero disables this fallback. Ranges are compacted without
+dropping pending work; compaction may recheck intervening heights.
+
+The lagged `TaskReviewProvenTxs` audit starts at the minimum stored proof
+height on the built-in SQL and IndexedDB providers, leaves an empty wallet
+uncheckpointed, repairs older checkpoints in empty history, and retains fair
+bounded retries through restart and tip retreat. Custom storage providers may
+override `getProvenTxsReviewStartHeight`; its safe default starts at zero when
+proofs exist, so custom providers can retain a longer initial audit.
+Recent rolling scans and these forward cursors do not establish detection of
+an arbitrary historical reorg below both cursors; deeper ancestry reconciliation
+remains separate work.
+
+Coordinate the upgrade of all monitor writers sharing a storage database:
+older versions do not understand compact retry checkpoints and may overwrite
+pending recovery work. The durability evidence covers one active Monitor owner
+with sequential restart; concurrent checkpoint writers are unqualified, and
+this change adds no ownership lock. Public Storage API serving topology is
+independent of the internal monitor worker's ownership.
+
+No SQL schema or manual data rewrite is required. IndexedDB automatically
+upgrades to version 7 to add a nonunique `proven_txs.height` index, avoiding a
+proof-blob scan during audit bootstrap. Close other connections using older
+code before upgrading, and retain a backup of browser wallet data. Reverting
+to code opening an older IndexedDB version requires a compatible restore or a
+forward fix. Source merge does not publish a package or upgrade a running wallet.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
@@ -625,6 +659,18 @@ deactivated headers by default. `MonitorOptions.maxQueuedDeactivatedHeaders`
 can lower that ceiling. Prepared-proof invalidations are coalesced and drained
 during teardown; partial event subscriptions and rejected application
 callbacks are contained and reported through bounded monitor events.
+The Go client accepts both TypeScript reorg events and Go events carrying
+`orphanedHashes`, `commonAncestor`, `newTip`, and `depth`. It resolves only the
+announced hashes, validates their headers and linkage to the common ancestor,
+and uses `maxReorgHeaders`, one `requestTimeoutMsecs` deadline per event, and
+unsubscribe cancellation to bound the work. Existing reorg listener arguments
+are unchanged. `streamErrorCount` exposes malformed events and stream failures;
+optional `onStreamError(message)` receives single-line diagnostics capped at
+512 characters. Observer exceptions do not stop later events. A rejected event is reported and
+subsequent complete events already received in the same SSE chunk still run in
+order. These events do
+not by themselves prove the server's canonical-chain selection.
+
 The legacy `BHServiceClient` applies the same endpoint, whole-body deadline,
 byte, range, hash, linkage, and proof-of-work checks. Its historical public
 `cache` property remains for source compatibility but is diagnostic only:
