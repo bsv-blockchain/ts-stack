@@ -167,6 +167,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: SpendVerifierInterface
 
+  /**
+   * Safe lower bound for the proof audit. Built-in providers return the minimum
+   * height; custom providers conservatively review from zero when proofs exist.
+   * No insertion-order assumption or unbounded proof-blob scan is required.
+   */
+  async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const rows = await this.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 } })
+    return rows.length === 0 ? undefined : 0
+  }
+
   static defaultOptions(): {
     feeModel: StorageFeeModel
     commissionSatoshis: number
