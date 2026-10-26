@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **35 public packages**. Versions
+The release graph currently contains **36 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -48,6 +48,7 @@ authorized release action.
 | helpers | `create-bsv-app` | `1.1.2` | cli | cli | node | `>=22` | [packages/helpers/create-bsv-app](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app) |
 | messaging | `@bsv/authsocket` | `2.1.10` | node-library | node-cjs, node-esm | node | `>=22` | [packages/messaging/authsocket](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket) |
 | messaging | `@bsv/authsocket-client` | `2.1.9` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/messaging/authsocket-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket-client) |
+| messaging | `@bsv/group-messaging` | `0.1.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/messaging/group-messaging](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/group-messaging) |
 | messaging | `@bsv/message-box-client` | `2.7.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm, umd-global | browser, node, umd | `>=22` | [packages/messaging/message-box-client](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client) |
 | messaging | `@bsv/paymail` | `2.4.11` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/messaging/ts-paymail](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail) |
 | messaging | `@bsv/webrtpay` | `0.2.2` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/messaging/webrtpay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/webrtpay) |
@@ -93,9 +94,9 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 43 |
-| Package-area projects | 38 |
-| Public npm packages | 35 |
+| Governed projects | 44 |
+| Package-area projects | 39 |
+| Public npm packages | 36 |
 | Private package-area projects | 3 |
 | Standalone infrastructure projects | 8 |
 
@@ -130,7 +131,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 37 | current package manifests |
+| Projects with a test:coverage script | 38 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
