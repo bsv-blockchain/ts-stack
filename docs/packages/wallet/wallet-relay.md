@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.6.0'
+version: '0.7.0'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -247,7 +247,7 @@ await session.connect()
 > signed QR codes and wire an explicit approval callback before upgrading.
 
 > **Phone on the same LAN** — By default only HTTPS/WSS and loopback HTTP/WS
-> are accepted. Since 0.6.0, plain HTTP/WS on a private-network IP address
+> are accepted. Since 0.7.0, plain HTTP/WS on a private-network IP address
 > (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, IPv6 `fc00::/7`) is a
 > development opt-in: pass `allowLocalNetworkHttp: true` to
 > `WalletRelayService`, to `WalletRelayClient` (or `useWalletRelayClient`), and,
