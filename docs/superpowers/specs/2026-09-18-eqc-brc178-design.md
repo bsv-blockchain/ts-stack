@@ -437,8 +437,12 @@ it has received the transaction and its derivation suffix.
 
 ## Protocol decisions
 
-Each row resolves an ambiguity or a practical conflict in BRC-178 and should be
-fed back into the specification.
+Each row resolves an ambiguity or a practical conflict in BRC-178. Rows 1, 2,
+3, 4, 5, 6, 10, 12, 14, and 15 are proposed as amendments to BRC-178 in
+[bsv-blockchain/BRCs#358](https://github.com/bsv-blockchain/BRCs/pull/358),
+together with the test vectors in `packages/overlays/eqc/test/vectors`. eqc
+also follows that BRC's square-root payout weights, which replaced Fibonacci
+after this design was written.
 
 | #   | Topic                            | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | --- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
