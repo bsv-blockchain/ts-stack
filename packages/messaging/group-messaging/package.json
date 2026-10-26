@@ -29,8 +29,6 @@
   "files": [
     "dist",
     "README.md",
-    "THIRD_PARTY_NOTICES.md",
-    "LICENSES",
     "LICENSE.txt"
   ],
   "scripts": {
