@@ -13,6 +13,11 @@ on:
         type: boolean
         default: false
         required: false
+      application-performance-diagnostics:
+        description: Measure the unchanged alias disclosure property during artifact qualification
+        type: boolean
+        default: false
+        required: false
 
 permissions: {}
 
@@ -93,6 +98,8 @@ jobs:
       mutation-classification: ${{ steps.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ steps.scope.outputs.mutation-matrix }}
       partition-targets: ${{ steps.scope.outputs.partition-targets }}
+      mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
       docs: ${{ steps.scope.outputs.docs }}
@@ -175,6 +182,16 @@ jobs:
             echo "- Infrastructure: $(jq -c '[.infraMatrix.include[].display]' <<<"$SCOPE")"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Pin complete immutable mutation execution batches
+        # GitHub caps a matrix at 256 jobs; the full registry runs in ordered batches.
+        id: mutation-execution
+        env:
+          MUTATION_MATRIX: ${{ steps.scope.outputs.mutation-matrix }}
+        run: |
+          batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
+          printf 'batches=%s\nmatrix-digest=%s\n' "$batches" "$matrix_digest" >> "$GITHUB_OUTPUT"
+
       - name: Plan test lanes
         # Coverage suites run only for directly changed package importers.
         # Regression/type compatibility expands through dependents; builds also
@@ -213,11 +230,19 @@ jobs:
             --mode coverage-other)
           echo "coverage-other-packages=$COVERAGE_OTHER_PACKAGES" >> "$GITHUB_OUTPUT"
           # Packages run serially inside a shard, so plan shards from measured
-          # durations rather than package count.
+          # durations rather than package count. The application package runs
+          # in its own four complete-union shards instead.
+          COVERAGE_OTHER_ORDINARY=$(jq -c 'map(select(. != "@bsv/output-knowledge"))' <<<"$COVERAGE_OTHER_PACKAGES")
           COVERAGE_OTHER_MATRIX=$(node scripts/ci-shard-plan.mjs \
-            --packages-json "$COVERAGE_OTHER_PACKAGES" \
+            --packages-json "$COVERAGE_OTHER_ORDINARY" \
             --durations governance/ci-lane-durations.json \
             --lane coverage-other)
+          COVERAGE_OTHER_MATRIX=$(jq -c --argjson all "$COVERAGE_OTHER_PACKAGES" '
+            {include: ((if ($all | map(select(. != "@bsv/output-knowledge")) | length) > 0 then
+              [.include[] | . + {id:("packages-" + (.shard | tostring)),application:0}]
+              else [] end) + (if $all | index("@bsv/output-knowledge") then
+              [range(1;5) as $shard | {id:("application-" + ($shard | tostring)),shard:$shard,total:4,application:$shard,packages:[]}]
+              else [] end))}' <<<"$COVERAGE_OTHER_MATRIX")
           echo "coverage-other-matrix=$COVERAGE_OTHER_MATRIX" >> "$GITHUB_OUTPUT"
           BROWSER_PACKAGES=$(node scripts/run-ci-tests.mjs \
             --projects-json .ci-affected-packages.json \
@@ -325,6 +350,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
+    outputs:
+      mutation-execution-identity: ${{ steps.mutation-identity.outputs.identity }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -383,15 +410,26 @@ jobs:
           {
             find packages -type d \( -name dist -o -name out \) -prune -print0
             find packages -type f -name '*.tsbuildinfo' -print0
+            find apps -type d \( -name node_modules -o -name .stryker-tmp \) -prune -o -type d \( -name dist -o -name dist-server -o -name dist-proposals \) -print0 -prune
           } | tar --null --create --gzip --file build-outputs.tar.gz --files-from=-
 
       - name: Share build outputs
+        id: mutation-build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: build-outputs
           path: build-outputs.tar.gz
           if-no-files-found: error
           retention-days: 1
+
+      - name: Pin the immutable mutation build identity
+        id: mutation-identity
+        env:
+          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
+          BUILD_ARTIFACT_NAME: build-outputs
+        run: |
+          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
+          printf 'identity=%s\n' "$identity" >> "$GITHUB_OUTPUT"
 
   policy:
     name: Lint and policy
@@ -424,6 +462,12 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Test installed mutation engine controls
+        run: node --test scripts/mutation-partitions-engine.integration.mjs
+
+      - name: Test installed application coverage reporting
+        run: node --test scripts/output-knowledge-coverage.integration.mjs
 
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
@@ -518,6 +562,9 @@ jobs:
       mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
       partition-targets: ${{ needs.scope.outputs.partition-targets }}
+      mutation-batches: ${{ needs.scope.outputs.mutation-batches }}
+      mutation-matrix-digest: ${{ needs.scope.outputs.mutation-matrix-digest }}
+      mutation-execution-identity: ${{ needs.build.outputs.mutation-execution-identity }}
       sdk: ${{ needs.scope.outputs.sdk }}
       did: ${{ needs.scope.outputs.did }}
       wallet: ${{ needs.scope.outputs.wallet }}
@@ -535,8 +582,11 @@ jobs:
     name: Package artifacts and documentation consumers (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success'
     needs: prepare
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
+    runs-on: ubuntu-22.04
+    # Three original diagnostics plus all packed consumers took 20m41 with cleanup.
+    # Preserve their intrinsic deadlines; allow bounded orchestration headroom.
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
@@ -546,6 +596,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -566,6 +617,42 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Restore the fixed Mongo binary for optional native diagnostics
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/mongodb-binaries
+          key: mongodb-memory-server-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Prepare the fixed Mongo binary before optional measurement
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --prepare-native-runtime
+      - name: Measure the unchanged application property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs
+      - name: Measure the unchanged native purchase HTTP composition on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --native-http
+      - name: Measure the unchanged application coordinator property on hosted Linux
+        if: ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        env:
+          OUTPUT_KNOWLEDGE_SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/output-knowledge-performance-diagnostic.mjs --coordinator
+      - name: Preserve bounded application function timing
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.application-performance-diagnostics) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:application-performance-diagnostics')))
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: application-performance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .coverage-output/performance-diagnostic-*/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
       - name: Compile documentation examples against exact package tarballs
         if: matrix.shard == 1 && needs.prepare.outputs.direct-projects != '[]'
         env:
@@ -606,7 +693,7 @@ jobs:
             --dry-run
 
   mutation-tests:
-    name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
+    name: Mutation batch / ${{ matrix.batch }}
     # Analyzer failures stop expensive qualification; explicit diagnostics only
     # collect evidence and never waive the required final analyzer/merge gates.
     if: >-
@@ -619,47 +706,21 @@ jobs:
     needs:
       - prepare
       - sonar-zero-findings
-    runs-on: ubuntu-latest
-    # The governed air-gap codec target currently instruments 352 mutants and
-    # legitimately exceeds 20 minutes on a hosted runner.
-    timeout-minutes: ${{ contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: 6
-      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-matrix) }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.22.1
-          cache: pnpm
-      - name: Install frozen dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: build-outputs
-          path: .ci-artifacts
-      - name: Restore build outputs
-        run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
-      - name: Enforce the affected mutation-quality ratchet
-        run: node scripts/mutation-testing.mjs --target "${{ matrix.target }}" --partition "${{ matrix.partition }}"
-      - name: Capture complete execution-partition evidence
-        if: matrix.partition != 'whole'
-        run: |
-          node scripts/mutation-partition-evidence.mjs capture --mode diagnostic \
-            --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
-            --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
-      - name: Preserve the machine-readable mutation report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: mutation-${{ matrix.target }}-${{ matrix.partition }}
-          path: artifacts/mutation/${{ matrix.target }}
-          if-no-files-found: ignore
-          retention-days: 30
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.mutation-batches) }}
+    uses: ./.github/workflows/mutation-execution.yml
+    with:
+      execution-matrix: ${{ toJSON(matrix.executionMatrix) }}
+      execution-batch: ${{ matrix.batch }}
+      selected-targets: ${{ needs.prepare.outputs.mutation-targets }}
+      matrix-digest: ${{ needs.prepare.outputs.mutation-matrix-digest }}
+      identity: ${{ needs.prepare.outputs.mutation-execution-identity }}
+      profile: ci
+      mode: diagnostic
 
   mutation-quality:
     name: Mutation quality
@@ -679,6 +740,7 @@ jobs:
           MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
           MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
           MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
+          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
@@ -688,7 +750,16 @@ jobs:
             exit 1
           fi
           "${NODE_EXECUTABLE:-node}" --input-type=module <<'NODE'
+          const batches = JSON.parse(process.env.MUTATION_BATCHES)
           const matrix = JSON.parse(process.env.MUTATION_MATRIX)
+          if (!Array.isArray(matrix.include) || matrix.include.length > 256 ** 2)
+            throw new Error('Invalid complete execution matrix')
+          const expectedBatches = { include: [] }
+          for (let offset = 0; offset < matrix.include.length; offset += 256)
+            expectedBatches.include.push({ batch: expectedBatches.include.length + 1,
+              executionMatrix: { include: matrix.include.slice(offset, offset + 256) } })
+          if (JSON.stringify(batches) !== JSON.stringify(expectedBatches))
+            throw new Error('Incomplete, unordered or malformed execution batch union')
           const actual = JSON.parse(process.env.PARTITION_TARGETS)
           if (!Array.isArray(matrix.include) || !Array.isArray(actual) ||
               actual.some(target => typeof target !== 'string') || new Set(actual).size !== actual.length)
@@ -760,7 +831,8 @@ jobs:
     name: Tests / non-coverage packages
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.standard-packages != '[]'
     needs: prepare
-    runs-on: ubuntu-latest
+    # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
+    runs-on: ubuntu-22.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -803,7 +875,8 @@ jobs:
     name: Tests / affected dependents (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.dependent-test-packages != '[]'
     needs: prepare
-    runs-on: ubuntu-latest
+    # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: read
@@ -865,7 +938,8 @@ jobs:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.browser-packages != '[]'
     needs: prepare
-    runs-on: ubuntu-latest
+    # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
+    runs-on: ubuntu-22.04
     timeout-minutes: 25
     permissions:
       contents: read
@@ -1374,10 +1448,11 @@ jobs:
           retention-days: 1
 
   coverage-other:
-    name: Coverage / other affected packages (${{ matrix.shard }}/${{ matrix.total }})
+    name: Coverage / ${{ matrix.application && 'application state' || 'other affected packages' }} (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success' && needs.prepare.outputs.coverage-other-packages != '[]'
     needs: prepare
-    runs-on: ubuntu-latest
+    # Preserve the pinned MongoDB on a compatible kernel (SERVER-121912/131779).
+    runs-on: ubuntu-22.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -1402,7 +1477,13 @@ jobs:
           name: build-outputs
           path: .ci-artifacts
       - run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
+      - name: Generate complete application coverage shard
+        if: matrix.application != 0
+        run: >-
+          node scripts/output-knowledge-coverage.mjs collect
+          "${{ matrix.application }}" ".coverage-output/shard-${{ matrix.application }}"
       - name: Generate coverage for other affected packages
+        if: matrix.application == 0
         env:
           SHARD_PACKAGES: ${{ toJSON(matrix.packages) }}
           MONGOMS_DOWNLOAD_DIR: ${{ runner.temp }}/mongodb-binaries
@@ -1455,7 +1536,7 @@ jobs:
           echo "a coverage script are tested by the non-coverage lane." > .coverage-output/partition.txt
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-other-${{ matrix.shard }}
+          name: coverage-other-${{ matrix.id }}
           path: .coverage-output/
           if-no-files-found: error
           include-hidden-files: true
@@ -1494,15 +1575,21 @@ jobs:
       # The gate compares emitted JavaScript to distinguish declaration-only
       # edits from executable changes. LCOV intentionally has no interfaces.
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
         with:
           node-version: 24.22.1
       - name: Install the locked patch-coverage compiler
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        env:
+          COVERAGE_OTHER_PACKAGES: ${{ needs.prepare.outputs.coverage-other-packages }}
         run: |
-          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack
+          filters=()
+          if jq -e 'index("@bsv/output-knowledge") != null' <<<"$COVERAGE_OTHER_PACKAGES" > /dev/null; then
+            filters+=(--filter @bsv/output-knowledge)
+          fi
+          pnpm install --frozen-lockfile --ignore-scripts --filter @bsv/ts-stack "${filters[@]}"
           pnpm rebuild esbuild
           node --input-type=module -e "import { runtimeComparisonAvailable } from './scripts/patch-coverage.mjs'; if (!runtimeComparisonAvailable()) throw new Error('Patch coverage requires the locked compiler.');"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -1510,6 +1597,12 @@ jobs:
           pattern: coverage-*
           path: .coverage-artifacts
           merge-multiple: true
+      - name: Require the complete application test union and original global coverage thresholds
+        if: contains(fromJSON(needs.prepare.outputs.coverage-other-packages), '@bsv/output-knowledge')
+        run: |
+          node scripts/output-knowledge-coverage.mjs aggregate .coverage-artifacts .application-coverage
+          node scripts/normalize-lcov-paths.mjs .application-coverage/lcov.info packages/application/output-knowledge
+          cp .application-coverage/lcov.info .coverage-artifacts/output-knowledge.lcov.info
       - name: Compose Codecov inputs
         id: cov
         run: |
@@ -1741,12 +1834,17 @@ jobs:
       - name: Build Linux image
         if: matrix.run && matrix.component != 'uhrp-server-cloud-bucket/notifier'
         run: |
+          context_lines=$(node scripts/ci-container-base-contexts.mjs)
+          context_arguments=()
+          while IFS= read -r context; do
+            if [ -n "$context" ]; then context_arguments+=(--build-context "$context"); fi
+          done <<< "$context_lines"
           # Anonymous base-image pulls can be throttled (HTTP 429). Back off
           # longer only for that; any other build failure keeps the short retry.
           set -o pipefail
           log="$RUNNER_TEMP/docker-build-${{ strategy.job-index }}.log"
           for attempt in 1 2 3 4 5; do
-            if docker build --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}" 2>&1 | tee "$log"; then
+            if docker build "${context_arguments[@]}" --tag "ts-stack-${{ strategy.job-index }}:ci" "infra/${{ matrix.component }}" 2>&1 | tee "$log"; then
               exit 0
             fi
             if grep -qiE '429 Too Many Requests|toomanyrequests' "$log"; then

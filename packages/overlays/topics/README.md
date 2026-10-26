@@ -1,11 +1,15 @@
 # @bsv/overlay-topics
 
+Patch candidate `2.0.2` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 
 Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
+
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This dependency addition does not enable history retention automatically or migrate data. The separately approved DID retirement below has its own migration requirements.
 
 UMP lookup requests the full retained token-update lineage for presentation,
 recovery and outpoint queries. The engine owns traversal and byte limits.

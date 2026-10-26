@@ -95,6 +95,8 @@ All notable changes to this project will be documented in this file. The format 
   subscriber is called. A consumer asserting synchronous delivery in a test
   needs to let the microtask run.
 
+- Prepare `2.6.1` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
 ### 2.6.0 candidate — list APIs keep payments the wallet did not store (#503)
 
 - `listMessages()` and `listMessagesLite()` now report `paymentOutcome` on each

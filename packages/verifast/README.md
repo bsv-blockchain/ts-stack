@@ -1,5 +1,7 @@
 # @bsv/verifast
 
+Patch candidate `0.3.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Real BSV BDK script verification in WebAssembly for `@bsv/sdk`. One package
 supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 

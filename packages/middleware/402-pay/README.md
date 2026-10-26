@@ -1,5 +1,7 @@
 # @bsv/402-pay
 
+Patch candidate `0.3.4` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [BRC-121](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) Simple 402 Payments -- server middleware and client for BSV micropayments over HTTP.
 
 ## Install
@@ -48,13 +50,7 @@ import { validatePayment, send402 } from '@bsv/402-pay/server'
 
 // In any HTTP handler:
 const requiredSatoshis = 100
-const result = await validatePayment(
-  req,
-  wallet,
-  requiredSatoshis,
-  30_000,
-  sharedAtomicReplayStore
-)
+const result = await validatePayment(req, wallet, requiredSatoshis, 30_000, sharedAtomicReplayStore)
 if (!result) {
   send402(res, serverIdentityKey, requiredSatoshis)
   return

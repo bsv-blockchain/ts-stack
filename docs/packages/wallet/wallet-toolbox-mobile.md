@@ -72,22 +72,15 @@ The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
 
-BEEF requests and schema-declared storage response bytes use the existing
-negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
-and identical transaction/proof bytes. Authentication and payload ceilings
-remain unchanged; upgrade both clients and active storage for the savings.
+## Local recovery capability boundary
 
-Internalizing an unproven transaction new to a user attempts broadcast before
-storing recipient outputs, including a sender's no-send transaction already
-known to shared storage. Rejected broadcasts return a review-actions error
-and store no recipient outputs. Transactions backed by a mining proof are
-not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
-
-Confirmed internalization resolves and checks the block header before the
-storage writer opens, including a no-send merge that carries a mining proof.
-A missing or malformed header, or an invalid proof, still rejects and leaves
-no partial proven transaction, transaction, or output. Upgrade the active
-storage implementation; no API, wire or schema migration is required.
+The coordinated 2.15.0 candidate preserves this wrapper's ordinary API and SDK
+peer range. The core package's new SQLite action/funding controllers are separate
+Node deep imports. This wrapper does not expose them or grant IndexedDB, mobile
+or remote storage a durable operation journal. If a host separately adopts core
+recovery, preserve its complete wallet database and keys and reconcile outstanding
+operations before rollback; ordinary entity export/sync omits that auxiliary state.
+See [local action recovery](../../guides/local-action-recovery.md).
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.

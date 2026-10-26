@@ -1,5 +1,7 @@
 # @bsv/did
 
+Patch candidate `0.3.1` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 `@bsv/did` supplies the proposed BRC-202 identity-key DID profile and BRC-203
 signature-preserving bridge for existing encrypted BRC-52 certificates. It also
 retains independent SD-JWT VC helpers. The BRC bridge preserves the original

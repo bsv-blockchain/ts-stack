@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.0.2` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
+
 ### Removed (2.0.0 candidate)
 
 - Remove `tm_did` / `ls_did`, `DIDTopicManager`, `createDIDLookupService`,

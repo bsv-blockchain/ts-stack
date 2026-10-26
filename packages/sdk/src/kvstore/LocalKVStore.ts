@@ -172,7 +172,10 @@ export default class LocalKVStore {
     return { protocolID: [2, this.context], keyID: key }
   }
 
-  private async getOutputs(key: string, limit?: number): Promise<ListOutputsResult & { totalOutputs: number }> {
+  private async getOutputs(
+    key: string,
+    limit?: number
+  ): Promise<ListOutputsResult & { totalOutputs: number }> {
     validateKVStoreKey(key)
     const results = assertSafeWalletValue(
       await this.wallet.listOutputs(

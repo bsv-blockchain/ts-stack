@@ -478,3 +478,29 @@ async start(): Promise<void>
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes)
 
 ---
+
+
+## Progressive and live lookup companion
+
+`OverlayExpress.configureOutputLookup(options)` installs an optional durable
+lookup provider before `start`. Its options are
+`Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>`. Startup supplies
+the host's shared authentication instance, verifies the server wallet identity for
+BRC-103 mode, and applies existing host capacity limits. The caller owns provider
+storage and must drain requests before closing it.
+
+The optional `@bsv/overlay-express/output-lookup` entry exports
+`createOutputLookupRouter(options: OutputLookupRouteOptions): Router`, with matching
+ESM and CommonJS declarations. It requires SDK 3.3.0. The companion port exposes
+`open`, `read` and `close`, each accepting unknown wire input, a transport-verified
+`OutputLookupCaller` and optional abort signal. It returns already serialized
+`body` bytes and exact capability/profile selection headers. Do not modify that
+body after the provider's final disclosure gate.
+
+Configure the exact service, base URL, identity, chain, authentication mode, signed
+manifest callback, trusted Unix-second clock, allowed browser origins and optional
+request/response/concurrency limits. Standalone authenticated routers also need the
+actual middleware instance and may disable duplicate handshake installation with
+`handleHandshake: false`. Mount before generic parsers, compression, caches and
+payload logging. See the [provider guide](../../../docs/guides/durable-live-lookup.md)
+for complete composition, restart and retention requirements.

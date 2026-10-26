@@ -14,6 +14,13 @@ All notable changes to this package are documented here. The format is based on
   gated on that workflow's successful qualification; no verifier requirement is waived.
 - No consumer migration is required. Exports, dependency ranges and relay behavior remain.
 
+### Fixed
+
+- The offer expiry timer rechecks the whole-second deadline encoded in the offer
+  before closing its link. An early timer wake no longer closes an unexpired
+  offer; expiry validation and completion/cancellation cleanup retain their
+  existing behavior.
+
 ## 0.2.1
 
 The relay can run as a governed container image: it now answers the readiness and CORS probes

@@ -6,7 +6,7 @@ settings:
 
 overrides:
   '@chainsafe/libp2p-yamux>@libp2p/utils': 7.4.1
-  brace-expansion@<5.0.11: 5.0.11
+  brace-expansion@<5.0.12: 5.0.12
   engine.io@<6.6.10: 6.6.10
   nanoid@<3.3.18: 3.3.18
   qs@<6.16.0: 6.16.0
@@ -20,7 +20,7 @@ packageExtensionsChecksum: sha256-j1ipTIriuh1r8NrHzy5rLoGNr081FjMxVoEY/IdY3mE=
 
 patchedDependencies:
   metro-file-map@0.87.1:
-    hash: 32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d
+    hash: 28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b
     path: patches/metro-file-map@0.87.1.patch
 
 importers:
@@ -42,6 +42,15 @@ importers:
       esbuild:
         specifier: 0.28.2
         version: 0.28.2
+      istanbul-lib-coverage:
+        specifier: 3.2.2
+        version: 3.2.2
+      istanbul-lib-report:
+        specifier: 3.0.1
+        version: 3.0.1
+      istanbul-reports:
+        specifier: 3.2.0
+        version: 3.2.0
       jest-environment-node:
         specifier: 30.5.1
         version: 30.5.1
@@ -79,6 +88,64 @@ importers:
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.6.1)(@vitest/coverage-v8@5.0.1)(jsdom@26.1.0)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
+
+  apps/output-knowledge-reference:
+    dependencies:
+      '@bsv/auth-express-middleware':
+        specifier: workspace:^
+        version: link:../../packages/middleware/auth-express-middleware
+      '@bsv/lch':
+        specifier: workspace:^
+        version: link:../../packages/content/lch
+      '@bsv/output-knowledge':
+        specifier: workspace:^
+        version: link:../../packages/application/output-knowledge
+      '@bsv/overlay':
+        specifier: workspace:^
+        version: link:../../packages/overlays/overlay
+      '@bsv/overlay-express':
+        specifier: workspace:^
+        version: link:../../packages/overlays/overlay-express
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../packages/sdk
+      '@bsv/wallet-toolbox':
+        specifier: workspace:^
+        version: link:../../packages/wallet/wallet-toolbox
+      express:
+        specifier: ^5.2.1
+        version: 5.3.0
+      express-rate-limit:
+        specifier: ^8.6.1
+        version: 8.7.0(express@5.3.0)
+      mongodb:
+        specifier: 7.6.0
+        version: 7.6.0
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      oxlint:
+        specifier: ^1.76.0
+        version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -219,6 +286,51 @@ importers:
       rollup:
         specifier: ^4.63.3
         version: 4.63.3
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
+
+  packages/application/output-knowledge:
+    devDependencies:
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
+      '@bsv/wallet-toolbox':
+        specifier: workspace:^
+        version: link:../../wallet/wallet-toolbox
+      '@jest/globals':
+        specifier: ^30.4.1
+        version: 30.5.1
+      '@types/jest':
+        specifier: ^30.0.0
+        version: 30.0.0
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.10.1
+      jest:
+        specifier: ^30.4.2
+        version: 30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2))
+      oxlint:
+        specifier: ^1.76.0
+        version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
+      ts-jest:
+        specifier: ^29.4.12
+        version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.1)(@jest/types@30.5.1)(@typescript/typescript6@6.0.2)(babel-jest@30.5.1(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2)))
       typescript:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
@@ -660,6 +772,55 @@ importers:
         specifier: ^7.2.3
         version: 7.2.3(json5@2.2.3)(webpack@5.111.0)
 
+  packages/messaging/group-messaging:
+    dependencies:
+      '@noble/ciphers':
+        specifier: 2.1.1
+        version: 2.1.1
+      '@noble/curves':
+        specifier: 2.0.1
+        version: 2.0.1
+      ts-mls:
+        specifier: 1.6.4
+        version: 1.6.4(@noble/ciphers@2.1.1)(@noble/curves@2.0.1)
+    devDependencies:
+      '@bsv/message-box-client':
+        specifier: workspace:^
+        version: link:../message-box-client
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
+      '@types/node':
+        specifier: ^26.6.1
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      fake-indexeddb:
+        specifier: ^6.2.5
+        version: 6.2.5
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.10.1
+      oxlint:
+        specifier: ^1.83.0
+        version: 1.83.0
+      ts2md:
+        specifier: ^0.2.8
+        version: 0.2.8
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.24)(tsx@4.23.13)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@26.6.1)(@vitest/coverage-v8@4.1.11)(esbuild@0.28.2)(jsdom@26.1.0)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1)
+
   packages/messaging/message-box-client:
     dependencies:
       '@bsv/authsocket-client':
@@ -937,6 +1098,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.3.0
+      express-rate-limit:
+        specifier: 8.6.1
+        version: 8.6.1(express@5.3.0)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -1186,6 +1350,52 @@ importers:
         specifier: npm:@typescript/typescript6@6.0.2
         version: '@typescript/typescript6@6.0.2'
 
+  packages/overlays/eqc:
+    dependencies:
+      express-rate-limit:
+        specifier: 8.7.0
+        version: 8.7.0(express@5.3.0)
+    devDependencies:
+      '@bsv/auth-express-middleware':
+        specifier: workspace:^
+        version: link:../../middleware/auth-express-middleware
+      '@bsv/sdk':
+        specifier: workspace:^
+        version: link:../../sdk
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^26.6.1
+        version: 26.6.1
+      '@typescript/native':
+        specifier: npm:typescript@7.0.2
+        version: typescript@7.0.2
+      '@vitest/coverage-v8':
+        specifier: 5.0.1
+        version: 5.0.1(vitest@5.0.1)
+      express:
+        specifier: ^5.2.1
+        version: 5.3.0
+      fast-check:
+        specifier: ^4.9.0
+        version: 4.10.1
+      oxlint:
+        specifier: ^1.83.0
+        version: 1.83.0
+      ts2md:
+        specifier: ^0.2.8
+        version: 0.2.8
+      tsdown:
+        specifier: 0.23.0
+        version: 0.23.0(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.24)(tsx@4.23.13)
+      typescript:
+        specifier: npm:@typescript/typescript6@6.0.2
+        version: '@typescript/typescript6@6.0.2'
+      vitest:
+        specifier: ^5.0.1
+        version: 5.0.1(@types/node@26.6.1)(@vitest/coverage-v8@5.0.1)(jsdom@26.1.0)(vite@8.3.4(@types/node@26.6.1)(esbuild@0.28.2)(terser@5.51.2)(tsx@4.23.13)(yaml@2.9.1))
+
   packages/overlays/gasp-core:
     devDependencies:
       '@bsv/sdk':
@@ -1374,6 +1584,9 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      express-rate-limit:
+        specifier: ^8.6.1
+        version: 8.7.0(express@5.3.0)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -2855,6 +3068,14 @@ packages:
   '@hapi/topo@6.0.2':
     resolution: {integrity: sha512-KR3rD5inZbGMrHmgPxsJ9dbi6zEK+C3ZwUwTa+eMwWLz7oijWUTWD2pMSNNYJAU6Qq+65NkxXjqHr/7LM2Xkqg==}
 
+  '@hpke/common@1.10.1':
+    resolution: {integrity: sha512-moJwhmtLtuxiUzzNp1jpfBfx8yefKoO9D/RCR9dmwrnc7qjJqId1rEtQz+lSlU5cabX8daToMSx/7HayXOiaFw==}
+    engines: {node: '>=16.0.0'}
+
+  '@hpke/core@1.9.0':
+    resolution: {integrity: sha512-pFxWl1nNJeQCSUFs7+GAblHvXBCjn9EPN65vdKlYQil2aURaRxfGMO6vBKGqm1YHTKwiAxJQNEI70PbSowMP9Q==}
+    engines: {node: '>=16.0.0'}
+
   '@iconify/types@2.0.0':
     resolution: {integrity: sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg==}
 
@@ -3301,6 +3522,14 @@ packages:
       '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
       '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
 
+  '@noble/ciphers@2.1.1':
+    resolution: {integrity: sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw==}
+    engines: {node: '>= 20.19.0'}
+
+  '@noble/curves@2.0.1':
+    resolution: {integrity: sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==}
+    engines: {node: '>= 20.19.0'}
+
   '@noble/ciphers@2.2.0':
     resolution: {integrity: sha512-Z6pjIZ/8IJcCGzb2S/0Px5J81yij85xASuk1teLNeg75bfT07MV3a/O2Mtn1I2se43k3lkVEcFaR10N4cgQcZA==}
     engines: {node: '>= 20.19.0'}
@@ -3316,6 +3545,10 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@2.0.1':
+    resolution: {integrity: sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw==}
+    engines: {node: '>= 20.19.0'}
 
   '@noble/hashes@2.2.0':
     resolution: {integrity: sha512-IYqDGiTXab6FniAgnSdZwgWbomxpy9FtYvLKs7wCUs2a8RkITG+DFGO1DM9cr+E3/RgADRpFjrKVaJ1z6sjtEg==}
@@ -5315,8 +5548,8 @@ packages:
     resolution: {integrity: sha512-Ifk1KcLrxaGt1occQagQNFNNOqRt1LFuehEnHHzB8Z6cRgIxRU1TBaiIsUiCdA+gy5PL7Y1IX31DNKkRmxtXjQ==}
     engines: {node: '>=18'}
 
-  brace-expansion@5.0.11:
-    resolution: {integrity: sha512-awigjhi6cLTh90bdw6+QJ9CtmJmyYhEIi70iCbc8Rozn04Fw9FeQIBjv/E22FFGuCGx1bLJyUfB64x/szUSXUg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
   browserslist@4.29.0:
@@ -6090,6 +6323,12 @@ packages:
 
   exponential-backoff@3.1.3:
     resolution: {integrity: sha512-ZgEeZXj30q+I0EN+CbSSpIyPaJ5HVQD18Z1m+u1FXbAeT94mr1zw50q4q6jiiC447Nl/YTcIYSAftiGqetwXCA==}
+
+  express-rate-limit@8.6.1:
+    resolution: {integrity: sha512-0D493aP61w0TJ2A0wy27riRsO7FMQ7FK+KUHOKCSfPvYo0R55aiC6emCVgFUeShH0fq0ICPVzNcgoS+BsbXQCA==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      express: '>= 4.11'
 
   express-rate-limit@8.7.0:
     resolution: {integrity: sha512-hOwV7WOxXfjRpAM1DSJWZDXx3GhplwD8IfwuwvogD8i1Qnkgosw/H45s4ZnFAUHDAhPjlY9hLBvJhKmGMyY26g==}
@@ -8682,6 +8921,30 @@ packages:
       loader-utils:
         optional: true
 
+  ts-mls@1.6.4:
+    resolution: {integrity: sha512-BFb9qJ3V1+HIuifC+MtnlROEj3oc6NEzA7Ig1/LAmANDRhNay7UCnwkzijzHH9cav5wf1BoJw8KQ2mXiEhPy1Q==}
+    peerDependencies:
+      '@hpke/chacha20poly1305': 1.8.0
+      '@hpke/dhkem-x448': 1.8.0
+      '@hpke/hybridkem-x-wing': 0.7.0
+      '@hpke/ml-kem': 0.3.0
+      '@noble/ciphers': 2.1.1
+      '@noble/curves': 2.0.1
+      '@noble/post-quantum': 0.5.2
+    peerDependenciesMeta:
+      '@hpke/chacha20poly1305':
+        optional: true
+      '@hpke/dhkem-x448':
+        optional: true
+      '@hpke/hybridkem-x-wing':
+        optional: true
+      '@hpke/ml-kem':
+        optional: true
+      '@noble/curves':
+        optional: true
+      '@noble/post-quantum':
+        optional: true
+
   ts-node@10.9.2:
     resolution: {integrity: sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==}
     hasBin: true
@@ -10274,6 +10537,12 @@ snapshots:
     dependencies:
       '@hapi/hoek': 11.0.7
 
+  '@hpke/common@1.10.1': {}
+
+  '@hpke/core@1.9.0':
+    dependencies:
+      '@hpke/common': 1.10.1
+
   '@iconify/types@2.0.0': {}
 
   '@iconify/utils@3.1.7':
@@ -11131,6 +11400,12 @@ snapshots:
       '@tybys/wasm-util': 0.10.4
     optional: true
 
+  '@noble/ciphers@2.1.1': {}
+
+  '@noble/curves@2.0.1':
+    dependencies:
+      '@noble/hashes': 2.0.1
+
   '@noble/ciphers@2.2.0': {}
 
   '@noble/curves@2.2.0':
@@ -11142,6 +11417,8 @@ snapshots:
       '@noble/hashes': 2.4.0
 
   '@noble/hashes@1.8.0': {}
+
+  '@noble/hashes@2.0.1': {}
 
   '@noble/hashes@2.2.0': {}
 
@@ -12840,7 +13117,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  brace-expansion@5.0.11:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -13619,6 +13896,14 @@ snapshots:
       jest-util: 30.5.1
 
   exponential-backoff@3.1.3: {}
+
+  express-rate-limit@8.6.1(express@5.3.0):
+    dependencies:
+      debug: 4.4.3
+      express: 5.3.0
+      ip-address: 10.7.2
+    transitivePeerDependencies:
+      - supports-color
 
   express-rate-limit@8.7.0(express@5.3.0):
     dependencies:
@@ -15178,7 +15463,7 @@ snapshots:
       lodash.throttle: 4.1.1
       metro-resolver: 0.87.1
 
-  metro-file-map@0.87.1(patch_hash=32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d):
+  metro-file-map@0.87.1(patch_hash=28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b):
     dependencies:
       debug: 4.4.3
       fb-watchman: 2.0.2
@@ -15286,7 +15571,7 @@ snapshots:
       metro-cache-key: 0.87.1
       metro-config: 0.87.1
       metro-core: 0.87.1
-      metro-file-map: 0.87.1(patch_hash=32d4c04a0bb19e2af5220b5b76523da87d73c1e129ec51aa394a749e20b2f51d)
+      metro-file-map: 0.87.1(patch_hash=28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b)
       metro-resolver: 0.87.1
       metro-runtime: 0.87.1
       metro-source-map: 0.87.1
@@ -15600,11 +15885,11 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 5.0.11
+      brace-expansion: 5.0.12
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 5.0.11
+      brace-expansion: 5.0.12
 
   minimist@1.2.8: {}
 
@@ -17044,6 +17329,13 @@ snapshots:
       source-map: 0.7.6
       typescript: '@typescript/typescript6@6.0.2'
       webpack: 5.111.0(esbuild@0.28.2)
+
+  ts-mls@1.6.4(@noble/ciphers@2.1.1)(@noble/curves@2.0.1):
+    dependencies:
+      '@hpke/core': 1.9.0
+      '@noble/ciphers': 2.1.1
+    optionalDependencies:
+      '@noble/curves': 2.0.1
 
   ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2):
     dependencies:

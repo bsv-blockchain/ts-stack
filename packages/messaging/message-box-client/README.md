@@ -1,5 +1,7 @@
 # @bsv/message-box-client
 
+Patch candidate `2.6.1` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Authenticated, optionally encrypted store-and-forward messaging for BSV
 applications. The package supports browser and Node.js consumers, HTTP polling,
 live authenticated WebSockets, overlay-based host discovery, peer payments,

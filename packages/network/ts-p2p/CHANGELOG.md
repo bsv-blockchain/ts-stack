@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `1.1.8` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
 ### Added
 
 - Optional typed decoder for the two-layer JSON wire format. New `decodeMessage()` / `tryDecodeMessage()` helpers and topic payload interfaces (`MessageEnvelope`, `BlockMessage`, `SubtreeMessage`, `RejectedTxMessage`, `NodeStatusMessage`, `FeePolicy`). Set `decodeMessages: true` on the listener to receive a typed `DecodedMessage` instead of raw `Uint8Array`. Backward compatible (defaults to off).

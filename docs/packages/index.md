@@ -55,6 +55,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/overlay-express](./overlays/overlay-express.md) — HTTP server for the Overlay spec
 - [@bsv/overlay-topics](./overlays/overlay-topics.md) — Topic managers (UHRP, BTMS, custom)
 - [@bsv/overlay-discovery-services](./overlays/overlay-discovery-services.md) — Discover overlays by service type
+- [@bsv/eqc](./overlays/eqc.md) — Pay the fastest agreeing overlay and message box hosts (BRC-178)
 - [@bsv/gasp](./overlays/gasp.md) — Graph Aware Sync Protocol (GASP) for incremental ancestry/descendancy graph sync
 - [@bsv/btms-backend](./overlays/btms-backend.md) — Backend for running a token overlay
 
@@ -65,6 +66,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/message-box-client](./messaging/message-box-client.md) — Send and retrieve messages from a message box service
 - [@bsv/authsocket](./messaging/authsocket.md) — WebSocket protocol for authenticated messaging
 - [@bsv/authsocket-client](./messaging/authsocket-client.md) — Client library for Authsocket
+- [@bsv/group-messaging](./messaging/group-messaging.md) — Experimental end-to-end encrypted group messaging (MLS, RFC 9420) for BRC-100 wallets
 - [@bsv/paymail](./messaging/paymail.md) — Paymail protocol (payment address discovery)
 - [@bsv/webrtpay](./messaging/webrtpay.md) — Direct wallet-to-wallet payments over WebRTC data channels, authenticated with BRC-100 identity keys
 

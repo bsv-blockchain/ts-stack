@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "../../..",
+    "noEmit": true,
+    "incremental": false,
+    "types": ["jest", "node"]
+  },
+  "files": [],
+  "include": [
+    "src/__tests__/**/*.ts",
+    "src/__tests/**/*.ts",
+    "src/Proposal*.ts",
+    "src/__tests__/Proposal*.ts",
+    "src/PrivatePublication*.ts",
+    "src/__tests__/PrivatePublication*.ts",
+    "src/PrivateAcquisition*.ts",
+    "src/__tests__/PrivateAcquisition*.ts",
+    "src/PrivatePurchase*.ts",
+    "src/__tests__/PrivatePurchase*.ts",
+    "src/PrivateOverlayHost.ts",
+    "src/__tests__/PrivateOverlayHost*.ts",
+    "src/__tests__/PrivateBuyer*.ts"
+  ],
+  "exclude": ["dist", "node_modules", ".stryker-tmp"]
+}

@@ -1,5 +1,7 @@
 # fund-wallet
 
+Patch candidate `1.5.4` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 A command-line tool to fund a Metanet wallet with Bitcoin SV (BSV).
 
 ## Installation

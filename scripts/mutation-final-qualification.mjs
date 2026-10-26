@@ -18,6 +18,8 @@ const INPUTS = [
   'scripts/mutation-final-qualification.mjs',
   'scripts/mutation-partitions.mjs',
   'scripts/mutation-partition-evidence.mjs',
+  'scripts/mutation-execution-batches.mjs',
+  '.github/workflows/mutation-execution.yml',
   '.github/workflows/mutation-tests.yml',
   'package.json',
   'pnpm-lock.yaml',

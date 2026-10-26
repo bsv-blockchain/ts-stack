@@ -28,7 +28,7 @@ import { RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/getVerifiableCertificates.js'
-import { copyAuthByteArray } from '../AuthMessageValidation.js'
+import { assertAuthIdentityKey, copyAuthByteArray } from '../AuthMessageValidation.js'
 
 interface SimplifiedFetchRequestOptions {
   method?: string
@@ -37,6 +37,26 @@ interface SimplifiedFetchRequestOptions {
   retryCounter?: number
   paymentContext?: PaymentRetryContext
   paymentRetryAttempts?: number
+  /**
+   * False returns an authenticated 402 without creating or retrying a BRC-105 payment.
+   * Ordinary HTTP fallback error handling is unchanged.
+   * Omission/true preserves automatic payment. An explicit false is retained
+   * across authentication recovery even if the caller later changes its options.
+   */
+  allowPayments?: boolean
+  /**
+   * True requires BRC-103/104 authentication and disables ordinary HTTP fallback.
+   * Omission/false preserves existing fallback behavior. This does not select
+   * a particular peer; use expectedIdentityKey when the service identity is known.
+   */
+  requireMutualAuth?: boolean
+  /**
+   * Canonical compressed public key of the expected server. Implies
+   * requireMutualAuth, pins the handshake before application data is sent, and
+   * checks the authenticated response sender. A different cached identity is
+   * rejected rather than silently rebound. The pin survives session recovery.
+   */
+  expectedIdentityKey?: string
   /**
    * Optional wallet action labels applied to BRC-105 payment transactions
    * created for 402 responses. Use these to find payments later via
@@ -215,7 +235,7 @@ export class AuthFetch {
    * Mutually authenticates and sends a HTTP request to a server.
    *
    * 1) Attempt the request.
-   * 2) If 402 Payment Required, ask the wallet to authorize, create, and send payment.
+   * 2) If 402 Payment Required and payments are allowed, ask the wallet to authorize, create, and send payment.
    * 3) Return the final response.
    *
    * @param url - The URL to send the request to.
@@ -226,6 +246,19 @@ export class AuthFetch {
    * @throws Will throw an error if unsupported headers are used or other validation fails.
    */
   async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> {
+    const allowPayments = config.allowPayments
+    if (allowPayments !== undefined && typeof allowPayments !== 'boolean')
+      throw new TypeError('allowPayments must be a boolean.')
+    const expectedIdentityKey = config.expectedIdentityKey
+    if (expectedIdentityKey !== undefined) assertAuthIdentityKey(expectedIdentityKey)
+    const requestedMutualAuth = config.requireMutualAuth
+    if (requestedMutualAuth !== undefined && typeof requestedMutualAuth !== 'boolean')
+      throw new TypeError('requireMutualAuth must be a boolean.')
+    const requireMutualAuth = requestedMutualAuth === true || expectedIdentityKey !== undefined
+    // Own explicit restrictions before any await, including authentication retries.
+    // Default callers retain the existing options/retry-counter behavior.
+    if (allowPayments === false || requireMutualAuth)
+      config = { ...config, allowPayments, requireMutualAuth, expectedIdentityKey }
     if (typeof config.retryCounter === 'number') {
       if (config.retryCounter <= 0) {
         throw new Error('Request failed after maximum number of retries.')
@@ -243,7 +276,15 @@ export class AuthFetch {
           const baseURL = parsedUrl.origin
 
           const peerToUse = await this.#getOrCreatePeer(baseURL)
+          if (
+            expectedIdentityKey !== undefined &&
+            peerToUse.identityKey !== undefined &&
+            peerToUse.identityKey !== expectedIdentityKey
+          ) {
+            throw new Error('Cached peer identity does not match expectedIdentityKey.')
+          }
           if (peerToUse.supportsMutualAuth === false) {
+            if (requireMutualAuth) throw new Error('Mutual authentication is required.')
             resolve(await this.handleFetchAndValidate(url, config, peerToUse))
             return
           }
@@ -286,13 +327,18 @@ export class AuthFetch {
           this.pendingRequestNonces.add(requestNonceAsBase64)
           listenerId = peerToUse.peer.listenForGeneralMessages(
             (senderPublicKey: string, payload: number[]) => {
-              const responseValue = this.parseAuthenticatedResponse(
-                baseURL,
-                requestNonceAsBase64,
-                senderPublicKey,
-                payload
-              )
-              if (responseValue !== undefined) resolveRequest(responseValue)
+              try {
+                const responseValue = this.parseAuthenticatedResponse(
+                  baseURL,
+                  requestNonceAsBase64,
+                  senderPublicKey,
+                  payload,
+                  expectedIdentityKey
+                )
+                if (responseValue !== undefined) resolveRequest(responseValue)
+              } catch (error) {
+                rejectRequest(error)
+              }
             }
           )
           responseTimeout = setTimeout(() => {
@@ -311,7 +357,10 @@ export class AuthFetch {
             // A certificate prompt can outlive the request deadline. Never
             // dispatch a request after its caller has already seen a timeout.
             if (cleaned) return
-            await peerToUse.peer.toPeer(writer.toArray(), peerToUse.identityKey)
+            await peerToUse.peer.toPeer(
+              writer.toArray(),
+              expectedIdentityKey ?? peerToUse.identityKey
+            )
           } catch (error) {
             // Late transport/session failures must not start recovery that
             // replays a request after its response deadline has expired.
@@ -331,7 +380,7 @@ export class AuthFetch {
       })()
     })
     // Check if server requires payment to access the requested route
-    if (response.status === 402) {
+    if (response.status === 402 && allowPayments !== false) {
       // Create and attach a payment, then retry
       return await this.handlePaymentAndRetry(url, config, response)
     }
@@ -397,12 +446,16 @@ export class AuthFetch {
     return peerState
   }
 
-  private isStaleSessionError(error: unknown, peerToUse: AuthPeer): boolean {
+  private isStaleSessionError(
+    error: unknown,
+    peerToUse: AuthPeer,
+    expectedIdentityKey?: string
+  ): boolean {
     return (
       error instanceof Error &&
       (error.message.includes('Session not found for nonce') ||
         (error.message.includes('without valid BSV authentication') &&
-          peerToUse.identityKey != null &&
+          (peerToUse.identityKey != null || expectedIdentityKey !== undefined) &&
           (error as any).details?.status === 401))
     )
   }
@@ -414,12 +467,24 @@ export class AuthFetch {
     config: SimplifiedFetchRequestOptions,
     peerToUse: AuthPeer
   ): Promise<Response> {
-    if (this.isStaleSessionError(error, peerToUse)) {
+    if (this.isStaleSessionError(error, peerToUse, config.expectedIdentityKey)) {
+      if (config.expectedIdentityKey !== undefined) {
+        // A new Peer still shares this store. Discard the selected stale session
+        // so its explicit identity target cannot immediately reuse it. Preserve
+        // other identities and await durable/async stores before retrying.
+        const manager = this.sessionManager as SessionManager | AsyncSessionManager
+        const session = await manager.getSession(config.expectedIdentityKey)
+        if (session != null) await manager.removeSession(session)
+      }
       delete this.peers[baseURL]
       config.retryCounter ??= 3
       return await this.fetch(url, config)
     }
-    if (error instanceof Error && error.message.includes('HTTP server failed to authenticate')) {
+    if (
+      config.requireMutualAuth !== true &&
+      error instanceof Error &&
+      error.message.includes('HTTP server failed to authenticate')
+    ) {
       return await this.handleFetchAndValidate(url, config, peerToUse)
     }
     throw error
@@ -429,7 +494,8 @@ export class AuthFetch {
     baseURL: string,
     requestNonceAsBase64: string,
     senderPublicKey: string,
-    payload: number[]
+    payload: number[],
+    expectedIdentityKey?: string
   ): Response | undefined {
     if (payload.length > this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES) {
       throw new Error('Authenticated response frame exceeds the configured limit.')
@@ -437,6 +503,9 @@ export class AuthFetch {
     const responseReader = new StrictResponseReader(payload)
     const responseNonceAsBase64 = toBase64(responseReader.readExact(32, 'response nonce'))
     if (responseNonceAsBase64 !== requestNonceAsBase64) return undefined
+    if (expectedIdentityKey !== undefined && senderPublicKey !== expectedIdentityKey) {
+      throw new Error('Authenticated response identity does not match expectedIdentityKey.')
+    }
 
     const peerState = this.peers[baseURL]
     if (peerState !== undefined) {
@@ -1064,14 +1133,25 @@ export class AuthFetch {
   }
 
   private async waitForPendingCertificateRequests(peer: AuthPeer): Promise<void> {
+    for await (const _ of this.pendingCertificateWaits(peer)) {
+      // The next pull rechecks completion and the original deadline after this wait.
+    }
+  }
+
+  private pendingCertificateWaits(peer: AuthPeer): AsyncIterable<void> {
     const timeoutMs = 30000
     const checkIntervalMs = 100
     const startedAt = Date.now()
-    while (peer.pendingCertificateRequests.length > 0) {
-      if (Date.now() - startedAt > timeoutMs) {
-        throw new Error('Timeout waiting for certificate request to complete')
-      }
-      await this.wait(checkIntervalMs)
+    return {
+      [Symbol.asyncIterator]: () => ({
+        next: async (): Promise<IteratorResult<void>> => {
+          if (peer.pendingCertificateRequests.length === 0) return { done: true, value: undefined }
+          if (Date.now() - startedAt > timeoutMs)
+            throw new Error('Timeout waiting for certificate request to complete')
+          await this.wait(checkIntervalMs)
+          return { done: false, value: undefined }
+        }
+      })
     }
   }
 
