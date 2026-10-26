@@ -95,7 +95,7 @@ test('semantic execution ranges retain the complete source line union and every 
     }
     assert.equal(selectedMutationPartition(id, original), original)
   }
-  assert.equal(Object.keys(targets).length, 155)
+  assert.equal(Object.keys(targets).length, 156)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
   assert.equal(matrix.include.length, 606)
   const batches = mutationExecutionBatches(matrix)

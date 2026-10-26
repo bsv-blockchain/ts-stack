@@ -110,7 +110,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
     assert.equal(selectedMutationPartition(id, original), original)
   }
-  assert.equal(Object.keys(targets).length, 155)
+  assert.equal(Object.keys(targets).length, 156)
   assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 606)
 })
 

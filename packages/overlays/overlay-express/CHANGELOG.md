@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Added `registerRouter(path, factory)`. Registered routers mount during `start()` after the BRC-103 authentication middleware and before the admin routes and 404 handler, inheriting CORS, body parsing, response limits, and `req.auth`. Additive; no consumer migration is required.
+
 ### 2.8.0 candidate — optional durable live lookup
 
 - Add `configureOutputLookup` and `@bsv/overlay-express/output-lookup` for explicitly

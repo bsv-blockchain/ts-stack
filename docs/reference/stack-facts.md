@@ -31,7 +31,7 @@ Node consumers; they do not require a browser or mobile device to provide Node A
 
 ## Public package manifest
 
-The release graph currently contains **37 public packages**. Versions
+The release graph currently contains **38 public packages**. Versions
 below are source-manifest versions; registry publication is a separate, explicitly
 authorized release action.
 
@@ -59,6 +59,7 @@ authorized release action.
 | middleware | `@bsv/payment-express-middleware` | `2.1.10` | node-library | node-cjs, node-esm | node | `>=22` | [packages/middleware/payment-express-middleware](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware) |
 | network | `@bsv/chirp` | `0.1.5` | browser-library | browser-bundler, browser-esm, cli, node-esm | browser, node | `>=22` | [packages/network/chirp](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp) |
 | network | `@bsv/teranode-listener` | `1.1.8` | node-library | node-esm | node | `>=22` | [packages/network/ts-p2p](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/ts-p2p) |
+| overlays | `@bsv/eqc` | `0.1.0` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/overlays/eqc](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc) |
 | overlays | `@bsv/gasp` | `1.3.9` | browser-library | browser-bundler, browser-esm, node-cjs, node-esm | browser, node | `>=22` | [packages/overlays/gasp-core](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/gasp-core) |
 | overlays | `@bsv/overlay` | `2.7.0` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay) |
 | overlays | `@bsv/overlay-discovery-services` | `2.2.8` | node-library | node-cjs, node-esm | node | `>=22` | [packages/overlays/overlay-discovery-services](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-discovery-services) |
@@ -95,9 +96,9 @@ the separately released and verified image digest.
 
 | Metric | Count |
 | --- | --- |
-| Governed projects | 46 |
-| Package-area projects | 40 |
-| Public npm packages | 37 |
+| Governed projects | 47 |
+| Package-area projects | 41 |
+| Public npm packages | 38 |
 | Private package-area projects | 3 |
 | Standalone infrastructure projects | 8 |
 
@@ -132,7 +133,7 @@ targets have been completed.
 
 | Metric | Current value | Authority |
 | --- | --- | --- |
-| Projects with a test:coverage script | 39 | current package manifests |
+| Projects with a test:coverage script | 40 | current package manifests |
 | Aggregate line coverage | 66.97% | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported source files | 543 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
 | Reported lines (hit / missed / partial) | 30981 / 11619 / 3659 | https://app.codecov.io/gh/BSV-blockchain/ts-stack |
