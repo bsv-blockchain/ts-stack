@@ -1,6 +1,8 @@
 import http from 'node:http'
+import { WebSocket } from 'ws'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import { WalletRelayService } from '../src/server/WalletRelayService.js'
+import { parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
 import type { RpcResponse, WireEnvelope } from '../src/types.js'
 
 const RPC_ID = '00000000-0000-4000-8000-000000000001'
@@ -38,6 +40,14 @@ function plaintext(wallet: ProtoWallet, value: unknown): void {
   jest.spyOn(wallet, 'decrypt').mockResolvedValueOnce({
     plaintext: Array.from(new TextEncoder().encode(JSON.stringify(value)))
   } as never)
+}
+
+async function waitUntil(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!condition()) {
+    if (Date.now() > deadline) throw new Error('Timed out waiting for service state')
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
 }
 
 function responseDouble() {
@@ -84,6 +94,123 @@ describe('WalletRelayService boundary and state enforcement', () => {
           ...options
         })
     ).toThrow(message as string)
+  })
+
+  it.each([
+    [{ origin: 'http://app.example.com' }, 'origin must be HTTPS'],
+    [{ origin: 'http://203.0.113.5:5173' }, 'origin must be HTTPS'],
+    [{ origin: 'http://192.168.1.20.nip.io:5173' }, 'origin must be HTTPS'],
+    [{ relayUrl: 'ws://relay.example.com' }, 'relay URL must be WSS'],
+    [{ relayUrl: 'ws://172.32.0.1:3000' }, 'relay URL must be WSS']
+  ])('rejects plain transport to a public host at construction %#', (options, message) => {
+    expect(() => createService(options)).toThrow(
+      new RegExp(`^${message as string}, except for loopback development$`, 'u')
+    )
+    expect(() => createService({ ...options, allowLocalNetworkHttp: true })).toThrow(
+      `${message as string}, except for loopback or local-network development`
+    )
+  })
+
+  it.each([
+    [{ origin: 'http://192.168.1.20:5173' }, 'origin must be HTTPS'],
+    [{ origin: 'http://[fd00::20]:5173' }, 'origin must be HTTPS'],
+    [{ relayUrl: 'ws://10.0.0.5:3000' }, 'relay URL must be WSS']
+  ])(
+    'rejects private-network plain transport at construction unless allowLocalNetworkHttp is set %#',
+    (options, message) => {
+      expect(() => createService(options)).toThrow(
+        `${message as string}, except for loopback development (set allowLocalNetworkHttp: true to allow private-network IP addresses in development)`
+      )
+      expect(() => createService({ ...options, allowLocalNetworkHttp: false })).toThrow(
+        'allowLocalNetworkHttp'
+      )
+      const { service } = createService({ ...options, allowLocalNetworkHttp: true })
+      service.stop()
+    }
+  )
+
+  it('keeps loopback plain transport available by default', async () => {
+    const { service } = createService({
+      relayUrl: 'ws://127.0.0.1:3000',
+      origin: 'http://wallet.localhost:5173'
+    })
+    try {
+      const parsed = parsePairingUri((await service.createSession()).pairingUri)
+      expect(parsed.error).toBeNull()
+      expect(parsed.params?.origin).toBe('http://wallet.localhost:5173')
+      expect(await verifyPairingSignature(parsed.params!)).toBe(true)
+      expect(service.getSession(parsed.params!.topic)?.relay).toBe('ws://127.0.0.1:3000')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('rejects a non-boolean allowLocalNetworkHttp', () => {
+    expect(() => createService({ allowLocalNetworkHttp: 'true' as unknown as boolean })).toThrow(
+      'allowLocalNetworkHttp must be a boolean'
+    )
+  })
+
+  it('issues signed pairing URIs for plain-HTTP local-network origins when opted in', async () => {
+    const { service } = createService({
+      relayUrl: 'ws://192.168.1.20:3000',
+      origin: 'http://192.168.1.20:3000',
+      allowedOrigins: ['http://192.168.1.20:3000', 'http://[fd00::20]:5173'],
+      allowLocalNetworkHttp: true
+    })
+    const allow = { allowLocalNetworkHttp: true }
+    try {
+      const defaultUri = (await service.createSession()).pairingUri
+      expect(parsePairingUri(defaultUri).error).toBe(
+        'origin must be HTTPS, except for loopback development'
+      )
+      const fromDefault = parsePairingUri(defaultUri, undefined, allow)
+      expect(fromDefault.error).toBeNull()
+      expect(fromDefault.params?.origin).toBe('http://192.168.1.20:3000')
+      expect(await verifyPairingSignature(fromDefault.params!, allow)).toBe(true)
+      expect(service.getSession(fromDefault.params!.topic)?.relay).toBe('ws://192.168.1.20:3000')
+
+      const perSession = parsePairingUri(
+        (await service.createSession({ origin: 'http://[fd00::20]:5173' })).pairingUri,
+        undefined,
+        allow
+      )
+      expect(perSession.error).toBeNull()
+      expect(perSession.params?.origin).toBe('http://[fd00::20]:5173')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('rejects a per-session plain-HTTP origin on a public host, or a private one without the opt-in', async () => {
+    const { service } = createService()
+    try {
+      await expect(service.createSession({ origin: 'http://app.example.com' })).rejects.toThrow(
+        /^origin must be HTTPS, except for loopback development$/u
+      )
+      await expect(service.createSession({ origin: 'http://172.32.0.1:5173' })).rejects.toThrow(
+        'origin must be HTTPS'
+      )
+      await expect(service.createSession({ origin: 'http://192.168.1.20:5173' })).rejects.toThrow(
+        'allowLocalNetworkHttp'
+      )
+    } finally {
+      service.stop()
+    }
+    const optedIn = createService({
+      allowLocalNetworkHttp: true,
+      allowedOrigins: () => true
+    }).service
+    try {
+      await expect(optedIn.createSession({ origin: 'http://app.example.com' })).rejects.toThrow(
+        'origin must be HTTPS, except for loopback or local-network development'
+      )
+      await expect(
+        optedIn.createSession({ origin: 'http://192.168.1.20:5173' })
+      ).resolves.toMatchObject({ status: 'pending' })
+    } finally {
+      optedIn.stop()
+    }
   })
 
   it('resets the creation window after clock rollback instead of permanently rate-limiting', () => {
@@ -308,6 +435,66 @@ describe('WalletRelayService boundary and state enforcement', () => {
     }
   })
 
+  it('ignores non-response mobile messages and settles error and custom responses', async () => {
+    const { service, wallet } = createService()
+    try {
+      const session = await connectedSession(service)
+      const disconnect = jest.spyOn((service as any).relay, 'disconnectMobile')
+      const reject = jest.fn()
+      const resolve = jest.fn()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 3,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+
+      plaintext(wallet, { id: RPC_ID, seq: 3, method: 'custom', params: {} })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(true)
+
+      const error = { code: 42, message: 'wallet rejected' }
+      plaintext(wallet, { id: RPC_ID, seq: 3, error })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(expect.objectContaining({ id: RPC_ID, error }))
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+
+      resolve.mockClear()
+      ;(service as any).pending.set(RPC_ID, {
+        sessionId: session.id,
+        seq: 4,
+        method: 'custom',
+        params: {},
+        resolve,
+        reject,
+        timer: setTimeout(() => undefined, 60_000)
+      })
+      plaintext(wallet, { id: RPC_ID, seq: 4, result: { ok: true } })
+      await (service as any).handleMobileMessage(session.id, {
+        topic: session.id,
+        ciphertext: 'AQID'
+      })
+      expect(resolve).toHaveBeenCalledWith(
+        expect.objectContaining({ id: RPC_ID, result: { ok: true } })
+      )
+      expect(reject).not.toHaveBeenCalled()
+      expect(disconnect).not.toHaveBeenCalled()
+      expect((service as any).pending.has(RPC_ID)).toBe(false)
+    } finally {
+      service.stop()
+    }
+  })
+
   it('disconnects pairing attempts that cannot prove the claimed identity and permissions', async () => {
     const { service, wallet } = createService()
     try {
@@ -315,6 +502,8 @@ describe('WalletRelayService boundary and state enforcement', () => {
       const session = sessions.createSession()
       const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
       const relay = (service as any).relay
+      // No real socket: treat every call as coming from the topic's current mobile socket.
+      jest.spyOn(relay, 'isCurrentMobile').mockReturnValue(true)
       const disconnect = jest.spyOn(relay, 'disconnectMobile')
       const envelope: WireEnvelope = {
         topic: session.id,
@@ -356,6 +545,118 @@ describe('WalletRelayService boundary and state enforcement', () => {
       service.stop()
     }
   })
+
+  it('accepts the pairing mobile socket only after its pairing proof succeeds', async () => {
+    const { service, wallet } = createService()
+    try {
+      const session = (service as any).sessions.createSession()
+      const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
+      const relay = (service as any).relay
+      expect(relay.holdDesktopTraffic).toBe(true)
+      jest.spyOn(relay, 'isCurrentMobile').mockReturnValue(true)
+      const accept = jest.spyOn(relay, 'acceptMobile')
+      const envelope: WireEnvelope = { topic: session.id, mobileIdentityKey, ciphertext: 'AQID' }
+
+      relay.onMessage(session.id, envelope, 'mobile', 7)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(accept).not.toHaveBeenCalled()
+
+      plaintext(wallet, {
+        id: RPC_ID,
+        seq: 1,
+        method: 'pairing_approved',
+        params: { mobileIdentityKey }
+      })
+      relay.onMessage(session.id, envelope, 'mobile', 8)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      expect(accept).toHaveBeenCalledTimes(1)
+      expect(accept).toHaveBeenCalledWith(session.id, 8)
+      expect(service.getSession(session.id)?.status).toBe('connected')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it.each(['decrypt', 'failing decrypt', 'encrypt'] as const)(
+    'ignores a pairing proof that finishes after its socket was replaced (delayed %s)',
+    async delayed => {
+      const onSessionConnected = jest.fn()
+      const { service, wallet, server } = createService({ noServer: false, onSessionConnected })
+      try {
+        const port = await new Promise<number>(resolve =>
+          server.listen(0, '127.0.0.1', () => resolve((server.address() as { port: number }).port))
+        )
+        const session = (service as any).sessions.createSession()
+        const relay = (service as any).relay
+        const url = `ws://127.0.0.1:${port}/ws?topic=${session.id}&role=mobile`
+        const mobileIdentityKey = PrivateKey.fromRandom().toPublicKey().toString()
+        // The first socket's handler stalls in the delayed wallet call until the test releases it.
+        let release!: () => void
+        const gate = new Promise<void>(resolve => (release = resolve))
+        let stalled = false
+        const approval = {
+          id: RPC_ID,
+          seq: 1,
+          method: 'pairing_approved',
+          params: { mobileIdentityKey }
+        }
+        jest.spyOn(wallet, 'decrypt').mockImplementationOnce(async () => {
+          if (delayed !== 'encrypt') {
+            stalled = true
+            await gate
+          }
+          if (delayed === 'failing decrypt') throw new Error('Decryption failed')
+          return { plaintext: Array.from(new TextEncoder().encode(JSON.stringify(approval))) }
+        })
+        const encrypt = wallet.encrypt.bind(wallet)
+        jest.spyOn(wallet, 'encrypt').mockImplementationOnce(async args => {
+          if (delayed === 'encrypt') {
+            stalled = true
+            await gate
+          }
+          return encrypt(args)
+        })
+
+        const first = new WebSocket(url)
+        await new Promise(resolve => first.once('open', resolve))
+        first.send(JSON.stringify({ topic: session.id, mobileIdentityKey, ciphertext: 'AQID' }))
+        await waitUntil(() => stalled)
+        first.close()
+        await waitUntil(() => relay.topics.get(session.id)?.mobile == null)
+
+        const second = new WebSocket(url)
+        const secondReceived: string[] = []
+        second.on('message', data => secondReceived.push(`${data}`))
+        await new Promise(resolve => second.once('open', resolve))
+        await waitUntil(() => (service as any).mobileAuthTimers.has(session.id))
+        const secondTimer = (service as any).mobileAuthTimers.get(session.id)
+
+        release()
+        await new Promise(resolve => setTimeout(resolve, 100))
+
+        expect({
+          authTimerKept: (service as any).mobileAuthTimers.get(session.id) === secondTimer,
+          status: service.getSession(session.id)?.status,
+          mobileIdentityKey: (service as any).sessions.getSession(session.id)?.mobileIdentityKey,
+          sessionConnectedCalls: onSessionConnected.mock.calls.length,
+          framesToSecond: secondReceived.length,
+          secondOpen: second.readyState === WebSocket.OPEN
+        }).toEqual({
+          authTimerKept: true,
+          status: 'disconnected',
+          mobileIdentityKey: undefined,
+          sessionConnectedCalls: 0,
+          framesToSecond: 0,
+          secondOpen: true
+        })
+        second.close()
+      } finally {
+        service.stop()
+        server.closeAllConnections()
+        server.close()
+      }
+    }
+  )
 
   it('routes asynchronous malformed-mobile failures into immediate socket revocation', async () => {
     const { service } = createService()

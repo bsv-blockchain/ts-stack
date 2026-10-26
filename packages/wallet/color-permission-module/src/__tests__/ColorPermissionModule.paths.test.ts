@@ -6,6 +6,7 @@ import {
   TransactionSignature,
   UnlockingScript,
   type CreateActionArgs,
+  type CreateActionResult,
   type ListOutputsResult
 } from '@bsv/sdk'
 import { hash160 } from '@bsv/sdk/primitives/Hash'
@@ -139,7 +140,10 @@ describe('ColorPermissionModule boundaries', () => {
     ])
     expect(funded.outputs![2]).toMatchObject({ basket: assetBasket(assetId, 'value') })
 
-    const created = await wallet.createAction(funded)
+    const created = (await module.onResponse(await wallet.createAction(funded), {
+      method: 'createAction',
+      originator: APP
+    })) as CreateActionResult
     const signable = created.signableTransaction!
     const action = {
       reference: signable.reference,
@@ -210,6 +214,8 @@ describe('ColorPermissionModule boundaries', () => {
     })
     expect(funded.outputs![0].lockingScript).toBe(output.lockingScript)
     expect(funded.outputs![1]).toMatchObject({ basket: assetBasket(assetId, 'value') })
+    // That funding never reaches the wallet; drop its staged input so the next calls can fund.
+    module.dispose()
 
     await expect(
       createAction({
@@ -240,7 +246,10 @@ describe('ColorPermissionModule boundaries', () => {
 
   /** The signAction hook call for a funded action, as the permissions manager makes it. */
   async function signAction(funded: CreateActionArgs) {
-    const created = await wallet.createAction(funded)
+    const created = (await module.onResponse(await wallet.createAction(funded), {
+      method: 'createAction',
+      originator: APP
+    })) as CreateActionResult
     const signable = created.signableTransaction!
     const pending = wallet.pending.get(signable.reference)!
     const action = {
@@ -280,6 +289,8 @@ describe('ColorPermissionModule boundaries', () => {
   })
 
   it('signs a managed input with its sighash override', async () => {
+    // The app names this input without its BEEF; the fake wallet resolves it from storage.
+    wallet.requireInputBEEF = false
     const [held] = await holdTokens(wallet, provider, assetId, [300n])
     const outpoint = `${held.id('hex')}.0`
     const scope =
@@ -318,6 +329,8 @@ describe('ColorPermissionModule boundaries', () => {
       ]
     })
     expect(funded.inputs!.map(input => input.outpoint)).toEqual([outpoint])
+    // That funding never reaches the wallet; drop its staged input so the next call can name it.
+    module.dispose()
     provider.spend(outpoint)
     await expect(
       createAction({
@@ -330,6 +343,8 @@ describe('ColorPermissionModule boundaries', () => {
   })
 
   it('checks at signAction a token input the wallet resolved without inputBEEF', async () => {
+    // The app names this input without its BEEF; the fake wallet resolves it from storage.
+    wallet.requireInputBEEF = false
     await holdTokens(wallet, provider, assetId, [300n])
     const extra = (await tokenPayment(new FakeWallet(), wallet, assetId, 50n)).tx
     provider.admit(assetId, extra, 0)

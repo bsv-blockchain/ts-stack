@@ -63,6 +63,7 @@ export * from './OutputPaidLookupFunding.js'
 export * from './OutputRootEvictionProtocol.js'
 export * from './OutputCapabilityRetention.js'
 export * from './OutputServiceError.js'
+export * from './OverlayNames.js'
 export {
   default as OverlayAdminTokenTemplate,
   type OverlayDiscoveryAdvertisement,

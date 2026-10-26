@@ -1,11 +1,20 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import test from 'node:test'
 
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import { planShards } from './ci-shard-plan.mjs'
 import { mutationExecutionMatrix, partitionedMutationTargets } from './mutation-partitions.mjs'
 import { APPLICATION_COVERAGE_SHARDS } from './output-knowledge-coverage-validation.mjs'
 import { REPOSITORY_ROOT } from './repository-health.mjs'
@@ -67,10 +76,10 @@ function workflowJobBlocks(workflow) {
   }))
 }
 
-test('installed engine regressions run unconditionally after frozen installation and before build or reuse', () => {
+test('installed engine regressions run unconditionally after frozen installation and before build reuse', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
-  const prepare = workflowJobBlocks(workflow).find(job => job.name === 'prepare').source
-  const steps = prepare.split(/\n {6}- /)
+  const policy = workflowJobBlocks(workflow).find(job => job.name === 'policy').source
+  const steps = policy.split(/\n {6}- /)
   const installed = steps.findIndex(step =>
     step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
   )
@@ -80,8 +89,8 @@ test('installed engine regressions run unconditionally after frozen installation
   const rebuild = steps.findIndex(step =>
     step.startsWith('name: Rebuild the audited workspace build tool\n')
   )
-  const build = steps.findIndex(step => step.startsWith('name: Build workspace\n'))
-  assert.ok(installed >= 0 && engine > installed && rebuild > engine && build > engine)
+  const reuse = steps.findIndex(step => step.startsWith('uses: actions/download-artifact@'))
+  assert.ok(installed >= 0 && engine > installed && rebuild > engine && reuse > engine)
   assert.match(
     steps[engine],
     /run: node --test scripts\/mutation-partitions-engine\.integration\.mjs(?:\n|$)/
@@ -102,7 +111,7 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
   assert.equal(workflow.match(/- name: Build workspace/g)?.length, 1)
   assert.match(
     workflow,
-    /^      browser-packages: \$\{\{ steps\.scope\.outputs\.browser-packages \}\}$/m
+    /^      browser-packages: \$\{\{ steps\.lanes\.outputs\.browser-packages \}\}$/m
   )
   assert.match(workflow, /^  browser-packages:$/m)
   assert.match(
@@ -175,8 +184,8 @@ test('CI contributes mobile and type-only wallet surfaces to aggregate patch cov
 test('application coverage shards retain the complete selection and a required merged global gate', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
-  const command = jobs.prepare.match(
-    /COVERAGE_OTHER_MATRIX=\$\(jq -c '([\s\S]*?)' <<<"\$COVERAGE_OTHER_PACKAGES"\)/
+  const command = jobs.scope.match(
+    /COVERAGE_OTHER_MATRIX=\$\(jq -c --argjson all "\$COVERAGE_OTHER_PACKAGES" '([\s\S]*?)' <<<"\$COVERAGE_OTHER_MATRIX"\)/
   )?.[1]
   assert.ok(command)
   for (const selected of [
@@ -186,8 +195,15 @@ test('application coverage shards retain the complete selection and a required m
     ['other', 'second'],
     ['other', '@bsv/output-knowledge', 'second']
   ]) {
+    const planned = planShards(
+      selected.filter(name => name !== '@bsv/output-knowledge'),
+      {}
+    )
     const rows = JSON.parse(
-      execFileSync('jq', ['-c', command], { input: JSON.stringify(selected), encoding: 'utf8' })
+      execFileSync('jq', ['-c', '--argjson', 'all', JSON.stringify(selected), command], {
+        input: JSON.stringify(planned),
+        encoding: 'utf8'
+      })
     ).include
     const application = rows.filter(row => row.application !== 0)
     assert.deepEqual(
@@ -203,9 +219,7 @@ test('application coverage shards retain the complete selection and a required m
     )
     const other = selected.filter(name => name !== '@bsv/output-knowledge')
     const packageRows = rows.filter(row => row.application === 0)
-    const union = packageRows.flatMap(row =>
-      other.filter((_, index) => (index % row.total) + 1 === row.shard)
-    )
+    const union = packageRows.flatMap(row => row.packages)
     assert.deepEqual(union.sort(), [...other].sort())
     assert.equal(new Set(rows.map(row => row.id)).size, rows.length)
   }
@@ -220,15 +234,15 @@ test('application coverage shards retain the complete selection and a required m
     jobs['coverage-other'] + jobs['coverage-upload'],
     /continue-on-error|passWithNoTests/
   )
-  const steps = jobs.prepare.split(/\n {6}- /)
+  const steps = jobs.policy.split(/\n {6}- /)
   const installed = steps.findIndex(step =>
     step.includes('run: pnpm install --frozen-lockfile --ignore-scripts')
   )
   const reporting = steps.findIndex(step =>
     step.startsWith('name: Test installed application coverage reporting\n')
   )
-  const build = steps.findIndex(step => step.startsWith('name: Build workspace\n'))
-  assert.ok(installed >= 0 && reporting > installed && build > reporting)
+  const reuse = steps.findIndex(step => step.startsWith('uses: actions/download-artifact@'))
+  assert.ok(installed >= 0 && reporting > installed && reuse > reporting)
   assert.match(
     steps[reporting],
     /run: node --test scripts\/output-knowledge-coverage\.integration\.mjs/
@@ -242,8 +256,23 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const directGateCondition =
     "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
-  assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
+  // Lint, policy and typecheck wait for every early gate and the shared build.
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.policy, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.policy, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.policy, /name: Typecheck workspace/)
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
+  // The build overlaps the repository-health contract; test lanes still wait
+  // for every early gate and the shared build before they start.
+  // The build waits for nothing; it builds every package from the cache.
+  assert.doesNotMatch(jobs.build, /^    needs:/m)
+  assert.match(jobs.build, /scripts\/build-output-cache\.mjs names/)
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.prepare, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.prepare, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.prepare, /needs\.build\.result == 'success'$/m)
+  for (const gate of ['merge-gate', 'build-and-test'])
+    assert.match(jobs[gate], /^      - policy$/m, gate)
   for (const jobName of ['docs-validate', 'conformance']) {
     assert.match(jobs[jobName], /^    if: >-$/m)
     assert.match(jobs[jobName], /^      always\(\) && !cancelled\(\) &&$/m)
@@ -312,7 +341,7 @@ test('all selected execution jobs survive skipped ancestors and expose a strict 
   const selected = jobs.filter(
     job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
   )
-  assert.equal(selected.length, 14)
+  assert.equal(selected.length, 15)
   for (const job of selected) {
     if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
     assert.match(
@@ -496,7 +525,14 @@ test('every HTTP latency scenario retains its own required coverage execution', 
     latencies
   )
   assert.ok(selected.every(match => match[1] === match[2]))
-  assert.equal(wallet.match(/id: shard-\d, shard: \d/g).length, 4)
+  // Every planned shard has a matrix row, so no test file can go unrun.
+  const shardRows = wallet.match(/id: shard-\d+, shard: \d+/g).length
+  assert.equal(Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]), shardRows)
+  assert.match(
+    wallet,
+    /--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(wallet, /JEST_SHARD_LANE=wallet-toolbox-coverage/)
   assert.match(
     wallet,
     /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/
@@ -803,4 +839,69 @@ test('acquisition and proposal HTTP aggregation require every selected part arti
     ).source
     assertPartitionDownload(aggregate, id)
   }
+})
+
+// Extract one step's `run: |` block from the raw workflow text, as the other
+// checks here read the workflow without a YAML dependency.
+function stepScript(workflow, name) {
+  const lines = workflow.split('\n')
+  const at = lines.findIndex(line => line.trim() === `- name: ${name}`)
+  assert.ok(at >= 0, name)
+  const run = lines.findIndex((line, index) => index > at && line.trim() === 'run: |')
+  const indent = lines[run + 1].match(/^ */)[0].length
+  const body = []
+  for (const line of lines.slice(run + 1)) {
+    if (line.trim() !== '' && line.match(/^ */)[0].length < indent) break
+    body.push(line.slice(indent))
+  }
+  return body.join('\n')
+}
+
+test('infra image builds back off longer only for registry rate limits', () => {
+  const script = stepScript(readFileSync(CI_PATH, 'utf8'), 'Build Linux image')
+    .replaceAll('${{ strategy.job-index }}', '0')
+    .replaceAll('${{ matrix.component }}', 'wab')
+  const scenario = outcomes => {
+    const directory = mkdtempSync(join(tmpdir(), 'ts-stack-image-retry-'))
+    writeFileSync(join(directory, 'outcomes'), outcomes.join('\n') + '\n')
+    // Each docker call consumes one scripted outcome; sleep only records.
+    writeFileSync(
+      join(directory, 'docker'),
+      `#!/bin/bash\noutcome=$(head -n1 "${directory}/outcomes"); sed -i.bak 1d "${directory}/outcomes"\n` +
+        `echo call >> "${directory}/calls"\n` +
+        `case "$outcome" in ok) exit 0;; 429) echo "429 Too Many Requests" >&2; exit 1;; *) echo "error: build failed" >&2; exit 1;; esac\n`
+    )
+    writeFileSync(join(directory, 'sleep'), `#!/bin/bash\necho "$1" >> "${directory}/sleeps"\n`)
+    chmodSync(join(directory, 'docker'), 0o755)
+    chmodSync(join(directory, 'sleep'), 0o755)
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: { PATH: `${directory}:${process.env.PATH}`, RUNNER_TEMP: directory },
+      encoding: 'utf8'
+    })
+    const lines = file => {
+      try {
+        return readFileSync(join(directory, file), 'utf8').trim().split('\n').filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    return { status: run.status, calls: lines('calls').length, sleeps: lines('sleeps').map(Number) }
+  }
+  assert.deepEqual(scenario(['ok']), { status: 0, calls: 1, sleeps: [] })
+  assert.deepEqual(scenario(['429', '429', '429', 'ok']), {
+    status: 0,
+    calls: 4,
+    sleeps: [15, 30, 60]
+  })
+  assert.deepEqual(scenario(['429', '429', '429', '429', '429']), {
+    status: 1,
+    calls: 5,
+    sleeps: [15, 30, 60, 120]
+  })
+  // A genuine build failure keeps the short retry and does not wait minutes.
+  assert.deepEqual(scenario(['fail', 'fail', 'fail', 'ok']), {
+    status: 1,
+    calls: 3,
+    sleeps: [5, 10]
+  })
 })

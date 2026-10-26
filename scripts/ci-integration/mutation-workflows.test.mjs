@@ -65,6 +65,7 @@ test('every publisher requires complete exact-source qualification before publis
             prepare: { outputs: { count: '1' } },
             discover: { result: 'success', outputs: { count: '1' } },
             source: { result: 'success' },
+            'build-image': { result: 'success' },
             [gate]: { result, outputs: { 'qualified-sha': qualified } }
           }
         }
@@ -196,7 +197,7 @@ test('partition jobs cannot replace each original canonical global gate or the f
   assert.deepEqual(await mutationExecutor(ci), executor)
   assert.equal(
     executor.strategy['max-parallel'],
-    "${{ inputs.profile == 'qualification' && 20 || 6 }}"
+    "${{ inputs.profile == 'qualification' && 100 || 6 }}"
   )
   assert.equal(executor.strategy['fail-fast'], false)
   assert.equal(executor.strategy.matrix, '${{ fromJSON(inputs.execution-matrix) }}')
@@ -407,19 +408,19 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
       .filter(step => step.uses?.startsWith('actions/setup-node@'))
       .map(step => step.with['node-version'])
   )
-  assert.deepEqual(fullRuntimes, ['24.19.0', '24.19.0', '24.19.0'])
+  assert.deepEqual(fullRuntimes, ['24.22.1', '24.22.1', '24.22.1'])
   const executor = await mutationExecutor(full)
   const setup = executor.steps.find(step => step.uses?.startsWith('actions/setup-node@'))
   assert.equal(
     setup.with['node-version'],
-    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.22.1' }}"
   )
   const profile = executor.steps.find(
     step => step.name === 'Require the original caller evidence profile'
   )
   assert.equal(
     profile.env.NODE_VERSION,
-    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.22.1' }}"
   )
   const source = 'a'.repeat(40)
   for (const version of [
@@ -454,16 +455,16 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
     assert.equal(result.status === 0, ['v24.18.0', 'v24.19.0'].includes(version), version)
   }
   const ci = parse(readFileSync(CI_PATH, 'utf8'))
-  const originalSetup = ci.jobs.prepare.steps.find(step =>
+  const originalSetup = ci.jobs.build.steps.find(step =>
     step.uses?.startsWith('actions/setup-node@')
   )
-  assert.equal(originalSetup.with['node-version'], '24.18.0')
+  assert.equal(originalSetup.with['node-version'], '24.22.1')
   const ciExecutor = await mutationExecutor(ci)
   assert.equal(
     ciExecutor.steps.find(step => step.uses?.startsWith('actions/setup-node@')).with[
       'node-version'
     ],
-    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}"
+    "${{ fromJSON(inputs.identity).nodeVersion || 'v24.22.1' }}"
   )
 })
 

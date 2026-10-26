@@ -47,7 +47,7 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
-      max-parallel: ${{ inputs.profile == 'qualification' && 20 || 6 }}
+      max-parallel: ${{ inputs.profile == 'qualification' && 100 || 6 }}
       matrix: ${{ fromJSON(inputs.execution-matrix) }}
     steps:
       - name: Require the original caller evidence profile
@@ -57,7 +57,7 @@ jobs:
           SOURCE_SHA: ${{ fromJSON(inputs.identity).sourceSha }}
           SOURCE_RUN_ID: ${{ fromJSON(inputs.identity).runId }}
           SOURCE_RUN_ATTEMPT: ${{ fromJSON(inputs.identity).runAttempt }}
-          NODE_VERSION: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}
+          NODE_VERSION: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.22.1' }}
           ARCHIVE_DIGEST: ${{ fromJSON(inputs.identity).archiveDigest }}
           ARTIFACT_ID: ${{ fromJSON(inputs.identity).artifactId }}
           ARTIFACT_NAME: ${{ fromJSON(inputs.identity).artifactName }}
@@ -88,7 +88,7 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # Original six-field callers used this exact runtime before version capture.
-          node-version: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.18.0' }}
+          node-version: ${{ fromJSON(inputs.identity).nodeVersion || 'v24.22.1' }}
           cache: pnpm
 
       - name: Install frozen dependencies

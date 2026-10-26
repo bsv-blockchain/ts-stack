@@ -1,8 +1,12 @@
 import { describe, expect, it } from '@jest/globals'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import {
   assetBasket,
   assetTag,
   colorProtocolID,
+  derivationSuffixTag,
+  isDerivationSuffixTag,
   ISSUE,
   parseAssetBasket,
   parseBalanceSelector,
@@ -123,5 +127,18 @@ describe('BRC-207 identifiers', () => {
     expect(() => parseBalanceSelector('p color balance issue')).toThrow(
       'BRC-207: issue is not a stored basket'
     )
+  })
+})
+
+describe('derivationSuffixTag', () => {
+  it('is `p color ` and the SHA-256 of the suffix’s UTF-8 bytes, 72 characters', () => {
+    const suffix = 'c3VmZml4c3VmZml4c3VmZg=='
+    const tag = derivationSuffixTag(suffix)
+    expect(tag).toBe(`p color ${toHex(sha256(toArray(suffix, 'utf8')))}`)
+    expect(tag).toHaveLength(72)
+    expect(derivationSuffixTag('x'.repeat(1000))).toHaveLength(72)
+    expect(isDerivationSuffixTag(tag)).toBe(true)
+    expect(isDerivationSuffixTag('p color')).toBe(false)
+    expect(isDerivationSuffixTag('p color assets')).toBe(false)
   })
 })

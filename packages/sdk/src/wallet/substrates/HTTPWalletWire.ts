@@ -1,5 +1,10 @@
 import WalletWire, { MAX_WALLET_WIRE_FRAME_BYTES } from './WalletWire.js'
 import WalletWireCalls from './WalletWireCalls.js'
+import {
+  CERTIFICATE_COMPATIBILITY_CALL,
+  CERTIFICATE_COMPATIBILITY_VERSION
+} from './CertificateWireCompatibility.js'
+import { WalletError, walletErrors } from '../WalletError.js'
 import { ReaderUint8Array, toUTF8Strict } from '../../primitives/utils.js'
 import { validateOriginator } from '../validationHelpers.js'
 import { normalizeWalletHttpBaseUrl } from './utils/toOriginHeader.js'
@@ -33,7 +38,10 @@ export default class HTTPWalletWire implements WalletWire {
     const callCode = messageReader.readUInt8()
 
     // Map call code to call name
-    const callName = WalletWireCalls[callCode] // calls is enum
+    const callName =
+      callCode === CERTIFICATE_COMPATIBILITY_CALL
+        ? 'certificateCompatibility'
+        : WalletWireCalls[callCode]
     if (callName === undefined || callName === '') {
       // Invalid call code
       throw new Error(`Invalid call code: ${callCode}`)
@@ -55,6 +63,11 @@ export default class HTTPWalletWire implements WalletWire {
       throw new Error('Wallet Wire frame originator does not match the configured originator')
     }
     const payload = messageReader.readView()
+    const compatibilityProbe =
+      callCode === CERTIFICATE_COMPATIBILITY_CALL &&
+      payload.length === 2 &&
+      payload[0] === 0 &&
+      payload[1] === CERTIFICATE_COMPATIBILITY_VERSION
     const baseUrl = normalizeWalletHttpBaseUrl(this.baseUrl)
     const response = await this.httpClient(`${baseUrl}/${callName}`, {
       method: 'POST',
@@ -65,6 +78,15 @@ export default class HTTPWalletWire implements WalletWire {
       },
       body: payload as BodyInit
     })
+    // Old HTTP routers have no extension endpoint. Only a missing probe route
+    // establishes lack of support; never downgrade or retry an invocation.
+    if (compatibilityProbe && (response.status === 404 || response.status === 405)) {
+      await response.body?.cancel()
+      throw new WalletError(
+        'Wallet does not support the certificate compatibility HTTP endpoint',
+        walletErrors.unsupportedAction
+      )
+    }
     return await this.readResponse(response)
   }
 

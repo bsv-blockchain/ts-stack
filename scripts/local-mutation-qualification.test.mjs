@@ -34,7 +34,7 @@ const identity = {
   localAttempt: 1,
   sourceSha: 'a'.repeat(40),
   sourceTree: 'b'.repeat(40),
-  nodeVersion: 'v24.18.0',
+  nodeVersion: 'v24.22.1',
   nodeExecutable: '/opt/node/bin/node',
   nodeExecutableDigest: 'c'.repeat(64),
   platform: 'linux',

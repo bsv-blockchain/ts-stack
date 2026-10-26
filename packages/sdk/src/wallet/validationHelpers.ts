@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from './CertificateType.js'
 /* eslint-disable @typescript-eslint/strict-boolean-expressions */
 import {
   AbortActionArgs,
@@ -472,6 +473,18 @@ function validateDecodedBase64Length(
   }
   if (max !== undefined && bytes > max) {
     throw new WERR_INVALID_PARAMETER(name, `no more than ${max} bytes`)
+  }
+}
+
+/** Validate an existing certificate reference without weakening new issuance. */
+export function validateExistingCertificateType(value: string, name: string): string {
+  try {
+    // Preserve reference-argument normalization without rewriting signed types.
+    if (typeof value === 'string') value = value.trim()
+    existingCertificateTypeBytes(value)
+    return value
+  } catch {
+    throw new WERR_INVALID_PARAMETER(name, 'canonical base64 encoding 1 to 128 bytes')
   }
 }
 
@@ -1155,7 +1168,7 @@ export function validateRelinquishCertificateArgs(
 ): ValidRelinquishCertificateArgs {
   validateRecord(args, 'args')
   const vargs: ValidRelinquishCertificateArgs = {
-    type: validateBase64String(args.type, 'type', 32, 32),
+    type: validateExistingCertificateType(args.type, 'type'),
     serialNumber: validateBase64String(args.serialNumber, 'serialNumber', 32, 32),
     certifier: validatePublicKey(args.certifier, 'certifier')
   }
@@ -1195,7 +1208,7 @@ export function validateListCertificatesArgs(
     certifiers: validateArray(args.certifiers, 'certifiers').map(c =>
       validatePublicKey(c, 'certifiers')
     ),
-    types: validateArray(args.types, 'types').map(t => validateBase64String(t, 'types', 32, 32)),
+    types: validateArray(args.types, 'types').map(t => validateExistingCertificateType(t, 'types')),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
     offset: validateInteger(args.offset, 'offset', 0, 0),
     privileged: defaultFalse(args.privileged, 'privileged'),
@@ -1480,7 +1493,10 @@ export function validateProveCertificateArgs(
   }
 
   const vargs: ValidProveCertificateArgs = {
-    type: validateOptionalBase64String(args.certificate.type, 'certificate.type', 32, 32),
+    type:
+      args.certificate.type === undefined
+        ? undefined
+        : validateExistingCertificateType(args.certificate.type, 'certificate.type'),
     serialNumber: validateOptionalBase64String(
       args.certificate.serialNumber,
       'certificate.serialNumber',

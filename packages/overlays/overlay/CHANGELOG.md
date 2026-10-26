@@ -21,6 +21,10 @@ All notable changes to this project will be documented in this file. The format 
 ## [Unreleased]
 
 - Add an explicit Mongo retained-admission history option and trusted scoped reader. Preserve default receipt bytes, existing public receipt shape, legacy retry behavior and database validators; old receipts without provenance remain unresolved. Bound the complete opt-in record before effects.
+- SHIP/SLAP advertisement validation accepts topic and service names with
+  digits, up to 256 bytes, matching the `@bsv/sdk` overlay name grammar and the
+  BRC-207 per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`).
+  Names accepted before are still accepted; no migration is required.
 
 - Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
 

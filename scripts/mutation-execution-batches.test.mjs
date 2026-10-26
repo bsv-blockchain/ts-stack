@@ -407,17 +407,17 @@ test('both callers dispatch serial immutable batches and the reusable executor r
   assert.match(executor, /fail-fast: false/)
   assert.match(
     executor,
-    /max-parallel: \$\{\{ inputs\.profile == 'qualification' && 20 \|\| 6 \}\}/
+    /max-parallel: \$\{\{ inputs\.profile == 'qualification' && 100 \|\| 6 \}\}/
   )
   assert.match(executor, /ref: \$\{\{ fromJSON\(inputs\.identity\)\.sourceSha \}\}/)
   assert.match(executor, /persist-credentials: false/)
   assert.match(
     executor,
-    /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.18\.0' \}\}/
+    /node-version: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.22\.1' \}\}/
   )
   assert.match(
     executor,
-    /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.18\.0' \}\}/
+    /NODE_VERSION: \$\{\{ fromJSON\(inputs\.identity\)\.nodeVersion \|\| 'v24\.22\.1' \}\}/
   )
   assert.match(executor, /pnpm install --frozen-lockfile --ignore-scripts/)
   assert.match(executor, /artifact-ids: \$\{\{ fromJSON\(inputs\.identity\)\.artifactId \}\}/)

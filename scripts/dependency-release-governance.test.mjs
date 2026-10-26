@@ -10,10 +10,10 @@ import { promisify } from 'node:util'
 
 import {
   classifyDirectDependency,
-  readPublishedPackage,
   collectOverrides,
   immutableDeploymentImages,
   isAutomationPullRequest,
+  isRegistryNotFound,
   parsePnpmOverrides,
   publishedInstallContexts,
   validateDependabotExclusions,
@@ -31,7 +31,7 @@ test('dependency and release governance is internally complete', () => {
   assert.deepEqual(validateDependencyReleaseGovernance(), [])
 
   const overrides = collectOverrides()
-  assert.equal(overrides.length, 27)
+  assert.equal(overrides.length, 28)
   assert.deepEqual(
     overrides.filter(entry => entry.selector === 'nodemon'),
     []
@@ -44,7 +44,12 @@ test('dependency and release governance is internally complete', () => {
     '5.0.12'
   )
   assert.equal(overrides.find(entry => entry.selector === 'engine.io@<6.6.10')?.value, '6.6.10')
-  assert.equal(overrides.filter(entry => entry.selector === 'toml@<4.2.0').length, 1)
+  assert.equal(
+    overrides.find(entry => entry.selector === 'puppeteer-core@25.11.0>chromium-bidi')?.value,
+    "'-'"
+  )
+  assert.equal(overrides.find(entry => entry.selector === 'zod@>=4.0.0 <4.6.6')?.value, '4.6.7')
+  assert.equal(overrides.filter(entry => entry.selector.startsWith('toml')).length, 0)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml@<3.15.2').length, 1)
   assert.equal(overrides.filter(entry => entry.selector === 'js-yaml').length, 1)
   assert.equal(overrides.find(entry => entry.selector === 'lodash-es@<4.18.0')?.value, '4.18.1')
@@ -188,78 +193,6 @@ test('Dependabot rejects parent paths before GitHub disables every update job', 
         .replace('../../../pnpm-workspace.yaml', '**/pnpm-workspace.yaml')
     ),
     []
-  )
-})
-
-test('initial package verification distinguishes registry absence from failure or an existing publication', async () => {
-  const project = { name: '@example/initial' }
-  const absent = Object.assign(new Error('not found'), {
-    stdout: JSON.stringify({
-      error: {
-        code: 'E404',
-        summary: 'Not Found - GET https://registry.npmjs.org/@example%2finitial - Not found'
-      }
-    })
-  })
-  const notFound = async () => {
-    throw absent
-  }
-  const initial = await readPublishedPackage(project, '0.1.0', null, 'initial', notFound)
-  assert.equal(initial.status, 'unpublished-initial-candidate')
-  assert.equal(initial.publishedLatest, null)
-  assert.equal(initial.recordedPublishedBaseline, null)
-  await assert.rejects(
-    readPublishedPackage(project, '0.1.0', '0.0.1', 'patch', notFound),
-    error => error === absent
-  )
-  await assert.rejects(
-    readPublishedPackage(project, '0.1.0', null, 'patch', notFound),
-    error => error === absent
-  )
-  for (const failure of [
-    new Error('offline'),
-    Object.assign(new Error('authentication failed'), {
-      stdout: JSON.stringify({ error: { code: 'E403' } })
-    })
-  ]) {
-    await assert.rejects(
-      readPublishedPackage(project, '0.1.0', null, 'initial', async () => {
-        throw failure
-      }),
-      error => error === failure
-    )
-  }
-  for (const summary of [
-    'No match found for version latest',
-    'Unpublished on 2026-01-01',
-    'Not Found - GET https://registry.npmjs.org/@example%2fother - Not found',
-    'Not Found - GET https://unrelated.example/@example%2finitial - Not found'
-  ]) {
-    const failure = Object.assign(new Error(summary), {
-      stdout: JSON.stringify({ error: { code: 'E404', summary } })
-    })
-    await assert.rejects(
-      readPublishedPackage(project, '0.1.0', null, 'initial', async () => {
-        throw failure
-      }),
-      error => error === failure
-    )
-  }
-  const published = async () => ({
-    version: '0.1.0',
-    'dist.integrity': 'sha512-fixture',
-    'dist.attestations': { provenance: { predicateType: 'https://slsa.dev/provenance/v1' } }
-  })
-  assert.equal(
-    (await readPublishedPackage(project, '0.1.0', null, 'initial', published)).status,
-    'diverged'
-  )
-  const reconciled = await readPublishedPackage(project, '0.1.0', '0.1.0', 'none', published)
-  assert.equal(reconciled.status, 'current')
-  assert.equal(reconciled.provenance, true)
-  assert.equal(
-    (await readPublishedPackage(project, '0.2.0', '0.1.0', 'minor', published)).status,
-    'first-party-release-held'
   )
 })
 
@@ -505,4 +438,62 @@ test('dependency resolution has no release-age block and retains real security c
   const lock = fs.readFileSync('pnpm-lock.yaml', 'utf8')
   assert.doesNotMatch(lock, /handlebars@4\.7\.9:/)
   assert.match(lock, /handlebars@4\.7\.10:/)
+})
+
+test('only a completed npm E404 is registry absence, never authentication or observer failure', () => {
+  const error = { code: 1, stdout: JSON.stringify({ error: { code: 'E404' } }) }
+  assert.equal(isRegistryNotFound(error), true)
+  for (const value of [
+    undefined,
+    { ...error, code: 'ETIMEDOUT' },
+    { ...error, killed: true },
+    { ...error, signal: 'SIGTERM' },
+    { ...error, stdout: '' },
+    { ...error, stdout: JSON.stringify({ error: { code: 'E401' } }) },
+    { ...error, stdout: JSON.stringify({ error: { code: 'E403' } }) },
+    { ...error, stdout: JSON.stringify({ error: { code: 'EAI_AGAIN' } }) }
+  ]) {
+    assert.equal(isRegistryNotFound(value), false)
+  }
+})
+
+test('explicit initial-release holds stay in complete reports without inventing published consumers', () => {
+  const names = ['@bsv/sdk', '@bsv/new']
+  const report = installReport(names)
+  const initial = {
+    name: '@bsv/new',
+    sourceVersion: '0.1.0',
+    publishedLatest: null,
+    recordedPublishedBaseline: '0.0.0',
+    status: 'first-party-initial-release-held',
+    registryNotFound: true
+  }
+  report.packages[1] = initial
+  const contexts = publishedInstallContexts(report, names, ['@bsv/new'])
+  assert.equal(contexts.length, 1)
+  assert.equal(contexts[0].name, '@bsv/sdk')
+  assert.throws(() => publishedInstallContexts(report, names, []))
+  assert.throws(() =>
+    publishedInstallContexts({ ...report, packages: [initial] }, names, ['@bsv/new'])
+  )
+  assert.throws(() =>
+    publishedInstallContexts({ ...report, packages: [initial, initial] }, names, ['@bsv/new'])
+  )
+  for (const change of [
+    { recordedPublishedBaseline: '1.0.0' },
+    { registryNotFound: false },
+    { publishedLatest: '0.1.0' },
+    { sourceVersion: '0.0.0' },
+    { sourceVersion: 'latest' },
+    { integrity: 'unverified' },
+    { provenance: false }
+  ]) {
+    assert.throws(() =>
+      publishedInstallContexts(
+        { ...report, packages: [report.packages[0], { ...initial, ...change }] },
+        names,
+        ['@bsv/new']
+      )
+    )
+  }
 })
