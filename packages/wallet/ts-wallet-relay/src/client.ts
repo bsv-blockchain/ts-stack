@@ -48,3 +48,4 @@ export type {
   RequestLogEntry
 } from './types.js'
 export type { CryptoParams } from './shared/crypto.js'
+export type { LocalNetworkHttpOptions } from './shared/validation.js'

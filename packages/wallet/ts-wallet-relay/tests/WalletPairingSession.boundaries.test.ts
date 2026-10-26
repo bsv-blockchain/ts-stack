@@ -2,7 +2,13 @@ import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import { WebSocket } from 'ws'
 import { WalletPairingSession } from '../src/client/WalletPairingSession.js'
 import { decryptEnvelope, encryptEnvelope } from '../src/shared/crypto.js'
+import { bytesToBase64url } from '../src/shared/encoding.js'
 import type { PairingParams, RpcRequest, RpcResponse } from '../src/types.js'
+import {
+  LOCAL_NETWORK_AUTHORITIES,
+  LOOPBACK_AUTHORITIES,
+  PUBLIC_AUTHORITIES
+} from './fixtures/localDevelopmentHosts.js'
 
 const TOPIC = 'A'.repeat(43)
 const RPC_ID = '00000000-0000-4000-8000-000000000001'
@@ -49,6 +55,36 @@ async function fixture(options: ConstructorParameters<typeof WalletPairingSessio
   }
 
   return { backend, mobile, mobileIdentityKey, params, response, session, socket }
+}
+
+/** A session whose pairing parameters are validly signed for `origin`. */
+async function signedSession(
+  origin: string,
+  options: ConstructorParameters<typeof WalletPairingSession>[2] = {}
+): Promise<WalletPairingSession> {
+  const { backend, mobile, params } = await fixture()
+  const data = Array.from(
+    new TextEncoder().encode(
+      `${params.topic}|${params.backendIdentityKey}|${origin}|${params.expiry}`
+    )
+  )
+  const { signature } = await backend.createSignature({
+    data,
+    protocolID: [0, 'qr pairing'],
+    keyID: params.topic,
+    counterparty: 'anyone'
+  })
+  return new WalletPairingSession(
+    mobile,
+    { ...params, origin, sig: bytesToBase64url(signature) },
+    options
+  )
+}
+
+function relayResponse(relay: string): Response {
+  return new Response(JSON.stringify({ sessionId: TOPIC, status: 'pending', relay }), {
+    headers: { 'Content-Type': 'application/json' }
+  })
 }
 
 function request(method: string, params: unknown): RpcRequest {
@@ -128,6 +164,86 @@ describe('WalletPairingSession hostile request boundaries', () => {
 
     await expect(session.resolveRelay()).rejects.toThrow('did not return a relay URL')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(LOOPBACK_AUTHORITIES)(
+    'resolves the relay from a signed plain-HTTP loopback origin %s by default',
+    async authority => {
+      const origin = `http://${authority}`
+      const { host } = new URL(origin)
+      const session = await signedSession(origin)
+      const fetchMock = jest
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce(relayResponse(`ws://${authority}`))
+
+      await expect(session.resolveRelay()).resolves.toBe(`ws://${host}`)
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://${host}/api/session/${TOPIC}`,
+        expect.objectContaining({ redirect: 'error' })
+      )
+    }
+  )
+
+  it.each(LOCAL_NETWORK_AUTHORITIES)(
+    'refuses a signed plain-HTTP private-network origin %s unless allowLocalNetworkHttp is set',
+    async authority => {
+      const origin = `http://${authority}`
+      const { host } = new URL(origin)
+      const fetchMock = jest.spyOn(globalThis, 'fetch')
+
+      const strict = await signedSession(origin)
+      // Phone-side errors reach wallet users, so they carry no developer hint.
+      await expect(strict.resolveRelay()).rejects.toMatchObject({
+        message: 'Pairing origin must be HTTPS, except for loopback development'
+      })
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      const optedIn = await signedSession(origin, { allowLocalNetworkHttp: true })
+      fetchMock.mockResolvedValueOnce(relayResponse(`ws://${authority}`))
+      await expect(optedIn.resolveRelay()).resolves.toBe(`ws://${host}`)
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://${host}/api/session/${TOPIC}`,
+        expect.objectContaining({ redirect: 'error' })
+      )
+    }
+  )
+
+  it.each(PUBLIC_AUTHORITIES)(
+    'refuses a signed plain-HTTP origin on public host %s before any request, even when opted in',
+    async authority => {
+      const fetchMock = jest.spyOn(globalThis, 'fetch')
+      for (const allowLocalNetworkHttp of [false, true]) {
+        const session = await signedSession(`http://${authority}`, { allowLocalNetworkHttp })
+        await expect(session.resolveRelay()).rejects.toThrow('Pairing origin must be HTTPS')
+      }
+      expect(fetchMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it('accepts a private-network ws: relay from the origin only with allowLocalNetworkHttp', async () => {
+    const fetchMock = jest.spyOn(globalThis, 'fetch')
+    const strict = await signedSession('https://app.example.com')
+    fetchMock.mockResolvedValueOnce(relayResponse('ws://192.168.1.20:3000'))
+    // Phone-side errors reach wallet users, so they carry no developer hint.
+    await expect(strict.resolveRelay()).rejects.toMatchObject({
+      message: 'relay URL must be WSS, except for loopback development'
+    })
+
+    const optedIn = await signedSession('https://app.example.com', {
+      allowLocalNetworkHttp: true
+    })
+    fetchMock.mockResolvedValueOnce(relayResponse('ws://192.168.1.20:3000'))
+    await expect(optedIn.resolveRelay()).resolves.toBe('ws://192.168.1.20:3000')
+  })
+
+  it('rejects a non-boolean allowLocalNetworkHttp at construction', async () => {
+    const { mobile, params } = await fixture()
+    expect(
+      () =>
+        new WalletPairingSession(mobile, params, {
+          allowLocalNetworkHttp: 'true' as unknown as boolean
+        })
+    ).toThrow('allowLocalNetworkHttp must be a boolean')
   })
 
   describe('origin-bound pairing key', () => {
