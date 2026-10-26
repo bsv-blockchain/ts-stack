@@ -8332,6 +8332,14 @@ export function buildMutationTargets(repositoryRoot) {
         )
       ],
       ...jestTarget('jest.config.js', ['<rootDir>/test/frames*.test.ts'], { esm: true })
+    },
+    'group-messaging-envelope': {
+      packageDirectory: 'packages/messaging/group-messaging',
+      manifest: 'packages/messaging/group-messaging/package.json',
+      propertyTest:
+        'packages/messaging/group-messaging/src/bootstrap/__tests__/envelope.property.test.ts',
+      mutate: ['src/bootstrap/envelope.ts'],
+      ...vitestTarget('vitest.config.ts')
     }
   }
   // Append ownership after original target construction; never replace a

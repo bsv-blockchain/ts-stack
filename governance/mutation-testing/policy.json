@@ -1016,6 +1016,16 @@
       "minimumScore": 83,
       "maximumNoCoverage": 0,
       "maximumInvalid": 0
+    },
+    {
+      "id": "group-messaging-envelope",
+      "manifest": "packages/messaging/group-messaging/package.json",
+      "propertyTest": "packages/messaging/group-messaging/src/bootstrap/__tests__/envelope.property.test.ts",
+      "risk": "critical",
+      "boundary": "Bootstrap and MLS envelopes received from unauthenticated MessageBox peers before any group exists",
+      "minimumScore": 89,
+      "maximumNoCoverage": 0,
+      "maximumInvalid": 0
     }
   ]
 }
