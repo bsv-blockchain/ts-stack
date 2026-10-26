@@ -111,8 +111,12 @@ export class IndexedDbStorageBackend implements StorageBackend {
         reject(abortError(transaction, 'failed'))
       }
     })
-    const result = await promisify(operation(transaction.objectStore(table)))
-    await committed
+    // Awaited together: a failed request also aborts the transaction, and a
+    // `committed` nobody is awaiting would reject unhandled.
+    const [result] = await Promise.all([
+      promisify(operation(transaction.objectStore(table))),
+      committed
+    ])
     return result
   }
 }

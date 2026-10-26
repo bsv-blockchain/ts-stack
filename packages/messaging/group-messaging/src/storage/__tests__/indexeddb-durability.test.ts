@@ -18,6 +18,7 @@ import { IndexedDbStorageBackend, openDatabase } from '../backends/indexeddb.js'
  */
 interface Controls {
   succeed: (result?: unknown) => void
+  fail: () => void
   complete: () => void
   abort: () => void
 }
@@ -49,6 +50,10 @@ const stubDatabase = (): { database: IDBDatabase; controls: Controls } => {
       succeed: (result?: unknown) => {
         request.result = result
         request.onsuccess?.()
+      },
+      fail: () => {
+        request.error = new DOMException('Key already exists', 'ConstraintError')
+        request.onerror?.()
       },
       complete: () => transaction.oncomplete?.(),
       abort: () => transaction.onabort?.()
@@ -96,6 +101,23 @@ describe('IndexedDbStorageBackend durability', () => {
 
     controls.complete()
     await expect(write).resolves.toBeUndefined()
+  })
+
+  /**
+   * A failed request aborts its transaction too, so both promises reject. The
+   * write reports the request's error; the transaction's must still be
+   * observed, or it surfaces as an unhandled rejection.
+   */
+  it('refuses a write whose request fails, without an unhandled abort', async () => {
+    const { database, controls } = stubDatabase()
+    const backend = new IndexedDbStorageBackend(database)
+
+    const write = backend.set('groups', 'g1', new Uint8Array([1]))
+    controls.fail()
+    controls.abort()
+
+    await expect(write).rejects.toThrow(/key already exists/i)
+    await new Promise(resolve => setTimeout(resolve, 0))
   })
 
   it('refuses a delete whose transaction aborts', async () => {
