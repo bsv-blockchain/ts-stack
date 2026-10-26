@@ -107,16 +107,13 @@ export {
 export { IndexedDbUnavailableError } from './storage/index.js'
 export { DEFAULT_CIPHERSUITE } from './types.js'
 export type {
-  ChatId,
   ChatInfo,
   CiphersuiteChoice,
   IdentityKey,
-  InviteId,
   KeyPackageBytes,
   KeyPackageOptions,
   KeyPackageRef,
   Member,
-  MessageId,
   MintedKeyPackage,
   MlsCiphersuiteName,
   MlsGroupId,

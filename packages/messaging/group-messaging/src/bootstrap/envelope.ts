@@ -175,8 +175,10 @@ export const decodeEnvelope = (bytes: Uint8Array): Envelope => {
 }
 
 /** Sender-chosen, so never `String()` it: an object whose `toString` is not callable throws. */
-const describeField = (value: unknown): string =>
-  typeof value === 'string' ? value : value === null ? 'null' : typeof value
+const describeField = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  return value === null ? 'null' : typeof value
+}
 
 const frame = (kind: number, header: object, body: Uint8Array): Uint8Array => {
   const headerBytes = encoder.encode(JSON.stringify(header))

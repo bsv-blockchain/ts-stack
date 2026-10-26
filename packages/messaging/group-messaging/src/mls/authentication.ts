@@ -23,13 +23,13 @@ import type { MlsCiphersuiteName } from '../types.js'
 export const walletAuthenticationService = (
   ciphersuite: MlsCiphersuiteName
 ): AuthenticationService => ({
-  async validateCredential(credential, signaturePublicKey) {
-    if (credential.credentialType !== 'basic') return false
+  validateCredential(credential, signaturePublicKey) {
+    if (credential.credentialType !== 'basic') return Promise.resolve(false)
     try {
       IdentityService.verifyCredential(credential.identity, signaturePublicKey, ciphersuite)
-      return true
+      return Promise.resolve(true)
     } catch {
-      return false
+      return Promise.resolve(false)
     }
   }
 })

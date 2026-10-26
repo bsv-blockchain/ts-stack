@@ -683,13 +683,16 @@ export class MlsEngine {
   }
 
   /** Read a group's identifier, epoch and roster out of its stored state. */
-  async info(state: Uint8Array): Promise<MlsGroupSummary> {
-    const decoded = decodeState(state, this.ciphersuite)
-    return {
-      mlsGroupId: toHex(decoded.groupContext.groupId),
-      epoch: decoded.groupContext.epoch,
-      members: membersOf(decoded.ratchetTree)
-    }
+  info(state: Uint8Array): Promise<MlsGroupSummary> {
+    // Settled through the chain so a corrupt state still rejects, never throws.
+    return Promise.resolve().then(() => {
+      const decoded = decodeState(state, this.ciphersuite)
+      return {
+        mlsGroupId: toHex(decoded.groupContext.groupId),
+        epoch: decoded.groupContext.epoch,
+        members: membersOf(decoded.ratchetTree)
+      }
+    })
   }
 
   /**

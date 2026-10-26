@@ -72,8 +72,9 @@ export class IndexedDbStorageBackend implements StorageBackend {
     return (keys as IDBValidKey[]).map(String)
   }
 
-  async close(): Promise<void> {
+  close(): Promise<void> {
     this.database.close()
+    return Promise.resolve()
   }
 
   /**

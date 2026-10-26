@@ -1,3 +1,4 @@
+import { eachInOrder } from '../../inOrder.js'
 import { DeliveryFailed, GroupMessagingError, isPermanent } from '../../errors.js'
 import type { IdentityKey, Unsubscribe, WirePayload } from '../../types.js'
 import type { TransportBackend } from '../backend.js'
@@ -218,8 +219,8 @@ class PollingSource implements MessageBoxSource {
     void this.start(this.#deliver)
   }
 
-  async start(deliver: (messages: InboxMessage[]) => Promise<void>): Promise<void> {
-    if (this.#timer !== undefined) return
+  start(deliver: (messages: InboxMessage[]) => Promise<void>): Promise<void> {
+    if (this.#timer !== undefined) return Promise.resolve()
     this.#deliver = deliver
     const tick = async (): Promise<void> => {
       try {
@@ -243,6 +244,7 @@ class PollingSource implements MessageBoxSource {
       })
       this.#inFlight = running
     }, this.intervalMs)
+    return Promise.resolve()
   }
 
   /**
@@ -653,7 +655,7 @@ export class MessageBoxTransport implements TransportBackend {
    */
   async #fanOut(message: InboxMessage, payload: Uint8Array, acknowledge: string[]): Promise<void> {
     const failures: Error[] = []
-    for (const handler of this.#handlers) {
+    await eachInOrder(this.#handlers, async handler => {
       try {
         await handler(message.sender, payload)
       } catch (cause) {
@@ -661,7 +663,7 @@ export class MessageBoxTransport implements TransportBackend {
         if (!(error instanceof DeliveryFailed)) this.#report(error)
         failures.push(error)
       }
-    }
+    })
     if (failures.length === 0) this.#give(message.messageId, acknowledge)
     else this.#failed(message.messageId, new DeliveryFailed(message.sender, failures), acknowledge)
   }
@@ -673,15 +675,15 @@ export class MessageBoxTransport implements TransportBackend {
     if (this.#handlers.size === 0) return 0
     const acknowledge: string[] = []
     let fresh = 0
-    for (const message of [...messages].sort(byArrival)) {
-      if (this.#settled(message, acknowledge)) continue
+    await eachInOrder([...messages].sort(byArrival), async message => {
+      if (this.#settled(message, acknowledge)) return
       // Only a message seen for the first time says anything about the socket.
       // A retry is one the socket may well have delivered already.
       if (!this.#attempts.has(message.messageId)) fresh += 1
       const payload = this.#decode(message, acknowledge)
-      if (payload === undefined) continue
+      if (payload === undefined) return
       await this.#fanOut(message, payload, acknowledge)
-    }
+    })
     this.#forget()
     if (acknowledge.length > 0) {
       await this.client.acknowledgeMessage({ messageIds: acknowledge, ...hostArg(this.client) })

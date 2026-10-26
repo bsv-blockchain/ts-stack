@@ -5,16 +5,21 @@
  * envelope and what each layer holds.
  */
 
+import type {
+  HexString as KeyPackageRef,
+  HexString as MlsGroupId,
+  PubKeyHex as IdentityKey
+} from '@bsv/sdk'
+
 /**
  * A participant's long-term secp256k1 identity key, as a compressed public key
  * in lowercase hex (66 characters). This is the form BRC-100 wallets return
  * from `getPublicKey({ identityKey: true })` and the form used throughout the
  * public API, including transport addressing.
+ *
+ * `@bsv/sdk`'s `PubKeyHex`, under this package's name for it.
  */
-export type IdentityKey = string
-
-/** Opaque identifier for a single application message. */
-export type MessageId = string
+export type { PubKeyHex as IdentityKey } from '@bsv/sdk'
 
 export type Unsubscribe = () => void
 
@@ -65,16 +70,10 @@ export type WirePayload = Uint8Array & { readonly __brand?: undefined }
 export type PrivateKeyPackageBytes = Uint8Array & { readonly __brand: 'PrivateKeyPackage' }
 
 /** RFC 9420 KeyPackageRef, hex. A hash — safe to log, index and transmit. */
-export type KeyPackageRef = string
-
-/** Application-chosen chat identifier. Local; never leaves the device. */
-export type ChatId = string
+export type { HexString as KeyPackageRef } from '@bsv/sdk'
 
 /** MLS group identifier, hex. The only cross-party identifier. */
-export type MlsGroupId = string
-
-/** Local handle for one invitation. Never leaves the device. */
-export type InviteId = string
+export type { HexString as MlsGroupId } from '@bsv/sdk'
 
 export interface MintedKeyPackage {
   ref: KeyPackageRef
@@ -99,7 +98,8 @@ export interface Member {
 }
 
 export interface ChatInfo {
-  chatId: ChatId
+  /** Application-chosen chat identifier. Local; never leaves the device. */
+  chatId: string
   mlsGroupId: MlsGroupId
   name: string | undefined
   epoch: bigint
@@ -111,7 +111,8 @@ export interface ChatInfo {
  * has not resolved into a chat yet.
  */
 export interface PendingInvite {
-  inviteId: InviteId
+  /** Local handle for one invitation. Never leaves the device. */
+  inviteId: string
   direction: 'inbound' | 'outbound'
   kind: 'keyPackageRequest' | 'welcome'
   /** As reported by the transport — bootstrap envelopes carry no signature. */

@@ -9,7 +9,7 @@ import {
   type RemoteAttachment
 } from './content/index.js'
 import { GroupMessagingError, UnknownGroupError } from './errors.js'
-import type { ChatId, ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from './types.js'
+import type { ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from './types.js'
 
 /**
  * One MLS group, as a chat.
@@ -27,7 +27,7 @@ import type { ChatId, ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from 
 export class Group {
   constructor(
     /** The application's local name for this chat. Never leaves the device. */
-    readonly chatId: ChatId,
+    readonly chatId: string,
     /** The MLS group identifier. The only cross-party name for this group. */
     readonly mlsGroupId: MlsGroupId,
     private readonly client: GroupMessagingClient

@@ -1,3 +1,4 @@
+import { eachInOrder } from '../inOrder.js'
 import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
@@ -81,7 +82,7 @@ export class TransportService {
     await this.backend.start?.()
     this.#unsubscribe ??= this.backend.onMessage(async (from, payload) => {
       const failures: Error[] = []
-      for (const handler of this.#handlers) {
+      await eachInOrder(this.#handlers, async handler => {
         try {
           await handler(from, payload)
         } catch (cause) {
@@ -89,7 +90,7 @@ export class TransportService {
           this.#report(error, from)
           failures.push(error)
         }
-      }
+      })
       if (failures.length > 0) throw new DeliveryFailed(from, failures)
     })
   }

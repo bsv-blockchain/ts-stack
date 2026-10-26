@@ -1,8 +1,7 @@
+import { eachInOrder } from '../inOrder.js'
 import { GroupMessagingError } from '../errors.js'
 import type {
-  ChatId,
   IdentityKey,
-  InviteId,
   KeyPackageBytes,
   KeyPackageRef,
   MlsGroupId,
@@ -16,7 +15,7 @@ import { decodeFrames, encodeFrames } from './frames.js'
 
 /** A local chat: the application-chosen name over the MLS group underneath. */
 export interface ChatRecord {
-  chatId: ChatId
+  chatId: string
   mlsGroupId: MlsGroupId
   name?: string
   createdAt: string
@@ -193,7 +192,7 @@ export class StorageProvider {
 
   // ── Chats ────────────────────────────────────────────────────────────────
 
-  async getChat(chatId: ChatId): Promise<ChatRecord | undefined> {
+  async getChat(chatId: string): Promise<ChatRecord | undefined> {
     const bytes = await this.#get('chats', chatId)
     return bytes === undefined ? undefined : fromJson<ChatRecord>(bytes)
   }
@@ -203,7 +202,7 @@ export class StorageProvider {
   }
 
   /** Removes the chat, its MLS state, and anything queued for it. */
-  async deleteChat(chatId: ChatId): Promise<void> {
+  async deleteChat(chatId: string): Promise<void> {
     const record = await this.getChat(chatId)
     await this.#delete('chats', chatId)
     if (record !== undefined) await this.deleteGroup(record.mlsGroupId)
@@ -211,15 +210,15 @@ export class StorageProvider {
 
   async listChats(): Promise<ChatRecord[]> {
     const chats: ChatRecord[] = []
-    for (const key of await this.#keys('chats')) {
+    await eachInOrder(await this.#keys('chats'), async key => {
       const record = await this.getChat(key)
       if (record !== undefined) chats.push(record)
-    }
+    })
     return chats
   }
 
   /** Inbound traffic names the MLS group; the application names the chat. */
-  async chatIdForGroup(mlsGroupId: MlsGroupId): Promise<ChatId | undefined> {
+  async chatIdForGroup(mlsGroupId: MlsGroupId): Promise<string | undefined> {
     const match = (await this.listChats()).find(chat => chat.mlsGroupId === mlsGroupId)
     return match?.chatId
   }
@@ -245,7 +244,7 @@ export class StorageProvider {
 
   // ── Invites ──────────────────────────────────────────────────────────────
 
-  async getInvite(inviteId: InviteId): Promise<PendingInvite | undefined> {
+  async getInvite(inviteId: string): Promise<PendingInvite | undefined> {
     const bytes = await this.#get('invites', inviteId)
     return bytes === undefined ? undefined : fromJson<PendingInvite>(bytes)
   }
@@ -254,18 +253,18 @@ export class StorageProvider {
     await this.#set('invites', invite.inviteId, toJson(invite))
   }
 
-  async deleteInvite(inviteId: InviteId): Promise<void> {
+  async deleteInvite(inviteId: string): Promise<void> {
     await this.#delete('invites', inviteId)
   }
 
   async listInvites(direction?: 'inbound' | 'outbound'): Promise<PendingInvite[]> {
     const invites: PendingInvite[] = []
-    for (const key of await this.#keys('invites')) {
+    await eachInOrder(await this.#keys('invites'), async key => {
       const invite = await this.getInvite(key)
       if (invite !== undefined && (direction === undefined || invite.direction === direction)) {
         invites.push(invite)
       }
-    }
+    })
     return invites
   }
 

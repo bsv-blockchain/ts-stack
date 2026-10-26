@@ -4,6 +4,7 @@ import { decodeContent, type MessageContent } from './content/index.js'
 import { GroupMessagingError, PermanentProcessingError } from './errors.js'
 import { Emitter } from './events.js'
 import { Group } from './group.js'
+import { eachInOrder } from './inOrder.js'
 import { IdentityService, type IdentityInput } from './identity/index.js'
 import { InviteService } from './invites/index.js'
 import { MlsEngine, type MlsProcessResult } from './mls/index.js'
@@ -11,10 +12,8 @@ import { StorageProvider, type StorageInput } from './storage/index.js'
 import { TransportService, type TransportInput } from './transport/index.js'
 import {
   DEFAULT_CIPHERSUITE,
-  type ChatId,
   type CiphersuiteChoice,
   type IdentityKey,
-  type InviteId,
   type KeyPackageBytes,
   type KeyPackageOptions,
   type KeyPackageRef,
@@ -91,7 +90,7 @@ export const MAX_PENDING_BYTES_PER_GROUP = 1_048_576
 export interface ClientEvents {
   /** An application message, decrypted. */
   message: {
-    chatId: ChatId
+    chatId: string
     mlsGroupId: MlsGroupId
     sender: IdentityKey
     /** The epoch the message was sent in, which may predate the current one. */
@@ -99,7 +98,7 @@ export interface ClientEvents {
     content: MessageContent
   }
   membership: {
-    chatId: ChatId
+    chatId: string
     mlsGroupId: MlsGroupId
     added: IdentityKey[]
     removed: IdentityKey[]
@@ -111,7 +110,7 @@ export interface ClientEvents {
    * are gone, so it is unrecoverable and has been discarded.
    */
   epochMismatch: {
-    chatId: ChatId
+    chatId: string
     mlsGroupId: MlsGroupId
     expected: bigint
     received: bigint
@@ -127,7 +126,7 @@ export interface ClientEvents {
   keyPackageConsumed: { ref: KeyPackageRef }
   /** Delivery failed for some members. The group has still advanced locally. */
   deliveryFailed: {
-    chatId: ChatId
+    chatId: string
     mlsGroupId: MlsGroupId
     recipients: IdentityKey[]
     error: Error
@@ -143,7 +142,7 @@ export interface ClientEvents {
 
   /** A peer asked for a KeyPackage. Nothing is minted until `invites.accept`. */
   inviteReceived: {
-    inviteId: InviteId
+    inviteId: string
     peer: IdentityKey
     ciphersuites: MlsCiphersuiteName[]
     chatName?: string
@@ -155,7 +154,7 @@ export interface ClientEvents {
    * consumer following this path cannot label a member with the wrong identity.
    */
   keyPackageReceived: {
-    inviteId: InviteId
+    inviteId: string
     peer: IdentityKey
     /** The identity the KeyPackage's own credential claims. Equals `peer`. */
     keyPackageIdentity: IdentityKey
@@ -173,14 +172,14 @@ export interface ClientEvents {
    * way, so the exchange must be restarted.
    */
   keyPackageRejected: {
-    inviteId: InviteId
+    inviteId: string
     /** Who the transport says answered. */
     peer: IdentityKey
     /** Who the credential claims, when the KeyPackage could be read at all. */
     claimed?: IdentityKey
     error: Error
   }
-  inviteDeclined: { inviteId: InviteId; peer: IdentityKey }
+  inviteDeclined: { inviteId: string; peer: IdentityKey }
   /**
    * A peer sent an answer to an invitation this client never issued them.
    *
@@ -203,7 +202,7 @@ export interface ClientEvents {
    * device's stored KeyPackages match.
    */
   welcomeReceived: {
-    inviteId: InviteId
+    inviteId: string
     peer: IdentityKey
     ref?: KeyPackageRef
     /** The inviter's name for the chat, if they sent one. */
@@ -434,7 +433,7 @@ export class GroupMessagingClient {
    * group exists locally either way.
    */
   async createGroup(input: {
-    chatId: ChatId
+    chatId: string
     members: KeyPackageBytes[]
     name?: string
     privateKeyPackage: PrivateKeyPackageBytes
@@ -486,8 +485,8 @@ export class GroupMessagingClient {
    * wants the chat to have. The invite is consumed on success.
    */
   async joinFromWelcome(input: {
-    inviteId: InviteId
-    chatId: ChatId
+    inviteId: string
+    chatId: string
     privateKeyPackage: PrivateKeyPackageBytes
     /** Overrides the name the inviter sent, if any. */
     name?: string
@@ -540,7 +539,7 @@ export class GroupMessagingClient {
   }
 
   /** The chat with this local identifier, if this device has its state. */
-  async getGroup(chatId: ChatId): Promise<Group | undefined> {
+  async getGroup(chatId: string): Promise<Group | undefined> {
     const chat = await this.storage.getChat(chatId)
     if (chat === undefined) return undefined
     const state = await this.storage.getGroup(chat.mlsGroupId)
@@ -551,11 +550,11 @@ export class GroupMessagingClient {
   async listGroups(): Promise<Group[]> {
     const chats = await this.storage.listChats()
     const groups: Group[] = []
-    for (const chat of chats) {
+    await eachInOrder(chats, async chat => {
       if ((await this.storage.getGroup(chat.mlsGroupId)) !== undefined) {
         groups.push(new Group(chat.chatId, chat.mlsGroupId, this))
       }
-    }
+    })
     return groups
   }
 
@@ -728,7 +727,7 @@ export class GroupMessagingClient {
    * announces second.
    */
   async #processOne(
-    chatId: ChatId,
+    chatId: string,
     mlsGroupId: MlsGroupId,
     state: Uint8Array,
     message: Uint8Array,
@@ -795,7 +794,7 @@ export class GroupMessagingClient {
 
   /** Process one message, store it, then announce it. */
   async #applyOne(
-    chatId: ChatId,
+    chatId: string,
     mlsGroupId: MlsGroupId,
     state: Uint8Array,
     message: Uint8Array,
@@ -832,7 +831,7 @@ export class GroupMessagingClient {
    * queue.
    */
   async #consumeOne(
-    chatId: ChatId,
+    chatId: string,
     mlsGroupId: MlsGroupId,
     state: Uint8Array,
     payload: Uint8Array
@@ -902,25 +901,31 @@ export class GroupMessagingClient {
    * next.
    */
   async #drainPass(
-    chatId: ChatId,
+    chatId: string,
     mlsGroupId: MlsGroupId,
     queued: readonly Uint8Array[]
   ): Promise<{ kept: Uint8Array[]; applied: boolean } | undefined> {
     const kept: Uint8Array[] = []
     let applied = false
-    for (const payload of queued) {
+    // The group vanishing mid-pass ends it: nothing after that payload runs.
+    let vanished = false
+    await eachInOrder(queued, async payload => {
+      if (vanished) return
       const state = await this.storage.getGroup(mlsGroupId)
-      if (state === undefined) return undefined
+      if (state === undefined) {
+        vanished = true
+        return
+      }
       const consumed = await this.#consumeOne(chatId, mlsGroupId, state, payload)
       if (consumed.verdict === 'keep') {
         kept.push(payload)
-        continue
+        return
       }
-      if (consumed.verdict !== 'applied') continue
+      if (consumed.verdict !== 'applied') return
       await this.#storeApplied(mlsGroupId, consumed)
       applied = true
-    }
-    return { kept, applied }
+    })
+    return vanished ? undefined : { kept, applied }
   }
 
   /**
@@ -938,7 +943,7 @@ export class GroupMessagingClient {
    * the past, and they are dropped as permanent. The cost is one spurious
    * `processingFailed` per already-applied payload, never a message.
    */
-  async #drainPending(chatId: ChatId, mlsGroupId: MlsGroupId): Promise<void> {
+  async #drainPending(chatId: string, mlsGroupId: MlsGroupId): Promise<void> {
     for (;;) {
       const queued = await this.storage.peekPending(mlsGroupId)
       if (queued.length === 0) return
@@ -996,9 +1001,9 @@ export class GroupMessagingClient {
   /** Groups with something queued that this device holds no state for. */
   async #heldBeforeJoin(): Promise<MlsGroupId[]> {
     const held: MlsGroupId[] = []
-    for (const groupId of await this.storage.listPendingGroups()) {
+    await eachInOrder(await this.storage.listPendingGroups(), async groupId => {
       if ((await this.storage.chatIdForGroup(groupId)) === undefined) held.push(groupId)
-    }
+    })
     return held
   }
 
@@ -1014,9 +1019,9 @@ export class GroupMessagingClient {
   async #reclaimHeldBeforeJoin(): Promise<void> {
     const invites = await this.storage.listInvites()
     if (invites.some(invite => invite.kind === 'welcome')) return
-    for (const groupId of await this.#heldBeforeJoin()) {
+    await eachInOrder(await this.#heldBeforeJoin(), async groupId => {
       await this.storage.replacePending(groupId, [])
-    }
+    })
   }
 
   /**
@@ -1030,10 +1035,10 @@ export class GroupMessagingClient {
     privateKeyPackage: PrivateKeyPackageBytes
   ): Promise<{ ref: KeyPackageRef; keyPackage: KeyPackageBytes }> {
     const stored: Array<{ ref: KeyPackageRef; keyPackage: KeyPackageBytes }> = []
-    for (const ref of await this.storage.listKeyPackageRefs()) {
+    await eachInOrder(await this.storage.listKeyPackageRefs(), async ref => {
       const keyPackage = await this.storage.getKeyPackage(ref)
       if (keyPackage !== undefined) stored.push({ ref, keyPackage })
-    }
+    })
     const candidates = stored.map(entry => entry.keyPackage)
     const match = await this.engine.matchKeyPackage({ privateKeyPackage, candidates })
     if (match === undefined) {
@@ -1080,7 +1085,7 @@ export class GroupMessagingClient {
         return
       case 'keyPackageReceived':
         await this.#onKeyPackageReceived(
-          payload as { inviteId: InviteId; peer: IdentityKey; keyPackage: KeyPackageBytes }
+          payload as { inviteId: string; peer: IdentityKey; keyPackage: KeyPackageBytes }
         )
         return
       case 'inviteDeclined':
@@ -1091,7 +1096,7 @@ export class GroupMessagingClient {
         return
       case 'welcomeReceived': {
         const { inviteId, peer, ref, welcome, chatName } = payload as {
-          inviteId: InviteId
+          inviteId: string
           peer: IdentityKey
           ref?: KeyPackageRef
           welcome: Uint8Array
@@ -1126,7 +1131,7 @@ export class GroupMessagingClient {
    * Both are surfaced here, on the event a consumer already handles.
    */
   async #onKeyPackageReceived(payload: {
-    inviteId: InviteId
+    inviteId: string
     peer: IdentityKey
     keyPackage: KeyPackageBytes
   }): Promise<void> {

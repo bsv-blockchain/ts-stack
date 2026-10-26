@@ -5,7 +5,6 @@ import type { StorageProvider } from '../storage/index.js'
 import type { TransportService } from '../transport/index.js'
 import type {
   IdentityKey,
-  InviteId,
   KeyPackageBytes,
   KeyPackageRef,
   MlsCiphersuiteName,
@@ -62,7 +61,7 @@ export class InviteService {
   constructor(private readonly deps: InviteServiceDeps) {}
 
   /** Ask `peer` for a KeyPackage. Returns the local handle for the exchange. */
-  async send(peer: IdentityKey, options: { chatName?: string } = {}): Promise<InviteId> {
+  async send(peer: IdentityKey, options: { chatName?: string } = {}): Promise<string> {
     const inviteId = randomId()
     const requestId = randomId()
 
@@ -103,7 +102,7 @@ export class InviteService {
    * send in fact reached the peer, they hold a KeyPackage this device will not
    * recognize when the Welcome arrives.
    */
-  async accept(inviteId: InviteId, keyPackage: KeyPackageBytes): Promise<void> {
+  async accept(inviteId: string, keyPackage: KeyPackageBytes): Promise<void> {
     const invite = await this.#require(inviteId)
     this.#requireInboundRequest(invite)
     this.#requireSupportedCiphersuite(invite)
@@ -150,7 +149,7 @@ export class InviteService {
   }
 
   /** Refuse an inbound request, telling the peer so it stops waiting. */
-  async decline(inviteId: InviteId): Promise<void> {
+  async decline(inviteId: string): Promise<void> {
     const invite = await this.#require(inviteId)
     await this.#send(invite.peer, { type: 'keyPackageDecline', requestId: invite.requestId })
     await this.deps.storage.deleteInvite(inviteId)
@@ -362,7 +361,7 @@ export class InviteService {
     return invite
   }
 
-  async #require(inviteId: InviteId): Promise<PendingInvite> {
+  async #require(inviteId: string): Promise<PendingInvite> {
     const invite = await this.deps.storage.getInvite(inviteId)
     if (invite === undefined) throw new GroupMessagingError(`No invite ${inviteId}`)
     return invite

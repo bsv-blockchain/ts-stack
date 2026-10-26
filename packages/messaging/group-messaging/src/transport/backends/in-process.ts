@@ -1,3 +1,4 @@
+import { eachInOrder } from '../../inOrder.js'
 import { utf8 } from '../../bytes.js'
 import { decodeFrames, encodeFrames } from '../../storage/frames.js'
 import type { IdentityKey, Unsubscribe } from '../../types.js'
@@ -106,10 +107,10 @@ export class InProcessTransportHub {
     if (queued.length === 0) return
     this.queues.delete(identity)
 
-    for (const item of queued) {
+    await eachInOrder(queued, async item => {
       const [from, payload] = decodeFrames(item)
-      if (from === undefined || payload === undefined) continue
-      for (const handler of handlers) {
+      if (from === undefined || payload === undefined) return
+      await eachInOrder(handlers, async handler => {
         try {
           await handler(decoder.decode(from), payload)
         } catch {
@@ -117,7 +118,7 @@ export class InProcessTransportHub {
           // send: this hub has no queue to leave it in, and the failure has
           // already been reported through the transport's error channel.
         }
-      }
-    }
+      })
+    })
   }
 }
