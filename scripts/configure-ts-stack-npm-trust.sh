@@ -13,6 +13,7 @@ PKGS=(
   "@bsv/authsocket-client"
   "@bsv/authsocket"
   "@bsv/message-box-client"
+  "@bsv/group-messaging"
   "@bsv/paymail"
   "@bsv/webrtpay"
   "@bsv/402-pay"

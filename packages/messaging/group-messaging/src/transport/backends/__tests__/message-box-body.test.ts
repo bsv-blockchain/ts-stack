@@ -37,6 +37,12 @@ describe('the MessageBox body', () => {
     expect(() => decodeBody(JSON.stringify({ v: 99, payload: 'AAE=' }))).toThrow(MalformedBodyError)
   })
 
+  it('refuses a version whose toString is not callable as malformed, not a TypeError', () => {
+    expect(() => decodeBody(JSON.stringify({ v: { toString: '' }, payload: 'AAE=' }))).toThrow(
+      MalformedBodyError
+    )
+  })
+
   it('refuses a body with no payload', () => {
     expect(() => decodeBody(JSON.stringify({ v: 1 }))).toThrow(MalformedBodyError)
   })

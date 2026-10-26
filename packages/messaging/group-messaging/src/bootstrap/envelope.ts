@@ -119,15 +119,16 @@ export const decodeEnvelope = (bytes: Uint8Array): Envelope => {
   if (kind === KIND_MLS) return { kind: 'mls', payload: body }
   if (kind !== KIND_BOOTSTRAP) throw new EnvelopeError(`Unknown envelope kind ${kind}`)
 
-  let header: Record<string, unknown>
+  let parsed: unknown
   try {
-    header = JSON.parse(decoder.decode(bytes.subarray(6, 6 + headerLength))) as Record<
-      string,
-      unknown
-    >
+    parsed = JSON.parse(decoder.decode(bytes.subarray(6, 6 + headerLength)))
   } catch (cause) {
     throw new EnvelopeError('Envelope header is not valid JSON', { cause })
   }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new EnvelopeError('Envelope header is not an object')
+  }
+  const header = parsed as Record<string, unknown>
 
   switch (header['type']) {
     case 'keyPackageRequest': {
@@ -169,9 +170,13 @@ export const decodeEnvelope = (bytes: Uint8Array): Envelope => {
       }
     }
     default:
-      throw new EnvelopeError(`Unknown bootstrap message type ${String(header['type'])}`)
+      throw new EnvelopeError(`Unknown bootstrap message type ${describeField(header['type'])}`)
   }
 }
+
+/** Sender-chosen, so never `String()` it: an object whose `toString` is not callable throws. */
+const describeField = (value: unknown): string =>
+  typeof value === 'string' ? value : value === null ? 'null' : typeof value
 
 const frame = (kind: number, header: object, body: Uint8Array): Uint8Array => {
   const headerBytes = encoder.encode(JSON.stringify(header))

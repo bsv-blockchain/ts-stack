@@ -75,7 +75,9 @@ export const decodeBody = (body: string | Record<string, unknown>): Uint8Array =
   }
   const envelope = parsed as { v?: unknown; payload?: unknown }
   if (envelope.v !== BODY_VERSION) {
-    throw new MalformedBodyError(`Unsupported MessageBox body version ${String(envelope.v)}`)
+    throw new MalformedBodyError(
+      `Unsupported MessageBox body version ${typeof envelope.v === 'number' ? envelope.v : typeof envelope.v}`
+    )
   }
   if (typeof envelope.payload !== 'string') {
     throw new MalformedBodyError('MessageBox body carries no payload')

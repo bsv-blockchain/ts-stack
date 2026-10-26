@@ -41,6 +41,7 @@
     "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports GroupMessagingClient,Group,IdentityService,StorageProvider,TransportService,MlsEngine,InviteService,MessageBoxTransport,InProcessTransportHub",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
+    "test:property": "vitest run src/bootstrap/__tests__/envelope.property.test.ts",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --project tsconfig.typecheck.json"
@@ -80,8 +81,10 @@
     "@bsv/message-box-client": "workspace:^",
     "@bsv/sdk": "workspace:^",
     "@types/node": "^26.6.1",
+    "@typescript/native": "npm:typescript@7.0.2",
     "@vitest/coverage-v8": "4.1.11",
     "fake-indexeddb": "^6.2.5",
+    "fast-check": "^4.9.0",
     "oxlint": "^1.83.0",
     "ts2md": "^0.2.8",
     "tsdown": "0.23.0",
