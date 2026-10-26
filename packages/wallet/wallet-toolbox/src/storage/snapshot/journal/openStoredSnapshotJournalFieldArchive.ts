@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain, type SnapshotArchiveChain } from '../archive/SnapshotArchiveChain'
 import { promiseFromSync } from '../../../utility/promiseFromSync'
 import type { StorageKnex } from '../../StorageKnex'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
@@ -43,9 +44,9 @@ export async function openStoredSnapshotJournalFieldArchive(
     chain = manifest.binding.sourceStorage.chain,
     now = await snapshotArchiveDatabaseNow(root),
     lifetimeMs = Math.min(options.lifetimeMs ?? 30000, request.notAfter - now)
-  if ((chain !== 'main' && chain !== 'test') || lifetimeMs < 1 || manifest.expiresAt !== request.notAfter)
+  if (!isSnapshotArchiveChain(chain) || lifetimeMs < 1 || manifest.expiresAt !== request.notAfter)
     throw new WERR_INVALID_OPERATION('Field upload expired')
-  const actualChain: 'main' | 'test' = chain
+  const actualChain: SnapshotArchiveChain = chain
   const fields = {
       version: 4 as const,
       nonce: request.nonce,

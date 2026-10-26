@@ -12,6 +12,7 @@ import { snapshotArchiveRequestId } from './SnapshotArchiveRequest'
 import { snapshotArchiveReaderRequestId } from './SnapshotArchiveReaderRequest'
 import { verifySnapshotArchiveDirectory } from './SnapshotArchiveDirectory'
 import { stringifyJsonRpc } from '../../remoting/BinaryJson'
+import { isSnapshotArchiveChain, type SnapshotArchiveChain } from './SnapshotArchiveChain'
 import { fixture, expected, now, rehash } from '../../../../test/utils/snapshotArchiveDirectoryFixtures'
 
 const identityKey = '02' + 'ab'.repeat(32)
@@ -23,6 +24,23 @@ const wire = (value: unknown) =>
   Buffer.byteLength(
     stringifyJsonRpc({ jsonrpc: '2.0', id: Number.MAX_SAFE_INTEGER, result: value }, true).replace(/[<>&]/g, '\\u003c')
   )
+
+test.each(['main', 'test', 'ttn'] as const)('archive offers retain the exact %s network', chain => {
+  expect(isSnapshotArchiveChain(chain)).toBe(true)
+  expect(validateSnapshotArchiveOffer({ ...offer, chain }, 'source', chain).chain).toBe(chain)
+  for (const other of ['main', 'test', 'ttn'] as const) {
+    if (other !== chain)
+      expect(() => validateSnapshotArchiveOffer({ ...offer, chain: other }, 'source', chain)).toThrow()
+  }
+})
+
+test.each([undefined, null, 1, 'mock', 'stn', 'tstn', 'regtest', 'TTN', 'testnet', 'ttnnet'])(
+  'archive negotiation rejects unsupported network %p even when both peer arguments match',
+  chain => {
+    expect(isSnapshotArchiveChain(chain)).toBe(false)
+    expect(() => validateSnapshotArchiveOffer({ ...offer, chain }, 'source', chain as SnapshotArchiveChain)).toThrow()
+  }
+)
 
 test('detaches and freezes validated capability, offer and all exact receipt states', () => {
   expect(validateSnapshotArchiveCapabilities({ ...snapshotArchiveCapabilities })).toBe(snapshotArchiveCapabilities)

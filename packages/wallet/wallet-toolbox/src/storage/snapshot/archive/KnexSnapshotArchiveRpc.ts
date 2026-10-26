@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain } from './SnapshotArchiveChain'
 import {
   snapshotJournalFieldArchiveMethods,
   isSnapshotJournalFieldArchiveMethod,
@@ -53,7 +54,7 @@ export class KnexSnapshotArchiveRpc {
     if (
       this.stopped ||
       this.storage.knex !== this.database ||
-      (this.storage.chain !== 'main' && this.storage.chain !== 'test') ||
+      !isSnapshotArchiveChain(this.storage.chain) ||
       this.storage.getSnapshotSync() === undefined ||
       // The local native source does not establish the separate durable remote
       // guard/receiver contract. Keep version-one RPC negotiation on its
@@ -109,7 +110,7 @@ export class KnexSnapshotArchiveRpc {
 
   private async sourceOffer(serverTime?: number): Promise<SnapshotArchiveOffer> {
     const chain = this.storage.chain
-    if (chain !== 'main' && chain !== 'test') throw new WERR_INVALID_OPERATION('Snapshot archive chain is unavailable')
+    if (!isSnapshotArchiveChain(chain)) throw new WERR_INVALID_OPERATION('Snapshot archive chain is unavailable')
     const settings = this.storage.getSettings()
     const sourceStorageIdentityKey = settings.storageIdentityKey
     const sourceSchema = await readSnapshotArchiveSourceSchema(this.storage, this.database)
@@ -304,7 +305,7 @@ export class KnexSnapshotArchiveRpc {
       if (
         this.stopped ||
         this.storage.knex !== this.database ||
-        (chain !== 'main' && chain !== 'test') ||
+        !isSnapshotArchiveChain(chain) ||
         found.binding.sourceStorage.storageIdentityKey !== settings.storageIdentityKey ||
         found.binding.sourceStorage.chain !== chain
       )

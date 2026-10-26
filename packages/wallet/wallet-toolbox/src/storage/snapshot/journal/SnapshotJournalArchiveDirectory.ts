@@ -1,3 +1,4 @@
+import type { SnapshotArchiveChain } from '../archive/SnapshotArchiveChain'
 import { sha256 } from '@bsv/sdk/primitives/Hash'
 import { toHex } from '@bsv/sdk/primitives/utils'
 import { snapshotArchiveLimits } from '../archive/SnapshotArchive'
@@ -49,7 +50,7 @@ export interface VerifiedSnapshotJournalArchiveDirectory {
 }
 export interface SnapshotJournalArchiveExpectedSource {
   identityKey: string
-  chain: 'main' | 'test'
+  chain: SnapshotArchiveChain
   sourceStorageIdentityKey: string
   sourceSchema: string
   archiveId: string

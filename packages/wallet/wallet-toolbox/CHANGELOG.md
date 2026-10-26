@@ -1,5 +1,7 @@
 ## Held #569 implementation candidate — unreleased
 
+TTN now supports authenticated snapshot archives, row/field journal archives and the dependent remote primary handoff. Producers, stored-artifact readers and full/mobile clients preserve the literal `ttn` binding; cross-network artifacts still refuse. Existing main/test bytes, schema, protocol versions and resource bounds are unchanged. No consumer migration is required; every archive/handoff participant must advertise compatible support.
+
 WAL recovery copies now finish through the pinned SQLite engine's rollback journal before frozen comparison opens the new scratch. The original retained source snapshot, physical/working quotas, operation deadline and financial expiry remain enforced. No WAL/SHM allowance, immutable-open shortcut, API, wire, persisted schema or native ABI change; complete platform and expired-recovery qualification remains required.
 
 Proof inventory drains complete page-history reconstruction before reserving its separate proof scratch frame. Both phases retain the same actual borrowed native transaction, shared working owner, fresh source/schema and complete byte/cache checks. The fixed original allocation ceiling and all financial and operation deadlines remain unchanged. No API, wire, persisted schema, native ABI or consumer migration; complete expired-recovery qualification remains required.

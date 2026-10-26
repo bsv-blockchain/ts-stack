@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain, type SnapshotArchiveChain } from './SnapshotArchiveChain'
 import { parseSnapshotSyncContentRevision } from '../SnapshotSyncContentRevision'
 import { syncTransferDigest } from '../../remoting/SyncTransfer'
 import type { WalletSnapshotTable } from '../WalletReadSnapshot'
@@ -29,7 +30,7 @@ export interface SnapshotArchiveDirectory {
 
 export interface SnapshotArchiveExpectedSource {
   identityKey: string
-  chain: 'main' | 'test'
+  chain: SnapshotArchiveChain
   sourceStorageIdentityKey: string
   archiveId?: string
   digest?: string
@@ -113,6 +114,7 @@ function binding(encoded: string, expected: SnapshotArchiveExpectedSource): Snap
   const user = record(value.user, ['created_at', 'updated_at', 'userId', 'identityKey', 'activeStorage'])
   if (expected.sourceSchema !== undefined && value.sourceSchema !== expected.sourceSchema) invalid()
   if (
+    !isSnapshotArchiveChain(storage.chain) ||
     storage.chain !== expected.chain ||
     storage.storageIdentityKey !== expected.sourceStorageIdentityKey ||
     user.identityKey !== expected.identityKey

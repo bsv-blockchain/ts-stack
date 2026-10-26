@@ -1,3 +1,4 @@
+import type { SnapshotArchiveChain } from '../archive/SnapshotArchiveChain'
 import { awaitFromSync } from '../../../utility/promiseFromSync'
 import {
   validateSnapshotArchiveReaderOptions,
@@ -55,7 +56,7 @@ export class SnapshotJournalArchiveTransport {
     private readonly rpc: SnapshotJournalArchiveRpcCall,
     private readonly identityKey: string,
     private readonly storageIdentityKey: string,
-    private readonly chain: 'main' | 'test',
+    private readonly chain: SnapshotArchiveChain,
     capabilities: SnapshotJournalArchiveCapabilities
   ) {
     this.capabilities = validateSnapshotJournalArchiveCapabilities(capabilities)

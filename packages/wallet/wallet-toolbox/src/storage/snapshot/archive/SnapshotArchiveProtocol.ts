@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain, type SnapshotArchiveChain } from './SnapshotArchiveChain'
 import {
   validateSnapshotArchiveReaderOptions,
   type SnapshotArchiveReaderOptions,
@@ -46,7 +47,7 @@ export interface SnapshotArchiveOffer {
   serverTime: number
   sourceStorageIdentityKey: string
   sourceSchema: string
-  chain: 'main' | 'test'
+  chain: SnapshotArchiveChain
 }
 
 function invalid(): never {
@@ -162,12 +163,13 @@ export function parseSnapshotArchiveRpcInput(
 export function validateSnapshotArchiveOffer(
   input: unknown,
   storageIdentityKey: string,
-  chain: 'main' | 'test'
+  chain: SnapshotArchiveChain
 ): Readonly<SnapshotArchiveOffer> {
   const value = record(input, ['version', 'serverTime', 'sourceStorageIdentityKey', 'sourceSchema', 'chain'])
   if (
     value.version !== 1 ||
     value.sourceStorageIdentityKey !== storageIdentityKey ||
+    !isSnapshotArchiveChain(value.chain) ||
     value.chain !== chain ||
     typeof value.sourceSchema !== 'string' ||
     value.sourceSchema.length < 1 ||

@@ -4,6 +4,19 @@ The candidate implements local SQL controls, authenticated full/mobile RPC, and
 wallet-manager coordination. These unpublished components remain subject to the
 complete #544 qualification programme. They do not authorize a release or rollout.
 
+## Networks and negotiated availability
+
+Snapshot archives and their row/field journal transports support `main`, `test`
+and `ttn`. The literal network is bound into offers, stored manifests, receipt
+validation and both client transports; TTN is never mapped to testnet. A peer or
+artifact from another network refuses even when its other identities match.
+Other networks retain their previous unavailable archive behavior.
+
+Remote primary handoff requires the negotiated journal archive and destination
+content contracts plus the actual SQL control backend. Upgrade every participant
+before using this path on TTN; older servers may omit these capabilities. No
+schema migration or wire-version change is needed for the TTN correction.
+
 ## Application entry point
 
 Continue using the application's existing `WalletStorageManager` and an already

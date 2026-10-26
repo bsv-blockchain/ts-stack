@@ -70,6 +70,8 @@ on Postgres, and its retained, paged and incremental snapshot capabilities are
 unavailable there. Future Postgres snapshot support requires forward migrations;
 those no-op entries must not be rewritten as deployed schema changes.
 
+TTN archive and remote primary handoff support preserves the literal network through row/field archives, stored-artifact recovery and full/mobile transports. Main/test remain compatible; cross-network artifacts refuse. See [network negotiation](docs/primary-handoff.md#networks-and-negotiated-availability) before enrolling participants.
+
 ## Current unpublished candidate status
 
 Occupied native merge-history validation identifies the selected user without

@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain } from './SnapshotArchiveChain'
 import {
   snapshotJournalFieldArchiveStorageTable,
   parseSnapshotJournalFieldArchiveStorageTable,
@@ -140,7 +141,7 @@ export class KnexSnapshotArchiveStore {
     identifier(binding?.snapshotId, 'snapshotId')
     if (
       ![1, 2].includes(binding.version) ||
-      !['main', 'test'].includes(binding.sourceStorage?.chain) ||
+      !isSnapshotArchiveChain(binding.sourceStorage?.chain) ||
       typeof binding.sourceSchema !== 'string' ||
       binding.sourceSchema.length < 1 ||
       binding.sourceSchema.length > 256 ||

@@ -1,3 +1,4 @@
+import type { SnapshotArchiveChain } from './SnapshotArchiveChain'
 import { validateSnapshotArchiveOffer, type SnapshotArchiveOffer } from './SnapshotArchiveProtocol'
 import {
   validateSnapshotArchiveReaderRequest,
@@ -37,7 +38,7 @@ export function validateSnapshotArchiveReaderOffer(
   input: unknown,
   options: SnapshotArchiveReaderOptions,
   storageIdentityKey: string,
-  chain: 'main' | 'test'
+  chain: SnapshotArchiveChain
 ): Readonly<SnapshotArchiveReaderOffer> {
   const expected = validateSnapshotArchiveReaderOptions(options)
   const outcome =

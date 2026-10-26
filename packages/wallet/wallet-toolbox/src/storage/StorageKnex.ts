@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain } from './snapshot/archive/SnapshotArchiveChain'
 import { PRIMARY_HANDOFF_MIGRATION, dropPrimaryHandoffForDataDeletion } from './schema/primaryHandoffMigration'
 import { KnexWalletWriteAdmission } from './KnexWalletWriteAdmission'
 import { parseSnapshotJournalDataCheckpoint } from './snapshot/journal/SnapshotJournalDataProtocol'
@@ -733,7 +734,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       { openRemoteSnapshotJournalFieldArchive } =
         await import('./snapshot/journal/openRemoteSnapshotJournalFieldArchive'),
       settings = this.getSettings()
-    if (this.knex !== root || this.snapshotAdmissionStopped || (settings.chain !== 'main' && settings.chain !== 'test'))
+    if (this.knex !== root || this.snapshotAdmissionStopped || !isSnapshotArchiveChain(settings.chain))
       throw new WERR_INVALID_OPERATION('Actual local field source changed')
     const transport = new SnapshotJournalFieldArchiveTransport(
       async (method, params, signal) => {

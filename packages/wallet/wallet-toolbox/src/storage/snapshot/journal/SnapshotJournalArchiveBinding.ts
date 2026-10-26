@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain } from '../archive/SnapshotArchiveChain'
 import { parseSnapshotSyncContentRevision, type SnapshotSyncContentRevision } from '../SnapshotSyncContentRevision'
 import type { TableSettings, TableUser } from '../../schema/tables'
 import {
@@ -113,7 +114,7 @@ export function parseSnapshotJournalArchiveBinding(input: unknown): SnapshotJour
     compareSnapshotJournalRevisions(low, receipt.highWater) > 0 ||
     storage.storageIdentityKey !== source.storageIdentity ||
     storage.chain !== source.chain ||
-    (storage.chain !== 'main' && storage.chain !== 'test') ||
+    !isSnapshotArchiveChain(storage.chain) ||
     (storage.dbtype !== 'SQLite' && storage.dbtype !== 'MySQL') ||
     typeof storage.maxOutputScript !== 'number' ||
     !Number.isSafeInteger(storage.maxOutputScript) ||

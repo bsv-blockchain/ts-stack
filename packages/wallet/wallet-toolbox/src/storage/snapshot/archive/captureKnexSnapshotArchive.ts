@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain } from './SnapshotArchiveChain'
 import type { Knex } from 'knex'
 import type { Chain } from '../../../sdk/types'
 import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
@@ -27,7 +28,7 @@ export async function captureKnexSnapshotArchive(
   if (reader.knex === staging) {
     throw new WERR_INVALID_PARAMETER('staging', 'a connection pool separate from the retained source reader')
   }
-  if (chain !== 'main' && chain !== 'test') throw new WERR_INVALID_PARAMETER('chain', 'main or test')
+  if (!isSnapshotArchiveChain(chain)) throw new WERR_INVALID_PARAMETER('chain', 'main, test or ttn')
   // Detach caller-owned options before the first asynchronous boundary.
   const { signal, lifetimeMs, maxBytes, onProgress } = options
   assertSnapshotArchiveCaptureActive(signal)

@@ -1,3 +1,4 @@
+import { isSnapshotArchiveChain, type SnapshotArchiveChain } from '../snapshot/archive/SnapshotArchiveChain'
 import { promiseFromSync, awaitFromSync, awaitVoidFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import type { StorageWriterAdmission } from '../StorageActiveWrite'
 import type { PrimaryHandoffControl, PrimaryHandoffControlOptions } from '../PrimaryHandoffControl'
@@ -436,7 +437,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   private readonly snapshotWallet: WalletInterface
   private snapshotAuthClient?: AuthFetch
   private snapshotDestinationAuthClient?: AuthFetch
-  private snapshotSource?: { identityKey: string; chain: 'main' | 'test'; supportsReader: boolean }
+  private snapshotSource?: { identityKey: string; chain: SnapshotArchiveChain; supportsReader: boolean }
   /** Optional progress/cancellation hook for a bounded transfer; never receives wallet contents. */
   onSyncTransferProgress?: (progress: { direction: 'read' | 'write'; bytes: number; totalBytes: number }) => void
 
@@ -1143,7 +1144,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     if (this.expectedStorageIdentityKey !== undefined && storageIdentityKey !== this.expectedStorageIdentityKey) {
       throw new Error('Wallet storage settings identity does not match the configured storage identity.')
     }
-    if (settings.snapshotArchive !== undefined && (settings.chain === 'main' || settings.chain === 'test')) {
+    if (settings.snapshotArchive !== undefined && isSnapshotArchiveChain(settings.chain)) {
       this.snapshotSource = {
         identityKey: storageIdentityKey,
         chain: settings.chain,

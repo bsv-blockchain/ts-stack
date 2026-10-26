@@ -7651,6 +7651,7 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest:
         'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts',
       mutate: [
+        'src/storage/snapshot/archive/SnapshotArchiveChain.ts',
         'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
         'src/storage/snapshot/archive/SnapshotArchiveTransport.ts',

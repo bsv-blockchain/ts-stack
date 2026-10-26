@@ -12,6 +12,23 @@ import {
   sourceStorageIdentityKey
 } from '../../../../test/utils/snapshotArchiveDirectoryFixtures'
 
+test.each(['main', 'test', 'ttn'] as const)(
+  'hashed archive directories preserve %s and reject cross-network reuse',
+  chain => {
+    const { directory, binding } = fixture()
+    Reflect.set(binding.sourceStorage, 'chain', chain)
+    directory.bindingJson = JSON.stringify(binding)
+    rehash(directory)
+    expect(
+      verifySnapshotArchiveDirectory(directory, { ...expected, chain }, now).manifest.binding.sourceStorage.chain
+    ).toBe(chain)
+    for (const other of ['main', 'test', 'ttn'] as const) {
+      if (other !== chain)
+        expect(() => verifySnapshotArchiveDirectory(directory, { ...expected, chain: other }, now)).toThrow()
+    }
+  }
+)
+
 test.each([null, undefined, 1, 'directory', []])('rejects a non-record directory %p', value => {
   expect(() => verifySnapshotArchiveDirectory(value, expected, now)).toThrow('Invalid snapshot archive directory')
 })
