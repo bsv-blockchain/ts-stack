@@ -1857,7 +1857,7 @@ See also: [Base64String](./wallet.md#type-base64string), [OriginatorDomainNameSt
 
 Returns
 
-The status of the validation
+`true` when the wallet accepts the HMAC, otherwise `false`. An HMAC mismatch is a failed validation: wallets that reject with `ERR_INVALID_HMAC` or the message `HMAC is not valid` return `false` instead of propagating that rejection. Other wallet failures still reject.
 
 Argument Details
 

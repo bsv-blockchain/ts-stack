@@ -5,8 +5,8 @@ kind: package
 domain: middleware
 version: '2.2.10'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -24,6 +24,12 @@ Express transport for BRC-103 peer-to-peer mutual authentication over
 BRC-104 HTTP. It handles the public handshake, verifies authenticated
 application requests, signs responses, and optionally exchanges verifiable
 certificates.
+
+The 2.2.10 source candidate answers a general request whose session nonce or
+HMAC cannot be verified with `401 ERR_AUTH_FAILED`. `AuthFetch` discards that
+session and authenticates again. Unrelated processing failures remain
+`500 ERR_INTERNAL_SERVER_ERROR`. No BRC-103/104 wire or request-shape migration
+is required. This candidate is not publication.
 
 ## Install
 

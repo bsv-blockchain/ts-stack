@@ -4,7 +4,7 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.15.0'
+version: '2.15.1'
 last_updated: '2026-10-13'
 last_verified: '2026-10-13'
 review_cadence_days: 30
@@ -125,6 +125,13 @@ only as a generic signal. Monitor and daemon startup await retryable ChainTracks
 subscriptions, teardown closes SSE/subscriptions before storage, persisted
 diagnostics are bounded, and monitor operational logging requires the additive
 `MonitorOptions.logging` callback.
+
+An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
+argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it
+is sent as `Authorization: Bearer <key>` on broadcast, lookup and SSE requests.
+A refused key (HTTP 401 or 403) is a service error, like a 429 or 5xx: the
+wallet fails over to the next broadcaster or retries, and never marks the
+transaction invalid because of it.
 
 Spending approvals apply to one operation per prompt and are never cached or
 coalesced. Spending-token accounting reads every action page before authorizing
@@ -453,3 +460,13 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

@@ -736,9 +736,10 @@ async function createNewTxRecord(
   const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   if (brc177?.kind === 'protected') {
     newTx.noSendExpiryMode = brc177.expiry.mode
-    newTx.noSendExpiryValue = brc177.expiry.value
-    newTx.noSendExpiryDeadline = brc177.deadline
-    newTx.noSendExpiryState = 'preparing'
+    newTx.noSendExpiryValue = brc177.expiry.value ?? undefined
+    newTx.noSendExpiryDeadline = brc177.deadline ?? undefined
+    // A `never` action has no reclaim to arm, so it is ready for signature release at once.
+    newTx.noSendExpiryState = brc177.expiry.mode === 'never' ? 'unsigned' : 'preparing'
     newTx.noSendExpiryAnchorTxid = brc177.anchorTxid
     newTx.noSendExpiryAnchorVout = brc177.anchorVout
   }

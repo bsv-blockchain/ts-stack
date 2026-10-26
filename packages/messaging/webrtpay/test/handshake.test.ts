@@ -471,7 +471,7 @@ describe('authenticate over loopback', () => {
     ).resolves.toEqual({ valid: true })
   })
 
-  it('rejects both sides with auth_failed when each expects a third key, before signing', async () => {
+  it('fails both sides when each expects a third key, before signing', async () => {
     const A = party()
     const B = party()
     const C = party()
@@ -482,10 +482,15 @@ describe('authenticate over loopback', () => {
       rejectionCode(authenticate(a, { wallet: A.wallet, expectedPeer: C.key })),
       rejectionCode(authenticate(b, { wallet: B.wallet, expectedPeer: C.key }))
     ])
-    expect([ca, cb]).toEqual(['auth_failed', 'auth_failed'])
+    // Both sides check the peer's hello concurrently. The first to see the wrong
+    // key closes the link, and a close carries no reason to the other side: if
+    // that side has not yet checked the hello it reports 'closed'. At least one
+    // side always rejects the identity, and neither ever signs.
+    expect([ca, cb]).toContain('auth_failed')
+    for (const code of [ca, cb]) expect(['auth_failed', 'closed']).toContain(code)
     expect(signA).not.toHaveBeenCalled()
     expect(signB).not.toHaveBeenCalled()
-    expect((await closeOf(a))?.code).toBe('auth_failed')
+    expect((await closeOf(a))?.code).toBe(ca)
     expect(a.isOpen).toBe(false)
     expect(b.isOpen).toBe(false)
   })
