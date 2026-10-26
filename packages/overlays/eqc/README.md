@@ -52,7 +52,7 @@ route; the fee of the query that follows covers it. An `ls_slap` lookup issued a
 | `collectAttempts`     | 3       | Sends of a paid collect before the host is given up on.                           |
 | `collectRetryDelayMs` | 250     | Pause before a collect is sent again.                                             |
 
-At the defaults, five hosts receive 418, 250, 166, 83, and 83 satoshis from one transaction. A
+At the defaults, five hosts receive 269, 238, 206, 168, and 119 satoshis from one transaction. A
 ranked host whose share is below the `minPayoutSats` it advertises gets no output and no collect
 request, because it would refuse the output; it appears in `result.rejected` with
 `share below host minPayoutSats`, and `result.feeSats` is the total actually paid.
@@ -140,7 +140,7 @@ the log line is what lets the operator claim it later.
 host is held to the fee it quoted in its signed attestation: at rank `i` of `k` it requires
 `floor(quotedFeeSats × weight(i) / S)`, without the rounding remainder rank 1 is paid, so any fee
 at or above the quote is served at every rank. The client chooses `k` up to the host's `topK`, so
-the enforceable minimum per delivery is `max(minPayoutSats, share at rank K of K)`: 83 satoshis at
+the enforceable minimum per delivery is `max(minPayoutSats, share at rank K of K)`: 119 satoshis at
 the defaults. Raise `minPayoutSats` or lower `topK` to raise it; clients skip a host whose
 `topK` is too small for them and send no output below its `minPayoutSats`.
 

@@ -7,7 +7,7 @@ import { HostWallet, PayerWallet } from '../../test/support/wallets.js'
 import { bytesProvider, messageListProvider, overlayLookupProvider } from '../host/providers.js'
 import { rebuildLookupAnswer } from '../protocol/payloads.js'
 import { EQCError } from '../protocol/errors.js'
-import { computePayouts } from '../protocol/fibonacci.js'
+import { computePayouts } from '../protocol/weights.js'
 import { DEFAULTS } from '../protocol/query.js'
 import type { LookupResolverLike } from './discovery.js'
 import { EQC, type EQCOptions } from './EQC.js'
@@ -73,7 +73,7 @@ describe('EQC.query', () => {
     expect(result.payload).toEqual(ANSWER)
     expect(result.feeSats).toBe(1000)
     expect(result.ranking.map(entry => entry.url)).toEqual([...urls].reverse())
-    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([418, 250, 166, 83, 83])
+    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([269, 238, 206, 168, 119])
     expect(result.ranking[0].arrivalMs).toBe(0)
     expect(result.rejected).toEqual([])
     expect(result.attestations).toHaveLength(5)
@@ -81,8 +81,8 @@ describe('EQC.query', () => {
     expect(payer.actions).toHaveLength(1)
     expect(payer.actions[0].outputs).toHaveLength(5)
     const fastest = hosts[4].wallet.internalized
-    expect(fastest).toEqual([expect.objectContaining({ txid: result.txid, satoshis: 418 })])
-    expect(hosts[0].wallet.internalized).toEqual([expect.objectContaining({ satoshis: 83 })])
+    expect(fastest).toEqual([expect.objectContaining({ txid: result.txid, satoshis: 269 })])
+    expect(hosts[0].wallet.internalized).toEqual([expect.objectContaining({ satoshis: 119 })])
   })
 
   it('leaves a host that answers differently unpaid', async () => {
@@ -213,7 +213,7 @@ describe('EQC.query', () => {
     const result = await eqc.query(request)
     await result.completion
     expect(result.feeSats).toBe(1500)
-    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([750, 375, 375])
+    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([628, 511, 361])
   })
 
   it('reports a wallet that cannot pay before any collect is sent', async () => {
@@ -480,10 +480,10 @@ describe('EQC host market limits', () => {
   it('sends no output and no collect to a ranked host whose share is below its minPayoutSats', async () => {
     const reputation = new InMemoryReputationStore()
     const { payer, network, eqc } = setup({ reputation })
-    // Slowest of five, so it ranks fifth: its share of 1000 is 83, below the 100 it demands.
+    // Slowest of five, so it ranks fifth: its share of 1000 is 119, below the 150 it demands.
     const picky = network.add(
       urls[0],
-      { providers: [relay(ANSWER)], minPayoutSats: 100 },
+      { providers: [relay(ANSWER)], minPayoutSats: 150 },
       { delayMs: 120 }
     )
     const others = urls
@@ -495,9 +495,9 @@ describe('EQC host market limits', () => {
     await result.completion
 
     expect(result.ranking.map(entry => entry.url)).toEqual([...urls.slice(1), urls[0]])
-    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([418, 250, 166, 83, 0])
-    expect(result.feeSats).toBe(917)
-    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([418, 250, 166, 83])
+    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([269, 238, 206, 168, 0])
+    expect(result.feeSats).toBe(881)
+    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([269, 238, 206, 168])
     expect(picky.posts.map(post => post.path)).toEqual(['/economic/query'])
     expect(result.rejected).toEqual([
       {
@@ -516,25 +516,25 @@ describe('EQC host market limits', () => {
     expect(collects.map(post => (post.body as { ranking: string[] }).ranking)).toEqual([
       result.ranking.map(entry => entry.host)
     ])
-    expect(others[3].wallet.internalized).toEqual([expect.objectContaining({ satoshis: 83 })])
+    expect(others[3].wallet.internalized).toEqual([expect.objectContaining({ satoshis: 168 })])
   })
 
   it('serves the fastest host when another host floor sits one satoshi higher', async () => {
-    // Floors 1007 and 1008 make the client pay 1008, whose rank 1 payout (420) is below the
-    // rank 1 payout at 1007 (423). The fastest host must still be served.
+    // Floors 1001 and 1002 make the client pay 1002, whose rank 1 payout (268) is below the
+    // rank 1 payout at 1001 (270). The fastest host must still be served.
     const { network, eqc } = setup()
-    const fastest = network.add(urls[0], { providers: [relay(ANSWER)], floorFeeSats: 1007 })
-    network.add(urls[1], { providers: [relay(ANSWER)], floorFeeSats: 1008 }, { delayMs: 25 })
+    const fastest = network.add(urls[0], { providers: [relay(ANSWER)], floorFeeSats: 1001 })
+    network.add(urls[1], { providers: [relay(ANSWER)], floorFeeSats: 1002 }, { delayMs: 25 })
     for (const [index, url] of urls.slice(2).entries()) {
       network.add(url, { providers: [relay(ANSWER)] }, { delayMs: 50 + index * 25 })
     }
     const result = await eqc.query(request)
     await result.completion
-    expect(result.feeSats).toBe(1008)
+    expect(result.feeSats).toBe(1002)
     expect(result.ranking[0].url).toBe(urls[0])
-    expect(result.ranking.map(entry => entry.payoutSats)).toEqual(computePayouts(1008, 5))
+    expect(result.ranking.map(entry => entry.payoutSats)).toEqual(computePayouts(1002, 5))
     expect(result.rejected).toEqual([])
-    expect(fastest.wallet.internalized).toEqual([expect.objectContaining({ satoshis: 420 })])
+    expect(fastest.wallet.internalized).toEqual([expect.objectContaining({ satoshis: 268 })])
   })
 })
 

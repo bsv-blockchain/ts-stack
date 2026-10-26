@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, test } from 'vitest'
 
 import { canonicalJson } from './canonicalJson.js'
-import { computePayouts, fibonacciWeights, requiredShare } from './fibonacci.js'
+import { computePayouts, requiredShare, squareRootWeights } from './weights.js'
 import { decodeOutpointList, encodeMessageList, encodeOutpointList } from './payloads.js'
 
 const MIN_PROPERTY_RUNS = 300
@@ -54,12 +54,10 @@ describe('BRC-178 protocol invariants', () => {
             expect(payouts[rank]).toBeLessThanOrEqual(payouts[rank - 1])
             expect(payouts[rank]).toBeGreaterThanOrEqual(0)
           }
-          const weights = fibonacciWeights(k)
+          const weights = squareRootWeights(k)
           const sum = weights.reduce((accumulator, weight) => accumulator + weight, 0)
           for (let rank = 1; rank < k; rank++) {
-            expect(payouts[rank]).toBe(
-              Number((BigInt(total) * BigInt(weights[rank])) / BigInt(sum))
-            )
+            expect(payouts[rank]).toBe(Math.floor((total * weights[rank]) / sum))
           }
         }
       )

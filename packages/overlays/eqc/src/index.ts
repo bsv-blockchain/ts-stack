@@ -9,10 +9,11 @@ export {
 } from './protocol/query.js'
 export {
   computePayouts,
-  fibonacciWeights,
+  minimumFeeForAllRanks,
   requiredShare,
+  squareRootWeights,
   sumOfWeights
-} from './protocol/fibonacci.js'
+} from './protocol/weights.js'
 export {
   canonicalizeLookupAnswer,
   compareCodePoints,

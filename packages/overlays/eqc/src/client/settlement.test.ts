@@ -19,14 +19,14 @@ function ranked(hosts: HostWallet[]): Arrival[] {
 }
 
 describe('planPayouts', () => {
-  it('splits the fee by Fibonacci weight in rank order', () => {
+  it('splits the fee by square-root weight in rank order', () => {
     const hosts = Array.from({ length: 5 }, () => new HostWallet())
     expect(planPayouts(ranked(hosts), 1000).map(plan => [plan.rank, plan.satoshis])).toEqual([
-      [1, 418],
-      [2, 250],
-      [3, 166],
-      [4, 83],
-      [5, 83]
+      [1, 269],
+      [2, 238],
+      [3, 206],
+      [4, 168],
+      [5, 119]
     ])
   })
 
@@ -46,7 +46,7 @@ describe('settle', () => {
     expect(payer.actions).toHaveLength(1)
     expect(payer.actions[0].options?.randomizeOutputs).toBe(false)
     expect(payer.actions[0].labels).toEqual(['brc178'])
-    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([500, 250, 250])
+    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([418, 341, 241])
     expect(settlement.txid).toMatch(/^[0-9a-f]{64}$/)
 
     for (const [index, host] of hosts.entries()) {

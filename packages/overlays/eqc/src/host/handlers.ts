@@ -3,7 +3,7 @@ import type { RateLimitRequestHandler } from 'express-rate-limit'
 
 import { signAttestation, signDelivery } from '../protocol/attestation.js'
 import { HostError } from '../protocol/errors.js'
-import { requiredShare } from '../protocol/fibonacci.js'
+import { requiredShare } from '../protocol/weights.js'
 import type { HostParams } from '../protocol/params.js'
 import { parsePaymentEnvelope, type PaymentEnvelope } from '../protocol/payment.js'
 import { contentHash } from '../protocol/payloads.js'
@@ -70,7 +70,7 @@ export interface EconomicQueryHostOptions {
   topK?: number
   /** Minimum total fee for a query, optionally scaled by canonical payload size. */
   floorFeeSats?: number | ((payloadSize: number) => number)
-  /** Smallest output this host serves a collect for, even when its Fibonacci share is smaller. */
+  /** Smallest output this host serves a collect for, even when its weighted share is smaller. */
   minPayoutSats?: number
   maxQueryTtlMs?: number
   /**

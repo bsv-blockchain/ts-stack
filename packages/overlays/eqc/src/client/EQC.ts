@@ -16,7 +16,7 @@ import {
 } from '../protocol/attestation.js'
 import { compareCodeUnits } from '../protocol/canonicalJson.js'
 import { EQCError } from '../protocol/errors.js'
-import { sumOfWeights } from '../protocol/fibonacci.js'
+import { minimumFeeForAllRanks } from '../protocol/weights.js'
 import type { HostParams } from '../protocol/params.js'
 import {
   decodeMessageList,
@@ -310,7 +310,12 @@ export class EQC {
       .filter(quote => quote <= market.maxFeeSats)
     const feeSats = Math.min(
       market.maxFeeSats,
-      Math.max(query.floorFeeSats, market.feeSats, sumOfWeights(outcome.ranked.length), ...quotes)
+      Math.max(
+        query.floorFeeSats,
+        market.feeSats,
+        minimumFeeForAllRanks(outcome.ranked.length),
+        ...quotes
+      )
     )
     // A host is never sent an output it advertised it would refuse: that output could only be
     // stranded. The host did nothing wrong, so this is reported but is no reputation event, and

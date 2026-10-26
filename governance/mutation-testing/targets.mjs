@@ -719,7 +719,7 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/eqc',
       manifest: 'packages/overlays/eqc/package.json',
       propertyTest: 'packages/overlays/eqc/src/protocol/protocol.property.test.ts',
-      mutate: ['src/protocol/fibonacci.ts', 'src/protocol/canonicalJson.ts'],
+      mutate: ['src/protocol/weights.ts', 'src/protocol/canonicalJson.ts'],
       ...vitestTarget('vitest.config.ts')
     },
     'webrtpay-codes': {

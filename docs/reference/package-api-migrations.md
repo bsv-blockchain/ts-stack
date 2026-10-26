@@ -229,7 +229,7 @@ CLI entry points: `{"chirp":"./dist/cli.js"}`.
 
 - Package documentation: [docs/packages/overlays/eqc.md](../packages/overlays/eqc.md)
 - Source: [packages/overlays/eqc](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/eqc)
-- Release note: Introduces the Economic Query Client for BRC-178 race-settled collection markets: SLAP-bootstrapped host discovery, a client-judged race over BRC-77 attestations, one Fibonacci-weighted BRC-29 payout transaction, hash-verified collection, BRC-136 topic-anchor consistency reporting, local host reputation, and framework-agnostic host handlers with overlay-lookup, message-list, and byte providers.
+- Release note: Introduces the Economic Query Client for BRC-178 race-settled collection markets: SLAP-bootstrapped host discovery, a client-judged race over BRC-77 attestations, one square-root-weighted BRC-29 payout transaction, hash-verified collection, BRC-136 topic-anchor consistency reporting, local host reputation, and framework-agnostic host handlers with overlay-lookup, message-list, and byte providers.
 - Migration: No consumer migration is required; this is the first release of a new additive package. Existing LookupResolver, MessageBoxClient, overlay, and message box server routes are unchanged. Requires @bsv/sdk ^2.8.0, ^3.0.0 or ^4.0.0; 2.8.0 is the first SDK2 release whose AuthFetch accepts bounded transport options and whose SLAP advertisements are canonical https, wss or js8 URIs.
 
 | Public subpath | Runtime target(s)                        | Declaration target(s)                        |

@@ -8,7 +8,7 @@ import {
   verifyDelivery
 } from '../protocol/attestation.js'
 import { HostError } from '../protocol/errors.js'
-import { computePayouts } from '../protocol/fibonacci.js'
+import { computePayouts } from '../protocol/weights.js'
 import { paymentEnvelope, payoutLockingScript, type PaymentEnvelope } from '../protocol/payment.js'
 import { computeQueryId, type EconomicQuery } from '../protocol/query.js'
 import {
@@ -373,7 +373,7 @@ describe('collect', () => {
 
   it('delivers the attested bytes once its rank is paid', async () => {
     const { host, wallet, payer, queryId, contentHash, ranking } = await prepared()
-    const payment = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     const body = { type: 'collect', queryId, contentHash, ranking, payment }
     const response = recorder()
     await host.collect(request(payer.identityKey, body), response)
@@ -385,7 +385,7 @@ describe('collect', () => {
     })
     expect(verdict).toEqual({ verdict: 'ok', payload: PAYLOAD, supplement: [] })
     expect(wallet.internalized).toEqual([
-      expect.objectContaining({ outputIndex: 1, satoshis: 250 })
+      expect.objectContaining({ outputIndex: 1, satoshis: 341 })
     ])
 
     // The response was lost: the same collect again replays the delivery without a new charge.
@@ -398,7 +398,7 @@ describe('collect', () => {
 
   it('refuses a settled query on the query route too', async () => {
     const { host, payer, query, queryId, contentHash, ranking } = await prepared()
-    const payment = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     await host.collect(
       request(payer.identityKey, { type: 'collect', queryId, contentHash, ranking, payment }),
       recorder()
@@ -408,7 +408,7 @@ describe('collect', () => {
 
   it('accepts the payment in the x-bsv-payment header', async () => {
     const { host, payer, queryId, contentHash, ranking } = await prepared()
-    const payment = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     const response = recorder()
     await host.collect(
       request(
@@ -421,7 +421,7 @@ describe('collect', () => {
     expect(response.statusCode).toBe(200)
   })
 
-  it('demands its Fibonacci share and lets the client retry', async () => {
+  it('demands its square-root share and lets the client retry', async () => {
     const { host, wallet, payer, queryId, contentHash, ranking } = await prepared()
     const missing = recorder()
     await host.collect(
@@ -429,9 +429,9 @@ describe('collect', () => {
       missing
     )
     expect(missing.statusCode).toBe(402)
-    expect(missing.headers['x-bsv-payment-satoshis-required']).toBe('250')
+    expect(missing.headers['x-bsv-payment-satoshis-required']).toBe('341')
 
-    const cheap = await pay(payer, queryId, ranking, [500, 100, 250], 2)
+    const cheap = await pay(payer, queryId, ranking, [418, 100, 241], 2)
     const underpaid = recorder()
     await host.collect(
       request(payer.identityKey, {
@@ -446,7 +446,7 @@ describe('collect', () => {
     expect(underpaid.statusCode).toBe(402)
     expect(wallet.internalized).toEqual([])
 
-    const fair = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const fair = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     const retried = recorder()
     await host.collect(
       request(payer.identityKey, { type: 'collect', queryId, contentHash, ranking, payment: fair }),
@@ -457,7 +457,7 @@ describe('collect', () => {
 
   it('rejects bad collects with the documented codes', async () => {
     const { host, wallet, payer, queryId, contentHash, ranking } = await prepared()
-    const payment = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     const base = { type: 'collect', queryId, contentHash, ranking, payment }
     const cases: Array<[string | undefined, unknown, number, string]> = [
       [undefined, base, 401, 'ERR_AUTH_REQUIRED'],
@@ -522,7 +522,7 @@ describe('collect', () => {
 
   it('delivers exactly once under concurrent collects', async () => {
     const { host, wallet, payer, queryId, contentHash, ranking } = await prepared()
-    const payment = await pay(payer, queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, queryId, ranking, [418, 341, 241], 2)
     const body = { type: 'collect', queryId, contentHash, ranking, payment }
     const responses = [recorder(), recorder(), recorder()]
     await Promise.all(
@@ -544,13 +544,13 @@ describe('collect', () => {
   })
 
   it('serves rank 1 a fee one satoshi above its floor, where the rank 1 payout shrinks', async () => {
-    // computePayouts(1007, 5)[0] is 423 but computePayouts(1008, 5)[0] is 420: rank 1 takes the
+    // computePayouts(1001, 5)[0] is 270 but computePayouts(1002, 5)[0] is 268: rank 1 takes the
     // rounding remainder, which is not monotone in the fee.
-    const { host, wallet } = makeHost({ floorFeeSats: 1007 })
+    const { host, wallet } = makeHost({ floorFeeSats: 1001 })
     const payer = new PayerWallet()
-    const query = makeQuery(payer.identityKey, { floorFeeSats: 1008 })
+    const query = makeQuery(payer.identityKey, { floorFeeSats: 1002 })
     const attestation = parseAttestation((await attest(host, query)).body)
-    expect(attestation.quotedFeeSats).toBe(1007)
+    expect(attestation.quotedFeeSats).toBe(1001)
     const ranking = [wallet.identityKey, ...[1, 2, 3, 4].map(() => new HostWallet().identityKey)]
     const base = {
       type: 'collect',
@@ -562,15 +562,15 @@ describe('collect', () => {
     const unpaid = recorder()
     await host.collect(request(payer.identityKey, base), unpaid)
     expect(unpaid.statusCode).toBe(402)
-    expect(unpaid.headers['x-bsv-payment-satoshis-required']).toBe('419')
+    expect(unpaid.headers['x-bsv-payment-satoshis-required']).toBe('267')
 
-    const shares = computePayouts(1008, 5)
-    expect(shares[0]).toBe(420)
+    const shares = computePayouts(1002, 5)
+    expect(shares[0]).toBe(268)
     const payment = await pay(payer, attestation.queryId, ranking, shares, 1)
     const response = recorder()
     await host.collect(request(payer.identityKey, { ...base, payment }), response)
     expect(response.statusCode).toBe(200)
-    expect(wallet.internalized).toEqual([expect.objectContaining({ satoshis: 420 })])
+    expect(wallet.internalized).toEqual([expect.objectContaining({ satoshis: 268 })])
   })
 
   it('holds the client to the fee it quoted, not to a floor re-evaluated at collect', async () => {
@@ -587,7 +587,7 @@ describe('collect', () => {
     const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
     const callsAtAttestation = floorCalls.length
     surge = 1_000_000
-    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, attestation.queryId, ranking, [418, 341, 241], 2)
     const response = recorder()
     await host.collect(
       request(payer.identityKey, {
@@ -604,7 +604,7 @@ describe('collect', () => {
   })
 
   it('never serves below minPayoutSats, however small the share', async () => {
-    const { host, wallet } = makeHost({ minPayoutSats: 100 })
+    const { host, wallet } = makeHost({ minPayoutSats: 150 })
     const payer = new PayerWallet()
     const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
     const ranking = [...[1, 2, 3, 4].map(() => new HostWallet().identityKey), wallet.identityKey]
@@ -621,7 +621,7 @@ describe('collect', () => {
       response
     )
     expect(response.statusCode).toBe(402)
-    expect(response.headers['x-bsv-payment-satoshis-required']).toBe('100')
+    expect(response.headers['x-bsv-payment-satoshis-required']).toBe('150')
   })
 
   it('answers 500 and logs when the wallet cannot internalize, and never asks for more money', async () => {
@@ -630,7 +630,7 @@ describe('collect', () => {
     const payer = new PayerWallet()
     const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
     const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
-    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, attestation.queryId, ranking, [418, 341, 241], 2)
     const body = {
       type: 'collect',
       queryId: attestation.queryId,
@@ -675,7 +675,7 @@ describe('collect', () => {
     const payer = new PayerWallet()
     const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
     const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
-    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, attestation.queryId, ranking, [418, 341, 241], 2)
     wallet.declinePayments = true
     const response = recorder()
     await host.collect(
@@ -699,7 +699,7 @@ describe('collect', () => {
     const payer = new PayerWallet()
     const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
     const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
-    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, attestation.queryId, ranking, [418, 341, 241], 2)
     const internalize = wallet.internalizeAction.bind(wallet)
     wallet.internalizeAction = async args => {
       const result = await internalize(args)
@@ -748,7 +748,7 @@ describe('paid delivery recovery', () => {
     const payer = new PayerWallet()
     const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
     const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
-    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const payment = await pay(payer, attestation.queryId, ranking, [418, 341, 241], 2)
     const body = {
       type: 'collect',
       queryId: attestation.queryId,

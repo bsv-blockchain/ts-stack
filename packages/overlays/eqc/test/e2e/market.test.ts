@@ -78,7 +78,7 @@ describe('economic query market over HTTP', () => {
 
     expect(result.rejected).toEqual([])
     expect(result.ranking).toHaveLength(5)
-    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([418, 250, 166, 83, 83])
+    expect(result.ranking.map(entry => entry.payoutSats)).toEqual([269, 238, 206, 168, 119])
     expect(result.consistency).toEqual([
       expect.objectContaining({ topic: 'tm_market', status: 'agreed' })
     ])
@@ -120,7 +120,7 @@ describe('economic query market over HTTP', () => {
     expect(result.rejected).toContainEqual(expect.objectContaining({ url: greedy.url }))
     expect(payer.actions).toHaveLength(1)
     expect(payer.actions[0].description).toBe('BRC-178 query payout')
-    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([500, 250, 250])
+    expect(payer.actions[0].outputs?.map(output => output.satoshis)).toEqual([418, 341, 241])
     expect(greedy.wallet.internalized).toEqual([])
   }, 30_000)
 

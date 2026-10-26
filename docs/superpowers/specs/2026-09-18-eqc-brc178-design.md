@@ -86,11 +86,11 @@ decisions below.
 7. **`infra/message-box-server` is outside the pnpm workspace** and consumes
    published `@bsv/*` packages. It cannot depend on `@bsv/eqc` until the first
    npm release.
-8. **Fibonacci floors to zero at the BRC-178 recommended floor.** With `R = 2`
-   and `K = 5` the payouts are `[2, 0, 0, 0, 0]`. Every one of `k` ranked hosts
-   receives at least one satoshi only when `R ≥ Σ weights(k)` (12 for `k = 5`).
-   The 1000-satoshi default floor chosen below removes the problem for any
-   `K` up to 14.
+8. **Square-root weights floor to zero at the BRC-178 recommended floor.** With
+   `R = 2` and `K = 5` the payouts are `[2, 0, 0, 0, 0]`. Every one of `k`
+   ranked hosts receives at least one satoshi only when `R ≥ ceil(Σ weights(k))`
+   (9 for `k = 5`). The 1000-satoshi default floor chosen below removes the
+   problem for every `K` up to the 64-rank maximum.
 9. **SLAP advertisements carry the host identity key.**
    `OverlayAdminTokenTemplate.decode` returns the advertiser's `identityKey`
    alongside `protocol`, `domain`, and `topicOrService`. `LookupResolver`
@@ -148,7 +148,7 @@ src/
     payloads.ts            canonical bytes per query class, contentHash
     brc77.ts               wallet-based sign, SignedMessage-based verify
     attestation.ts         attestation + delivery preimages, sign, verify
-    fibonacci.ts           weights, payouts, required share
+    weights.ts             square-root weights, payouts, required share
     payment.ts             BRC-29 prefix/suffix encoding, payout scripts, envelope
     params.ts              HostParams shared by client and host
     encoding.ts            canonical base64 guard
@@ -169,7 +169,7 @@ src/
 ```
 
 Each unit has one purpose and is testable alone: `race.ts` takes attestation
-arrivals and a clock and returns a ranking; `fibonacci.ts` is arithmetic;
+arrivals and a clock and returns a ranking; `weights.ts` is arithmetic;
 `paymentVerifier.ts` takes a transaction, a rank, and a wallet.
 
 ## Client API
@@ -414,7 +414,7 @@ winner = hash with most distinct hosts; tie -> earliest first attestation
 rank winners by arrival; k = min(K, winners)
 R = max(floorFeeSats, feeSats, sum of weights(k), winners' quotedFeeSats that
     fit maxFeeSats), capped by maxFeeSats
-Fibonacci payouts; zero-satoshi ranks dropped
+square-root payouts; zero-satoshi ranks dropped
   a rank below its host's advertised minPayoutSats gets no output and no collect
 one createAction: output i pays host i under BRC-29
   prefix = base64(queryId), suffix = base64(u16be(rank)), randomizeOutputs false
@@ -456,18 +456,18 @@ fed back into the specification.
 | 12  | Replay                           | A repeated `queryId` while pending returns the stored attestation. After settlement both `query` and `collect` return 409 until expiry plus a grace period.                                                                                                                                                                                                                                                                                                                                                                 |
 | 13  | Arrival time                     | Stamped from a monotonic clock when the transport promise resolves, before signature verification, so verification cost does not reorder hosts. `attestedAt` is never read for ranking.                                                                                                                                                                                                                                                                                                                                     |
 | 14  | HTTP paths                       | `GET /economic/params`, `POST /economic/query`, `POST /economic/collect`, replacing the `/brc178/*` binding in the specification with a descriptive prefix. Signature domain tags such as `BRC-178 attestation` are unchanged.                                                                                                                                                                                                                                                                                              |
-| 15  | Default floor                    | `floorFeeSats` defaults to 1 000 satoshis on client and host, replacing the recommended 2. At `K = 5` the split is 418, 250, 166, 83, 83, and no share floors to zero for any `K` up to 14. Operators and clients may still configure any floor of at least 1.                                                                                                                                                                                                                                                              |
+| 15  | Default floor                    | `floorFeeSats` defaults to 1 000 satoshis on client and host, replacing the recommended 2. At `K = 5` the split is 269, 238, 206, 168, 119, and no share floors to zero for any `K` up to 64. Operators and clients may still configure any floor of at least 1.                                                                                                                                                                                                                                                              |
 | 16  | Discovery pricing                | The `ls_slap` lookup that precedes a query is answered on the free BRC-24 `/lookup` route and is covered by the target query's fee. `ls_slap` as the target of an economic query is raced and paid normally.                                                                                                                                                                                                                                                                                                                |
 
 Decision 5 rests on reputation: `collect-failed` is a hard event, because every
 collect follows a dispatched payout, so a failed collect is always a paid
 non-delivery.
 
-Decision 6 does not let a host demand its full Fibonacci payout at its own
+Decision 6 does not let a host demand its full weighted payout at its own
 floor. `computePayouts` gives rank 1 the rounding remainder, and the remainder
-is not monotone in the fee: `computePayouts(1007, 5)[0]` is 423 but
-`computePayouts(1008, 5)[0]` is 420, so a rank 1 host with a floor of 1007
-would refuse a client that paid 1008 because another host's floor was one
+is not monotone in the fee: `computePayouts(1001, 5)[0]` is 270 but
+`computePayouts(1002, 5)[0]` is 268, so a rank 1 host with a floor of 1001
+would refuse a client that paid 1002 because another host's floor was one
 satoshi higher. `requiredShare(feeSats, k, rank)` is the remainder-free share
 `floor(feeSats × weight(rank) / S)`. It is monotone in the fee at every rank,
 so every payment `R ≥ quotedFeeSats` covers it. The host takes `feeSats` from
@@ -750,5 +750,5 @@ Known obstacles in the current server:
 
 **Phase 3.** Collection grants end to end (sender attaches, host stores and
 releases to the authenticated recipient, recipient spends the grant into the
-Fibonacci outputs, so a recipient with no BSV can collect). Sender-signed
+square-root outputs, so a recipient with no BSV can collect). Sender-signed
 gossip envelopes between hosts. Optional query deposits.

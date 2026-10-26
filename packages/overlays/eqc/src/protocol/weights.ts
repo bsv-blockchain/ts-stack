@@ -6,32 +6,38 @@ function assertRankCount(k: number): void {
   }
 }
 
-/** Weights for ranks `1..k`: `weight(i) = F_(k - i + 1)` with `F_1 = F_2 = 1`. */
-export function fibonacciWeights(k: number): number[] {
-  assertRankCount(k)
-  const ascending: number[] = []
-  for (let n = 0; n < k; n++) {
-    ascending.push(n < 2 ? 1 : ascending[n - 1] + ascending[n - 2])
-  }
-  return ascending.reverse()
-}
-
-export function sumOfWeights(k: number): number {
-  return fibonacciWeights(k).reduce((sum, weight) => sum + weight, 0)
-}
-
 /**
- * Splits `totalSats` across `k` ranks: `floor(R * weight / S)` each, remainder to rank 1.
- * BigInt keeps the product exact for any fee up to the BSV supply.
+ * BRC-178 weights for ranks `1..k`: `weight(i) = sqrt(k - i + 1)`, as IEEE-754 binary64. `sqrt` is
+ * correctly rounded, so every conforming implementation computes the same bits.
  */
+export function squareRootWeights(k: number): number[] {
+  assertRankCount(k)
+  return Array.from({ length: k }, (_, index) => Math.sqrt(k - index))
+}
+
+/** `S = weight(1) + ... + weight(k)`, summed in rank order so the binary64 result is fixed. */
+export function sumOfWeights(k: number): number {
+  return squareRootWeights(k).reduce((sum, weight) => sum + weight, 0)
+}
+
+/** The smallest fee at which every one of `k` ranks is paid at least one satoshi. */
+export function minimumFeeForAllRanks(k: number): number {
+  return Math.ceil(sumOfWeights(k))
+}
+
+/** `floor(R * weight / S)` in binary64, evaluated as `(R * weight) / S` as BRC-178 specifies. */
+function rawShare(totalSats: number, weight: number, sum: number): number {
+  return Math.floor((totalSats * weight) / sum)
+}
+
+/** Splits `totalSats` across `k` ranks: `floor(R * weight / S)` each, remainder to rank 1. */
 export function computePayouts(totalSats: number, k: number): number[] {
   if (!Number.isSafeInteger(totalSats) || totalSats < 1) {
     throw new RangeError('totalSats must be a positive safe integer')
   }
-  const weights = fibonacciWeights(k)
-  const total = BigInt(totalSats)
-  const sum = BigInt(weights.reduce((accumulator, weight) => accumulator + weight, 0))
-  const payouts = weights.map(weight => Number((total * BigInt(weight)) / sum))
+  const weights = squareRootWeights(k)
+  const sum = weights.reduce((accumulator, weight) => accumulator + weight, 0)
+  const payouts = weights.map(weight => rawShare(totalSats, weight, sum))
   const distributed = payouts.reduce((accumulator, payout) => accumulator + payout, 0)
   payouts[0] += totalSats - distributed
   return payouts
@@ -47,10 +53,10 @@ export function requiredShare(feeSats: number, k: number, rank: number): number 
   if (!Number.isSafeInteger(feeSats) || feeSats < 1) {
     throw new RangeError('feeSats must be a positive safe integer')
   }
-  const weights = fibonacciWeights(k)
+  const weights = squareRootWeights(k)
   if (!Number.isSafeInteger(rank) || rank < 1 || rank > k) {
     throw new RangeError(`rank must be an integer from 1 to ${k}`)
   }
-  const sum = BigInt(weights.reduce((accumulator, weight) => accumulator + weight, 0))
-  return Number((BigInt(feeSats) * BigInt(weights[rank - 1])) / sum)
+  const sum = weights.reduce((accumulator, weight) => accumulator + weight, 0)
+  return rawShare(feeSats, weights[rank - 1], sum)
 }

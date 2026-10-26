@@ -57,7 +57,7 @@ server.registerRouter('/', ({ engine }) => {
 
 ## What it provides
 
-- **`EQC`** — discovers hosts from SLAP trackers, fans one BRC-103 authenticated query out to all of them, ranks BRC-77 attestations by local arrival time, pays the top `K` hosts that attested the same content hash from one Fibonacci-weighted BRC-29 transaction, and returns bytes whose hash it verified.
+- **`EQC`** — discovers hosts from SLAP trackers, fans one BRC-103 authenticated query out to all of them, ranks BRC-77 attestations by local arrival time, pays the top `K` hosts that attested the same content hash from one square-root-weighted BRC-29 transaction, and returns bytes whose hash it verified.
 - **`@bsv/eqc/host`** — `GET /economic/params`, `POST /economic/query`, and `POST /economic/collect` handlers with providers for overlay lookups, message box listings, and arbitrary byte reads.
 - **Protocol core** — canonical JSON query identifiers, canonical payload encodings, wallet-based BRC-77 signatures, and the payout split.
 

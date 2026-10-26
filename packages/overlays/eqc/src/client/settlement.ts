@@ -1,6 +1,6 @@
 import { Transaction, type WalletInterface } from '@bsv/sdk'
 
-import { computePayouts } from '../protocol/fibonacci.js'
+import { computePayouts } from '../protocol/weights.js'
 import { paymentEnvelope, payoutLockingScript, type PaymentEnvelope } from '../protocol/payment.js'
 import type { Arrival } from './race.js'
 
@@ -18,7 +18,7 @@ export interface Settlement {
   envelopes: Map<string, PaymentEnvelope>
 }
 
-/** Fibonacci split over the ranked hosts. Shares are non-increasing, so zeros only trail. */
+/** BRC-178 square-root split over the ranked hosts. Shares are non-increasing, so zeros only trail. */
 export function planPayouts(ranked: Arrival[], feeSats: number): PayoutPlan[] {
   if (ranked.length === 0) return []
   const payouts = computePayouts(feeSats, ranked.length)
