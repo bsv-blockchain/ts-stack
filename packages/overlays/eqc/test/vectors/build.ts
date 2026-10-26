@@ -2,7 +2,7 @@ import { Hash, PrivateKey, ProtoWallet, Utils } from '@bsv/sdk'
 
 import { attestationPreimage, deliveryPreimage } from '../../src/protocol/attestation.js'
 import { verifyBRC77 } from '../../src/protocol/brc77.js'
-import { canonicalJson } from '../../src/protocol/canonicalJson.js'
+import { canonicalJson, compareCodeUnits } from '../../src/protocol/canonicalJson.js'
 import {
   contentHash,
   encodeMessageList,
@@ -82,7 +82,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
   const query: EconomicQuery = {
     type: 'message-list',
     client: clientKey,
-    hostSetHint: [...hostKeys].sort(),
+    hostSetHint: [...hostKeys].sort(compareCodeUnits),
     params: { recipient: clientKey, messageBox: 'payment_inbox' },
     maxFeeSats: 2000,
     floorFeeSats: 1000,
@@ -96,7 +96,7 @@ export async function buildVectors(): Promise<Record<string, unknown>> {
     type: 'overlay-lookup',
     client: clientKey,
     strictHosts: true,
-    hostSetHint: [...hostKeys].sort(),
+    hostSetHint: [...hostKeys].sort(compareCodeUnits),
     params: { service: 'ls_example', query: { z: [3, 1, 2], a: { y: 'é', b: null, x: true } } },
     maxFeeSats: 5000,
     floorFeeSats: 1000,
