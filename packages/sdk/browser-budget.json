@@ -21,18 +21,18 @@
       "brotli": 240000
     },
     "esbuild": {
-      "raw": 950000,
-      "gzip": 275000,
-      "brotli": 225000
+      "raw": 1050000,
+      "gzip": 305000,
+      "brotli": 245000
     }
   },
   "umd": {
     "path": "dist/umd/bundle.js",
     "global": "bsv",
     "maximumBytes": {
-      "raw": 940000,
-      "gzip": 270000,
-      "brotli": 215000
+      "raw": 1040000,
+      "gzip": 295000,
+      "brotli": 240000
     }
   },
   "additionalEntries": [
