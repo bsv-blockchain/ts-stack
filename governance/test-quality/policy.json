@@ -46,7 +46,8 @@
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/application/output-knowledge/package.json",
-      "packages/messaging/webrtpay/package.json"
+      "packages/messaging/webrtpay/package.json",
+      "packages/messaging/group-messaging/package.json"
     ],
     "suites": [
       {
@@ -1890,6 +1891,18 @@
           "The size cap fires on exactly the first frame whose running total passes it.",
           "Random, corrupted, truncated, dropped, duplicated and reordered frames only ever throw WebRTPayError.",
           "Exactly the JSON objects within the depth and structural-token limits are accepted, for any text."
+        ]
+      },
+      {
+        "path": "packages/messaging/group-messaging/src/bootstrap/__tests__/envelope.property.test.ts",
+        "manifest": "packages/messaging/group-messaging/package.json",
+        "risk": "critical",
+        "boundary": "Bootstrap and MLS envelopes received from unauthenticated MessageBox peers before any group exists",
+        "target": "Envelope encode/decode round trips, and decoder totality on arbitrary, hostile-header or mutated input",
+        "invariants": [
+          "Every well-formed bootstrap and MLS envelope round-trips through encode and decode unchanged.",
+          "Arbitrary bytes, any JSON header value, hostile header fields and mutated or truncated valid envelopes only ever throw EnvelopeError.",
+          "A decoded key package request never carries a ciphersuite the library does not implement."
         ]
       }
     ],

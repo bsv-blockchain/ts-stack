@@ -110,8 +110,8 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
     assert.equal(selectedMutationPartition(id, original), original)
   }
-  assert.equal(Object.keys(targets).length, 154)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 605)
+  assert.equal(Object.keys(targets).length, 155)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 606)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {
