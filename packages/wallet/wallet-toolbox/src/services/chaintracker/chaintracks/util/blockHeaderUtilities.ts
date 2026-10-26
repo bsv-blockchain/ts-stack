@@ -174,7 +174,7 @@ export async function validateBulkFileData(
   if (vbf.firstHeight + vbf.count - 1 > MAX_BLOCK_HEIGHT) {
     throw new WERR_INVALID_PARAMETER('bf', 'a header range within the supported block heights')
   }
-  if (!['main', 'test', 'stn', 'ttn', 'tstn', 'mock'].includes(vbf.chain!)) {
+  if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'].includes(vbf.chain!)) {
     throw new WERR_INVALID_PARAMETER('bf.chain', 'a supported Chaintracks network')
   }
   if (
@@ -210,7 +210,14 @@ export async function validateBulkFileData(
     throw new WERR_INVALID_PARAMETER('bf.fileHash', `expected ${bf.fileHash} but got ${vbf.fileHash}`)
   }
 
-  const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(vbf.data, prevHash, 0, undefined, prevChainWork)
+  const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(
+    vbf.data,
+    prevHash,
+    0,
+    undefined,
+    prevChainWork,
+    vbf.chain
+  )
   if (
     bf.lastHash &&
     (typeof bf.lastHash !== 'string' || !HEX_32_BYTES.test(bf.lastHash) || bf.lastHash.toLowerCase() !== lastHeaderHash)
@@ -242,6 +249,9 @@ export async function validateBulkFileData(
  * @param previousHash Expected previousHash of first header.
  * @param offset Optional starting offset within `buffer`.
  * @param count Optional number of headers to validate. Validates to end of buffer if missing.
+ * @param previousChainWork Optional chain work through `previousHash`; when present, the result carries it forward.
+ * @param chain Optional chain the headers belong to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns Header hash of last header validated or previousHash if there where none.
  */
 export function validateBufferOfHeaders(
@@ -249,7 +259,8 @@ export function validateBufferOfHeaders(
   previousHash: string,
   offset = 0,
   count = -1,
-  previousChainWork?: string
+  previousChainWork?: string,
+  chain?: Chain
 ): { lastHeaderHash: string; lastChainWork: string | undefined } {
   if (!(buffer instanceof Uint8Array)) throw new WERR_INVALID_PARAMETER('buffer', 'a Uint8Array')
   if (!Number.isSafeInteger(offset) || offset < 0 || offset > buffer.length) {
@@ -293,9 +304,9 @@ export function validateBufferOfHeaders(
     }
     lastHeaderHash = asString(doubleSha256BE(header))
     validateAgainstDirtyHashes(lastHeaderHash)
-    validateConsensusProofOfWork(lastHeaderHash, h.bits)
+    validateConsensusProofOfWork(lastHeaderHash, h.bits, chain)
     if (lastChainWork) {
-      lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits))
+      lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits, chain))
     }
   }
   return { lastHeaderHash, lastChainWork }
@@ -399,11 +410,13 @@ function readCompactBits(bits: number[]): number {
 /**
  * Computes "chainWork" value for 4 byte Bitcoin block header "bits" value.
  * @param bits number or converted from Buffer using `readUint32LE`
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns 32 byte Buffer with "chainWork" value
  */
-export function convertBitsToWork(bits: number | number[]): string {
+export function convertBitsToWork(bits: number | number[], chain?: Chain): string {
   const encoded = Array.isArray(bits) ? readCompactBits(bits) : bits
-  const target = validateCompactTarget(encoded)
+  const target = validateCompactTarget(encoded, chain)
 
   // convert target to work
   const work = target.notn(256).div(target.addn(1)).addn(1)
@@ -556,18 +569,21 @@ export function validateHeaderFormat(header: BlockHeader): void {
 /**
  * Ensures that a header has a valid proof-of-work target and hash.
  *
- * @param header The header to validate
+ * @param hash The header hash, big-endian.
+ * @param bits The header's compact target.
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  *
  * @returns true if the header is valid
  */
-export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number) {
+export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number, chain?: Chain) {
   if (!Array.isArray(hash) && !(hash instanceof Uint8Array)) {
     throw new WERR_INVALID_PARAMETER('hash', 'exactly 32 bytes')
   }
   validateByteWindow(hash, 0, hash.length, 'hash')
   if (hash.length !== 32) throw new WERR_INVALID_PARAMETER('hash', 'exactly 32 bytes')
   const hashBN = new BigNumber(asArray(hash))
-  const target = validateCompactTarget(bits)
+  const target = validateCompactTarget(bits, chain)
 
   if (hashBN.lte(target)) return true
 
@@ -581,12 +597,34 @@ const proofOfWorkExceptions = new Map([
   ['6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594', 0x1d00ffff]
 ])
 
-function validateConsensusProofOfWork(hash: string, bits: number): void {
-  if (proofOfWorkExceptions.get(hash) === bits) return
-  validateHeaderDifficulty(asArray(hash, 'hex'), bits)
+/** Compact encoding of the highest target (lowest difficulty) mainnet and every public test network admit. */
+const MAINNET_POW_LIMIT_BITS = 0x1d00ffff
+
+/**
+ * Compact encoding of regtest's highest target, as Teranode defines it
+ * (go-chaincfg `RegressionNetParams.PowLimitBits`). Every regtest header carries
+ * these bits, so its proof of work costs nothing to produce: a regtest chain is
+ * only as trustworthy as the ChainTracks service that serves it.
+ */
+const REGTEST_POW_LIMIT_BITS = 0x207fffff
+
+/**
+ * The compact encoding of the highest proof-of-work target `chain` admits.
+ *
+ * Only `'regtest'` raises the limit. Every other chain — and an omitted chain,
+ * which is how every caller that predates this parameter asks — keeps the mainnet
+ * limit, so no existing validation is relaxed.
+ */
+export function proofOfWorkLimitBits(chain?: Chain): number {
+  return chain === 'regtest' ? REGTEST_POW_LIMIT_BITS : MAINNET_POW_LIMIT_BITS
 }
 
-function validateCompactTarget(bits: number): BigNumber {
+function validateConsensusProofOfWork(hash: string, bits: number, chain?: Chain): void {
+  if (proofOfWorkExceptions.get(hash) === bits) return
+  validateHeaderDifficulty(asArray(hash, 'hex'), bits, chain)
+}
+
+function validateCompactTarget(bits: number, chain?: Chain): BigNumber {
   if (!Number.isSafeInteger(bits) || bits < 0 || bits > 0xffffffff) {
     throw new Error('Block target encoding is invalid.')
   }
@@ -599,7 +637,7 @@ function validateCompactTarget(bits: number): BigNumber {
   }
 
   const target = convertBitsToTarget(bits)
-  const proofOfWorkLimit = convertBitsToTarget(0x1d00ffff)
+  const proofOfWorkLimit = convertBitsToTarget(proofOfWorkLimitBits(chain))
   if (target.gt(proofOfWorkLimit)) {
     throw new Error('Block target exceeds the proof-of-work limit.')
   }
@@ -611,11 +649,13 @@ function validateCompactTarget(bits: number): BigNumber {
  * proof-of-work target.
  *
  * @param header Header whose format and hash have already been checked.
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns true if the header has valid proof-of-work.
  * @publicbody
  */
-export function validateHeaderProofOfWork(header: BlockHeader): true {
-  validateConsensusProofOfWork(header.hash, header.bits)
+export function validateHeaderProofOfWork(header: BlockHeader, chain?: Chain): true {
+  validateConsensusProofOfWork(header.hash, header.bits, chain)
   return true
 }
 
@@ -773,6 +813,18 @@ export function genesisHeader(chain: Chain): BlockHeader {
         nonce: 1780488216,
         height: 0,
         hash: '000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c'
+      }
+    case 'regtest':
+      // go-chaincfg regTestGenesisBlock: the Bitcoin regtest genesis header.
+      return {
+        version: 1,
+        previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        merkleRoot: '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+        time: 1296688602,
+        bits: 545259519,
+        nonce: 2,
+        height: 0,
+        hash: '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206'
       }
     case 'mock':
       throw new Error("genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.")

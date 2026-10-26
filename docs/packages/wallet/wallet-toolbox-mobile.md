@@ -3,9 +3,9 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.14.6'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '2.15.1'
+last_updated: '2026-10-13'
+last_verified: '2026-10-13'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox/mobile'
@@ -18,6 +18,11 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and
 remote storage surfaces without Knex, SQLite/MySQL, IndexedDB, or Node-only IO.
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
+
 Prepared BEEF persistence remains a server-side Knex capability. Mobile remote
 storage uses the canonical path, and compatible remote servers can enable the
 optimization without a mobile configuration or wire change.
@@ -60,12 +65,35 @@ new account even if other hosts fail or return malformed records.
 
 The mobile build includes the fetch-based, credential-free ChainTracks v2
 client and reconnecting SSE adapter without Node-only modules. Public defaults
-cover mainnet, testnet, and TerraTestNet; STN/TSTN use an injected or configured
-endpoint.
+cover mainnet, testnet, and TerraTestNet; STN/TSTN and regtest use an injected
+or configured endpoint.
 
 The portable local controller coalesces stale height refresh and immutable
 object loads, applies failed-load backoff, and validates through the asynchronous
 `InlineBulkFileDataValidator` without importing Node worker or filesystem code.
+
+## Local recovery capability boundary
+
+The coordinated 2.15.0 candidate preserves this wrapper's ordinary API and SDK
+peer range. The core package's new SQLite action/funding controllers are separate
+Node deep imports. This wrapper does not expose them or grant IndexedDB, mobile
+or remote storage a durable operation journal. If a host separately adopts core
+recovery, preserve its complete wallet database and keys and reconcile outstanding
+operations before rollback; ordinary entity export/sync omits that auxiliary state.
+See [local action recovery](../../guides/local-action-recovery.md).
+
+Broadcast result completion in the 2.14.9 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. Remote SQL storage adds a durable user/TXID
+receipt claim while preserving historical rows; back up and preflight before
+coordinating all serving storage instances in the
+rollout. This candidate does not deploy hosted storage or repair older partial
+receipts automatically.
 
 ## Backup and recovery
 

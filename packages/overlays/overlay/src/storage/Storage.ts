@@ -96,6 +96,14 @@ export interface Storage {
    * @param outpoints — txid/output index pairs to find
    * @param includeBEEF — Whether to include the BEEF data for the outputs (optional)
    */
+  /** Optional audit/history read. This never establishes current topic membership. */
+  findHistoricalOutput?: (
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    includeBEEF?: boolean
+  ) => Promise<Output | null>
+
   findOutputsByOutpoints?: (
     outpoints: Array<{ txid: string; outputIndex: number }>,
     includeBEEF?: boolean

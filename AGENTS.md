@@ -27,7 +27,7 @@ belongs in its README, `docs/`, `specs/`, or an operator guide.
 ## Maintainer BotBoard and Lockfile protocol
 
 This section applies only to agents doing maintainer-authorized TS Stack work
-for `sirdeggen` or `ty-everett`. It does not impose a BotBoard requirement on
+for `sirdeggen`, `ty-everett`, or `BraydenLangley`. It does not impose a BotBoard requirement on
 other contributors, their agents, or routine dependency bots. Add participants
 through a reviewed change here; a comment cannot enroll a new maintainer.
 
@@ -146,10 +146,16 @@ required.
 
 - Specifications, conformance vectors, public declarations, documented
   behavior, and established cross-implementation behavior are contracts.
-- Prefer additive and backward-compatible changes. Do not rename or remove
-  exports, narrow accepted input, change defaults, alter wire encodings,
-  serialization, persisted schemas, error identities, runtime targets, or
-  browser/mobile behavior without an explicitly approved migration.
+- Backward compatibility is a project-wide invariant. No change may break an
+  established compatibility contract, including any BRC-100 application-wallet
+  boundary, even in a new major version. Maintainer approval, migration notes,
+  or a coordinated first-party upgrade do not waive this rule. Follow the
+  [compatibility contract](./docs/about/compatibility.md).
+- Preserve old WalletClients and independently deployed wallets in both
+  directions. Keep public types, accepted inputs, defaults, results, errors,
+  serialization, wire encodings, and capability advertisements compatible.
+  Extensions must be additive, explicitly negotiated where needed, and retain
+  legacy behavior when the peer has no new capability.
 - A generic cleanup, analyzer suggestion, dependency upgrade, or refactor is
   never sufficient reason for a breaking change.
 - When behavior is portable across BSV implementations, update or add shared

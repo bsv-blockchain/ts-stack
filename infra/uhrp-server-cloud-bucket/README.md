@@ -409,3 +409,15 @@ route, and failure-path checks above pass.
 © 2025 – Feel free to adapt, improve, and PR!
 
 Advertisement, owner metadata and renewal operations use the same `GCP_STORAGE_CREDS`/`GCP_PROJECT_ID` identity as signed uploads. When credentials are explicitly configured, those operations must not fall back to the runtime metadata server. Unset credentials retain ADC for installations that intentionally use a runtime service account. Malformed configured credentials fail without logging their contents.
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

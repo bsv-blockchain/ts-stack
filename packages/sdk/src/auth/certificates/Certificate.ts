@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from '../../wallet/CertificateType.js'
 import {
   Base64String,
   PubKeyHex,
@@ -149,7 +150,7 @@ function assertCompressedPublicKey(value: number[], fieldName: string): void {
  */
 export default class Certificate {
   /**
-   * Type identifier for the certificate, base64 encoded string, 32 bytes.
+   * Type identifier as canonical base64. New signing requires 32 bytes; existing verification accepts 1–128 bytes.
    */
   type: Base64String
 
@@ -186,7 +187,7 @@ export default class Certificate {
   /**
    * Constructs a new Certificate.
    *
-   * @param {Base64String} type - Type identifier for the certificate, base64 encoded string, 32 bytes.
+   * @param {Base64String} type - Type identifier as canonical base64. New signing requires 32 bytes; existing verification accepts 1–128 bytes.
    * @param {Base64String} serialNumber - Unique serial number of the certificate, base64 encoded string, 32 bytes.
    * @param {PubKeyHex} subject - The public key belonging to the certificate's subject, compressed public key hex string.
    * @param {PubKeyHex} certifier - Public key of the certifier who issued the certificate, compressed public key hex string.
@@ -227,10 +228,17 @@ export default class Certificate {
    * @returns {number[]} - The serialized certificate in binary format.
    */
   toBinary(includeSignature: boolean = true): number[] {
+    return this.#serialize(includeSignature, false)
+  }
+
+  // Transport adaptation never participates in the signed preimage.
+  #serialize(includeSignature: boolean, existingType: boolean): number[] {
     const writer = new Writer()
 
     // Write type (Base64String, 32 bytes)
-    const typeBytes = assertCanonicalBase64Length(this.type, 'type', 32)
+    const typeBytes = existingType
+      ? existingCertificateTypeBytes(this.type)
+      : assertCanonicalBase64Length(this.type, 'type', 32)
     writer.write(typeBytes)
 
     // Write serialNumber (Base64String, 32 bytes)
@@ -419,12 +427,19 @@ export default class Certificate {
    * from its own chain source. Signature validity alone is not current
    * certificate validity.
    *
+   * Existing types of 1–128 decoded bytes use the original historical preimage
+   * and type/serial key derivation. This does not make the type BRC-52 compliant
+   * or permit new issuance; canonical binary export remains strictly 32 bytes.
+   *
    * @returns {Promise<boolean>} - A promise that resolves to true if the signature is valid;
    * it makes no revocation-status assertion.
    */
   async verify(): Promise<boolean> {
     try {
-      const verificationData = this.toBinary(false) // Exclude the signature from the verification data
+      const typeBytes = existingCertificateTypeBytes(this.type)
+      // Retain the established canonical export hook for 32-byte certificates.
+      const verificationData =
+        typeBytes.length === 32 ? this.toBinary(false) : this.#serialize(false, true)
       const certifierKey = PublicKey.fromString(this.certifier).deriveChild(
         new BigNumber(1) as PrivateKey,
         `2-certificate signature-${this.type} ${this.serialNumber}`

@@ -1,4 +1,12 @@
 import {
+  BRC197_INTERNALIZATION_PROFILE,
+  assertBrc197Recipient,
+  brc197ChildPublicKey,
+  ownBrc197InternalizeActionArgs,
+  type Brc197InternalizeActionArgs,
+  type Brc197InternalizationCapabilities
+} from '../sdk/Brc197Internalization'
+import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
   type ValidListCertificatesArgs,
@@ -9,6 +17,7 @@ import {
   validateRelinquishOutputArgs
 } from '@bsv/sdk/wallet/validationHelpers'
 import { SyncPageBudget } from './sync/SyncPageBudget'
+import { assertLiveSyncChainsMatch, throwIfProcessSyncChunkError } from './sync/liveSyncGuards'
 import { validateSyncCheckpoint } from './sync/syncCheckpoint'
 import {
   AbortActionArgs,
@@ -514,7 +523,40 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
+  /** Capability of the actual authorized writer, not a remote BRC-100 assumption. */
+  async getBrc197InternalizationCapabilities(): Promise<Brc197InternalizationCapabilities> {
+    return await this.runAsWriter(async writer => {
+      if (typeof writer.internalizeBrc197Action !== 'function') {
+        throw new WERR_NOT_IMPLEMENTED(
+          'The active provider does not support local BRC-197 fixed-child internalization.'
+        )
+      }
+      const auth = await this.getAuth(true)
+      return {
+        profile: BRC197_INTERNALIZATION_PROFILE,
+        recipientIdentityKey: auth.identityKey,
+        childPublicKey: brc197ChildPublicKey(auth.identityKey)
+      }
+    })
+  }
+
+  async internalizeBrc197Action(args: Brc197InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
+    const owned = ownBrc197InternalizeActionArgs(args)
+    return await this.runAsWriter(async writer => {
+      const internalize = writer.internalizeBrc197Action
+      if (typeof internalize !== 'function') {
+        throw new WERR_NOT_IMPLEMENTED(
+          'The active provider does not support local BRC-197 fixed-child internalization.'
+        )
+      }
+      const auth = await this.getAuth(true)
+      assertBrc197Recipient(owned, auth.identityKey)
+      return await internalize.call(writer, auth, owned)
+    })
+  }
+
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
+    // Validate an existing reference, including historical types; acquisition remains strict.
     validateRelinquishCertificateArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
@@ -894,6 +936,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log = await this.runAsSync(async sync => {
       const writer = sync
       const writerSettings = this.getSettings()
+      assertLiveSyncChainsMatch(readerSettings, writerSettings)
 
       log += `syncFromReader from ${readerSettings.storageName} to ${writerSettings.storageName}\n`
 
@@ -915,6 +958,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
           chunk.user.activeStorage = ((this._active as ManagedStorage).user as TableUser).activeStorage
         }
         const r = await writer.processSyncChunk(pageArgs, chunk)
+        throwIfProcessSyncChunkError(r)
         budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
@@ -949,6 +993,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log = await this.runAsSync(async sync => {
       const reader = sync
       const readerSettings = reader.getSettings()
+      assertLiveSyncChainsMatch(readerSettings, writerSettings)
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
 
@@ -967,6 +1012,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
         const chunk = await reader.getSyncChunk(pageArgs)
         log += EntitySyncState.syncChunkSummary(chunk)
         const r = await writer.processSyncChunk(pageArgs, chunk)
+        throwIfProcessSyncChunkError(r)
         budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates

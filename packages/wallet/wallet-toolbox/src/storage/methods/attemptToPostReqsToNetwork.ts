@@ -270,9 +270,13 @@ export async function updateReqsFromAggregateResults(
       serviceErrorCount
     }
 
-    if (['completed', 'unmined'].includes(req.status))
-    // However it happened, don't degrade status if it is somehow already beyond broadcast stage
-    {
+    if (['completed', 'unmined'].includes(req.status)) {
+      // Preserve advanced durable state, but still report this broadcast's outcome.
+      // Leaving details unknown makes a successful first receipt fail aggregation.
+      // Negative provider results must remain negative even for an advanced request.
+      const details = r.details.find(d => d.txid === txid)!
+      details.status = ar.status
+      details.competingTxs = ar.competingTxs
       continue
     }
 

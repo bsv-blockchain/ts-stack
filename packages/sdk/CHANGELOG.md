@@ -2,6 +2,68 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
 
+## Legacy certificate compatibility (4.0.0 candidate)
+
+- Restore existing certificate listing, discovery, proof, relinquishment, signature
+  verification and BRC-103 requests for canonical Base64 types of 1–128 bytes.
+  New signing and both acquisition protocols still require exactly 32 bytes.
+- Add an opt-in binary substrate profile with sentinel type slots and phantom
+  certificate metadata; original signed objects and ordinary encodings remain
+  unchanged. Binary HTTP includes a dedicated internal capability endpoint and
+  explicit missing-route probe fallback; wallet routers must register the new
+  transport route. Both adapters must upgrade for legacy binary use. No new BRC-100
+  app API or storage schema/RPC is required; strict remote relinquishment servers
+  must upgrade their SDK reference validator.
+- Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier
+  signing/JSON paths. Those types never reliably round-tripped through the old
+  fixed-width binary parser. This profile restores their use without reissuance.
+### Revenue profile spend construction
+
+Revenue listing profile witness estimates use the existing Script encoder for
+push prefixes and retain their exact conservative activation and active bounds
+(39,110 and 6,542 bytes). Internal funded snapshots receive an explicit header
+choice. Public construction defaults, signatures, transaction bytes and ABI
+remain compatible; no consumer migration is required.
+
+### Fresh purchase and release ownership companions
+
+Add seven opt-in purchase response, commitment, POTATOES and release-evidence
+companions. Original public entry points, signature/request binding, refusals,
+encodings and limits remain compatible; every invocation validates fresh input.
+No migration is required. Hosted qualification remains separate.
+
+The explicit server purchase companions use lazy fixed-grammar metadata after
+complete fresh input ownership. Ordinary standalone schema validation, portable
+parsers, all field/domain checks and custom callbacks retain their behavior.
+No input or verdict is cached; no wire, storage, default or root-export migration
+is introduced. Complete hosted qualification remains required.
+
+`validateOutputByteEncoding(value, maximumBytes)` returns the current canonical
+standard Base64 string after validating its alphabet, framing, padding bits and
+exact decoded-size bound. It avoids constructing a decoded array when a caller
+only needs the encoded representation. Defaults, limit predicates and refusal
+order match `decodeOutputBytes`; decoding retains its existing implementation.
+The private fixed owned-record schema selects this validator only after fresh
+complete parent ownership. Ordinary byte callbacks and portable parser paths
+remain unchanged. This establishes representation only; endpoint schema,
+transaction validity, signature, custody and current authorization still need
+independent checks. No input or validation verdict is retained. The helper is an
+additive SDK export and requires no wire or stored-data migration. Hosted
+runtime and mutation qualification remain required; static checks establish no
+performance improvement.
+
+### Fresh authentication byte ownership
+
+Authentication byte ownership captures each external array element through its own data descriptor once. Shape validation then checks values in the private arrays produced by the completed bounded snapshot traversal. Sparse arrays, accessors, invalid byte values and all size, depth and node limits retain their existing refusals. Every operation constructs fresh owned data; no caller input or validation verdict is cached. Public declarations, wire bytes, signature and session checks, errors and defaults are unchanged. No consumer migration is required. Complete composed qualification remains required; this implementation change alone establishes no performance improvement.
+
+### Authenticated transport failure evidence
+
+Authenticated fetch network failures now preserve the original thrown value as
+the wrapper's optional `Error.cause` when the value is not a same-realm Error.
+This retains cross-realm native error evidence while preserving existing
+messages, Error names, stack behavior and request dispatch counts. No automatic
+replay, payment authorization, wire change or consumer migration is introduced.
+
 ## Table of Contents
 
 - [Unreleased](#unreleased)
@@ -213,6 +275,188 @@ All notable changes to this project will be documented in this file. The format 
 - [Template for New Releases](#template-for-new-releases)
 
 ## [Unreleased]
+
+### Performance (4.0.0 candidate)
+
+- Bound the windowed point-multiplication table cache. Every distinct public
+  key verified added a table that was never released (about 3 KiB per key);
+  the generator's tables are kept and other points share a 64-entry
+  least-recently-used cache.
+- `PrivateKey.toPublicKey()` caches its result, so P2PKH signing and key
+  derivation no longer recompute k·G per call. The cache checks a SHA-256
+  fingerprint of the key's current value, never a copy of the secret; each
+  call still returns an independent `PublicKey`, and an in-place change to
+  the key recomputes it. `KeyDeriver` reuses its `anyone` public key.
+- `toArray` from a `Uint8Array`, hex decoding to `number[]`, `Writer.toArray`,
+  `Transaction.toBEEF`/`fromHexBEEF`, `Beef.toBinary` and `Beef.mergeBeef(Beef)`
+  convert bytes with a presized loop instead of `Array.from` or a growing
+  `number[]` writer. Output bytes are unchanged.
+- Adds `benchmarks/key-cache-bench.js` and `benchmarks/beef-conversion-bench.js`.
+
+### Fixed (4.0.0 candidate)
+
+- `MerklePath` refuses a one-level proof whose only leaf is not at offset 0.
+  A block of one transaction contains only its coinbase, at index 0, so any
+  other offset is a missing sibling. `fromHex`, the constructor (including
+  deferred root validation), and root computation throw
+  `Missing hash for index <offset> at height 0`. `combine()` recomputes the
+  merged root and leaves the receiver unchanged when that root differs from
+  the paths it merged. Offset 0, including `fromCoinbaseTxidAndHeight`, is
+  unchanged. Valid proofs need no migration. Fixes #1083.
+
+- `verifyNonce` returns `false` when the wallet rejects an HMAC mismatch
+  (`ERR_INVALID_HMAC`, or an error whose message is exactly `HMAC is not valid`)
+  instead of propagating that rejection. `Peer` can then raise its own
+  unverifiable-nonce error, and an authentication server can answer 401 so
+  `AuthFetch` drops the stale session and re-handshakes (issue #1086).
+  Other wallet failures still reject. No API, wire, or wallet-data migration.
+
+### Overlay topic and lookup service names (4.0.0 candidate)
+
+- `TopicBroadcaster` (`SHIPBroadcaster`) topics and `OverlayAdminTokenTemplate`
+  SHIP/SLAP names accept the `tm_` or `ls_` prefix followed by lowercase
+  letters and digits in segments joined by single underscores, up to 256 bytes
+  (the overlay engine's topic limit). The previous grammar allowed letters only
+  and 50 characters, which refused the BRC-207 per-asset names
+  `tm_color_<txid>_<vout>` and `ls_color_<txid>_<vout>`. Leading, trailing and
+  consecutive underscores, uppercase, other characters and a missing prefix are
+  still rejected.
+- Adds `isOverlayTopicName`, `isOverlayLookupServiceName`,
+  `OVERLAY_TOPIC_NAME_PATTERN`, `OVERLAY_LOOKUP_SERVICE_NAME_PATTERN` and
+  `MAX_OVERLAY_NAME_BYTES` to the overlay tools exports.
+- Migration: none. Every name accepted before is still accepted.
+
+### BRC-112 module balances and listOutputs spendability (4.0.0 candidate)
+
+- `ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`.
+  A BRC-112 module balance query (`p <module> balance <basket>`) returns the
+  exact balance as canonical decimal text with no outputs and no BEEF; every
+  other query still returns a count. Result validation requires decimal text
+  for those queries and rejects it for all others.
+- Restore the deployed SDK 2/3 binary `listOutputs` layout by default: no
+  spendability byte is inserted before custom instructions. Existing clients
+  and wallets can upgrade independently. Frozen published SDK 3.2.1 frames
+  cover both interoperability directions, six-output pages, BEEF, absent/empty/
+  single-byte/Unicode/253-byte instructions, tags, labels and module baskets.
+- Non-spendable inventory records use an explicitly selected request extension:
+  `new WalletWireTransceiver(wire, { listOutputsEncoding: 'spendable' })` appends
+  version byte `1` after `seekPermission`; the response acknowledges it with
+  signed VarInt `-1` after the success byte. A supporting processor includes each
+  output's spendability byte only for that request. Legacy requests cannot
+  silently turn a non-spendable record into a spendable one. JSON preserves
+  non-spendable records too. New module balance queries carry only decimal text.
+- Migration: TypeScript that compares or adds `totalOutputs` must first check
+  `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
+- Add `canonicalOutputJSONWithDirectRecords`, an opt-in canonical text emitter
+  that freshly checks records and arrays with the existing canonical bytes,
+  descriptor observations, refusals and resource limits. Native private-state
+  serializers explicitly select it; existing and portable entry points retain
+  their selections. Add independent parity, refusal and property coverage.
+  No input, encoding or authority verdict is cached. Hosted qualification
+  remains required.
+
+- Reuse a lazy, private non-streaming UTF-8 decoder with fixed options; freshly
+  check every input and preserve malformed UTF-8, BOM, duplicate-key and Unicode
+  refusals across retries. Bounded ASCII strings establish Unicode validity and
+  exact byte length directly; non-ASCII strings retain surrogate-before-size
+  refusal order. No input or verdict is cached and no consumer migration is needed.
+
+- Reject trailing line terminators in canonical U64, Hex32, compressed identity,
+  Base64 and request-ID primitives using strict absolute end assertions. Preserve
+  valid canonical forms, encoded-bound precedence and Base64 padding-bit checks.
+
+- Construct program-value ownership with native JSON parsing only after complete bounded canonical validation and byte emission. A bounded private traversal selects null prototypes only on fresh, unexposed records; incoming text retains duplicate-aware parsing. Special keys, own data attributes, independent ownership, UTF-16 order and all refusal boundaries remain unchanged.
+
+### Added (3.3 source candidate)
+
+- Add explicit `WithOwnedRecords` purchase and release parser companions for
+  server bindings. Portable `WithInlineStrings` text/byte parsing retains the
+  general parser. Preserve complete fresh syntax, decoded duplicates, Unicode,
+  safe integers, resource bounds, intrinsic packet checks and all existing APIs.
+  No input, graph or authority verdict is cached.
+
+- Compose nested policy, STEAK and release grammar checks after complete fresh parent ownership; keep embedded-text parsing, every bound/refusal and intrinsic/authority check, original APIs and no input/verdict cache or new root export.
+
+- Initialize lazy fixed companion grammars in standalone statements before returning their validator configuration; retain fresh input checks, existing declarations, wire behavior and browser budgets.
+
+- Lazily instantiate fixed nested companion grammars so unused paths can be removed from browser bundles; retain no supplied input or verdict. Carry explicit fresh-ownership purchase and release parsing through fixed nested policy, STEAK and release-evidence companion grammars. Preserve ordinary schemas, nested JSON-text inputs, all bounds/refusals and signature/request bindings. Internal helpers add no root SDK export; no input or verdict is cached.
+
+- Assemble the explicit native owner's private independent graph during fresh canonical traversal; return both results only after all checks pass. Preserve ordinary ownership, complete descriptor/refusal order, canonical bytes, resource limits and array/record attributes. Add ordered-reflection, reentrancy, refusal and 300-case recursive differential tests without changing original tests or mutation sites.
+
+- Add explicit `ownOutputJSONWithInlineStrings` returning fresh canonical text and independent null-prototype data through the separately selected serializer. Native protected-ledger copies select it; ordinary ownership, all representation/resource checks, schemas and authority fences remain unchanged. No input, graph, shape or verdict is cached.
+
+- Add opt-in `canonicalOutputJSONWithInlineStrings` with direct ASCII field emission and the original complete fresh traversal, descriptor/reflection order, canonical bytes and resource refusals. Private native payload/ledger serialization selects the companion; ordinary SDK serialization is unchanged. No input, graph or verdict is cached. Simplify the scalar inspector to a complete member grammar with explicit separator and safe-integer checks, retaining unsupported-shape/error fallbacks.
+
+- Add opt-in `inspectOutputJSONEncodingWithScalarRecords` with fresh complete compact-scalar validation, canonical-input inspection and independent ownership. Unsupported shapes and refusals retain the original lexical observer/error order, including one observation of limits and byteLength. Native protected-ledger plaintext inspection explicitly selects it; ordinary SDK inspection, browser paths, authentication, custody and all bounds remain unchanged. No input or verdict is cached and no existing consumer migration is required.
+- Add opt-in `parseOutputJSONWithStringRecords` with fresh complete lexical, quote-boundary, duplicate-name and resource validation before independent null-prototype graph construction. Preserve ordinary parsing, every original public declaration and all limits; other shapes/refusals use the original parser/error order. The Node private-payload codec and native protected-ledger envelope-metadata reader select the additive entry; browser consumers retain the original path. No input, shape, authorization or verdict is cached.
+- Preserve canonical Base64 syntax, decoded bytes, allocation bounds and refusal order while checking final unused sextet bits directly after the decoded-byte limit. Preserve fresh Unicode validation and exact 1,024-byte bounds while avoiding native UTF-8 array allocation for ASCII strings. No input or validation result is cached; no consumer migration is required.
+- Traverse freshly parsed, completely validated private JSON graphs with direct dense array iteration and null-prototype own record fields, avoiding intermediate values-array copies. Caller graphs, validation order, data attributes, independence, wire bytes and every limit remain unchanged. No input or verdict is cached.
+- Lexically validate incoming JSON with fresh decoded-key Sets and successful-value counts before native data-only graph construction. Preserve every syntax, Unicode, integer, duplicate-key, resource and trailing-data refusal, null-prototype records, own data attributes and independent ownership. No input or verdict is cached.
+- Sort fresh primitive canonical JSON names with one captured locale-independent UTF-16 comparator. Explicit schema normalization still counts every canonical byte and creates an independent owned graph without constructing discarded composite text; public serialization, all refusal boundaries and limits remain unchanged.
+- Add opt-in `ownOutputJSONWithCountedRecords` for fresh value-only ownership with complete canonical byte accounting. Audited native import bindings select it where only `.value` is consumed; text-requiring paths and original method bodies remain intact.
+- Add `inspectOutputJSONEncoding` for fresh duplicate-aware, bounded parsing with a canonical-input flag and an independently owned value. The flag is not a schema, signature or authorization verdict. Ordinary parsing, canonical UTF-16 key order, literal/number encodings, limits and refusal order are preserved; optional inspection code stays separate from ordinary parser bundles.
+- Preserve own decoded-key duplicate detection and ordinary data-property construction for fresh null-prototype parsed records; traverse canonical fields in order without per-field callbacks. Preserve special property names, all bounds, exact encodings and refusal order.
+
+- Add the portable `RevenueListingProfile` two-stage literal codec, immutable public-child schedule and exact 717-byte metadata with required height expiry. Both locks match unchanged PR295 positive wire vectors. Recognition does not establish activation, lineage or transaction validity; the separate `RevenueListingProfilePlan` and `RevenueListingProfileSpend` entries add immutable route planning, owned complete funding layouts, full 114/15-value public witnesses, protected seller-child requests and full purchase commitments. Tests execute complete positive routes and all eight recipients. The separately installed native reference composition exercises these codecs with protected child authority, wallet funding, lineage and alias recovery; complete exact-source qualification remains required.
+
+- Add full input-zero purchase commitment calculation, fixed public BRC-197 child derivation and commitment/current-alias BRC-196 wire bindings. Exact historical release identity remains unchanged. The replacement-family/wallet/native-alias composition is implemented but final-source qualification remains open; earlier six-route reference receipts do not qualify BRC PR295.
+
+- Add opt-in `OutputPurchaseTransport` for exact retained BRC-196 prepare/submit/recover exchanges, original recipient/domain/release/transaction binding and authenticated errors without HTTP payment. Its optional wallet identity fence shares the existing finite deadline; durable custody, new-work authorization, Script validation and usable private material remain separate. Existing transport APIs and defaults are preserved.
+
+- Add opt-in `OutputProposalTransport` for exact saved BRC-194 put/get/finalize operations, signed author and selected policy bindings, active expiry, explicit prior-reservation identity and authenticated unpaid error handling. It never discovers, persists, funds, signs a proposal or starts automatic retries.
+
+- Add bounded BRC-199 signed request/result and status representations, direct authenticated requester/root/chain bindings, exact decision identities and restoration-basis checks. New-request clocks are separate from historical recovery. Evidence, local authority, durable decisions and all-path serving guards remain separate; existing discovery behavior is unchanged.
+- Add bounded BRC-195 payment-header parsing and exact single BRC-29 funding-output inspection with proof-independent wallet operation identifiers. Callers retain responsibility for independently derived payment keys, chain acceptance, acquisition reservation and durable idempotent wallet credit.
+
+- Add bounded BRC-195 private-publication and paid-lookup representations, publication semantic digests, frozen quote bindings and exact amount/recovery checks. Protected storage, authenticated transport, payment validation/internalization and usable secret delivery remain separate. Existing BRC-105 and lookup-context behavior is unchanged.
+- Add closed BRC-196 purchase preparation, signed terms, submission, uncharged recovery and STEAK/POTATOES envelopes. Explicit verification binds the original selected seller/request and retained acquisition/transaction/private result; legacy STEAK is unchanged. Domain, release-policy, durable admission and recipient usability checks remain independent.
+- Add bounded BRC-195/196 release-policy and evidence representations, independently selected chain/transaction/policy binding, and exact registered BRC-77 processor-attestation verification. Parsing declared confirmation depth does not establish mining; acquisition durability, selected-chain verification and private delivery remain separate. Existing APIs and encodings are unchanged.
+- Construct protocol JSON maps with explicit own data fields, retaining accepted keys, null prototypes and ordinary property attributes. Add full-source mutation and generated round-trip/byte-bound qualification; existing JSON encodings and parser limits remain unchanged.
+- Retain the historical opt-in `RevenueListingPlan` and `RevenueListingSpend` compatibility entries for all six former BRC-197 routes, exact mandatory outputs, retained remainders, explicit retirement top-up, per-input seller/unanimous consent signatures, funded snapshot ownership and final-layout checks. They never acquire keys, fund or broadcast. Complete lineage, BRC-100 wallet and fulfillment integration remain separate.
+- Retain the separate historical `@bsv/sdk/script/templates/RevenueListing` compatibility codec for the former BRC-197 executable, exact descriptors and canonical 305-byte revenue schedules. Program bytes are explicitly supplied and authenticated; no root bundle, existing API or storage migration is required. Lineage, spend construction, wallet integration and fulfillment remain separate obligations.
+
+- Add `OutputLookupTransport` for retained-contract BRC-193 HTTP open/read/close, explicit peer and signed contract binding, bounded original response bytes, unpaid error recovery and cancellation. Reads validate scope, limits, fixed deadlines and snapshot/live continuity without automatically persisting or advancing a cursor. Existing SDK defaults and endpoints remain unchanged. Callers must persist opening identity and atomically commit received groups with each checkpoint; this client component does not claim a complete durable service.
+
+- Add per-request `requireMutualAuth` and `expectedIdentityKey` to AuthFetch. Required authentication disables ordinary HTTP fallback; a canonical peer pin authenticates the handshake before application dispatch and checks matched response senders. Restrictions survive stale-session recovery and caller option changes. Existing defaults, wire formats and payment behavior remain unchanged.
+
+- Add opt-in BRC-192–194 output observation, proposal, progressive lookup, endpoint and signed capability representations, bounded canonical JSON parsing, domain-separated digests and identity-bound packet verification. These utilities do not change existing lookup, submission, wallet or transaction verification behavior. Durable application orchestration is provided by the separate `@bsv/output-knowledge` package. No existing API or stored-data migration is required.
+- Add closed BRC-194 proposal put/get/finalize request and response codecs. Author signature and policy checks, authenticated provider state, Bitcoin evidence and topical admission remain separate responsibilities; parsing never authorizes an action.
+- Add `retainOutputCapability` and `restoreOutputCapability` for bounded local retention of the original signed manifest, selector and freshness policy. Recovery revalidates the original selection without substituting current discovery or treating manifest expiry as loss of an existing obligation. Local storage integrity, current authorization and operation deadlines remain required. No existing API or stored encoding changes.
+- Add bounded common packet-service error parsing and exact BRC-193 HTTP mappings, including `not-found` responses and explicit capacity minimums. Errors cannot carry successful cursors or trigger automatic payment; local cancellation and storage revision failures retain their existing behavior.
+- Add `AuthFetch.fetch(..., { allowPayments: false })` to disable automatic BRC-105 payment for unpaid authenticated requests. The opt-out survives authentication recovery and caller option mutation; omission or `true` preserves existing payment behavior. Ordinary HTTP fallback errors are unchanged. No migration is required for existing callers.
+
+### Fixed (3.2.1 candidate)
+
+- Align `OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operand decoding with
+  [SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+  The node now decodes the offset, length and count operands through a checked
+  int64 script-number path (`int_serialization.h` `deserialize<int64_t>`): an
+  operand longer than nine bytes, or whose sign-magnitude value lies outside
+  the signed 64-bit range, fails with `SCRIPT_ERR_SCRIPTNUM_OVERFLOW`. Node
+  v1.2.2, and this interpreter until now, read only the first eight bytes and
+  ignored the rest, so a nine-byte `04 00 00 00 00 00 00 00 80` was treated as
+  `4` instead of `-4`. Operands of eight bytes or fewer, the int32 saturation
+  of the decoded value and the range errors are unchanged.
+- `OP_SPLIT` rejects a position above `INT32_MAX` in addition to one above the
+  element size, matching the node's new guard for elements larger than
+  `INT32_MAX` bytes.
+- Added node `opcode_tests.cpp` / `int_serialization_tests.cpp` vectors to
+  `ChronicleOpcodes.test.ts` and flipped the one synthetic v1.2.2 regression
+  vector (`gen-00795`) whose verdict the node changed. No API, wire or
+  wallet-data migration is required.
+
+### Identity search recovery (3.2.0 candidate)
+
+- Match `any` queries against saved contact names and keys, retain exact named
+  selectors and return contact-only matches in parallel searches without
+  duplicating their public-certificate overrides.
+- Add opt-in `contactErrorMode`, `contactTimeoutMs` and `onContactError` to both
+  resolution option types. Fallback bounds optional contact loading while
+  preserving public lookup errors and trust checks. Legacy callers retain their
+  defaults and original contact failures.
+- No wire, wallet permission, certificate, or persistence migration. UIs must
+  adopt recovery explicitly and distinguish lookup errors from empty results.
 
 - Add caller-installed additional-output authorization to `completeBoundAction`.
   Bind independently verified local outputs by exact index, script and amount

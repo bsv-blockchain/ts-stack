@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.14.6'
-last_updated: '2026-10-05'
-last_verified: '2026-10-05'
+version: '2.15.1'
+last_updated: '2026-10-13'
+last_verified: '2026-10-13'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,36 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+## Optional local transaction recovery
+
+The 2.15.0 source candidate adds separate deep-import SQLite action and funding
+recovery controllers. They retain exact noSend preparation/signing state or
+atomically reconcile BRC-29 wallet ownership with a durable receipt. Ordinary
+BRC-100 APIs and SDK peer compatibility remain unchanged; the optional funding
+capability requires SDK 3.3.0 and explicit same-wallet schema installation.
+
+Read [local action recovery](../../guides/local-action-recovery.md) and
+[local funding recovery](../../guides/local-funding-recovery.md) before adopting
+them. Retain a consistent whole database plus keys and reopen existing auxiliary
+state after restart. Legacy entity sync/export, IndexedDB, remote providers and
+browser/mobile wrappers do not carry this state. Stop new use and reconcile
+outstanding operations before rollback. These local receipts do not establish
+settlement, quote-time service capacity or protected delivery.
+
+Broadcast result completion in the 2.14.9 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. SQL storage adds a durable user/TXID receipt
+claim table while preserving historical transaction and output rows. Back up
+and preflight the database, then coordinate the rollout across every serving storage instance;
+older instances do not honor the claim. Local IndexedDB does not use the SQL
+claim. This candidate does not deploy hosted storage or repair older partial
+receipts automatically.
 
 ## Optional registry descriptions
 
@@ -43,6 +73,11 @@ then use [BRC-38/39 integration](../../guides/wallet-data-portability.md), the
 [agent implementation brief](../../guides/wallet-recovery-agent-brief.md).
 The integration guide documents concrete-provider requirements, explicit
 restore/merge modes and the limits of the current in-memory export helpers.
+
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
 
 ## Current capabilities
 
@@ -82,6 +117,13 @@ only as a generic signal. Monitor and daemon startup await retryable ChainTracks
 subscriptions, teardown closes SSE/subscriptions before storage, persisted
 diagnostics are bounded, and monitor operational logging requires the additive
 `MonitorOptions.logging` callback.
+
+An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
+argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it
+is sent as `Authorization: Bearer <key>` on broadcast, lookup and SSE requests.
+A refused key (HTTP 401 or 403) is a service error, like a 429 or 5xx: the
+wallet fails over to the next broadcaster or retries, and never marks the
+transaction invalid because of it.
 
 Spending approvals apply to one operation per prompt and are never cached or
 coalesced. Spending-token accounting reads every action page before authorizing
@@ -410,3 +452,13 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

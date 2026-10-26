@@ -26,6 +26,12 @@ const maxOpsBeforeGenesis = 500
 const maxNodeNum2BinSize = 0x7fffffffn
 const maxScriptNumLengthAfterGenesis = 750000
 const maxScriptNumLengthAfterChronicle = 32000000
+// Checked int64 splice operands: eight magnitude bytes plus one sign byte.
+const spliceOperandMaxBytes = 9
+const int64Min = -(1n << 63n)
+const int64Max = (1n << 63n) - 1n
+const int32Min = -(1n << 31n)
+const int32Max = (1n << 31n) - 1n
 const maxStackItemsBeforeGenesis = 1000
 const maxMultisigKeyCount = Math.pow(2, 31) - 1
 const maxMultisigKeyCountBigInt = BigInt(maxMultisigKeyCount)
@@ -536,8 +542,13 @@ export default class Spend {
     return new BigNumber(0)
   }
 
-  // The node uses the int64 CScriptNum constructor for these splice operands,
-  // then clamps getint() to int32. Bytes after the eighth are ignored there.
+  // OP_SUBSTR, OP_LEFT and OP_RIGHT operands go through the node's checked
+  // int64 CScriptNum path (bitcoin-sv v1.2.3, int_serialization.h
+  // deserialize<int64_t>), in the node's order: the era length limit, the
+  // minimal-encoding check, then a length above nine bytes is rejected before
+  // anything is decoded, then a sign-magnitude value outside the signed 64-bit
+  // range is a script number overflow. The decoded value is saturated to int32
+  // like CScriptNum::getint().
   #readSpliceOperand(buf: number[]): number {
     const maxSize = this.#scriptNumMaxSize()
     if (maxSize !== undefined && buf.length > maxSize) {
@@ -546,18 +557,15 @@ export default class Spend {
     if (this.#shouldEnforceMinimalData() && !isMinimallyEncodedHelper(buf)) {
       this.#scriptEvaluationError('non-minimally encoded script number')
     }
-    let value: bigint
-    if (buf.length > 8) {
-      value = 0n
-      for (let index = 0; index < 8; index++) {
-        value |= BigInt(buf[index]) << BigInt(index * 8)
-      }
-      value = BigInt.asIntN(64, value)
-    } else {
-      value = this.#readScriptNumber(buf).toBigInt()
+    if (buf.length > spliceOperandMaxBytes) {
+      this.#scriptEvaluationError('script number overflow')
     }
-    if (value > 0x7fffffffn) return 0x7fffffff
-    if (value < -0x80000000n) return -0x80000000
+    const value = BigNumber.fromSm(buf, 'little').toBigInt()
+    if (value < int64Min || value > int64Max) {
+      this.#scriptEvaluationError('script number overflow')
+    }
+    if (value > int32Max) return Number(int32Max)
+    if (value < int32Min) return Number(int32Min)
     return Number(value)
   }
 
@@ -1910,10 +1918,16 @@ export default class Spend {
             const posBuf = this.#popStack()
             const dataToSplit = this.#popStack()
 
+            // bitcoin-sv v1.2.3 bounds the position by INT32_MAX as well as by
+            // the element size (a post-Genesis element may exceed INT32_MAX bytes).
             const splitIndexBigInt = this.#readScriptNumber(posBuf).toBigInt()
-            if (splitIndexBigInt < 0n || splitIndexBigInt > BigInt(dataToSplit.length)) {
+            if (
+              splitIndexBigInt < 0n ||
+              splitIndexBigInt > int32Max ||
+              splitIndexBigInt > BigInt(dataToSplit.length)
+            ) {
               this.#scriptEvaluationError(
-                'OP_SPLIT requires the first stack item to be a non-negative number less than or equal to the size of the second-from-top stack item.'
+                'OP_SPLIT requires the first stack item to be a non-negative number no greater than INT32_MAX and less than or equal to the size of the second-from-top stack item.'
               )
             }
             const splitIndex = Number(splitIndexBigInt)

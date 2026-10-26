@@ -1,4 +1,11 @@
 import {
+  CERTIFICATE_COMPATIBILITY_CALL,
+  CERTIFICATE_COMPATIBILITY_VERSION,
+  COMPATIBLE_CERTIFICATE_CALLS,
+  writeCertificateType,
+  decodeWireCertificate
+} from './CertificateWireCompatibility.js'
+import {
   AcquireCertificateArgs,
   AcquireCertificateResult,
   SecurityLevel,
@@ -61,6 +68,7 @@ import { WalletError, walletErrors } from '../WalletError.js'
 import PublicKey from '../../primitives/PublicKey.js'
 import { validateOriginator } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
 
@@ -82,22 +90,88 @@ const ACTION_STATUS_MAP: Record<number, ActionStatus> = {
  */
 export default class WalletWireTransceiver implements WalletInterface {
   wire: WalletWire
+  readonly #listOutputsSpendable: boolean
 
-  constructor(wire: WalletWire) {
+  constructor(wire: WalletWire, options: { listOutputsEncoding?: 'legacy' | 'spendable' } = {}) {
     this.wire = wire
+    if (
+      options.listOutputsEncoding !== undefined &&
+      options.listOutputsEncoding !== 'legacy' &&
+      options.listOutputsEncoding !== 'spendable'
+    ) {
+      throw new Error('Invalid listOutputs encoding')
+    }
+    this.#listOutputsSpendable = options.listOutputsEncoding === 'spendable'
+  }
+
+  readonly #certificateProfiles = new WeakMap<WalletWire, Promise<boolean>>()
+
+  async #supportsCertificateCompatibility(
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    wire: WalletWire = this.wire
+  ): Promise<boolean> {
+    const cached = this.#certificateProfiles.get(wire)
+    if (cached !== undefined) return await cached
+    const probe = this.#probeCertificateCompatibility(originator, wire)
+    this.#certificateProfiles.set(wire, probe)
+    try {
+      return await probe
+    } catch (error) {
+      this.#certificateProfiles.delete(wire)
+      throw error
+    }
+  }
+
+  async #probeCertificateCompatibility(
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    wire: WalletWire = this.wire
+  ): Promise<boolean> {
+    let result: Uint8Array
+    try {
+      result = await this.#transmit(
+        CERTIFICATE_COMPATIBILITY_CALL,
+        originator,
+        [0, CERTIFICATE_COMPATIBILITY_VERSION],
+        false,
+        wire
+      )
+    } catch (error) {
+      // Old processors explicitly reject unknown call IDs; transport/auth failures
+      // and malformed responses must never silently downgrade an invocation.
+      if (
+        error instanceof WalletError &&
+        (error.code === walletErrors.unsupportedAction ||
+          (error.code === walletErrors.unknownError && error.message === 'Invalid call code: 29'))
+      )
+        return false
+      throw error
+    }
+    if (result.length !== 1 || result[0] !== CERTIFICATE_COMPATIBILITY_VERSION) {
+      throw new Error('Invalid certificate compatibility capability response')
+    }
+    return true
   }
 
   async #transmit(
-    call: CallType,
+    call: CallType | typeof CERTIFICATE_COMPATIBILITY_CALL,
     originator: OriginatorDomainNameStringUnder250Bytes = '',
-    params: readonly number[] | Uint8Array = []
+    params: readonly number[] | Uint8Array = [],
+    compatibility: boolean = false,
+    wire: WalletWire = this.wire
   ): Promise<Uint8Array> {
     const normalizedOriginator = originator === '' ? '' : validateOriginator(originator)!
     const originatorArray = UtilsToUint8Array(normalizedOriginator, 'utf8')
     const frameWriter = new WriterUint8Array(undefined, 2 + originatorArray.length + params.length)
-    frameWriter.writeUInt8(calls[call])
+    const callCode = typeof call === 'number' ? call : calls[call]
+    frameWriter.writeUInt8(compatibility ? CERTIFICATE_COMPATIBILITY_CALL : callCode)
     frameWriter.writeUInt8(originatorArray.length)
     frameWriter.write(originatorArray)
+    if (compatibility) {
+      if (typeof call === 'number' || !COMPATIBLE_CERTIFICATE_CALLS.has(calls[call])) {
+        throw new Error('Invalid certificate compatibility operation')
+      }
+      frameWriter.write([1, CERTIFICATE_COMPATIBILITY_VERSION, calls[call]])
+    }
     if (params.length > 0) {
       frameWriter.write(params)
     }
@@ -106,8 +180,8 @@ export default class WalletWireTransceiver implements WalletInterface {
       throw new Error('Wallet Wire request exceeds the maximum permitted size')
     }
     let result: Uint8Array
-    if (this.wire.transmitToWalletUint8Array === undefined) {
-      const legacyResult: unknown = await this.wire.transmitToWallet(Array.from(frame))
+    if (wire.transmitToWalletUint8Array === undefined) {
+      const legacyResult: unknown = await wire.transmitToWallet(Array.from(frame))
       if (!Array.isArray(legacyResult) || legacyResult.length > MAX_WALLET_WIRE_FRAME_BYTES) {
         throw new Error('Wallet Wire response exceeds the maximum permitted size')
       }
@@ -123,7 +197,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       }
       result = Uint8Array.from(legacyResult)
     } else {
-      const compactResult: unknown = await this.wire.transmitToWalletUint8Array(frame)
+      const compactResult: unknown = await wire.transmitToWalletUint8Array(frame)
       if (
         !(compactResult instanceof Uint8Array) ||
         compactResult.length > MAX_WALLET_WIRE_FRAME_BYTES
@@ -147,7 +221,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       const stackTraceLength = resultReader.readVarIntNumStrict(false)
       const stackTraceBytes = resultReader.read(stackTraceLength)
       const stackTrace = toUTF8Strict(stackTraceBytes)
-      this.#assertResponseConsumed(resultReader, call)
+      this.#assertResponseConsumed(resultReader, String(call))
 
       // Construct a custom wallet error
       const e = new WalletError(errorMessage, errorByte, stackTrace)
@@ -646,8 +720,16 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.#writeOptionalVarInt(paramWriter, args.offset)
     this.#writeOptionalBool(paramWriter, args.seekPermission)
 
-    const result = await this.#transmit('listOutputs', originator, paramWriter.toUint8Array())
-    const resultReader = new ReaderUint8Array(result)
+    const resultReader = await this.#transmitListOutputs(paramWriter, originator)
+    if (isModuleBalanceQuery(args.basket)) {
+      const balance = toUTF8Strict(resultReader.read(resultReader.readVarIntNumStrict(false)))
+      if (!resultReader.eof()) throw new Error('Invalid listOutputs module balance response')
+      return validateWalletResult(
+        'listOutputs',
+        { totalOutputs: balance, outputs: [] },
+        bindingRequest
+      )
+    }
     const totalOutputs = this.#requireInteger(
       resultReader.readVarIntNumStrict(false),
       'listOutputs totalOutputs',
@@ -665,6 +747,21 @@ export default class WalletWireTransceiver implements WalletInterface {
     return validateWalletResult('listOutputs', { totalOutputs, BEEF, outputs }, bindingRequest)
   }
 
+  async #transmitListOutputs(
+    params: WriterUint8Array,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ReaderUint8Array> {
+    // Historical peers omit spendability from output records. Only request the
+    // extended layout explicitly; never guess it from response field values.
+    if (this.#listOutputsSpendable) params.writeUInt8(1)
+    const result = await this.#transmit('listOutputs', originator, params.toUint8Array())
+    const reader = new ReaderUint8Array(result)
+    if (this.#listOutputsSpendable && reader.readVarIntNumStrict() !== -1) {
+      throw new Error('Missing listOutputs spendable encoding acknowledgement')
+    }
+    return reader
+  }
+
   #parseListOutputEntry(reader: ReaderUint8Array): ListOutputsResult['outputs'][number] {
     const outpoint = this.#readOutpoint(reader)
     const satoshis = this.#requireInteger(
@@ -676,6 +773,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     const output: ListOutputsResult['outputs'][number] = { spendable: true, outpoint, satoshis }
     const scriptLen = reader.readVarIntNumStrict()
     if (scriptLen >= 0) output.lockingScript = toHex(reader.read(scriptLen))
+    if (this.#listOutputsSpendable) {
+      output.spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
+    }
     const custLen = reader.readVarIntNumStrict()
     if (custLen >= 0) output.customInstructions = toUTF8Strict(reader.read(custLen))
     const tagsLen = reader.readVarIntNumStrict()
@@ -1474,7 +1574,15 @@ export default class WalletWireTransceiver implements WalletInterface {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
     validateWalletArgs('listCertificates', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args, types: [...args.types], certifiers: [...args.certifiers] }
     const bindingRequest = snapshotWalletResultRequest('listCertificates', args)
+    const compatibility =
+      args.types.length === 0 ||
+      args.types.some(type => UtilsToUint8Array(type, 'base64').length !== 32)
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
     const paramWriter = new WriterUint8Array()
     paramWriter.writeVarIntNum(args.certifiers.length)
     for (const certifier of args.certifiers) {
@@ -1483,7 +1591,7 @@ export default class WalletWireTransceiver implements WalletInterface {
 
     paramWriter.writeVarIntNum(args.types.length)
     for (const type of args.types) {
-      paramWriter.write(UtilsToUint8Array(type, 'base64'))
+      writeCertificateType(paramWriter, type, compatibility)
     }
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
@@ -1496,7 +1604,13 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
-    const result = await this.#transmit('listCertificates', originator, paramWriter.toUint8Array())
+    const result = await this.#transmit(
+      'listCertificates',
+      originator,
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
+    )
     const resultReader = new ReaderUint8Array(result)
     const totalCertificates = this.#requireInteger(
       resultReader.readVarIntNumStrict(false),
@@ -1509,7 +1623,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       this.#requirePageCapacity(certificates.length, args.limit, 'listCertificates')
       const certificateLength = resultReader.readVarIntNumStrict(false)
       const certificateBin = resultReader.read(certificateLength)
-      const cert = Certificate.fromBinary(certificateBin)
+      const cert = decodeWireCertificate(certificateBin, compatibility)
       const keyringForVerifier: Record<string, string> = {}
       if (this.#readBooleanFlag(resultReader, 'listCertificates keyring present')) {
         const numFields = resultReader.readVarIntNumStrict(false)
@@ -1563,10 +1677,23 @@ export default class WalletWireTransceiver implements WalletInterface {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
     validateWalletArgs('proveCertificate', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = {
+      ...args,
+      certificate: {
+        ...args.certificate,
+        ...(args.certificate.fields === undefined ? {} : { fields: { ...args.certificate.fields } })
+      },
+      fieldsToReveal: [...args.fieldsToReveal]
+    }
     const bindingRequest = snapshotWalletResultRequest('proveCertificate', args)
+    const compatibility =
+      UtilsToUint8Array(args.certificate.type, 'base64').length !== 32
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
     const paramWriter = new WriterUint8Array()
-    const typeAsArray = UtilsToUint8Array(args.certificate.type, 'base64')
-    paramWriter.write(typeAsArray)
+    writeCertificateType(paramWriter, args.certificate.type!, compatibility)
     const subjectAsArray = UtilsToUint8Array(args.certificate.subject, 'hex')
     paramWriter.write(subjectAsArray)
     const serialNumberAsArray = UtilsToUint8Array(args.certificate.serialNumber, 'base64')
@@ -1598,7 +1725,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
     paramWriter.write(UtilsToUint8Array(args.verifier, 'hex'))
     paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
-    const result = await this.#transmit('proveCertificate', originator, paramWriter.toUint8Array())
+    const result = await this.#transmit(
+      'proveCertificate',
+      originator,
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
+    )
     const resultReader = new ReaderUint8Array(result)
     const numFields = resultReader.readVarIntNumStrict(false)
     this.#requireResponseCollectionLength(resultReader, numFields, 'proveCertificate keyring')
@@ -1633,9 +1766,15 @@ export default class WalletWireTransceiver implements WalletInterface {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ relinquished: true }> {
     validateWalletArgs('relinquishCertificate', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args }
+    const compatibility =
+      UtilsToUint8Array(args.type, 'base64').length !== 32
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
     const paramWriter = new WriterUint8Array()
-    const typeAsArray = UtilsToUint8Array(args.type, 'base64')
-    paramWriter.write(typeAsArray)
+    writeCertificateType(paramWriter, args.type, compatibility)
     const serialNumberAsArray = UtilsToUint8Array(args.serialNumber, 'base64')
     paramWriter.write(serialNumberAsArray)
     const certifierAsArray = UtilsToUint8Array(args.certifier, 'hex')
@@ -1643,7 +1782,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     const result = await this.#transmit(
       'relinquishCertificate',
       originator,
-      paramWriter.toUint8Array()
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
     )
     this.#requireEmptyResponse(result, 'relinquishCertificate')
     return { relinquished: true }
@@ -1651,7 +1792,8 @@ export default class WalletWireTransceiver implements WalletInterface {
 
   #parseDiscoveryResult(
     result: Uint8Array,
-    requestedLimit: number | undefined
+    requestedLimit: number | undefined,
+    compatibility: boolean = false
   ): {
     totalCertificates: number
     certificates: Array<{
@@ -1700,7 +1842,7 @@ export default class WalletWireTransceiver implements WalletInterface {
       this.#requirePageCapacity(certificates.length, requestedLimit, 'discover')
       const certBinLen = resultReader.readVarIntNumStrict(false)
       const certBin = resultReader.read(certBinLen)
-      const cert = Certificate.fromBinary(certBin)
+      const cert = decodeWireCertificate(certBin, compatibility)
       const nameLength = resultReader.readVarIntNumStrict(false)
       const name = toUTF8Strict(resultReader.read(nameLength))
       const iconUrlLength = resultReader.readVarIntNumStrict(false)
@@ -1773,7 +1915,11 @@ export default class WalletWireTransceiver implements WalletInterface {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     validateWalletArgs('discoverByIdentityKey', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args }
     const bindingRequest = snapshotWalletResultRequest('discoverByIdentityKey', args)
+    const compatibility = await this.#supportsCertificateCompatibility(originator, targetWire)
     const paramWriter = new WriterUint8Array()
     paramWriter.write(UtilsToUint8Array(args.identityKey, 'hex'))
     if (typeof args.limit === 'number') {
@@ -1791,11 +1937,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     const result = await this.#transmit(
       'discoverByIdentityKey',
       originator,
-      paramWriter.toUint8Array()
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
     )
     return validateWalletResult(
       'discoverByIdentityKey',
-      this.#parseDiscoveryResult(result, args.limit),
+      this.#parseDiscoveryResult(result, args.limit, compatibility),
       bindingRequest
     )
   }
@@ -1810,7 +1958,11 @@ export default class WalletWireTransceiver implements WalletInterface {
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
     validateWalletArgs('discoverByAttributes', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args, attributes: { ...args.attributes } }
     const bindingRequest = snapshotWalletResultRequest('discoverByAttributes', args)
+    const compatibility = await this.#supportsCertificateCompatibility(originator, targetWire)
     const paramWriter = new WriterUint8Array()
     const attributeKeys = Object.keys(args.attributes)
     paramWriter.writeVarIntNum(attributeKeys.length)
@@ -1837,11 +1989,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     const result = await this.#transmit(
       'discoverByAttributes',
       originator,
-      paramWriter.toUint8Array()
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
     )
     return validateWalletResult(
       'discoverByAttributes',
-      this.#parseDiscoveryResult(result, args.limit),
+      this.#parseDiscoveryResult(result, args.limit, compatibility),
       bindingRequest
     )
   }

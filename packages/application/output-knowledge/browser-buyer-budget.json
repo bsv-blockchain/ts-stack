@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": "./private/buyer",
+  "requiredExports": [
+    "PrivateLookupBuyer",
+    "privateLookupBuyerBinding",
+    "PRIVATE_LOOKUP_BUYER_INITIAL",
+    "WalletToolboxBuyerPayment"
+  ],
+  "prohibitedExports": [
+    "PrivateAcquisitionCoordinator",
+    "SQLitePrivateAcquisitionStore",
+    "SQLiteOperationStateStore",
+    "NodeProtectedPayloadCodec",
+    "OutputKnowledge"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 590000,
+      "gzip": 155000,
+      "brotli": 130000
+    },
+    "esbuild": {
+      "raw": 460000,
+      "gzip": 142000,
+      "brotli": 122000
+    }
+  }
+}

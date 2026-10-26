@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Prepare `0.3.4` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
 ### 0.3.2 candidate — replay-safe Atomic BEEF payments
 
 ### Maintenance

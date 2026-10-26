@@ -3,10 +3,10 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.6.0'
+version: '2.7.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-25'
-last_verified: '2026-09-25'
+last_updated: '2026-10-21'
+last_verified: '2026-10-21'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -16,13 +16,15 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 # @bsv/message-box-client
 
-This source candidate declares SDK peer `^2.8.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
 > Browser- and Node-compatible authenticated store-and-forward messaging,
 > live WebSockets, peer payments, token settlement, permissions, quotes, and
 > push-device registration.
+
+The 2.7.0 release repairs live WebSocket delivery. A dropped socket is kept while Socket.IO reconnects it instead of being abandoned while it reconnects underneath, and the rooms a caller asked for are joined again once the new connection authenticates, because membership belongs to the server-side socket that joined. A server-forced disconnect, which Socket.IO never retries, triggers a rebuild: immediately the first time, then doubling from one second to a thirty-second cap. One listener per room serves every subscriber and one acknowledgement listener serves every send, in place of listeners that accumulated because the socket wrapper has no `off`. The client now reads the server's `joinedRoom` and `joinFailed`, so a refused join no longer leaves it certain of a room it was never given; correcting the record needs a server that names the refused room, which ships alongside this release, and against any other server the client records joins as it always did. A refused join is dropped from the reported live status at once. Joins are paced at 16 awaiting the server's answer per socket, the rest following as answers arrive or after five seconds without one, because the server drops a socket with more than 32 signed messages in process. `sendLiveMessage()` falls back to HTTP when the socket cannot be established, authenticated or joined, instead of throwing; a conflicting WebSocket identity pin still throws. A live message is delivered a tick after it arrives rather than synchronously, which was already true whenever it was encrypted.
 
 The 2.6.0 source candidate adds optional `paymentOutcome` and `payment` fields to the `PeerMessage` values returned by `listMessages()` and `listMessagesLite()`, so a payment the wallet did not store is no longer lost when its message is acknowledged. See [Payment acceptance and acknowledgment ordering](#payment-acceptance-and-acknowledgment-ordering).
 
@@ -37,7 +39,7 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
-The current candidate requires `^2.8.6 || ^3.0.0`; use SDK2.8.6 or newer within
+The current candidate requires `^2.8.6 || ^3.0.0 || ^4.0.0`; use SDK2.8.6 or newer within
 the SDK2 family, or the proposed SDK3 candidate after the linked qualification. The package imports SDK validation modules first
 shipped in 2.8.0, and SDK 2.8.6 fixes BRC-29 payment acceptance. BRC-29 sends accept both historical `number[]` and
 binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
@@ -79,7 +81,9 @@ is useful.
 ## What it provides
 
 - `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery,
-  with selectable socket transports
+  with selectable socket transports, rooms restored across reconnects, a
+  bounded rebuild after a server-forced disconnect, and `onLiveStatus` for
+  observing all of it
 - encryption through the BRC-100 wallet protocol, enabled by default
 - overlay host advertisement and public-HTTPS discovery
 - sender-specific and box-wide permissions with fee quotes
@@ -87,6 +91,28 @@ is useful.
 - `PeerPayClient` — BRC-29 payments, requests, responses, and refunds
 - `PeerTokenClient` — token transport through pluggable settlement adapters
 - `RemittanceAdapter` — SDK remittance communication integration
+
+## Live delivery is not a substitute for polling
+
+A live message reaches only the sockets held by the server process that served
+the send, so a scaled-out deployment without a shared broker will not reach a
+recipient joined elsewhere. A send carrying a payment is never pushed at all:
+the push carries the request body, which holds no payment, and only
+`listMessages()` internalizes a recipient payment. A consumer that
+acknowledges on the push would delete the stored row before its wallet had the
+output.
+
+`onLiveStatus(listener)` reports the socket's state — `connecting`, `live`
+with its joined rooms (requested on the current socket and not refused by the
+server, recorded when requested), `reconnecting` when something will restore it, or
+`closed` when nothing will — and returns a function that unsubscribes. It
+describes the socket, not delivery.
+
+`listMessages()` therefore remains required for correctness rather than as a
+fallback. `getJoinedRooms()` reports the rooms joined on the current socket, in
+the same sense; mutating the returned set does not cancel a rejoin, so use
+`leaveRoom()`. There is no raw Socket.IO connect/disconnect event to subscribe
+to; use `onLiveStatus`.
 
 ## Security and interoperability
 

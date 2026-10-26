@@ -1,5 +1,7 @@
 # @bsv/message-box-client
 
+Patch candidate `2.6.1` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Authenticated, optionally encrypted store-and-forward messaging for BSV
 applications. The package supports browser and Node.js consumers, HTTP polling,
 live authenticated WebSockets, overlay-based host discovery, peer payments,
@@ -136,11 +138,69 @@ await messages.sendLiveMessage({
 
 `sendLiveMessage()` uses an authenticated WebSocket and falls back to the HTTP
 send route when the socket is unavailable or does not acknowledge delivery.
+A conflicting WebSocket identity pin is a misconfiguration, not an unavailable
+socket, so it still throws.
 It captures and validates the same immutable recipient, message-box, body,
 message-ID, permission, and payment-ceiling authority as `sendMessage()` before
 opening or joining a socket. Room names are exact, control-free strings rather
 than values the client or server silently trims.
 Call `disconnectWebSocket()` when a long-lived client shuts down.
+
+### What the live socket does on its own
+
+A dropped socket is kept while Socket.IO reconnects it, and the rooms you
+asked for are joined again once the new connection authenticates — membership
+belongs to the server-side socket that joined, so a replacement has to ask for
+itself. A server-forced disconnect is one Socket.IO will not retry, so the
+client rebuilds the socket itself: immediately the first time, then doubling
+from one second to a thirty-second cap until a socket holds its
+authentication.
+
+Joins are paced: at most 16 await the server's answer on a socket, and the rest
+go out as answers arrive, or after five seconds without one. The server drops a
+socket with more than 32 signed messages in process, so a client on more than
+32 boxes that sent every join at once never kept its socket.
+
+A room counts as joined on the current socket from the moment it is requested,
+before the server answers, until the server refuses it with `joinFailed` or you
+leave it. `getJoinedRooms()` and the live status's `rooms` both mean that.
+
+Two things follow for a caller:
+
+- **Polling is required for correctness, not as a fallback.** A live message
+  reaches only the sockets held by the process that served the send, and a
+  paid message is never pushed at all. Keep calling `listMessages()`; it is
+  also the only path that internalizes a recipient payment.
+- **`getJoinedRooms()` reports; it is not a lever.** It returns the rooms
+  joined on the current socket, requested and not refused. Mutating the
+  returned set does not cancel a rejoin — call `leaveRoom()`, which releases
+  the room whether or not the socket is up.
+
+### Knowing what the socket is doing
+
+```ts
+const stop = messages.onLiveStatus(({ state, rooms, reason }) => {
+  // 'connecting' | 'live' | 'reconnecting' | 'closed'
+  poller.setInterval(state === 'live' ? 60_000 : 5_000)
+})
+```
+
+The listener is called once immediately with the current status and on every
+transition after that; `onLiveStatus` returns a function that removes it, and
+`messages.liveStatus` reads the same value without subscribing.
+
+`reconnecting` means something will restore the socket — Socket.IO's own retry,
+or a rebuild the client has scheduled. `closed` means nothing will: a deliberate
+`disconnectWebSocket()`, a drop under `managerOptions.reconnection: false`, or a
+rebuild that failed. The next call that needs a socket still builds one.
+
+`rooms` lists the rooms joined on the current socket, as defined above, and is
+empty unless the state is `live`. A room the server refuses is removed from it
+with a new report. A listener that throws is logged and does not stop the
+others.
+
+The status describes this socket. It is not a delivery guarantee: keep polling
+`listMessages()` whatever it says.
 
 ### Socket options
 
@@ -177,6 +237,15 @@ Socket.IO acknowledgements that message retries require, so enabling retries
 would block subsequent authentication and application messages. The constructor
 rejects nonzero retries. Connection reconnection settings such as `reconnection`
 and `reconnectionAttempts` remain supported.
+
+`managerOptions.reconnection: false` is read and honoured: a drop disposes the
+socket rather than waiting for a retry that will never come. **Nothing rebuilds
+it on its own under that setting.** The next `initializeConnection()`,
+`joinRoom()`, `listenForLiveMessages()` or `sendLiveMessage()` builds a new
+socket and restores the rooms and subscriptions, so a client that sends
+recovers on its next send — but one that only subscribes and then waits never
+does. Leave reconnection enabled unless the host is driving reconnection
+itself.
 
 `socketOptions` applies **only to the live socket path** — `initializeConnection()`,
 `listenForLiveMessages()`, and `sendLiveMessage()`. It has no effect on

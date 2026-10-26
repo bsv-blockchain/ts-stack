@@ -6,6 +6,92 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Optional local transaction recovery
+
+The 2.15.0 source candidate adds explicit local SQLite recovery controllers as
+separate deep imports. Action recovery retains one fixed-layout, two-phase
+`noSend` allocation, prepared transaction and final signed bytes. Funding recovery
+binds one BRC-29 payment to its acquisition and atomically retains wallet ownership,
+monitor work and a durable receipt. Ordinary BRC-100 calls and defaults are unchanged.
+The new funding capability requires SDK 3.3.0; legacy root and existing deep
+consumers retain the declared older SDK peer compatibility.
+
+Install the auxiliary schemas explicitly in the active local wallet database.
+Reopen them after restart, and preserve a consistent whole database plus wallet
+keys. These journals are not included in ordinary entity backup/sync or BRC-38/39
+exports. Browser, mobile, IndexedDB and remote provider wrappers do not acquire
+these capabilities by upgrading. During rollback, stop new operations, reconcile
+outstanding work and retain the original journals; deleting them loses recovery.
+
+See [local action recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/)
+and [local funding recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-funding-recovery/)
+for construction limits, deep imports, verification and unresolved service obligations.
+A local receipt does not prove settlement, a content license or protected delivery.
+
+Internal recovery JSON ownership uses a fresh call-local context for scalar,
+array and record checks. It retains the same deterministic stored bytes, error
+identities, descriptor/prototype/cycle checks and fixed resource bounds; the
+refactor requires no caller or stored-format migration. It never retains
+ownership state or authority between calls.
+
+## Receiving already-broadcast payments
+
+The 2.14.9 source candidate completes broadcast results even when storage
+already marks the request `unmined` or `completed`. This fixes first receipt
+without a mining proof on shared storage, and the same result path when another
+storage worker advances the request before the broadcast result refresh. The
+stored advanced state remains intact; unsuccessful provider results still
+reject receipt and do not credit new recipient outputs. Repeated successful
+receipt remains idempotent. A payment carrying its valid mining proof follows
+the existing proof path without rebroadcast.
+
+SQL storage now serializes receipt ownership across independent processes
+through a durable user/TXID claim. The migration preserves legacy transaction
+and output rows, including historical duplicates, while adding the claim table.
+Ambiguous historical receipts still require separate reconciliation; this
+change prevents a new same-recipient overlap from creating another local credit.
+Back up and preflight the database before rollout, then upgrade all storage
+instances together; an older instance can bypass the new receipt claim.
+Pending claims recover after their database-timed lease expires. No
+public API or wire migration is required. Browser IndexedDB does not use the
+SQL receipt claim. Source versions are candidates until published through the
+protected release workflow; upgrading an app alone does not upgrade its remote
+storage server.
+
+## Reorg proof recovery
+
+`TaskReorg` compares the latest 12 heights after each processed tip, including
+when ChainTracks events are unavailable. It journals pending ranges before
+remote work, retries unresolved heights every minute without requiring a new
+tip, and recovers observed gaps after monitor downtime. Each attempt reviews
+at most `recentDepth` fresh heights and `recentDepth` pending heights; the
+default is 12 and zero disables this fallback. Ranges are compacted without
+dropping pending work; compaction may recheck intervening heights.
+
+The lagged `TaskReviewProvenTxs` audit starts at the minimum stored proof
+height on the built-in SQL and IndexedDB providers, leaves an empty wallet
+uncheckpointed, repairs older checkpoints in empty history, and retains fair
+bounded retries through restart and tip retreat. Custom storage providers may
+override `getProvenTxsReviewStartHeight`; its safe default starts at zero when
+proofs exist, so custom providers can retain a longer initial audit.
+Recent rolling scans and these forward cursors do not establish detection of
+an arbitrary historical reorg below both cursors; deeper ancestry reconciliation
+remains separate work.
+
+Coordinate the upgrade of all monitor writers sharing a storage database:
+older versions do not understand compact retry checkpoints and may overwrite
+pending recovery work. The durability evidence covers one active Monitor owner
+with sequential restart; concurrent checkpoint writers are unqualified, and
+this change adds no ownership lock. Public Storage API serving topology is
+independent of the internal monitor worker's ownership.
+
+No SQL schema or manual data rewrite is required. IndexedDB automatically
+upgrades to version 7 to add a nonunique `proven_txs.height` index, avoiding a
+proof-blob scan during audit bootstrap. Close other connections using older
+code before upgrading, and retain a backup of browser wallet data. Reverting
+to code opening an older IndexedDB version requires a compatible restore or a
+forward fix. Source merge does not publish a package or upgrade a running wallet.
+
 ## Backup and recovery: keep both keys and wallet data
 
 **A root key or seed alone is not a complete BRC-100 wallet backup.** Users
@@ -372,6 +458,22 @@ retained privately, outside this repository.
 page for both Knex and IndexedDB storage, including short final pages and pages
 requested at or past the end of the result set.
 
+### Profile update failures
+
+`CWIStyleWalletManager.addProfile` and `deleteProfile` commit the local profile
+list when the replacement UMP token is published. A factor-decryption or
+publication failure preserves the previous list, so a failed creation can be
+retried with the same name. Concurrent creations reserve names without regard
+to case until each attempt settles. A failed deletion of the active profile
+attempts to restore that profile and preserves the original update error if
+restoration also fails.
+
+Restoring the active wallet can fail after publication has succeeded. In that
+case, the token and profile list already contain the change, and the default
+profile may remain active. Inspect `listProfiles()` before retrying and switch
+to an available profile as needed. This bookkeeping fix does not correct the
+underlying factor-decryption error; diagnose that error separately.
+
 ### UMP account continuity and phone changes
 
 Argon2id password derivation uses a proven-ready host backend when one is
@@ -440,21 +542,35 @@ empty wallet. Main currently carries the separate SDK3.1 candidate; SDK2 hosts
 need an additive backport or the documented SDK3 migration.
 
 The signed action is staged locally, labeled, and recorded in a recovery basket
-before broadcast. This fee fix does not change signup persistence or retry
-recovery. Internalization clears the output's custom instructions, and standard
-`listActions` does not return them; a later retry can therefore require manual
-reconciliation. Preserve the existing wallet and reconcile its faucet action
-before restarting a failed signup. Missing, substituted, ambiguous, or
-result-only recovery evidence fails closed.
+before broadcast. Internalization clears the output's custom instructions, and
+standard `listActions` does not return them. A retry with the same wallet root
+can recover the prior faucet action; missing, substituted, ambiguous, or
+result-only recovery evidence fails closed. Preserve the wallet's storage when
+reconciling an interrupted signup.
 
-New WAB registrations are interruption-safe across the off-chain/on-chain
-boundary. A WAB that advertises `registrationStatus: "pending"` lets a verified
-retry reuse the stored presentation key when a clean UMP lookup confirms that
-publication has not happened. After publishing the UMP token, the manager
-finalizes WAB idempotently. A lost finalization response is non-fatal: the next
-verified login finds the published token and repairs the pending state. Missing
-or invalid lifecycle metadata remains fail-closed for established accounts, and
-older WAB servers and clients retain their existing wire behavior.
+For restart-safe WAB registrations, store an unpublished UMP token checkpoint
+before faucet redemption. Pass `pendingRegistrationTokenSaver` in
+`WalletAuthenticationManagerOptions` and synchronously verify that the token
+bytes are stored before the callback resolves. On app restart, call
+`loadPendingRegistrationToken(bytes)` before starting authentication. The token
+contains encrypted UMP fields and no plaintext wallet root, snapshot key, or on-chain
+outpoint. Keep it through failed funding and logout; clear it only after a
+successful authenticated snapshot has been stored and
+`hasPendingRegistrationToken()` returns false. If an older pending WAB
+registration has no checkpoint, the manager refuses to redeem its faucet output
+again. Recover that registration using its original wallet state instead of
+creating a new root. A checkpoint for another presentation key does not block
+login to an already published wallet; retain that checkpoint until its own
+registration is reconciled.
+
+A WAB that advertises `registrationStatus: "pending"` lets a verified retry
+reuse the stored presentation key when a clean UMP lookup confirms that
+publication has not happened. The loaded checkpoint reconstructs the original
+root, so the wallet can recover its prior faucet action. After publishing the
+UMP token, the manager finalizes WAB idempotently. A lost finalization response
+is non-fatal: the next verified login finds the published token and repairs the
+pending state. Missing or invalid lifecycle metadata remains fail-closed for
+established accounts; WAB wire behavior is unchanged.
 
 Authenticated applications can verify a phone number and roll the presentation
 key, including when the user enters the same phone number:
@@ -533,11 +649,22 @@ synchronized tracker can continue serving its last-good checked data during a
 provider outage. WhatsOnChain remains a mainnet/testnet fallback and anonymous
 requests are serialized below its documented public rate.
 
-The supported chain identifiers are `main`, `test`, `stn`, `ttn`, and `tstn`
-(`mock` remains available for test utilities). STN and Terra Scaling TestNet do
-not have operator-independent public endpoints: set `STN_CHAINTRACKS_URL` or
-`TSTN_CHAINTRACKS_URL`, use the matching Arcade environment variable, or inject
-an explicit `ChaintracksClientApi`. URLs ending in `/v2` use the reconnecting
+The supported chain identifiers are `main`, `test`, `stn`, `ttn`, `tstn`, and
+`regtest` (`mock` remains available for test utilities). STN, Terra Scaling
+TestNet, and regtest do not have operator-independent public endpoints: set
+`STN_CHAINTRACKS_URL`, `TSTN_CHAINTRACKS_URL`, or `REGTEST_CHAINTRACKS_URL`, use
+the matching Arcade environment variable, or inject an explicit
+`ChaintracksClientApi`. Like TTN, the default regtest services use Arcade
+(`REGTEST_ARCADE_URL`) as broadcaster and Merkle-path provider and register no
+legacy ARC fallback.
+
+`regtest` is Teranode's regression network (go-chaincfg `RegressionNetParams`):
+the canonical regtest genesis header and a proof-of-work limit of `0x207fffff`.
+Only a caller that names `regtest` gets that limit; every other chain, and every
+header check that names no chain, keeps the mainnet limit of `0x1d00ffff`.
+Regtest proof of work costs nothing to produce, so a regtest wallet trusts its
+ChainTracks service for the header chain. Use it for private test deployments
+only. URLs ending in `/v2` use the reconnecting
 go-chaintracks client; existing legacy v1 URLs and explicit clients remain
 compatible. Browser and mobile distributions expose the same fetch/SSE client
 without Node `Buffer` or filesystem dependencies.
@@ -560,6 +687,18 @@ deactivated headers by default. `MonitorOptions.maxQueuedDeactivatedHeaders`
 can lower that ceiling. Prepared-proof invalidations are coalesced and drained
 during teardown; partial event subscriptions and rejected application
 callbacks are contained and reported through bounded monitor events.
+The Go client accepts both TypeScript reorg events and Go events carrying
+`orphanedHashes`, `commonAncestor`, `newTip`, and `depth`. It resolves only the
+announced hashes, validates their headers and linkage to the common ancestor,
+and uses `maxReorgHeaders`, one `requestTimeoutMsecs` deadline per event, and
+unsubscribe cancellation to bound the work. Existing reorg listener arguments
+are unchanged. `streamErrorCount` exposes malformed events and stream failures;
+optional `onStreamError(message)` receives single-line diagnostics capped at
+512 characters. Observer exceptions do not stop later events. A rejected event is reported and
+subsequent complete events already received in the same SSE chunk still run in
+order. These events do
+not by themselves prove the server's canonical-chain selection.
+
 The legacy `BHServiceClient` applies the same endpoint, whole-body deadline,
 byte, range, hash, linkage, and proof-of-work checks. Its historical public
 `cache` property remains for source compatibility but is diagnostic only:
@@ -857,6 +996,14 @@ that contain unrelated BEEF branches. The wallet restricts either form to the
 declared transaction and its recursive dependencies before independently
 validating every transaction, proof, and BRC-29 payment output.
 
+The experimental local `getBrc197InternalizationCapabilities()` and
+`internalizeBrc197Action()` extension accepts the literal fixed-child remittance
+for the optional BRC-197 exemplar through the complete wallet ownership pipeline.
+Ordinary BRC-29 validation and remote BRC-100 methods remain unchanged.
+Read the [fixed-child intake guide](../../../docs/guides/brc197-fixed-child-wallet.md)
+for explicit capability selection and the outstanding native, recipient spending
+and activation-before-funding qualification gates.
+
 ## Documentation
 
 [Full API documentation](https://bsv-blockchain.github.io/wallet-toolbox) is available on GitHub Pages.
@@ -1149,3 +1296,50 @@ for the full stack-wide policy.
 This package is released under the [Open BSV License Version 6](./LICENSE.txt).
 The accompanying [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and
 [LICENSES/](./LICENSES/) preserve the package's earlier Open BSV grant.
+
+## Internalization refusal and rollback boundaries
+
+Signer and storage boundaries independently validate the AtomicBEEF subject,
+proof verdict and requested ownership before admitting outputs. Early basket
+classification and final basket admission share the same pure policy: the
+wallet's default basket cannot be a custom insertion destination. Both checks
+retain the existing error identity and occur before a basket lookup or write.
+
+Synthetic port-fault regressions cover inconsistent verifier and validator
+results, missing inclusion information, transaction races, degenerate child
+keys and failed publication. They verify the retained storage state as well
+as the error. Failed publication restores only inputs transitioned by that
+attempt and does not admit requested outputs, labels, baskets or tags;
+bookkeeping preserves a different recorded spender even when a legacy row
+still says spendable. These checks do not replace chain verification or prove
+real-network broadcast. Public methods, remittances, schemas and defaults
+require no migration.
+
+The failed-publication fixture supplies the optional new-request signal through
+a disclosed synthetic storage port and uses real SQLite ownership writes and
+rollback. The ordinary concrete provider path retains its existing behavior.
+Additional mined recovery and tag-free insertion cases check retained balances,
+proof identities, transaction lifecycle and empty metadata without network I/O.
+
+The failed-publication regression binds both stored inputs to the transaction
+actually consumed. At the publication boundary it observes committed SQLite
+spend transitions for own and foreign rows, then checks restoration of the
+complete original rows apart from their update timestamps.
+
+## Pre-construction conflict recovery
+
+The 2.15.0 candidate preserves remote storage's empty attempted-TXID sentinel
+only for a bounded double-spend review before transaction construction. It does
+not authorize a retry. Applications must verify complete competing transactions
+against the requested explicit inputs, synchronize the accepted winner, then
+read fresh state before rebuilding. Upgrade the application SDK alongside the
+wallet parser. Use the existing JSON wallet API for structured review errors;
+the binary wire format is unchanged. No database or call migration is required.
+
+### Existing certificate types
+
+With the compatibility SDK, existing BRC-100 methods can list, prove and relinquish
+historical certificates without rewriting them. Listing and proof use unchanged
+storage RPCs. For relinquishment, upgrade the storage server SDK as well: its
+existing reference validator must accept the historical type. New signing and
+acquisition remain strictly 32 bytes. See [the compatibility contract](../../../specs/wallet/legacy-certificate-wire.md).

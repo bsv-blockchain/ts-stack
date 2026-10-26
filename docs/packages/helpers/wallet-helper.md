@@ -3,7 +3,7 @@ id: pkg-wallet-helper
 title: '@bsv/wallet-helper'
 kind: package
 domain: helpers
-version: '0.1.9'
+version: '0.1.10'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
@@ -16,7 +16,7 @@ tags: [helpers, wallet, transaction-builder]
 
 # @bsv/wallet-helper
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 

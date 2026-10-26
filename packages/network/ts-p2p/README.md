@@ -1,5 +1,7 @@
 # @bsv/teranode-listener
 
+Patch candidate `1.1.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 BSV BLOCKCHAIN | A TypeScript library for subscribing to Teranode P2P topics over libp2p
 
 A robust npm package that enables subscription to Teranode P2P topics using libp2p with private network support, DHT, and gossipsub messaging.

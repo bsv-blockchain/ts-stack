@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -40,11 +41,43 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
   )
 })
 
-test('workspace discovery exactly matches the 41-project registry', () => {
+test('workspace inventory ignores generated mutation sandboxes while retaining neighboring packages', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-inventory-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const authored = [
+    '.',
+    'packages/application/example',
+    'packages/application/example/.stryker-tmp-lookalike',
+    'packages/application/example/nested'
+  ]
+  const generated = [
+    'packages/application/example/.stryker-tmp/sandbox-fixture',
+    'tools/example/.stryker-tmp/sandbox-fixture'
+  ]
+  for (const directory of [...authored, ...generated]) {
+    fs.mkdirSync(path.join(root, directory), { recursive: true })
+    fs.writeFileSync(
+      path.join(root, directory, 'package.json'),
+      JSON.stringify({ name: directory, private: true })
+    )
+  }
+  assert.deepEqual(
+    discoverWorkspaceProjects(root).map(project => project.path),
+    authored
+  )
+  assert.deepEqual(
+    discoverPackageManifests(root).map(project => project.path),
+    authored
+      .map(directory => (directory === '.' ? 'package.json' : directory + '/package.json'))
+      .sort((a, b) => a.localeCompare(b))
+  )
+})
+
+test('workspace discovery exactly matches the 47-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 41)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 33)
+  assert.equal(discovered.length, 47)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 38)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -67,7 +100,7 @@ test('workspace discovery exactly matches the 41-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 50)
+  assert.equal(manifests.length, 57)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 
@@ -80,8 +113,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 41)
-  assert.equal(result.publicPackages, 33)
+  assert.equal(result.projects.length, 47)
+  assert.equal(result.publicPackages, 38)
   assert.equal(result.findings.length, 0)
 })
 
@@ -228,7 +261,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 33)
+  assert.equal(publicPackages.length, 38)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -282,7 +315,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 33)
+  assert.equal(publicProjects.length, 38)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),
@@ -362,7 +395,7 @@ test('contract ratchet detects both new and stale resolved findings', () => {
   )
 })
 
-test('exception registry rejects expired, under-evidenced exceptions', () => {
+test('exception registry rejects under-evidenced exceptions without blocking on expiry', () => {
   const registry = {
     schemaVersion: 1,
     lastReviewed: '2026-07-25',
@@ -383,12 +416,11 @@ test('exception registry rejects expired, under-evidenced exceptions', () => {
 
   assert.deepEqual(validateExceptionRegistry(registry, '2026-07-25'), [
     'exception temporary-hold reason must be at least 20 characters',
-    'exception temporary-hold must have one or more evidence references',
-    'exception temporary-hold expired on 2026-07-24'
+    'exception temporary-hold must have one or more evidence references'
   ])
 })
 
-test('exception registry requires a current monthly review even when empty', () => {
+test('exception registry never fails solely because of the current calendar date', () => {
   assert.deepEqual(
     validateExceptionRegistry(
       {
@@ -398,7 +430,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json monthly review is overdue: last reviewed 2026-06-01']
+    []
   )
   assert.deepEqual(
     validateExceptionRegistry(
@@ -409,7 +441,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json lastReviewed is in the future: 2026-07-26']
+    []
   )
 })
 
@@ -549,14 +581,17 @@ test('CI and release typecheck the built cross-package declaration graph', () =>
   }
 })
 
-test('calendar expiry is advisory in source CI and enforced by the maintenance audit', () => {
+test('calendar expiry stays advisory even with legacy maintenance enforcement options', () => {
   const ordinary = evaluateRepositoryHealth({ today: '2027-01-01' })
   assert.deepEqual(ordinary.errors, [])
   assert.ok(ordinary.warnings.some(item => item.includes('expired on')))
   assert.ok(ordinary.warnings.some(item => item.includes('monthly review is overdue')))
   const maintenance = evaluateRepositoryHealth({ today: '2027-01-01', enforceDeadlines: true })
-  for (const warning of ordinary.warnings) assert.ok(maintenance.errors.includes(warning))
-  assert.deepEqual(maintenance.warnings, [])
+  assert.deepEqual(maintenance.errors, [])
+  assert.deepEqual(maintenance.warnings, ordinary.warnings)
+  const earlierClock = evaluateRepositoryHealth({ today: '2020-01-01' })
+  assert.deepEqual(earlierClock.errors, [])
+  assert.ok(earlierClock.warnings.some(item => item.includes('lastReviewed is in the future')))
 })
 
 test('source CI still rejects malformed exception dates and missing evidence', () => {

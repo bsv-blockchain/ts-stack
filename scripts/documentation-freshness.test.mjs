@@ -271,8 +271,8 @@ test('an edited source produces a review reminder, not an unrelated merge failur
     warnings: ['verification expired 2026-09-11']
   })
   assert.deepEqual(documentationDateReport(...args, true), {
-    errors: ['verification expired 2026-09-11'],
-    warnings: []
+    errors: [],
+    warnings: ['verification expired 2026-09-11']
   })
   assert.deepEqual(documentationDateReport('2026-09-14', '2026-08-12', 30, args[3], false, false), {
     errors: ['last_verified predates last_updated'],
@@ -287,4 +287,16 @@ test('maintenance deadlines run outside the merge workflow', () => {
   assert.match(workflow, /documentation-policy.mjs --all/)
   assert.ok(!workflow.includes('pull_request:'))
   assert.ok(!workflow.includes('continue-on-error:'))
+})
+
+test('a future review timestamp is advisory while field ordering remains structural', () => {
+  const today = new Date('2020-01-01T00:00:00Z')
+  assert.deepEqual(documentationDateReport('2026-10-10', '2026-10-10', 30, today, true), {
+    errors: [],
+    warnings: ['last_verified cannot be in the future']
+  })
+  assert.deepEqual(documentationDateReport('2026-10-10', '2026-10-09', 30, today, true), {
+    errors: ['last_verified predates last_updated'],
+    warnings: ['last_verified cannot be in the future']
+  })
 })

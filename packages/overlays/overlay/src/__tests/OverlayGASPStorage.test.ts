@@ -336,6 +336,82 @@ describe('OverlayGASPStorage', () => {
   })
 
   describe('hydrateGASPNode', () => {
+    it('requires an explicit historical port, pins it and leaves the ordinary read path unchanged', async () => {
+      expect(
+        () =>
+          new OverlayGASPStorage('test-topic', mockEngine, undefined, undefined, {
+            historicalOutputs: true
+          })
+      ).toThrow('historical output reader unavailable')
+      const tx = new Transaction(
+          1,
+          [],
+          [{ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') }],
+          0
+        ),
+        txid = tx.id('hex'),
+        owner = mockEngine.storage,
+        read = jest.fn(async function (this: unknown) {
+          expect(this).toBe(owner)
+          return { txid, outputIndex: 0, topic: 'test-topic', spent: true, beef: tx.toBEEF() }
+        })
+      owner.findHistoricalOutput = read
+      const history = new OverlayGASPStorage('test-topic', mockEngine, undefined, undefined, {
+        historicalOutputs: true
+      })
+      await expect(history.hydrateGASPNode(`${txid}.0`, txid, 0, true)).resolves.toEqual({
+        graphID: `${txid}.0`,
+        outputIndex: 0,
+        rawTx: tx.toHex()
+      })
+      expect(read).toHaveBeenCalledWith(txid, 0, 'test-topic', true)
+      expect(owner.findOutput).not.toHaveBeenCalled()
+      // Merely supplying a historical method never opts an ordinary reader in.
+      await expect(overlayStorage.hydrateGASPNode(`${txid}.0`, txid, 0, true)).rejects.toThrow(
+        'No matching output'
+      )
+      expect(read).toHaveBeenCalledTimes(1)
+      owner.findHistoricalOutput = jest.fn()
+      await expect(history.hydrateGASPNode(`${txid}.0`, txid, 0, true)).rejects.toThrow(
+        'reader changed'
+      )
+      owner.findHistoricalOutput = read
+      mockEngine.storage = { ...owner }
+      await expect(history.hydrateGASPNode(`${txid}.0`, txid, 0, true)).rejects.toThrow(
+        'reader changed'
+      )
+    })
+
+    it.each(['missing', 'topic', 'raw', 'index'])(
+      'retains binding checks on the historical %s cut',
+      async cut => {
+        const tx = new Transaction(
+            1,
+            [],
+            [{ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') }],
+            0
+          ),
+          txid = cut === 'raw' ? '88'.repeat(32) : tx.id('hex'),
+          index = cut === 'index' ? 1 : 0
+        mockEngine.storage.findHistoricalOutput = jest.fn(async () =>
+          cut === 'missing'
+            ? null
+            : {
+                txid,
+                outputIndex: index,
+                topic: cut === 'topic' ? 'wrong-topic' : 'test-topic',
+                beef: tx.toBEEF()
+              }
+        )
+        const history = new OverlayGASPStorage('test-topic', mockEngine, undefined, undefined, {
+          historicalOutputs: true
+        })
+        await expect(
+          history.hydrateGASPNode(`${txid}.${index}`, txid, index, true)
+        ).rejects.toThrow()
+        expect(mockEngine.storage.findOutput).not.toHaveBeenCalled()
+      }
+    )
     it('should throw an error if no output is found', async () => {
       const txid = '11'.repeat(32)
       await expect(overlayStorage.hydrateGASPNode(`${txid}.0`, txid, 0, false)).rejects.toThrow(

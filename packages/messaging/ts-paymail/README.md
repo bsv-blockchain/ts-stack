@@ -1,5 +1,7 @@
 # BSV Paymail
 
+Patch candidate `2.4.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 `@bsv/paymail` provides a typed Paymail client and an Express router for
 capability discovery, public profiles, PKI, P2P transaction delivery,
 transaction negotiation, and simple ordinal flows.

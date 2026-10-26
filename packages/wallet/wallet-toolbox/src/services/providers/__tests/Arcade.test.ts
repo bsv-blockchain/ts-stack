@@ -904,3 +904,165 @@ describe('Arcade broadcaster', () => {
     })
   })
 })
+
+/**
+ * bsv-blockchain/arcade API-key authorization: a key is presented as
+ * `Authorization: Bearer bsvb_…`; a refused key is answered 401 (403 for a key not allowed to make
+ * the call) before the transaction is parsed, and an exhausted quota 429 with Retry-After.
+ */
+describe('Arcade API key', () => {
+  // Shaped like an Arcade key (bsvb_ + 43 base62 + _ + 6 base62) but not a real one.
+  const API_KEY = 'bsvb_0000000000000000000000000000000000000000000_000000'
+  const TXID = 'ab'.repeat(32)
+
+  const refused = (status: 401 | 403): Partial<HttpClientResponse<unknown>> => ({
+    ok: false,
+    status,
+    statusText: status === 401 ? 'Unauthorized' : 'Forbidden',
+    data: { error: 'invalid api key' }
+  })
+
+  test('sends the key as a bearer token on every Arcade request', async () => {
+    const captured: CapturedRequest[] = []
+    const http = mockHttpClientSequence(
+      [
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: TXID, status: 202, txStatus: 'RECEIVED' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } }
+      ],
+      captured
+    )
+    const arc = new Arcade('https://arcade.example', { httpClient: http, apiKey: API_KEY })
+
+    await arc.postRawTx(RAW_TX, [TXID])
+    await arc.getTxData(TXID)
+    await arc.getStatusForTxids([TXID])
+
+    expect(captured.map(c => `${c.options.method ?? 'GET'} ${c.url}`)).toEqual([
+      'POST https://arcade.example/tx',
+      `GET https://arcade.example/tx/${TXID}`,
+      `GET https://arcade.example/tx/${TXID}`
+    ])
+    for (const c of captured) {
+      expect((c.options.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`)
+    }
+  })
+
+  test('sends no Authorization header when no key is configured', async () => {
+    const captured: CapturedRequest[] = []
+    const http = mockHttpClientSequence(
+      [
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: TXID, status: 202, txStatus: 'RECEIVED' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } }
+      ],
+      captured
+    )
+    const arc = new Arcade('https://arcade.example', { httpClient: http })
+
+    await arc.postRawTx(RAW_TX, [TXID])
+    await arc.getTxData(TXID)
+
+    expect(captured).toHaveLength(2)
+    for (const c of captured) {
+      expect(c.options.headers as Record<string, string>).not.toHaveProperty('Authorization')
+    }
+  })
+
+  test.each([401, 403] as const)(
+    'HTTP %i (key refused) → serviceError=true, never an invalid-transaction verdict',
+    async status => {
+      const captured: CapturedRequest[] = []
+      const arc = new Arcade('https://arcade.example', {
+        httpClient: mockHttpClient(refused(status), captured),
+        apiKey: API_KEY
+      })
+
+      const r = await arc.postRawTx(RAW_TX, [TXID])
+
+      expect(r.status).toBe('error')
+      expect(r.serviceError).toBe(true)
+      expect(r.doubleSpend).toBeFalsy()
+      expect(r.data).toMatchObject({ status: String(status), detail: 'Arcade refused the configured API key' })
+      expect(r.notes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            what: 'postRawTxError',
+            status,
+            detail: 'Arcade refused the configured API key'
+          })
+        ])
+      )
+    }
+  )
+
+  test('HTTP 401 without a configured key says the instance requires one', async () => {
+    const arc = new Arcade('https://arcade.example', { httpClient: mockHttpClient(refused(401), []) })
+
+    const r = await arc.postRawTx(RAW_TX, [TXID])
+
+    expect(r.serviceError).toBe(true)
+    expect(r.data).toMatchObject({ detail: 'Arcade requires an API key' })
+  })
+
+  test('HTTP 429 (quota exhausted) → serviceError=true', async () => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(
+        { ok: false, status: 429, statusText: 'Too Many Requests', data: { error: 'rate limit exceeded' } },
+        []
+      ),
+      apiKey: API_KEY
+    })
+
+    const r = await arc.postRawTx(RAW_TX, [TXID])
+
+    expect(r.status).toBe('error')
+    expect(r.serviceError).toBe(true)
+  })
+
+  test('postBeef: a refused key marks every txid a service error so the wallet fails over or retries', async () => {
+    const key = PrivateKey.fromRandom()
+    const lock = new P2PKH().lock(key.toAddress())
+    const parent = new Transaction()
+    parent.addInput({ sourceTXID: '00'.repeat(32), sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
+    parent.addOutput({ lockingScript: lock, satoshis: 1000 })
+    const child = new Transaction()
+    child.addInput({ sourceTransaction: parent, sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
+    child.addOutput({ lockingScript: lock, satoshis: 900 })
+    const beef = new Beef()
+    beef.mergeTransaction(parent)
+    beef.mergeTransaction(child)
+    const childTxid = child.id('hex')
+
+    const captured: CapturedRequest[] = []
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(401), captured),
+      apiKey: API_KEY
+    })
+
+    const r = await arc.postBeef(beef, [childTxid])
+
+    // the request really reached Arcade (EF was built) and was refused there
+    expect(captured).toHaveLength(1)
+    expect((captured[0].options.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`)
+    expect(r.status).toBe('error')
+    expect(r.txidResults).toHaveLength(1)
+    expect(r.txidResults[0]).toMatchObject({ txid: childTxid, status: 'error', serviceError: true })
+  })
+
+  test.each([401, 403] as const)('getTxData rejects on HTTP %i instead of reporting the tx unknown', async status => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(status), []),
+      apiKey: API_KEY
+    })
+    await expect(arc.getTxData(TXID)).rejects.toThrow(`Arcade transaction data response ${status}`)
+  })
+
+  test('getStatusForTxids on HTTP 401 is an inconclusive provider error, not "unknown"', async () => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(401), []),
+      apiKey: API_KEY
+    })
+    const r = await arc.getStatusForTxids([TXID])
+    expect(r.status).toBe('error')
+  })
+})

@@ -82,6 +82,14 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
     hashToHeaderId: new Map<string, number>()
   }
 
+  static readonly regtestData: ChaintracksNoDbData = {
+    chain: 'regtest',
+    liveHeaders: new Map<number, LiveBlockHeader>(),
+    maxHeaderId: 0,
+    tipHeaderId: 0,
+    hashToHeaderId: new Map<string, number>()
+  }
+
   private readonly instanceData: ChaintracksNoDbData
 
   constructor(options: ChaintracksStorageNoDbOptions) {
@@ -106,11 +114,12 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
       case 'stn':
       case 'ttn':
       case 'tstn':
+      case 'regtest':
         return this.instanceData
       default:
         throw new WERR_INVALID_PARAMETER(
           'chain',
-          `'main', 'test', 'stn', 'ttn', or 'tstn'. '${this.chain}' is unsupported.`
+          `'main', 'test', 'stn', 'ttn', 'tstn', or 'regtest'. '${this.chain}' is unsupported.`
         )
     }
   }
@@ -287,7 +296,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
       ...header,
       headerId: ++data.maxHeaderId,
       previousHeaderId: null,
-      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits)),
+      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits, this.chain)),
       isChainTip: true,
       isActive: true
     }
@@ -429,7 +438,7 @@ export class ChaintracksStorageNoDb extends ChaintracksStorageBase {
 
     // We have an acceptable new live header...and live headers has an active chain tip.
 
-    const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits))
+    const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits, this.chain))
 
     r.isActiveTip = isMoreWork(chainWork, r.priorTip.chainWork)
 

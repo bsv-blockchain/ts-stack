@@ -1,5 +1,7 @@
 # @bsv/auth
 
+Patch candidate `0.1.7` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Simple, secure wallet login for BSV apps. A client wallet signs a short-lived
 proof that it controls an identity key; the server verifies the signature,
 checks freshness, and consumes the proof once. The single-use store is injected,
@@ -20,7 +22,7 @@ has not been seen before.
 npm install @bsv/auth
 ```
 
-Requires `@bsv/sdk` (`^2.1.6 || ^3.0.0`).
+Requires `@bsv/sdk` (`^2.1.6 || ^3.0.0 || ^4.0.0`).
 
 ## Usage
 

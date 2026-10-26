@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-10-01",
+  "lastReviewed": "2026-10-09",
   "owner": "ts-stack-maintainers",
-  "reviewBy": "2026-10-08",
+  "reviewBy": "2026-10-16",
   "suites": [
     {
       "path": "packages/wallet/wallet-toolbox/src/services/__tests/ARC.man.test.ts",
@@ -31,6 +31,13 @@
       "sideEffects": "public-network",
       "disposition": "retain-as-test",
       "purpose": "Validates Arcade endpoint routing and permanent versus transient error classification."
+    },
+    {
+      "path": "packages/wallet/wallet-toolbox/src/services/__tests/Arcade.apiKey.man.test.ts",
+      "kind": "manual-integration",
+      "sideEffects": "public-network",
+      "disposition": "retain-as-test",
+      "purpose": "Validates Arcade API-key authorization: the key selects its rate-limit tier and a refused key is a service error, not a rejection."
     },
     {
       "path": "packages/wallet/wallet-toolbox/src/services/__tests/ArcadeMainnet.man.test.ts",

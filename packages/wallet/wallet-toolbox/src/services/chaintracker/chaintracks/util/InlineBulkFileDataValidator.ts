@@ -12,7 +12,7 @@ import { validateBufferOfHeaders, validateGenesisHeader } from './blockHeaderUti
 const MAX_HEADERS_PER_FILE = 100_000
 const HEX_32_BYTES = /^[0-9a-f]{64}$/
 const SAFE_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._~-]{0,254}$/
-const SUPPORTED_CHAINS = new Set(['main', 'test', 'stn', 'ttn', 'tstn', 'mock'])
+const SUPPORTED_CHAINS = new Set(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
 
 function canonicalSha256(value: unknown): value is string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9+/]{43}=$/.test(value)) return false
@@ -136,7 +136,8 @@ export class InlineBulkFileDataValidator implements BulkFileDataValidatorApi {
         request.prevHash,
         0,
         request.count,
-        request.prevChainWork
+        request.prevChainWork,
+        request.chain ?? undefined
       )
 
       if (request.lastHash && request.lastHash !== lastHeaderHash) {

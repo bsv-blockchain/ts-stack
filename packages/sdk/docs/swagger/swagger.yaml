@@ -18,17 +18,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/CreateActionArgs"
+              $ref: '#/components/schemas/CreateActionArgs'
       responses:
-        "200":
+        '200':
           description: The created transaction result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/CreateActionResult"
-        "400":
+                $ref: '#/components/schemas/CreateActionResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /signAction:
     post:
@@ -40,17 +40,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/SignActionArgs"
+              $ref: '#/components/schemas/SignActionArgs'
       responses:
-        "200":
+        '200':
           description: The signed transaction result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SignActionResult"
-        "400":
+                $ref: '#/components/schemas/SignActionResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /abortAction:
     post:
@@ -62,17 +62,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AbortActionArgs"
+              $ref: '#/components/schemas/AbortActionArgs'
       responses:
-        "200":
+        '200':
           description: The abortion result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AbortActionResult"
-        "400":
+                $ref: '#/components/schemas/AbortActionResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /listActions:
     post:
@@ -84,17 +84,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ListActionsArgs"
+              $ref: '#/components/schemas/ListActionsArgs'
       responses:
-        "200":
+        '200':
           description: The list of actions
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListActionsResult"
-        "400":
+                $ref: '#/components/schemas/ListActionsResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /internalizeAction:
     post:
@@ -106,17 +106,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/InternalizeActionArgs"
+              $ref: '#/components/schemas/InternalizeActionArgs'
       responses:
-        "200":
+        '200':
           description: The internalization result
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/InternalizeActionResult"
-        "400":
+                $ref: '#/components/schemas/InternalizeActionResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /listOutputs:
     post:
@@ -128,17 +128,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ListOutputsArgs"
+              $ref: '#/components/schemas/ListOutputsArgs'
       responses:
-        "200":
+        '200':
           description: The list of outputs
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListOutputsResult"
-        "400":
+                $ref: '#/components/schemas/ListOutputsResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /relinquishOutput:
     post:
@@ -153,11 +153,11 @@ paths:
               type: object
               properties:
                 basket:
-                  $ref: "#/components/schemas/BasketStringUnder300Bytes"
+                  $ref: '#/components/schemas/BasketStringUnder300Bytes'
                 output:
-                  $ref: "#/components/schemas/OutpointString"
+                  $ref: '#/components/schemas/OutpointString'
       responses:
-        "200":
+        '200':
           description: The relinquishment result
           content:
             application/json:
@@ -168,9 +168,9 @@ paths:
                     type: boolean
                     examples:
                       - true
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
   /getPublicKey:
     post:
@@ -190,27 +190,27 @@ paths:
                 identityKey:
                   type: boolean
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privileged:
                   type: boolean
                   default: false
                 privilegedReason:
                   type: string
                   examples:
-                    - "extra secure"
+                    - 'extra secure'
                 counterparty:
                   type: string
                   examples:
-                    - "0200daf17a4b9f7ca9e188a5b0e2b356107bde46d9d358d99e3402bd0e5beffbff"
+                    - '0200daf17a4b9f7ca9e188a5b0e2b356107bde46d9d358d99e3402bd0e5beffbff'
                 forSelf:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The public key
           content:
             application/json:
@@ -220,10 +220,10 @@ paths:
                   publicKey:
                     type: string
                     examples:
-                      - "027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef"
-        "400":
+                      - '027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /revealCounterpartyKeyLinkage:
@@ -241,20 +241,20 @@ paths:
                 counterparty:
                   type: string
                   examples:
-                    - "027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef"
+                    - '027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef'
                 verifier:
                   type: string
                   examples:
-                    - "03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b"
+                    - '03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b'
                 privilegedReason:
                   type: string
                   examples:
-                    - "extra sensitive"
+                    - 'extra sensitive'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The counterparty key linkage
           content:
             application/json:
@@ -264,19 +264,19 @@ paths:
                   prover:
                     type: string
                     examples:
-                      - "02790ab2d725d04af29e20bf46e1dbc40ba8b49f1355146884c5bd06819273d101"
+                      - '02790ab2d725d04af29e20bf46e1dbc40ba8b49f1355146884c5bd06819273d101'
                   verifier:
                     type: string
                     examples:
-                      - "03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b"
+                      - '03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b'
                   counterparty:
                     type: string
                     examples:
-                      - "027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef"
+                      - '027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef'
                   revelationTime:
                     type: string
                     examples:
-                      - "2024-12-12T12:12:12.120Z"
+                      - '2024-12-12T12:12:12.120Z'
                   encryptedLinkage:
                     type: array
                     items:
@@ -285,9 +285,9 @@ paths:
                     type: array
                     items:
                       type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /revealSpecificKeyLinkage:
@@ -305,26 +305,26 @@ paths:
                 counterparty:
                   type: string
                   examples:
-                    - "027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef"
+                    - '027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef'
                 verifier:
                   type: string
                   examples:
-                    - "03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b"
+                    - '03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b'
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "special stuff"
+                    - 'special stuff'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The specific key linkage
           content:
             application/json:
@@ -334,25 +334,25 @@ paths:
                   prover:
                     type: string
                     examples:
-                      - "02790ab2d725d04af29e20bf46e1dbc40ba8b49f1355146884c5bd06819273d101"
+                      - '02790ab2d725d04af29e20bf46e1dbc40ba8b49f1355146884c5bd06819273d101'
                   verifier:
                     type: string
                     examples:
-                      - "03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b"
+                      - '03c378a866d72c391343eddeadf64c4f896637c4160ac6073e7b80b5717310153b'
                   counterparty:
                     type: string
                     examples:
-                      - "027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef"
+                      - '027facf8e28228eea25abd69c4f23f15573e1d0f9180718af297e1458827cd5aef'
                   revelationTime:
                     type: string
                     examples:
-                      - "2024-12-12T12:12:12.120Z"
+                      - '2024-12-12T12:12:12.120Z'
                   protocolID:
-                    $ref: "#/components/schemas/ProtocolID"
+                    $ref: '#/components/schemas/ProtocolID'
                   keyID:
                     type: string
                     examples:
-                      - "1"
+                      - '1'
                   encryptedLinkage:
                     type: array
                     items:
@@ -363,9 +363,9 @@ paths:
                       type: integer
                   proofType:
                     type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /encrypt:
@@ -390,24 +390,24 @@ paths:
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "extra secure"
+                    - 'extra secure'
                 counterparty:
                   type: string
                   examples:
-                    - "self"
+                    - 'self'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The encrypted data
           content:
             application/json:
@@ -420,9 +420,9 @@ paths:
                       - [47, 102, 55, 54, 51, 52, 42, 38, 9]
                     items:
                       type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /decrypt:
@@ -447,24 +447,24 @@ paths:
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "extra secure"
+                    - 'extra secure'
                 counterparty:
                   type: string
                   examples:
-                    - "self"
+                    - 'self'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The decrypted data
           content:
             application/json:
@@ -477,9 +477,9 @@ paths:
                       - [115, 101, 99, 114, 101, 116, 115]
                     items:
                       type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /createHmac:
@@ -504,24 +504,24 @@ paths:
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "2"
+                    - '2'
                 privilegedReason:
                   type: string
                   examples:
-                    - "special reasons"
+                    - 'special reasons'
                 counterparty:
                   type: string
                   examples:
-                    - "anyone"
+                    - 'anyone'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The HMAC
           content:
             application/json:
@@ -563,13 +563,13 @@ paths:
                           124,
                           246,
                           168,
-                          73,
+                          73
                         ]
                     items:
                       type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /verifyHmac:
@@ -628,29 +628,29 @@ paths:
                         124,
                         246,
                         168,
-                        73,
+                        73
                       ]
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "I love to be secure"
+                    - 'I love to be secure'
                 counterparty:
                   type: string
                   examples:
-                    - "anyone"
+                    - 'anyone'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The verification result
           content:
             application/json:
@@ -659,9 +659,9 @@ paths:
                 properties:
                   valid:
                     type: boolean
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /createSignature:
@@ -692,24 +692,24 @@ paths:
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "I love to be secure"
+                    - 'I love to be secure'
                 counterparty:
                   type: string
                   examples:
-                    - "anyone"
+                    - 'anyone'
                 privileged:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The signature
           content:
             application/json:
@@ -720,9 +720,9 @@ paths:
                     type: array
                     items:
                       type: integer
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /verifySignature:
@@ -779,7 +779,7 @@ paths:
                         124,
                         246,
                         168,
-                        73,
+                        73
                       ]
                   items:
                     type: integer
@@ -858,24 +858,24 @@ paths:
                         65,
                         114,
                         64,
-                        65,
+                        65
                       ]
                   items:
                     type: integer
                 protocolID:
-                  $ref: "#/components/schemas/ProtocolID"
+                  $ref: '#/components/schemas/ProtocolID'
                 keyID:
                   type: string
                   examples:
-                    - "1"
+                    - '1'
                 privilegedReason:
                   type: string
                   examples:
-                    - "-"
+                    - '-'
                 counterparty:
                   type: string
                   examples:
-                    - "anyone"
+                    - 'anyone'
                 forSelf:
                   type: boolean
                   default: false
@@ -883,7 +883,7 @@ paths:
                   type: boolean
                   default: false
       responses:
-        "200":
+        '200':
           description: The verification result
           content:
             application/json:
@@ -892,9 +892,9 @@ paths:
                 properties:
                   valid:
                     type: boolean
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /acquireCertificate:
@@ -907,17 +907,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/AcquireCertificateArgs"
+              $ref: '#/components/schemas/AcquireCertificateArgs'
       responses:
-        "200":
+        '200':
           description: The acquired certificate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Certificate"
-        "400":
+                $ref: '#/components/schemas/Certificate'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /listCertificates:
@@ -935,16 +935,16 @@ paths:
                 certifiers:
                   type: array
                   examples:
-                    - - "0322f8f64b95234a4b531109c2c271e01cd2a9ee497e71a788cae384b6aae54d75"
-                      - "02e3dfb8196c17baab7353e139693a1c0813d60ecd022f5c52779faf2cff341374"
-                      - "0334b3dd693269d37e0ef35aace5dc07fdd510ff0f1596399ed7bf8b27dc025bdd"
+                    - - '0322f8f64b95234a4b531109c2c271e01cd2a9ee497e71a788cae384b6aae54d75'
+                      - '02e3dfb8196c17baab7353e139693a1c0813d60ecd022f5c52779faf2cff341374'
+                      - '0334b3dd693269d37e0ef35aace5dc07fdd510ff0f1596399ed7bf8b27dc025bdd'
                   items:
                     type: string
                 types:
                   type: array
                   examples:
-                    - - "W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8="
-                      - "xrhnMvBJoy7tWi92bFzci3cGNhmiC+yU8iK8vSSeZWI="
+                    - - 'W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8='
+                      - 'xrhnMvBJoy7tWi92bFzci3cGNhmiC+yU8iK8vSSeZWI='
                   items:
                     type: string
                 limit:
@@ -959,17 +959,17 @@ paths:
                 privilegedReason:
                   type: string
                   examples:
-                    - "-"
+                    - '-'
       responses:
-        "200":
+        '200':
           description: The list of certificates
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListCertificatesResult"
-        "400":
+                $ref: '#/components/schemas/ListCertificatesResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /proveCertificate:
@@ -982,17 +982,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/ProveCertificateArgs"
+              $ref: '#/components/schemas/ProveCertificateArgs'
       responses:
-        "200":
+        '200':
           description: The proof of the certificate
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ProveCertificateResult"
-        "400":
+                $ref: '#/components/schemas/ProveCertificateResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /relinquishCertificate:
@@ -1010,17 +1010,17 @@ paths:
                 type:
                   type: string
                   examples:
-                    - "W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8="
+                    - 'W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8='
                 serialNumber:
                   type: string
                   examples:
-                    - "oXTshKWy209Lv8MFVDxmsFzZQQ"
+                    - 'oXTshKWy209Lv8MFVDxmsFzZQQ'
                 certifier:
                   type: string
                   examples:
-                    - "03d40063722f77cc57a96bdf963c56fd29085b1297e598471ad63dd51b1b54db6e"
+                    - '03d40063722f77cc57a96bdf963c56fd29085b1297e598471ad63dd51b1b54db6e'
       responses:
-        "200":
+        '200':
           description: The relinquishment result
           content:
             application/json:
@@ -1031,9 +1031,9 @@ paths:
                     type: boolean
                     examples:
                       - true
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /discoverByIdentityKey:
@@ -1051,7 +1051,7 @@ paths:
                 identityKey:
                   type: string
                   examples:
-                    - "03ed91c6e33a5ef6fc3d927b2d7064af0c78447cfc304c069715ea7bdd2e5c6ea8"
+                    - '03ed91c6e33a5ef6fc3d927b2d7064af0c78447cfc304c069715ea7bdd2e5c6ea8'
                 limit:
                   type: integer
                   examples:
@@ -1062,15 +1062,15 @@ paths:
                   type: boolean
                   default: true
       responses:
-        "200":
+        '200':
           description: The discovered certificates
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DiscoverCertificatesResult"
-        "400":
+                $ref: '#/components/schemas/DiscoverCertificatesResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /discoverByAttributes:
@@ -1088,7 +1088,7 @@ paths:
                 attributes:
                   type: object
                   examples:
-                    - firstName: "David"
+                    - firstName: 'David'
                   additionalProperties:
                     type: string
                 limit:
@@ -1101,15 +1101,15 @@ paths:
                   type: boolean
                   default: true
       responses:
-        "200":
+        '200':
           description: The discovered certificates
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/DiscoverCertificatesResult"
-        "400":
+                $ref: '#/components/schemas/DiscoverCertificatesResult'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /isAuthenticated:
@@ -1118,7 +1118,7 @@ paths:
         - HTTPWalletJSON
       summary: Checks if the user is authenticated
       responses:
-        "200":
+        '200':
           description: The authentication status
           content:
             application/json:
@@ -1127,9 +1127,9 @@ paths:
                 properties:
                   authenticated:
                     type: boolean
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /waitForAuthentication:
@@ -1138,7 +1138,7 @@ paths:
         - HTTPWalletJSON
       summary: Waits for user authentication
       responses:
-        "200":
+        '200':
           description: The authentication result
           content:
             application/json:
@@ -1149,9 +1149,9 @@ paths:
                     type: boolean
                     examples:
                       - true
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /getHeight:
@@ -1160,7 +1160,7 @@ paths:
         - HTTPWalletJSON
       summary: Retrieves the current blockchain height
       responses:
-        "200":
+        '200':
           description: The current blockchain height
           content:
             application/json:
@@ -1171,9 +1171,9 @@ paths:
                     type: integer
                     examples:
                       - 875002
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /getHeaderForHeight:
@@ -1193,7 +1193,7 @@ paths:
                   examples:
                     - 875002
       responses:
-        "200":
+        '200':
           description: The block header
           content:
             application/json:
@@ -1203,10 +1203,10 @@ paths:
                   header:
                     type: string
                     examples:
-                      - "0020372d395bfcfc03b467e747f873da7e4f4fd0afcc89301787b10a0000000000000000724ab3c241848b826766b46947e008e022b95877629498ec3e7dd85f1ae0b383f8f8826566280d184b11f02a"
-        "400":
+                      - '0020372d395bfcfc03b467e747f873da7e4f4fd0afcc89301787b10a0000000000000000724ab3c241848b826766b46947e008e022b95877629498ec3e7dd85f1ae0b383f8f8826566280d184b11f02a'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /getNetwork:
@@ -1215,7 +1215,7 @@ paths:
         - HTTPWalletJSON
       summary: Retrieves the current network
       responses:
-        "200":
+        '200':
           description: The current network
           content:
             application/json:
@@ -1227,9 +1227,9 @@ paths:
                     enum:
                       - mainnet
                       - testnet
-        "400":
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 
   /getVersion:
@@ -1238,7 +1238,7 @@ paths:
         - HTTPWalletJSON
       summary: Retrieves the current version
       responses:
-        "200":
+        '200':
           description: The current version
           content:
             application/json:
@@ -1248,10 +1248,10 @@ paths:
                   version:
                     type: string
                     examples:
-                      - "BSVA-1.0.0"
-        "400":
+                      - 'BSVA-1.0.0'
+        '400':
           description: Invalid input
-        "500":
+        '500':
           description: Internal server error
 components:
   schemas:
@@ -1261,7 +1261,7 @@ components:
         description:
           type: string
           examples:
-            - "human readable purpose of this action"
+            - 'human readable purpose of this action'
         inputBEEF:
           type: array
           examples:
@@ -1271,11 +1271,11 @@ components:
         inputs:
           type: array
           items:
-            $ref: "#/components/schemas/CreateActionInput"
+            $ref: '#/components/schemas/CreateActionInput'
         outputs:
           type: array
           items:
-            $ref: "#/components/schemas/CreateActionOutput"
+            $ref: '#/components/schemas/CreateActionOutput'
         lockTime:
           type: number
           examples:
@@ -1287,18 +1287,18 @@ components:
         labels:
           type: array
           examples:
-            - ["todo create"]
+            - ['todo create']
           items:
             type: string
         options:
-          $ref: "#/components/schemas/CreateActionOptions"
+          $ref: '#/components/schemas/CreateActionOptions'
     CreateActionResult:
       type: object
       properties:
         txid:
           type: string
           examples:
-            - "16bed6368b8b1542cd6eb87f5bc20dc830b41a2258dde40438a75fa701d24e9a"
+            - '16bed6368b8b1542cd6eb87f5bc20dc830b41a2258dde40438a75fa701d24e9a'
         tx:
           type: array
           examples:
@@ -1308,17 +1308,15 @@ components:
         noSendChange:
           type: array
           examples:
-            - [
-                "11df9f39662e276dc2f637f063919ce3ca86cbc2d55ee8d661408d22b1f49018.0",
-              ]
+            - ['11df9f39662e276dc2f637f063919ce3ca86cbc2d55ee8d661408d22b1f49018.0']
           items:
             type: string
         sendWithResults:
           type: array
           items:
-            $ref: "#/components/schemas/SendWithResult"
+            $ref: '#/components/schemas/SendWithResult'
         signableTransaction:
-          $ref: "#/components/schemas/SignableTransaction"
+          $ref: '#/components/schemas/SignableTransaction'
     SignActionArgs:
       type: object
       properties:
@@ -1326,26 +1324,26 @@ components:
           type: object
           examples:
             - 0:
-                unlockingScript: "47304402206ba4a1c0aa4e1ba7f2cd79de36..."
+                unlockingScript: '47304402206ba4a1c0aa4e1ba7f2cd79de36...'
                 sequenceNumber: 4294967295
               1:
-                unlockingScript: "473044022031d6c05d21ea4ee96da0fa17ea..."
+                unlockingScript: '473044022031d6c05d21ea4ee96da0fa17ea...'
                 sequenceNumber: 4294967295
           additionalProperties:
-            $ref: "#/components/schemas/SignActionSpend"
+            $ref: '#/components/schemas/SignActionSpend'
         reference:
           type: string
           examples:
-            - "C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA="
+            - 'C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA='
         options:
-          $ref: "#/components/schemas/SignActionOptions"
+          $ref: '#/components/schemas/SignActionOptions'
     SignActionResult:
       type: object
       properties:
         txid:
           type: string
           examples:
-            - "cd8345f101b2c6163921d9ff08526d88aa24cb68456f546eec935c6485155838"
+            - 'cd8345f101b2c6163921d9ff08526d88aa24cb68456f546eec935c6485155838'
         tx:
           type: array
           examples:
@@ -1355,14 +1353,14 @@ components:
         sendWithResults:
           type: array
           items:
-            $ref: "#/components/schemas/SendWithResult"
+            $ref: '#/components/schemas/SendWithResult'
     AbortActionArgs:
       type: object
       properties:
         reference:
           type: string
           examples:
-            - "C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA="
+            - 'C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA='
     AbortActionResult:
       type: object
       properties:
@@ -1376,7 +1374,7 @@ components:
         labels:
           type: array
           examples:
-            - ["todo create"]
+            - ['todo create']
           items:
             type: string
         labelQueryMode:
@@ -1416,7 +1414,7 @@ components:
         actions:
           type: array
           items:
-            $ref: "#/components/schemas/WalletAction"
+            $ref: '#/components/schemas/WalletAction'
     InternalizeActionArgs:
       type: object
       properties:
@@ -1430,29 +1428,29 @@ components:
           type: array
           examples:
             - - outputIndex: 0
-                protocol: "wallet payment"
+                protocol: 'wallet payment'
                 paymentRemittance:
-                  derivationPrefix: "12345678"
-                  derivationSuffix: "00000"
-                  senderIdentity: "02ffc4f361307f34a82069edbcbe2c9f4bd5498165549f42bdeb698ffdcab1ea38"
+                  derivationPrefix: '12345678'
+                  derivationSuffix: '00000'
+                  senderIdentity: '02ffc4f361307f34a82069edbcbe2c9f4bd5498165549f42bdeb698ffdcab1ea38'
               - outputIndex: 1
-                protocol: "basket insertion"
+                protocol: 'basket insertion'
                 insertionRemittance:
-                  basket: "todo token"
-                  customInstructions: "3453,3462346,self"
+                  basket: 'todo token'
+                  customInstructions: '3453,3462346,self'
                   tags:
-                    - "foose"
-                    - "goose"
+                    - 'foose'
+                    - 'goose'
           items:
-            $ref: "#/components/schemas/InternalizeOutput"
+            $ref: '#/components/schemas/InternalizeOutput'
         description:
           type: string
           examples:
-            - "Creation of a new thing."
+            - 'Creation of a new thing.'
         labels:
           type: array
           examples:
-            - ["todo create", "productivity"]
+            - ['todo create', 'productivity']
           items:
             type: string
         seekPermission:
@@ -1470,17 +1468,17 @@ components:
         basket:
           type: string
           examples:
-            - "todo token"
+            - 'todo token'
         tags:
           type: array
           examples:
-            - ["todo create", "todo burn"]
+            - ['todo create', 'todo burn']
           items:
             type: string
         tagQueryMode:
           type: string
           examples:
-            - "any"
+            - 'any'
           enum: [all, any]
         include:
           type: string
@@ -1505,17 +1503,21 @@ components:
         - totalOutputs: 1
           outputs:
             - satoshis: 1000
-              lockingScript: "76a914dd8b1abde0304820ace0adf1478a3ef2291a833788ac"
+              lockingScript: '76a914dd8b1abde0304820ace0adf1478a3ef2291a833788ac'
               spendable: true
-              customInstructions: "12,34,023398754239872342354534"
-              tags: ["todo create"]
-              outpoint: "d834139537caeb6abb876e1adcf00064fa7a775cf324a2c3bd8c13a8ec8c888f.34"
-              labels: ["productivity"]
+              customInstructions: '12,34,023398754239872342354534'
+              tags: ['todo create']
+              outpoint: 'd834139537caeb6abb876e1adcf00064fa7a775cf324a2c3bd8c13a8ec8c888f.34'
+              labels: ['productivity']
         - totalOutputs: 1
           BEEF: [2, 0, 190, 239]
       properties:
         totalOutputs:
-          type: number
+          oneOf:
+            - type: number
+            - type: string
+              pattern: '^(0|[1-9][0-9]*)$'
+          description: The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as decimal text with no outputs and no BEEF.
           examples:
             - 1
         BEEF:
@@ -1525,22 +1527,22 @@ components:
         outputs:
           type: array
           items:
-            $ref: "#/components/schemas/WalletOutput"
+            $ref: '#/components/schemas/WalletOutput'
     CreateActionInput:
       type: object
       properties:
         outpoint:
           type: string
           examples:
-            - "ef01fee61a0d00090280027a0ec9df2e605fa46a903dfa1bd249b96aa3001490.0"
+            - 'ef01fee61a0d00090280027a0ec9df2e605fa46a903dfa1bd249b96aa3001490.0'
         inputDescription:
           type: string
           examples:
-            - "why this token is being spent"
+            - 'why this token is being spent'
         unlockingScript:
           type: string
           examples:
-            - "47304402200aa56a892e310a7575035fb3c0bcf466bbc16e97dae197cc1d40412313f94b89022011944d2b1b0fa72dbe7893c400624a0652a6efcc40d459216c0e00d5d135f7fc412103820b289317fa9ba995ca05bc084a77ae6077dbb424206424d92b51653521bb90"
+            - '47304402200aa56a892e310a7575035fb3c0bcf466bbc16e97dae197cc1d40412313f94b89022011944d2b1b0fa72dbe7893c400624a0652a6efcc40d459216c0e00d5d135f7fc412103820b289317fa9ba995ca05bc084a77ae6077dbb424206424d92b51653521bb90'
         unlockingScriptLength:
           type: number
           examples:
@@ -1555,7 +1557,7 @@ components:
         lockingScript:
           type: string
           examples:
-            - "76a914978bf440c1ae52331b2e95b641c0041debaa87ce88ac"
+            - '76a914978bf440c1ae52331b2e95b641c0041debaa87ce88ac'
         satoshis:
           type: number
           examples:
@@ -1563,19 +1565,19 @@ components:
         outputDescription:
           type: string
           examples:
-            - "why this token is being created"
+            - 'why this token is being created'
         basket:
           type: string
           examples:
-            - "todo token"
+            - 'todo token'
         customInstructions:
           type: string
           examples:
-            - "invoice1234,keyId1,03820b289317fa9ba995ca05bc084a77ae6077dbb424206424d92b51653521bb90"
+            - 'invoice1234,keyId1,03820b289317fa9ba995ca05bc084a77ae6077dbb424206424d92b51653521bb90'
         tags:
           type: array
           examples:
-            - ["todo", "productivity"]
+            - ['todo', 'productivity']
           items:
             type: string
     CreateActionOptions:
@@ -1599,17 +1601,13 @@ components:
         noSendChange:
           type: array
           examples:
-            - [
-                "11df9f39662e276dc2f637f063919ce3ca86cbc2d55ee8d661408d22b1f49018.0",
-              ]
+            - ['11df9f39662e276dc2f637f063919ce3ca86cbc2d55ee8d661408d22b1f49018.0']
           items:
             type: string
         sendWith:
           type: array
           examples:
-            - [
-                "c2d37dd0575766e4deedf7ba072ad35b87e9223af01d2829a81960ba7164f606",
-              ]
+            - ['c2d37dd0575766e4deedf7ba072ad35b87e9223af01d2829a81960ba7164f606']
           items:
             type: string
         randomizeOutputs:
@@ -1620,7 +1618,7 @@ components:
         txid:
           type: string
           examples:
-            - "a0084f73e13afdcc284cc810b4d22af004a38dcf404d8ddbe43ac9fb1a77a4be"
+            - 'a0084f73e13afdcc284cc810b4d22af004a38dcf404d8ddbe43ac9fb1a77a4be'
         status:
           type: string
           enum: [unproven, sending, failed]
@@ -1636,14 +1634,14 @@ components:
         reference:
           type: string
           examples:
-            - "C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA="
+            - 'C1HST7xvPKzh66npoiJ5fKwnLtnH3xxQ4ylxaGBTTOA='
     SignActionSpend:
       type: object
       properties:
         unlockingScript:
           type: string
           examples:
-            - "47304402206ba4a1c0aa4e1ba7f2cd79de3617c9b1..."
+            - '47304402206ba4a1c0aa4e1ba7f2cd79de3617c9b1...'
         sequenceNumber:
           type: number
           examples:
@@ -1660,9 +1658,7 @@ components:
         sendWith:
           type: array
           examples:
-            - [
-                "c2d37dd0575766e4deedf7ba072ad35b87e9223af01d2829a81960ba7164f606",
-              ]
+            - ['c2d37dd0575766e4deedf7ba072ad35b87e9223af01d2829a81960ba7164f606']
           items:
             type: string
     InternalizeOutput:
@@ -1699,33 +1695,24 @@ components:
         txid:
           type: string
           examples:
-            - "ab69c16801e6ea2bb78bde521c6e3654f7e665d0900e4236b5945e47a1482d3c"
+            - 'ab69c16801e6ea2bb78bde521c6e3654f7e665d0900e4236b5945e47a1482d3c'
         satoshis:
           type: number
           examples:
             - 1
         status:
           type: string
-          enum:
-            [
-              completed,
-              unprocessed,
-              sending,
-              unproven,
-              unsigned,
-              nosend,
-              nonfinal,
-            ]
+          enum: [completed, unprocessed, sending, unproven, unsigned, nosend, nonfinal]
         isOutgoing:
           type: boolean
         description:
           type: string
           examples:
-            - "The creation of a token which captures an item of a todo list."
+            - 'The creation of a token which captures an item of a todo list.'
         labels:
           type: array
           examples:
-            - ["todo create"]
+            - ['todo create']
           items:
             type: string
         version:
@@ -1737,18 +1724,18 @@ components:
         inputs:
           type: array
           items:
-            $ref: "#/components/schemas/WalletActionInput"
+            $ref: '#/components/schemas/WalletActionInput'
         outputs:
           type: array
           items:
-            $ref: "#/components/schemas/WalletActionOutput"
+            $ref: '#/components/schemas/WalletActionOutput'
     WalletActionInput:
       type: object
       properties:
         sourceOutpoint:
           type: string
           examples:
-            - "50e7365af507f6c862b6ca77cef2571ae63544bcd8e19c3c2abc44b20d0aeb6c.3"
+            - '50e7365af507f6c862b6ca77cef2571ae63544bcd8e19c3c2abc44b20d0aeb6c.3'
         sourceSatoshis:
           type: number
           examples:
@@ -1756,15 +1743,15 @@ components:
         sourceLockingScript:
           type: string
           examples:
-            - "76a9144f427ee5f3099f0ac571f6b723a628e7b08fb64c88ac"
+            - '76a9144f427ee5f3099f0ac571f6b723a628e7b08fb64c88ac'
         unlockingScript:
           type: string
           examples:
-            - "47304402200aa56a892e310a7575035fb3c0bcf4..."
+            - '47304402200aa56a892e310a7575035fb3c0bcf4...'
         inputDescription:
           type: string
           examples:
-            - "spending of a token of some sort"
+            - 'spending of a token of some sort'
         sequenceNumber:
           type: number
           examples:
@@ -1779,17 +1766,17 @@ components:
         lockingScript:
           type: string
           examples:
-            - "76a914dd8b1abde0304820ace0adf1478a3ef2291a833788ac"
+            - '76a914dd8b1abde0304820ace0adf1478a3ef2291a833788ac'
         spendable:
           type: boolean
         customInstructions:
           type: string
           examples:
-            - "invoice5678,keyId2,02ffc4f361307f34a82069edbcbe2c9f4bd5498165549f42bdeb698ffdcab1ea38"
+            - 'invoice5678,keyId2,02ffc4f361307f34a82069edbcbe2c9f4bd5498165549f42bdeb698ffdcab1ea38'
         tags:
           type: array
           examples:
-            - ["todo create", "productivity"]
+            - ['todo create', 'productivity']
           items:
             type: string
         outputIndex:
@@ -1799,11 +1786,11 @@ components:
         outputDescription:
           type: string
           examples:
-            - "a special token of some description"
+            - 'a special token of some description'
         basket:
           type: string
           examples:
-            - "todo token"
+            - 'todo token'
     WalletOutput:
       type: object
       properties:
@@ -1828,34 +1815,34 @@ components:
     BasketStringUnder300Bytes:
       type: string
       examples:
-        - "todo token"
+        - 'todo token'
     OutpointString:
       type: string
       examples:
-        - "ae9b36d2bad995e5cd9a12e73d02140c163a7932fa37b927de1f031410dbd751.0"
+        - 'ae9b36d2bad995e5cd9a12e73d02140c163a7932fa37b927de1f031410dbd751.0'
     AcquireCertificateArgs:
       type: object
       properties:
         certifier:
           type: string
           examples:
-            - "035836f24728af22bdeb3524c35b2e6c6126a45587dd11fcab826c054e170f97b8"
+            - '035836f24728af22bdeb3524c35b2e6c6126a45587dd11fcab826c054e170f97b8'
         type:
           type: string
           examples:
-            - "W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8="
+            - 'W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8='
         fields:
           type: object
           examples:
-            - firstName: "Michael"
-              lastName: "Huntington"
-              dob: "12/12/2001"
+            - firstName: 'Michael'
+              lastName: 'Huntington'
+              dob: '12/12/2001'
           additionalProperties:
             type: string
         privilegedReason:
           type: string
           examples:
-            - "-"
+            - '-'
         privileged:
           type: boolean
           default: false
@@ -1865,33 +1852,33 @@ components:
         type:
           type: string
           examples:
-            - "W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8="
+            - 'W/iqV/xaa8VH3s8cxttj8Q3rVaPGxd9JfWMfs9leGr8='
         subject:
           type: string
           examples:
-            - "02d292971b665575c90e8183e20d7c528e2ec1734fcb9f69c7e65e5046596767f3"
+            - '02d292971b665575c90e8183e20d7c528e2ec1734fcb9f69c7e65e5046596767f3'
         serialNumber:
           type: string
           examples:
-            - "6d4U5qznZnQmWJF3sEqKXsi5pB8sUhD0MWcadrxzKas="
+            - '6d4U5qznZnQmWJF3sEqKXsi5pB8sUhD0MWcadrxzKas='
         certifier:
           type: string
           examples:
-            - "035836f24728af22bdeb3524c35b2e6c6126a45587dd11fcab826c054e170f97b8"
+            - '035836f24728af22bdeb3524c35b2e6c6126a45587dd11fcab826c054e170f97b8'
         revocationOutput:
           type: string
           examples:
-            - "e38a285d99d8a70448240255b5e92090bef87d7c5abab34a1263966fcde40621.3"
+            - 'e38a285d99d8a70448240255b5e92090bef87d7c5abab34a1263966fcde40621.3'
         signature:
           type: string
           examples:
-            - "30450221008a9e150a43dc22652f4b627d08cae1d..."
+            - '30450221008a9e150a43dc22652f4b627d08cae1d...'
         fields:
           type: object
           examples:
-            - firstName: "Michael"
-              lastName: "Huntington"
-              dob: "12/12/2001"
+            - firstName: 'Michael'
+              lastName: 'Huntington'
+              dob: '12/12/2001'
           additionalProperties:
             type: string
     ListCertificatesResult:
@@ -1904,38 +1891,38 @@ components:
         certificates:
           type: array
           items:
-            $ref: "#/components/schemas/Certificate"
+            $ref: '#/components/schemas/Certificate'
     ProveCertificateArgs:
       type: object
       properties:
         certificate:
-          $ref: "#/components/schemas/Certificate"
+          $ref: '#/components/schemas/Certificate'
         fieldsToReveal:
           type: array
           items:
             type: string
             examples:
-              - "dob"
+              - 'dob'
         verifier:
           type: string
           examples:
-            - "02a3ffa2ea5db22192aed65131a6683c0f626fb35a8c717c783587e08a4daec380"
+            - '02a3ffa2ea5db22192aed65131a6683c0f626fb35a8c717c783587e08a4daec380'
         privileged:
           type: boolean
           default: false
         privilegedReason:
           type: string
           examples:
-            - "-"
+            - '-'
     ProveCertificateResult:
       type: object
       properties:
         keyringForVerifier:
           type: object
           examples:
-            - firstName: "ZGF2aWQ="
-              lastName: "SW52ZXJuZXNz"
-              dob: "MTIvMTIvMTk4OA=="
+            - firstName: 'ZGF2aWQ='
+              lastName: 'SW52ZXJuZXNz'
+              dob: 'MTIvMTIvMTk4OA=='
           additionalProperties:
             type: string
     DiscoverCertificatesResult:
@@ -1948,11 +1935,11 @@ components:
         certificates:
           type: array
           items:
-            $ref: "#/components/schemas/Certificate"
+            $ref: '#/components/schemas/Certificate'
     ProtocolID:
       type: array
       examples:
-        - [0, "todo token"]
+        - [0, 'todo token']
       prefixItems:
         - type: integer
         - type: string

@@ -1,3 +1,11 @@
+import { createServer } from 'node:http'
+import type {
+  PrivateOverlayHost,
+  PrivateOverlayHostOptions,
+  PrivateAcquisitionHostOptions,
+  PrivatePublicationHostOptions,
+  PrivatePurchaseHostOptions
+} from './PrivateOverlayHost.js'
 import { Reader, Writer } from '@bsv/sdk/primitives/utils'
 import express, { type Request, type Response } from 'express'
 import bodyParser from 'body-parser'
@@ -54,6 +62,9 @@ import { ResourceBoundedLookupWrapper } from './ResourceBoundedLookupWrapper.js'
 import { BanAwareTopicManager } from './BanAwareTopicManager.js'
 import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoveryStorage.js'
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
+import type { OutputLookupRouteOptions } from './OutputLookupRoutes.js'
+import type { RootEvictionRouteOptions } from './RootEvictionHTTPPorts.js'
+import type { ProposalRouteOptions } from './ProposalHTTPPorts.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
@@ -74,6 +85,7 @@ import {
   concurrencyLimit,
   configureHttpServer,
   corsPolicy,
+  readCorsOriginSetting,
   initialDoubleSlashCompatibility,
   profileValue,
   readBodyLimitBytes,
@@ -137,6 +149,23 @@ class InMemoryMigrationSource implements Knex.Knex.MigrationSource<Migration> {
 export type SyncConfigurationEntry = string[] | 'SHIP' | false
 export type SyncConfigurationMap = Record<string, SyncConfigurationEntry>
 export type OverlayNetwork = 'main' | 'test' | 'ttn'
+
+/** What a factory registered with {@link OverlayExpress.registerRouter} receives. */
+export interface RegisteredRouterContext {
+  engine: Engine
+  /**
+   * The server wallet behind BRC-103 authentication, or undefined when it failed to start. It has
+   * no storage provider: it signs and verifies, but it cannot create or internalize actions, so
+   * `createAction` and `internalizeAction` throw. A router that takes payment must build its own
+   * storage-backed wallet from the same root key, so its identity matches the BRC-103 session key.
+   */
+  wallet: WalletInterface | undefined
+}
+
+/** Builds a router once the engine and server wallet exist. */
+export type RegisteredRouterFactory = (
+  context: RegisteredRouterContext
+) => express.RequestHandler | Promise<express.RequestHandler>
 
 export interface EngineConfig {
   chainTracker?: ChainTracker | 'scripts only'
@@ -594,6 +623,18 @@ export default class OverlayExpress {
   // Optional shared store for BSV mutual-auth sessions.
   authSessionManager?: SessionManager | AsyncSessionManager
 
+  private outputLookup?: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
+  private rootEviction?: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & {
+    identity: string
+  }
+  private readonly privateOverlayOptions: PrivateOverlayHostOptions = {}
+  private proposalIdentity?: string
+  private proposalRoutes?: (
+    authenticate: express.RequestHandler,
+    handleHandshake: boolean,
+    limits: { request: number; response: number; origins?: readonly string[] | '*' }
+  ) => Promise<express.Router>
+
   // Server start time for uptime tracking
   private startTime?: Date
 
@@ -631,6 +672,12 @@ export default class OverlayExpress {
         "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
   }
+
+  // Application routers mounted by start(), in registration order
+  private readonly registeredRouters: Array<{ path: string; factory: RegisteredRouterFactory }> = []
+
+  // Set once start() begins wiring routes; later registrations could never be reached
+  private startInvoked = false
 
   /**
    * Constructs an instance of OverlayExpress.
@@ -935,6 +982,25 @@ export default class OverlayExpress {
   }
 
   /**
+   * Registers an application router. Its factory runs during `start()`, after the BRC-103
+   * authentication middleware is mounted and before the admin routes and the 404 handler, so
+   * the router inherits CORS, body parsing, response limits, and `req.auth`.
+   *
+   * @param path - Mount path, beginning with "/"
+   * @param factory - Receives the engine and server wallet and returns the router
+   */
+  registerRouter(path: string, factory: RegisteredRouterFactory): this {
+    if (this.startInvoked) throw new Error('registerRouter must be called before start()')
+    if (typeof path !== 'string' || !path.startsWith('/')) {
+      throw new TypeError('Router path must begin with "/"')
+    }
+    if (typeof factory !== 'function') throw new TypeError('Router factory must be a function')
+    this.registeredRouters.push({ path, factory })
+    this.logger.log(chalk.blue(`Registered router at ${path}`))
+    return this
+  }
+
+  /**
    * Configures the admin identity key for wallet-based admin detection.
    * When set, the frontend can compare the user's wallet identity key against this
    * to determine whether to show the admin dashboard.
@@ -957,6 +1023,119 @@ export default class OverlayExpress {
   configureAuthSessionManager(sessionManager: SessionManager | AsyncSessionManager): void {
     this.authSessionManager = sessionManager
     this.logger.log(chalk.blue('BSV authentication session manager has been configured.'))
+  }
+
+  /**
+   * Opt in to a durable BRC-193 companion at its signed concrete base path.
+   * This never upgrades an existing finite LookupService or changes /lookup.
+   * Configure before start; the host retains ownership of provider storage.
+   */
+  configureOutputLookup(
+    options: Omit<OutputLookupRouteOptions, 'authenticate' | 'handleHandshake'>
+  ): void {
+    if (this.isListening) throw new Error('Configure the live lookup companion before start')
+    this.outputLookup = {
+      ...options,
+      chain: { ...options.chain },
+      allowedOrigins: [...options.allowedOrigins]
+    }
+  }
+
+  /**
+   * Explicit root coordination routes sharing this host's authentication wallet.
+   * Configure before start. The caller retains database and worker ownership;
+   * this does not publish capabilities or retrofit existing serving paths.
+   */
+  configureRootEviction(
+    options: Omit<RootEvictionRouteOptions, 'authenticate' | 'handleHandshake'> & {
+      identity: string
+    }
+  ): void {
+    if (this.isListening) throw new Error('Configure root coordination before start')
+    assertSingleLineString(options.identity, 'Root coordination identity', 66, false)
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Root origins must be an array')
+    this.rootEviction = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+
+  /**
+   * Opt-in non-final proposal routes; storage, policy and admission remain caller-owned.
+   * The closure retains the journal's record type without adding SDK types to legacy
+   * host declarations. No proposal enters ordinary admission except explicit finalize.
+   */
+  configureProposals<Entry>(
+    options: Omit<ProposalRouteOptions<Entry>, 'authenticate' | 'handleHandshake'> & {
+      identity: string
+    }
+  ): void {
+    if (this.isListening) throw new Error('Configure proposals before start')
+    assertSingleLineString(options.identity, 'Proposal identity', 66, false)
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Proposal origins must be an array')
+    const owned = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+    this.proposalIdentity = options.identity
+    this.proposalRoutes = async (authenticate, handleHandshake, limits) => {
+      const { createProposalRouter } = await import('./ProposalRoutes.js')
+      const origins = owned.allowedOrigins ?? limits.origins
+      return createProposalRouter({
+        ...owned,
+        authenticate,
+        handleHandshake,
+        allowedOrigins: origins === '*' ? undefined : origins,
+        maximumRequestBytes: Math.min(owned.maximumRequestBytes ?? 1048576, limits.request),
+        maximumResponseBytes: Math.min(owned.maximumResponseBytes ?? 4194304, limits.response)
+      })
+    }
+  }
+
+  /** Optional private acquisition; the application owns durable storage and workers. */
+  configurePrivateAcquisition(options: PrivateAcquisitionHostOptions): void {
+    if (this.isListening) throw new Error('Configure private acquisition before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.acquisition = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+  /** Optional private publication using the same authentication and native response gate. */
+  configurePrivatePublication(options: PrivatePublicationHostOptions): void {
+    if (this.isListening) throw new Error('Configure private publication before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.publication = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
+  }
+
+  /** Optional selected-host covenant purchases. The application owns durable
+   * preparation, exact transaction validation, release and physical disclosure.
+   */
+  configurePrivatePurchase(options: PrivatePurchaseHostOptions): void {
+    if (this.isListening) throw new Error('Configure private purchase before start')
+    if (options.allowedOrigins !== undefined && !Array.isArray(options.allowedOrigins))
+      throw new TypeError('Private overlay origins must be an array')
+    this.privateOverlayOptions.purchase = {
+      ...options,
+      ...(options.allowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: [...options.allowedOrigins] })
+    }
   }
 
   /**
@@ -2321,6 +2500,41 @@ export default class OverlayExpress {
   async start(): Promise<void> {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
+    const rootEviction = this.rootEviction
+    const proposalRoutes = this.proposalRoutes
+    let privateOverlay: PrivateOverlayHost | undefined
+    if (
+      this.privateOverlayOptions.acquisition ||
+      this.privateOverlayOptions.publication ||
+      this.privateOverlayOptions.purchase
+    ) {
+      const { PrivateOverlayHost } = await import('./PrivateOverlayHost.js')
+      privateOverlay = new PrivateOverlayHost(this.privateOverlayOptions)
+    }
+    const authenticatedLookup = this.outputLookup?.authentication === 'brc103'
+    let companionAuth: express.RequestHandler | undefined
+    if (authenticatedLookup || rootEviction || proposalRoutes || privateOverlay) {
+      if (!this.serverWallet) {
+        if (authenticatedLookup)
+          throw new Error('Authenticated live lookup requires a server wallet')
+        if (rootEviction) throw new Error('Root coordination requires a server wallet')
+        if (privateOverlay) throw new Error('Private overlays require a server wallet')
+        throw new Error('Proposals require a server wallet')
+      }
+      const { publicKey } = await this.serverWallet.getPublicKey({ identityKey: true })
+      if (authenticatedLookup && publicKey !== this.outputLookup!.identity)
+        throw new Error('Live lookup identity must match the server authentication wallet')
+      if (rootEviction && publicKey !== rootEviction.identity)
+        throw new Error('Root coordination identity must match the server authentication wallet')
+      if (proposalRoutes && publicKey !== this.proposalIdentity)
+        throw new Error('Proposal identity must match the server authentication wallet')
+      privateOverlay?.requireIdentity(publicKey)
+      companionAuth = createAuthMiddleware({
+        wallet: this.serverWallet,
+        sessionManager: this.authSessionManager,
+        allowUnauthenticated: true
+      })
+    }
     const hasConfiguredArcProvider =
       (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
       (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
@@ -2333,6 +2547,7 @@ export default class OverlayExpress {
       )
     }
     this.startTime = new Date()
+    this.startInvoked = true
 
     const edgePolicy = this.edgePolicyConfig
     const resourceProfile = readResourceProfile(edgePolicy.environmentPrefix)
@@ -2453,6 +2668,81 @@ export default class OverlayExpress {
         environmentPrefix: edgePolicy.environmentPrefix
       })
     )
+    const requestCapacity = concurrencyLimit(
+      edgePolicy.environmentPrefix,
+      edgePolicy.maxConcurrentRequests === 200
+        ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
+        : edgePolicy.maxConcurrentRequests
+    )
+    if (this.outputLookup || rootEviction || proposalRoutes || privateOverlay) {
+      // All companions share host capacity, including long polls. Raw signed
+      // requests stay before legacy parsers, transformations and payload logging.
+      this.app.use(requestCapacity)
+      const jsonBytes = readBodyLimitBytes(
+        `${edgePolicy.environmentPrefix}_JSON`,
+        edgePolicy.jsonBodyLimitBytes
+      )
+      if (this.outputLookup) {
+        const { createOutputLookupRouter } = await import('./OutputLookupRoutes.js')
+        this.app.use(
+          createOutputLookupRouter({
+            ...this.outputLookup,
+            authenticate: companionAuth,
+            maximumRequestBytes: Math.min(
+              this.outputLookup.maximumRequestBytes ?? 1048576,
+              jsonBytes
+            ),
+            maximumResponseBytes: Math.min(
+              this.outputLookup.maximumResponseBytes ?? 4194304,
+              maxResponseBytes === -1 ? 4194304 : maxResponseBytes
+            )
+          })
+        )
+      }
+      if (rootEviction) {
+        const { createRootEvictionRouter } = await import('./RootEvictionRoutes.js')
+        const originSetting =
+          rootEviction.allowedOrigins ??
+          edgePolicy.allowedOrigins ??
+          readCorsOriginSetting(edgePolicy.environmentPrefix)
+        this.app.use(
+          createRootEvictionRouter({
+            ...rootEviction,
+            authenticate: companionAuth!,
+            handleHandshake: !authenticatedLookup,
+            allowedOrigins: originSetting === '*' ? undefined : originSetting,
+            maximumRequestBytes: Math.min(rootEviction.maximumRequestBytes ?? 1048576, jsonBytes),
+            maximumResponseBytes: Math.min(
+              rootEviction.maximumResponseBytes ?? 1048576,
+              maxResponseBytes === -1 ? 1048576 : maxResponseBytes
+            )
+          })
+        )
+      }
+      if (proposalRoutes) {
+        this.app.use(
+          await proposalRoutes(companionAuth!, !authenticatedLookup && !rootEviction, {
+            request: jsonBytes,
+            response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
+            origins:
+              edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
+          })
+        )
+      }
+      if (privateOverlay) {
+        for (const router of privateOverlay.routes(
+          companionAuth!,
+          !authenticatedLookup && !rootEviction && !proposalRoutes,
+          {
+            request: jsonBytes,
+            response: maxResponseBytes === -1 ? 4194304 : maxResponseBytes,
+            origins:
+              edgePolicy.allowedOrigins ?? readCorsOriginSetting(edgePolicy.environmentPrefix)
+          }
+        ))
+          this.app.use(router)
+      }
+    }
     this.app.use(
       corsPolicy({
         environmentPrefix: edgePolicy.environmentPrefix,
@@ -2460,14 +2750,8 @@ export default class OverlayExpress {
         methods: ['GET', 'POST', 'OPTIONS']
       })
     )
-    this.app.use(
-      concurrencyLimit(
-        edgePolicy.environmentPrefix,
-        edgePolicy.maxConcurrentRequests === 200
-          ? profileValue(resourceProfile, { small: 8, standard: 24, highThroughput: 96 })
-          : edgePolicy.maxConcurrentRequests
-      )
-    )
+    if (!this.outputLookup && !rootEviction && !proposalRoutes && !privateOverlay)
+      this.app.use(requestCapacity)
     this.app.use(
       bodyParser.json({
         limit: readBodyLimitBytes(
@@ -3031,14 +3315,24 @@ export default class OverlayExpress {
      * are present, allowing Bearer token fallback.
      */
     if (this.serverWallet !== undefined) {
-      const bsvAuth = createAuthMiddleware({
-        wallet: this.serverWallet,
-        sessionManager: this.authSessionManager,
-        allowUnauthenticated: true
-      })
+      const bsvAuth =
+        companionAuth ??
+        createAuthMiddleware({
+          wallet: this.serverWallet,
+          sessionManager: this.authSessionManager,
+          allowUnauthenticated: true
+        })
       this.app.use(bsvAuth as any)
       this.logger.log(chalk.blue('BSV mutual authentication middleware enabled.'))
     }
+
+    // Routers mount strictly in registration order: each factory starts after the previous one
+    // was mounted. reduce invokes every callback up front, so nothing may run before the await.
+    await this.registeredRouters.reduce<Promise<void>>(async (previous, { path, factory }) => {
+      await previous
+      this.app.use(path, await factory({ engine, wallet: this.serverWallet }))
+      this.logger.log(chalk.blue(`Mounted registered router at ${path}`))
+    }, Promise.resolve())
 
     /**
      * Middleware for checking admin authentication.
@@ -3635,12 +3929,19 @@ export default class OverlayExpress {
     await this.runStartupSync()
 
     // Start listening on the configured port
-    this.server = this.app.listen(this.port, () => {
+    const listening = () => {
       this.isListening = true
       this.logger.log(
         chalk.green.bold(`${this.name} is ready and listening on local port ${this.port}`)
       )
-    })
+    }
+    this.server =
+      privateOverlay?.maximumHeaderBytes === undefined
+        ? this.app.listen(this.port, listening)
+        : createServer({ maxHeaderSize: privateOverlay.maximumHeaderBytes }, this.app).listen(
+            this.port,
+            listening
+          )
     configureHttpServer(this.server, edgePolicy.environmentPrefix, edgePolicy.http)
   }
 

@@ -1,5 +1,9 @@
-import { type ValidListActionsArgs, type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
-import { ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
+import {
+  type ValidListActionsArgs,
+  type ValidListOutputsArgs,
+  validateInternalizeActionArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import { InternalizeActionArgs, ListActionsResult, ListOutputsResult, TelemetrySpan } from '@bsv/sdk'
 import {
   outputColumnsWithoutLockingScript,
   TableCertificate,
@@ -34,6 +38,7 @@ import { reviewStatus } from './methods/reviewStatus'
 import { ServicesCallHistory, WalletServices } from '../sdk/WalletServices.interfaces'
 import {
   AuthId,
+  StorageInternalizeActionResult,
   FindCertificateFieldsArgs,
   FindCertificatesArgs,
   FindCommissionsArgs,
@@ -61,7 +66,12 @@ import {
   WalletStorageProvider
 } from '../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
-import { verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
+import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../utility/utilityHelpers'
+import { canonicalizeAtomicBeef } from '../utility/canonicalizeAtomicBeef'
+import { internalizeAction } from './methods/internalizeAction'
+import type { InternalizeReceiptClaim } from './methods/InternalizeReceiptClaim'
+import { authorizeBrc197StorageUser, internalizeBrc197Action } from './methods/internalizeBrc197Action'
+import { ownBrc197InternalizeActionArgs, type Brc197InternalizeActionArgs } from '../sdk/Brc197Internalization'
 
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { managedChangeOutputFields } from './methods/managedChange'
@@ -143,6 +153,182 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       this.knex.on('query-response', this.onQueryResponse)
       this.knex.on('query-error', this.onQueryError)
     }
+  }
+
+  private receiptClockMs(): Knex.Raw<number> {
+    switch (this.dbtype) {
+      case 'MySQL':
+        return this.knex.raw('CAST(UNIX_TIMESTAMP(CURRENT_TIMESTAMP(3)) * 1000 AS UNSIGNED)')
+      case 'Postgres':
+        return this.knex.raw('CAST(EXTRACT(EPOCH FROM clock_timestamp()) * 1000 AS BIGINT)')
+      case 'SQLite':
+        return this.knex.raw("CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)")
+      default:
+        throw new WERR_INTERNAL('wallet receipt claim requires a ready SQL storage provider')
+    }
+  }
+
+  private receiptLeaseMs(): Knex.Raw<number> {
+    return this.knex.raw('(? + ?)', [this.receiptClockMs(), 120_000])
+  }
+
+  private async acquireInternalizeReceipt(
+    userId: number,
+    txid: string,
+    scope?: TrxToken
+  ): Promise<{
+    ownerToken: string
+    claim: InternalizeReceiptClaim
+    preserveComplete: boolean
+  }> {
+    const ownerToken = randomBytesBase64(18)
+    const deadline = Date.now() + 30_000
+    const db = this.toDb(scope)
+    while (Date.now() < deadline) {
+      const previous = await this.tryAcquireInternalizeReceipt(db, userId, txid, ownerToken)
+      if (previous === undefined) {
+        // An atomic writer must release its transaction before retrying a
+        // competing external lease; waiting here would block that owner's write.
+        if (scope !== undefined) break
+        await new Promise(resolve => setTimeout(resolve, 100))
+        continue
+      }
+
+      const activeRow = (trx: TrxToken) => {
+        if (scope !== undefined && trx !== scope)
+          throw new WERR_INVALID_PARAMETER('trx', 'the receipt ownership transaction')
+        const query = (trx as Knex.Transaction)('internalize_receipts')
+          .where({ userId, txid, ownerToken, state: 'pending' })
+          .where('leaseUntil', '>', this.receiptClockMs())
+        return this.dbtype === 'SQLite' ? query : query.forUpdate()
+      }
+      const claim: InternalizeReceiptClaim = {
+        retryNew: previous.retryNew,
+        assertActive: async trx => {
+          const active = await activeRow(trx).first('ownerToken')
+          if (active == null) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        },
+        markNew: async trx => {
+          const changed = await activeRow(trx).update({ needsNewReceipt: true })
+          if (changed !== 1) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        },
+        complete: async trx => {
+          const changed = await activeRow(trx).update({
+            state: 'complete',
+            needsNewReceipt: false,
+            leaseUntil: 0
+          })
+          if (changed !== 1) throw new WERR_INTERNAL('wallet receipt claim expired or was superseded')
+        }
+      }
+      return { ownerToken, claim, preserveComplete: previous.preserveComplete }
+    }
+    throw new WERR_INTERNAL('wallet receipt is already being processed; retry after the active request finishes')
+  }
+
+  override async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
+    validateInternalizeActionArgs(args)
+    return await this.withInternalizeReceipt(auth, args, claim => internalizeAction(this, auth, args, claim))
+  }
+
+  override async internalizeBrc197Action(
+    auth: AuthId,
+    args: Brc197InternalizeActionArgs
+  ): Promise<StorageInternalizeActionResult> {
+    const owned = ownBrc197InternalizeActionArgs(args)
+    const owner = await authorizeBrc197StorageUser(this, auth)
+    return await this.withInternalizeReceipt(owner, owned, claim => internalizeBrc197Action(this, owner, owned, claim))
+  }
+
+  /** Coordinate an explicitly installed same-database ownership writer. Callers
+   * must use the supplied fence in each writer and complete it atomically with
+   * ownership. This backend port carries no acquisition, Script or SDK3 types. */
+  async withInternalizeReceipt(
+    auth: AuthId,
+    args: InternalizeActionArgs,
+    write: (claim: InternalizeReceiptClaim) => Promise<StorageInternalizeActionResult>
+  ): Promise<StorageInternalizeActionResult> {
+    return await this.withInternalizeReceiptScope(auth, args.tx, write)
+  }
+
+  /** Join an existing ownership transaction. Claim acquisition, ownership and
+   * completion roll back together. A competing external lease is refused
+   * immediately so the transaction cannot hold its writer while waiting. */
+  async withInternalizeReceiptTransaction(
+    auth: AuthId,
+    args: Pick<InternalizeActionArgs, 'tx'>,
+    trx: TrxToken,
+    write: (claim: InternalizeReceiptClaim) => Promise<StorageInternalizeActionResult>
+  ): Promise<StorageInternalizeActionResult> {
+    const transaction = trx as Knex.Transaction
+    if (
+      transaction == null ||
+      typeof transaction !== 'function' ||
+      transaction.isTransaction !== true ||
+      typeof transaction.isCompleted !== 'function' ||
+      transaction.isCompleted()
+    )
+      throw new WERR_INVALID_PARAMETER('trx', 'an active SQL ownership transaction')
+    return await this.withInternalizeReceiptScope(auth, args.tx, write, trx)
+  }
+
+  private async withInternalizeReceiptScope(
+    auth: AuthId,
+    tx: InternalizeActionArgs['tx'],
+    write: (claim: InternalizeReceiptClaim) => Promise<StorageInternalizeActionResult>,
+    trx?: TrxToken
+  ): Promise<StorageInternalizeActionResult> {
+    const userId = auth.userId
+    if (userId == null) throw new WERR_UNAUTHORIZED()
+    const txid = canonicalizeAtomicBeef(tx).atomicTxid
+    if (txid == null) throw new WERR_INVALID_PARAMETER('tx', 'an AtomicBEEF transaction')
+    const db = this.toDb(trx)
+    const { ownerToken, claim, preserveComplete } = await this.acquireInternalizeReceipt(userId, txid, trx)
+    try {
+      return await write(claim)
+    } finally {
+      // A successful writer marked its claim complete in the same transaction
+      // as the output records. Preserve that durable key across later merges;
+      // release an uncompleted key only when no new receipt header was marked.
+      const noNewReceipt = db('internalize_receipts').where({
+        userId,
+        txid,
+        ownerToken,
+        state: 'pending',
+        needsNewReceipt: false
+      })
+      if (preserveComplete) await noNewReceipt.update({ state: 'complete', leaseUntil: 0 })
+      else await noNewReceipt.delete()
+      await db('internalize_receipts')
+        .where({ userId, txid, ownerToken, state: 'pending', needsNewReceipt: true })
+        .update({ state: 'retryable', leaseUntil: 0 })
+    }
+  }
+
+  private async tryAcquireInternalizeReceipt(
+    db: Knex | Knex.Transaction,
+    userId: number,
+    txid: string,
+    ownerToken: string
+  ): Promise<{ retryNew: boolean; preserveComplete: boolean } | undefined> {
+    await db('internalize_receipts')
+      .insert({ userId, txid, ownerToken, state: 'pending', leaseUntil: this.receiptLeaseMs(), needsNewReceipt: false })
+      .onConflict(['userId', 'txid'])
+      .ignore()
+    const previous = await db('internalize_receipts')
+      .where({ userId, txid })
+      .first<{ ownerToken: string; state: string; needsNewReceipt: boolean }>('ownerToken', 'state', 'needsNewReceipt')
+    if (previous == null) return undefined
+    if (previous.ownerToken !== ownerToken) {
+      const changed = await db('internalize_receipts')
+        .where({ userId, txid, ownerToken: previous.ownerToken })
+        .where(builder =>
+          builder.whereIn('state', ['retryable', 'complete']).orWhere('leaseUntil', '<=', this.receiptClockMs())
+        )
+        .update({ ownerToken, state: 'pending', leaseUntil: this.receiptLeaseMs() })
+      if (changed !== 1) return undefined
+    }
+    return { retryNew: Boolean(previous.needsNewReceipt), preserveComplete: previous.state === 'complete' }
   }
 
   private databaseSystem(): string {
@@ -1496,6 +1682,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     const q = this.findProvenTxReqsQuery(args)
     const r = await q
     return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
+  }
+
+  override async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const [row] = await this.toDb()('proven_txs').min('height as minimum')
+    return row.minimum == null ? undefined : Number(row.minimum)
   }
 
   override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {

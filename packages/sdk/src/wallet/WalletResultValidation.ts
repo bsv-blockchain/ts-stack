@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from './CertificateType.js'
 import { CallType } from './substrates/WalletWireCalls.js'
 import { MAXIMUM_SEND_WITH_TRANSACTIONS } from './validationHelpers.js'
 import { MAX_WALLET_WIRE_FRAME_BYTES } from './substrates/WalletWire.js'
@@ -8,6 +9,7 @@ import {
   type WalletResultBEEF,
   type WalletResultTransaction
 } from './WalletResultBEEF.js'
+import { isCanonicalDecimal, isModuleBalanceQuery } from './moduleBalanceQuery.js'
 import { isCanonicalDERSignature, isValidCompressedPublicKey } from './Secp256k1Validation.js'
 import {
   base64ToBytes,
@@ -1474,18 +1476,29 @@ function stringRecord(
   return values as Record<string, string>
 }
 
+function certificateIdentifierLength(
+  certificate: UnknownRecord,
+  name: 'type' | 'serialNumber',
+  call: string,
+  field: string
+): number {
+  const encoded = base64(certificate[name], call, `${field}.${name}`)
+  if (name === 'type' && call !== 'acquireCertificate') {
+    return existingCertificateTypeBytes(encoded).length
+  }
+  const decoded = base64ToBytes(encoded)
+  if (decoded.length !== 32 || bytesToBase64(decoded) !== encoded) {
+    throw new Error(`Certificate ${name} must canonically encode exactly 32 bytes`)
+  }
+  return decoded.length
+}
+
 function validateCertificate(value: unknown, call: string, field: string): UnknownRecord {
   const certificate = record(value, call, field)
   try {
-    let encodedLength = 0
-    const encodedFieldNames = ['type', 'serialNumber'] as const
-    for (let index = 0; index < encodedFieldNames.length; index++) {
-      const name = encodedFieldNames[index]
-      const encoded = base64(certificate[name], call, `${field}.${name}`)
-      const decoded = base64ToBytes(encoded)
-      if (decoded.length !== 32 || bytesToBase64(decoded) !== encoded) throw new Error()
-      encodedLength += decoded.length
-    }
+    let encodedLength =
+      certificateIdentifierLength(certificate, 'type', call, field) +
+      certificateIdentifierLength(certificate, 'serialNumber', call, field)
     const publicKeyFieldNames = ['subject', 'certifier'] as const
     for (let index = 0; index < publicKeyFieldNames.length; index++) {
       const name = publicKeyFieldNames[index]
@@ -2078,9 +2091,19 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
 }
 
 function validateListOutputs(result: UnknownRecord, call: string, request?: unknown): void {
+  const requestArgs = requestRecord(request)
+  if (isModuleBalanceQuery(requestArgs?.basket)) {
+    if (!isCanonicalDecimal(result.totalOutputs)) {
+      invalid(call, 'totalOutputs', 'canonical decimal text for a module balance query')
+    }
+    if (!arrayIsArray(result.outputs) || result.outputs.length !== 0) {
+      invalid(call, 'outputs', 'an empty array for a module balance query')
+    }
+    if (result.BEEF !== undefined) invalid(call, 'BEEF', 'absent for a module balance query')
+    return
+  }
   const outputs = validateListResult(result, call, 'totalOutputs', 'outputs', request)
   const parsedBeef = result.BEEF === undefined ? undefined : beef(result.BEEF, call, 'BEEF')
-  const requestArgs = requestRecord(request)
   const requestedTags: string[] = []
   if (arrayIsArray(requestArgs?.tags)) {
     for (let index = 0; index < requestArgs.tags.length; index++) {

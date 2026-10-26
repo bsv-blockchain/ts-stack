@@ -220,10 +220,12 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
   async initDB(storageName?: string, storageIdentityKey?: string): Promise<IDBPDatabase<StorageIdbSchema>> {
     const chain = this.chain
     const maxOutputScript = 1024
-    const db = await openDB<StorageIdbSchema>(this.dbName, 6, {
+    const db = await openDB<StorageIdbSchema>(this.dbName, 7, {
       upgrade(db, _oldVersion, _newVersion, transaction) {
         upgradeAllStoresV1(db)
         upgradeActionBatchStoresV2(db)
+        const proofs = transaction.objectStore('proven_txs')
+        if (!proofs.indexNames.contains('height')) proofs.createIndex('height', 'height')
         const transactions = transaction.objectStore('transactions')
         if (!transactions.indexNames.contains('txid_userId')) {
           transactions.createIndex('txid_userId', ['txid', 'userId'])
@@ -658,7 +660,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset ?? 0,
       args.paged?.limit,
       async r => {
-        if (args.tagIds != null && !args.tagIds.includes(r.outputTagId)) return false
+        if (args.tagIds != null && args.tagIds.length > 0 && !args.tagIds.includes(r.outputTagId)) return false
         if (!matchesOutputTagMapPartial(r, args.partial)) return false
         if (userId !== undefined) {
           const tagsForUser = await this.countOutputTags({
@@ -808,6 +810,14 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       next
     )
     if (args.trx == null) await dbTrx.done
+  }
+
+  override async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const dbTrx = this.toDbTrx(['proven_txs'], 'readonly')
+    const cursor = await dbTrx.objectStore('proven_txs').index('height').openKeyCursor()
+    const height = cursor === null ? undefined : Number(cursor.key)
+    await dbTrx.done
+    return height
   }
 
   async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
@@ -1614,8 +1624,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       args.paged?.offset ?? 0,
       args.paged?.limit,
       r => {
-        if (args.certifiers != null && !args.certifiers.includes(r.certifier)) return false
-        if (args.types != null && !args.types.includes(r.type)) return false
+        if (args.certifiers != null && args.certifiers.length > 0 && !args.certifiers.includes(r.certifier)) return false
+        if (args.types != null && args.types.length > 0 && !args.types.includes(r.type)) return false
         return matchesCertificatePartial(r, args.partial)
       },
       filtered
@@ -1681,10 +1691,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
     this.assertNoUndefinedInPartial(args.partial)
     const dbTrx = this.toDbTrx(['monitor_events'], 'readonly', args.trx)
     const store = dbTrx.objectStore('monitor_events')
-    const cursor =
-      args.partial?.id != null && args.partial.id !== 0
-        ? await store.openCursor(args.partial.id)
-        : await store.openCursor()
+    const direction = args.orderDescending ? 'prev' : 'next'
+    const query = args.partial?.id != null && args.partial.id !== 0 ? args.partial.id : null
+    const cursor = await store.openCursor(query, direction)
     await scanCursor<TableMonitorEvent>(
       cursor,
       args.since,
@@ -2014,7 +2023,7 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       async r => {
         if (args.from != null && r.created_at.getTime() < args.from.getTime()) return false
         if (args.to != null && r.created_at.getTime() >= args.to.getTime()) return false
-        if (args.status != null && !args.status.includes(r.status)) return false
+        if (args.status != null && args.status.length > 0 && !args.status.includes(r.status)) return false
         if (!matchesTransactionPartial(r, args.partial)) return false
         if (
           labelIds != null &&

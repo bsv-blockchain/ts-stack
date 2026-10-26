@@ -4,44 +4,44 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ## Interfaces
 
-| | | |
-| --- | --- | --- |
-| [AbortActionArgs](#interface-abortactionargs) | [ListCertificatesResult](#interface-listcertificatesresult) | [ValidListCertificatesArgs](#interface-validlistcertificatesargs) |
-| [AbortActionResult](#interface-abortactionresult) | [ListOutputsArgs](#interface-listoutputsargs) | [ValidListOutputsArgs](#interface-validlistoutputsargs) |
-| [AcquireCertificateArgs](#interface-acquirecertificateargs) | [ListOutputsResult](#interface-listoutputsresult) | [ValidProcessActionArgs](#interface-validprocessactionargs) |
-| [AuthenticatedResult](#interface-authenticatedresult) | [OutPoint](#interface-outpoint) | [ValidProcessActionOptions](#interface-validprocessactionoptions) |
-| [BasketInsertion](#interface-basketinsertion) | [PrivateKeyDerivation](#interface-privatekeyderivation) | [ValidProveCertificateArgs](#interface-validprovecertificateargs) |
-| [BoundActionOptions](#interface-boundactionoptions) | [ProveCertificateArgs](#interface-provecertificateargs) | [ValidRelinquishCertificateArgs](#interface-validrelinquishcertificateargs) |
-| [CertificateResult](#interface-certificateresult) | [ProveCertificateResult](#interface-provecertificateresult) | [ValidRelinquishOutputArgs](#interface-validrelinquishoutputargs) |
-| [CreateActionArgs](#interface-createactionargs) | [RelinquishCertificateArgs](#interface-relinquishcertificateargs) | [ValidSignActionArgs](#interface-validsignactionargs) |
-| [CreateActionInput](#interface-createactioninput) | [RelinquishCertificateResult](#interface-relinquishcertificateresult) | [ValidSignActionOptions](#interface-validsignactionoptions) |
-| [CreateActionOptions](#interface-createactionoptions) | [RelinquishOutputArgs](#interface-relinquishoutputargs) | [ValidWalletPayment](#interface-validwalletpayment) |
-| [CreateActionOutput](#interface-createactionoutput) | [RelinquishOutputResult](#interface-relinquishoutputresult) | [ValidWalletSignerArgs](#interface-validwalletsignerargs) |
-| [CreateActionResult](#interface-createactionresult) | [RevealCounterpartyKeyLinkageArgs](#interface-revealcounterpartykeylinkageargs) | [VerifyHmacArgs](#interface-verifyhmacargs) |
-| [CreateHmacArgs](#interface-createhmacargs) | [RevealCounterpartyKeyLinkageResult](#interface-revealcounterpartykeylinkageresult) | [VerifyHmacResult](#interface-verifyhmacresult) |
-| [CreateHmacResult](#interface-createhmacresult) | [RevealSpecificKeyLinkageArgs](#interface-revealspecifickeylinkageargs) | [VerifySignatureArgs](#interface-verifysignatureargs) |
-| [CreateSignatureArgs](#interface-createsignatureargs) | [RevealSpecificKeyLinkageResult](#interface-revealspecifickeylinkageresult) | [VerifySignatureResult](#interface-verifysignatureresult) |
-| [CreateSignatureResult](#interface-createsignatureresult) | [ReviewActionResult](#interface-reviewactionresult) | [WalletAction](#interface-walletaction) |
-| [DiscoverByAttributesArgs](#interface-discoverbyattributesargs) | [SendWithResult](#interface-sendwithresult) | [WalletActionInput](#interface-walletactioninput) |
-| [DiscoverByIdentityKeyArgs](#interface-discoverbyidentitykeyargs) | [SignActionArgs](#interface-signactionargs) | [WalletActionOutput](#interface-walletactionoutput) |
-| [DiscoverCertificatesResult](#interface-discovercertificatesresult) | [SignActionOptions](#interface-signactionoptions) | [WalletCertificate](#interface-walletcertificate) |
-| [GetHeaderArgs](#interface-getheaderargs) | [SignActionResult](#interface-signactionresult) | [WalletDecryptArgs](#interface-walletdecryptargs) |
-| [GetHeaderResult](#interface-getheaderresult) | [SignActionSpend](#interface-signactionspend) | [WalletDecryptResult](#interface-walletdecryptresult) |
-| [GetHeightResult](#interface-getheightresult) | [SignableTransaction](#interface-signabletransaction) | [WalletEncryptArgs](#interface-walletencryptargs) |
-| [GetNetworkResult](#interface-getnetworkresult) | [ValidAbortActionArgs](#interface-validabortactionargs) | [WalletEncryptResult](#interface-walletencryptresult) |
-| [GetPublicKeyArgs](#interface-getpublickeyargs) | [ValidAcquireCertificateArgs](#interface-validacquirecertificateargs) | [WalletEncryptionArgs](#interface-walletencryptionargs) |
-| [GetPublicKeyResult](#interface-getpublickeyresult) | [ValidAcquireDirectCertificateArgs](#interface-validacquiredirectcertificateargs) | [WalletErrorObject](#interface-walleterrorobject) |
-| [GetVersionResult](#interface-getversionresult) | [ValidAcquireIssuanceCertificateArgs](#interface-validacquireissuancecertificateargs) | [WalletInterface](#interface-walletinterface) |
-| [IdentityCertificate](#interface-identitycertificate) | [ValidBasketInsertion](#interface-validbasketinsertion) | [WalletLoggerInterface](#interface-walletloggerinterface) |
-| [IdentityCertifier](#interface-identitycertifier) | [ValidCreateActionArgs](#interface-validcreateactionargs) | [WalletLoggerLog](#interface-walletloggerlog) |
-| [InternalizeActionArgs](#interface-internalizeactionargs) | [ValidCreateActionInput](#interface-validcreateactioninput) | [WalletOutput](#interface-walletoutput) |
-| [InternalizeActionResult](#interface-internalizeactionresult) | [ValidCreateActionOptions](#interface-validcreateactionoptions) | [WalletPayment](#interface-walletpayment) |
-| [InternalizeOutput](#interface-internalizeoutput) | [ValidCreateActionOutput](#interface-validcreateactionoutput) | [WalletResultBEEF](#interface-walletresultbeef) |
-| [KeyDeriverApi](#interface-keyderiverapi) | [ValidDiscoverByAttributesArgs](#interface-validdiscoverbyattributesargs) | [WalletResultTransaction](#interface-walletresulttransaction) |
-| [KeyLinkageResult](#interface-keylinkageresult) | [ValidDiscoverByIdentityKeyArgs](#interface-validdiscoverbyidentitykeyargs) | [WalletResultTransactionInput](#interface-walletresulttransactioninput) |
-| [ListActionsArgs](#interface-listactionsargs) | [ValidInternalizeActionArgs](#interface-validinternalizeactionargs) | [WalletResultTransactionOutput](#interface-walletresulttransactionoutput) |
-| [ListActionsResult](#interface-listactionsresult) | [ValidInternalizeOutput](#interface-validinternalizeoutput) | [WalletWire](#interface-walletwire) |
-| [ListCertificatesArgs](#interface-listcertificatesargs) | [ValidListActionsArgs](#interface-validlistactionsargs) |  |
+|                                                                     |                                                                                       |                                                                             |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [AbortActionArgs](#interface-abortactionargs)                       | [ListCertificatesResult](#interface-listcertificatesresult)                           | [ValidListCertificatesArgs](#interface-validlistcertificatesargs)           |
+| [AbortActionResult](#interface-abortactionresult)                   | [ListOutputsArgs](#interface-listoutputsargs)                                         | [ValidListOutputsArgs](#interface-validlistoutputsargs)                     |
+| [AcquireCertificateArgs](#interface-acquirecertificateargs)         | [ListOutputsResult](#interface-listoutputsresult)                                     | [ValidProcessActionArgs](#interface-validprocessactionargs)                 |
+| [AuthenticatedResult](#interface-authenticatedresult)               | [OutPoint](#interface-outpoint)                                                       | [ValidProcessActionOptions](#interface-validprocessactionoptions)           |
+| [BasketInsertion](#interface-basketinsertion)                       | [PrivateKeyDerivation](#interface-privatekeyderivation)                               | [ValidProveCertificateArgs](#interface-validprovecertificateargs)           |
+| [BoundActionOptions](#interface-boundactionoptions)                 | [ProveCertificateArgs](#interface-provecertificateargs)                               | [ValidRelinquishCertificateArgs](#interface-validrelinquishcertificateargs) |
+| [CertificateResult](#interface-certificateresult)                   | [ProveCertificateResult](#interface-provecertificateresult)                           | [ValidRelinquishOutputArgs](#interface-validrelinquishoutputargs)           |
+| [CreateActionArgs](#interface-createactionargs)                     | [RelinquishCertificateArgs](#interface-relinquishcertificateargs)                     | [ValidSignActionArgs](#interface-validsignactionargs)                       |
+| [CreateActionInput](#interface-createactioninput)                   | [RelinquishCertificateResult](#interface-relinquishcertificateresult)                 | [ValidSignActionOptions](#interface-validsignactionoptions)                 |
+| [CreateActionOptions](#interface-createactionoptions)               | [RelinquishOutputArgs](#interface-relinquishoutputargs)                               | [ValidWalletPayment](#interface-validwalletpayment)                         |
+| [CreateActionOutput](#interface-createactionoutput)                 | [RelinquishOutputResult](#interface-relinquishoutputresult)                           | [ValidWalletSignerArgs](#interface-validwalletsignerargs)                   |
+| [CreateActionResult](#interface-createactionresult)                 | [RevealCounterpartyKeyLinkageArgs](#interface-revealcounterpartykeylinkageargs)       | [VerifyHmacArgs](#interface-verifyhmacargs)                                 |
+| [CreateHmacArgs](#interface-createhmacargs)                         | [RevealCounterpartyKeyLinkageResult](#interface-revealcounterpartykeylinkageresult)   | [VerifyHmacResult](#interface-verifyhmacresult)                             |
+| [CreateHmacResult](#interface-createhmacresult)                     | [RevealSpecificKeyLinkageArgs](#interface-revealspecifickeylinkageargs)               | [VerifySignatureArgs](#interface-verifysignatureargs)                       |
+| [CreateSignatureArgs](#interface-createsignatureargs)               | [RevealSpecificKeyLinkageResult](#interface-revealspecifickeylinkageresult)           | [VerifySignatureResult](#interface-verifysignatureresult)                   |
+| [CreateSignatureResult](#interface-createsignatureresult)           | [ReviewActionResult](#interface-reviewactionresult)                                   | [WalletAction](#interface-walletaction)                                     |
+| [DiscoverByAttributesArgs](#interface-discoverbyattributesargs)     | [SendWithResult](#interface-sendwithresult)                                           | [WalletActionInput](#interface-walletactioninput)                           |
+| [DiscoverByIdentityKeyArgs](#interface-discoverbyidentitykeyargs)   | [SignActionArgs](#interface-signactionargs)                                           | [WalletActionOutput](#interface-walletactionoutput)                         |
+| [DiscoverCertificatesResult](#interface-discovercertificatesresult) | [SignActionOptions](#interface-signactionoptions)                                     | [WalletCertificate](#interface-walletcertificate)                           |
+| [GetHeaderArgs](#interface-getheaderargs)                           | [SignActionResult](#interface-signactionresult)                                       | [WalletDecryptArgs](#interface-walletdecryptargs)                           |
+| [GetHeaderResult](#interface-getheaderresult)                       | [SignActionSpend](#interface-signactionspend)                                         | [WalletDecryptResult](#interface-walletdecryptresult)                       |
+| [GetHeightResult](#interface-getheightresult)                       | [SignableTransaction](#interface-signabletransaction)                                 | [WalletEncryptArgs](#interface-walletencryptargs)                           |
+| [GetNetworkResult](#interface-getnetworkresult)                     | [ValidAbortActionArgs](#interface-validabortactionargs)                               | [WalletEncryptResult](#interface-walletencryptresult)                       |
+| [GetPublicKeyArgs](#interface-getpublickeyargs)                     | [ValidAcquireCertificateArgs](#interface-validacquirecertificateargs)                 | [WalletEncryptionArgs](#interface-walletencryptionargs)                     |
+| [GetPublicKeyResult](#interface-getpublickeyresult)                 | [ValidAcquireDirectCertificateArgs](#interface-validacquiredirectcertificateargs)     | [WalletErrorObject](#interface-walleterrorobject)                           |
+| [GetVersionResult](#interface-getversionresult)                     | [ValidAcquireIssuanceCertificateArgs](#interface-validacquireissuancecertificateargs) | [WalletInterface](#interface-walletinterface)                               |
+| [IdentityCertificate](#interface-identitycertificate)               | [ValidBasketInsertion](#interface-validbasketinsertion)                               | [WalletLoggerInterface](#interface-walletloggerinterface)                   |
+| [IdentityCertifier](#interface-identitycertifier)                   | [ValidCreateActionArgs](#interface-validcreateactionargs)                             | [WalletLoggerLog](#interface-walletloggerlog)                               |
+| [InternalizeActionArgs](#interface-internalizeactionargs)           | [ValidCreateActionInput](#interface-validcreateactioninput)                           | [WalletOutput](#interface-walletoutput)                                     |
+| [InternalizeActionResult](#interface-internalizeactionresult)       | [ValidCreateActionOptions](#interface-validcreateactionoptions)                       | [WalletPayment](#interface-walletpayment)                                   |
+| [InternalizeOutput](#interface-internalizeoutput)                   | [ValidCreateActionOutput](#interface-validcreateactionoutput)                         | [WalletResultBEEF](#interface-walletresultbeef)                             |
+| [KeyDeriverApi](#interface-keyderiverapi)                           | [ValidDiscoverByAttributesArgs](#interface-validdiscoverbyattributesargs)             | [WalletResultTransaction](#interface-walletresulttransaction)               |
+| [KeyLinkageResult](#interface-keylinkageresult)                     | [ValidDiscoverByIdentityKeyArgs](#interface-validdiscoverbyidentitykeyargs)           | [WalletResultTransactionInput](#interface-walletresulttransactioninput)     |
+| [ListActionsArgs](#interface-listactionsargs)                       | [ValidInternalizeActionArgs](#interface-validinternalizeactionargs)                   | [WalletResultTransactionOutput](#interface-walletresulttransactionoutput)   |
+| [ListActionsResult](#interface-listactionsresult)                   | [ValidInternalizeOutput](#interface-validinternalizeoutput)                           | [WalletWire](#interface-walletwire)                                         |
+| [ListCertificatesArgs](#interface-listcertificatesargs)             | [ValidListActionsArgs](#interface-validlistactionsargs)                               |                                                                             |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -51,7 +51,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface AbortActionArgs {
-    reference: Base64String;
+  reference: Base64String
 }
 ```
 
@@ -60,6 +60,7 @@ See also: [Base64String](./wallet.md#type-base64string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: AbortActionResult
 
 Result of an `abortAction` call.
@@ -78,29 +79,30 @@ refusing — refusal is reserved for positive on-chain confirmation.
 
 ```ts
 export interface AbortActionResult {
-    aborted: boolean;
+  aborted: boolean
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: AcquireCertificateArgs
 
 ```ts
 export interface AcquireCertificateArgs {
-    type: Base64String;
-    certifier: PubKeyHex;
-    acquisitionProtocol: AcquisitionProtocol;
-    fields: Record<CertificateFieldNameUnder50Bytes, string>;
-    serialNumber?: Base64String;
-    revocationOutpoint?: OutpointString;
-    signature?: HexString;
-    certifierUrl?: string;
-    keyringRevealer?: KeyringRevealer;
-    keyringForSubject?: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    privileged?: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
+  type: Base64String
+  certifier: PubKeyHex
+  acquisitionProtocol: AcquisitionProtocol
+  fields: Record<CertificateFieldNameUnder50Bytes, string>
+  serialNumber?: Base64String
+  revocationOutpoint?: OutpointString
+  signature?: HexString
+  certifierUrl?: string
+  keyringRevealer?: KeyringRevealer
+  keyringForSubject?: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -109,24 +111,26 @@ See also: [AcquisitionProtocol](./wallet.md#type-acquisitionprotocol), [Base64St
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: AuthenticatedResult
 
 ```ts
 export interface AuthenticatedResult {
-    authenticated: true;
+  authenticated: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: BasketInsertion
 
 ```ts
 export interface BasketInsertion {
-    basket: BasketStringUnder300Bytes;
-    customInstructions?: string;
-    tags?: OutputTagStringUnder300Bytes[];
+  basket: BasketStringUnder300Bytes
+  customInstructions?: string
+  tags?: OutputTagStringUnder300Bytes[]
 }
 ```
 
@@ -135,15 +139,22 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: BoundActionOptions
 
 ```ts
 export interface BoundActionOptions {
-    inputSigners?: Record<string, (transaction: Transaction, inputIndex: number) => Promise<UnlockingScript | string>>;
-    outputSatoshisRanges?: Record<string, {
-        minimumSatoshis: number;
-        maximumSatoshis: number;
-    }>;
+  inputSigners?: Record<
+    string,
+    (transaction: Transaction, inputIndex: number) => Promise<UnlockingScript | string>
+  >
+  outputSatoshisRanges?: Record<
+    string,
+    {
+      minimumSatoshis: number
+      maximumSatoshis: number
+    }
+  >
 }
 ```
 
@@ -156,6 +167,7 @@ Signers keyed by canonical `txid.vout` for requested inputs with an unlockingScr
 ```ts
 inputSigners?: Record<string, (transaction: Transaction, inputIndex: number) => Promise<UnlockingScript | string>>
 ```
+
 See also: [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [string](./remittance.md#function-string)
 
 #### Property outputSatoshisRanges
@@ -170,17 +182,19 @@ outputSatoshisRanges?: Record<string, {
     maximumSatoshis: number;
 }>
 ```
+
 See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CertificateResult
 
 ```ts
 export interface CertificateResult extends WalletCertificate {
-    keyring?: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    verifier?: string;
+  keyring?: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  verifier?: string
 }
 ```
 
@@ -189,18 +203,19 @@ See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateActionArgs
 
 ```ts
 export interface CreateActionArgs {
-    description: DescriptionString5to50Bytes;
-    inputBEEF?: BEEF;
-    inputs?: CreateActionInput[];
-    outputs?: CreateActionOutput[];
-    lockTime?: PositiveIntegerOrZero;
-    version?: PositiveIntegerOrZero;
-    labels?: LabelStringUnder300Bytes[];
-    options?: CreateActionOptions;
+  description: DescriptionString5to50Bytes
+  inputBEEF?: BEEF
+  inputs?: CreateActionInput[]
+  outputs?: CreateActionOutput[]
+  lockTime?: PositiveIntegerOrZero
+  version?: PositiveIntegerOrZero
+  labels?: LabelStringUnder300Bytes[]
+  options?: CreateActionOptions
 }
 ```
 
@@ -209,15 +224,16 @@ See also: [BEEF](./wallet.md#type-beef), [CreateActionInput](./wallet.md#interfa
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateActionInput
 
 ```ts
 export interface CreateActionInput {
-    outpoint: OutpointString;
-    inputDescription: DescriptionString5to50Bytes;
-    unlockingScript?: HexString;
-    unlockingScriptLength?: PositiveInteger;
-    sequenceNumber?: PositiveIntegerOrZero;
+  outpoint: OutpointString
+  inputDescription: DescriptionString5to50Bytes
+  unlockingScript?: HexString
+  unlockingScriptLength?: PositiveInteger
+  sequenceNumber?: PositiveIntegerOrZero
 }
 ```
 
@@ -226,19 +242,20 @@ See also: [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50b
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateActionOptions
 
 ```ts
 export interface CreateActionOptions {
-    signAndProcess?: BooleanDefaultTrue;
-    acceptDelayedBroadcast?: BooleanDefaultTrue;
-    trustSelf?: TrustSelf;
-    knownTxids?: TXIDHexString[];
-    returnTXIDOnly?: BooleanDefaultFalse;
-    noSend?: BooleanDefaultFalse;
-    noSendChange?: OutpointString[];
-    sendWith?: TXIDHexString[];
-    randomizeOutputs?: BooleanDefaultTrue;
+  signAndProcess?: BooleanDefaultTrue
+  acceptDelayedBroadcast?: BooleanDefaultTrue
+  trustSelf?: TrustSelf
+  knownTxids?: TXIDHexString[]
+  returnTXIDOnly?: BooleanDefaultFalse
+  noSend?: BooleanDefaultFalse
+  noSendChange?: OutpointString[]
+  sendWith?: TXIDHexString[]
+  randomizeOutputs?: BooleanDefaultTrue
 }
 ```
 
@@ -247,16 +264,17 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateActionOutput
 
 ```ts
 export interface CreateActionOutput {
-    lockingScript: HexString;
-    satoshis: SatoshiValue;
-    outputDescription: DescriptionString5to50Bytes;
-    basket?: BasketStringUnder300Bytes;
-    customInstructions?: string;
-    tags?: OutputTagStringUnder300Bytes[];
+  lockingScript: HexString
+  satoshis: SatoshiValue
+  outputDescription: DescriptionString5to50Bytes
+  basket?: BasketStringUnder300Bytes
+  customInstructions?: string
+  tags?: OutputTagStringUnder300Bytes[]
 }
 ```
 
@@ -265,15 +283,16 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateActionResult
 
 ```ts
 export interface CreateActionResult {
-    txid?: TXIDHexString;
-    tx?: AtomicBEEF;
-    noSendChange?: OutpointString[];
-    sendWithResults?: SendWithResult[];
-    signableTransaction?: SignableTransaction;
+  txid?: TXIDHexString
+  tx?: AtomicBEEF
+  noSendChange?: OutpointString[]
+  sendWithResults?: SendWithResult[]
+  signableTransaction?: SignableTransaction
 }
 ```
 
@@ -300,16 +319,18 @@ every caller-requested input, output, sequence, version, and lock time.
 ```ts
 tx?: AtomicBEEF
 ```
+
 See also: [AtomicBEEF](./wallet.md#type-atomicbeef)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateHmacArgs
 
 ```ts
 export interface CreateHmacArgs extends WalletEncryptionArgs {
-    data: Byte[];
+  data: Byte[]
 }
 ```
 
@@ -318,11 +339,12 @@ See also: [Byte](./wallet.md#type-byte), [WalletEncryptionArgs](./wallet.md#inte
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateHmacResult
 
 ```ts
 export interface CreateHmacResult {
-    hmac: Byte[];
+  hmac: Byte[]
 }
 ```
 
@@ -331,12 +353,13 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateSignatureArgs
 
 ```ts
 export interface CreateSignatureArgs extends WalletEncryptionArgs {
-    data?: Byte[];
-    hashToDirectlySign?: Byte[];
+  data?: Byte[]
+  hashToDirectlySign?: Byte[]
 }
 ```
 
@@ -345,11 +368,12 @@ See also: [Byte](./wallet.md#type-byte), [WalletEncryptionArgs](./wallet.md#inte
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: CreateSignatureResult
 
 ```ts
 export interface CreateSignatureResult {
-    signature: Byte[];
+  signature: Byte[]
 }
 ```
 
@@ -358,14 +382,15 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: DiscoverByAttributesArgs
 
 ```ts
 export interface DiscoverByAttributesArgs {
-    attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-    limit?: PositiveIntegerDefault10Max10000;
-    offset?: PositiveIntegerOrZero;
-    seekPermission?: BooleanDefaultTrue;
+  attributes: Record<CertificateFieldNameUnder50Bytes, string>
+  limit?: PositiveIntegerDefault10Max10000
+  offset?: PositiveIntegerOrZero
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -374,14 +399,15 @@ See also: [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [Certificat
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: DiscoverByIdentityKeyArgs
 
 ```ts
 export interface DiscoverByIdentityKeyArgs {
-    identityKey: PubKeyHex;
-    limit?: PositiveIntegerDefault10Max10000;
-    offset?: PositiveIntegerOrZero;
-    seekPermission?: BooleanDefaultTrue;
+  identityKey: PubKeyHex
+  limit?: PositiveIntegerDefault10Max10000
+  offset?: PositiveIntegerOrZero
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -390,12 +416,13 @@ See also: [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [PositiveIn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: DiscoverCertificatesResult
 
 ```ts
 export interface DiscoverCertificatesResult {
-    totalCertificates: PositiveIntegerOrZero;
-    certificates: IdentityCertificate[];
+  totalCertificates: PositiveIntegerOrZero
+  certificates: IdentityCertificate[]
 }
 ```
 
@@ -404,11 +431,12 @@ See also: [IdentityCertificate](./wallet.md#interface-identitycertificate), [Pos
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetHeaderArgs
 
 ```ts
 export interface GetHeaderArgs {
-    height: PositiveInteger;
+  height: PositiveInteger
 }
 ```
 
@@ -417,11 +445,12 @@ See also: [PositiveInteger](./wallet.md#type-positiveinteger)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetHeaderResult
 
 ```ts
 export interface GetHeaderResult {
-    header: HexString;
+  header: HexString
 }
 ```
 
@@ -436,16 +465,18 @@ membership at the requested height or on the active network chain.
 ```ts
 header: HexString
 ```
+
 See also: [HexString](./wallet.md#type-hexstring)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetHeightResult
 
 ```ts
 export interface GetHeightResult {
-    height: PositiveInteger;
+  height: PositiveInteger
 }
 ```
 
@@ -459,16 +490,18 @@ self-authenticating proof of active-chain state.
 ```ts
 height: PositiveInteger
 ```
+
 See also: [PositiveInteger](./wallet.md#type-positiveinteger)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetNetworkResult
 
 ```ts
 export interface GetNetworkResult {
-    network: WalletNetwork;
+  network: WalletNetwork
 }
 ```
 
@@ -481,11 +514,13 @@ The selected wallet's network assertion, not independent chain evidence.
 ```ts
 network: WalletNetwork
 ```
+
 See also: [WalletNetwork](./wallet.md#type-walletnetwork)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetPublicKeyArgs
 
 When `identityKey` is true, `WalletEncryptionArgs` are not used.
@@ -494,8 +529,8 @@ When `identityKey` is undefined, `WalletEncryptionArgs` are required.
 
 ```ts
 export interface GetPublicKeyArgs extends Partial<WalletEncryptionArgs> {
-    identityKey?: true;
-    forSelf?: BooleanDefaultFalse;
+  identityKey?: true
+  forSelf?: BooleanDefaultFalse
 }
 ```
 
@@ -504,11 +539,12 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [WalletEn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetPublicKeyResult
 
 ```ts
 export interface GetPublicKeyResult {
-    publicKey: PubKeyHex;
+  publicKey: PubKeyHex
 }
 ```
 
@@ -517,11 +553,12 @@ See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: GetVersionResult
 
 ```ts
 export interface GetVersionResult {
-    version: VersionString7To30Bytes;
+  version: VersionString7To30Bytes
 }
 ```
 
@@ -530,13 +567,14 @@ See also: [VersionString7To30Bytes](./wallet.md#type-versionstring7to30bytes)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: IdentityCertificate
 
 ```ts
 export interface IdentityCertificate extends WalletCertificate {
-    certifierInfo: IdentityCertifier;
-    publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>;
+  certifierInfo: IdentityCertifier
+  publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
 }
 ```
 
@@ -545,14 +583,15 @@ See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: IdentityCertifier
 
 ```ts
 export interface IdentityCertifier {
-    name: EntityNameStringMax100Bytes;
-    iconUrl: EntityIconURLStringMax500Bytes;
-    description: DescriptionString5to50Bytes;
-    trust: PositiveIntegerMax10;
+  name: EntityNameStringMax100Bytes
+  iconUrl: EntityIconURLStringMax500Bytes
+  description: DescriptionString5to50Bytes
+  trust: PositiveIntegerMax10
 }
 ```
 
@@ -561,15 +600,16 @@ See also: [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50b
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: InternalizeActionArgs
 
 ```ts
 export interface InternalizeActionArgs {
-    tx: AtomicBEEF;
-    outputs: InternalizeOutput[];
-    description: DescriptionString5to50Bytes;
-    labels?: LabelStringUnder300Bytes[];
-    seekPermission?: BooleanDefaultTrue;
+  tx: AtomicBEEF
+  outputs: InternalizeOutput[]
+  description: DescriptionString5to50Bytes
+  labels?: LabelStringUnder300Bytes[]
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -578,25 +618,27 @@ See also: [AtomicBEEF](./wallet.md#type-atomicbeef), [BooleanDefaultTrue](./wall
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: InternalizeActionResult
 
 ```ts
 export interface InternalizeActionResult {
-    accepted: true;
+  accepted: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: InternalizeOutput
 
 ```ts
 export interface InternalizeOutput {
-    outputIndex: PositiveIntegerOrZero;
-    protocol: "wallet payment" | "basket insertion";
-    paymentRemittance?: WalletPayment;
-    insertionRemittance?: BasketInsertion;
+  outputIndex: PositiveIntegerOrZero
+  protocol: 'wallet payment' | 'basket insertion'
+  paymentRemittance?: WalletPayment
+  insertionRemittance?: BasketInsertion
 }
 ```
 
@@ -605,20 +647,47 @@ See also: [BasketInsertion](./wallet.md#interface-basketinsertion), [PositiveInt
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: KeyDeriverApi
 
 ```ts
 export interface KeyDeriverApi {
-    rootKey: PrivateKey;
-    identityKey: string;
-    derivePublicKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf?: boolean) => PublicKey;
-    derivePrivateKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => PrivateKey;
-    derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[];
-    deriveSymmetricKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => SymmetricKey;
-    derivePublicKeyAsync?: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf?: boolean) => Promise<PublicKey>;
-    deriveSymmetricKeyAsync?: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => Promise<SymmetricKey>;
-    revealCounterpartySecret: (counterparty: Counterparty) => number[];
-    revealSpecificSecret: (counterparty: Counterparty, protocolID: WalletProtocol, keyID: string) => number[];
+  rootKey: PrivateKey
+  identityKey: string
+  derivePublicKey: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf?: boolean
+  ) => PublicKey
+  derivePrivateKey: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ) => PrivateKey
+  derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
+  deriveSymmetricKey: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ) => SymmetricKey
+  derivePublicKeyAsync?: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf?: boolean
+  ) => Promise<PublicKey>
+  deriveSymmetricKeyAsync?: (
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ) => Promise<SymmetricKey>
+  revealCounterpartySecret: (counterparty: Counterparty) => number[]
+  revealSpecificSecret: (
+    counterparty: Counterparty,
+    protocolID: WalletProtocol,
+    keyID: string
+  ) => number[]
 }
 ```
 
@@ -629,8 +698,10 @@ See also: [Counterparty](./wallet.md#type-counterparty), [PrivateKey](./primitiv
 Derives a private key based on protocol ID, key ID, and counterparty.
 
 ```ts
-derivePrivateKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => PrivateKey
+derivePrivateKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) =>
+  PrivateKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PrivateKey](./primitives.md#class-privatekey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property derivePrivateKeys
@@ -642,6 +713,7 @@ per-key `derivePrivateKey` contract.
 ```ts
 derivePrivateKeys?: (derivations: readonly PrivateKeyDerivation[]) => PrivateKey[]
 ```
+
 See also: [PrivateKey](./primitives.md#class-privatekey), [PrivateKeyDerivation](./wallet.md#interface-privatekeyderivation)
 
 #### Property derivePublicKey
@@ -649,8 +721,14 @@ See also: [PrivateKey](./primitives.md#class-privatekey), [PrivateKeyDerivation]
 Derives a public key based on protocol ID, key ID, and counterparty.
 
 ```ts
-derivePublicKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf?: boolean) => PublicKey
+derivePublicKey: (
+  protocolID: WalletProtocol,
+  keyID: string,
+  counterparty: Counterparty,
+  forSelf?: boolean
+) => PublicKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PublicKey](./primitives.md#class-publickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property derivePublicKeyAsync
@@ -660,6 +738,7 @@ Asynchronous acceleration lane; synchronous-only implementations may omit it.
 ```ts
 derivePublicKeyAsync?: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf?: boolean) => Promise<PublicKey>
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PublicKey](./primitives.md#class-publickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property deriveSymmetricKey
@@ -668,8 +747,10 @@ Derives a symmetric key based on protocol ID, key ID, and counterparty.
 Note: Symmetric keys should not be derivable by everyone due to security risks.
 
 ```ts
-deriveSymmetricKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => SymmetricKey
+deriveSymmetricKey: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) =>
+  SymmetricKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [SymmetricKey](./primitives.md#class-symmetrickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property deriveSymmetricKeyAsync
@@ -679,6 +760,7 @@ Asynchronous acceleration lane; synchronous-only implementations may omit it.
 ```ts
 deriveSymmetricKeyAsync?: (protocolID: WalletProtocol, keyID: string, counterparty: Counterparty) => Promise<SymmetricKey>
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [SymmetricKey](./primitives.md#class-symmetrickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property identityKey
@@ -688,6 +770,7 @@ The identity of this key deriver which is normally the public key associated wit
 ```ts
 identityKey: string
 ```
+
 See also: [string](./remittance.md#function-string)
 
 #### Property revealCounterpartySecret
@@ -698,6 +781,7 @@ Note: This should not be used for 'self'.
 ```ts
 revealCounterpartySecret: (counterparty: Counterparty) => number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty)
 
 #### Property revealSpecificSecret
@@ -707,6 +791,7 @@ Reveals the specific key association for a given protocol ID, key ID, and counte
 ```ts
 revealSpecificSecret: (counterparty: Counterparty, protocolID: WalletProtocol, keyID: string) => number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 #### Property rootKey
@@ -716,20 +801,22 @@ The root key from which all other keys are derived.
 ```ts
 rootKey: PrivateKey
 ```
+
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: KeyLinkageResult
 
 ```ts
 export interface KeyLinkageResult {
-    encryptedLinkage: Byte[];
-    encryptedLinkageProof: Byte[];
-    prover: PubKeyHex;
-    verifier: PubKeyHex;
-    counterparty: PubKeyHex;
+  encryptedLinkage: Byte[]
+  encryptedLinkageProof: Byte[]
+  prover: PubKeyHex
+  verifier: PubKeyHex
+  counterparty: PubKeyHex
 }
 ```
 
@@ -744,26 +831,28 @@ resolves to the canonical public key of private key 1.
 ```ts
 counterparty: PubKeyHex
 ```
+
 See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListActionsArgs
 
 ```ts
 export interface ListActionsArgs {
-    labels: LabelStringUnder300Bytes[];
-    labelQueryMode?: "any" | "all";
-    includeLabels?: BooleanDefaultFalse;
-    includeInputs?: BooleanDefaultFalse;
-    includeInputSourceLockingScripts?: BooleanDefaultFalse;
-    includeInputUnlockingScripts?: BooleanDefaultFalse;
-    includeOutputs?: BooleanDefaultFalse;
-    includeOutputLockingScripts?: BooleanDefaultFalse;
-    limit?: PositiveIntegerDefault10Max10000;
-    offset?: PositiveIntegerOrZero;
-    seekPermission?: BooleanDefaultTrue;
+  labels: LabelStringUnder300Bytes[]
+  labelQueryMode?: 'any' | 'all'
+  includeLabels?: BooleanDefaultFalse
+  includeInputs?: BooleanDefaultFalse
+  includeInputSourceLockingScripts?: BooleanDefaultFalse
+  includeInputUnlockingScripts?: BooleanDefaultFalse
+  includeOutputs?: BooleanDefaultFalse
+  includeOutputLockingScripts?: BooleanDefaultFalse
+  limit?: PositiveIntegerDefault10Max10000
+  offset?: PositiveIntegerOrZero
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -772,12 +861,13 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListActionsResult
 
 ```ts
 export interface ListActionsResult {
-    totalActions: PositiveIntegerOrZero;
-    actions: WalletAction[];
+  totalActions: PositiveIntegerOrZero
+  actions: WalletAction[]
 }
 ```
 
@@ -786,16 +876,17 @@ See also: [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [Wall
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListCertificatesArgs
 
 ```ts
 export interface ListCertificatesArgs {
-    certifiers: PubKeyHex[];
-    types: Base64String[];
-    limit?: PositiveIntegerDefault10Max10000;
-    offset?: PositiveIntegerOrZero;
-    privileged?: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
+  certifiers: PubKeyHex[]
+  types: Base64String[]
+  limit?: PositiveIntegerDefault10Max10000
+  offset?: PositiveIntegerOrZero
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -804,12 +895,13 @@ See also: [Base64String](./wallet.md#type-base64string), [BooleanDefaultFalse](.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListCertificatesResult
 
 ```ts
 export interface ListCertificatesResult {
-    totalCertificates: PositiveIntegerOrZero;
-    certificates: CertificateResult[];
+  totalCertificates: PositiveIntegerOrZero
+  certificates: CertificateResult[]
 }
 ```
 
@@ -818,20 +910,21 @@ See also: [CertificateResult](./wallet.md#interface-certificateresult), [Positiv
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListOutputsArgs
 
 ```ts
 export interface ListOutputsArgs {
-    basket: BasketStringUnder300Bytes;
-    tags?: OutputTagStringUnder300Bytes[];
-    tagQueryMode?: "all" | "any";
-    include?: "locking scripts" | "entire transactions";
-    includeCustomInstructions?: BooleanDefaultFalse;
-    includeTags?: BooleanDefaultFalse;
-    includeLabels?: BooleanDefaultFalse;
-    limit?: PositiveIntegerDefault10Max10000;
-    offset?: number;
-    seekPermission?: BooleanDefaultTrue;
+  basket: BasketStringUnder300Bytes
+  tags?: OutputTagStringUnder300Bytes[]
+  tagQueryMode?: 'all' | 'any'
+  include?: 'locking scripts' | 'entire transactions'
+  includeCustomInstructions?: BooleanDefaultFalse
+  includeTags?: BooleanDefaultFalse
+  includeLabels?: BooleanDefaultFalse
+  limit?: PositiveIntegerDefault10Max10000
+  offset?: number
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -840,29 +933,31 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ListOutputsResult
 
 ```ts
 export interface ListOutputsResult {
-    totalOutputs: PositiveIntegerOrZero;
-    BEEF?: BEEF;
-    outputs: WalletOutput[];
+  totalOutputs: PositiveIntegerOrZero | DecimalString
+  BEEF?: BEEF
+  outputs: WalletOutput[]
 }
 ```
 
-See also: [BEEF](./wallet.md#type-beef), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [WalletOutput](./wallet.md#interface-walletoutput)
+See also: [BEEF](./wallet.md#type-beef), [DecimalString](./wallet.md#type-decimalstring), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [WalletOutput](./wallet.md#interface-walletoutput)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: OutPoint
 
 Identifies a unique transaction output by its `txid` and index `vout`
 
 ```ts
 export interface OutPoint {
-    txid: string;
-    vout: number;
+  txid: string
+  vout: number
 }
 ```
 
@@ -875,6 +970,7 @@ Transaction double sha256 hash as big endian hex string
 ```ts
 txid: string
 ```
+
 See also: [string](./remittance.md#function-string)
 
 #### Property vout
@@ -888,13 +984,14 @@ vout: number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: PrivateKeyDerivation
 
 ```ts
 export interface PrivateKeyDerivation {
-    protocolID: WalletProtocol;
-    keyID: string;
-    counterparty: Counterparty;
+  protocolID: WalletProtocol
+  keyID: string
+  counterparty: Counterparty
 }
 ```
 
@@ -903,15 +1000,16 @@ See also: [Counterparty](./wallet.md#type-counterparty), [WalletProtocol](./wall
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ProveCertificateArgs
 
 ```ts
 export interface ProveCertificateArgs {
-    certificate: Partial<WalletCertificate>;
-    fieldsToReveal: CertificateFieldNameUnder50Bytes[];
-    verifier: PubKeyHex;
-    privileged?: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
+  certificate: Partial<WalletCertificate>
+  fieldsToReveal: CertificateFieldNameUnder50Bytes[]
+  verifier: PubKeyHex
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -920,13 +1018,14 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [Certific
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ProveCertificateResult
 
 ```ts
 export interface ProveCertificateResult {
-    keyringForVerifier: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    certificate?: WalletCertificate;
-    verifier?: PubKeyHex;
+  keyringForVerifier: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  certificate?: WalletCertificate
+  verifier?: PubKeyHex
 }
 ```
 
@@ -935,13 +1034,14 @@ See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RelinquishCertificateArgs
 
 ```ts
 export interface RelinquishCertificateArgs {
-    type: Base64String;
-    serialNumber: Base64String;
-    certifier: PubKeyHex;
+  type: Base64String
+  serialNumber: Base64String
+  certifier: PubKeyHex
 }
 ```
 
@@ -950,23 +1050,25 @@ See also: [Base64String](./wallet.md#type-base64string), [PubKeyHex](./wallet.md
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RelinquishCertificateResult
 
 ```ts
 export interface RelinquishCertificateResult {
-    relinquished: true;
+  relinquished: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RelinquishOutputArgs
 
 ```ts
 export interface RelinquishOutputArgs {
-    basket: BasketStringUnder300Bytes;
-    output: OutpointString;
+  basket: BasketStringUnder300Bytes
+  output: OutpointString
 }
 ```
 
@@ -975,25 +1077,27 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RelinquishOutputResult
 
 ```ts
 export interface RelinquishOutputResult {
-    relinquished: true;
+  relinquished: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RevealCounterpartyKeyLinkageArgs
 
 ```ts
 export interface RevealCounterpartyKeyLinkageArgs {
-    counterparty: PubKeyHex;
-    verifier: PubKeyHex;
-    privileged?: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
+  counterparty: PubKeyHex
+  verifier: PubKeyHex
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1002,11 +1106,12 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [Descript
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RevealCounterpartyKeyLinkageResult
 
 ```ts
 export interface RevealCounterpartyKeyLinkageResult extends KeyLinkageResult {
-    revelationTime: ISOTimestampString;
+  revelationTime: ISOTimestampString
 }
 ```
 
@@ -1015,16 +1120,17 @@ See also: [ISOTimestampString](./wallet.md#type-isotimestampstring), [KeyLinkage
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RevealSpecificKeyLinkageArgs
 
 ```ts
 export interface RevealSpecificKeyLinkageArgs {
-    counterparty: WalletCounterparty;
-    verifier: PubKeyHex;
-    protocolID: WalletProtocol;
-    keyID: KeyIDStringUnder800Bytes;
-    privilegedReason?: DescriptionString5to50Bytes;
-    privileged?: BooleanDefaultFalse;
+  counterparty: WalletCounterparty
+  verifier: PubKeyHex
+  protocolID: WalletProtocol
+  keyID: KeyIDStringUnder800Bytes
+  privilegedReason?: DescriptionString5to50Bytes
+  privileged?: BooleanDefaultFalse
 }
 ```
 
@@ -1033,13 +1139,14 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [Descript
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: RevealSpecificKeyLinkageResult
 
 ```ts
 export interface RevealSpecificKeyLinkageResult extends KeyLinkageResult {
-    protocolID: WalletProtocol;
-    keyID: KeyIDStringUnder800Bytes;
-    proofType: Byte;
+  protocolID: WalletProtocol
+  keyID: KeyIDStringUnder800Bytes
+  proofType: Byte
 }
 ```
 
@@ -1048,14 +1155,15 @@ See also: [Byte](./wallet.md#type-byte), [KeyIDStringUnder800Bytes](./wallet.md#
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ReviewActionResult
 
 ```ts
 export interface ReviewActionResult {
-    txid: TXIDHexString;
-    status: ReviewActionResultStatus;
-    competingTxs?: string[];
-    competingBeef?: BEEF;
+  txid: TXIDHexString
+  status: ReviewActionResultStatus
+  competingTxs?: string[]
+  competingBeef?: BEEF
 }
 ```
 
@@ -1068,6 +1176,7 @@ Merged beef of competingTxs, valid when status is 'doubleSpend'.
 ```ts
 competingBeef?: BEEF
 ```
+
 See also: [BEEF](./wallet.md#type-beef)
 
 #### Property competingTxs
@@ -1077,17 +1186,19 @@ Any competing txids reported for this txid, valid when status is 'doubleSpend'.
 ```ts
 competingTxs?: string[]
 ```
+
 See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SendWithResult
 
 ```ts
 export interface SendWithResult {
-    txid: TXIDHexString;
-    status: SendWithResultStatus;
+  txid: TXIDHexString
+  status: SendWithResultStatus
 }
 ```
 
@@ -1096,13 +1207,14 @@ See also: [SendWithResultStatus](./wallet.md#type-sendwithresultstatus), [TXIDHe
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SignActionArgs
 
 ```ts
 export interface SignActionArgs {
-    spends: Record<PositiveIntegerOrZero, SignActionSpend>;
-    reference: Base64String;
-    options?: SignActionOptions;
+  spends: Record<PositiveIntegerOrZero, SignActionSpend>
+  reference: Base64String
+  options?: SignActionOptions
 }
 ```
 
@@ -1111,14 +1223,15 @@ See also: [Base64String](./wallet.md#type-base64string), [PositiveIntegerOrZero]
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SignActionOptions
 
 ```ts
 export interface SignActionOptions {
-    acceptDelayedBroadcast?: BooleanDefaultTrue;
-    returnTXIDOnly?: BooleanDefaultFalse;
-    noSend?: BooleanDefaultFalse;
-    sendWith?: TXIDHexString[];
+  acceptDelayedBroadcast?: BooleanDefaultTrue
+  returnTXIDOnly?: BooleanDefaultFalse
+  noSend?: BooleanDefaultFalse
+  sendWith?: TXIDHexString[]
 }
 ```
 
@@ -1127,13 +1240,14 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SignActionResult
 
 ```ts
 export interface SignActionResult {
-    txid?: TXIDHexString;
-    tx?: AtomicBEEF;
-    sendWithResults?: SendWithResult[];
+  txid?: TXIDHexString
+  tx?: AtomicBEEF
+  sendWithResults?: SendWithResult[]
 }
 ```
 
@@ -1142,12 +1256,13 @@ See also: [AtomicBEEF](./wallet.md#type-atomicbeef), [SendWithResult](./wallet.m
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SignActionSpend
 
 ```ts
 export interface SignActionSpend {
-    unlockingScript: HexString;
-    sequenceNumber?: PositiveIntegerOrZero;
+  unlockingScript: HexString
+  sequenceNumber?: PositiveIntegerOrZero
 }
 ```
 
@@ -1156,12 +1271,13 @@ See also: [HexString](./wallet.md#type-hexstring), [PositiveIntegerOrZero](./wal
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: SignableTransaction
 
 ```ts
 export interface SignableTransaction {
-    tx: AtomicBEEF;
-    reference: Base64String;
+  tx: AtomicBEEF
+  reference: Base64String
 }
 ```
 
@@ -1180,16 +1296,18 @@ transaction with empty `sourceTransaction` on every input.
 ```ts
 tx: AtomicBEEF
 ```
+
 See also: [AtomicBEEF](./wallet.md#type-atomicbeef)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidAbortActionArgs
 
 ```ts
 export interface ValidAbortActionArgs extends ValidWalletSignerArgs {
-    reference: Base64String;
+  reference: Base64String
 }
 ```
 
@@ -1198,22 +1316,23 @@ See also: [Base64String](./wallet.md#type-base64string), [ValidWalletSignerArgs]
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidAcquireCertificateArgs
 
 ```ts
 export interface ValidAcquireCertificateArgs extends ValidWalletSignerArgs {
-    acquisitionProtocol: AcquisitionProtocol;
-    type: Base64String;
-    serialNumber?: Base64String;
-    certifier: PubKeyHex;
-    revocationOutpoint?: OutpointString;
-    fields: Record<CertificateFieldNameUnder50Bytes, string>;
-    signature?: HexString;
-    certifierUrl?: string;
-    keyringRevealer?: KeyringRevealer;
-    keyringForSubject?: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    privileged: boolean;
-    privilegedReason?: DescriptionString5to50Bytes;
+  acquisitionProtocol: AcquisitionProtocol
+  type: Base64String
+  serialNumber?: Base64String
+  certifier: PubKeyHex
+  revocationOutpoint?: OutpointString
+  fields: Record<CertificateFieldNameUnder50Bytes, string>
+  signature?: HexString
+  certifierUrl?: string
+  keyringRevealer?: KeyringRevealer
+  keyringForSubject?: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  privileged: boolean
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1222,21 +1341,22 @@ See also: [AcquisitionProtocol](./wallet.md#type-acquisitionprotocol), [Base64St
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidAcquireDirectCertificateArgs
 
 ```ts
 export interface ValidAcquireDirectCertificateArgs extends ValidWalletSignerArgs {
-    type: Base64String;
-    serialNumber: Base64String;
-    certifier: PubKeyHex;
-    revocationOutpoint: OutpointString;
-    fields: Record<CertificateFieldNameUnder50Bytes, string>;
-    signature: HexString;
-    subject: PubKeyHex;
-    keyringRevealer: KeyringRevealer;
-    keyringForSubject: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-    privileged: boolean;
-    privilegedReason?: DescriptionString5to50Bytes;
+  type: Base64String
+  serialNumber: Base64String
+  certifier: PubKeyHex
+  revocationOutpoint: OutpointString
+  fields: Record<CertificateFieldNameUnder50Bytes, string>
+  signature: HexString
+  subject: PubKeyHex
+  keyringRevealer: KeyringRevealer
+  keyringForSubject: Record<CertificateFieldNameUnder50Bytes, Base64String>
+  privileged: boolean
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1250,22 +1370,24 @@ match expectations of keyringForSubject
 ```ts
 subject: PubKeyHex
 ```
+
 See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidAcquireIssuanceCertificateArgs
 
 ```ts
 export interface ValidAcquireIssuanceCertificateArgs extends ValidWalletSignerArgs {
-    type: Base64String;
-    certifier: PubKeyHex;
-    certifierUrl: string;
-    fields: Record<CertificateFieldNameUnder50Bytes, string>;
-    subject: PubKeyHex;
-    privileged: boolean;
-    privilegedReason?: DescriptionString5to50Bytes;
+  type: Base64String
+  certifier: PubKeyHex
+  certifierUrl: string
+  fields: Record<CertificateFieldNameUnder50Bytes, string>
+  subject: PubKeyHex
+  privileged: boolean
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1279,18 +1401,20 @@ match expectations of keyringForSubject
 ```ts
 subject: PubKeyHex
 ```
+
 See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidBasketInsertion
 
 ```ts
 export interface ValidBasketInsertion {
-    basket: BasketStringUnder300Bytes;
-    customInstructions?: string;
-    tags: BasketStringUnder300Bytes[];
+  basket: BasketStringUnder300Bytes
+  customInstructions?: string
+  tags: BasketStringUnder300Bytes[]
 }
 ```
 
@@ -1299,21 +1423,22 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidCreateActionArgs
 
 ```ts
 export interface ValidCreateActionArgs extends ValidProcessActionArgs {
-    description: DescriptionString5to2000Bytes;
-    inputBEEF?: BEEF;
-    inputs: ValidCreateActionInput[];
-    outputs: ValidCreateActionOutput[];
-    lockTime: number;
-    version: number;
-    labels: string[];
-    options: ValidCreateActionOptions;
-    isSignAction: boolean;
-    randomVals?: number[];
-    includeAllSourceTransactions: boolean;
+  description: DescriptionString5to2000Bytes
+  inputBEEF?: BEEF
+  inputs: ValidCreateActionInput[]
+  outputs: ValidCreateActionOutput[]
+  lockTime: number
+  version: number
+  labels: string[]
+  options: ValidCreateActionOptions
+  isSignAction: boolean
+  randomVals?: number[]
+  includeAllSourceTransactions: boolean
 }
 ```
 
@@ -1332,15 +1457,16 @@ includeAllSourceTransactions: boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidCreateActionInput
 
 ```ts
 export interface ValidCreateActionInput {
-    outpoint: OutPoint;
-    inputDescription: DescriptionString5to2000Bytes;
-    sequenceNumber: PositiveIntegerOrZero;
-    unlockingScript?: HexString;
-    unlockingScriptLength: PositiveInteger;
+  outpoint: OutPoint
+  inputDescription: DescriptionString5to2000Bytes
+  sequenceNumber: PositiveIntegerOrZero
+  unlockingScript?: HexString
+  unlockingScriptLength: PositiveInteger
 }
 ```
 
@@ -1349,15 +1475,16 @@ See also: [DescriptionString5to2000Bytes](./wallet.md#type-descriptionstring5to2
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidCreateActionOptions
 
 ```ts
 export interface ValidCreateActionOptions extends ValidProcessActionOptions {
-    signAndProcess: boolean;
-    trustSelf?: TrustSelf;
-    knownTxids: TXIDHexString[];
-    noSendChange: OutPoint[];
-    randomizeOutputs: boolean;
+  signAndProcess: boolean
+  trustSelf?: TrustSelf
+  knownTxids: TXIDHexString[]
+  noSendChange: OutPoint[]
+  randomizeOutputs: boolean
 }
 ```
 
@@ -1366,16 +1493,17 @@ See also: [OutPoint](./wallet.md#interface-outpoint), [TXIDHexString](./wallet.m
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidCreateActionOutput
 
 ```ts
 export interface ValidCreateActionOutput {
-    lockingScript: HexString;
-    satoshis: SatoshiValue;
-    outputDescription: DescriptionString5to2000Bytes;
-    basket?: BasketStringUnder300Bytes;
-    customInstructions?: string;
-    tags: BasketStringUnder300Bytes[];
+  lockingScript: HexString
+  satoshis: SatoshiValue
+  outputDescription: DescriptionString5to2000Bytes
+  basket?: BasketStringUnder300Bytes
+  customInstructions?: string
+  tags: BasketStringUnder300Bytes[]
 }
 ```
 
@@ -1384,14 +1512,15 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidDiscoverByAttributesArgs
 
 ```ts
 export interface ValidDiscoverByAttributesArgs extends ValidWalletSignerArgs {
-    attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-    limit: PositiveIntegerDefault10Max10000;
-    offset: PositiveIntegerOrZero;
-    seekPermission: boolean;
+  attributes: Record<CertificateFieldNameUnder50Bytes, string>
+  limit: PositiveIntegerDefault10Max10000
+  offset: PositiveIntegerOrZero
+  seekPermission: boolean
 }
 ```
 
@@ -1400,14 +1529,15 @@ See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldna
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidDiscoverByIdentityKeyArgs
 
 ```ts
 export interface ValidDiscoverByIdentityKeyArgs extends ValidWalletSignerArgs {
-    identityKey: PubKeyHex;
-    limit: PositiveIntegerDefault10Max10000;
-    offset: PositiveIntegerOrZero;
-    seekPermission: boolean;
+  identityKey: PubKeyHex
+  limit: PositiveIntegerDefault10Max10000
+  offset: PositiveIntegerOrZero
+  seekPermission: boolean
 }
 ```
 
@@ -1416,15 +1546,16 @@ See also: [PositiveIntegerDefault10Max10000](./wallet.md#type-positiveintegerdef
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidInternalizeActionArgs
 
 ```ts
 export interface ValidInternalizeActionArgs extends ValidWalletSignerArgs {
-    tx: AtomicBEEF;
-    outputs: InternalizeOutput[];
-    description: DescriptionString5to2000Bytes;
-    labels: LabelStringUnder300Bytes[];
-    seekPermission: BooleanDefaultTrue;
+  tx: AtomicBEEF
+  outputs: InternalizeOutput[]
+  description: DescriptionString5to2000Bytes
+  labels: LabelStringUnder300Bytes[]
+  seekPermission: BooleanDefaultTrue
 }
 ```
 
@@ -1433,14 +1564,15 @@ See also: [AtomicBEEF](./wallet.md#type-atomicbeef), [BooleanDefaultTrue](./wall
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidInternalizeOutput
 
 ```ts
 export interface ValidInternalizeOutput {
-    outputIndex: PositiveIntegerOrZero;
-    protocol: "wallet payment" | "basket insertion";
-    paymentRemittance?: ValidWalletPayment;
-    insertionRemittance?: ValidBasketInsertion;
+  outputIndex: PositiveIntegerOrZero
+  protocol: 'wallet payment' | 'basket insertion'
+  paymentRemittance?: ValidWalletPayment
+  insertionRemittance?: ValidBasketInsertion
 }
 ```
 
@@ -1449,21 +1581,22 @@ See also: [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [Vali
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidListActionsArgs
 
 ```ts
 export interface ValidListActionsArgs extends ValidWalletSignerArgs {
-    labels: LabelStringUnder300Bytes[];
-    labelQueryMode: "any" | "all";
-    includeLabels: BooleanDefaultFalse;
-    includeInputs: BooleanDefaultFalse;
-    includeInputSourceLockingScripts: BooleanDefaultFalse;
-    includeInputUnlockingScripts: BooleanDefaultFalse;
-    includeOutputs: BooleanDefaultFalse;
-    includeOutputLockingScripts: BooleanDefaultFalse;
-    limit: PositiveIntegerDefault10Max10000;
-    offset: PositiveIntegerOrZero;
-    seekPermission: BooleanDefaultTrue;
+  labels: LabelStringUnder300Bytes[]
+  labelQueryMode: 'any' | 'all'
+  includeLabels: BooleanDefaultFalse
+  includeInputs: BooleanDefaultFalse
+  includeInputSourceLockingScripts: BooleanDefaultFalse
+  includeInputUnlockingScripts: BooleanDefaultFalse
+  includeOutputs: BooleanDefaultFalse
+  includeOutputLockingScripts: BooleanDefaultFalse
+  limit: PositiveIntegerDefault10Max10000
+  offset: PositiveIntegerOrZero
+  seekPermission: BooleanDefaultTrue
 }
 ```
 
@@ -1472,24 +1605,25 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidListCertificatesArgs
 
 ```ts
 export interface ValidListCertificatesArgs extends ValidWalletSignerArgs {
-    partial?: {
-        type?: Base64String;
-        serialNumber?: Base64String;
-        certifier?: PubKeyHex;
-        subject?: PubKeyHex;
-        revocationOutpoint?: OutpointString;
-        signature?: HexString;
-    };
-    certifiers: PubKeyHex[];
-    types: Base64String[];
-    limit: PositiveIntegerDefault10Max10000;
-    offset: PositiveIntegerOrZero;
-    privileged: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
+  partial?: {
+    type?: Base64String
+    serialNumber?: Base64String
+    certifier?: PubKeyHex
+    subject?: PubKeyHex
+    revocationOutpoint?: OutpointString
+    signature?: HexString
+  }
+  certifiers: PubKeyHex[]
+  types: Base64String[]
+  limit: PositiveIntegerDefault10Max10000
+  offset: PositiveIntegerOrZero
+  privileged: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1498,22 +1632,23 @@ See also: [Base64String](./wallet.md#type-base64string), [BooleanDefaultFalse](.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidListOutputsArgs
 
 ```ts
 export interface ValidListOutputsArgs extends ValidWalletSignerArgs {
-    basket: BasketStringUnder300Bytes;
-    tags: OutputTagStringUnder300Bytes[];
-    tagQueryMode: "all" | "any";
-    includeLockingScripts: boolean;
-    includeTransactions: boolean;
-    includeCustomInstructions: BooleanDefaultFalse;
-    includeTags: BooleanDefaultFalse;
-    includeLabels: BooleanDefaultFalse;
-    limit: PositiveIntegerDefault10Max10000;
-    offset: number;
-    seekPermission: BooleanDefaultTrue;
-    knownTxids: string[];
+  basket: BasketStringUnder300Bytes
+  tags: OutputTagStringUnder300Bytes[]
+  tagQueryMode: 'all' | 'any'
+  includeLockingScripts: boolean
+  includeTransactions: boolean
+  includeCustomInstructions: BooleanDefaultFalse
+  includeTags: BooleanDefaultFalse
+  includeLabels: BooleanDefaultFalse
+  limit: PositiveIntegerDefault10Max10000
+  offset: number
+  seekPermission: BooleanDefaultTrue
+  knownTxids: string[]
 }
 ```
 
@@ -1522,17 +1657,18 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidProcessActionArgs
 
 ```ts
 export interface ValidProcessActionArgs extends ValidWalletSignerArgs {
-    options: ValidProcessActionOptions;
-    isSendWith: boolean;
-    isNewTx: boolean;
-    isRemixChange: boolean;
-    isNoSend: boolean;
-    isDelayed: boolean;
-    isTestWerrReviewActions: boolean;
+  options: ValidProcessActionOptions
+  isSendWith: boolean
+  isNewTx: boolean
+  isRemixChange: boolean
+  isNoSend: boolean
+  isDelayed: boolean
+  isTestWerrReviewActions: boolean
 }
 ```
 
@@ -1541,14 +1677,15 @@ See also: [ValidProcessActionOptions](./wallet.md#interface-validprocessactionop
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidProcessActionOptions
 
 ```ts
 export interface ValidProcessActionOptions {
-    acceptDelayedBroadcast: BooleanDefaultTrue;
-    returnTXIDOnly: BooleanDefaultFalse;
-    noSend: BooleanDefaultFalse;
-    sendWith: TXIDHexString[];
+  acceptDelayedBroadcast: BooleanDefaultTrue
+  returnTXIDOnly: BooleanDefaultFalse
+  noSend: BooleanDefaultFalse
+  sendWith: TXIDHexString[]
 }
 ```
 
@@ -1557,20 +1694,21 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidProveCertificateArgs
 
 ```ts
 export interface ValidProveCertificateArgs extends ValidWalletSignerArgs {
-    type?: Base64String;
-    serialNumber?: Base64String;
-    certifier?: PubKeyHex;
-    subject?: PubKeyHex;
-    revocationOutpoint?: OutpointString;
-    signature?: HexString;
-    fieldsToReveal: CertificateFieldNameUnder50Bytes[];
-    verifier: PubKeyHex;
-    privileged: boolean;
-    privilegedReason?: DescriptionString5to50Bytes;
+  type?: Base64String
+  serialNumber?: Base64String
+  certifier?: PubKeyHex
+  subject?: PubKeyHex
+  revocationOutpoint?: OutpointString
+  signature?: HexString
+  fieldsToReveal: CertificateFieldNameUnder50Bytes[]
+  verifier: PubKeyHex
+  privileged: boolean
+  privilegedReason?: DescriptionString5to50Bytes
 }
 ```
 
@@ -1579,13 +1717,14 @@ See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUn
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidRelinquishCertificateArgs
 
 ```ts
 export interface ValidRelinquishCertificateArgs extends ValidWalletSignerArgs {
-    type: Base64String;
-    serialNumber: Base64String;
-    certifier: PubKeyHex;
+  type: Base64String
+  serialNumber: Base64String
+  certifier: PubKeyHex
 }
 ```
 
@@ -1594,12 +1733,13 @@ See also: [Base64String](./wallet.md#type-base64string), [PubKeyHex](./wallet.md
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidRelinquishOutputArgs
 
 ```ts
 export interface ValidRelinquishOutputArgs extends ValidWalletSignerArgs {
-    basket: BasketStringUnder300Bytes;
-    output: OutpointString;
+  basket: BasketStringUnder300Bytes
+  output: OutpointString
 }
 ```
 
@@ -1608,13 +1748,14 @@ See also: [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidSignActionArgs
 
 ```ts
 export interface ValidSignActionArgs extends ValidProcessActionArgs {
-    spends: Record<PositiveIntegerOrZero, SignActionSpend>;
-    reference: Base64String;
-    options: ValidSignActionOptions;
+  spends: Record<PositiveIntegerOrZero, SignActionSpend>
+  reference: Base64String
+  options: ValidSignActionOptions
 }
 ```
 
@@ -1623,14 +1764,15 @@ See also: [Base64String](./wallet.md#type-base64string), [PositiveIntegerOrZero]
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidSignActionOptions
 
 ```ts
 export interface ValidSignActionOptions extends ValidProcessActionOptions {
-    acceptDelayedBroadcast: boolean;
-    returnTXIDOnly: boolean;
-    noSend: boolean;
-    sendWith: TXIDHexString[];
+  acceptDelayedBroadcast: boolean
+  returnTXIDOnly: boolean
+  noSend: boolean
+  sendWith: TXIDHexString[]
 }
 ```
 
@@ -1639,13 +1781,14 @@ See also: [TXIDHexString](./wallet.md#type-txidhexstring), [ValidProcessActionOp
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidWalletPayment
 
 ```ts
 export interface ValidWalletPayment {
-    derivationPrefix: Base64String;
-    derivationSuffix: Base64String;
-    senderIdentityKey: PubKeyHex;
+  derivationPrefix: Base64String
+  derivationSuffix: Base64String
+  senderIdentityKey: PubKeyHex
 }
 ```
 
@@ -1654,11 +1797,12 @@ See also: [Base64String](./wallet.md#type-base64string), [PubKeyHex](./wallet.md
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: ValidWalletSignerArgs
 
 ```ts
 export interface ValidWalletSignerArgs {
-    logger?: WalletLoggerInterface;
+  logger?: WalletLoggerInterface
 }
 ```
 
@@ -1667,12 +1811,13 @@ See also: [WalletLoggerInterface](./wallet.md#interface-walletloggerinterface)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: VerifyHmacArgs
 
 ```ts
 export interface VerifyHmacArgs extends WalletEncryptionArgs {
-    data: Byte[];
-    hmac: Byte[];
+  data: Byte[]
+  hmac: Byte[]
 }
 ```
 
@@ -1681,25 +1826,27 @@ See also: [Byte](./wallet.md#type-byte), [WalletEncryptionArgs](./wallet.md#inte
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: VerifyHmacResult
 
 ```ts
 export interface VerifyHmacResult {
-    valid: true;
+  valid: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: VerifySignatureArgs
 
 ```ts
 export interface VerifySignatureArgs extends WalletEncryptionArgs {
-    data?: Byte[];
-    hashToDirectlyVerify?: Byte[];
-    signature: Byte[];
-    forSelf?: BooleanDefaultFalse;
+  data?: Byte[]
+  hashToDirectlyVerify?: Byte[]
+  signature: Byte[]
+  forSelf?: BooleanDefaultFalse
 }
 ```
 
@@ -1708,31 +1855,33 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [Byte](./
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: VerifySignatureResult
 
 ```ts
 export interface VerifySignatureResult {
-    valid: true;
+  valid: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletAction
 
 ```ts
 export interface WalletAction {
-    txid: TXIDHexString;
-    satoshis: SatoshiValue;
-    status: ActionStatus;
-    isOutgoing: boolean;
-    description: DescriptionString5to50Bytes;
-    labels?: LabelStringUnder300Bytes[];
-    version: PositiveIntegerOrZero;
-    lockTime: PositiveIntegerOrZero;
-    inputs?: WalletActionInput[];
-    outputs?: WalletActionOutput[];
+  txid: TXIDHexString
+  satoshis: SatoshiValue
+  status: ActionStatus
+  isOutgoing: boolean
+  description: DescriptionString5to50Bytes
+  labels?: LabelStringUnder300Bytes[]
+  version: PositiveIntegerOrZero
+  lockTime: PositiveIntegerOrZero
+  inputs?: WalletActionInput[]
+  outputs?: WalletActionOutput[]
 }
 ```
 
@@ -1741,16 +1890,17 @@ See also: [ActionStatus](./wallet.md#type-actionstatus), [DescriptionString5to50
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletActionInput
 
 ```ts
 export interface WalletActionInput {
-    sourceOutpoint: OutpointString;
-    sourceSatoshis: SatoshiValue;
-    sourceLockingScript?: HexString;
-    unlockingScript?: HexString;
-    inputDescription: DescriptionString5to50Bytes;
-    sequenceNumber: PositiveIntegerOrZero;
+  sourceOutpoint: OutpointString
+  sourceSatoshis: SatoshiValue
+  sourceLockingScript?: HexString
+  unlockingScript?: HexString
+  inputDescription: DescriptionString5to50Bytes
+  sequenceNumber: PositiveIntegerOrZero
 }
 ```
 
@@ -1759,18 +1909,19 @@ See also: [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50b
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletActionOutput
 
 ```ts
 export interface WalletActionOutput {
-    satoshis: SatoshiValue;
-    lockingScript?: HexString;
-    spendable: boolean;
-    customInstructions?: string;
-    tags: OutputTagStringUnder300Bytes[];
-    outputIndex: PositiveIntegerOrZero;
-    outputDescription: DescriptionString5to50Bytes;
-    basket: BasketStringUnder300Bytes;
+  satoshis: SatoshiValue
+  lockingScript?: HexString
+  spendable: boolean
+  customInstructions?: string
+  tags: OutputTagStringUnder300Bytes[]
+  outputIndex: PositiveIntegerOrZero
+  outputDescription: DescriptionString5to50Bytes
+  basket: BasketStringUnder300Bytes
 }
 ```
 
@@ -1787,17 +1938,18 @@ spendable: boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletCertificate
 
 ```ts
 export interface WalletCertificate {
-    type: Base64String;
-    subject: PubKeyHex;
-    serialNumber: Base64String;
-    certifier: PubKeyHex;
-    revocationOutpoint: OutpointString;
-    signature: HexString;
-    fields: Record<CertificateFieldNameUnder50Bytes, string>;
+  type: Base64String
+  subject: PubKeyHex
+  serialNumber: Base64String
+  certifier: PubKeyHex
+  revocationOutpoint: OutpointString
+  signature: HexString
+  fields: Record<CertificateFieldNameUnder50Bytes, string>
 }
 ```
 
@@ -1816,16 +1968,18 @@ unspent before treating the certificate as current authorization.
 ```ts
 revocationOutpoint: OutpointString
 ```
+
 See also: [OutpointString](./wallet.md#type-outpointstring)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletDecryptArgs
 
 ```ts
 export interface WalletDecryptArgs extends WalletEncryptionArgs {
-    ciphertext: Byte[];
+  ciphertext: Byte[]
 }
 ```
 
@@ -1834,11 +1988,12 @@ See also: [Byte](./wallet.md#type-byte), [WalletEncryptionArgs](./wallet.md#inte
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletDecryptResult
 
 ```ts
 export interface WalletDecryptResult {
-    plaintext: Byte[];
+  plaintext: Byte[]
 }
 ```
 
@@ -1847,11 +2002,12 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletEncryptArgs
 
 ```ts
 export interface WalletEncryptArgs extends WalletEncryptionArgs {
-    plaintext: Byte[];
+  plaintext: Byte[]
 }
 ```
 
@@ -1860,11 +2016,12 @@ See also: [Byte](./wallet.md#type-byte), [WalletEncryptionArgs](./wallet.md#inte
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletEncryptResult
 
 ```ts
 export interface WalletEncryptResult {
-    ciphertext: Byte[];
+  ciphertext: Byte[]
 }
 ```
 
@@ -1873,16 +2030,17 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletEncryptionArgs
 
 ```ts
 export interface WalletEncryptionArgs {
-    protocolID: WalletProtocol;
-    keyID: KeyIDStringUnder800Bytes;
-    counterparty?: WalletCounterparty;
-    privileged?: BooleanDefaultFalse;
-    privilegedReason?: DescriptionString5to50Bytes;
-    seekPermission?: BooleanDefaultTrue;
+  protocolID: WalletProtocol
+  keyID: KeyIDStringUnder800Bytes
+  counterparty?: WalletCounterparty
+  privileged?: BooleanDefaultFalse
+  privilegedReason?: DescriptionString5to50Bytes
+  seekPermission?: BooleanDefaultTrue
 }
 ```
 
@@ -1891,6 +2049,7 @@ See also: [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanD
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletErrorObject
 
 Every method of the `Wallet` interface has a return value of the form `Promise<object>`.
@@ -1900,13 +2059,14 @@ Deserialization should rethrow `WalletErrorObject` conforming objects.
 
 ```ts
 export interface WalletErrorObject extends Error {
-    isError: true;
+  isError: true
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletInterface
 
 The Wallet interface defines a wallet capable of various tasks including transaction creation and signing,
@@ -1923,34 +2083,118 @@ deserialize and rethrow `WalletErrorObject` conforming objects.
 
 ```ts
 export interface WalletInterface {
-    getPublicKey: (args: GetPublicKeyArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetPublicKeyResult>;
-    revealCounterpartyKeyLinkage: (args: RevealCounterpartyKeyLinkageArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RevealCounterpartyKeyLinkageResult>;
-    revealSpecificKeyLinkage: (args: RevealSpecificKeyLinkageArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RevealSpecificKeyLinkageResult>;
-    encrypt: (args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletEncryptResult>;
-    decrypt: (args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletDecryptResult>;
-    createHmac: (args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateHmacResult>;
-    verifyHmac: (args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<VerifyHmacResult>;
-    createSignature: (args: CreateSignatureArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateSignatureResult>;
-    verifySignature: (args: VerifySignatureArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<VerifySignatureResult>;
-    createAction: (args: CreateActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateActionResult>;
-    signAction: (args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<SignActionResult>;
-    abortAction: (args: AbortActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AbortActionResult>;
-    listActions: (args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListActionsResult>;
-    internalizeAction: (args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<InternalizeActionResult>;
-    listOutputs: (args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListOutputsResult>;
-    relinquishOutput: (args: RelinquishOutputArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RelinquishOutputResult>;
-    acquireCertificate: (args: AcquireCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletCertificate>;
-    listCertificates: (args: ListCertificatesArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListCertificatesResult>;
-    proveCertificate: (args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ProveCertificateResult>;
-    relinquishCertificate: (args: RelinquishCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RelinquishCertificateResult>;
-    discoverByIdentityKey: (args: DiscoverByIdentityKeyArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<DiscoverCertificatesResult>;
-    discoverByAttributes: (args: DiscoverByAttributesArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<DiscoverCertificatesResult>;
-    isAuthenticated: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AuthenticatedResult>;
-    waitForAuthentication: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AuthenticatedResult>;
-    getHeight: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetHeightResult>;
-    getHeaderForHeight: (args: GetHeaderArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetHeaderResult>;
-    getNetwork: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetNetworkResult>;
-    getVersion: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetVersionResult>;
+  getPublicKey: (
+    args: GetPublicKeyArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<GetPublicKeyResult>
+  revealCounterpartyKeyLinkage: (
+    args: RevealCounterpartyKeyLinkageArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<RevealCounterpartyKeyLinkageResult>
+  revealSpecificKeyLinkage: (
+    args: RevealSpecificKeyLinkageArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<RevealSpecificKeyLinkageResult>
+  encrypt: (
+    args: WalletEncryptArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<WalletEncryptResult>
+  decrypt: (
+    args: WalletDecryptArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<WalletDecryptResult>
+  createHmac: (
+    args: CreateHmacArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<CreateHmacResult>
+  verifyHmac: (
+    args: VerifyHmacArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<VerifyHmacResult>
+  createSignature: (
+    args: CreateSignatureArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<CreateSignatureResult>
+  verifySignature: (
+    args: VerifySignatureArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<VerifySignatureResult>
+  createAction: (
+    args: CreateActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<CreateActionResult>
+  signAction: (
+    args: SignActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<SignActionResult>
+  abortAction: (
+    args: AbortActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<AbortActionResult>
+  listActions: (
+    args: ListActionsArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<ListActionsResult>
+  internalizeAction: (
+    args: InternalizeActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<InternalizeActionResult>
+  listOutputs: (
+    args: ListOutputsArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<ListOutputsResult>
+  relinquishOutput: (
+    args: RelinquishOutputArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<RelinquishOutputResult>
+  acquireCertificate: (
+    args: AcquireCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<WalletCertificate>
+  listCertificates: (
+    args: ListCertificatesArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<ListCertificatesResult>
+  proveCertificate: (
+    args: ProveCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<ProveCertificateResult>
+  relinquishCertificate: (
+    args: RelinquishCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<RelinquishCertificateResult>
+  discoverByIdentityKey: (
+    args: DiscoverByIdentityKeyArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<DiscoverCertificatesResult>
+  discoverByAttributes: (
+    args: DiscoverByAttributesArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<DiscoverCertificatesResult>
+  isAuthenticated: (
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<AuthenticatedResult>
+  waitForAuthentication: (
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<AuthenticatedResult>
+  getHeight: (
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<GetHeightResult>
+  getHeaderForHeight: (
+    args: GetHeaderArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<GetHeaderResult>
+  getNetwork: (
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<GetNetworkResult>
+  getVersion: (
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ) => Promise<GetVersionResult>
 }
 ```
 
@@ -1961,8 +2205,10 @@ See also: [AbortActionArgs](./wallet.md#interface-abortactionargs), [AbortAction
 Aborts a transaction that is in progress and has not yet been finalized or sent to the network.
 
 ```ts
-abortAction: (args: AbortActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AbortActionResult>
+abortAction: (args: AbortActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<AbortActionResult>
 ```
+
 See also: [AbortActionArgs](./wallet.md#interface-abortactionargs), [AbortActionResult](./wallet.md#interface-abortactionresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property acquireCertificate
@@ -1970,8 +2216,12 @@ See also: [AbortActionArgs](./wallet.md#interface-abortactionargs), [AbortAction
 Acquires an identity certificate, whether by acquiring one from the certifier or by directly receiving it.
 
 ```ts
-acquireCertificate: (args: AcquireCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletCertificate>
+acquireCertificate: (
+  args: AcquireCertificateArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<WalletCertificate>
 ```
+
 See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [WalletCertificate](./wallet.md#interface-walletcertificate)
 
 #### Property createAction
@@ -1979,8 +2229,10 @@ See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs)
 Creates a new Bitcoin transaction based on the provided inputs, outputs, labels, locks, and other options.
 
 ```ts
-createAction: (args: CreateActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateActionResult>
+createAction: (args: CreateActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<CreateActionResult>
 ```
+
 See also: [CreateActionArgs](./wallet.md#interface-createactionargs), [CreateActionResult](./wallet.md#interface-createactionresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property createHmac
@@ -1988,8 +2240,10 @@ See also: [CreateActionArgs](./wallet.md#interface-createactionargs), [CreateAct
 Creates an HMAC (Hash-based Message Authentication Code) based on the provided data, protocol, key ID, counterparty, and other factors.
 
 ```ts
-createHmac: (args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateHmacResult>
+createHmac: (args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<CreateHmacResult>
 ```
+
 See also: [CreateHmacArgs](./wallet.md#interface-createhmacargs), [CreateHmacResult](./wallet.md#interface-createhmacresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property createSignature
@@ -1997,8 +2251,12 @@ See also: [CreateHmacArgs](./wallet.md#interface-createhmacargs), [CreateHmacRes
 Creates a digital signature for the provided data or hash using a specific protocol, key, and optionally considering privilege and counterparty.
 
 ```ts
-createSignature: (args: CreateSignatureArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<CreateSignatureResult>
+createSignature: (
+  args: CreateSignatureArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<CreateSignatureResult>
 ```
+
 See also: [CreateSignatureArgs](./wallet.md#interface-createsignatureargs), [CreateSignatureResult](./wallet.md#interface-createsignatureresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property decrypt
@@ -2006,8 +2264,10 @@ See also: [CreateSignatureArgs](./wallet.md#interface-createsignatureargs), [Cre
 Decrypts the provided ciphertext using derived keys, based on the protocol ID, key ID, counterparty, and other factors.
 
 ```ts
-decrypt: (args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletDecryptResult>
+decrypt: (args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<WalletDecryptResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [WalletDecryptArgs](./wallet.md#interface-walletdecryptargs), [WalletDecryptResult](./wallet.md#interface-walletdecryptresult)
 
 #### Property discoverByAttributes
@@ -2015,8 +2275,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Discovers identity certificates belonging to other users, where the documents contain specific attributes, issued by a trusted entity.
 
 ```ts
-discoverByAttributes: (args: DiscoverByAttributesArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<DiscoverCertificatesResult>
+discoverByAttributes: (
+  args: DiscoverByAttributesArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<DiscoverCertificatesResult>
 ```
+
 See also: [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [DiscoverCertificatesResult](./wallet.md#interface-discovercertificatesresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property discoverByIdentityKey
@@ -2024,8 +2288,12 @@ See also: [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesa
 Discovers identity certificates, issued to a given identity key by a trusted entity.
 
 ```ts
-discoverByIdentityKey: (args: DiscoverByIdentityKeyArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<DiscoverCertificatesResult>
+discoverByIdentityKey: (
+  args: DiscoverByIdentityKeyArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<DiscoverCertificatesResult>
 ```
+
 See also: [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [DiscoverCertificatesResult](./wallet.md#interface-discovercertificatesresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property encrypt
@@ -2033,8 +2301,10 @@ See also: [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentityke
 Encrypts the provided plaintext data using derived keys, based on the protocol ID, key ID, counterparty, and other factors.
 
 ```ts
-encrypt: (args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<WalletEncryptResult>
+encrypt: (args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<WalletEncryptResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [WalletEncryptArgs](./wallet.md#interface-walletencryptargs), [WalletEncryptResult](./wallet.md#interface-walletencryptresult)
 
 #### Property getHeaderForHeight
@@ -2042,8 +2312,10 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Retrieves the block header of a block at a specified height.
 
 ```ts
-getHeaderForHeight: (args: GetHeaderArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetHeaderResult>
+getHeaderForHeight: (args: GetHeaderArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<GetHeaderResult>
 ```
+
 See also: [GetHeaderArgs](./wallet.md#interface-getheaderargs), [GetHeaderResult](./wallet.md#interface-getheaderresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property getHeight
@@ -2051,8 +2323,10 @@ See also: [GetHeaderArgs](./wallet.md#interface-getheaderargs), [GetHeaderResult
 Retrieves the current height of the blockchain.
 
 ```ts
-getHeight: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetHeightResult>
+getHeight: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<GetHeightResult>
 ```
+
 See also: [GetHeightResult](./wallet.md#interface-getheightresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property getNetwork
@@ -2060,8 +2334,10 @@ See also: [GetHeightResult](./wallet.md#interface-getheightresult), [OriginatorD
 Retrieves the Bitcoin network the client is using (mainnet or testnet).
 
 ```ts
-getNetwork: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetNetworkResult>
+getNetwork: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<GetNetworkResult>
 ```
+
 See also: [GetNetworkResult](./wallet.md#interface-getnetworkresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property getPublicKey
@@ -2069,8 +2345,10 @@ See also: [GetNetworkResult](./wallet.md#interface-getnetworkresult), [Originato
 Retrieves a derived or identity public key based on the requested protocol, key ID, counterparty, and other factors.
 
 ```ts
-getPublicKey: (args: GetPublicKeyArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetPublicKeyResult>
+getPublicKey: (args: GetPublicKeyArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<GetPublicKeyResult>
 ```
+
 See also: [GetPublicKeyArgs](./wallet.md#interface-getpublickeyargs), [GetPublicKeyResult](./wallet.md#interface-getpublickeyresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property getVersion
@@ -2078,8 +2356,10 @@ See also: [GetPublicKeyArgs](./wallet.md#interface-getpublickeyargs), [GetPublic
 Retrieves the current version string of the wallet.
 
 ```ts
-getVersion: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<GetVersionResult>
+getVersion: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<GetVersionResult>
 ```
+
 See also: [GetVersionResult](./wallet.md#interface-getversionresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property internalizeAction
@@ -2087,8 +2367,12 @@ See also: [GetVersionResult](./wallet.md#interface-getversionresult), [Originato
 Submits a transaction to be internalized and optionally labeled, outputs paid to the wallet balance, inserted into baskets, and/or tagged.
 
 ```ts
-internalizeAction: (args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<InternalizeActionResult>
+internalizeAction: (
+  args: InternalizeActionArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<InternalizeActionResult>
 ```
+
 See also: [InternalizeActionArgs](./wallet.md#interface-internalizeactionargs), [InternalizeActionResult](./wallet.md#interface-internalizeactionresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property isAuthenticated
@@ -2096,8 +2380,10 @@ See also: [InternalizeActionArgs](./wallet.md#interface-internalizeactionargs), 
 Checks the authentication status of the user.
 
 ```ts
-isAuthenticated: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AuthenticatedResult>
+isAuthenticated: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<AuthenticatedResult>
 ```
+
 See also: [AuthenticatedResult](./wallet.md#interface-authenticatedresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property listActions
@@ -2105,8 +2391,10 @@ See also: [AuthenticatedResult](./wallet.md#interface-authenticatedresult), [Ori
 Lists all transactions matching the specified labels.
 
 ```ts
-listActions: (args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListActionsResult>
+listActions: (args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<ListActionsResult>
 ```
+
 See also: [ListActionsArgs](./wallet.md#interface-listactionsargs), [ListActionsResult](./wallet.md#interface-listactionsresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property listCertificates
@@ -2114,8 +2402,12 @@ See also: [ListActionsArgs](./wallet.md#interface-listactionsargs), [ListActions
 Lists identity certificates belonging to the user, filtered by certifier(s) and type(s).
 
 ```ts
-listCertificates: (args: ListCertificatesArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListCertificatesResult>
+listCertificates: (
+  args: ListCertificatesArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<ListCertificatesResult>
 ```
+
 See also: [ListCertificatesArgs](./wallet.md#interface-listcertificatesargs), [ListCertificatesResult](./wallet.md#interface-listcertificatesresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property listOutputs
@@ -2123,8 +2415,10 @@ See also: [ListCertificatesArgs](./wallet.md#interface-listcertificatesargs), [L
 Lists the spendable outputs kept within a specific basket, optionally tagged with specific labels.
 
 ```ts
-listOutputs: (args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ListOutputsResult>
+listOutputs: (args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<ListOutputsResult>
 ```
+
 See also: [ListOutputsArgs](./wallet.md#interface-listoutputsargs), [ListOutputsResult](./wallet.md#interface-listoutputsresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 #### Property proveCertificate
@@ -2132,8 +2426,12 @@ See also: [ListOutputsArgs](./wallet.md#interface-listoutputsargs), [ListOutputs
 Proves select fields of an identity certificate, as specified, when requested by a verifier.
 
 ```ts
-proveCertificate: (args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<ProveCertificateResult>
+proveCertificate: (
+  args: ProveCertificateArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<ProveCertificateResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [ProveCertificateArgs](./wallet.md#interface-provecertificateargs), [ProveCertificateResult](./wallet.md#interface-provecertificateresult)
 
 #### Property relinquishCertificate
@@ -2141,8 +2439,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Relinquishes an identity certificate, removing it from the wallet regardless of whether the revocation outpoint has become spent.
 
 ```ts
-relinquishCertificate: (args: RelinquishCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RelinquishCertificateResult>
+relinquishCertificate: (
+  args: RelinquishCertificateArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<RelinquishCertificateResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RelinquishCertificateArgs](./wallet.md#interface-relinquishcertificateargs), [RelinquishCertificateResult](./wallet.md#interface-relinquishcertificateresult)
 
 #### Property relinquishOutput
@@ -2150,8 +2452,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Relinquish an output out of a basket, removing it from tracking without spending it.
 
 ```ts
-relinquishOutput: (args: RelinquishOutputArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RelinquishOutputResult>
+relinquishOutput: (
+  args: RelinquishOutputArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<RelinquishOutputResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RelinquishOutputArgs](./wallet.md#interface-relinquishoutputargs), [RelinquishOutputResult](./wallet.md#interface-relinquishoutputresult)
 
 #### Property revealCounterpartyKeyLinkage
@@ -2159,8 +2465,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Reveals the key linkage between ourselves and a counterparty, to a particular verifier, across all interactions with the counterparty.
 
 ```ts
-revealCounterpartyKeyLinkage: (args: RevealCounterpartyKeyLinkageArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RevealCounterpartyKeyLinkageResult>
+revealCounterpartyKeyLinkage: (
+  args: RevealCounterpartyKeyLinkageArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<RevealCounterpartyKeyLinkageResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RevealCounterpartyKeyLinkageArgs](./wallet.md#interface-revealcounterpartykeylinkageargs), [RevealCounterpartyKeyLinkageResult](./wallet.md#interface-revealcounterpartykeylinkageresult)
 
 #### Property revealSpecificKeyLinkage
@@ -2168,8 +2478,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Reveals the key linkage between ourselves and a counterparty, to a particular verifier, with respect to a specific interaction.
 
 ```ts
-revealSpecificKeyLinkage: (args: RevealSpecificKeyLinkageArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<RevealSpecificKeyLinkageResult>
+revealSpecificKeyLinkage: (
+  args: RevealSpecificKeyLinkageArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<RevealSpecificKeyLinkageResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RevealSpecificKeyLinkageArgs](./wallet.md#interface-revealspecifickeylinkageargs), [RevealSpecificKeyLinkageResult](./wallet.md#interface-revealspecifickeylinkageresult)
 
 #### Property signAction
@@ -2177,8 +2491,10 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Signs a transaction previously created using `createAction`.
 
 ```ts
-signAction: (args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<SignActionResult>
+signAction: (args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<SignActionResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [SignActionArgs](./wallet.md#interface-signactionargs), [SignActionResult](./wallet.md#interface-signactionresult)
 
 #### Property verifyHmac
@@ -2186,8 +2502,10 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Verifies an HMAC (Hash-based Message Authentication Code) based on the provided data, protocol, key ID, counterparty, and other factors.
 
 ```ts
-verifyHmac: (args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<VerifyHmacResult>
+verifyHmac: (args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<VerifyHmacResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [VerifyHmacArgs](./wallet.md#interface-verifyhmacargs), [VerifyHmacResult](./wallet.md#interface-verifyhmacresult)
 
 #### Property verifySignature
@@ -2195,8 +2513,12 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Verifies a digital signature for the provided data or hash using a specific protocol, key, and optionally considering privilege and counterparty.
 
 ```ts
-verifySignature: (args: VerifySignatureArgs, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<VerifySignatureResult>
+verifySignature: (
+  args: VerifySignatureArgs,
+  originator?: OriginatorDomainNameStringUnder250Bytes
+) => Promise<VerifySignatureResult>
 ```
+
 See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [VerifySignatureArgs](./wallet.md#interface-verifysignatureargs), [VerifySignatureResult](./wallet.md#interface-verifysignatureresult)
 
 #### Property waitForAuthentication
@@ -2204,13 +2526,16 @@ See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatord
 Continuously waits until the user is authenticated, returning the result once confirmed.
 
 ```ts
-waitForAuthentication: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) => Promise<AuthenticatedResult>
+waitForAuthentication: (args: object, originator?: OriginatorDomainNameStringUnder250Bytes) =>
+  Promise<AuthenticatedResult>
 ```
+
 See also: [AuthenticatedResult](./wallet.md#interface-authenticatedresult), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletLoggerInterface
 
 A console-like interface for logging within wallet operations.
@@ -2219,17 +2544,17 @@ Intended to reflect a subset of standard `Console` interface methods used by `Wa
 
 ```ts
 export interface WalletLoggerInterface {
-    group: (...label: any[]) => void;
-    groupEnd: () => void;
-    log: (message?: any, ...optionalParams: any[]) => void;
-    error: (message?: any, ...optionalParams: any[]) => void;
-    flush?: () => object | undefined;
-    merge?: (log: WalletLoggerInterface) => void;
-    level?: "error" | "warn" | "info" | "debug" | "trace";
-    indent?: number;
-    isOrigin?: boolean;
-    isError?: boolean;
-    logs?: WalletLoggerLog[];
+  group: (...label: any[]) => void
+  groupEnd: () => void
+  log: (message?: any, ...optionalParams: any[]) => void
+  error: (message?: any, ...optionalParams: any[]) => void
+  flush?: () => object | undefined
+  merge?: (log: WalletLoggerInterface) => void
+  level?: 'error' | 'warn' | 'info' | 'debug' | 'trace'
+  indent?: number
+  isOrigin?: boolean
+  isError?: boolean
+  logs?: WalletLoggerLog[]
 }
 ```
 
@@ -2325,6 +2650,7 @@ Optional array of accumulated logged data and errors.
 ```ts
 logs?: WalletLoggerLog[]
 ```
+
 See also: [WalletLoggerLog](./wallet.md#interface-walletloggerlog)
 
 #### Property merge
@@ -2336,21 +2662,23 @@ Typically used to merge log data from network request.
 ```ts
 merge?: (log: WalletLoggerInterface) => void
 ```
+
 See also: [WalletLoggerInterface](./wallet.md#interface-walletloggerinterface)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletLoggerLog
 
 ```ts
 export interface WalletLoggerLog {
-    when: number;
-    indent: number;
-    log: string;
-    isError?: boolean;
-    isBegin?: boolean;
-    isEnd?: boolean;
+  when: number
+  indent: number
+  log: string
+  isError?: boolean
+  isBegin?: boolean
+  isEnd?: boolean
 }
 ```
 
@@ -2359,17 +2687,18 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletOutput
 
 ```ts
 export interface WalletOutput {
-    satoshis: SatoshiValue;
-    lockingScript?: HexString;
-    spendable: boolean;
-    customInstructions?: string;
-    tags?: OutputTagStringUnder300Bytes[];
-    outpoint: OutpointString;
-    labels?: LabelStringUnder300Bytes[];
+  satoshis: SatoshiValue
+  lockingScript?: HexString
+  spendable: boolean
+  customInstructions?: string
+  tags?: OutputTagStringUnder300Bytes[]
+  outpoint: OutpointString
+  labels?: LabelStringUnder300Bytes[]
 }
 ```
 
@@ -2386,13 +2715,14 @@ spendable: boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletPayment
 
 ```ts
 export interface WalletPayment {
-    derivationPrefix: Base64String;
-    derivationSuffix: Base64String;
-    senderIdentityKey: PubKeyHex;
+  derivationPrefix: Base64String
+  derivationSuffix: Base64String
+  senderIdentityKey: PubKeyHex
 }
 ```
 
@@ -2401,12 +2731,13 @@ See also: [Base64String](./wallet.md#type-base64string), [PubKeyHex](./wallet.md
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletResultBEEF
 
 ```ts
 export interface WalletResultBEEF {
-    atomicTxid?: string;
-    transactions: Map<string, WalletResultTransaction | undefined>;
+  atomicTxid?: string
+  transactions: Map<string, WalletResultTransaction | undefined>
 }
 ```
 
@@ -2415,15 +2746,16 @@ See also: [WalletResultTransaction](./wallet.md#interface-walletresulttransactio
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletResultTransaction
 
 ```ts
 export interface WalletResultTransaction {
-    txid: string;
-    version: number;
-    inputs: WalletResultTransactionInput[];
-    outputs: WalletResultTransactionOutput[];
-    lockTime: number;
+  txid: string
+  version: number
+  inputs: WalletResultTransactionInput[]
+  outputs: WalletResultTransactionOutput[]
+  lockTime: number
 }
 ```
 
@@ -2432,15 +2764,16 @@ See also: [WalletResultTransactionInput](./wallet.md#interface-walletresulttrans
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletResultTransactionInput
 
 ```ts
 export interface WalletResultTransactionInput {
-    sourceTXID: string;
-    sourceOutputIndex: number;
-    unlockingScript: Uint8Array;
-    sequence: number;
-    sourceSatoshis?: number;
+  sourceTXID: string
+  sourceOutputIndex: number
+  unlockingScript: Uint8Array
+  sequence: number
+  sourceSatoshis?: number
 }
 ```
 
@@ -2457,24 +2790,26 @@ sourceSatoshis?: number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletResultTransactionOutput
 
 ```ts
 export interface WalletResultTransactionOutput {
-    satoshis: number;
-    lockingScript: Uint8Array;
+  satoshis: number
+  lockingScript: Uint8Array
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Interface: WalletWire
 
 ```ts
 export default interface WalletWire {
-    transmitToWallet: (message: number[]) => Promise<number[]>;
-    transmitToWalletUint8Array?: (message: Uint8Array) => Promise<Uint8Array>;
+  transmitToWallet: (message: number[]) => Promise<number[]>
+  transmitToWalletUint8Array?: (message: Uint8Array) => Promise<Uint8Array>
 }
 ```
 
@@ -2491,19 +2826,20 @@ transmitToWalletUint8Array?: (message: Uint8Array) => Promise<Uint8Array>
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ## Classes
 
-| | |
-| --- | --- |
-| [CachedKeyDeriver](#class-cachedkeyderiver) | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
-| [ExactByteCache](#class-exactbytecache) | [WERR_REVIEW_ACTIONS](#class-werr_review_actions) |
-| [HTTPWalletJSON](#class-httpwalletjson) | [WalletClient](#class-walletclient) |
-| [HTTPWalletWire](#class-httpwalletwire) | [WalletError](#class-walleterror) |
-| [InvokableWalletBase](#class-invokablewalletbase) | [WalletWireProcessor](#class-walletwireprocessor) |
-| [KeyDeriver](#class-keyderiver) | [WalletWireTransceiver](#class-walletwiretransceiver) |
-| [ProtoWallet](#class-protowallet) | [WindowCWISubstrate](#class-windowcwisubstrate) |
-| [ReactNativeWebView](#class-reactnativewebview) | [XDMSubstrate](#class-xdmsubstrate) |
-| [WERR_INSUFFICIENT_FUNDS](#class-werr_insufficient_funds) |  |
+|                                                           |                                                         |
+| --------------------------------------------------------- | ------------------------------------------------------- |
+| [CachedKeyDeriver](#class-cachedkeyderiver)               | [WERR_INVALID_PARAMETER](#class-werr_invalid_parameter) |
+| [ExactByteCache](#class-exactbytecache)                   | [WERR_REVIEW_ACTIONS](#class-werr_review_actions)       |
+| [HTTPWalletJSON](#class-httpwalletjson)                   | [WalletClient](#class-walletclient)                     |
+| [HTTPWalletWire](#class-httpwalletwire)                   | [WalletError](#class-walleterror)                       |
+| [InvokableWalletBase](#class-invokablewalletbase)         | [WalletWireProcessor](#class-walletwireprocessor)       |
+| [KeyDeriver](#class-keyderiver)                           | [WalletWireTransceiver](#class-walletwiretransceiver)   |
+| [ProtoWallet](#class-protowallet)                         | [WindowCWISubstrate](#class-windowcwisubstrate)         |
+| [ReactNativeWebView](#class-reactnativewebview)           | [XDMSubstrate](#class-xdmsubstrate)                     |
+| [WERR_INSUFFICIENT_FUNDS](#class-werr_insufficient_funds) |                                                         |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2517,19 +2853,48 @@ It supports configurable cache size with sane defaults and maintains cache entri
 
 ```ts
 export default class CachedKeyDeriver implements KeyDeriverApi {
-    rootKey: PrivateKey;
-    identityKey: string;
-    constructor(rootKey: PrivateKey | "anyone", options?: {
-        maxCacheSize?: number;
-    })
-    derivePublicKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf: boolean = false): PublicKey
-    async derivePublicKeyAsync(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf: boolean = false): Promise<PublicKey>
-    derivePrivateKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): PrivateKey
-    derivePrivateKeys(derivations: readonly PrivateKeyDerivation[]): PrivateKey[]
-    deriveSymmetricKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): SymmetricKey
-    async deriveSymmetricKeyAsync(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): Promise<SymmetricKey>
-    revealCounterpartySecret(counterparty: Counterparty): number[]
-    revealSpecificSecret(counterparty: Counterparty, protocolID: WalletProtocol, keyID: string): number[]
+  rootKey: PrivateKey
+  identityKey: string
+  constructor(
+    rootKey: PrivateKey | 'anyone',
+    options?: {
+      maxCacheSize?: number
+    }
+  )
+  derivePublicKey(
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf: boolean = false
+  ): PublicKey
+  async derivePublicKeyAsync(
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty,
+    forSelf: boolean = false
+  ): Promise<PublicKey>
+  derivePrivateKey(
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ): PrivateKey
+  derivePrivateKeys(derivations: readonly PrivateKeyDerivation[]): PrivateKey[]
+  deriveSymmetricKey(
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ): SymmetricKey
+  async deriveSymmetricKeyAsync(
+    protocolID: WalletProtocol,
+    keyID: string,
+    counterparty: Counterparty
+  ): Promise<SymmetricKey>
+  revealCounterpartySecret(counterparty: Counterparty): number[]
+  revealSpecificSecret(
+    counterparty: Counterparty,
+    protocolID: WalletProtocol,
+    keyID: string
+  ): number[]
 }
 ```
 
@@ -2544,14 +2909,15 @@ constructor(rootKey: PrivateKey | "anyone", options?: {
     maxCacheSize?: number;
 })
 ```
+
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
 Argument Details
 
-+ **rootKey**
-  + The root private key or the string 'anyone'.
-+ **options**
-  + Optional settings for the cache.
+- **rootKey**
+  - The root private key or the string 'anyone'.
+- **options**
+  - Optional settings for the cache.
 
 #### Property identityKey
 
@@ -2560,6 +2926,7 @@ The identity of this key deriver which is normally the public key associated wit
 ```ts
 identityKey: string
 ```
+
 See also: [string](./remittance.md#function-string)
 
 #### Property rootKey
@@ -2569,6 +2936,7 @@ The root key from which all other keys are derived.
 ```ts
 rootKey: PrivateKey
 ```
+
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
 #### Method derivePrivateKey
@@ -2579,6 +2947,7 @@ Caches the result for future calls with the same parameters.
 ```ts
 derivePrivateKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): PrivateKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PrivateKey](./primitives.md#class-privatekey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -2587,12 +2956,12 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 #### Method derivePublicKey
 
@@ -2602,6 +2971,7 @@ Caches the result for future calls with the same parameters.
 ```ts
 derivePublicKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf: boolean = false): PublicKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PublicKey](./primitives.md#class-publickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -2610,14 +2980,14 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
-+ **forSelf**
-  + Whether deriving for self.
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
+- **forSelf**
+  - Whether deriving for self.
 
 #### Method deriveSymmetricKey
 
@@ -2627,6 +2997,7 @@ Caches the result for future calls with the same parameters.
 ```ts
 deriveSymmetricKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): SymmetricKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [SymmetricKey](./primitives.md#class-symmetrickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -2635,12 +3006,12 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 Throws
 
@@ -2654,6 +3025,7 @@ Caches the result for future calls with the same parameters.
 ```ts
 revealCounterpartySecret(counterparty: Counterparty): number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty)
 
 Returns
@@ -2662,8 +3034,8 @@ Returns
 
 Argument Details
 
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 Throws
 
@@ -2677,6 +3049,7 @@ Caches the result for future calls with the same parameters.
 ```ts
 revealSpecificSecret(counterparty: Counterparty, protocolID: WalletProtocol, keyID: string): number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -2685,246 +3058,221 @@ Returns
 
 Argument Details
 
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: ExactByteCache
 
 A one-entry cache that reuses a result only after an exact native byte comparison.
 
 ```ts
 export default class ExactByteCache<T> {
-    get(bytes: number[] | Uint8Array): T | undefined
-    set(bytes: number[] | Uint8Array, value: T): void
+  get(bytes: number[] | Uint8Array): T | undefined
+  set(bytes: number[] | Uint8Array, value: T): void
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: HTTPWalletJSON
 
 ```ts
 export default class HTTPWalletJSON implements WalletInterface {
-    baseUrl: string;
-    httpClient: typeof fetch;
-    originator: OriginatorDomainNameStringUnder250Bytes | undefined;
-    api: (call: CallType, args: object) => Promise<unknown>;
-    constructor(originator: OriginatorDomainNameStringUnder250Bytes | undefined, baseUrl: string = "http://localhost:3321", httpClient = fetch)
-    async createAction(args: CreateActionArgs): Promise<CreateActionResult>
-    async signAction(args: SignActionArgs): Promise<SignActionResult>
-    async abortAction(args: {
-        reference: Base64String;
-    }): Promise<{
-        aborted: true;
-    }>
-    async listActions(args: ListActionsArgs): Promise<ListActionsResult>
-    async internalizeAction(args: InternalizeActionArgs): Promise<{
-        accepted: true;
-    }>
-    async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
-    async relinquishOutput(args: {
-        basket: BasketStringUnder300Bytes;
-        output: OutpointString;
-    }): Promise<{
-        relinquished: true;
-    }>
-    async getPublicKey(args: {
-        seekPermission?: BooleanDefaultTrue;
-        identityKey?: true;
-        protocolID?: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID?: KeyIDStringUnder800Bytes;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-    }): Promise<{
-        publicKey: PubKeyHex;
-    }>
-    async revealCounterpartyKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        revelationTime: ISOTimestampString;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: number[];
-    }>
-    async revealSpecificKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-        proofType: Byte;
-    }>
-    async encrypt(args: {
-        seekPermission?: BooleanDefaultTrue;
-        plaintext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        ciphertext: Byte[];
-    }>
-    async decrypt(args: {
-        seekPermission?: BooleanDefaultTrue;
-        ciphertext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        plaintext: Byte[];
-    }>
-    async createHmac(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        hmac: Byte[];
-    }>
-    async verifyHmac(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data: Byte[];
-        hmac: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        valid: true;
-    }>
-    async createSignature(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data?: Byte[];
-        hashToDirectlySign?: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        signature: Byte[];
-    }>
-    async verifySignature(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data?: Byte[];
-        hashToDirectlyVerify?: Byte[];
-        signature: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        valid: true;
-    }>
-    async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
-    async listCertificates(args: {
-        certifiers: PubKeyHex[];
-        types: Base64String[];
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-    }): Promise<ListCertificatesResult>
-    async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
-    async relinquishCertificate(args: {
-        type: Base64String;
-        serialNumber: Base64String;
-        certifier: PubKeyHex;
-    }): Promise<{
-        relinquished: true;
-    }>
-    async discoverByIdentityKey(args: {
-        seekPermission?: BooleanDefaultTrue;
-        identityKey: PubKeyHex;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }): Promise<DiscoverCertificatesResult>
-    async discoverByAttributes(args: {
-        seekPermission?: BooleanDefaultTrue;
-        attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }): Promise<DiscoverCertificatesResult>
-    async isAuthenticated(args: object): Promise<{
-        authenticated: true;
-    }>
-    async waitForAuthentication(args: object): Promise<{
-        authenticated: true;
-    }>
-    async getHeight(args: object): Promise<{
-        height: PositiveInteger;
-    }>
-    async getHeaderForHeight(args: {
-        height: PositiveInteger;
-    }): Promise<{
-        header: HexString;
-    }>
-    async getNetwork(args: object): Promise<{
-        network: "mainnet" | "testnet";
-    }>
-    async getVersion(args: object): Promise<{
-        version: VersionString7To30Bytes;
-    }>
+  baseUrl: string
+  httpClient: typeof fetch
+  originator: OriginatorDomainNameStringUnder250Bytes | undefined
+  api: (call: CallType, args: object) => Promise<unknown>
+  constructor(
+    originator: OriginatorDomainNameStringUnder250Bytes | undefined,
+    baseUrl: string = 'http://localhost:3321',
+    httpClient = fetch
+  )
+  async createAction(args: CreateActionArgs): Promise<CreateActionResult>
+  async signAction(args: SignActionArgs): Promise<SignActionResult>
+  async abortAction(args: { reference: Base64String }): Promise<{
+    aborted: true
+  }>
+  async listActions(args: ListActionsArgs): Promise<ListActionsResult>
+  async internalizeAction(args: InternalizeActionArgs): Promise<{
+    accepted: true
+  }>
+  async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
+  async relinquishOutput(args: {
+    basket: BasketStringUnder300Bytes
+    output: OutpointString
+  }): Promise<{
+    relinquished: true
+  }>
+  async getPublicKey(args: {
+    seekPermission?: BooleanDefaultTrue
+    identityKey?: true
+    protocolID?: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID?: KeyIDStringUnder800Bytes
+    privileged?: BooleanDefaultFalse
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    forSelf?: BooleanDefaultFalse
+  }): Promise<{
+    publicKey: PubKeyHex
+  }>
+  async revealCounterpartyKeyLinkage(args: {
+    counterparty: PubKeyHex
+    verifier: PubKeyHex
+    privilegedReason?: DescriptionString5to50Bytes
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    revelationTime: ISOTimestampString
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: number[]
+  }>
+  async revealSpecificKeyLinkage(args: {
+    counterparty: PubKeyHex
+    verifier: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+    proofType: Byte
+  }>
+  async encrypt(args: {
+    seekPermission?: BooleanDefaultTrue
+    plaintext: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    ciphertext: Byte[]
+  }>
+  async decrypt(args: {
+    seekPermission?: BooleanDefaultTrue
+    ciphertext: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    plaintext: Byte[]
+  }>
+  async createHmac(args: {
+    seekPermission?: BooleanDefaultTrue
+    data: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    hmac: Byte[]
+  }>
+  async verifyHmac(args: {
+    seekPermission?: BooleanDefaultTrue
+    data: Byte[]
+    hmac: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    valid: true
+  }>
+  async createSignature(args: {
+    seekPermission?: BooleanDefaultTrue
+    data?: Byte[]
+    hashToDirectlySign?: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    signature: Byte[]
+  }>
+  async verifySignature(args: {
+    seekPermission?: BooleanDefaultTrue
+    data?: Byte[]
+    hashToDirectlyVerify?: Byte[]
+    signature: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    forSelf?: BooleanDefaultFalse
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    valid: true
+  }>
+  async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
+  async listCertificates(args: {
+    certifiers: PubKeyHex[]
+    types: Base64String[]
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+    privileged?: BooleanDefaultFalse
+    privilegedReason?: DescriptionString5to50Bytes
+  }): Promise<ListCertificatesResult>
+  async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
+  async relinquishCertificate(args: {
+    type: Base64String
+    serialNumber: Base64String
+    certifier: PubKeyHex
+  }): Promise<{
+    relinquished: true
+  }>
+  async discoverByIdentityKey(args: {
+    seekPermission?: BooleanDefaultTrue
+    identityKey: PubKeyHex
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+  }): Promise<DiscoverCertificatesResult>
+  async discoverByAttributes(args: {
+    seekPermission?: BooleanDefaultTrue
+    attributes: Record<CertificateFieldNameUnder50Bytes, string>
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+  }): Promise<DiscoverCertificatesResult>
+  async isAuthenticated(args: object): Promise<{
+    authenticated: true
+  }>
+  async waitForAuthentication(args: object): Promise<{
+    authenticated: true
+  }>
+  async getHeight(args: object): Promise<{
+    height: PositiveInteger
+  }>
+  async getHeaderForHeight(args: { height: PositiveInteger }): Promise<{
+    header: HexString
+  }>
+  async getNetwork(args: object): Promise<{
+    network: 'mainnet' | 'testnet'
+  }>
+  async getVersion(args: object): Promise<{
+    version: VersionString7To30Bytes
+  }>
 }
 ```
 
@@ -2933,16 +3281,21 @@ See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: HTTPWalletWire
 
 ```ts
 export default class HTTPWalletWire implements WalletWire {
-    baseUrl: string;
-    httpClient: typeof fetch;
-    originator: string | undefined;
-    constructor(originator: string | undefined, baseUrl: string = "http://localhost:3301", httpClient?: typeof fetch)
-    async transmitToWallet(message: number[]): Promise<number[]>
-    async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
+  baseUrl: string
+  httpClient: typeof fetch
+  originator: string | undefined
+  constructor(
+    originator: string | undefined,
+    baseUrl: string = 'http://localhost:3301',
+    httpClient?: typeof fetch
+  )
+  async transmitToWallet(message: number[]): Promise<number[]>
+  async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
 }
 ```
 
@@ -2951,6 +3304,7 @@ See also: [WalletWire](./wallet.md#interface-walletwire), [string](./remittance.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: InvokableWalletBase
 
 Abstract base class for WalletInterface substrates that delegate all
@@ -2961,36 +3315,40 @@ the specific transport (e.g. XDM postMessage, ReactNative bridge).
 
 ```ts
 export abstract class InvokableWalletBase implements WalletInterface {
-    protected async invokeRaw(_call: CallType, _args: any, _bindingRequest: unknown): Promise<any>
-    async invoke(call: CallType, args: any): Promise<any>
-    async createAction(args: CreateActionArgs): Promise<CreateActionResult>
-    async signAction(args: SignActionArgs): Promise<SignActionResult>
-    async abortAction(args: AbortActionArgs): Promise<AbortActionResult>
-    async listActions(args: ListActionsArgs): Promise<ListActionsResult>
-    async internalizeAction(args: InternalizeActionArgs): Promise<InternalizeActionResult>
-    async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
-    async relinquishOutput(args: RelinquishOutputArgs): Promise<RelinquishOutputResult>
-    async getPublicKey(args: GetPublicKeyArgs): Promise<GetPublicKeyResult>
-    async revealCounterpartyKeyLinkage(args: RevealCounterpartyKeyLinkageArgs): Promise<RevealCounterpartyKeyLinkageResult>
-    async revealSpecificKeyLinkage(args: RevealSpecificKeyLinkageArgs): Promise<RevealSpecificKeyLinkageResult>
-    async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult>
-    async decrypt(args: WalletDecryptArgs): Promise<WalletDecryptResult>
-    async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult>
-    async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult>
-    async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult>
-    async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult>
-    async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
-    async listCertificates(args: ListCertificatesArgs): Promise<ListCertificatesResult>
-    async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
-    async relinquishCertificate(args: RelinquishCertificateArgs): Promise<RelinquishCertificateResult>
-    async discoverByIdentityKey(args: DiscoverByIdentityKeyArgs): Promise<DiscoverCertificatesResult>
-    async discoverByAttributes(args: DiscoverByAttributesArgs): Promise<DiscoverCertificatesResult>
-    async isAuthenticated(args: {}): Promise<AuthenticatedResult>
-    async waitForAuthentication(args: {}): Promise<AuthenticatedResult>
-    async getHeight(args: {}): Promise<GetHeightResult>
-    async getHeaderForHeight(args: GetHeaderArgs): Promise<GetHeaderResult>
-    async getNetwork(args: {}): Promise<GetNetworkResult>
-    async getVersion(args: {}): Promise<GetVersionResult>
+  protected async invokeRaw(_call: CallType, _args: any, _bindingRequest: unknown): Promise<any>
+  async invoke(call: CallType, args: any): Promise<any>
+  async createAction(args: CreateActionArgs): Promise<CreateActionResult>
+  async signAction(args: SignActionArgs): Promise<SignActionResult>
+  async abortAction(args: AbortActionArgs): Promise<AbortActionResult>
+  async listActions(args: ListActionsArgs): Promise<ListActionsResult>
+  async internalizeAction(args: InternalizeActionArgs): Promise<InternalizeActionResult>
+  async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
+  async relinquishOutput(args: RelinquishOutputArgs): Promise<RelinquishOutputResult>
+  async getPublicKey(args: GetPublicKeyArgs): Promise<GetPublicKeyResult>
+  async revealCounterpartyKeyLinkage(
+    args: RevealCounterpartyKeyLinkageArgs
+  ): Promise<RevealCounterpartyKeyLinkageResult>
+  async revealSpecificKeyLinkage(
+    args: RevealSpecificKeyLinkageArgs
+  ): Promise<RevealSpecificKeyLinkageResult>
+  async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult>
+  async decrypt(args: WalletDecryptArgs): Promise<WalletDecryptResult>
+  async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult>
+  async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult>
+  async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult>
+  async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult>
+  async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
+  async listCertificates(args: ListCertificatesArgs): Promise<ListCertificatesResult>
+  async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
+  async relinquishCertificate(args: RelinquishCertificateArgs): Promise<RelinquishCertificateResult>
+  async discoverByIdentityKey(args: DiscoverByIdentityKeyArgs): Promise<DiscoverCertificatesResult>
+  async discoverByAttributes(args: DiscoverByAttributesArgs): Promise<DiscoverCertificatesResult>
+  async isAuthenticated(args: {}): Promise<AuthenticatedResult>
+  async waitForAuthentication(args: {}): Promise<AuthenticatedResult>
+  async getHeight(args: {}): Promise<GetHeightResult>
+  async getHeaderForHeight(args: GetHeaderArgs): Promise<GetHeaderResult>
+  async getNetwork(args: {}): Promise<GetNetworkResult>
+  async getVersion(args: {}): Promise<GetVersionResult>
 }
 ```
 
@@ -3005,11 +3363,13 @@ public `invoke(call, args)` contract continue to compile unchanged.
 ```ts
 protected async invokeRaw(_call: CallType, _args: any, _bindingRequest: unknown): Promise<any>
 ```
+
 See also: [CallType](./wallet.md#type-calltype)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: KeyDeriver
 
 Class responsible for deriving various types of keys using a root private key.
@@ -3044,12 +3404,13 @@ Initializes the KeyDeriver instance with a root private key.
 ```ts
 constructor(rootKey: PrivateKey | "anyone", private readonly cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, private readonly retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined)
 ```
+
 See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey)
 
 Argument Details
 
-+ **rootKey**
-  + The root private key or the string 'anyone'.
+- **rootKey**
+  - The root private key or the string 'anyone'.
 
 #### Method derivePrivateKey
 
@@ -3058,6 +3419,7 @@ Derives a private key based on protocol ID, key ID, and counterparty.
 ```ts
 derivePrivateKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): PrivateKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PrivateKey](./primitives.md#class-privatekey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -3066,12 +3428,12 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 #### Method derivePublicKey
 
@@ -3080,6 +3442,7 @@ Derives a public key based on protocol ID, key ID, and counterparty.
 ```ts
 derivePublicKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty, forSelf: boolean = false): PublicKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [PublicKey](./primitives.md#class-publickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -3088,14 +3451,14 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
-+ **forSelf**
-  + Whether deriving for self.
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
+- **forSelf**
+  - Whether deriving for self.
 
 #### Method deriveSymmetricKey
 
@@ -3105,6 +3468,7 @@ Note: Symmetric keys should not be derivable by everyone due to security risks.
 ```ts
 deriveSymmetricKey(protocolID: WalletProtocol, keyID: string, counterparty: Counterparty): SymmetricKey
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [SymmetricKey](./primitives.md#class-symmetrickey), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -3113,12 +3477,12 @@ Returns
 
 Argument Details
 
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 #### Method revealCounterpartySecret
 
@@ -3128,6 +3492,7 @@ Note: This should not be used for 'self'.
 ```ts
 revealCounterpartySecret(counterparty: Counterparty): number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty)
 
 Returns
@@ -3136,8 +3501,8 @@ Returns
 
 Argument Details
 
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
 
 Throws
 
@@ -3150,6 +3515,7 @@ Reveals the specific key association for a given protocol ID, key ID, and counte
 ```ts
 revealSpecificSecret(counterparty: Counterparty, protocolID: WalletProtocol, keyID: string): number[]
 ```
+
 See also: [Counterparty](./wallet.md#type-counterparty), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
@@ -3158,16 +3524,17 @@ Returns
 
 Argument Details
 
-+ **counterparty**
-  + The counterparty's public key or a predefined value ('self' or 'anyone').
-+ **protocolID**
-  + The protocol ID including a security level and protocol name.
-+ **keyID**
-  + The key identifier.
+- **counterparty**
+  - The counterparty's public key or a predefined value ('self' or 'anyone').
+- **protocolID**
+  - The protocol ID including a security level and protocol name.
+- **keyID**
+  - The key identifier.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: ProtoWallet
 
 A ProtoWallet is precursor to a full wallet, capable of performing all foundational cryptographic operations.
@@ -3178,19 +3545,23 @@ enable the management of identity certificates, or store any data. It is also no
 
 ```ts
 export class ProtoWallet {
-    keyDeriver?: KeyDeriverApi;
-    constructor(rootKeyOrKeyDeriver?: PrivateKey | "anyone" | KeyDeriverApi)
-    async getPublicKey(args: GetPublicKeyArgs): Promise<{
-        publicKey: PubKeyHex;
-    }>
-    async revealCounterpartyKeyLinkage(args: RevealCounterpartyKeyLinkageArgs): Promise<RevealCounterpartyKeyLinkageResult>
-    async revealSpecificKeyLinkage(args: RevealSpecificKeyLinkageArgs): Promise<RevealSpecificKeyLinkageResult>
-    async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult>
-    async decrypt(args: WalletDecryptArgs, _originator?: string): Promise<WalletDecryptResult>
-    async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult>
-    async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult>
-    async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult>
-    async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult>
+  keyDeriver?: KeyDeriverApi
+  constructor(rootKeyOrKeyDeriver?: PrivateKey | 'anyone' | KeyDeriverApi)
+  async getPublicKey(args: GetPublicKeyArgs): Promise<{
+    publicKey: PubKeyHex
+  }>
+  async revealCounterpartyKeyLinkage(
+    args: RevealCounterpartyKeyLinkageArgs
+  ): Promise<RevealCounterpartyKeyLinkageResult>
+  async revealSpecificKeyLinkage(
+    args: RevealSpecificKeyLinkageArgs
+  ): Promise<RevealSpecificKeyLinkageResult>
+  async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult>
+  async decrypt(args: WalletDecryptArgs, _originator?: string): Promise<WalletDecryptResult>
+  async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult>
+  async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult>
+  async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult>
+  async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult>
 }
 ```
 
@@ -3199,6 +3570,7 @@ See also: [CreateHmacArgs](./wallet.md#interface-createhmacargs), [CreateHmacRes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: ReactNativeWebView
 
 Facilitates wallet operations over cross-document messaging.
@@ -3208,18 +3580,23 @@ into the document that made the call, so a response is delivered by this
 window, by the frame bridging for it, or by a host-synthesized event that
 carries no source at all. Messages from any other browsing context - a
 framed document, an opener, or a sandboxed frame reporting an opaque origin
+
 - are never wallet responses and are ignored before their payload is read.
-A relaying host frame is a separate browsing context, so its browser-attested
-origin must belong to this document or to the configured wallet origin.
-Whatever origin a host stamps on an event it synthesizes in this document is
-accepted, because the browser does not attest it and the injection is already
-same-origin; configuring an exact domain additionally pins every response to
-that origin, while the default wildcard target keeps every host reachable.
+  A relaying host frame is a separate browsing context, so its browser-attested
+  origin must belong to this document or to the configured wallet origin.
+  Whatever origin a host stamps on an event it synthesizes in this document is
+  accepted, because the browser does not attest it and the injection is already
+  same-origin; configuring an exact domain additionally pins every response to
+  that origin, while the default wildcard target keeps every host reachable.
 
 ```ts
 export default class ReactNativeWebView extends InvokableWalletBase {
-    constructor(domain: string = "*", responseTimeout?: number)
-    protected override async invokeRaw(call: CallType, args: any, bindingRequest: unknown): Promise<any>
+  constructor(domain: string = '*', responseTimeout?: number)
+  protected override async invokeRaw(
+    call: CallType,
+    args: any,
+    bindingRequest: unknown
+  ): Promise<any>
 }
 ```
 
@@ -3228,6 +3605,7 @@ See also: [CallType](./wallet.md#type-calltype), [InvokableWalletBase](./wallet.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WERR_INSUFFICIENT_FUNDS
 
 Insufficient funds in the available inputs to cover the cost of the required outputs
@@ -3251,14 +3629,15 @@ constructor(public totalSatoshisNeeded: number, public moreSatoshisNeeded: numbe
 
 Argument Details
 
-+ **totalSatoshisNeeded**
-  + Total satoshis required to fund transactions after net of required inputs and outputs.
-+ **moreSatoshisNeeded**
-  + Shortfall on total satoshis required to fund transactions after net of required inputs and outputs.
+- **totalSatoshisNeeded**
+  - Total satoshis required to fund transactions after net of required inputs and outputs.
+- **moreSatoshisNeeded**
+  - Shortfall on total satoshis required to fund transactions after net of required inputs and outputs.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WERR_INVALID_PARAMETER
 
 The ${parameter} parameter is invalid.
@@ -3278,6 +3657,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WERR_REVIEW_ACTIONS
 
 When a `createAction` or `signAction` is completed in undelayed mode (`acceptDelayedBroadcast`: false),
@@ -3303,217 +3683,199 @@ which contains more details, particularly for double spend results.
 ```ts
 constructor(public reviewActionResults: ReviewActionResult[], public sendWithResults: SendWithResult[], public txid?: TXIDHexString, public tx?: AtomicBEEF, public noSendChange?: OutpointString[])
 ```
+
 See also: [AtomicBEEF](./wallet.md#type-atomicbeef), [OutpointString](./wallet.md#type-outpointstring), [ReviewActionResult](./wallet.md#interface-reviewactionresult), [SendWithResult](./wallet.md#interface-sendwithresult), [TXIDHexString](./wallet.md#type-txidhexstring)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WalletClient
 
 The SDK is how applications communicate with wallets over a communications substrate.
 
 ```ts
 export default class WalletClient implements WalletInterface {
-    public substrate: "auto" | WalletInterface;
-    originator?: OriginatorDomainNameStringUnder250Bytes;
-    constructor(substrate: "auto" | "Cicada" | "XDM" | "window.CWI" | "json-api" | "react-native" | "secure-json-api" | WalletInterface = "auto", originator?: OriginatorDomainNameStringUnder250Bytes)
-    async connectToSubstrate(): Promise<void>
-    async createAction(args: CreateActionArgs): Promise<CreateActionResult>
-    async signAction(args: SignActionArgs): Promise<SignActionResult>
-    async abortAction(args: {
-        reference: Base64String;
-    }): Promise<{
-        aborted: boolean;
-    }>
-    async listActions(args: ListActionsArgs): Promise<ListActionsResult>
-    async internalizeAction(args: InternalizeActionArgs): Promise<{
-        accepted: true;
-    }>
-    async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
-    async relinquishOutput(args: {
-        basket: BasketStringUnder300Bytes;
-        output: OutpointString;
-    }): Promise<{
-        relinquished: true;
-    }>
-    async getPublicKey(args: {
-        identityKey?: true;
-        protocolID?: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID?: KeyIDStringUnder800Bytes;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-    }): Promise<{
-        publicKey: PubKeyHex;
-    }>
-    async revealCounterpartyKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        revelationTime: ISOTimestampString;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-    }>
-    async revealSpecificKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-        proofType: Byte;
-    }>
-    async encrypt(args: {
-        plaintext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        ciphertext: Byte[];
-    }>
-    async decrypt(args: {
-        ciphertext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        plaintext: Byte[];
-    }>
-    async createHmac(args: {
-        data: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        hmac: Byte[];
-    }>
-    async verifyHmac(args: {
-        data: Byte[];
-        hmac: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        valid: true;
-    }>
-    async createSignature(args: {
-        data?: Byte[];
-        hashToDirectlySign?: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        signature: Byte[];
-    }>
-    async verifySignature(args: {
-        data?: Byte[];
-        hashToDirectlyVerify?: Byte[];
-        signature: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-        privileged?: BooleanDefaultFalse;
-    }): Promise<{
-        valid: true;
-    }>
-    async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
-    async listCertificates(args: {
-        certifiers: PubKeyHex[];
-        types: Base64String[];
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-    }): Promise<ListCertificatesResult>
-    async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
-    async relinquishCertificate(args: {
-        type: Base64String;
-        serialNumber: Base64String;
-        certifier: PubKeyHex;
-    }): Promise<{
-        relinquished: true;
-    }>
-    async discoverByIdentityKey(args: {
-        identityKey: PubKeyHex;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }): Promise<DiscoverCertificatesResult>
-    async discoverByAttributes(args: {
-        attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }): Promise<DiscoverCertificatesResult>
-    async isAuthenticated(args: object = {}): Promise<AuthenticatedResult>
-    async waitForAuthentication(args: object = {}): Promise<{
-        authenticated: true;
-    }>
-    async getHeight(args: object = {}): Promise<{
-        height: PositiveInteger;
-    }>
-    async getHeaderForHeight(args: {
-        height: PositiveInteger;
-    }): Promise<{
-        header: HexString;
-    }>
-    async getNetwork(args: object = {}): Promise<{
-        network: "mainnet" | "testnet";
-    }>
-    async getVersion(args: object = {}): Promise<{
-        version: VersionString7To30Bytes;
-    }>
+  public substrate: 'auto' | WalletInterface
+  originator?: OriginatorDomainNameStringUnder250Bytes
+  constructor(
+    substrate:
+      | 'auto'
+      | 'Cicada'
+      | 'XDM'
+      | 'window.CWI'
+      | 'json-api'
+      | 'react-native'
+      | 'secure-json-api'
+      | WalletInterface = 'auto',
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  )
+  async connectToSubstrate(): Promise<void>
+  async createAction(args: CreateActionArgs): Promise<CreateActionResult>
+  async signAction(args: SignActionArgs): Promise<SignActionResult>
+  async abortAction(args: { reference: Base64String }): Promise<{
+    aborted: boolean
+  }>
+  async listActions(args: ListActionsArgs): Promise<ListActionsResult>
+  async internalizeAction(args: InternalizeActionArgs): Promise<{
+    accepted: true
+  }>
+  async listOutputs(args: ListOutputsArgs): Promise<ListOutputsResult>
+  async relinquishOutput(args: {
+    basket: BasketStringUnder300Bytes
+    output: OutpointString
+  }): Promise<{
+    relinquished: true
+  }>
+  async getPublicKey(args: {
+    identityKey?: true
+    protocolID?: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID?: KeyIDStringUnder800Bytes
+    privileged?: BooleanDefaultFalse
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    forSelf?: BooleanDefaultFalse
+  }): Promise<{
+    publicKey: PubKeyHex
+  }>
+  async revealCounterpartyKeyLinkage(args: {
+    counterparty: PubKeyHex
+    verifier: PubKeyHex
+    privilegedReason?: DescriptionString5to50Bytes
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    revelationTime: ISOTimestampString
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+  }>
+  async revealSpecificKeyLinkage(args: {
+    counterparty: PubKeyHex
+    verifier: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+    proofType: Byte
+  }>
+  async encrypt(args: {
+    plaintext: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    ciphertext: Byte[]
+  }>
+  async decrypt(args: {
+    ciphertext: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    plaintext: Byte[]
+  }>
+  async createHmac(args: {
+    data: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    hmac: Byte[]
+  }>
+  async verifyHmac(args: {
+    data: Byte[]
+    hmac: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    valid: true
+  }>
+  async createSignature(args: {
+    data?: Byte[]
+    hashToDirectlySign?: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    signature: Byte[]
+  }>
+  async verifySignature(args: {
+    data?: Byte[]
+    hashToDirectlyVerify?: Byte[]
+    signature: Byte[]
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    privilegedReason?: DescriptionString5to50Bytes
+    counterparty?: PubKeyHex
+    forSelf?: BooleanDefaultFalse
+    privileged?: BooleanDefaultFalse
+  }): Promise<{
+    valid: true
+  }>
+  async acquireCertificate(args: AcquireCertificateArgs): Promise<AcquireCertificateResult>
+  async listCertificates(args: {
+    certifiers: PubKeyHex[]
+    types: Base64String[]
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+    privileged?: BooleanDefaultFalse
+    privilegedReason?: DescriptionString5to50Bytes
+  }): Promise<ListCertificatesResult>
+  async proveCertificate(args: ProveCertificateArgs): Promise<ProveCertificateResult>
+  async relinquishCertificate(args: {
+    type: Base64String
+    serialNumber: Base64String
+    certifier: PubKeyHex
+  }): Promise<{
+    relinquished: true
+  }>
+  async discoverByIdentityKey(args: {
+    identityKey: PubKeyHex
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+  }): Promise<DiscoverCertificatesResult>
+  async discoverByAttributes(args: {
+    attributes: Record<CertificateFieldNameUnder50Bytes, string>
+    limit?: PositiveIntegerDefault10Max10000
+    offset?: PositiveIntegerOrZero
+  }): Promise<DiscoverCertificatesResult>
+  async isAuthenticated(args: object = {}): Promise<AuthenticatedResult>
+  async waitForAuthentication(args: object = {}): Promise<{
+    authenticated: true
+  }>
+  async getHeight(args: object = {}): Promise<{
+    height: PositiveInteger
+  }>
+  async getHeaderForHeight(args: { height: PositiveInteger }): Promise<{
+    header: HexString
+  }>
+  async getNetwork(args: object = {}): Promise<{
+    network: 'mainnet' | 'testnet'
+  }>
+  async getVersion(args: object = {}): Promise<{
+    version: VersionString7To30Bytes
+  }>
 }
 ```
 
@@ -3522,14 +3884,15 @@ See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WalletError
 
 ```ts
 export class WalletError extends Error {
-    code: number;
-    isError: boolean = true;
-    constructor(message: string, code = 1, stack?: string)
-    static unknownToJson(error: any): string
+  code: number
+  isError: boolean = true
+  constructor(message: string, code = 1, stack?: string)
+  static unknownToJson(error: any): string
 }
 ```
 
@@ -3546,6 +3909,7 @@ Example deserialization can be found in HTTPWalletJSON.ts of bsv ts-sdk.
 ```ts
 static unknownToJson(error: any): string
 ```
+
 See also: [string](./remittance.md#function-string)
 
 Returns
@@ -3555,55 +3919,73 @@ stringified JSON representation of the error such that it can be deserialized to
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WalletWireProcessor
 
 Processes incoming wallet calls received over a wallet wire, with a given wallet.
 
 ```ts
 export default class WalletWireProcessor implements WalletWire {
-    wallet: WalletInterface;
-    constructor(wallet: WalletInterface)
-    #readBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean
-    #readOptionalBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean | undefined
-    #readOptionalInt8Length(reader: ReaderUint8Array, fieldName: string): number | undefined
-    #requireOptionalListLength(reader: ReaderUint8Array, length: number, fieldName: string, maximum: number, minimumBytesPerItem: number): number | undefined
-    #requireBytes(value: unknown, fieldName: string, expectedLength?: number): Uint8Array
-    #stableBytes(value: number[] | Uint8Array): number[] | Uint8Array
-    #requireCollectionLength(reader: ReaderUint8Array, length: number, fieldName: string, maximum: number = MAX_WIRE_COLLECTION_ITEMS, minimumBytesPerItem: number = 1): number
-    #requireFixedHex(value: unknown, fieldName: string, expectedLength: number): Uint8Array
-    #requireInteger(value: unknown, fieldName: string, minimum: number, maximum: number): number
-    #sendWithStatusCode(status: unknown): number
-    #actionStatusCode(status: unknown): number
-    #requirePageTotal(totalValue: unknown, records: unknown, resultName: string): {
-        total: number;
-        records: any[];
-    }
-    #recordFromWireEntries<T>(entries: ReadonlyMap<string | number, T>, recordName: string): Record<string, T>
-    #assertRecordKey(key: string, recordName: string): void
-    #recordEntries(record: unknown, recordName: string): Array<[
-        string,
-        unknown
-    ]>
-    #setUniqueWireEntry<K, V>(entries: Map<K, V>, key: K, value: V, recordName: string): void
-    #decodeOutpoint(reader: ReaderUint8Array): string
-    #encodeOutpoint(outpoint: string): Uint8Array
-    async transmitToWallet(message: number[]): Promise<number[]>
-    async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
-    async #processMessage(message: Uint8Array): Promise<Uint8Array>
-    async #invokeWallet<T>(operation: () => Promise<T>): Promise<T>
-    async #invokeValidatedWallet<T>(call: CallType, request: unknown, operation: () => Promise<T>): Promise<T>
-    #assertRequestConsumed(reader: ReaderUint8Array, callName: string): void
-    #decodeProtocolID(reader: ReaderUint8Array): [
-        SecurityLevel,
-        string
-    ]
-    #decodeCounterparty(reader: ReaderUint8Array): string | undefined
-    #decodePrivilegedParams(reader: ReaderUint8Array): {
-        privileged: boolean | undefined;
-        privilegedReason: string | undefined;
-    }
-    #serializeDiscoveryResult(discoverResult: any): Uint8Array
-    #decodeKeyRelatedParams(paramsReader: ReaderUint8Array): any
+  wallet: WalletInterface
+  constructor(wallet: WalletInterface)
+  #readBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean
+  #readOptionalBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean | undefined
+  #readOptionalInt8Length(reader: ReaderUint8Array, fieldName: string): number | undefined
+  #requireOptionalListLength(
+    reader: ReaderUint8Array,
+    length: number,
+    fieldName: string,
+    maximum: number,
+    minimumBytesPerItem: number
+  ): number | undefined
+  #requireBytes(value: unknown, fieldName: string, expectedLength?: number): Uint8Array
+  #stableBytes(value: number[] | Uint8Array): number[] | Uint8Array
+  #requireCollectionLength(
+    reader: ReaderUint8Array,
+    length: number,
+    fieldName: string,
+    maximum: number = MAX_WIRE_COLLECTION_ITEMS,
+    minimumBytesPerItem: number = 1
+  ): number
+  #requireFixedHex(value: unknown, fieldName: string, expectedLength: number): Uint8Array
+  #requireInteger(value: unknown, fieldName: string, minimum: number, maximum: number): number
+  #sendWithStatusCode(status: unknown): number
+  #actionStatusCode(status: unknown): number
+  #requirePageTotal(
+    totalValue: unknown,
+    records: unknown,
+    resultName: string
+  ): {
+    total: number
+    records: any[]
+  }
+  #recordFromWireEntries<T>(
+    entries: ReadonlyMap<string | number, T>,
+    recordName: string
+  ): Record<string, T>
+  #assertRecordKey(key: string, recordName: string): void
+  #recordEntries(record: unknown, recordName: string): Array<[string, unknown]>
+  #setUniqueWireEntry<K, V>(entries: Map<K, V>, key: K, value: V, recordName: string): void
+  #decodeOutpoint(reader: ReaderUint8Array): string
+  #encodeOutpoint(outpoint: string): Uint8Array
+  async transmitToWallet(message: number[]): Promise<number[]>
+  async transmitToWalletUint8Array(message: Uint8Array): Promise<Uint8Array>
+  async #processMessage(message: Uint8Array): Promise<Uint8Array>
+  async #invokeWallet<T>(operation: () => Promise<T>): Promise<T>
+  async #invokeValidatedWallet<T>(
+    call: CallType,
+    request: unknown,
+    operation: () => Promise<T>
+  ): Promise<T>
+  #assertRequestConsumed(reader: ReaderUint8Array, callName: string): void
+  #decodeProtocolID(reader: ReaderUint8Array): [SecurityLevel, string]
+  #decodeCounterparty(reader: ReaderUint8Array): string | undefined
+  #decodePrivilegedParams(reader: ReaderUint8Array): {
+    privileged: boolean | undefined
+    privilegedReason: string | undefined
+  }
+  #serializeDiscoveryResult(discoverResult: any): Uint8Array
+  #decodeKeyRelatedParams(paramsReader: ReaderUint8Array): any
 }
 ```
 
@@ -3612,326 +3994,430 @@ See also: [CallType](./wallet.md#type-calltype), [ReaderUint8Array](./primitives
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WalletWireTransceiver
 
 A way to make remote calls to a wallet over a wallet wire.
 
 ```ts
 export default class WalletWireTransceiver implements WalletInterface {
-    wire: WalletWire;
-    constructor(wire: WalletWire)
-    async #transmit(call: CallType, originator: OriginatorDomainNameStringUnder250Bytes = "", params: readonly number[] | Uint8Array = []): Promise<Uint8Array>
-    async createAction(args: CreateActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<CreateActionResult>
-    #parseCreateActionResult(result: Uint8Array): CreateActionResult
-    async signAction(args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<SignActionResult>
-    async abortAction(args: {
-        reference: Base64String;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        aborted: boolean;
-    }>
-    async listActions(args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListActionsResult>
-    #parseActionStatus(code: number): ActionStatus
-    #parseAction(reader: ReaderUint8Array): ListActionsResult["actions"][number]
-    #parseActionInput(reader: ReaderUint8Array): {
-        sourceOutpoint: OutpointString;
-        sourceSatoshis: SatoshiValue;
-        sourceLockingScript?: HexString;
-        unlockingScript?: HexString;
-        inputDescription: DescriptionString5to50Bytes;
-        sequenceNumber: PositiveIntegerOrZero;
+  wire: WalletWire
+  constructor(wire: WalletWire)
+  async #transmit(
+    call: CallType,
+    originator: OriginatorDomainNameStringUnder250Bytes = '',
+    params: readonly number[] | Uint8Array = []
+  ): Promise<Uint8Array>
+  async createAction(
+    args: CreateActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<CreateActionResult>
+  #parseCreateActionResult(result: Uint8Array): CreateActionResult
+  async signAction(
+    args: SignActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<SignActionResult>
+  async abortAction(
+    args: {
+      reference: Base64String
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    aborted: boolean
+  }>
+  async listActions(
+    args: ListActionsArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ListActionsResult>
+  #parseActionStatus(code: number): ActionStatus
+  #parseAction(reader: ReaderUint8Array): ListActionsResult['actions'][number]
+  #parseActionInput(reader: ReaderUint8Array): {
+    sourceOutpoint: OutpointString
+    sourceSatoshis: SatoshiValue
+    sourceLockingScript?: HexString
+    unlockingScript?: HexString
+    inputDescription: DescriptionString5to50Bytes
+    sequenceNumber: PositiveIntegerOrZero
+  }
+  #parseActionOutput(reader: ReaderUint8Array): {
+    outputIndex: PositiveIntegerOrZero
+    satoshis: SatoshiValue
+    lockingScript?: HexString
+    spendable: boolean
+    outputDescription: DescriptionString5to50Bytes
+    basket: BasketStringUnder300Bytes
+    tags: OutputTagStringUnder300Bytes[]
+    customInstructions?: string
+  }
+  async internalizeAction(
+    args: InternalizeActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    accepted: true
+  }>
+  #serializeInternalizeOutput(
+    writer: WriterUint8Array,
+    out: InternalizeActionArgs['outputs'][number]
+  ): void
+  async listOutputs(
+    args: ListOutputsArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ListOutputsResult>
+  #parseListOutputEntry(reader: ReaderUint8Array): ListOutputsResult['outputs'][number]
+  async relinquishOutput(
+    args: {
+      basket: BasketStringUnder300Bytes
+      output: OutpointString
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    relinquished: true
+  }>
+  #encodeOutpoint(outpoint: OutpointString): Uint8Array
+  #readOutpoint(reader: ReaderUint8Array): OutpointString
+  async getPublicKey(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      identityKey?: true
+      protocolID?: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID?: KeyIDStringUnder800Bytes
+      privileged?: BooleanDefaultFalse
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      forSelf?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    publicKey: PubKeyHex
+  }>
+  async revealCounterpartyKeyLinkage(
+    args: {
+      counterparty: PubKeyHex
+      verifier: PubKeyHex
+      privilegedReason?: DescriptionString5to50Bytes
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    revelationTime: ISOTimestampString
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: number[]
+  }>
+  async revealSpecificKeyLinkage(
+    args: {
+      counterparty: PubKeyHex
+      verifier: PubKeyHex
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+    proofType: Byte
+  }>
+  async encrypt(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      plaintext: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    ciphertext: Byte[]
+  }>
+  async decrypt(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      ciphertext: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    plaintext: Byte[]
+  }>
+  async createHmac(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      data: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    hmac: Byte[]
+  }>
+  async verifyHmac(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      data: Byte[]
+      hmac: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    valid: true
+  }>
+  async createSignature(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      data?: Byte[]
+      hashToDirectlySign?: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    signature: Byte[]
+  }>
+  async verifySignature(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      data?: Byte[]
+      hashToDirectlyVerify?: Byte[]
+      signature: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      forSelf?: BooleanDefaultFalse
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    valid: true
+  }>
+  #writeOptionalBool(writer: WriterUint8Array, val: boolean | undefined): void
+  #writeOptionalVarInt(writer: WriterUint8Array, val: number | undefined): void
+  #writeUTF8(writer: WriterUint8Array, val: string | undefined): void
+  #writeOptionalUTF8(writer: WriterUint8Array, val: string | undefined): void
+  #writeUTF8Array(writer: WriterUint8Array, arr: string[] | undefined): void
+  #writeTxidArray(writer: WriterUint8Array, arr: string[] | undefined): void
+  #readSendWithResults(reader: ReaderUint8Array):
+    | Array<{
+        txid: TXIDHexString
+        status: SendWithResultStatus
+      }>
+    | undefined
+  #serializeCreateActionInput(
+    writer: WriterUint8Array,
+    input: {
+      outpoint: OutpointString
+      unlockingScript?: string
+      unlockingScriptLength?: number
+      inputDescription: string
+      sequenceNumber?: number
     }
-    #parseActionOutput(reader: ReaderUint8Array): {
-        outputIndex: PositiveIntegerOrZero;
-        satoshis: SatoshiValue;
-        lockingScript?: HexString;
-        spendable: boolean;
-        outputDescription: DescriptionString5to50Bytes;
-        basket: BasketStringUnder300Bytes;
-        tags: OutputTagStringUnder300Bytes[];
-        customInstructions?: string;
+  ): void
+  #serializeCreateActionOutput(
+    writer: WriterUint8Array,
+    output: {
+      lockingScript: string
+      satoshis: number
+      outputDescription: string
+      basket?: string
+      customInstructions?: string
+      tags?: string[]
     }
-    async internalizeAction(args: InternalizeActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        accepted: true;
+  ): void
+  #serializeCreateActionOptions(
+    writer: WriterUint8Array,
+    options:
+      | {
+          signAndProcess?: boolean
+          acceptDelayedBroadcast?: boolean
+          trustSelf?: string
+          knownTxids?: string[]
+          returnTXIDOnly?: boolean
+          noSend?: boolean
+          noSendChange?: OutpointString[]
+          sendWith?: string[]
+          randomizeOutputs?: boolean
+        }
+      | undefined
+  ): void
+  #serializeSignActionOptions(
+    writer: WriterUint8Array,
+    options:
+      | {
+          acceptDelayedBroadcast?: boolean
+          returnTXIDOnly?: boolean
+          noSend?: boolean
+          sendWith?: string[]
+        }
+      | undefined
+  ): void
+  #encodeKeyRelatedParams(
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes],
+    keyID: KeyIDStringUnder800Bytes,
+    counterparty?: PubKeyHex,
+    privileged?: boolean,
+    privilegedReason?: string
+  ): Uint8Array
+  async acquireCertificate(
+    args: AcquireCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<AcquireCertificateResult>
+  #encodePrivilegedParams(privileged?: boolean, privilegedReason?: string): Uint8Array
+  async listCertificates(
+    args: {
+      certifiers: PubKeyHex[]
+      types: Base64String[]
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+      privileged?: BooleanDefaultFalse
+      privilegedReason?: DescriptionString5to50Bytes
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ListCertificatesResult>
+  async proveCertificate(
+    args: ProveCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ProveCertificateResult>
+  async relinquishCertificate(
+    args: {
+      type: Base64String
+      serialNumber: Base64String
+      certifier: PubKeyHex
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    relinquished: true
+  }>
+  #parseDiscoveryResult(
+    result: Uint8Array,
+    requestedLimit: number | undefined
+  ): {
+    totalCertificates: number
+    certificates: Array<{
+      type: Base64String
+      subject: PubKeyHex
+      serialNumber: Base64String
+      certifier: PubKeyHex
+      revocationOutpoint: OutpointString
+      signature: HexString
+      fields: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      certifierInfo: {
+        name: EntityNameStringMax100Bytes
+        iconUrl: EntityIconURLStringMax500Bytes
+        description: DescriptionString5to50Bytes
+        trust: PositiveIntegerMax10
+      }
+      publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
-    #serializeInternalizeOutput(writer: WriterUint8Array, out: InternalizeActionArgs["outputs"][number]): void
-    async listOutputs(args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListOutputsResult>
-    #parseListOutputEntry(reader: ReaderUint8Array): ListOutputsResult["outputs"][number]
-    async relinquishOutput(args: {
-        basket: BasketStringUnder300Bytes;
-        output: OutpointString;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        relinquished: true;
-    }>
-    #encodeOutpoint(outpoint: OutpointString): Uint8Array
-    #readOutpoint(reader: ReaderUint8Array): OutpointString
-    async getPublicKey(args: {
-        seekPermission?: BooleanDefaultTrue;
-        identityKey?: true;
-        protocolID?: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID?: KeyIDStringUnder800Bytes;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        publicKey: PubKeyHex;
-    }>
-    async revealCounterpartyKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        revelationTime: ISOTimestampString;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: number[];
-    }>
-    async revealSpecificKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-        proofType: Byte;
-    }>
-    async encrypt(args: {
-        seekPermission?: BooleanDefaultTrue;
-        plaintext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        ciphertext: Byte[];
-    }>
-    async decrypt(args: {
-        seekPermission?: BooleanDefaultTrue;
-        ciphertext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        plaintext: Byte[];
-    }>
-    async createHmac(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        hmac: Byte[];
-    }>
-    async verifyHmac(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data: Byte[];
-        hmac: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        valid: true;
-    }>
-    async createSignature(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data?: Byte[];
-        hashToDirectlySign?: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        signature: Byte[];
-    }>
-    async verifySignature(args: {
-        seekPermission?: BooleanDefaultTrue;
-        data?: Byte[];
-        hashToDirectlyVerify?: Byte[];
-        signature: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        valid: true;
-    }>
-    #writeOptionalBool(writer: WriterUint8Array, val: boolean | undefined): void
-    #writeOptionalVarInt(writer: WriterUint8Array, val: number | undefined): void
-    #writeUTF8(writer: WriterUint8Array, val: string | undefined): void
-    #writeOptionalUTF8(writer: WriterUint8Array, val: string | undefined): void
-    #writeUTF8Array(writer: WriterUint8Array, arr: string[] | undefined): void
-    #writeTxidArray(writer: WriterUint8Array, arr: string[] | undefined): void
-    #readSendWithResults(reader: ReaderUint8Array): Array<{
-        txid: TXIDHexString;
-        status: SendWithResultStatus;
-    }> | undefined
-    #serializeCreateActionInput(writer: WriterUint8Array, input: {
-        outpoint: OutpointString;
-        unlockingScript?: string;
-        unlockingScriptLength?: number;
-        inputDescription: string;
-        sequenceNumber?: number;
-    }): void
-    #serializeCreateActionOutput(writer: WriterUint8Array, output: {
-        lockingScript: string;
-        satoshis: number;
-        outputDescription: string;
-        basket?: string;
-        customInstructions?: string;
-        tags?: string[];
-    }): void
-    #serializeCreateActionOptions(writer: WriterUint8Array, options: {
-        signAndProcess?: boolean;
-        acceptDelayedBroadcast?: boolean;
-        trustSelf?: string;
-        knownTxids?: string[];
-        returnTXIDOnly?: boolean;
-        noSend?: boolean;
-        noSendChange?: OutpointString[];
-        sendWith?: string[];
-        randomizeOutputs?: boolean;
-    } | undefined): void
-    #serializeSignActionOptions(writer: WriterUint8Array, options: {
-        acceptDelayedBroadcast?: boolean;
-        returnTXIDOnly?: boolean;
-        noSend?: boolean;
-        sendWith?: string[];
-    } | undefined): void
-    #encodeKeyRelatedParams(protocolID: [
-        SecurityLevel,
-        ProtocolString5To400Bytes
-    ], keyID: KeyIDStringUnder800Bytes, counterparty?: PubKeyHex, privileged?: boolean, privilegedReason?: string): Uint8Array
-    async acquireCertificate(args: AcquireCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AcquireCertificateResult>
-    #encodePrivilegedParams(privileged?: boolean, privilegedReason?: string): Uint8Array
-    async listCertificates(args: {
-        certifiers: PubKeyHex[];
-        types: Base64String[];
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListCertificatesResult>
-    async proveCertificate(args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ProveCertificateResult>
-    async relinquishCertificate(args: {
-        type: Base64String;
-        serialNumber: Base64String;
-        certifier: PubKeyHex;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        relinquished: true;
-    }>
-    #parseDiscoveryResult(result: Uint8Array, requestedLimit: number | undefined): {
-        totalCertificates: number;
-        certificates: Array<{
-            type: Base64String;
-            subject: PubKeyHex;
-            serialNumber: Base64String;
-            certifier: PubKeyHex;
-            revocationOutpoint: OutpointString;
-            signature: HexString;
-            fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            certifierInfo: {
-                name: EntityNameStringMax100Bytes;
-                iconUrl: EntityIconURLStringMax500Bytes;
-                description: DescriptionString5to50Bytes;
-                trust: PositiveIntegerMax10;
-            };
-            publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>;
-        }>;
-    }
-    async discoverByIdentityKey(args: {
-        seekPermission?: BooleanDefaultTrue;
-        identityKey: PubKeyHex;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<DiscoverCertificatesResult>
-    async discoverByAttributes(args: {
-        seekPermission?: BooleanDefaultTrue;
-        attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<DiscoverCertificatesResult>
-    async isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        authenticated: true;
-    }>
-    async waitForAuthentication(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        authenticated: true;
-    }>
-    async getHeight(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        height: PositiveInteger;
-    }>
-    async getHeaderForHeight(args: {
-        height: PositiveInteger;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        header: HexString;
-    }>
-    async getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        network: "mainnet" | "testnet";
-    }>
-    async getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        version: VersionString7To30Bytes;
-    }>
-    #assertResponseConsumed(reader: ReaderUint8Array, call: string): void
-    #assertPageCount(returned: number, total: number, call: string): void
-    #requirePageCapacity(returned: number, requestedLimit: number | undefined, call: string): void
-    #requireResponseCollectionLength(reader: ReaderUint8Array, length: number, fieldName: string, minimumBytesPerItem = 1, maximum = MAX_WIRE_RESPONSE_COLLECTION_ITEMS): number
-    #readBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean
-    #readRecordKey(reader: ReaderUint8Array, length: number, recordName: string): CertificateFieldNameUnder50Bytes
-    #setUniqueWireRecordEntry<T>(record: Record<string, T>, key: string, value: T, recordName: string): void
-    #readCompressedPublicKey(reader: ReaderUint8Array, _fieldName: string): PubKeyHex
-    #readSecurityLevel(reader: ReaderUint8Array, fieldName: string): SecurityLevel
-    #requireInteger(value: number, fieldName: string, minimum: number, maximum: number): number
-    #requireResponseLength(result: Uint8Array, length: number, call: string): void
-    #requireEmptyResponse(result: Uint8Array, call: string): void
+  }
+  async discoverByIdentityKey(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      identityKey: PubKeyHex
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<DiscoverCertificatesResult>
+  async discoverByAttributes(
+    args: {
+      seekPermission?: BooleanDefaultTrue
+      attributes: Record<CertificateFieldNameUnder50Bytes, string>
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<DiscoverCertificatesResult>
+  async isAuthenticated(
+    args: {},
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    authenticated: true
+  }>
+  async waitForAuthentication(
+    args: {},
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    authenticated: true
+  }>
+  async getHeight(
+    args: {},
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    height: PositiveInteger
+  }>
+  async getHeaderForHeight(
+    args: {
+      height: PositiveInteger
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    header: HexString
+  }>
+  async getNetwork(
+    args: {},
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    network: 'mainnet' | 'testnet'
+  }>
+  async getVersion(
+    args: {},
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    version: VersionString7To30Bytes
+  }>
+  #assertResponseConsumed(reader: ReaderUint8Array, call: string): void
+  #assertPageCount(returned: number, total: number, call: string): void
+  #requirePageCapacity(returned: number, requestedLimit: number | undefined, call: string): void
+  #requireResponseCollectionLength(
+    reader: ReaderUint8Array,
+    length: number,
+    fieldName: string,
+    minimumBytesPerItem = 1,
+    maximum = MAX_WIRE_RESPONSE_COLLECTION_ITEMS
+  ): number
+  #readBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean
+  #readRecordKey(
+    reader: ReaderUint8Array,
+    length: number,
+    recordName: string
+  ): CertificateFieldNameUnder50Bytes
+  #setUniqueWireRecordEntry<T>(
+    record: Record<string, T>,
+    key: string,
+    value: T,
+    recordName: string
+  ): void
+  #readCompressedPublicKey(reader: ReaderUint8Array, _fieldName: string): PubKeyHex
+  #readSecurityLevel(reader: ReaderUint8Array, fieldName: string): SecurityLevel
+  #requireInteger(value: number, fieldName: string, minimum: number, maximum: number): number
+  #requireResponseLength(result: Uint8Array, length: number, call: string): void
+  #requireEmptyResponse(result: Uint8Array, call: string): void
 }
 ```
 
@@ -3944,6 +4430,7 @@ Writes an optional boolean as Int8: 1/0 if present, -1 if absent.
 ```ts
 #writeOptionalBool(writer: WriterUint8Array, val: boolean | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array)
 
 #### Method
@@ -3953,6 +4440,7 @@ Writes an optional number as VarInt: the value if present, -1 if absent.
 ```ts
 #writeOptionalVarInt(writer: WriterUint8Array, val: number | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array)
 
 #### Method
@@ -3962,6 +4450,7 @@ Writes a UTF-8 string as (VarInt length, bytes).
 ```ts
 #writeUTF8(writer: WriterUint8Array, val: string | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -3971,6 +4460,7 @@ Writes an optional UTF-8 string: (VarInt length, bytes) if non-empty, -1 if abse
 ```ts
 #writeOptionalUTF8(writer: WriterUint8Array, val: string | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -3980,6 +4470,7 @@ Writes an array of UTF-8 strings as (VarInt count, ...items). -1 if null.
 ```ts
 #writeUTF8Array(writer: WriterUint8Array, arr: string[] | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -3989,6 +4480,7 @@ Writes an array of hex-encoded txids (each 32 bytes) as (VarInt count, ...items)
 ```ts
 #writeTxidArray(writer: WriterUint8Array, arr: string[] | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -4001,6 +4493,7 @@ Reads a list of SendWithResults entries from a binary reader.
     status: SendWithResultStatus;
 }> | undefined
 ```
+
 See also: [ReaderUint8Array](./primitives.md#class-readeruint8array), [SendWithResultStatus](./wallet.md#type-sendwithresultstatus), [TXIDHexString](./wallet.md#type-txidhexstring)
 
 #### Method
@@ -4016,6 +4509,7 @@ Serializes a single createAction input to the writer.
     sequenceNumber?: number;
 }): void
 ```
+
 See also: [OutpointString](./wallet.md#type-outpointstring), [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -4032,6 +4526,7 @@ Serializes a single createAction output to the writer.
     tags?: string[];
 }): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -4051,6 +4546,7 @@ Serializes createAction options to the writer (Int8 presence byte + fields).
     randomizeOutputs?: boolean;
 } | undefined): void
 ```
+
 See also: [OutpointString](./wallet.md#type-outpointstring), [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Method
@@ -4065,397 +4561,465 @@ Serializes signAction options to the writer (Int8 presence byte + fields).
     sendWith?: string[];
 } | undefined): void
 ```
+
 See also: [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: WindowCWISubstrate
 
 Facilitates wallet operations over the window.CWI interface.
 
 ```ts
 export default class WindowCWISubstrate implements WalletInterface {
-    constructor()
-    async createAction(args: {
-        description: DescriptionString5to50Bytes;
-        inputs?: Array<{
-            tx?: BEEF;
-            outpoint: OutpointString;
-            unlockingScript?: HexString;
-            unlockingScriptLength?: PositiveInteger;
-            inputDescription: DescriptionString5to50Bytes;
-            sequenceNumber?: PositiveIntegerOrZero;
-        }>;
-        outputs?: Array<{
-            lockingScript: HexString;
-            satoshis: SatoshiValue;
-            outputDescription: DescriptionString5to50Bytes;
-            basket?: BasketStringUnder300Bytes;
-            customInstructions?: string;
-            tags?: OutputTagStringUnder300Bytes[];
-        }>;
-        lockTime?: PositiveIntegerOrZero;
-        version?: PositiveIntegerOrZero;
-        labels?: LabelStringUnder300Bytes[];
-        options?: {
-            signAndProcess?: BooleanDefaultTrue;
-            acceptDelayedBroadcast?: BooleanDefaultTrue;
-            trustSelf?: "known";
-            knownTxids?: TXIDHexString[];
-            returnTXIDOnly?: BooleanDefaultFalse;
-            noSend?: BooleanDefaultFalse;
-            noSendChange?: OutpointString[];
-            sendWith?: TXIDHexString[];
-        };
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        txid?: TXIDHexString;
-        tx?: BEEF;
-        noSendChange?: OutpointString[];
-        sendWithResults?: Array<{
-            txid: TXIDHexString;
-            status: "unproven" | "sending" | "failed";
-        }>;
-        signableTransaction?: {
-            tx: BEEF;
-            reference: Base64String;
-        };
+  constructor()
+  async createAction(
+    args: {
+      description: DescriptionString5to50Bytes
+      inputs?: Array<{
+        tx?: BEEF
+        outpoint: OutpointString
+        unlockingScript?: HexString
+        unlockingScriptLength?: PositiveInteger
+        inputDescription: DescriptionString5to50Bytes
+        sequenceNumber?: PositiveIntegerOrZero
+      }>
+      outputs?: Array<{
+        lockingScript: HexString
+        satoshis: SatoshiValue
+        outputDescription: DescriptionString5to50Bytes
+        basket?: BasketStringUnder300Bytes
+        customInstructions?: string
+        tags?: OutputTagStringUnder300Bytes[]
+      }>
+      lockTime?: PositiveIntegerOrZero
+      version?: PositiveIntegerOrZero
+      labels?: LabelStringUnder300Bytes[]
+      options?: {
+        signAndProcess?: BooleanDefaultTrue
+        acceptDelayedBroadcast?: BooleanDefaultTrue
+        trustSelf?: 'known'
+        knownTxids?: TXIDHexString[]
+        returnTXIDOnly?: BooleanDefaultFalse
+        noSend?: BooleanDefaultFalse
+        noSendChange?: OutpointString[]
+        sendWith?: TXIDHexString[]
+      }
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    txid?: TXIDHexString
+    tx?: BEEF
+    noSendChange?: OutpointString[]
+    sendWithResults?: Array<{
+      txid: TXIDHexString
+      status: 'unproven' | 'sending' | 'failed'
     }>
-    async signAction(args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<SignActionResult>
-    async abortAction(args: {
-        reference: Base64String;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        aborted: boolean;
+    signableTransaction?: {
+      tx: BEEF
+      reference: Base64String
+    }
+  }>
+  async signAction(
+    args: SignActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<SignActionResult>
+  async abortAction(
+    args: {
+      reference: Base64String
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    aborted: boolean
+  }>
+  async listActions(
+    args: {
+      labels: LabelStringUnder300Bytes[]
+      labelQueryMode?: 'any' | 'all'
+      includeLabels?: BooleanDefaultFalse
+      includeInputs?: BooleanDefaultFalse
+      includeInputSourceLockingScripts?: BooleanDefaultFalse
+      includeInputUnlockingScripts?: BooleanDefaultFalse
+      includeOutputs?: BooleanDefaultFalse
+      includeOutputLockingScripts?: BooleanDefaultFalse
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    totalActions: PositiveIntegerOrZero
+    actions: Array<{
+      txid: TXIDHexString
+      satoshis: SatoshiValue
+      status:
+        | 'completed'
+        | 'unprocessed'
+        | 'sending'
+        | 'unproven'
+        | 'unsigned'
+        | 'nosend'
+        | 'nonfinal'
+        | 'failed'
+      isOutgoing: boolean
+      description: DescriptionString5to50Bytes
+      labels?: LabelStringUnder300Bytes[]
+      version: PositiveIntegerOrZero
+      lockTime: PositiveIntegerOrZero
+      inputs?: Array<{
+        sourceOutpoint: OutpointString
+        sourceSatoshis: SatoshiValue
+        sourceLockingScript?: HexString
+        unlockingScript?: HexString
+        inputDescription: DescriptionString5to50Bytes
+        sequenceNumber: PositiveIntegerOrZero
+      }>
+      outputs?: Array<{
+        outputIndex: PositiveIntegerOrZero
+        satoshis: SatoshiValue
+        lockingScript?: HexString
+        spendable: boolean
+        outputDescription: DescriptionString5to50Bytes
+        basket: BasketStringUnder300Bytes
+        tags: OutputTagStringUnder300Bytes[]
+        customInstructions?: string
+      }>
     }>
-    async listActions(args: {
-        labels: LabelStringUnder300Bytes[];
-        labelQueryMode?: "any" | "all";
-        includeLabels?: BooleanDefaultFalse;
-        includeInputs?: BooleanDefaultFalse;
-        includeInputSourceLockingScripts?: BooleanDefaultFalse;
-        includeInputUnlockingScripts?: BooleanDefaultFalse;
-        includeOutputs?: BooleanDefaultFalse;
-        includeOutputLockingScripts?: BooleanDefaultFalse;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalActions: PositiveIntegerOrZero;
-        actions: Array<{
-            txid: TXIDHexString;
-            satoshis: SatoshiValue;
-            status: "completed" | "unprocessed" | "sending" | "unproven" | "unsigned" | "nosend" | "nonfinal" | "failed";
-            isOutgoing: boolean;
-            description: DescriptionString5to50Bytes;
-            labels?: LabelStringUnder300Bytes[];
-            version: PositiveIntegerOrZero;
-            lockTime: PositiveIntegerOrZero;
-            inputs?: Array<{
-                sourceOutpoint: OutpointString;
-                sourceSatoshis: SatoshiValue;
-                sourceLockingScript?: HexString;
-                unlockingScript?: HexString;
-                inputDescription: DescriptionString5to50Bytes;
-                sequenceNumber: PositiveIntegerOrZero;
-            }>;
-            outputs?: Array<{
-                outputIndex: PositiveIntegerOrZero;
-                satoshis: SatoshiValue;
-                lockingScript?: HexString;
-                spendable: boolean;
-                outputDescription: DescriptionString5to50Bytes;
-                basket: BasketStringUnder300Bytes;
-                tags: OutputTagStringUnder300Bytes[];
-                customInstructions?: string;
-            }>;
-        }>;
+  }>
+  async internalizeAction(
+    args: {
+      tx: BEEF
+      outputs: Array<{
+        outputIndex: PositiveIntegerOrZero
+        protocol: 'wallet payment' | 'basket insertion'
+        paymentRemittance?: {
+          derivationPrefix: Base64String
+          derivationSuffix: Base64String
+          senderIdentityKey: PubKeyHex
+        }
+        insertionRemittance?: {
+          basket: BasketStringUnder300Bytes
+          customInstructions?: string
+          tags?: OutputTagStringUnder300Bytes[]
+        }
+      }>
+      description: DescriptionString5to50Bytes
+      labels?: LabelStringUnder300Bytes[]
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    accepted: true
+  }>
+  async listOutputs(
+    args: {
+      basket: BasketStringUnder300Bytes
+      tags?: OutputTagStringUnder300Bytes[]
+      tagQueryMode?: 'all' | 'any'
+      include?: 'locking scripts' | 'entire transactions'
+      includeCustomInstructions?: BooleanDefaultFalse
+      includeTags?: BooleanDefaultFalse
+      includeLabels?: BooleanDefaultFalse
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    totalOutputs: PositiveIntegerOrZero | DecimalString
+    outputs: Array<{
+      outpoint: OutpointString
+      satoshis: SatoshiValue
+      lockingScript?: HexString
+      tx?: BEEF
+      spendable: boolean
+      customInstructions?: string
+      tags?: OutputTagStringUnder300Bytes[]
+      labels?: LabelStringUnder300Bytes[]
     }>
-    async internalizeAction(args: {
-        tx: BEEF;
-        outputs: Array<{
-            outputIndex: PositiveIntegerOrZero;
-            protocol: "wallet payment" | "basket insertion";
-            paymentRemittance?: {
-                derivationPrefix: Base64String;
-                derivationSuffix: Base64String;
-                senderIdentityKey: PubKeyHex;
-            };
-            insertionRemittance?: {
-                basket: BasketStringUnder300Bytes;
-                customInstructions?: string;
-                tags?: OutputTagStringUnder300Bytes[];
-            };
-        }>;
-        description: DescriptionString5to50Bytes;
-        labels?: LabelStringUnder300Bytes[];
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        accepted: true;
+  }>
+  async relinquishOutput(
+    args: {
+      basket: BasketStringUnder300Bytes
+      output: OutpointString
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    relinquished: true
+  }>
+  async getPublicKey(
+    args: {
+      identityKey?: true
+      protocolID?: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID?: KeyIDStringUnder800Bytes
+      privileged?: BooleanDefaultFalse
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      forSelf?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    publicKey: PubKeyHex
+  }>
+  async revealCounterpartyKeyLinkage(
+    args: {
+      counterparty: PubKeyHex
+      verifier: PubKeyHex
+      privilegedReason?: DescriptionString5to50Bytes
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    revelationTime: ISOTimestampString
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+  }>
+  async revealSpecificKeyLinkage(
+    args: {
+      counterparty: PubKeyHex
+      verifier: PubKeyHex
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    prover: PubKeyHex
+    verifier: PubKeyHex
+    counterparty: PubKeyHex
+    protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+    keyID: KeyIDStringUnder800Bytes
+    encryptedLinkage: Byte[]
+    encryptedLinkageProof: Byte[]
+    proofType: Byte
+  }>
+  async encrypt(
+    args: {
+      plaintext: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    ciphertext: Byte[]
+  }>
+  async decrypt(
+    args: {
+      ciphertext: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    plaintext: Byte[]
+  }>
+  async createHmac(
+    args: {
+      data: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    hmac: Byte[]
+  }>
+  async verifyHmac(
+    args: {
+      data: Byte[]
+      hmac: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    valid: true
+  }>
+  async createSignature(
+    args: {
+      data?: Byte[]
+      hashToDirectlySign?: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    signature: Byte[]
+  }>
+  async verifySignature(
+    args: {
+      data?: Byte[]
+      hashToDirectlyVerify?: Byte[]
+      signature: Byte[]
+      protocolID: [SecurityLevel, ProtocolString5To400Bytes]
+      keyID: KeyIDStringUnder800Bytes
+      privilegedReason?: DescriptionString5to50Bytes
+      counterparty?: PubKeyHex
+      forSelf?: BooleanDefaultFalse
+      privileged?: BooleanDefaultFalse
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    valid: true
+  }>
+  async acquireCertificate(
+    args: AcquireCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<WalletCertificate>
+  async listCertificates(
+    args: {
+      certifiers: PubKeyHex[]
+      types: Base64String[]
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+      privileged?: BooleanDefaultFalse
+      privilegedReason?: DescriptionString5to50Bytes
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    totalCertificates: PositiveIntegerOrZero
+    certificates: Array<{
+      type: Base64String
+      subject: PubKeyHex
+      serialNumber: Base64String
+      certifier: PubKeyHex
+      revocationOutpoint: OutpointString
+      signature: HexString
+      fields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
-    async listOutputs(args: {
-        basket: BasketStringUnder300Bytes;
-        tags?: OutputTagStringUnder300Bytes[];
-        tagQueryMode?: "all" | "any";
-        include?: "locking scripts" | "entire transactions";
-        includeCustomInstructions?: BooleanDefaultFalse;
-        includeTags?: BooleanDefaultFalse;
-        includeLabels?: BooleanDefaultFalse;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalOutputs: PositiveIntegerOrZero;
-        outputs: Array<{
-            outpoint: OutpointString;
-            satoshis: SatoshiValue;
-            lockingScript?: HexString;
-            tx?: BEEF;
-            spendable: boolean;
-            customInstructions?: string;
-            tags?: OutputTagStringUnder300Bytes[];
-            labels?: LabelStringUnder300Bytes[];
-        }>;
+  }>
+  async proveCertificate(
+    args: ProveCertificateArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<ProveCertificateResult>
+  async relinquishCertificate(
+    args: {
+      type: Base64String
+      serialNumber: Base64String
+      certifier: PubKeyHex
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    relinquished: true
+  }>
+  async discoverByIdentityKey(
+    args: {
+      identityKey: PubKeyHex
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    totalCertificates: PositiveIntegerOrZero
+    certificates: Array<{
+      type: Base64String
+      subject: PubKeyHex
+      serialNumber: Base64String
+      certifier: PubKeyHex
+      revocationOutpoint: OutpointString
+      signature: HexString
+      fields: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      certifierInfo: {
+        name: EntityNameStringMax100Bytes
+        iconUrl: EntityIconURLStringMax500Bytes
+        description: DescriptionString5to50Bytes
+        trust: PositiveIntegerMax10
+      }
+      publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
-    async relinquishOutput(args: {
-        basket: BasketStringUnder300Bytes;
-        output: OutpointString;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        relinquished: true;
+  }>
+  async discoverByAttributes(
+    args: {
+      attributes: Record<CertificateFieldNameUnder50Bytes, string>
+      limit?: PositiveIntegerDefault10Max10000
+      offset?: PositiveIntegerOrZero
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    totalCertificates: PositiveIntegerOrZero
+    certificates: Array<{
+      type: Base64String
+      subject: PubKeyHex
+      serialNumber: Base64String
+      certifier: PubKeyHex
+      revocationOutpoint: OutpointString
+      signature: HexString
+      fields: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      certifierInfo: {
+        name: EntityNameStringMax100Bytes
+        iconUrl: EntityIconURLStringMax500Bytes
+        description: DescriptionString5to50Bytes
+        trust: PositiveIntegerMax10
+      }
+      publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
+      decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
-    async getPublicKey(args: {
-        identityKey?: true;
-        protocolID?: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID?: KeyIDStringUnder800Bytes;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        publicKey: PubKeyHex;
-    }>
-    async revealCounterpartyKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        revelationTime: ISOTimestampString;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-    }>
-    async revealSpecificKeyLinkage(args: {
-        counterparty: PubKeyHex;
-        verifier: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        prover: PubKeyHex;
-        verifier: PubKeyHex;
-        counterparty: PubKeyHex;
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        encryptedLinkage: Byte[];
-        encryptedLinkageProof: Byte[];
-        proofType: Byte;
-    }>
-    async encrypt(args: {
-        plaintext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        ciphertext: Byte[];
-    }>
-    async decrypt(args: {
-        ciphertext: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        plaintext: Byte[];
-    }>
-    async createHmac(args: {
-        data: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        hmac: Byte[];
-    }>
-    async verifyHmac(args: {
-        data: Byte[];
-        hmac: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        valid: true;
-    }>
-    async createSignature(args: {
-        data?: Byte[];
-        hashToDirectlySign?: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        signature: Byte[];
-    }>
-    async verifySignature(args: {
-        data?: Byte[];
-        hashToDirectlyVerify?: Byte[];
-        signature: Byte[];
-        protocolID: [
-            SecurityLevel,
-            ProtocolString5To400Bytes
-        ];
-        keyID: KeyIDStringUnder800Bytes;
-        privilegedReason?: DescriptionString5to50Bytes;
-        counterparty?: PubKeyHex;
-        forSelf?: BooleanDefaultFalse;
-        privileged?: BooleanDefaultFalse;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        valid: true;
-    }>
-    async acquireCertificate(args: AcquireCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletCertificate>
-    async listCertificates(args: {
-        certifiers: PubKeyHex[];
-        types: Base64String[];
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-        privileged?: BooleanDefaultFalse;
-        privilegedReason?: DescriptionString5to50Bytes;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalCertificates: PositiveIntegerOrZero;
-        certificates: Array<{
-            type: Base64String;
-            subject: PubKeyHex;
-            serialNumber: Base64String;
-            certifier: PubKeyHex;
-            revocationOutpoint: OutpointString;
-            signature: HexString;
-            fields: Record<CertificateFieldNameUnder50Bytes, string>;
-        }>;
-    }>
-    async proveCertificate(args: ProveCertificateArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ProveCertificateResult>
-    async relinquishCertificate(args: {
-        type: Base64String;
-        serialNumber: Base64String;
-        certifier: PubKeyHex;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        relinquished: true;
-    }>
-    async discoverByIdentityKey(args: {
-        identityKey: PubKeyHex;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalCertificates: PositiveIntegerOrZero;
-        certificates: Array<{
-            type: Base64String;
-            subject: PubKeyHex;
-            serialNumber: Base64String;
-            certifier: PubKeyHex;
-            revocationOutpoint: OutpointString;
-            signature: HexString;
-            fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            certifierInfo: {
-                name: EntityNameStringMax100Bytes;
-                iconUrl: EntityIconURLStringMax500Bytes;
-                description: DescriptionString5to50Bytes;
-                trust: PositiveIntegerMax10;
-            };
-            publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>;
-        }>;
-    }>
-    async discoverByAttributes(args: {
-        attributes: Record<CertificateFieldNameUnder50Bytes, string>;
-        limit?: PositiveIntegerDefault10Max10000;
-        offset?: PositiveIntegerOrZero;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        totalCertificates: PositiveIntegerOrZero;
-        certificates: Array<{
-            type: Base64String;
-            subject: PubKeyHex;
-            serialNumber: Base64String;
-            certifier: PubKeyHex;
-            revocationOutpoint: OutpointString;
-            signature: HexString;
-            fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            certifierInfo: {
-                name: EntityNameStringMax100Bytes;
-                iconUrl: EntityIconURLStringMax500Bytes;
-                description: DescriptionString5to50Bytes;
-                trust: PositiveIntegerMax10;
-            };
-            publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>;
-            decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>;
-        }>;
-    }>
-    async isAuthenticated(args: object, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        authenticated: true;
-    }>
-    async waitForAuthentication(args: object, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        authenticated: true;
-    }>
-    async getHeight(args: object, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        height: PositiveInteger;
-    }>
-    async getHeaderForHeight(args: {
-        height: PositiveInteger;
-    }, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        header: HexString;
-    }>
-    async getNetwork(args: object, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        network: "mainnet" | "testnet";
-    }>
-    async getVersion(args: object, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<{
-        version: VersionString7To30Bytes;
-    }>
+  }>
+  async isAuthenticated(
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    authenticated: true
+  }>
+  async waitForAuthentication(
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    authenticated: true
+  }>
+  async getHeight(
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    height: PositiveInteger
+  }>
+  async getHeaderForHeight(
+    args: {
+      height: PositiveInteger
+    },
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    header: HexString
+  }>
+  async getNetwork(
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    network: 'mainnet' | 'testnet'
+  }>
+  async getVersion(
+    args: object,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<{
+    version: VersionString7To30Bytes
+  }>
 }
 ```
 
-See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [BEEF](./wallet.md#type-beef), [Base64String](./wallet.md#type-base64string), [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes), [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [Byte](./wallet.md#type-byte), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [EntityIconURLStringMax500Bytes](./wallet.md#type-entityiconurlstringmax500bytes), [EntityNameStringMax100Bytes](./wallet.md#type-entitynamestringmax100bytes), [HexString](./wallet.md#type-hexstring), [ISOTimestampString](./wallet.md#type-isotimestampstring), [KeyIDStringUnder800Bytes](./wallet.md#type-keyidstringunder800bytes), [LabelStringUnder300Bytes](./wallet.md#type-labelstringunder300bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [OutputTagStringUnder300Bytes](./wallet.md#type-outputtagstringunder300bytes), [PositiveInteger](./wallet.md#type-positiveinteger), [PositiveIntegerDefault10Max10000](./wallet.md#type-positiveintegerdefault10max10000), [PositiveIntegerMax10](./wallet.md#type-positiveintegermax10), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes), [ProveCertificateArgs](./wallet.md#interface-provecertificateargs), [ProveCertificateResult](./wallet.md#interface-provecertificateresult), [PubKeyHex](./wallet.md#type-pubkeyhex), [SatoshiValue](./wallet.md#type-satoshivalue), [SecurityLevel](./wallet.md#type-securitylevel), [SignActionArgs](./wallet.md#interface-signactionargs), [SignActionResult](./wallet.md#interface-signactionresult), [TXIDHexString](./wallet.md#type-txidhexstring), [VersionString7To30Bytes](./wallet.md#type-versionstring7to30bytes), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt), [string](./remittance.md#function-string)
+See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [BEEF](./wallet.md#type-beef), [Base64String](./wallet.md#type-base64string), [BasketStringUnder300Bytes](./wallet.md#type-basketstringunder300bytes), [BooleanDefaultFalse](./wallet.md#type-booleandefaultfalse), [BooleanDefaultTrue](./wallet.md#type-booleandefaulttrue), [Byte](./wallet.md#type-byte), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [DecimalString](./wallet.md#type-decimalstring), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [EntityIconURLStringMax500Bytes](./wallet.md#type-entityiconurlstringmax500bytes), [EntityNameStringMax100Bytes](./wallet.md#type-entitynamestringmax100bytes), [HexString](./wallet.md#type-hexstring), [ISOTimestampString](./wallet.md#type-isotimestampstring), [KeyIDStringUnder800Bytes](./wallet.md#type-keyidstringunder800bytes), [LabelStringUnder300Bytes](./wallet.md#type-labelstringunder300bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [OutputTagStringUnder300Bytes](./wallet.md#type-outputtagstringunder300bytes), [PositiveInteger](./wallet.md#type-positiveinteger), [PositiveIntegerDefault10Max10000](./wallet.md#type-positiveintegerdefault10max10000), [PositiveIntegerMax10](./wallet.md#type-positiveintegermax10), [PositiveIntegerOrZero](./wallet.md#type-positiveintegerorzero), [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes), [ProveCertificateArgs](./wallet.md#interface-provecertificateargs), [ProveCertificateResult](./wallet.md#interface-provecertificateresult), [PubKeyHex](./wallet.md#type-pubkeyhex), [SatoshiValue](./wallet.md#type-satoshivalue), [SecurityLevel](./wallet.md#type-securitylevel), [SignActionArgs](./wallet.md#interface-signactionargs), [SignActionResult](./wallet.md#interface-signactionresult), [TXIDHexString](./wallet.md#type-txidhexstring), [VersionString7To30Bytes](./wallet.md#type-versionstring7to30bytes), [WalletCertificate](./wallet.md#interface-walletcertificate), [WalletInterface](./wallet.md#interface-walletinterface), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Class: XDMSubstrate
 
 Facilitates wallet operations over cross-document messaging.
@@ -4467,8 +5031,12 @@ exact-origin mode additionally requires the configured origin.
 
 ```ts
 export default class XDMSubstrate extends InvokableWalletBase {
-    constructor(domain: string = "*", responseTimeout?: number)
-    protected override async invokeRaw(call: CallType, args: any, bindingRequest: unknown): Promise<any>
+  constructor(domain: string = '*', responseTimeout?: number)
+  protected override async invokeRaw(
+    call: CallType,
+    args: any,
+    bindingRequest: unknown
+  ): Promise<any>
 }
 ```
 
@@ -4477,32 +5045,33 @@ See also: [CallType](./wallet.md#type-calltype), [InvokableWalletBase](./wallet.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ## Functions
 
-| | | |
-| --- | --- | --- |
-| [assertSafeWalletJSONValue](#function-assertsafewalletjsonvalue) | [validateAbortActionArgs](#function-validateabortactionargs) | [validateOptionalInteger](#function-validateoptionalinteger) |
-| [assertSafeWalletValue](#function-assertsafewalletvalue) | [validateAcquireDirectCertificateArgs](#function-validateacquiredirectcertificateargs) | [validateOptionalOutpointString](#function-validateoptionaloutpointstring) |
-| [base64ToBytes](#function-base64tobytes) | [validateAcquireIssuanceCertificateArgs](#function-validateacquireissuancecertificateargs) | [validateOriginator](#function-validateoriginator) |
-| [brc100JsonReplacer](#function-brc100jsonreplacer) | [validateBase64String](#function-validatebase64string) | [validateOutpointString](#function-validateoutpointstring) |
-| [bytesToBase64](#function-bytestobase64) | [validateBasketInsertion](#function-validatebasketinsertion) | [validatePositiveIntegerOrZero](#function-validatepositiveintegerorzero) |
-| [bytesToHex](#function-bytestohex) | [validateCreateActionArgs](#function-validatecreateactionargs) | [validateProveCertificateArgs](#function-validateprovecertificateargs) |
-| [completeBoundAction](#function-completeboundaction) | [validateCreateActionInput](#function-validatecreateactioninput) | [validateRelinquishCertificateArgs](#function-validaterelinquishcertificateargs) |
-| [hexToBytes](#function-hextobytes) | [validateCreateActionOptions](#function-validatecreateactionoptions) | [validateRelinquishOutputArgs](#function-validaterelinquishoutputargs) |
-| [isCanonicalDERSignature](#function-iscanonicaldersignature) | [validateCreateActionOutput](#function-validatecreateactionoutput) | [validateRevealCounterpartyKeyLinkageArgs](#function-validaterevealcounterpartykeylinkageargs) |
-| [isHexString](#function-ishexstring) | [validateCreateHmacArgs](#function-validatecreatehmacargs) | [validateRevealSpecificKeyLinkageArgs](#function-validaterevealspecifickeylinkageargs) |
-| [isValidCompressedPublicKey](#function-isvalidcompressedpublickey) | [validateCreateSignatureArgs](#function-validatecreatesignatureargs) | [validateSatoshis](#function-validatesatoshis) |
-| [normalizeBRC100ByteArray](#function-normalizebrc100bytearray) | [validateDiscoverByAttributesArgs](#function-validatediscoverbyattributesargs) | [validateSignActionArgs](#function-validatesignactionargs) |
-| [normalizeBRC100ByteFields](#function-normalizebrc100bytefields) | [validateDiscoverByIdentityKeyArgs](#function-validatediscoverbyidentitykeyargs) | [validateSignActionOptions](#function-validatesignactionoptions) |
-| [normalizeBRC100WalletByteFields](#function-normalizebrc100walletbytefields) | [validateGetHeaderArgs](#function-validategetheaderargs) | [validateStringLength](#function-validatestringlength) |
-| [normalizeWalletHttpBaseUrl](#function-normalizewallethttpbaseurl) | [validateGetPublicKeyArgs](#function-validategetpublickeyargs) | [validateVerifyHmacArgs](#function-validateverifyhmacargs) |
-| [parseWalletOutpoint](#function-parsewalletoutpoint) | [validateInteger](#function-validateinteger) | [validateVerifySignatureArgs](#function-validateverifysignatureargs) |
-| [parseWalletResultAtomicBEEF](#function-parsewalletresultatomicbeef) | [validateInternalizeActionArgs](#function-validateinternalizeactionargs) | [validateWalletArgs](#function-validatewalletargs) |
-| [parseWalletResultBEEF](#function-parsewalletresultbeef) | [validateInternalizeOutput](#function-validateinternalizeoutput) | [validateWalletDecryptArgs](#function-validatewalletdecryptargs) |
-| [snapshotWalletResultRequest](#function-snapshotwalletresultrequest) | [validateListActionsArgs](#function-validatelistactionsargs) | [validateWalletEncryptArgs](#function-validatewalletencryptargs) |
-| [stringifyBRC100](#function-stringifybrc100) | [validateListCertificatesArgs](#function-validatelistcertificatesargs) | [validateWalletPayment](#function-validatewalletpayment) |
-| [toBRC100PortableByteArray](#function-tobrc100portablebytearray) | [validateListOutputsArgs](#function-validatelistoutputsargs) | [validateWalletResult](#function-validatewalletresult) |
-| [toOriginHeader](#function-tooriginheader) | [validateNoArgs](#function-validatenoargs) |  |
+|                                                                              |                                                                                            |                                                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| [assertSafeWalletJSONValue](#function-assertsafewalletjsonvalue)             | [validateAbortActionArgs](#function-validateabortactionargs)                               | [validateOptionalInteger](#function-validateoptionalinteger)                                   |
+| [assertSafeWalletValue](#function-assertsafewalletvalue)                     | [validateAcquireDirectCertificateArgs](#function-validateacquiredirectcertificateargs)     | [validateOptionalOutpointString](#function-validateoptionaloutpointstring)                     |
+| [base64ToBytes](#function-base64tobytes)                                     | [validateAcquireIssuanceCertificateArgs](#function-validateacquireissuancecertificateargs) | [validateOriginator](#function-validateoriginator)                                             |
+| [brc100JsonReplacer](#function-brc100jsonreplacer)                           | [validateBase64String](#function-validatebase64string)                                     | [validateOutpointString](#function-validateoutpointstring)                                     |
+| [bytesToBase64](#function-bytestobase64)                                     | [validateBasketInsertion](#function-validatebasketinsertion)                               | [validatePositiveIntegerOrZero](#function-validatepositiveintegerorzero)                       |
+| [bytesToHex](#function-bytestohex)                                           | [validateCreateActionArgs](#function-validatecreateactionargs)                             | [validateProveCertificateArgs](#function-validateprovecertificateargs)                         |
+| [completeBoundAction](#function-completeboundaction)                         | [validateCreateActionInput](#function-validatecreateactioninput)                           | [validateRelinquishCertificateArgs](#function-validaterelinquishcertificateargs)               |
+| [hexToBytes](#function-hextobytes)                                           | [validateCreateActionOptions](#function-validatecreateactionoptions)                       | [validateRelinquishOutputArgs](#function-validaterelinquishoutputargs)                         |
+| [isCanonicalDERSignature](#function-iscanonicaldersignature)                 | [validateCreateActionOutput](#function-validatecreateactionoutput)                         | [validateRevealCounterpartyKeyLinkageArgs](#function-validaterevealcounterpartykeylinkageargs) |
+| [isHexString](#function-ishexstring)                                         | [validateCreateHmacArgs](#function-validatecreatehmacargs)                                 | [validateRevealSpecificKeyLinkageArgs](#function-validaterevealspecifickeylinkageargs)         |
+| [isValidCompressedPublicKey](#function-isvalidcompressedpublickey)           | [validateCreateSignatureArgs](#function-validatecreatesignatureargs)                       | [validateSatoshis](#function-validatesatoshis)                                                 |
+| [normalizeBRC100ByteArray](#function-normalizebrc100bytearray)               | [validateDiscoverByAttributesArgs](#function-validatediscoverbyattributesargs)             | [validateSignActionArgs](#function-validatesignactionargs)                                     |
+| [normalizeBRC100ByteFields](#function-normalizebrc100bytefields)             | [validateDiscoverByIdentityKeyArgs](#function-validatediscoverbyidentitykeyargs)           | [validateSignActionOptions](#function-validatesignactionoptions)                               |
+| [normalizeBRC100WalletByteFields](#function-normalizebrc100walletbytefields) | [validateGetHeaderArgs](#function-validategetheaderargs)                                   | [validateStringLength](#function-validatestringlength)                                         |
+| [normalizeWalletHttpBaseUrl](#function-normalizewallethttpbaseurl)           | [validateGetPublicKeyArgs](#function-validategetpublickeyargs)                             | [validateVerifyHmacArgs](#function-validateverifyhmacargs)                                     |
+| [parseWalletOutpoint](#function-parsewalletoutpoint)                         | [validateInteger](#function-validateinteger)                                               | [validateVerifySignatureArgs](#function-validateverifysignatureargs)                           |
+| [parseWalletResultAtomicBEEF](#function-parsewalletresultatomicbeef)         | [validateInternalizeActionArgs](#function-validateinternalizeactionargs)                   | [validateWalletArgs](#function-validatewalletargs)                                             |
+| [parseWalletResultBEEF](#function-parsewalletresultbeef)                     | [validateInternalizeOutput](#function-validateinternalizeoutput)                           | [validateWalletDecryptArgs](#function-validatewalletdecryptargs)                               |
+| [snapshotWalletResultRequest](#function-snapshotwalletresultrequest)         | [validateListActionsArgs](#function-validatelistactionsargs)                               | [validateWalletEncryptArgs](#function-validatewalletencryptargs)                               |
+| [stringifyBRC100](#function-stringifybrc100)                                 | [validateListCertificatesArgs](#function-validatelistcertificatesargs)                     | [validateWalletPayment](#function-validatewalletpayment)                                       |
+| [toBRC100PortableByteArray](#function-tobrc100portablebytearray)             | [validateListOutputsArgs](#function-validatelistoutputsargs)                               | [validateWalletResult](#function-validatewalletresult)                                         |
+| [toOriginHeader](#function-tooriginheader)                                   | [validateNoArgs](#function-validatenoargs)                                                 |                                                                                                |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4523,6 +5092,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: assertSafeWalletValue
 
 ```ts
@@ -4534,6 +5104,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: base64ToBytes
 
 ```ts
@@ -4545,12 +5116,17 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: brc100JsonReplacer
 
 JSON replacer that preserves `Uint8Array` values as portable JSON arrays.
 
 ```ts
-export function brc100JsonReplacer(this: Record<string, unknown>, key: string, value: unknown): unknown
+export function brc100JsonReplacer(
+  this: Record<string, unknown>,
+  key: string,
+  value: unknown
+): unknown
 ```
 
 See also: [string](./remittance.md#function-string)
@@ -4558,6 +5134,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: bytesToBase64
 
 ```ts
@@ -4569,6 +5146,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: bytesToHex
 
 ```ts
@@ -4580,6 +5158,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: completeBoundAction
 
 Complete a createAction/signAction flow while binding every caller-requested
@@ -4589,7 +5168,13 @@ outputs and transaction fees; wallet-added inputs must fully fund every
 additional wallet-managed output.
 
 ```ts
-export async function completeBoundAction(wallet: WalletInterface, createArgs: CreateActionArgs, options: BoundActionOptions = {}, originator?: string, trustedRequestedInputSatoshis?: readonly number[]): Promise<Transaction>
+export async function completeBoundAction(
+  wallet: WalletInterface,
+  createArgs: CreateActionArgs,
+  options: BoundActionOptions = {},
+  originator?: string,
+  trustedRequestedInputSatoshis?: readonly number[]
+): Promise<Transaction>
 ```
 
 See also: [BoundActionOptions](./wallet.md#interface-boundactionoptions), [CreateActionArgs](./wallet.md#interface-createactionargs), [Transaction](./transaction.md#class-transaction), [WalletInterface](./wallet.md#interface-walletinterface), [string](./remittance.md#function-string)
@@ -4597,6 +5182,7 @@ See also: [BoundActionOptions](./wallet.md#interface-boundactionoptions), [Creat
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: hexToBytes
 
 ```ts
@@ -4608,6 +5194,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: isCanonicalDERSignature
 
 Validate a strict, minimally encoded DER ECDSA signature with in-range scalars.
@@ -4619,6 +5206,7 @@ export function isCanonicalDERSignature(bytes: ArrayLike<number>): boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: isHexString
 
 Check whether a string is a valid hex string (even length and hex characters).
@@ -4635,12 +5223,13 @@ true when s is a valid hex string
 
 Argument Details
 
-+ **s**
-  + input string
+- **s**
+  - input string
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: isValidCompressedPublicKey
 
 Validate one canonical compressed SEC1 secp256k1 public key.
@@ -4654,6 +5243,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: normalizeBRC100ByteArray
 
 Normalizes the runtime representations used for BRC-100 byte arrays.
@@ -4672,6 +5262,7 @@ See also: [AtomicBEEF](./wallet.md#type-atomicbeef)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: normalizeBRC100ByteFields
 
 Repairs byte arrays only in explicitly selected own fields of one protocol
@@ -4687,6 +5278,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: normalizeBRC100WalletByteFields
 
 Repairs known byte fields in a wallet request, result, or serialized wallet
@@ -4700,6 +5292,7 @@ export function normalizeBRC100WalletByteFields<T>(value: T): T
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: normalizeWalletHttpBaseUrl
 
 Normalize the fixed HTTP endpoint used for privileged wallet RPC calls.
@@ -4718,12 +5311,13 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: parseWalletOutpoint
 
 ```ts
 export function parseWalletOutpoint(outpoint: string): {
-    txid: string;
-    vout: number;
+  txid: string
+  vout: number
 }
 ```
 
@@ -4732,12 +5326,16 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: parseWalletResultAtomicBEEF
 
 Parse and enforce the BRC-95 transaction-closure rule for an Atomic BEEF envelope.
 
 ```ts
-export function parseWalletResultAtomicBEEF(bytes: number[] | Uint8Array, allowPartial = false): WalletResultTransaction
+export function parseWalletResultAtomicBEEF(
+  bytes: number[] | Uint8Array,
+  allowPartial = false
+): WalletResultTransaction
 ```
 
 See also: [WalletResultTransaction](./wallet.md#interface-walletresulttransaction)
@@ -4745,6 +5343,7 @@ See also: [WalletResultTransaction](./wallet.md#interface-walletresulttransactio
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: parseWalletResultBEEF
 
 Parse exactly one BEEF envelope for read-only wallet-result validation.
@@ -4758,6 +5357,7 @@ See also: [WalletResultBEEF](./wallet.md#interface-walletresultbeef)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: snapshotWalletResultRequest
 
 Capture only the immutable request fields used to bind a later wallet
@@ -4773,6 +5373,7 @@ See also: [CallType](./wallet.md#type-calltype)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: stringifyBRC100
 
 Serialize a BRC-100 payload without allowing typed byte arrays to become objects.
@@ -4786,6 +5387,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: toBRC100PortableByteArray
 
 Convert a valid BRC-100 byte array to the portable JSON `number[]` form.
@@ -4797,10 +5399,11 @@ export function toBRC100PortableByteArray(value: unknown): number[] | undefined
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: toOriginHeader
 
 ```ts
-export function toOriginHeader(originator: string, fallbackScheme = "http"): string | undefined
+export function toOriginHeader(originator: string, fallbackScheme = 'http'): string | undefined
 ```
 
 See also: [string](./remittance.md#function-string)
@@ -4808,6 +5411,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateAbortActionArgs
 
 Validate AbortActionArgs (ensures reference is a valid base64 string).
@@ -4824,18 +5428,21 @@ ValidAbortActionArgs
 
 Argument Details
 
-+ **args**
-  + AbortActionArgs
+- **args**
+  - AbortActionArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateAcquireDirectCertificateArgs
 
 Validate direct-acquisition-specific acquire certificate args.
 
 ```ts
-export function validateAcquireDirectCertificateArgs(args: AcquireCertificateArgs): ValidAcquireDirectCertificateArgs
+export function validateAcquireDirectCertificateArgs(
+  args: AcquireCertificateArgs
+): ValidAcquireDirectCertificateArgs
 ```
 
 See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [ValidAcquireDirectCertificateArgs](./wallet.md#interface-validacquiredirectcertificateargs)
@@ -4846,8 +5453,8 @@ ValidAcquireDirectCertificateArgs
 
 Argument Details
 
-+ **args**
-  + AcquireCertificateArgs with acquisitionProtocol === 'direct'
+- **args**
+  - AcquireCertificateArgs with acquisitionProtocol === 'direct'
 
 Throws
 
@@ -4856,12 +5463,15 @@ when args contain fields invalid for direct acquisition
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateAcquireIssuanceCertificateArgs
 
 Validate issuance-specific acquire certificate args.
 
 ```ts
-export function validateAcquireIssuanceCertificateArgs(args: AcquireCertificateArgs): ValidAcquireIssuanceCertificateArgs
+export function validateAcquireIssuanceCertificateArgs(
+  args: AcquireCertificateArgs
+): ValidAcquireIssuanceCertificateArgs
 ```
 
 See also: [AcquireCertificateArgs](./wallet.md#interface-acquirecertificateargs), [ValidAcquireIssuanceCertificateArgs](./wallet.md#interface-validacquireissuancecertificateargs)
@@ -4872,8 +5482,8 @@ ValidAcquireIssuanceCertificateArgs
 
 Argument Details
 
-+ **args**
-  + AcquireCertificateArgs with acquisitionProtocol === 'issuance'
+- **args**
+  - AcquireCertificateArgs with acquisitionProtocol === 'issuance'
 
 Throws
 
@@ -4882,6 +5492,7 @@ when args contain fields invalid for issuance
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateBase64String
 
 Validate a Base64 string (structure and decoded size).
@@ -4898,14 +5509,14 @@ validated base64 string
 
 Argument Details
 
-+ **s**
-  + base64 string
-+ **name**
-  + parameter name used in error messages
-+ **min**
-  + optional minimum decoded byte length
-+ **max**
-  + optional maximum decoded byte length
+- **s**
+  - base64 string
+- **name**
+  - parameter name used in error messages
+- **min**
+  - optional minimum decoded byte length
+- **max**
+  - optional maximum decoded byte length
 
 Throws
 
@@ -4914,6 +5525,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateBasketInsertion
 
 Validate a BasketInsertion structure (basket, custom instructions, tags).
@@ -4930,18 +5542,22 @@ ValidBasketInsertion or undefined
 
 Argument Details
 
-+ **args**
-  + BasketInsertion or undefined
+- **args**
+  - BasketInsertion or undefined
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateActionArgs
 
 Validate the arguments for creating a new action.
 
 ```ts
-export function validateCreateActionArgs(args: CreateActionArgs, logger?: WalletLoggerInterface): ValidCreateActionArgs
+export function validateCreateActionArgs(
+  args: CreateActionArgs,
+  logger?: WalletLoggerInterface
+): ValidCreateActionArgs
 ```
 
 See also: [CreateActionArgs](./wallet.md#interface-createactionargs), [ValidCreateActionArgs](./wallet.md#interface-validcreateactionargs), [WalletLoggerInterface](./wallet.md#interface-walletloggerinterface)
@@ -4957,6 +5573,7 @@ primarily WERR_INVALID_PARAMETER if args are invalid.
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateActionInput
 
 Validate a CreateActionInput structure.
@@ -4976,8 +5593,8 @@ ValidCreateActionInput
 
 Argument Details
 
-+ **i**
-  + CreateActionInput to validate
+- **i**
+  - CreateActionInput to validate
 
 Throws
 
@@ -4986,6 +5603,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateActionOptions
 
 Normalize and validate CreateActionOptions, applying defaults for booleans/numbers/arrays.
@@ -5002,12 +5620,13 @@ ValidCreateActionOptions with defaults applied
 
 Argument Details
 
-+ **options**
-  + CreateActionOptions or undefined
+- **options**
+  - CreateActionOptions or undefined
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateActionOutput
 
 Validate CreateActionOutput fields: locking script, satoshis, description, basket, tags.
@@ -5024,8 +5643,8 @@ ValidCreateActionOutput
 
 Argument Details
 
-+ **o**
-  + CreateActionOutput to validate
+- **o**
+  - CreateActionOutput to validate
 
 Throws
 
@@ -5034,6 +5653,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateHmacArgs
 
 ```ts
@@ -5045,6 +5665,7 @@ See also: [CreateHmacArgs](./wallet.md#interface-createhmacargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateCreateSignatureArgs
 
 ```ts
@@ -5056,12 +5677,15 @@ See also: [CreateSignatureArgs](./wallet.md#interface-createsignatureargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateDiscoverByAttributesArgs
 
 Validate DiscoverByAttributesArgs: attributes, limit, offset, and permission flag.
 
 ```ts
-export function validateDiscoverByAttributesArgs(args: DiscoverByAttributesArgs): ValidDiscoverByAttributesArgs
+export function validateDiscoverByAttributesArgs(
+  args: DiscoverByAttributesArgs
+): ValidDiscoverByAttributesArgs
 ```
 
 See also: [DiscoverByAttributesArgs](./wallet.md#interface-discoverbyattributesargs), [ValidDiscoverByAttributesArgs](./wallet.md#interface-validdiscoverbyattributesargs)
@@ -5072,18 +5696,21 @@ ValidDiscoverByAttributesArgs
 
 Argument Details
 
-+ **args**
-  + DiscoverByAttributesArgs
+- **args**
+  - DiscoverByAttributesArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateDiscoverByIdentityKeyArgs
 
 Validate DiscoverByIdentityKeyArgs, enforcing identity key length and defaults.
 
 ```ts
-export function validateDiscoverByIdentityKeyArgs(args: DiscoverByIdentityKeyArgs): ValidDiscoverByIdentityKeyArgs
+export function validateDiscoverByIdentityKeyArgs(
+  args: DiscoverByIdentityKeyArgs
+): ValidDiscoverByIdentityKeyArgs
 ```
 
 See also: [DiscoverByIdentityKeyArgs](./wallet.md#interface-discoverbyidentitykeyargs), [ValidDiscoverByIdentityKeyArgs](./wallet.md#interface-validdiscoverbyidentitykeyargs)
@@ -5094,12 +5721,13 @@ ValidDiscoverByIdentityKeyArgs
 
 Argument Details
 
-+ **args**
-  + DiscoverByIdentityKeyArgs
+- **args**
+  - DiscoverByIdentityKeyArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateGetHeaderArgs
 
 ```ts
@@ -5111,6 +5739,7 @@ See also: [GetHeaderArgs](./wallet.md#interface-getheaderargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateGetPublicKeyArgs
 
 Validate arguments shared by key-derivation and symmetric-crypto calls.
@@ -5124,12 +5753,19 @@ See also: [GetPublicKeyArgs](./wallet.md#interface-getpublickeyargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateInteger
 
 Validate an integer, applying an optional default.
 
 ```ts
-export function validateInteger(v: number | undefined, name: string, defaultValue?: number, min?: number, max?: number): number
+export function validateInteger(
+  v: number | undefined,
+  name: string,
+  defaultValue?: number,
+  min?: number,
+  max?: number
+): number
 ```
 
 See also: [string](./remittance.md#function-string)
@@ -5140,16 +5776,16 @@ validated integer
 
 Argument Details
 
-+ **v**
-  + value to validate (may be undefined)
-+ **name**
-  + parameter name used in error messages
-+ **defaultValue**
-  + value to return when v is undefined
-+ **min**
-  + optional minimum allowed value
-+ **max**
-  + optional maximum allowed value
+- **v**
+  - value to validate (may be undefined)
+- **name**
+  - parameter name used in error messages
+- **defaultValue**
+  - value to return when v is undefined
+- **min**
+  - optional minimum allowed value
+- **max**
+  - optional maximum allowed value
 
 Throws
 
@@ -5158,12 +5794,15 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateInternalizeActionArgs
 
 Validate InternalizeActionArgs: tx, outputs, description, labels, permission flag.
 
 ```ts
-export function validateInternalizeActionArgs(args: InternalizeActionArgs): ValidInternalizeActionArgs
+export function validateInternalizeActionArgs(
+  args: InternalizeActionArgs
+): ValidInternalizeActionArgs
 ```
 
 See also: [InternalizeActionArgs](./wallet.md#interface-internalizeactionargs), [ValidInternalizeActionArgs](./wallet.md#interface-validinternalizeactionargs)
@@ -5174,8 +5813,8 @@ ValidInternalizeActionArgs
 
 Argument Details
 
-+ **args**
-  + InternalizeActionArgs to validate
+- **args**
+  - InternalizeActionArgs to validate
 
 Throws
 
@@ -5184,6 +5823,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateInternalizeOutput
 
 Validate an InternalizeOutput entry.
@@ -5200,12 +5840,13 @@ ValidInternalizeOutput
 
 Argument Details
 
-+ **args**
-  + InternalizeOutput to validate
+- **args**
+  - InternalizeOutput to validate
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateListActionsArgs
 
 ```ts
@@ -5216,32 +5857,33 @@ See also: [ListActionsArgs](./wallet.md#interface-listactionsargs), [ValidListAc
 
 Argument Details
 
-+ **args.labels**
-  + An array of labels used to filter actions.
-+ **args.labelQueryMode**
-  + Optional. Specifies how to match labels (default is any which matches any of the labels).
-+ **args.includeLabels**
-  + Optional. Whether to include transaction labels in the result set.
-+ **args.includeInputs**
-  + Optional. Whether to include input details in the result set.
-+ **args.includeInputSourceLockingScripts**
-  + Optional. Whether to include input source locking scripts in the result set.
-+ **args.includeInputUnlockingScripts**
-  + Optional. Whether to include input unlocking scripts in the result set.
-+ **args.includeOutputs**
-  + Optional. Whether to include output details in the result set.
-+ **args.includeOutputLockingScripts**
-  + Optional. Whether to include output locking scripts in the result set.
-+ **args.limit**
-  + Optional. The maximum number of transactions to retrieve.
-+ **args.offset**
-  + Optional. Number of transactions to skip before starting to return the results.
-+ **args.seekPermission**
-  + — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
+- **args.labels**
+  - An array of labels used to filter actions.
+- **args.labelQueryMode**
+  - Optional. Specifies how to match labels (default is any which matches any of the labels).
+- **args.includeLabels**
+  - Optional. Whether to include transaction labels in the result set.
+- **args.includeInputs**
+  - Optional. Whether to include input details in the result set.
+- **args.includeInputSourceLockingScripts**
+  - Optional. Whether to include input source locking scripts in the result set.
+- **args.includeInputUnlockingScripts**
+  - Optional. Whether to include input unlocking scripts in the result set.
+- **args.includeOutputs**
+  - Optional. Whether to include output details in the result set.
+- **args.includeOutputLockingScripts**
+  - Optional. Whether to include output locking scripts in the result set.
+- **args.limit**
+  - Optional. The maximum number of transactions to retrieve.
+- **args.offset**
+  - Optional. Number of transactions to skip before starting to return the results.
+- **args.seekPermission**
+  - — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateListCertificatesArgs
 
 Validate ListCertificatesArgs: certifiers, types, paging, and optional privileged reason.
@@ -5258,12 +5900,13 @@ ValidListCertificatesArgs
 
 Argument Details
 
-+ **args**
-  + ListCertificatesArgs
+- **args**
+  - ListCertificatesArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateListOutputsArgs
 
 ```ts
@@ -5274,50 +5917,57 @@ See also: [ListOutputsArgs](./wallet.md#interface-listoutputsargs), [ValidListOu
 
 Argument Details
 
-+ **args.basket**
-  + Required. The associated basket name whose outputs should be listed.
-+ **args.tags**
-  + Optional. Filter outputs based on these tags.
-+ **args.tagQueryMode**
-  + Optional. Filter mode, defining whether all or any of the tags must match. By default, any tag can match.
-+ **args.include**
-  + Optional. Whether to include locking scripts (with each output) or entire transactions (as aggregated BEEF, at the top level) in the result. By default, unless specified, neither are returned.
-+ **args.includeEntireTransactions**
-  + Optional. Whether to include the entire transaction(s) in the result.
-+ **args.includeCustomInstructions**
-  + Optional. Whether custom instructions should be returned in the result.
-+ **args.includeTags**
-  + Optional. Whether the tags associated with the output should be returned.
-+ **args.includeLabels**
-  + Optional. Whether the labels associated with the transaction containing the output should be returned.
-+ **args.limit**
-  + Optional limit on the number of outputs to return.
-+ **args.offset**
-  + If positive or zero: Number of outputs to skip before starting to return results, oldest first.
-If negative: Outputs are returned newest first and offset of -1 is the newest output.
-When using negative offsets, caution is required as new outputs may be added between calls,
-potentially causing outputs to be duplicated across calls.
-+ **args.seekPermission**
-  + — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
+- **args.basket**
+  - Required. The associated basket name whose outputs should be listed.
+- **args.tags**
+  - Optional. Filter outputs based on these tags.
+- **args.tagQueryMode**
+  - Optional. Filter mode, defining whether all or any of the tags must match. By default, any tag can match.
+- **args.include**
+  - Optional. Whether to include locking scripts (with each output) or entire transactions (as aggregated BEEF, at the top level) in the result. By default, unless specified, neither are returned.
+- **args.includeEntireTransactions**
+  - Optional. Whether to include the entire transaction(s) in the result.
+- **args.includeCustomInstructions**
+  - Optional. Whether custom instructions should be returned in the result.
+- **args.includeTags**
+  - Optional. Whether the tags associated with the output should be returned.
+- **args.includeLabels**
+  - Optional. Whether the labels associated with the transaction containing the output should be returned.
+- **args.limit**
+  - Optional limit on the number of outputs to return.
+- **args.offset**
+  - If positive or zero: Number of outputs to skip before starting to return results, oldest first.
+    If negative: Outputs are returned newest first and offset of -1 is the newest output.
+    When using negative offsets, caution is required as new outputs may be added between calls,
+    potentially causing outputs to be duplicated across calls.
+- **args.seekPermission**
+  - — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateNoArgs
 
 ```ts
-export function validateNoArgs(args: object, name = "args"): void
+export function validateNoArgs(args: object, name = 'args'): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateOptionalInteger
 
 Validate an optional integer. Returns undefined or the validated integer.
 
 ```ts
-export function validateOptionalInteger(v: number | undefined, name: string, min?: number, max?: number): number | undefined
+export function validateOptionalInteger(
+  v: number | undefined,
+  name: string,
+  min?: number,
+  max?: number
+): number | undefined
 ```
 
 See also: [string](./remittance.md#function-string)
@@ -5328,14 +5978,14 @@ validated integer or undefined
 
 Argument Details
 
-+ **v**
-  + value to validate (may be undefined)
-+ **name**
-  + parameter name used in error messages
-+ **min**
-  + optional minimum value
-+ **max**
-  + optional maximum value
+- **v**
+  - value to validate (may be undefined)
+- **name**
+  - parameter name used in error messages
+- **min**
+  - optional minimum value
+- **max**
+  - optional maximum value
 
 Throws
 
@@ -5344,12 +5994,16 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateOptionalOutpointString
 
 Validate an optional outpoint string (txid.vout).
 
 ```ts
-export function validateOptionalOutpointString(outpoint: string | undefined, name: string): string | undefined
+export function validateOptionalOutpointString(
+  outpoint: string | undefined,
+  name: string
+): string | undefined
 ```
 
 See also: [string](./remittance.md#function-string)
@@ -5360,14 +6014,15 @@ validated outpoint string or undefined
 
 Argument Details
 
-+ **outpoint**
-  + outpoint string or undefined
-+ **name**
-  + parameter name used in error messages
+- **outpoint**
+  - outpoint string or undefined
+- **name**
+  - parameter name used in error messages
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateOriginator
 
 Validate an originator hostname with an optional port. Ports are accepted
@@ -5386,12 +6041,13 @@ normalized originator or undefined
 
 Argument Details
 
-+ **s**
-  + originator string or undefined
+- **s**
+  - originator string or undefined
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateOutpointString
 
 Validate an outpoint string of the form txid.vout.
@@ -5408,10 +6064,10 @@ normalized outpoint string (validated txid and vout)
 
 Argument Details
 
-+ **outpoint**
-  + outpoint string
-+ **name**
-  + parameter name used in error messages
+- **outpoint**
+  - outpoint string
+- **name**
+  - parameter name used in error messages
 
 Throws
 
@@ -5420,6 +6076,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validatePositiveIntegerOrZero
 
 Validate a non-negative integer (zero allowed).
@@ -5436,10 +6093,10 @@ validated integer
 
 Argument Details
 
-+ **v**
-  + value to validate
-+ **name**
-  + parameter name used in error messages
+- **v**
+  - value to validate
+- **name**
+  - parameter name used in error messages
 
 Throws
 
@@ -5448,6 +6105,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateProveCertificateArgs
 
 Validate ProveCertificateArgs including optional certificate fields and reveal list.
@@ -5464,18 +6122,21 @@ ValidProveCertificateArgs
 
 Argument Details
 
-+ **args**
-  + ProveCertificateArgs
+- **args**
+  - ProveCertificateArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateRelinquishCertificateArgs
 
 Validate RelinquishCertificateArgs (type, serialNumber, certifier).
 
 ```ts
-export function validateRelinquishCertificateArgs(args: RelinquishCertificateArgs): ValidRelinquishCertificateArgs
+export function validateRelinquishCertificateArgs(
+  args: RelinquishCertificateArgs
+): ValidRelinquishCertificateArgs
 ```
 
 See also: [RelinquishCertificateArgs](./wallet.md#interface-relinquishcertificateargs), [ValidRelinquishCertificateArgs](./wallet.md#interface-validrelinquishcertificateargs)
@@ -5486,12 +6147,13 @@ ValidRelinquishCertificateArgs
 
 Argument Details
 
-+ **args**
-  + RelinquishCertificateArgs
+- **args**
+  - RelinquishCertificateArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateRelinquishOutputArgs
 
 Validate RelinquishOutputArgs (basket and output).
@@ -5508,16 +6170,19 @@ ValidRelinquishOutputArgs
 
 Argument Details
 
-+ **args**
-  + RelinquishOutputArgs
+- **args**
+  - RelinquishOutputArgs
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateRevealCounterpartyKeyLinkageArgs
 
 ```ts
-export function validateRevealCounterpartyKeyLinkageArgs(args: RevealCounterpartyKeyLinkageArgs): void
+export function validateRevealCounterpartyKeyLinkageArgs(
+  args: RevealCounterpartyKeyLinkageArgs
+): void
 ```
 
 See also: [RevealCounterpartyKeyLinkageArgs](./wallet.md#interface-revealcounterpartykeylinkageargs)
@@ -5525,6 +6190,7 @@ See also: [RevealCounterpartyKeyLinkageArgs](./wallet.md#interface-revealcounter
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateRevealSpecificKeyLinkageArgs
 
 ```ts
@@ -5536,6 +6202,7 @@ See also: [RevealSpecificKeyLinkageArgs](./wallet.md#interface-revealspecifickey
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateSatoshis
 
 Validate a satoshi amount.
@@ -5552,12 +6219,12 @@ validated satoshi number
 
 Argument Details
 
-+ **v**
-  + value to validate (integer number of satoshis)
-+ **name**
-  + parameter name used in error messages
-+ **min**
-  + optional minimum allowed satoshi value
+- **v**
+  - value to validate (integer number of satoshis)
+- **name**
+  - parameter name used in error messages
+- **min**
+  - optional minimum allowed satoshi value
 
 Throws
 
@@ -5566,6 +6233,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateSignActionArgs
 
 Validate SignActionArgs and apply defaults/flags.
@@ -5582,12 +6250,13 @@ ValidSignActionArgs
 
 Argument Details
 
-+ **args**
-  + SignActionArgs to validate
+- **args**
+  - SignActionArgs to validate
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateSignActionOptions
 
 Set all default true/false booleans to true or false if undefined.
@@ -5604,6 +6273,7 @@ See also: [SignActionOptions](./wallet.md#interface-signactionoptions), [ValidSi
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateStringLength
 
 Validate string length in bytes for UTF-8 encoded string.
@@ -5620,14 +6290,14 @@ the original string when valid
 
 Argument Details
 
-+ **s**
-  + string to validate
-+ **name**
-  + parameter name used in error messages
-+ **min**
-  + optional minimum byte length
-+ **max**
-  + optional maximum byte length
+- **s**
+  - string to validate
+- **name**
+  - parameter name used in error messages
+- **min**
+  - optional minimum byte length
+- **max**
+  - optional maximum byte length
 
 Throws
 
@@ -5636,6 +6306,7 @@ WERR_INVALID_PARAMETER when invalid
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateVerifyHmacArgs
 
 ```ts
@@ -5647,6 +6318,7 @@ See also: [VerifyHmacArgs](./wallet.md#interface-verifyhmacargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateVerifySignatureArgs
 
 ```ts
@@ -5658,6 +6330,7 @@ See also: [VerifySignatureArgs](./wallet.md#interface-verifysignatureargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateWalletArgs
 
 Runtime validation for every BRC-100 request before it crosses a wallet
@@ -5672,6 +6345,7 @@ See also: [CallType](./wallet.md#type-calltype)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateWalletDecryptArgs
 
 ```ts
@@ -5683,6 +6357,7 @@ See also: [WalletDecryptArgs](./wallet.md#interface-walletdecryptargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateWalletEncryptArgs
 
 ```ts
@@ -5694,6 +6369,7 @@ See also: [WalletEncryptArgs](./wallet.md#interface-walletencryptargs)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateWalletPayment
 
 Validate wallet payment remittance structure.
@@ -5710,12 +6386,13 @@ ValidWalletPayment or undefined
 
 Argument Details
 
-+ **args**
-  + WalletPayment or undefined
+- **args**
+  - WalletPayment or undefined
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Function: validateWalletResult
 
 Validate values crossing a wallet substrate boundary before application code
@@ -5730,25 +6407,27 @@ See also: [CallType](./wallet.md#type-calltype)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ## Types
 
-| | | |
-| --- | --- | --- |
-| [AcquireCertificateResult](#type-acquirecertificateresult) | [EntityIconURLStringMax500Bytes](#type-entityiconurlstringmax500bytes) | [PositiveIntegerMax10](#type-positiveintegermax10) |
-| [AcquisitionProtocol](#type-acquisitionprotocol) | [EntityNameStringMax100Bytes](#type-entitynamestringmax100bytes) | [PositiveIntegerOrZero](#type-positiveintegerorzero) |
-| [ActionStatus](#type-actionstatus) | [ErrorCodeString10To40Bytes](#type-errorcodestring10to40bytes) | [ProtocolString5To400Bytes](#type-protocolstring5to400bytes) |
-| [AtomicBEEF](#type-atomicbeef) | [ErrorDescriptionString20To200Bytes](#type-errordescriptionstring20to200bytes) | [PubKeyHex](#type-pubkeyhex) |
-| [BEEF](#type-beef) | [HexString](#type-hexstring) | [ReviewActionResultStatus](#type-reviewactionresultstatus) |
-| [Base64String](#type-base64string) | [ISOTimestampString](#type-isotimestampstring) | [SatoshiValue](#type-satoshivalue) |
-| [BasketStringUnder300Bytes](#type-basketstringunder300bytes) | [KeyIDStringUnder800Bytes](#type-keyidstringunder800bytes) | [SecurityLevel](#type-securitylevel) |
-| [BooleanDefaultFalse](#type-booleandefaultfalse) | [KeyringRevealer](#type-keyringrevealer) | [SendWithResultStatus](#type-sendwithresultstatus) |
-| [BooleanDefaultTrue](#type-booleandefaulttrue) | [LabelStringUnder300Bytes](#type-labelstringunder300bytes) | [TXIDHexString](#type-txidhexstring) |
-| [Byte](#type-byte) | [MakeWalletLogger](#type-makewalletlogger) | [TrustSelf](#type-trustself) |
-| [CallType](#type-calltype) | [OriginatorDomainNameStringUnder250Bytes](#type-originatordomainnamestringunder250bytes) | [VersionString7To30Bytes](#type-versionstring7to30bytes) |
-| [CertificateFieldNameUnder50Bytes](#type-certificatefieldnameunder50bytes) | [OutpointString](#type-outpointstring) | [WalletCounterparty](#type-walletcounterparty) |
-| [Counterparty](#type-counterparty) | [OutputTagStringUnder300Bytes](#type-outputtagstringunder300bytes) | [WalletErrorCode](#type-walleterrorcode) |
-| [DescriptionString5to2000Bytes](#type-descriptionstring5to2000bytes) | [PositiveInteger](#type-positiveinteger) | [WalletNetwork](#type-walletnetwork) |
-| [DescriptionString5to50Bytes](#type-descriptionstring5to50bytes) | [PositiveIntegerDefault10Max10000](#type-positiveintegerdefault10max10000) | [WalletProtocol](#type-walletprotocol) |
+|                                                                            |                                                                                          |                                                              |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [AcquireCertificateResult](#type-acquirecertificateresult)                 | [EntityIconURLStringMax500Bytes](#type-entityiconurlstringmax500bytes)                   | [PositiveIntegerOrZero](#type-positiveintegerorzero)         |
+| [AcquisitionProtocol](#type-acquisitionprotocol)                           | [EntityNameStringMax100Bytes](#type-entitynamestringmax100bytes)                         | [ProtocolString5To400Bytes](#type-protocolstring5to400bytes) |
+| [ActionStatus](#type-actionstatus)                                         | [ErrorCodeString10To40Bytes](#type-errorcodestring10to40bytes)                           | [PubKeyHex](#type-pubkeyhex)                                 |
+| [AtomicBEEF](#type-atomicbeef)                                             | [ErrorDescriptionString20To200Bytes](#type-errordescriptionstring20to200bytes)           | [ReviewActionResultStatus](#type-reviewactionresultstatus)   |
+| [BEEF](#type-beef)                                                         | [HexString](#type-hexstring)                                                             | [SatoshiValue](#type-satoshivalue)                           |
+| [Base64String](#type-base64string)                                         | [ISOTimestampString](#type-isotimestampstring)                                           | [SecurityLevel](#type-securitylevel)                         |
+| [BasketStringUnder300Bytes](#type-basketstringunder300bytes)               | [KeyIDStringUnder800Bytes](#type-keyidstringunder800bytes)                               | [SendWithResultStatus](#type-sendwithresultstatus)           |
+| [BooleanDefaultFalse](#type-booleandefaultfalse)                           | [KeyringRevealer](#type-keyringrevealer)                                                 | [TXIDHexString](#type-txidhexstring)                         |
+| [BooleanDefaultTrue](#type-booleandefaulttrue)                             | [LabelStringUnder300Bytes](#type-labelstringunder300bytes)                               | [TrustSelf](#type-trustself)                                 |
+| [Byte](#type-byte)                                                         | [MakeWalletLogger](#type-makewalletlogger)                                               | [VersionString7To30Bytes](#type-versionstring7to30bytes)     |
+| [CallType](#type-calltype)                                                 | [OriginatorDomainNameStringUnder250Bytes](#type-originatordomainnamestringunder250bytes) | [WalletCounterparty](#type-walletcounterparty)               |
+| [CertificateFieldNameUnder50Bytes](#type-certificatefieldnameunder50bytes) | [OutpointString](#type-outpointstring)                                                   | [WalletErrorCode](#type-walleterrorcode)                     |
+| [Counterparty](#type-counterparty)                                         | [OutputTagStringUnder300Bytes](#type-outputtagstringunder300bytes)                       | [WalletNetwork](#type-walletnetwork)                         |
+| [DecimalString](#type-decimalstring)                                       | [PositiveInteger](#type-positiveinteger)                                                 | [WalletProtocol](#type-walletprotocol)                       |
+| [DescriptionString5to2000Bytes](#type-descriptionstring5to2000bytes)       | [PositiveIntegerDefault10Max10000](#type-positiveintegerdefault10max10000)               |                                                              |
+| [DescriptionString5to50Bytes](#type-descriptionstring5to50bytes)           | [PositiveIntegerMax10](#type-positiveintegermax10)                                       |                                                              |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5765,24 +6444,35 @@ See also: [WalletCertificate](./wallet.md#interface-walletcertificate)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: AcquisitionProtocol
 
 ```ts
-export type AcquisitionProtocol = "direct" | "issuance"
+export type AcquisitionProtocol = 'direct' | 'issuance'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ActionStatus
 
 ```ts
-export type ActionStatus = "completed" | "unprocessed" | "sending" | "unproven" | "unsigned" | "nosend" | "nonfinal" | "failed"
+export type ActionStatus =
+  | 'completed'
+  | 'unprocessed'
+  | 'sending'
+  | 'unproven'
+  | 'unsigned'
+  | 'nosend'
+  | 'nonfinal'
+  | 'failed'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: AtomicBEEF
 
 ```ts
@@ -5794,6 +6484,7 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: BEEF
 
 ```ts
@@ -5805,6 +6496,7 @@ See also: [Byte](./wallet.md#type-byte)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: Base64String
 
 ```ts
@@ -5816,6 +6508,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: BasketStringUnder300Bytes
 
 ```ts
@@ -5827,6 +6520,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: BooleanDefaultFalse
 
 Analyzer note: the named primitive aliases in this file are the public
@@ -5842,6 +6536,7 @@ export type BooleanDefaultFalse = boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: BooleanDefaultTrue
 
 ```ts
@@ -5851,6 +6546,7 @@ export type BooleanDefaultTrue = boolean
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: Byte
 
 ```ts
@@ -5860,6 +6556,7 @@ export type Byte = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: CallType
 
 ```ts
@@ -5869,6 +6566,7 @@ export type CallType = keyof typeof calls
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: CertificateFieldNameUnder50Bytes
 
 ```ts
@@ -5880,6 +6578,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: Counterparty
 
 ```ts
@@ -5891,6 +6590,19 @@ See also: [PubKeyHex](./wallet.md#type-pubkeyhex), [PublicKey](./primitives.md#c
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
+### Type: DecimalString
+
+```ts
+export type DecimalString = string
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
 ### Type: DescriptionString5to2000Bytes
 
 DescriptionString5to2000Bytes alias type (documented).
@@ -5904,6 +6616,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: DescriptionString5to50Bytes
 
 ```ts
@@ -5915,6 +6628,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: EntityIconURLStringMax500Bytes
 
 ```ts
@@ -5926,6 +6640,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: EntityNameStringMax100Bytes
 
 ```ts
@@ -5937,6 +6652,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ErrorCodeString10To40Bytes
 
 ```ts
@@ -5948,6 +6664,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ErrorDescriptionString20To200Bytes
 
 ```ts
@@ -5959,6 +6676,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: HexString
 
 ```ts
@@ -5970,6 +6688,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ISOTimestampString
 
 ```ts
@@ -5981,6 +6700,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: KeyIDStringUnder800Bytes
 
 ```ts
@@ -5992,6 +6712,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: KeyringRevealer
 
 ```ts
@@ -6003,6 +6724,7 @@ See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: LabelStringUnder300Bytes
 
 ```ts
@@ -6014,6 +6736,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: MakeWalletLogger
 
 ```ts
@@ -6025,6 +6748,7 @@ See also: [WalletLoggerInterface](./wallet.md#interface-walletloggerinterface), 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: OriginatorDomainNameStringUnder250Bytes
 
 ```ts
@@ -6036,6 +6760,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: OutpointString
 
 ```ts
@@ -6047,6 +6772,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: OutputTagStringUnder300Bytes
 
 ```ts
@@ -6058,6 +6784,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: PositiveInteger
 
 ```ts
@@ -6067,6 +6794,7 @@ export type PositiveInteger = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: PositiveIntegerDefault10Max10000
 
 ```ts
@@ -6076,6 +6804,7 @@ export type PositiveIntegerDefault10Max10000 = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: PositiveIntegerMax10
 
 ```ts
@@ -6085,6 +6814,7 @@ export type PositiveIntegerMax10 = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: PositiveIntegerOrZero
 
 ```ts
@@ -6094,6 +6824,7 @@ export type PositiveIntegerOrZero = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ProtocolString5To400Bytes
 
 ```ts
@@ -6105,6 +6836,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: PubKeyHex
 
 ```ts
@@ -6116,6 +6848,7 @@ See also: [HexString](./wallet.md#type-hexstring)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: ReviewActionResultStatus
 
 Indicates status of a new Action following a `createAction` or `signAction` in immediate mode:
@@ -6127,12 +6860,13 @@ When `acceptDelayedBroadcast` is false.
 'serviceError': The broadcast services are currently unable to reach the bitcoin network. The action is now queued for delayed retries.
 
 ```ts
-export type ReviewActionResultStatus = "success" | "doubleSpend" | "serviceError" | "invalidTx"
+export type ReviewActionResultStatus = 'success' | 'doubleSpend' | 'serviceError' | 'invalidTx'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: SatoshiValue
 
 ```ts
@@ -6142,8 +6876,8 @@ export type SatoshiValue = number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
-### Type: SecurityLevel
 
+### Type: SecurityLevel
 
 SecurityLevel for protocols.
 0 = Silently grants the request with no user interation.
@@ -6157,15 +6891,17 @@ export type SecurityLevel = 0 | 1 | 2
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: SendWithResultStatus
 
 ```ts
-export type SendWithResultStatus = "unproven" | "sending" | "failed"
+export type SendWithResultStatus = 'unproven' | 'sending' | 'failed'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: TXIDHexString
 
 ```ts
@@ -6177,6 +6913,7 @@ See also: [HexString](./wallet.md#type-hexstring)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: TrustSelf
 
 Controls behavior of input BEEF validation.
@@ -6186,12 +6923,13 @@ If `known`, input transactions may omit supporting validity proof data for all T
 If undefined, input BEEFs must be complete and valid.
 
 ```ts
-export type TrustSelf = "known"
+export type TrustSelf = 'known'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: VersionString7To30Bytes
 
 ```ts
@@ -6203,6 +6941,7 @@ See also: [string](./remittance.md#function-string)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: WalletCounterparty
 
 ```ts
@@ -6214,6 +6953,7 @@ See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: WalletErrorCode
 
 ```ts
@@ -6225,22 +6965,21 @@ See also: [walletErrors](./wallet.md#enum-walleterrors)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: WalletNetwork
 
 ```ts
-export type WalletNetwork = "mainnet" | "testnet"
+export type WalletNetwork = 'mainnet' | 'testnet'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Type: WalletProtocol
 
 ```ts
-export type WalletProtocol = [
-    SecurityLevel,
-    ProtocolString5To400Bytes
-]
+export type WalletProtocol = [SecurityLevel, ProtocolString5To400Bytes]
 ```
 
 See also: [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes), [SecurityLevel](./wallet.md#type-securitylevel)
@@ -6248,12 +6987,13 @@ See also: [ProtocolString5To400Bytes](./wallet.md#type-protocolstring5to400bytes
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ## Enums
 
-| |
-| --- |
+|                                        |
+| -------------------------------------- |
 | [SecurityLevels](#enum-securitylevels) |
-| [walletErrors](#enum-walleterrors) |
+| [walletErrors](#enum-walleterrors)     |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6263,9 +7003,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export enum SecurityLevels {
-    Silent = 0,
-    App = 1,
-    Counterparty = 2
+  Silent = 0,
+  App = 1,
+  Counterparty = 2
 }
 ```
 
@@ -6274,33 +7014,35 @@ See also: [Counterparty](./wallet.md#type-counterparty)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Enum: walletErrors
 
 ```ts
 export enum walletErrors {
-    unknownError = 1,
-    unsupportedAction = 2,
-    invalidHmac = 3,
-    invalidSignature = 4,
-    reviewActions = 5,
-    invalidParameter = 6,
-    insufficientFunds = 7,
-    abortRefused = 8
+  unknownError = 1,
+  unsupportedAction = 2,
+  invalidHmac = 3,
+  invalidSignature = 4,
+  reviewActions = 5,
+  invalidParameter = 6,
+  insufficientFunds = 7,
+  abortRefused = 8
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ## Variables
 
-| |
-| --- |
+|                                                                                  |
+| -------------------------------------------------------------------------------- |
 | [MAXIMUM_CERTIFICATE_REVEAL_FIELDS](#variable-maximum_certificate_reveal_fields) |
-| [MAXIMUM_DISCOVERY_ATTRIBUTES](#variable-maximum_discovery_attributes) |
-| [MAXIMUM_SEND_WITH_TRANSACTIONS](#variable-maximum_send_with_transactions) |
-| [MAX_WALLET_WIRE_FRAME_BYTES](#variable-max_wallet_wire_frame_bytes) |
-| [specOpThrowReviewActions](#variable-specopthrowreviewactions) |
+| [MAXIMUM_DISCOVERY_ATTRIBUTES](#variable-maximum_discovery_attributes)           |
+| [MAXIMUM_SEND_WITH_TRANSACTIONS](#variable-maximum_send_with_transactions)       |
+| [MAX_WALLET_WIRE_FRAME_BYTES](#variable-max_wallet_wire_frame_bytes)             |
+| [specOpThrowReviewActions](#variable-specopthrowreviewactions)                   |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6315,6 +7057,7 @@ MAXIMUM_CERTIFICATE_REVEAL_FIELDS = 100
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Variable: MAXIMUM_DISCOVERY_ATTRIBUTES
 
 ```ts
@@ -6324,6 +7067,7 @@ MAXIMUM_DISCOVERY_ATTRIBUTES = 32
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Variable: MAXIMUM_SEND_WITH_TRANSACTIONS
 
 ```ts
@@ -6333,6 +7077,7 @@ MAXIMUM_SEND_WITH_TRANSACTIONS = 1000
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Variable: MAX_WALLET_WIRE_FRAME_BYTES
 
 ```ts
@@ -6342,10 +7087,11 @@ MAX_WALLET_WIRE_FRAME_BYTES = 256 * 1024 * 1024
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
 ### Variable: specOpThrowReviewActions
 
 ```ts
-specOpThrowReviewActions = "a496e747fc3ad5fabdd4ae8f91184e71f87539bd3d962aa2548942faaaf0047a"
+specOpThrowReviewActions = 'a496e747fc3ad5fabdd4ae8f91184e71f87539bd3d962aa2548942faaaf0047a'
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)

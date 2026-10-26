@@ -63,22 +63,28 @@ Before editing:
 4. inspect open issues and pull requests for overlapping work; and
 5. determine the project tier and required consumer profiles from governance.
 
-Maintainer-authorized agents for `sirdeggen` and `ty-everett` must also follow
+Maintainer-authorized agents for `sirdeggen`, `ty-everett`, and `BraydenLangley` must also follow
 the [BotBoard and per-turn Lockfile protocol](./AGENTS.md#maintainer-botboard-and-lockfile-protocol).
 Other contributors do not need a BotBoard handle.
 
 ## Design and compatibility rules
 
-The default expectation is no consumer breakage.
+Backward compatibility is a project-wide invariant: no change may break an
+established compatibility contract or any BRC-100 application-wallet boundary,
+even in a new major version. Read the [compatibility contract](./docs/about/compatibility.md).
 
 - Preserve public exports, declaration shapes, import conditions, supported
   runtime targets, documented inputs, defaults, errors, wire formats,
   serialization, persistence, browser/mobile behavior, and operational
   contracts.
-- Prefer additive changes and deprecation over removal. A breaking change
-  requires explicit maintainer approval, the appropriate SemVer release,
-  before/after migration instructions, cross-package coordination, and a
-  rollback or forward-fix plan.
+- Use additive changes and retain established contracts. Major versions,
+  deprecation notices, maintainer approval, and migration plans do not authorize
+  breaking those contracts. Independently deployed applications and wallets
+  cannot be required to upgrade together.
+- For application-wallet changes, prove old client/new wallet and new client/old
+  wallet interoperability using published clients and representative transports.
+  Retain regression tests for legacy encodings and validation. Record exact
+  versions, commands, results, and limitations before merge or publication.
 - Treat specifications and conformance vectors as implementation-independent
   contracts. A TypeScript-only convenience must not accidentally make the
   reference behavior incompatible with another conforming implementation.
@@ -227,8 +233,9 @@ Do not introduce a broad override or suppression. If no compatible upstream
 fix exists, register the narrowest temporary exception with an owner, evidence,
 review date, objective removal condition, and tests. Rehearse removal after
 relevant upstream releases. Elapsed documentation and exception review dates
-are maintenance warnings in source CI, enforced by the separate weekly
-Maintenance review deadlines workflow. Passing time alone must not block a PR;
+are advisory maintenance warnings in all source and maintenance checks.
+Dependency release age never blocks resolution or merging; vulnerability audits,
+provenance checks, and lifecycle-script restrictions remain required. Passing time alone must not block a PR;
 structural errors, generated drift, security audits, and code checks still do.
 
 ## Versions, changelogs, and migrations

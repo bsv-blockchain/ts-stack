@@ -129,7 +129,9 @@ test('authenticates and stages a complete 4 MiB CHIRP chunk at the default bound
     body: bytes
   })
   expect(response.status).toBe(201)
-  expect(received).toEqual([Buffer.from(bytes)])
+  expect(received).toHaveLength(1)
+  // Native byte comparison checks the complete chunk without millions of Jest object visits.
+  expect(received[0].equals(Buffer.from(bytes))).toBe(true)
 }, 30000)
 
 test('rejects bytes changed after signing without staging an object', async () => {

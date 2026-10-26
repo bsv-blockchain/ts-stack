@@ -1,5 +1,7 @@
 # GASP — Graph Aware Sync Protocol
 
+Patch candidate `1.3.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 The **Graph Aware Sync Protocol** (GASP) is a powerful protocol for synchronizing BSV transaction data between two or more parties. Unlike simplistic “UTXO list” or “transaction pushing” mechanisms, GASP allows each participant to incrementally build a _graph_ of transaction ancestors and descendants. This ensures:
 
 1. **Legitimacy**: Parties only finalize data they can validate, using Merkle proofs, script evaluation, and the other rules of SPV.

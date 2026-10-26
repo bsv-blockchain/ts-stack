@@ -4,9 +4,9 @@ title: '@bsv/overlay-express'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-express'
-version: '2.7.4'
-last_updated: '2026-09-26'
-last_verified: '2026-09-26'
+version: '2.8.0'
+last_updated: '2026-10-20'
+last_verified: '2026-10-20'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express'
 status: stable
@@ -15,7 +15,7 @@ tags: ['overlay', 'express', 'http']
 
 # @bsv/overlay-express
 
-This source candidate declares SDK peer `^2.4.0 || ^3.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.0 || ^3.0.0 || ^4.0.0`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -63,6 +63,41 @@ process.once('SIGINT', () => void server.close())
 - **Chaintracks integration** — Header resolution and reorg SSE for BASM
 - **OverlayMonitor** — Lookup probes plus optional admin maintenance actions
 - **Graceful lifecycle** — Idempotent `close()` drains HTTP and closes background work and databases
+
+## Progressive and live lookup candidate
+
+The optional `@bsv/overlay-express/root-eviction-response` entry connects
+authenticated response queueing to a durable root-advertisement journal.
+`guardRootAdvertisementResponse` requires middleware 2.3.0, SDK 3.3.0, a revision
+captured before hydration, every disclosed target and current synchronous data/control
+access checks. It resets a stale response in full and separately fences the signed
+replacement. It does not mount routes or automatically guard existing serving
+paths. See [root coordination](../../guides/root-eviction-coordination.md).
+
+The optional `@bsv/overlay-express/root-eviction` entry exposes
+`createRootEvictionRouter` for explicit request/status integration. A shared
+`RootEvictionService` and durable journal preserve received bytes, original
+selection and final current access through packet and HTTP signing. Wildcard
+credential-free CORS remains the default; exact origin lists are opt-in. Mount
+before generic parsers with the origin's actual shared authentication middleware.
+Alternatively, call `configureRootEviction` before `start()` with the server's
+wallet identity. The host shares authentication, mounts the handshake once, inherits
+its browser policy and clamps byte limits to host bounds. The application retains
+journal and worker lifecycle ownership. Capabilities, scheduling and complete serving/admission/GASP enforcement still
+require separate integration; no existing route is changed automatically.
+
+The unpublished 2.8.0 candidate adds `configureOutputLookup` and the separate
+`@bsv/overlay-express/output-lookup` entry. Supply a durable companion service,
+signed capability identity, chain and explicit allowed browser origins before
+starting the host. The opt-in routes share authentication and enforce their own
+framing, selection, byte and physical-work limits. The host leaves injected
+provider database ownership with the application.
+
+The [durable lookup guide](../../guides/durable-live-lookup.md) explains the provider,
+SQLite recovery, current authorization and mounting rules. The feature requires
+SDK 3.3.0; legacy root imports and finite routes remain available without enabling
+it. The candidate is not a package publication or a claim of complete application
+qualification.
 
 ## Common patterns
 
@@ -244,8 +279,52 @@ monitor.start()
 - [@bsv/overlay-discovery-services](./overlay-discovery-services.md) — SHIP/SLAP implementation
 - [@bsv/gasp](./gasp.md) — Graph Aware Sync Protocol
 
+## Registering additional routers
+
+`registerRouter(path, factory)` mounts an application router inside the server. The factory runs
+during `start()`, after the BRC-103 authentication middleware and before the admin routes and the
+404 handler, so the router inherits CORS, body parsing, response size limits, and
+`req.auth.identityKey`. Unauthenticated requests arrive with `req.auth.identityKey` equal to
+`'unknown'`. Call it before `start()`.
+
+```ts
+server.registerRouter('/', ({ engine, wallet }) => {
+  if (wallet === undefined) throw new Error('A server wallet is required')
+  const router = express.Router()
+  router.get('/status', (_req, res) => res.json({ ok: true }))
+  return router
+})
+```
+
+The `wallet` in the context is the BRC-103 authentication wallet. It is built without a storage
+provider, so it signs and verifies but cannot create or internalize actions: `createAction` and
+`internalizeAction` throw. A router that takes payment, such as a BRC-178 host from `@bsv/eqc`,
+must build its own storage-backed wallet from the same root key as the server, so that its
+identity equals the BRC-103 session key and the SLAP-advertised key.
+
+Registered routers inherit the response size limit (`MAX_RESPONSE_BYTES`: 4 MiB on the `small`
+profile, 8 MiB on `standard`). A larger JSON body is replaced by a 413 after the handler ran, so a
+router that is paid before it answers must bound its own responses below that limit.
+
 ## Reference
 
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/overlay-express/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay-express)
 - [npm](https://www.npmjs.com/package/@bsv/overlay-express)
+
+## Optional authenticated proposals
+
+`configureProposals` before `start` or the separate
+`@bsv/overlay-express/proposals` router composes the durable proposal service,
+service-owned disclosure validator and shared journal/native-enqueue gate.
+This entry requires SDK 3.3.0 and auth middleware 2.3; legacy root peer floors and
+routes remain unchanged. A current channel read differs from recovery of a
+retained publication ACK. Both require current authorization and original
+contract bounds after response signing. One sanitized replacement error may be
+signed, with independently checked control permission before native enqueue.
+
+The host shares authentication and handshake ownership with lookup/root companions,
+keeps physical service work counted through settlement, clamps byte limits and
+inherits host CORS policy unless explicitly overridden. Storage, capability
+publication, verified recovery, expiry and admission workers remain host-owned.
+See the [proposal guide](../../guides/non-final-proposals.md) for composition and recovery contracts.

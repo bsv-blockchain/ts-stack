@@ -11,6 +11,7 @@ import { resolveSourceDetails } from '../script/templates/SignatureUtils.js'
 import Transaction from '../transaction/Transaction.js'
 import { validateWalletResult } from '../wallet/WalletResultValidation.js'
 import { utf8ByteLength } from '../primitives/UTF8.js'
+import { OVERLAY_LOOKUP_SERVICE_NAME_PATTERN, OVERLAY_TOPIC_NAME_PATTERN } from './OverlayNames.js'
 import {
   OriginatorDomainNameStringUnder250Bytes,
   WalletInterface,
@@ -29,8 +30,8 @@ export interface OverlayDiscoveryAdvertisement {
 const MAX_DISCOVERY_FIELD_BYTES = 4096
 const MAX_DISCOVERY_PAYLOAD_BYTES = 8192
 const canonicalNamePattern: Record<OverlayDiscoveryProtocol, RegExp> = {
-  SHIP: /^(?=.{1,50}$)tm_[a-z]+(?:_[a-z]+)*$/,
-  SLAP: /^(?=.{1,50}$)ls_[a-z]+(?:_[a-z]+)*$/
+  SHIP: OVERLAY_TOPIC_NAME_PATTERN,
+  SLAP: OVERLAY_LOOKUP_SERVICE_NAME_PATTERN
 }
 const HTTPS_URI_PREFIXES = [
   'https://',

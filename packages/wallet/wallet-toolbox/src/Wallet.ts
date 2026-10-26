@@ -1,3 +1,13 @@
+import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
+import {
+  BRC197_INTERNALIZATION_PROFILE,
+  assertBrc197Recipient,
+  brc197ChildPublicKey,
+  ownBrc197InternalizeActionArgs,
+  validateBrc197InternalizeActionArgs,
+  type Brc197InternalizeActionArgs,
+  type Brc197InternalizationCapabilities
+} from './sdk/Brc197Internalization'
 import {
   type ValidAcquireIssuanceCertificateArgs,
   type ValidCreateActionArgs,
@@ -133,6 +143,7 @@ import {
 import { WalletServices } from './sdk/WalletServices.interfaces'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_NOT_IMPLEMENTED, WERR_REVIEW_ACTIONS } from './sdk/WERR_errors'
+import { numericTotalOutputs } from './utility/numericTotalOutputs'
 import { AuthId, StorageCreateActionResult, StorageInternalizeActionResult } from './sdk/WalletStorage.interfaces'
 import { WalletError } from './sdk/WalletError'
 import { asArray } from './utility/utilityHelpers.noBuffer'
@@ -1256,6 +1267,51 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return r
   }
 
+  /** Before locking listing value, callers must obtain this explicit local capability.
+   * It verifies protected public derivation and the currently authorized writer.
+   * It does not establish target miner policy, listing lineage or chain currentness. */
+  async getBrc197InternalizationCapabilities(): Promise<Brc197InternalizationCapabilities> {
+    const capability = this.storage.getBrc197InternalizationCapabilities
+    if (typeof capability !== 'function')
+      throw new WERR_NOT_IMPLEMENTED('Local BRC-197 fixed-child internalization is unsupported.')
+    const result = await capability.call(this.storage)
+    const root = await this.getPublicKey({ identityKey: true })
+    const child = await this.getPublicKey({
+      protocolID: [2, '3241645161d8'],
+      keyID: 'brc197 authority',
+      counterparty: 'anyone',
+      forSelf: true
+    })
+    if (
+      result.profile !== BRC197_INTERNALIZATION_PROFILE ||
+      result.recipientIdentityKey !== root.publicKey ||
+      result.childPublicKey !== child.publicKey ||
+      child.publicKey !== brc197ChildPublicKey(root.publicKey)
+    ) {
+      throw new WERR_INVALID_PARAMETER('storage', 'the authenticated protected BRC-197 child owner')
+    }
+    return { ...result }
+  }
+
+  /** Separate local profile. Ordinary internalizeAction and remote wire schemas are unchanged. */
+  async internalizeBrc197Action(
+    args: Brc197InternalizeActionArgs,
+    originator?: OriginatorDomainNameStringUnder250Bytes
+  ): Promise<StorageInternalizeActionResult> {
+    validateOriginator(originator)
+    const owned = ownBrc197InternalizeActionArgs(args)
+    const { auth, vargs } = this.validateAuthAndArgs(owned, validateBrc197InternalizeActionArgs)
+    assertBrc197Recipient(owned, auth.identityKey)
+    if (vargs.labels.includes(specOpThrowReviewActions)) throwDummyReviewActions()
+    if (hasBrc177NoSendExpiryLabel(vargs.labels)) {
+      throw new WERR_INVALID_PARAMETER('labels', 'BRC-177 noSend expiry labels only on outgoing createAction requests')
+    }
+    await this.getBrc197InternalizationCapabilities()
+    const result = await internalizeBrc197Action(this, auth, owned)
+    throwIfUnsuccessfulInternalizeAction(result)
+    return result
+  }
+
   async abortAction(
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
@@ -1410,7 +1466,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
         r.utxos.push({ satoshis: o.satoshis, outpoint: o.outpoint })
       }
       offset += change.outputs.length
-      if (offset >= change.totalOutputs) break
+      if (offset >= numericTotalOutputs(change)) break
     }
     return r
   }
@@ -1426,8 +1482,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
     if (args.basket !== specOpWalletBalance) {
       args.tags = [...(args.tags || []), specOpWalletBalance]
     }
-    const r = await this.listOutputs(args)
-    return r.totalOutputs
+    return numericTotalOutputs(await this.listOutputs(args))
   }
 
   /**
@@ -1591,6 +1646,14 @@ function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
   const balancePrefix = 'balance '
   if (vargs.basket.startsWith(balancePrefix)) {
     vargs.basket = vargs.basket.slice(balancePrefix.length)
+    // BRC-112: `balance p <module> <basket>` is never allowed; a module may offer
+    // `p <module> balance <basket>` instead.
+    if (vargs.basket.startsWith('p ')) {
+      throw new WERR_INVALID_PARAMETER(
+        'basket',
+        `not a BRC-99 module basket: BRC-112 rejects \`balance p <module> <basket>\`; use \`p <module> balance <basket>\` if the module offers it.`
+      )
+    }
     vargs.tags = [...vargs.tags, specOpWalletBalance]
   }
   return vargs

@@ -29,6 +29,11 @@ function packetFor(part, statuses = ['Killed'], mode = 'full') {
   value.files = Object.fromEntries(
     Object.entries(value.files).filter(([file]) => part.evidence.sources.has(file))
   )
+  for (const [file, result] of Object.entries(value.files))
+    result.source = part.evidence.sources.get(file)
+  const selected = new Set(part.evidence.mutants.map(mutant => mutant.id))
+  for (const file of Object.values(value.files))
+    file.mutants = file.mutants.filter(mutant => selected.has(mutant.id))
   let index = 0
   for (const file of Object.values(value.files))
     for (const mutant of file.mutants) {
@@ -51,6 +56,85 @@ function packetFor(part, statuses = ['Killed'], mode = 'full') {
 }
 const combine = packets =>
   combinePartitionEvidence(identity, 'one', parts, packets, policy, 'full', evidence)
+
+const sharedSourceParts = [
+  { id: 'api-first', ids: parts[0].evidence.mutants.slice(0, 3) },
+  { id: 'api-rest', ids: parts[0].evidence.mutants.slice(3) }
+].map(({ id, ids }) => ({
+  id,
+  evidence: {
+    ...parts[0].evidence,
+    mutants: ids,
+    config: { ...parts[0].evidence.config, mutate: [`src/api.ts:${id === 'api-first' ? 1 : 2}`] }
+  }
+}))
+const rangeParts = [...sharedSourceParts, parts[1]]
+const combineRanges = (packets, expected = rangeParts) =>
+  combinePartitionEvidence(identity, 'one', expected, packets, policy, 'full', evidence)
+
+test('byte-identical same-file parts prove the complete global inventory and preserve order-independent aggregation', () => {
+  const packets = rangeParts.map(part => packetFor(part))
+  const result = combineRanges(packets)
+  assert.equal(result.receipt.metrics.valid, 10)
+  assert.equal(result.receipt.metrics.score, 100)
+  assert.deepEqual(combineRanges([...packets].reverse()), result)
+  assert.equal(JSON.parse(result.reportBytes).files['src/api.ts'].mutants.length, 5)
+  const below = [packetFor(rangeParts[0], ['Survived', 'Survived']), ...packets.slice(1)]
+  assert.throws(() => combineRanges(below), /below 90/)
+})
+
+test('same-file parts cannot hide missing, duplicated or different-source canonical tuples', () => {
+  const packets = rangeParts.map(part => packetFor(part))
+  assert.throws(() => combineRanges(packets.slice(1)), /Missing/)
+  assert.throws(() => combineRanges([packets[0], packets[0], ...packets.slice(1)]), /duplicate/)
+  const duplicate = {
+    ...rangeParts[1],
+    evidence: {
+      ...rangeParts[1].evidence,
+      mutants: [...rangeParts[1].evidence.mutants, rangeParts[0].evidence.mutants[0]]
+    }
+  }
+  assert.throws(
+    () =>
+      combineRanges(
+        [packets[0], packetFor(duplicate), packets[2]],
+        [rangeParts[0], duplicate, rangeParts[2]]
+      ),
+    /inventory/
+  )
+  const changed = structuredClone(packets)
+  const changedReport = JSON.parse(changed[1].reportBytes)
+  changedReport.files['src/api.ts'].source += '\n// changed bytes'
+  changed[1].reportBytes = JSON.stringify(changedReport)
+  assert.throws(() => combineRanges(changed))
+  const differentSource = {
+    ...rangeParts[1],
+    evidence: {
+      ...rangeParts[1].evidence,
+      sources: new Map([['src/api.ts', evidence.sources.get('src/api.ts') + '\n// different']])
+    }
+  }
+  assert.throws(
+    () =>
+      combineRanges(
+        [packets[0], packetFor(differentSource), packets[2]],
+        [rangeParts[0], differentSource, rangeParts[2]]
+      ),
+    /source bytes differ/
+  )
+  const omission = {
+    ...rangeParts[1],
+    evidence: { ...rangeParts[1].evidence, mutants: rangeParts[1].evidence.mutants.slice(1) }
+  }
+  assert.throws(
+    () =>
+      combineRanges(
+        [packets[0], packetFor(omission), packets[2]],
+        [rangeParts[0], omission, rangeParts[2]]
+      ),
+    /inventory/
+  )
+})
 
 test('combined score uses the unchanged global denominator while retaining all disjoint canonical mutants', () => {
   const packets = [packetFor(parts[0], ['Survived']), packetFor(parts[1])]
@@ -147,4 +231,85 @@ test('aggregate destinations cannot replace, contain or descend into raw evidenc
     assert.doesNotThrow(() => validateEvidencePaths('/workspace/raw', output))
   assert.throws(() => validateEvidencePaths('/workspace/raw', '/'), /disjoint/)
   assert.throws(() => validateEvidencePaths('/', '/workspace/result'), /disjoint/)
+})
+
+test('line-split parts of one file merge into the exact canonical inventory and fail on gaps or duplicates', () => {
+  const key = mutant =>
+    JSON.stringify([
+      mutant.location.start.line,
+      mutant.location.start.column,
+      mutant.mutatorName,
+      mutant.replacement
+    ])
+  const api = evidence.mutants.filter(mutant => mutant.fileName === 'src/api.ts')
+  assert.ok(api.length >= 2)
+  const half = Math.floor(api.length / 2)
+  const slice = (id, file, mutants) => ({
+    id,
+    evidence: {
+      ...evidence,
+      sources: new Map([[file, evidence.sources.get(file)]]),
+      mutants,
+      config: { ...evidence.config, mutate: [`${file}:${id}`] }
+    }
+  })
+  const lineParts = [
+    slice('api-1', 'src/api.ts', api.slice(0, half)),
+    slice('api-2', 'src/api.ts', api.slice(half)),
+    slice(
+      'other',
+      'src/other.ts',
+      evidence.mutants.filter(mutant => mutant.fileName === 'src/other.ts')
+    )
+  ]
+  const packet = part => {
+    const value = report()
+    value.config = structuredClone(part.evidence.config)
+    const owned = new Set(part.evidence.mutants.map(key))
+    value.files = Object.fromEntries(
+      Object.entries(value.files)
+        .filter(([file]) => part.evidence.sources.has(file))
+        .map(([file, result]) => [
+          file,
+          { ...result, mutants: result.mutants.filter(mutant => owned.has(key(mutant))) }
+        ])
+    )
+    let index = 0
+    for (const file of Object.values(value.files))
+      for (const mutant of file.mutants) {
+        mutant.id = String(index++)
+        mutant.status = 'Killed'
+      }
+    const reportBytes = JSON.stringify(value)
+    const execution = JSON.parse(executionFor(reportBytes))
+    execution.partitionId = part.id
+    const executionBytes = JSON.stringify(execution)
+    return {
+      reportBytes,
+      executionBytes,
+      receipt: partitionReceipt(
+        identity,
+        { targetId: 'one', partitionId: part.id, reportBytes, executionBytes },
+        { policy, mode: 'full', evidence: part.evidence }
+      )
+    }
+  }
+  const merge = (planned, packets) =>
+    combinePartitionEvidence(identity, 'one', planned, packets, policy, 'full', evidence)
+  const packets = lineParts.map(packet)
+  const result = merge(lineParts, packets)
+  assert.equal(result.receipt.metrics.valid, evidence.mutants.length)
+  const merged = JSON.parse(result.reportBytes).files['src/api.ts'].mutants
+  assert.equal(merged.length, api.length)
+  assert.equal(new Set(merged.map(mutant => mutant.id)).size, api.length)
+  assert.deepEqual(merge(lineParts, [...packets].reverse()).receipt, result.receipt)
+  assert.throws(() => merge(lineParts, packets.slice(1)), /Missing/)
+
+  // A part that re-tests a neighbour's mutant double-counts the file and fails.
+  const overlapping = [
+    slice('api-1', 'src/api.ts', api.slice(0, half + 1)),
+    lineParts[1],
+    lineParts[2]
+  ]
+  assert.throws(() => merge(overlapping, overlapping.map(packet)), /inventory/)
 })
