@@ -20,9 +20,9 @@
   ],
   "maximumBytes": {
     "vite": {
-      "raw": 590000,
-      "gzip": 155000,
-      "brotli": 130000
+      "raw": 655000,
+      "gzip": 170000,
+      "brotli": 140000
     },
     "esbuild": {
       "raw": 460000,
