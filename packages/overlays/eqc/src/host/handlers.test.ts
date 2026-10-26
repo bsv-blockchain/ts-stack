@@ -385,10 +385,12 @@ describe('collect', () => {
       expect.objectContaining({ outputIndex: 1, satoshis: 250 })
     ])
 
+    // The response was lost: the same collect again replays the delivery without a new charge.
     const replay = recorder()
     await host.collect(request(payer.identityKey, body), replay)
-    expect(replay.statusCode).toBe(409)
-    expect(replay.body.code).toBe('ERR_QUERY_SETTLED')
+    expect(replay.statusCode).toBe(200)
+    expect(replay.body).toEqual(response.body)
+    expect(wallet.internalized).toHaveLength(1)
   })
 
   it('refuses a settled query on the query route too', async () => {
@@ -524,6 +526,17 @@ describe('collect', () => {
       responses.map(async r => await host.collect(request(payer.identityKey, body), r))
     )
     expect(responses.map(r => r.statusCode).sort()).toEqual([200, 409, 409])
+    expect(responses.filter(r => r.statusCode === 409).map(r => r.body.code)).toEqual([
+      'ERR_QUERY_SETTLING',
+      'ERR_QUERY_SETTLING'
+    ])
+    expect(wallet.internalized).toHaveLength(1)
+
+    // Collecting again once the settlement finished replays the one delivery.
+    const retry = recorder()
+    await host.collect(request(payer.identityKey, body), retry)
+    expect(retry.statusCode).toBe(200)
+    expect(retry.body).toEqual(responses.find(r => r.statusCode === 200)?.body)
     expect(wallet.internalized).toHaveLength(1)
   })
 
@@ -715,5 +728,141 @@ describe('collect', () => {
         contentHash: attestation.contentHash
       })
     ).toEqual({ verdict: 'ok', payload: PAYLOAD, supplement: [] })
+  })
+})
+
+describe('paid delivery recovery', () => {
+  async function paidQuery(store: InMemoryPendingStore, now: () => number) {
+    const wallet = new HostWallet()
+    const options = {
+      wallet,
+      providers: [bytesProvider('relay-lookup', async () => PAYLOAD)],
+      store,
+      now,
+      logger: { error: () => undefined }
+    }
+    const host = createEconomicQueryHost(options)
+    const payer = new PayerWallet()
+    const attestation = parseAttestation((await attest(host, makeQuery(payer.identityKey))).body)
+    const ranking = [new HostWallet().identityKey, wallet.identityKey, new HostWallet().identityKey]
+    const payment = await pay(payer, attestation.queryId, ranking, [500, 250, 250], 2)
+    const body = {
+      type: 'collect',
+      queryId: attestation.queryId,
+      contentHash: attestation.contentHash,
+      ranking,
+      payment
+    }
+    /** A second host process over the same store and the same key, as after a restart. */
+    const restart = (): EconomicQueryHost => createEconomicQueryHost(options)
+    return { host, wallet, payer, attestation, body, restart }
+  }
+
+  it('replays the delivery to a retry without a payment, and to nobody else', async () => {
+    const store = new InMemoryPendingStore({}, () => NOW)
+    const { host, wallet, payer, body } = await paidQuery(store, () => NOW)
+    const first = recorder()
+    await host.collect(request(payer.identityKey, body), first)
+    expect(first.statusCode).toBe(200)
+
+    const { payment: _payment, ...unpaid } = body
+    const retry = recorder()
+    await host.collect(request(payer.identityKey, unpaid), retry)
+    expect([retry.statusCode, retry.body]).toEqual([200, first.body])
+
+    const stranger = recorder()
+    await host.collect(request(new PayerWallet().identityKey, body), stranger)
+    expect([stranger.statusCode, stranger.body.code]).toEqual([404, 'ERR_QUERY_UNKNOWN'])
+
+    const wrongHash = recorder()
+    await host.collect(
+      request(payer.identityKey, { ...body, contentHash: 'ab'.repeat(32) }),
+      wrongHash
+    )
+    expect([wrongHash.statusCode, wrongHash.body.code]).toEqual([409, 'ERR_HASH_MISMATCH'])
+    expect(wallet.internalized).toHaveLength(1)
+  })
+
+  it('replays after the query expired, until the delivery retention ends', async () => {
+    let now = NOW
+    const store = new InMemoryPendingStore({ deliveryRetentionMs: 120_000 }, () => now)
+    const { host, payer, body } = await paidQuery(store, () => now)
+    const first = recorder()
+    await host.collect(request(payer.identityKey, body), first)
+
+    now = NOW + 119_999
+    const late = recorder()
+    await host.collect(request(payer.identityKey, body), late)
+    expect([late.statusCode, late.body]).toEqual([200, first.body])
+
+    now = NOW + 120_000
+    const gone = recorder()
+    await host.collect(request(payer.identityKey, body), gone)
+    expect(gone.statusCode).toBe(404)
+  })
+
+  it('answers 409 once the retained delivery is dropped inside the grace period', async () => {
+    let now = NOW
+    const store = new InMemoryPendingStore({ deliveryRetentionMs: 1000 }, () => now)
+    const { host, payer, body } = await paidQuery(store, () => now)
+    await host.collect(request(payer.identityKey, body), recorder())
+    now = NOW + 1000
+    const dropped = recorder()
+    await host.collect(request(payer.identityKey, body), dropped)
+    expect([dropped.statusCode, dropped.body.code]).toEqual([409, 'ERR_QUERY_SETTLED'])
+  })
+
+  it('replays from a restarted host that shares the store', async () => {
+    const store = new InMemoryPendingStore({}, () => NOW)
+    const { host, wallet, payer, body, restart } = await paidQuery(store, () => NOW)
+    const first = recorder()
+    await host.collect(request(payer.identityKey, body), first)
+
+    const replay = recorder()
+    await restart().collect(request(payer.identityKey, body), replay)
+    expect([replay.statusCode, replay.body]).toEqual([200, first.body])
+    expect(wallet.internalized).toHaveLength(1)
+  })
+
+  it('delivers after a crash between internalizing and recording, without a second payment', async () => {
+    let now = NOW
+    const store = new InMemoryPendingStore({ settleLeaseMs: 5000 }, () => now)
+    const { host, wallet, payer, attestation, body, restart } = await paidQuery(store, () => now)
+    const internalize = wallet.internalizeAction.bind(wallet)
+    // The first process takes the payment and dies before it records the delivery.
+    wallet.internalizeAction = async args => {
+      await internalize(args)
+      return await new Promise<never>(() => undefined)
+    }
+    const lost = recorder()
+    void host.collect(request(payer.identityKey, body), lost)
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(wallet.internalized).toHaveLength(1)
+    expect(lost.statusCode).toBe(0)
+    wallet.internalizeAction = internalize
+
+    const early = recorder()
+    await restart().collect(request(payer.identityKey, body), early)
+    expect([early.statusCode, early.body.code]).toEqual([409, 'ERR_QUERY_SETTLING'])
+
+    // Past the lease and past the query expiry, the restarted host takes the claim over.
+    now = NOW + 35_000
+    const recovered = recorder()
+    await restart().collect(request(payer.identityKey, body), recovered)
+    expect(recovered.statusCode).toBe(200)
+    expect(
+      verifyDelivery(parseDelivery(recovered.body), {
+        queryId: attestation.queryId,
+        host: wallet.identityKey,
+        contentHash: attestation.contentHash
+      })
+    ).toEqual({ verdict: 'ok', payload: PAYLOAD, supplement: [] })
+    // The same payout is internalized again, which wallet-toolbox merges; the client paid once.
+    expect(new Set(wallet.internalized.map(entry => entry.txid)).size).toBe(1)
+    expect(payer.actions).toHaveLength(1)
+
+    const replay = recorder()
+    await restart().collect(request(payer.identityKey, body), replay)
+    expect([replay.statusCode, replay.body]).toEqual([200, recovered.body])
   })
 })

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Attestation } from '../protocol/attestation.js'
+import type { Attestation, Delivery } from '../protocol/attestation.js'
 import { canonicalJson } from '../protocol/canonicalJson.js'
 import type { EconomicQuery } from '../protocol/query.js'
-import { InMemoryPendingStore, type PendingQuery } from './pendingStore.js'
+import { InMemoryPendingStore, type PendingQuery, type SettledDelivery } from './pendingStore.js'
 
 const clientA = `02${'aa'.repeat(32)}`
 const clientB = `02${'bb'.repeat(32)}`
@@ -19,6 +19,18 @@ function record(id: number, client: string, expiresAt: number, bytes = 10): Pend
     expiresAt,
     state: 'pending'
   }
+}
+
+/** A delivery the byte budget charges nothing for, so the tight budgets below stay exact. */
+const settled: SettledDelivery = {
+  delivery: { payload: '', signature: '' } as unknown as Delivery,
+  txid: 'cc'.repeat(32)
+}
+
+async function settle(store: InMemoryPendingStore, queryId: string): Promise<void> {
+  const claim = await store.beginSettle(queryId)
+  if (claim === undefined) throw new Error('not claimable')
+  await store.completeSettle(queryId, claim, settled)
 }
 
 describe('InMemoryPendingStore', () => {
@@ -58,11 +70,13 @@ describe('InMemoryPendingStore', () => {
 
   it('keeps an expired record visible during the grace period, then forgets it', async () => {
     let now = 0
-    const store = new InMemoryPendingStore({ settledGraceMs: 500 }, () => now)
+    const store = new InMemoryPendingStore(
+      { settledGraceMs: 500, deliveryRetentionMs: 0 },
+      () => now
+    )
     const entry = record(1, clientA, 1000)
     await store.put(entry)
-    await store.beginSettle(entry.queryId)
-    await store.completeSettle(entry.queryId)
+    await settle(store, entry.queryId)
     now = 1200
     expect(await store.get(entry.queryId)).toBe(entry)
     now = 1500
@@ -73,24 +87,28 @@ describe('InMemoryPendingStore', () => {
     const store = new InMemoryPendingStore({}, () => 0)
     const entry = record(1, clientA, 1000)
     await store.put(entry)
-    expect(await store.beginSettle(entry.queryId)).toBe(true)
-    expect(await store.beginSettle(entry.queryId)).toBe(false)
-    await store.abortSettle(entry.queryId)
+    const first = await store.beginSettle(entry.queryId)
+    expect(first).toMatch(/^[0-9a-f]{32}$/)
+    expect(await store.beginSettle(entry.queryId)).toBeUndefined()
+    await store.abortSettle(entry.queryId, first as string)
     expect(entry.state).toBe('pending')
-    expect(await store.beginSettle(entry.queryId)).toBe(true)
-    await store.completeSettle(entry.queryId)
+    const second = await store.beginSettle(entry.queryId)
+    expect(second).toBeDefined()
+    expect(second).not.toBe(first)
+    await store.completeSettle(entry.queryId, second as string, settled)
     expect(entry.state).toBe('settled')
     expect(entry.payload).toEqual([])
-    expect(await store.beginSettle(entry.queryId)).toBe(false)
-    expect(await store.beginSettle('ff'.repeat(32))).toBe(false)
+    expect(entry.delivery).toBe(settled.delivery)
+    expect(entry.txid).toBe(settled.txid)
+    expect(await store.beginSettle(entry.queryId)).toBeUndefined()
+    expect(await store.beginSettle('ff'.repeat(32))).toBeUndefined()
   })
 
   it('frees a settled record from the per-client cap', async () => {
     const store = new InMemoryPendingStore({ maxPendingPerClient: 1 }, () => 0)
     const entry = record(1, clientA, 1000)
     await store.put(entry)
-    await store.beginSettle(entry.queryId)
-    await store.completeSettle(entry.queryId)
+    await settle(store, entry.queryId)
     expect(await store.put(record(2, clientA, 1000))).toBe('stored')
   })
 
@@ -112,10 +130,10 @@ describe('InMemoryPendingStore', () => {
     expect(await store.put(record(1, clientA, 5000))).toBe('duplicate')
     expect(await store.get(first.queryId)).toBe(first)
 
-    expect(await store.beginSettle(first.queryId)).toBe(true)
+    expect(await store.beginSettle(first.queryId)).toBeDefined()
     expect(await store.put(record(1, clientA, 1000))).toBe('duplicate')
     expect(first.state).toBe('settling')
-    expect(await store.beginSettle(first.queryId)).toBe(false)
+    expect(await store.beginSettle(first.queryId)).toBeUndefined()
 
     expect(await store.put(record(2, clientB, 1000))).toBe('stored')
   })
@@ -161,8 +179,7 @@ describe('InMemoryPendingStore', () => {
     const store = new InMemoryPendingStore({ maxBytes: queryBytes + 80 + 12 }, () => 0)
     expect(await store.put(entry)).toBe('stored')
     expect(await store.put(record(2, clientB, 1000, 2))).toBe('too-many-pending')
-    await store.beginSettle(entry.queryId)
-    await store.completeSettle(entry.queryId)
+    await settle(store, entry.queryId)
     // The 80 payload bytes are free again; the tombstone still holds its query.
     expect(await store.put(record(3, clientB, 1000, 1))).toBe('stored')
     expect(await store.put(record(4, clientB, 1000, 10))).toBe('too-many-pending')
@@ -226,26 +243,27 @@ describe('InMemoryPendingStore', () => {
       const entry = record(1, clientA, 1000)
       await store.put(entry)
       now = 1000
-      expect(await store.beginSettle(entry.queryId)).toBe(false)
+      expect(await store.beginSettle(entry.queryId)).toBeUndefined()
       expect(entry.state).toBe('pending')
       expect(entry.payload).toEqual([])
       expect(await store.put(record(2, clientB, 5000))).toBe('stored')
     })
 
-    it('is released while settling, and a late completeSettle does not free the bytes twice', async () => {
+    it('is kept while settling, so a reclaimed settlement can still sign', async () => {
       let now = 0
       const store = new InMemoryPendingStore({ maxBytes: 88, settledGraceMs: 500 }, () => now)
       const entry = record(1, clientA, 1000)
       await store.put(entry)
-      expect(await store.beginSettle(entry.queryId)).toBe(true)
+      const claim = await store.beginSettle(entry.queryId)
       now = 1000
-      // The first put releases the settling record; its 80 bytes make room for this one.
-      expect(await store.put(record(2, clientB, 5000))).toBe('stored')
-      expect(entry.payload).toEqual([])
-      await store.completeSettle(entry.queryId)
+      expect(await store.put(record(2, clientB, 5000))).toBe('too-many-pending')
+      expect(entry.payload).toHaveLength(10)
+      await store.completeSettle(entry.queryId, claim as string, settled)
       expect(entry.state).toBe('settled')
-      // A double subtraction would leave the budget 80 bytes too generous and admit this record.
-      expect(await store.put(record(3, clientB, 5000))).toBe('too-many-pending')
+      expect(entry.payload).toEqual([])
+      // The payload was released exactly once: one record's worth of room, not two.
+      expect(await store.put(record(3, clientB, 5000))).toBe('stored')
+      expect(await store.put(record(4, clientB, 5000))).toBe('too-many-pending')
     })
 
     it('is released only once however often it is touched', async () => {
@@ -256,9 +274,117 @@ describe('InMemoryPendingStore', () => {
       now = 1000
       await store.get(entry.queryId)
       await store.get(entry.queryId)
-      expect(await store.beginSettle(entry.queryId)).toBe(false)
+      expect(await store.beginSettle(entry.queryId)).toBeUndefined()
       expect(await store.put(record(2, clientB, 5000))).toBe('stored')
       expect(await store.put(record(3, clientB, 5000))).toBe('too-many-pending')
+    })
+  })
+
+  describe('a settled record', () => {
+    const paid = (chars: number): SettledDelivery => ({
+      delivery: { payload: 'x'.repeat(chars), signature: '' } as unknown as Delivery,
+      txid: 'dd'.repeat(32)
+    })
+
+    it('keeps its delivery for the retention, past the grace, then forgets the record', async () => {
+      let now = 0
+      const store = new InMemoryPendingStore(
+        { settledGraceMs: 500, deliveryRetentionMs: 5000 },
+        () => now
+      )
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      await settle(store, entry.queryId)
+      now = 4999
+      expect((await store.get(entry.queryId))?.delivery).toBe(settled.delivery)
+      now = 5000
+      expect(await store.get(entry.queryId)).toBeUndefined()
+    })
+
+    it('drops a delivery whose retention ends inside the grace, and keeps the record', async () => {
+      let now = 0
+      const store = new InMemoryPendingStore(
+        { settledGraceMs: 500, deliveryRetentionMs: 100 },
+        () => now
+      )
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      await settle(store, entry.queryId)
+      now = 100
+      const kept = await store.get(entry.queryId)
+      expect(kept?.state).toBe('settled')
+      expect(kept?.delivery).toBeUndefined()
+      now = 1500
+      expect(await store.get(entry.queryId)).toBeUndefined()
+    })
+
+    it('charges the retained delivery, and frees it once', async () => {
+      let now = 0
+      // One ten-element record (80 + 4) settles into a 40-character delivery (80 bytes + 4).
+      const store = new InMemoryPendingStore(
+        { maxBytes: 88, settledGraceMs: 60_000, deliveryRetentionMs: 100 },
+        () => now
+      )
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      const claim = await store.beginSettle(entry.queryId)
+      await store.completeSettle(entry.queryId, claim as string, paid(40))
+      expect(await store.put(record(2, clientB, 5000, 1))).toBe('too-many-pending')
+      now = 100
+      await store.get(entry.queryId)
+      await store.get(entry.queryId)
+      expect(await store.put(record(3, clientB, 5000, 10))).toBe('stored')
+      expect(await store.put(record(4, clientB, 5000, 1))).toBe('too-many-pending')
+    })
+  })
+
+  describe('a settle claim', () => {
+    it('can be taken over once its lease has passed, even after the query expired', async () => {
+      let now = 0
+      const store = new InMemoryPendingStore({ settleLeaseMs: 2000 }, () => now)
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      const stale = await store.beginSettle(entry.queryId)
+      now = 1999
+      expect(await store.beginSettle(entry.queryId)).toBeUndefined()
+      now = 2000
+      const fresh = await store.beginSettle(entry.queryId)
+      expect(fresh).toBeDefined()
+      expect(fresh).not.toBe(stale)
+      expect(entry.payload).toHaveLength(10)
+      // The superseded claim can no longer return the query to pending.
+      await store.abortSettle(entry.queryId, stale as string)
+      expect(entry.state).toBe('settling')
+      await store.abortSettle(entry.queryId, fresh as string)
+      expect(entry.state).toBe('pending')
+    })
+
+    it('lets a superseded claim record a payment that went through', async () => {
+      let now = 0
+      const store = new InMemoryPendingStore({ settleLeaseMs: 2000 }, () => now)
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      const stale = await store.beginSettle(entry.queryId)
+      now = 2000
+      await store.beginSettle(entry.queryId)
+      await store.completeSettle(entry.queryId, stale as string, settled)
+      expect(entry.state).toBe('settled')
+      expect(entry.delivery).toBe(settled.delivery)
+    })
+
+    it('keeps an abandoned settling record until its lease and grace have passed', async () => {
+      let now = 0
+      const store = new InMemoryPendingStore(
+        { settleLeaseMs: 2000, settledGraceMs: 500 },
+        () => now
+      )
+      const entry = record(1, clientA, 1000)
+      await store.put(entry)
+      await store.beginSettle(entry.queryId)
+      now = 2499
+      expect(await store.get(entry.queryId)).toBe(entry)
+      now = 2500
+      expect(await store.get(entry.queryId)).toBeUndefined()
     })
   })
 })

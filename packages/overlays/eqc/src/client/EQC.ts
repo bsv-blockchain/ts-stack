@@ -71,6 +71,14 @@ export interface EQCOptions extends DiscoveryOptions {
   paramsTtlMs?: number
   /** Most hosts contacted per query, best reputation first. */
   maxHosts?: number
+  /**
+   * How many times a paid collect is sent before the host is given up on. A collect whose answer
+   * was lost, or that found the host still settling, is sent again with the same payment: a host
+   * replays the delivery it already recorded and never charges twice. Default 3.
+   */
+  collectAttempts?: number
+  /** Pause before a collect is sent again. Default 250 ms. */
+  collectRetryDelayMs?: number
   reputation?: ReputationStore
   transport?: HostTransport
   originator?: string
@@ -138,6 +146,15 @@ const TRANSIENT_PARAMS_FAILURE_MS = 15_000
 const UNADVERTISED_IDENTITY = 'session key is not advertised for this URL'
 const SHARE_BELOW_MINIMUM = 'share below host minPayoutSats'
 
+const DEFAULT_COLLECT_ATTEMPTS = 3
+const DEFAULT_COLLECT_RETRY_DELAY_MS = 250
+
+/** A concurrent collect for this query is still settling on the host; the answer will follow. */
+function isStillSettling(response: TransportResponse): boolean {
+  const body = response.body as { code?: unknown } | undefined
+  return response.status === 409 && body?.code === 'ERR_QUERY_SETTLING'
+}
+
 /** A 4xx is the host stating it runs no market. Anything else is a failure that may pass. */
 function isMarketRefusal(error: unknown): boolean {
   return error instanceof TransportStatusError && error.status >= 400 && error.status < 500
@@ -170,6 +187,12 @@ export class EQC {
     this.wallet = wallet
     this.options = options
     this.market({})
+    if (options.collectAttempts !== undefined) {
+      boundedInteger(options.collectAttempts, 'collectAttempts', 1, 10)
+    }
+    if (options.collectRetryDelayMs !== undefined) {
+      boundedInteger(options.collectRetryDelayMs, 'collectRetryDelayMs', 0, 60_000)
+    }
     this.discovery = new HostDiscovery(options)
     this.transport =
       options.transport ?? new AuthFetchTransport(wallet, { originator: options.originator })
@@ -568,22 +591,32 @@ export class EQC {
       this.reject(rejected, rejection)
       throw new Error(`${plan.url}: ${reason}`)
     }
-    let response: TransportResponse
-    try {
-      response = await this.transport.post(
-        plan.url,
-        ECONOMIC_PATHS.collect,
-        {
-          type: 'collect',
-          queryId: committed.queryId,
-          contentHash: committed.contentHash,
-          ranking: committed.ranking,
-          payment: settlement.envelopes.get(plan.host)
-        },
-        this.hostTimeoutMs()
-      )
-    } catch (error) {
-      return fail('collect-failed', error instanceof Error ? error.message : String(error))
+    const body = {
+      type: 'collect',
+      queryId: committed.queryId,
+      contentHash: committed.contentHash,
+      ranking: committed.ranking,
+      payment: settlement.envelopes.get(plan.host)
+    }
+    const attempts = this.options.collectAttempts ?? DEFAULT_COLLECT_ATTEMPTS
+    const retryDelayMs = this.options.collectRetryDelayMs ?? DEFAULT_COLLECT_RETRY_DELAY_MS
+    let response: TransportResponse | undefined
+    for (let attempt = 1; response === undefined; attempt++) {
+      try {
+        const answer = await this.transport.post(
+          plan.url,
+          ECONOMIC_PATHS.collect,
+          body,
+          this.hostTimeoutMs()
+        )
+        if (!isStillSettling(answer) || attempt >= attempts) response = answer
+      } catch (error) {
+        // The host may have taken the payment and lost only its answer: ask again.
+        if (attempt >= attempts) {
+          return fail('collect-failed', error instanceof Error ? error.message : String(error))
+        }
+      }
+      if (response === undefined) await new Promise(resolve => setTimeout(resolve, retryDelayMs))
     }
     if (response.status !== 200) return fail('collect-failed', `status ${response.status}`)
     if (response.identityKey !== plan.host) return fail('identity-mismatch')

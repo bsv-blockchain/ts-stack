@@ -39,6 +39,8 @@ export interface LoopbackHost {
   hangOn?: string
   /** Identity key the transport reports for the session, to simulate a spoof. */
   sessionIdentity?: string
+  /** Collects the host answers whose response is then lost on the way back to the client. */
+  lostCollectResponses: number
   /** Rewrites a successful collect body, to simulate a host that serves wrong bytes. */
   tamperDelivery?: (body: Record<string, unknown>) => Record<string, unknown>
   posts: Array<{ path: string; body: unknown }>
@@ -100,7 +102,13 @@ export class LoopbackNetwork implements HostTransport {
     behaviour: Partial<
       Pick<
         LoopbackHost,
-        'delayMs' | 'down' | 'withoutMarket' | 'transientParamsFailures' | 'paramsHang' | 'hangOn'
+        | 'delayMs'
+        | 'down'
+        | 'withoutMarket'
+        | 'transientParamsFailures'
+        | 'paramsHang'
+        | 'hangOn'
+        | 'lostCollectResponses'
       >
     > = {}
   ): LoopbackHost {
@@ -116,6 +124,7 @@ export class LoopbackNetwork implements HostTransport {
       paramsReads: 0,
       paramsTimeouts: [],
       paramsHang: false,
+      lostCollectResponses: 0,
       posts: [],
       ...behaviour
     }
@@ -169,6 +178,10 @@ export class LoopbackNetwork implements HostTransport {
     }
     const handler = path === ECONOMIC_PATHS.query ? entry.host.query : entry.host.collect
     await handler(request, captured.response as never)
+    if (path === ECONOMIC_PATHS.collect && entry.lostCollectResponses > 0) {
+      entry.lostCollectResponses -= 1
+      throw new Error(`${entry.url} reset the connection`)
+    }
     let responseBody = captured.body
     if (
       path === ECONOMIC_PATHS.collect &&

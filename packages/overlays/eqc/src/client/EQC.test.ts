@@ -725,7 +725,7 @@ describe('EQC supplement validation and deadlines', () => {
   })
 
   it('gives up on a paid host that never answers the collect, and still completes', async () => {
-    const { network, eqc } = setup({ hostTimeoutMs: 300 })
+    const { network, eqc } = setup({ hostTimeoutMs: 300, collectRetryDelayMs: 0 })
     const silent = network.add(
       urls[0],
       { providers: [relay(ANSWER)] },
@@ -751,7 +751,7 @@ describe('EQC supplement validation and deadlines', () => {
   })
 
   it('reports an undelivered query when every paid host stalls, instead of hanging', async () => {
-    const { network, eqc } = setup({ hostTimeoutMs: 300 })
+    const { network, eqc } = setup({ hostTimeoutMs: 300, collectRetryDelayMs: 0 })
     for (const url of urls) {
       network.add(url, { providers: [relay(ANSWER)] }, { hangOn: '/economic/collect' })
     }
@@ -759,6 +759,72 @@ describe('EQC supplement validation and deadlines', () => {
     const error = await failure(eqc.query(request))
     expect(performance.now() - started).toBeLessThan(1500)
     expect(error.code).toBe('ERR_EQC_UNDELIVERED')
+  })
+})
+
+describe('EQC paid delivery recovery', () => {
+  it('collects again when the answer is lost, and the host replays it without a second charge', async () => {
+    const { payer, network, eqc } = setup({ collectRetryDelayMs: 0 })
+    const hosts = urls.map(url =>
+      network.add(url, { providers: [relay(ANSWER)] }, { lostCollectResponses: 1 })
+    )
+    const result = await eqc.query(request)
+    await result.completion
+    expect(result.payload).toEqual(ANSWER)
+    expect(result.rejected).toEqual([])
+    expect(payer.actions).toHaveLength(1)
+    for (const host of hosts) {
+      expect(host.posts.filter(post => post.path === '/economic/collect')).toHaveLength(2)
+      expect(host.wallet.internalized).toHaveLength(1)
+    }
+  })
+
+  it('waits out a host that is still settling the first collect', async () => {
+    const { network, eqc } = setup({
+      hostTimeoutMs: 300,
+      collectAttempts: 4,
+      collectRetryDelayMs: 150
+    })
+    const slow = network.add(urls[0], { providers: [relay(ANSWER)] })
+    const internalize = slow.wallet.internalizeAction.bind(slow.wallet)
+    slow.wallet.internalizeAction = async args => {
+      await new Promise(resolve => setTimeout(resolve, 500))
+      return await internalize(args)
+    }
+    for (const url of urls.slice(1)) {
+      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: 30 })
+    }
+    const result = await eqc.query(request)
+    await result.completion
+    expect(result.ranking[0].url).toBe(urls[0])
+    expect(result.rejected).toEqual([])
+    expect(slow.wallet.internalized).toHaveLength(1)
+    expect(slow.posts.filter(post => post.path === '/economic/collect').length).toBeGreaterThan(2)
+  })
+
+  it('gives up after collectAttempts and reports the last failure', async () => {
+    const { network, eqc } = setup({ collectAttempts: 2, collectRetryDelayMs: 0 })
+    const lossy = network.add(urls[0], { providers: [relay(ANSWER)] }, { lostCollectResponses: 2 })
+    for (const url of urls.slice(1)) {
+      network.add(url, { providers: [relay(ANSWER)] }, { delayMs: 30 })
+    }
+    const result = await eqc.query(request)
+    await result.completion
+    expect(result.rejected).toEqual([
+      {
+        url: urls[0],
+        host: lossy.wallet.identityKey,
+        reason: 'collect-failed',
+        detail: `${urls[0]} reset the connection`
+      }
+    ])
+    expect(lossy.wallet.internalized).toHaveLength(1)
+  })
+
+  it('rejects out-of-range collect retry options', () => {
+    const payer = new PayerWallet()
+    expect(() => new EQC(payer, { collectAttempts: 0 })).toThrow(RangeError)
+    expect(() => new EQC(payer, { collectRetryDelayMs: -1 })).toThrow(RangeError)
   })
 })
 

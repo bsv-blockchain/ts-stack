@@ -38,17 +38,19 @@ and accepts the same network options: `networkPreset`, `slapTrackers`, `hostOver
 route; the fee of the query that follows covers it. An `ls_slap` lookup issued as the target of
 `eqc.lookup` is raced and paid like any other.
 
-| Option            | Default | Meaning                                                                           |
-| ----------------- | ------- | --------------------------------------------------------------------------------- |
-| `threshold`       | 3       | Distinct host identity keys that must attest one content hash before any payment. |
-| `topK`            | 5       | Fastest agreeing hosts that share the fee; hosts advertising less are skipped.    |
-| `raceMs`          | 400     | Window after the first valid attestation.                                         |
-| `floorFeeSats`    | 1000    | Minimum total fee.                                                                |
-| `maxFeeSats`      | 2000    | Budget per query; hosts with a higher floor are skipped.                          |
-| `feeSats`         | —       | Optional fee above the floor, capped by `maxFeeSats`.                             |
-| `hostTimeoutMs`   | 5000    | Deadline for each authenticated call to a host.                                   |
-| `paramsTimeoutMs` | 2000    | Deadline for each `/economic/params` probe.                                       |
-| `maxHosts`        | 16      | Hosts contacted per query, best reputation first, ties in random order.           |
+| Option                | Default | Meaning                                                                           |
+| --------------------- | ------- | --------------------------------------------------------------------------------- |
+| `threshold`           | 3       | Distinct host identity keys that must attest one content hash before any payment. |
+| `topK`                | 5       | Fastest agreeing hosts that share the fee; hosts advertising less are skipped.    |
+| `raceMs`              | 400     | Window after the first valid attestation.                                         |
+| `floorFeeSats`        | 1000    | Minimum total fee.                                                                |
+| `maxFeeSats`          | 2000    | Budget per query; hosts with a higher floor are skipped.                          |
+| `feeSats`             | —       | Optional fee above the floor, capped by `maxFeeSats`.                             |
+| `hostTimeoutMs`       | 5000    | Deadline for each authenticated call to a host.                                   |
+| `paramsTimeoutMs`     | 2000    | Deadline for each `/economic/params` probe.                                       |
+| `maxHosts`            | 16      | Hosts contacted per query, best reputation first, ties in random order.           |
+| `collectAttempts`     | 3       | Sends of a paid collect before the host is given up on.                           |
+| `collectRetryDelayMs` | 250     | Pause before a collect is sent again.                                             |
 
 At the defaults, five hosts receive 418, 250, 166, 83, and 83 satoshis from one transaction. A
 ranked host whose share is below the `minPayoutSats` it advertises gets no output and no collect
@@ -63,6 +65,11 @@ rather than one per query.
 Reputation is local to the client. A host that serves wrong bytes, signs with the wrong key, or
 fails a collect (every collect follows a dispatched payout) is excluded for ten minutes. Timeouts,
 late or minority answers, and a session key that no SLAP advertisement names only lower its rank.
+
+A collect that fails in transit, or that finds the host still settling an earlier collect for
+the same query (409 `ERR_QUERY_SETTLING`), is sent again with the same payment, up to
+`collectAttempts` times. The host answers a repeat with the delivery it already recorded and
+never internalizes a second payment, so a lost response costs a retry, not a second fee.
 
 `query()` resolves as soon as one paid host delivers bytes whose `SHA-256` equals the attested
 content hash. Collects to the other paid hosts continue in the background; `result.completion`
@@ -143,8 +150,22 @@ the payment was internalized. The 2 MiB default fits the smallest `@bsv/overlay-
 profile (`MAX_RESPONSE_BYTES` is 4 MiB on `small`, 8 MiB on `standard`).
 
 The pending store holds each attested answer until it is collected or expires. Its byte budget
-counts the cached payload and the stored query, and an unsettled record gives up its bytes and its
-per-client slot the moment it expires.
+counts the cached payload, the stored query, and retained deliveries, and an unsettled record
+gives up its bytes and its per-client slot the moment it expires.
+
+A paid collect records the signed delivery and the payout `txid` before it answers. If that
+answer is lost, the same client collects again and receives the same delivery, with or without a
+payment attached; the wallet is not called again. Deliveries are kept for `deliveryRetentionMs`
+after settlement (default ten minutes), then a repeat answers 409 `ERR_QUERY_SETTLED`. A
+concurrent collect that arrives mid-settlement answers 409 `ERR_QUERY_SETTLING`, which the client
+retries. A settle claim lasts `settleLeaseMs` (default two minutes): if the host stops between
+internalizing a payout and recording the delivery, a later collect takes the claim over and
+internalizes the same transaction again, which a wallet-toolbox wallet merges, so the host wallet
+must accept a transaction it already holds.
+
+`InMemoryPendingStore` lives in process memory, so a restart forgets pending queries and retained
+deliveries alike. To replay paid deliveries across restarts, or across several host instances,
+pass a durable `PendingStore` that persists every record field before each call resolves.
 
 Providers: `overlayLookupProvider` (BRC-24 lookups, with BRC-136 topic anchors),
 `messageListProvider` (BRC-33 listings, served only to the authenticated recipient), and

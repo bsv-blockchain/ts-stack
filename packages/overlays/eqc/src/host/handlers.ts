@@ -49,6 +49,9 @@ export interface EconomicQueryHostOptions {
    * An authentication-only wallet, such as the one `@bsv/overlay-express` hands a registered
    * router, signs but cannot internalize: every collect then fails with a logged 500. Build a
    * storage-backed wallet from the same root key instead.
+   *
+   * A settle claim taken over after its lease internalizes the same payout again, so
+   * `internalizeAction` must accept a transaction it already holds, as wallet-toolbox does.
    */
   wallet: WalletInterface
   providers: QueryProvider[]
@@ -133,6 +136,17 @@ function answerStored(existing: PendingQuery | undefined, client: string, res: H
     throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
   }
   res.status(200).json(existing.attestation)
+}
+
+/**
+ * Answers a collect for a query this client already paid with the delivery it paid for. The
+ * wallet is not touched and any payment in the request is ignored, so a retry never charges twice.
+ */
+function replaySettled(record: PendingQuery, res: HostResponse): void {
+  if (record.delivery === undefined) {
+    throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
+  }
+  res.status(200).json(record.delivery)
 }
 
 function parseCollect(req: HostRequest): CollectRequest {
@@ -338,14 +352,16 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     if (record?.clientIdentityKey !== client) {
       throw new HostError(404, 'ERR_QUERY_UNKNOWN', 'No such query for this client')
     }
-    if (record.state !== 'pending') {
-      throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
-    }
-    if (record.expiresAt <= now()) {
-      throw new HostError(410, 'ERR_QUERY_EXPIRED', 'The query has expired')
-    }
     if (request.contentHash !== record.attestation.contentHash) {
       throw new HostError(409, 'ERR_HASH_MISMATCH', 'This host attested a different content hash')
+    }
+    if (record.state === 'settled') {
+      replaySettled(record, res)
+      return
+    }
+    // A settling record may be past its expiry: its payment may already be on the network.
+    if (record.state === 'pending' && record.expiresAt <= now()) {
+      throw new HostError(410, 'ERR_QUERY_EXPIRED', 'The query has expired')
     }
     if (request.ranking.length > record.query.topK) {
       throw new HostError(400, 'ERR_INVALID_COLLECT', 'ranking is longer than the query topK')
@@ -361,8 +377,14 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     if (request.payment === undefined) throw paymentRequired(required)
     // Held here because the store may empty an expired record while the payment is settling.
     const { payload, supplement } = record
-    if (!(await store.beginSettle(request.queryId))) {
-      throw new HostError(409, 'ERR_QUERY_SETTLED', 'This query has already been settled')
+    const claim = await store.beginSettle(request.queryId)
+    if (claim === undefined) {
+      const current = await store.get(request.queryId)
+      if (current?.state === 'settled') {
+        replaySettled(current, res)
+        return
+      }
+      throw new HostError(409, 'ERR_QUERY_SETTLING', 'This query is being settled; collect again')
     }
     try {
       const payment = await verifyAndInternalizePayment({
@@ -401,10 +423,12 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
         { queryId: request.queryId, host, payload, supplement },
         originator
       )
-      await store.completeSettle(request.queryId)
+      // Recorded before the response is sent: if it is lost, the client collects again and gets
+      // this same delivery back without a second payment.
+      await store.completeSettle(request.queryId, claim, { delivery, txid: payment.txid })
       res.status(200).json(delivery)
     } catch (error) {
-      await store.abortSettle(request.queryId)
+      await store.abortSettle(request.queryId, claim)
       throw error
     }
   })

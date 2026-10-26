@@ -552,7 +552,7 @@ shape:
 | 402    | `ERR_PAYMENT_REQUIRED`                                     |
 | 403    | `ERR_FORBIDDEN_RECIPIENT`                                  |
 | 404    | `ERR_QUERY_UNKNOWN`                                        |
-| 409    | `ERR_QUERY_SETTLED`, `ERR_HASH_MISMATCH`, `ERR_NOT_RANKED` |
+| 409    | `ERR_QUERY_SETTLED`, `ERR_QUERY_SETTLING`, `ERR_HASH_MISMATCH`, `ERR_NOT_RANKED` |
 | 410    | `ERR_QUERY_EXPIRED`                                        |
 | 413    | `ERR_PAYLOAD_TOO_LARGE`                                    |
 | 422    | `ERR_UNSUPPORTED_CLASS`                                    |
