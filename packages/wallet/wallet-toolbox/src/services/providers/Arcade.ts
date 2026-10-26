@@ -29,6 +29,24 @@ import { classifyArcadeRejection } from './arcadeStatus'
 import { normalizeArcProviderConfig } from './arcProviderConfig'
 import { validateArcTxData } from './arcTxDataValidation'
 
+/**
+ * Arcade's API-key middleware answers 401 for a missing-but-required, malformed, unknown,
+ * revoked or expired key, and 403 for a key not allowed to make the call. Both are decided
+ * before the transaction is parsed, so they say nothing about the transaction.
+ */
+function isArcadeAuthStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403
+}
+
+/**
+ * Arcade-specific service-error classification: ARC's transient statuses (408, 429, 476, 5xx,
+ * rate-limit/backpressure details) plus Arcade's credential refusals. A refused API key must be
+ * a service error so the wallet fails over or retries instead of marking the transaction invalid.
+ */
+function isArcadeServiceErrorStatus(status: number | undefined, detail?: string): boolean {
+  return isArcadeAuthStatus(status) || isArcServiceErrorStatus(status, detail)
+}
+
 function defaultDeploymentId(): string {
   return `ts-sdk-${toHex(Random(16))}`
 }
@@ -188,7 +206,15 @@ export class Arcade {
         note.detail = responseData.detail
       }
     }
-    result.serviceError = isArcServiceErrorStatus(numericStatus, errorData.detail)
+    if (isArcadeAuthStatus(numericStatus)) {
+      const reason =
+        this.apiKey != null && this.apiKey !== ''
+          ? 'Arcade refused the configured API key'
+          : 'Arcade requires an API key'
+      errorData.detail ??= reason
+      note.detail ??= reason
+    }
+    result.serviceError = isArcadeServiceErrorStatus(numericStatus, errorData.detail)
     result.notes!.push(note)
   }
 

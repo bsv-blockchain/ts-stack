@@ -4,7 +4,7 @@ title: '@bsv/wallet-relay'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-relay'
-version: '0.6.0'
+version: '0.7.0'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -246,13 +246,24 @@ await session.connect()
 > non-auto-approved wallet method when `onApprovalRequired` is absent. Enable
 > signed QR codes and wire an explicit approval callback before upgrading.
 
+> **Phone on the same LAN** — By default only HTTPS/WSS and loopback HTTP/WS
+> are accepted. Since 0.7.0, plain HTTP/WS on a private-network IP address
+> (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, IPv6 `fc00::/7`) is a
+> development opt-in: pass `allowLocalNetworkHttp: true` to
+> `WalletRelayService`, to `WalletRelayClient` (or `useWalletRelayClient`), and,
+> in the phone wallet, to `parsePairingUri` and `WalletPairingSession`. A wallet
+> that has not enabled it, for example through a developer setting, rejects
+> LAN QR codes. HTTP origins cannot be authenticated: an on-path attacker on the
+> LAN can rewrite the plaintext session lookup and relay URL. Never enable it in
+> production.
+
 > **Missing X-Desktop-Token header** — `POST /api/request/:id` requires `X-Desktop-Token` header. Browser CORS preflight must allow this header in `allowedHeaders`.
 
 > **CORS misconfiguration** — If frontend and backend are different origins, CORS headers must be set. Missing `Access-Control-Allow-Credentials` or `Access-Control-Allow-Headers` will cause browser to block requests.
 
 > **WebSocket TLS mismatch** — If frontend is HTTPS but relay is ws:// (not wss://), browser blocks upgrade. Always use wss:// in production.
 
-> **Relay URL in QR** — The relay URL in QR is public. If relay is on internal network, mobile can't reach it. Use publicly routable URL or tunnel.
+> **Relay URL reachability** — The mobile fetches the relay URL from the QR origin and must be able to reach it. A relay on a private network is reachable only from a phone on that network, and over plain `ws://` only with the `allowLocalNetworkHttp` development opt-in. Otherwise use a publicly routable `wss://` URL or a trusted tunnel.
 
 ## Related packages
 

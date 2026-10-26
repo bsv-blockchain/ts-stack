@@ -53,6 +53,7 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   function ensureClient(): WalletRelayClient {
     clientRef.current ??= new WalletRelayClient({
       apiUrl: options?.apiUrl,
+      allowLocalNetworkHttp: options?.allowLocalNetworkHttp,
       pollInterval: options?.pollInterval,
       connectedPollInterval: options?.connectedPollInterval,
       persistSession: options?.persistSession,
