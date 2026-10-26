@@ -21,6 +21,10 @@ server wallet ──verifyAuthProof──▶  signature ✓ + fresh ✓ + nonce 
 ## Configure once (same options on both sides)
 
 `protocol` drives key derivation, so it **must match** on client and server.
+The supplied verifier counterparty participates in derivation at every level;
+the level controls wallet consent (`0` silent, `1` per app, `2` per
+counterparty). Choose that approval policy deliberately; level 2 is the safest
+default when each verifier should receive separate user authorization.
 
 ```ts
 // shared.ts (or just inline the same options in both places)
@@ -30,6 +34,7 @@ export const AUTH_OPTIONS = {
   protocol: [2, 'myapp auth'] as WalletProtocol
   // windowMs?    default 120000 (2 min)
   // clockSkewMs? default 30000
+  // maxBodyBytes? default 8 MiB
 }
 ```
 
@@ -41,9 +46,13 @@ import { AUTH_OPTIONS } from './shared'
 
 const authClient = new AuthProofClient(AUTH_OPTIONS)
 
-// `wallet` is any BRC-100 wallet (e.g. WalletClient). The 2nd arg is the
-// `counterparty` — the server's identity public key the wallet signs toward.
-const proof = await authClient.createAuthProof(wallet, backendPublicKey, 'login')
+// `wallet` is any BRC-100 wallet (e.g. WalletClient). `counterparty` is the
+// server's identity public key the wallet signs toward.
+const proof = await authClient.createAuthProof({
+  wallet,
+  counterparty: backendPublicKey,
+  action: 'login'
+})
 
 await fetch('/api/auth/login', {
   method: 'POST',
@@ -63,7 +72,10 @@ import { AUTH_OPTIONS } from './shared'
 
 const authServer = new AuthProofServer(AUTH_OPTIONS)
 
-const result = await authServer.verifyAuthProof(serverWallet, proof, 'login', {
+const result = await authServer.verifyAuthProof({
+  wallet: serverWallet,
+  proof,
+  action: 'login',
   consumeNonce
 })
 if (!result.valid || result.identityKey !== walletPubKey) {
@@ -104,7 +116,7 @@ const used = new Map<string, number>() // nonce -> expiresAt (ms)
 export const consumeNonce = (nonce: string, expiresAt: Date): boolean => {
   const now = Date.now()
   for (const [n, exp] of used) if (exp <= now) used.delete(n) // cheap sweep
-  if ((used.get(nonce) ?? 0) > now) return false              // replay
+  if ((used.get(nonce) ?? 0) > now) return false // replay
   used.set(nonce, expiresAt.getTime())
   return true
 }
@@ -119,9 +131,11 @@ a `'delete'` endpoint, so proofs can't be replayed across operations.
 ## Standalone functions
 
 The classes are thin wrappers. If you prefer not to instantiate, the same
-operations are exported as functions taking a trailing `options` argument:
-`createAuthProof`, `verifyAuthProof`, `checkAuthSigData`, `createAuthSigData`,
-`serializeAuthSigData`.
+operations are exported as functions. `createAuthProof` and `verifyAuthProof`
+take object-shaped arguments containing their options; the lower-level
+`checkAuthSigData` and `createAuthSigData` helpers take a trailing options
+argument. `serializeAuthSigData` validates and serializes canonical own-data
+fields.
 
 ## Why use this?
 

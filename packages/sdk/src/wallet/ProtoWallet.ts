@@ -1,19 +1,19 @@
 import { KeyDeriver, KeyDeriverApi } from './KeyDeriver.js'
 import CachedKeyDeriver from './CachedKeyDeriver.js'
+import { sha256, sha256hmac } from '../primitives/Hash.js'
+import { sign, verify } from '../primitives/ECDSA.js'
+import BigNumber from '../primitives/BigNumber.js'
+import Signature from '../primitives/Signature.js'
+import Schnorr from '../primitives/Schnorr.js'
+import PublicKey from '../primitives/PublicKey.js'
+import Point from '../primitives/Point.js'
+import PrivateKey from '../primitives/PrivateKey.js'
+import SymmetricKey from '../primitives/SymmetricKey.js'
 import {
-  Hash,
-  ECDSA,
-  BigNumber,
-  Signature,
-  Schnorr,
-  PublicKey,
-  Point,
-  PrivateKey,
-  SymmetricKey,
   readyAsyncCryptoBackend,
   isAsyncCryptoDigest,
   validateAsyncCryptoBytes
-} from '../primitives/index.js'
+} from '../primitives/AsyncCryptoBackend.js'
 import {
   CreateHmacArgs,
   CreateHmacResult,
@@ -32,14 +32,34 @@ import {
   WalletDecryptArgs,
   WalletDecryptResult,
   WalletEncryptArgs,
-  WalletEncryptResult
+  WalletEncryptResult,
+  WalletProtocol
 } from './Wallet.interfaces.js'
 import { constantTimeEquals, toArray } from '../primitives/utils.js'
+import {
+  validateCreateHmacArgs,
+  validateCreateSignatureArgs,
+  validateGetPublicKeyArgs,
+  validateRevealCounterpartyKeyLinkageArgs,
+  validateRevealSpecificKeyLinkageArgs,
+  validateVerifyHmacArgs,
+  validateVerifySignatureArgs,
+  validateWalletDecryptArgs,
+  validateWalletEncryptArgs
+} from './validationHelpers.js'
+
+function snapshotProtocolID(protocolID: WalletProtocol): WalletProtocol {
+  return [protocolID[0], protocolID[1]]
+}
+
+function snapshotBytes(bytes: number[]): number[] {
+  return Array.from(bytes)
+}
 
 async function hashSignatureData(data: number[]): Promise<number[]> {
   const subtle = globalThis.crypto?.subtle
   if (!Array.isArray(data) || data.length < 65536 || subtle === undefined) {
-    return Hash.sha256(data)
+    return sha256(data)
   }
   // Snapshot before yielding: a caller changing its array while native hashing
   // runs must not change the bytes used by a fallback after a host failure.
@@ -50,7 +70,7 @@ async function hashSignatureData(data: number[]): Promise<number[]> {
   } catch {
     // Some browser/mobile hosts expose Web Crypto without supporting digest.
   }
-  return Hash.sha256(bytes)
+  return sha256(bytes)
 }
 
 function keyDeriverOrThrow(keyDeriver?: KeyDeriverApi): KeyDeriverApi {
@@ -60,6 +80,20 @@ function keyDeriverOrThrow(keyDeriver?: KeyDeriverApi): KeyDeriverApi {
       throw new Error('keyDeriver is undefined')
     })()
   )
+}
+
+async function deriveIdentityPublicKey(keyDeriver: KeyDeriverApi): Promise<PublicKey> {
+  const rootKey = keyDeriver.rootKey
+  const backend = readyAsyncCryptoBackend('publicKeyFromPrivate')
+  if (backend !== undefined) {
+    const publicKey = validateAsyncCryptoBytes(
+      'publicKeyFromPrivate',
+      await backend.publicKeyFromPrivate(Uint8Array.from(rootKey.toArray('be', 32))),
+      33
+    )
+    return PublicKey.fromDER(Array.from(publicKey))
+  }
+  return rootKey.toPublicKey()
 }
 
 async function derivePublicKey(
@@ -123,44 +157,37 @@ export class ProtoWallet {
   }
 
   async getPublicKey(args: GetPublicKeyArgs): Promise<{ publicKey: PubKeyHex }> {
+    validateGetPublicKeyArgs(args)
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
     if (args.identityKey) {
-      const rootKey = keyDeriverOrThrow(this.keyDeriver).rootKey
-      const backend = readyAsyncCryptoBackend('publicKeyFromPrivate')
-      if (backend !== undefined) {
-        const publicKey = validateAsyncCryptoBytes(
-          'publicKeyFromPrivate',
-          await backend.publicKeyFromPrivate(Uint8Array.from(rootKey.toArray('be', 32))),
-          33
-        )
-        return {
-          publicKey: PublicKey.fromDER(Array.from(publicKey)).toString()
-        }
-      }
-      return { publicKey: rootKey.toPublicKey().toString() }
+      return { publicKey: (await deriveIdentityPublicKey(keyDeriver)).toString() }
     } else {
       if (args.protocolID == null || args.keyID == null || args.keyID === '') {
         throw new Error('protocolID and keyID are required if identityKey is false or undefined.')
       }
-      return {
-        publicKey: (await derivePublicKey(keyDeriverOrThrow(this.keyDeriver), args)).toString()
+      const request = {
+        protocolID: snapshotProtocolID(args.protocolID),
+        keyID: args.keyID,
+        counterparty: args.counterparty,
+        forSelf: args.forSelf
       }
+      return { publicKey: (await derivePublicKey(keyDeriver, request)).toString() }
     }
   }
 
   async revealCounterpartyKeyLinkage(
     args: RevealCounterpartyKeyLinkageArgs
   ): Promise<RevealCounterpartyKeyLinkageResult> {
-    const { publicKey: identityKey } = await this.getPublicKey({
-      identityKey: true
-    })
-    if (this.keyDeriver == null) {
-      throw new Error('keyDeriver is undefined')
-    }
-    const linkage = this.keyDeriver.revealCounterpartySecret(args.counterparty)
+    validateRevealCounterpartyKeyLinkageArgs(args)
+    const counterparty = args.counterparty
+    const verifier = args.verifier
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
+    const identityKey = (await deriveIdentityPublicKey(keyDeriver)).toString()
+    const linkage = keyDeriver.revealCounterpartySecret(counterparty)
     const linkageProof = new Schnorr().generateProof(
-      this.keyDeriver.rootKey,
-      this.keyDeriver.rootKey.toPublicKey(),
-      PublicKey.fromString(args.counterparty),
+      keyDeriver.rootKey,
+      keyDeriver.rootKey.toPublicKey(),
+      PublicKey.fromString(counterparty),
       Point.fromDER(linkage)
     )
     const linkageProofBin = [
@@ -169,22 +196,18 @@ export class ProtoWallet {
       ...linkageProof.z.toArray('be', 32)
     ] as number[]
     const revelationTime = new Date().toISOString()
-    const { ciphertext: encryptedLinkage } = await this.encrypt({
-      plaintext: linkage,
-      protocolID: [2, 'counterparty linkage revelation'],
-      keyID: revelationTime,
-      counterparty: args.verifier
-    })
-    const { ciphertext: encryptedLinkageProof } = await this.encrypt({
-      plaintext: linkageProofBin,
-      protocolID: [2, 'counterparty linkage revelation'],
-      keyID: revelationTime,
-      counterparty: args.verifier
-    })
+    const encryptionKey = await deriveSymmetricKey(
+      keyDeriver,
+      [2, 'counterparty linkage revelation'],
+      revelationTime,
+      verifier
+    )
+    const encryptedLinkage = encryptionKey.encrypt(linkage) as number[]
+    const encryptedLinkageProof = encryptionKey.encrypt(linkageProofBin) as number[]
     return {
       prover: identityKey,
-      verifier: args.verifier,
-      counterparty: args.counterparty,
+      verifier,
+      counterparty,
       revelationTime,
       encryptedLinkage,
       encryptedLinkageProof
@@ -194,35 +217,33 @@ export class ProtoWallet {
   async revealSpecificKeyLinkage(
     args: RevealSpecificKeyLinkageArgs
   ): Promise<RevealSpecificKeyLinkageResult> {
-    const { publicKey: identityKey } = await this.getPublicKey({
-      identityKey: true
-    })
-    if (this.keyDeriver == null) {
-      throw new Error('keyDeriver is undefined')
-    }
-    const linkage = this.keyDeriver.revealSpecificSecret(
-      args.counterparty,
-      args.protocolID,
-      args.keyID
-    )
-    const { ciphertext: encryptedLinkage } = await this.encrypt({
-      plaintext: linkage,
-      protocolID: [2, `specific linkage revelation ${args.protocolID[0]} ${args.protocolID[1]}`],
-      keyID: args.keyID,
-      counterparty: args.verifier
-    })
-    const { ciphertext: encryptedLinkageProof } = await this.encrypt({
-      plaintext: [0], // Proof type 0, no proof provided
-      protocolID: [2, `specific linkage revelation ${args.protocolID[0]} ${args.protocolID[1]}`],
-      keyID: args.keyID,
-      counterparty: args.verifier
-    })
+    validateRevealSpecificKeyLinkageArgs(args)
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
+    const counterpartyRequest = args.counterparty
+    const verifier = args.verifier
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const identityKey = (await deriveIdentityPublicKey(keyDeriver)).toString()
+    const linkage = keyDeriver.revealSpecificSecret(counterpartyRequest, protocolID, keyID)
+    const revelationProtocol: WalletProtocol = [
+      2,
+      `specific linkage revelation ${protocolID[0]} ${protocolID[1]}`
+    ]
+    const encryptionKey = await deriveSymmetricKey(keyDeriver, revelationProtocol, keyID, verifier)
+    const encryptedLinkage = encryptionKey.encrypt(linkage) as number[]
+    const encryptedLinkageProof = encryptionKey.encrypt([0]) as number[] // Proof type 0, no proof provided
+    const counterparty =
+      counterpartyRequest === 'self'
+        ? identityKey
+        : counterpartyRequest === 'anyone'
+          ? new PrivateKey(1).toPublicKey().toString()
+          : counterpartyRequest
     return {
       prover: identityKey,
-      verifier: args.verifier,
-      counterparty: args.counterparty,
-      protocolID: args.protocolID,
-      keyID: args.keyID,
+      verifier,
+      counterparty,
+      protocolID,
+      keyID,
       encryptedLinkage,
       encryptedLinkageProof,
       proofType: 0
@@ -230,44 +251,64 @@ export class ProtoWallet {
   }
 
   async encrypt(args: WalletEncryptArgs): Promise<WalletEncryptResult> {
+    validateWalletEncryptArgs(args)
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const counterparty = args.counterparty ?? 'self'
+    const plaintext = snapshotBytes(args.plaintext)
     const key = await deriveSymmetricKey(
       keyDeriverOrThrow(this.keyDeriver),
-      args.protocolID,
-      args.keyID,
-      args.counterparty ?? 'self'
+      protocolID,
+      keyID,
+      counterparty
     )
-    return { ciphertext: key.encrypt(args.plaintext) as number[] }
+    return { ciphertext: key.encrypt(plaintext) as number[] }
   }
 
   async decrypt(args: WalletDecryptArgs, _originator?: string): Promise<WalletDecryptResult> {
+    validateWalletDecryptArgs(args)
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const counterparty = args.counterparty ?? 'self'
+    const ciphertext = snapshotBytes(args.ciphertext)
     const key = await deriveSymmetricKey(
       keyDeriverOrThrow(this.keyDeriver),
-      args.protocolID,
-      args.keyID,
-      args.counterparty ?? 'self'
+      protocolID,
+      keyID,
+      counterparty
     )
-    return { plaintext: key.decrypt(args.ciphertext) as number[] }
+    return { plaintext: key.decrypt(ciphertext) as number[] }
   }
 
   async createHmac(args: CreateHmacArgs): Promise<CreateHmacResult> {
+    validateCreateHmacArgs(args)
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const counterparty = args.counterparty ?? 'self'
+    const data = snapshotBytes(args.data)
     const key = await deriveSymmetricKey(
       keyDeriverOrThrow(this.keyDeriver),
-      args.protocolID,
-      args.keyID,
-      args.counterparty ?? 'self'
+      protocolID,
+      keyID,
+      counterparty
     )
-    return { hmac: Hash.sha256hmac(key.toArray(), args.data) }
+    return { hmac: sha256hmac(key.toArray(), data) }
   }
 
   async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult> {
+    validateVerifyHmacArgs(args)
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const counterparty = args.counterparty ?? 'self'
+    const data = snapshotBytes(args.data)
+    const provided = snapshotBytes(args.hmac)
     const key = await deriveSymmetricKey(
       keyDeriverOrThrow(this.keyDeriver),
-      args.protocolID,
-      args.keyID,
-      args.counterparty ?? 'self'
+      protocolID,
+      keyID,
+      counterparty
     )
-    const computed = Hash.sha256hmac(key.toArray(), args.data)
-    const provided = args.hmac
+    const computed = sha256hmac(key.toArray(), data)
 
     const valid = constantTimeEquals(toArray(computed), toArray(provided))
     if (!valid) {
@@ -279,22 +320,25 @@ export class ProtoWallet {
   }
 
   async createSignature(args: CreateSignatureArgs): Promise<CreateSignatureResult> {
+    validateCreateSignatureArgs(args)
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
     if (args.hashToDirectlySign == null && args.data == null) {
       throw new Error('args.data or args.hashToDirectlySign must be valid')
     }
 
-    const hash: number[] = args.hashToDirectlySign ?? (await hashSignatureData(args.data ?? []))
-    const key = derivePrivateKey(
-      keyDeriverOrThrow(this.keyDeriver),
-      args.protocolID,
-      args.keyID,
-      args.counterparty ?? 'anyone'
-    )
+    const protocolID = snapshotProtocolID(args.protocolID)
+    const keyID = args.keyID
+    const counterparty = args.counterparty ?? 'anyone'
+    const directHash =
+      args.hashToDirectlySign === undefined ? undefined : snapshotBytes(args.hashToDirectlySign)
+    const data = args.data === undefined ? undefined : snapshotBytes(args.data)
+    const hash: number[] = directHash ?? (await hashSignatureData(data ?? []))
+    const key = derivePrivateKey(keyDeriver, protocolID, keyID, counterparty)
 
     const backend = isAsyncCryptoDigest(hash) ? readyAsyncCryptoBackend('signDigest') : undefined
     const signature =
       backend === undefined
-        ? ECDSA.sign(new BigNumber(hash), key, true)
+        ? sign(new BigNumber(hash), key, true)
         : Signature.fromDER(
             Array.from(
               validateAsyncCryptoBytes(
@@ -312,22 +356,34 @@ export class ProtoWallet {
   }
 
   async verifySignature(args: VerifySignatureArgs): Promise<VerifySignatureResult> {
+    validateVerifySignatureArgs(args)
+    const keyDeriver = keyDeriverOrThrow(this.keyDeriver)
     if (args.hashToDirectlyVerify == null && args.data == null) {
       throw new Error('args.data or args.hashToDirectlyVerify must be valid')
     }
 
-    const hash: number[] = args.hashToDirectlyVerify ?? (await hashSignatureData(args.data ?? []))
-    const key = await derivePublicKey(keyDeriverOrThrow(this.keyDeriver), args)
-    const parsedSignature = Signature.fromDER(args.signature)
+    const request = {
+      protocolID: snapshotProtocolID(args.protocolID),
+      keyID: args.keyID,
+      counterparty: args.counterparty,
+      forSelf: args.forSelf
+    }
+    const directHash =
+      args.hashToDirectlyVerify === undefined ? undefined : snapshotBytes(args.hashToDirectlyVerify)
+    const data = args.data === undefined ? undefined : snapshotBytes(args.data)
+    const signature = snapshotBytes(args.signature)
+    const hash: number[] = directHash ?? (await hashSignatureData(data ?? []))
+    const key = await derivePublicKey(keyDeriver, request)
+    const parsedSignature = Signature.fromDER(signature)
     const backend = isAsyncCryptoDigest(hash) ? readyAsyncCryptoBackend('verifyDigest') : undefined
     const valid =
       backend === undefined
-        ? ECDSA.verify(new BigNumber(hash), parsedSignature, key)
-        : await backend.verifyDigest(
+        ? verify(new BigNumber(hash), parsedSignature, key)
+        : (await backend.verifyDigest(
             Uint8Array.from(key.encode(true) as number[]),
             Uint8Array.from(hash),
             Uint8Array.from(parsedSignature.toDER() as number[])
-          )
+          )) === true
 
     if (!valid) {
       const e = new Error('Signature is not valid') as Error & { code: string }

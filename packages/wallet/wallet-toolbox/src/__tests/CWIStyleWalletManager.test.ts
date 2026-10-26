@@ -1,7 +1,19 @@
-import { WalletInterface, Random, Hash, Utils, PrivateKey, SymmetricKey, PushDrop, Transaction } from '@bsv/sdk'
+import {
+  WalletInterface,
+  Random,
+  Hash,
+  Utils,
+  PrivateKey,
+  SymmetricKey,
+  PushDrop,
+  Transaction,
+  ProtoWallet,
+  LockingScript
+} from '@bsv/sdk'
 import { PrivilegedKeyManager } from '../sdk'
 import {
   CWIStyleWalletManager,
+  DEFAULT_PROFILE_ID,
   PBKDF2_NUM_ROUNDS,
   UMPToken,
   UMPTokenInteractor,
@@ -193,6 +205,353 @@ describe('CWIStyleWalletManager Tests', () => {
   // ----------------------------------------------------------------------------------------
 
   describe('New user flow: presentation + password', () => {
+    test.each([
+      ['empty bytes', []],
+      ['oversized bytes', Array(64 * 1024 + 1).fill(0)],
+      ['negative byte', [-1]],
+      ['overflowing byte', [256]],
+      ['fractional byte', [1.5]],
+      ['non-finite byte', [NaN]]
+    ])('rejects a checkpoint with %s without starting authentication', (_name, bytes) => {
+      expect(() => manager.loadPendingRegistrationToken(bytes)).toThrow('Pending registration token is invalid')
+      expect(manager.hasPendingRegistrationToken()).toBe(false)
+      expect(manager.authenticated).toBe(false)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test.each<[string, Partial<UMPToken>]>([
+      ['a published outpoint', { currentOutpoint: `${'a'.repeat(64)}.0` }],
+      ['legacy token encoding', { umpVersion: undefined, passwordKdf: undefined }],
+      ['encrypted profiles', { profilesEncrypted: [1] }],
+      ['short password salt', { passwordSalt: Array(31).fill(1) }],
+      ['short presentation hash', { presentationHash: Array(31).fill(1) }],
+      ['short recovery hash', { recoveryHash: Array(31).fill(1) }]
+    ])('rejects an unpublished checkpoint containing %s', async (_name, invalid) => {
+      const token: UMPToken = {
+        ...(await createMockUMPToken()),
+        currentOutpoint: undefined,
+        umpVersion: 3,
+        passwordKdf: { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        ...invalid
+      }
+      const codec = manager as unknown as {
+        serializeUMPToken: (token: UMPToken, allowUnpublished: boolean) => number[]
+      }
+
+      expect(() => manager.loadPendingRegistrationToken(codec.serializeUMPToken(token, true))).toThrow(
+        'Pending registration token is invalid'
+      )
+      expect(manager.hasPendingRegistrationToken()).toBe(false)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test('refuses to replace wallet state with a checkpoint after authentication has started', async () => {
+      await manager.providePresentationKey(presentationKey)
+      expect(() => manager.loadPendingRegistrationToken([3])).toThrow('must be loaded before authentication')
+      await manager.providePassword('test-password')
+      expect(() => manager.loadPendingRegistrationToken([3])).toThrow('must be loaded before authentication')
+      expect(manager.authenticated).toBe(true)
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockWalletBuilder).toHaveBeenCalledTimes(1)
+    })
+
+    test('refuses a decryptable checkpoint whose wallet root has the wrong length', async () => {
+      const token: UMPToken = {
+        ...(await createMockUMPToken()),
+        currentOutpoint: undefined,
+        umpVersion: 3,
+        passwordKdf: { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        passwordPresentationPrimary: new SymmetricKey(XOR(presentationKey, passwordKey)).encrypt(Array(31).fill(1))
+      }
+      const codec = manager as unknown as {
+        serializeUMPToken: (token: UMPToken, allowUnpublished: boolean) => number[]
+      }
+      manager.loadPendingRegistrationToken(codec.serializeUMPToken(token, true))
+      await manager.providePresentationKey(presentationKey)
+
+      await expect(manager.providePassword('test-password')).rejects.toThrow('could not be unlocked')
+      expect(manager.authenticated).toBe(false)
+      expect(manager.hasPendingRegistrationToken()).toBe(true)
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(mockRecoveryKeySaver).not.toHaveBeenCalled()
+      expect(mockUMPTokenInteractor.buildAndSend).not.toHaveBeenCalled()
+    })
+
+    test('keeps the same pending wallet when UMP publication fails after successful funding', async () => {
+      const funder = jest.fn(async () => {})
+      const retryManager = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder
+      )
+      jest.mocked(mockUMPTokenInteractor.buildAndSend).mockRejectedValueOnce(new Error('UMP publication unavailable'))
+      await retryManager.providePresentationKey(presentationKey)
+
+      await expect(retryManager.providePassword('test-password')).rejects.toThrow('UMP publication unavailable')
+      expect(retryManager.authenticated).toBe(false)
+      expect(retryManager.hasPendingRegistrationToken()).toBe(true)
+      await expect(retryManager.switchProfile(Array(16).fill(0))).rejects.toThrow('Wallet not authenticated')
+      await retryManager.providePassword('test-password')
+
+      expect(retryManager.authenticated).toBe(true)
+      expect(retryManager.hasPendingRegistrationToken()).toBe(false)
+      expect(mockWalletBuilder.mock.calls[1][0]).toEqual(mockWalletBuilder.mock.calls[0][0])
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(funder).toHaveBeenCalledTimes(2)
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(2)
+    })
+
+    test('restores the same root after a restart between faucet broadcast and UMP publication', async () => {
+      const events: string[] = []
+      let savedToken: number[] | undefined
+      const savePendingToken = jest.fn(async (token: number[]) => {
+        events.push('checkpoint')
+        savedToken = [...token]
+      })
+      const firstBuilder = jest.fn(async (_root: number[]) => mockUnderlyingWallet)
+      const firstFunder = jest.fn(async () => {
+        events.push('funding')
+        throw new Error('broadcast response lost')
+      })
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        firstBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        firstFunder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        savePendingToken
+      )
+
+      await first.providePresentationKey(presentationKey)
+      await expect(first.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      expect(events).toEqual(['checkpoint', 'funding'])
+      expect(first.authenticated).toBe(false)
+      expect(() => first.saveSnapshot()).toThrow('UMP token cannot be saved without a current outpoint')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const secondBuilder = jest.fn(async (_root: number[]) => mockUnderlyingWallet)
+      const secondFunder = jest.fn(async () => {
+        events.push('funding after restart')
+      })
+      const second = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        secondBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        secondFunder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        savePendingToken
+      )
+      second.loadPendingRegistrationToken(savedToken)
+      await second.providePresentationKey(presentationKey)
+      await second.providePassword('test-password')
+
+      expect(second.authenticated).toBe(true)
+      expect(secondFunder).toHaveBeenCalledTimes(1)
+      expect(secondBuilder.mock.calls[0][0]).toEqual(firstBuilder.mock.calls[0][0])
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
+    })
+
+    test('clears a resolved checkpoint when a published snapshot for the same account is restored', async () => {
+      let savedToken: number[] | undefined
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {},
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await first.providePresentationKey(presentationKey)
+      await first.providePassword('test-password')
+      const snapshot = first.saveSnapshot()
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      restarted.loadPendingRegistrationToken(savedToken)
+      await restarted.loadSnapshot(snapshot)
+      expect(restarted.authenticated).toBe(true)
+      expect(restarted.hasPendingRegistrationToken()).toBe(false)
+    })
+
+    test('retains a pending root when a different root has published under the same presentation key', async () => {
+      let savedToken: number[] | undefined
+      const pending = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {
+          throw new Error('broadcast response lost')
+        },
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await pending.providePresentationKey(presentationKey)
+      await expect(pending.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const other = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      await other.providePresentationKey(presentationKey)
+      await other.providePassword('test-password')
+
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      restarted.loadPendingRegistrationToken(savedToken)
+      await restarted.loadSnapshot(other.saveSnapshot())
+      expect(restarted.hasPendingRegistrationToken()).toBe(true)
+
+      const lookup = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever
+      )
+      lookup.loadPendingRegistrationToken(savedToken)
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as jest.Mock).mockResolvedValueOnce(
+        (other as any).currentUMPToken
+      )
+      await lookup.providePresentationKey(presentationKey)
+      expect(lookup.hasPendingRegistrationToken()).toBe(true)
+    })
+
+    test('never invokes the funder when the pending token cannot be persisted', async () => {
+      const funder = jest.fn(async () => {})
+      const managerWithFailedStore = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async () => {
+          throw new Error('checkpoint write failed')
+        }
+      )
+
+      await managerWithFailedStore.providePresentationKey(presentationKey)
+      await expect(managerWithFailedStore.providePassword('test-password')).rejects.toThrow('checkpoint write failed')
+      expect(funder).not.toHaveBeenCalled()
+      expect(mockWalletBuilder).not.toHaveBeenCalled()
+      expect(managerWithFailedStore.authenticated).toBe(false)
+    })
+
+    test('rejects damaged checkpoints and wrong factors before retrying funding', async () => {
+      let savedToken: number[] | undefined
+      const first = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        async () => {
+          throw new Error('broadcast response lost')
+        },
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS },
+        undefined,
+        async token => {
+          savedToken = [...token]
+        }
+      )
+      await first.providePresentationKey(presentationKey)
+      await expect(first.providePassword('test-password')).rejects.toThrow('broadcast response lost')
+      if (savedToken == null) throw new Error('The pending token was not saved by the test fixture.')
+
+      const funder = jest.fn(async () => {})
+      const restarted = new CWIStyleWalletManager(
+        'admin.walletvendor.com',
+        mockWalletBuilder,
+        mockUMPTokenInteractor,
+        mockRecoveryKeySaver,
+        mockPasswordRetriever,
+        funder,
+        undefined,
+        { algorithm: 'pbkdf2-sha512', iterations: PBKDF2_NUM_ROUNDS }
+      )
+      expect(() => restarted.loadPendingRegistrationToken([...savedToken, 0])).toThrow('invalid')
+      restarted.loadPendingRegistrationToken(savedToken)
+      const otherPresentationKey = presentationKey.map(byte => byte ^ 0xff)
+      await expect(restarted.providePresentationKey(otherPresentationKey)).rejects.toThrow('another presentation key')
+      const otherPublishedToken = await createMockUMPToken()
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as jest.Mock).mockResolvedValueOnce({
+        ...otherPublishedToken,
+        presentationHash: Hash.sha256(otherPresentationKey)
+      })
+      await restarted.providePresentationKey(otherPresentationKey)
+      expect(restarted.authenticationFlow).toBe('existing-user')
+      expect(restarted.hasPendingRegistrationToken()).toBe(true)
+      await restarted.providePresentationKey(presentationKey)
+      await expect(restarted.providePassword('wrong-password')).rejects.toThrow('could not be unlocked')
+      expect(funder).not.toHaveBeenCalled()
+      expect(restarted.authenticated).toBe(false)
+    })
+
+    test('retries an interrupted funding attempt with the original wallet root', async () => {
+      let attempts = 0
+      const funder = jest.fn(async () => {
+        attempts += 1
+        if (attempts === 1) throw new Error('broadcast succeeded but its response was lost')
+      })
+      ;(manager as any).newWalletFunder = funder
+
+      await manager.providePresentationKey(presentationKey)
+      await expect(manager.providePassword('test-password')).rejects.toThrow('response was lost')
+      expect(manager.authenticated).toBe(false)
+
+      await manager.providePassword('test-password')
+      expect(manager.authenticated).toBe(true)
+      expect(funder).toHaveBeenCalledTimes(2)
+      expect(mockRecoveryKeySaver).toHaveBeenCalledTimes(1)
+      expect(mockWalletBuilder).toHaveBeenCalledTimes(2)
+      expect(mockWalletBuilder.mock.calls[1][0]).toEqual(mockWalletBuilder.mock.calls[0][0])
+    })
+
     test('Successfully creates a new token and calls buildAndSend', async () => {
       // New wallet funder is a mock function
       const newWalletFunder = jest.fn(() => {})
@@ -443,6 +802,185 @@ describe('CWIStyleWalletManager Tests', () => {
   })
 
   describe('Profile management', () => {
+    function publishedProfileNames(): string[] {
+      const token = (manager as any).currentUMPToken as UMPToken
+      if (token.profilesEncrypted == null) return []
+      const bytes = new SymmetricKey((manager as any).rootPrimaryKey).decrypt(token.profilesEncrypted) as number[]
+      return (JSON.parse(Utils.toUTF8(bytes)) as Array<{ name: string }>).map(p => p.name)
+    }
+
+    test.each(['Work', 'work'])('overlapping duplicate name %s is rejected before publication', async duplicate => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      let release!: () => void
+      const held = new Promise<void>(resolve => {
+        release = resolve
+      })
+      const getFactorSpy = jest
+        .spyOn(manager as any, 'getFactor')
+        .mockImplementationOnce(async () => {
+          await held
+          return Random(32)
+        })
+        .mockImplementation(async () => Random(32))
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockClear()
+      const first = manager.addProfile('Work')
+      const [second] = await Promise.allSettled([manager.addProfile(duplicate)])
+      release()
+      await first
+      expect(second.status).toBe('rejected')
+      if (second.status === 'rejected')
+        expect(second.reason.message).toBe(`Profile name "${duplicate}" is already in use.`)
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+      expect(publishedProfileNames()).toEqual(['Work'])
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
+      getFactorSpy.mockRestore()
+    })
+
+    test('addProfile publication failure preserves the token and releases the name for retry', async () => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const oldToken = (manager as any).currentUMPToken
+      const before = manager.listProfiles()
+      const error = new Error('UMP publication failed')
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockRejectedValueOnce(error)
+      await expect(manager.addProfile('Work')).rejects.toBe(error)
+      expect((manager as any).currentUMPToken).toBe(oldToken)
+      expect(manager.listProfiles()).toEqual(before)
+      expect(publishedProfileNames()).toEqual([])
+      await expect(manager.addProfile('work')).resolves.toHaveLength(16)
+      expect(publishedProfileNames()).toEqual(['work'])
+      getFactorSpy.mockRestore()
+    })
+
+    test.each([false, true])('deleteProfile publication failure preserves state with active=%s', async active => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      if (active) await manager.switchProfile(workId)
+      const oldToken = (manager as any).currentUMPToken
+      const before = manager.listProfiles()
+      const error = new Error('UMP publication failed')
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockRejectedValueOnce(error)
+      await expect(manager.deleteProfile(workId)).rejects.toBe(error)
+      expect((manager as any).currentUMPToken).toBe(oldToken)
+      expect(manager.listProfiles()).toEqual(before)
+      expect(publishedProfileNames()).toEqual(['Work'])
+      await manager.deleteProfile(workId)
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default'])
+      expect(manager.listProfiles()[0].active).toBe(true)
+      expect(publishedProfileNames()).toEqual([])
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile preserves the publication error when restoration also fails', async () => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+      const oldToken = (manager as any).currentUMPToken
+      const error = new Error('UMP publication failed')
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockRejectedValueOnce(error)
+      const realSwitch = manager.switchProfile.bind(manager)
+      const switchSpy = jest
+        .spyOn(manager, 'switchProfile')
+        .mockImplementationOnce(realSwitch)
+        .mockRejectedValueOnce(new Error('wallet rebuild failed'))
+      await expect(manager.deleteProfile(workId)).rejects.toBe(error)
+      expect((manager as any).currentUMPToken).toBe(oldToken)
+      expect(publishedProfileNames()).toEqual(['Work'])
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+      switchSpy.mockRestore()
+      getFactorSpy.mockRestore()
+    })
+
+    test('addProfile retains the published profile when switching back fails', async () => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+      const oldToken = (manager as any).currentUMPToken
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockClear().mockResolvedValueOnce('profile-added.0')
+      const error = new Error('wallet rebuild failed')
+      const realSwitch = manager.switchProfile.bind(manager)
+      const switchSpy = jest
+        .spyOn(manager, 'switchProfile')
+        .mockImplementationOnce(realSwitch)
+        .mockRejectedValueOnce(error)
+      await expect(manager.addProfile('Home')).rejects.toBe(error)
+      expect((manager as any).currentUMPToken).not.toBe(oldToken)
+      expect((manager as any).currentUMPToken.currentOutpoint).toBe('profile-added.0')
+      expect(publishedProfileNames()).toEqual(['Work', 'Home'])
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work', 'Home'])
+      await expect(manager.addProfile('home')).rejects.toThrow('already in use')
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
+      expect(switchSpy.mock.calls.map(([id]) => id)).toEqual([DEFAULT_PROFILE_ID, workId])
+      switchSpy.mockRestore()
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile retains the published deletion when switching back fails', async () => {
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      const homeId = await manager.addProfile('Home')
+      await manager.switchProfile(workId)
+      const oldToken = (manager as any).currentUMPToken
+      ;(mockUMPTokenInteractor.buildAndSend as jest.Mock).mockClear().mockResolvedValueOnce('profile-deleted.0')
+      const error = new Error('wallet rebuild failed')
+      const realSwitch = manager.switchProfile.bind(manager)
+      const switchSpy = jest
+        .spyOn(manager, 'switchProfile')
+        .mockImplementationOnce(realSwitch)
+        .mockRejectedValueOnce(error)
+      await expect(manager.deleteProfile(homeId)).rejects.toBe(error)
+      expect((manager as any).currentUMPToken).not.toBe(oldToken)
+      expect((manager as any).currentUMPToken.currentOutpoint).toBe('profile-deleted.0')
+      expect(publishedProfileNames()).toEqual(['Work'])
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+      await expect(manager.deleteProfile(homeId)).rejects.toThrow('Profile not found')
+      expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
+      expect(switchSpy.mock.calls.map(([id]) => id)).toEqual([DEFAULT_PROFILE_ID, workId])
+      switchSpy.mockRestore()
+      getFactorSpy.mockRestore()
+    })
+
+    test('overlapping addProfile calls keep both profiles', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+      // Each addProfile runs synchronously up to its first getFactor, so call 1
+      // is A's and call 2 is B's; B is held until A has published.
+      let releaseB!: () => void
+      const bHeld = new Promise<void>(resolve => {
+        releaseB = resolve
+      })
+      const getFactorSpy = jest
+        .spyOn(manager as any, 'getFactor')
+        .mockImplementationOnce(async () => Random(32))
+        .mockImplementationOnce(async () => {
+          await bHeld
+          return Random(32)
+        })
+        .mockImplementation(async () => Random(32))
+      const updateSpy = jest.spyOn(manager as any, 'updateFactors')
+      const addA = manager.addProfile('A')
+      const addB = manager.addProfile('B')
+      await addA
+      releaseB()
+      await addB
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'A', 'B'])
+      const lastPublished = updateSpy.mock.calls[updateSpy.mock.calls.length - 1][6] as Array<{ name: string }>
+      expect(lastPublished.map(p => p.name)).toEqual(['A', 'B'])
+      updateSpy.mockRestore()
+      getFactorSpy.mockRestore()
+    })
+
     test('addProfile adds a new profile and updates the UMP token', async () => {
       ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
       await manager.providePresentationKey(presentationKey)
@@ -469,6 +1007,78 @@ describe('CWIStyleWalletManager Tests', () => {
 
       expect(mockUMPTokenInteractor.buildAndSend).toHaveBeenCalledTimes(1)
 
+      getFactorSpy.mockRestore()
+    })
+
+    test('addProfile leaves the profile list unchanged when the UMP token update fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest
+        .spyOn(manager as any, 'getFactor')
+        .mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+        .mockImplementation(async () => Random(32))
+
+      await expect(manager.addProfile('Work')).rejects.toThrow('Failed to decrypt factor passwordKey')
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default'])
+
+      // A retry reports the outcome of the retry, not "already in use"
+      await expect(manager.addProfile('Work')).resolves.toHaveLength(16)
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile keeps the profile when the UMP token update fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+
+      getFactorSpy.mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+      const switchSpy = jest.spyOn(manager, 'switchProfile')
+
+      await expect(manager.deleteProfile(workId)).rejects.toThrow('Failed to decrypt factor passwordKey')
+      // It left the active profile for the update, then went back to it
+      expect(switchSpy.mock.calls.map(([id]) => id)).toEqual([DEFAULT_PROFILE_ID, workId])
+      switchSpy.mockRestore()
+      const profiles = manager.listProfiles()
+      expect(profiles.map(p => p.name)).toEqual(['default', 'Work'])
+      expect(profiles.find(p => p.name === 'Work')?.active).toBe(true)
+
+      // A retry succeeds and falls back to the default profile
+      await manager.deleteProfile(workId)
+      const after = manager.listProfiles()
+      expect(after.map(p => p.name)).toEqual(['default'])
+      expect(after[0].active).toBe(true)
+
+      getFactorSpy.mockRestore()
+    })
+
+    test('deleteProfile reports the update failure even if switching back also fails', async () => {
+      ;(mockUMPTokenInteractor.findByPresentationKeyHash as any).mockResolvedValueOnce(undefined)
+      await manager.providePresentationKey(presentationKey)
+      await manager.providePassword('test-password')
+
+      const getFactorSpy = jest.spyOn(manager as any, 'getFactor').mockImplementation(async () => Random(32))
+      const workId = await manager.addProfile('Work')
+      await manager.switchProfile(workId)
+
+      getFactorSpy.mockRejectedValueOnce(new Error('Failed to decrypt factor passwordKey'))
+      const realSwitch = manager.switchProfile.bind(manager)
+      const switchSpy = jest
+        .spyOn(manager, 'switchProfile')
+        .mockImplementationOnce(realSwitch)
+        .mockRejectedValueOnce(new Error('wallet rebuild failed'))
+
+      await expect(manager.deleteProfile(workId)).rejects.toThrow('Failed to decrypt factor passwordKey')
+      expect(manager.listProfiles().map(p => p.name)).toEqual(['default', 'Work'])
+
+      switchSpy.mockRestore()
       getFactorSpy.mockRestore()
     })
 
@@ -996,61 +1606,56 @@ describe('CWIStyleWalletManager Tests', () => {
   })
 
   describe('OverlayUMPTokenInteractor signature-aware parsing', () => {
-    test('strips verified trailing signature before interpreting optional profiles', () => {
+    async function lookupTransaction(fields: number[][]): Promise<Transaction> {
+      const owner = new ProtoWallet(PrivateKey.fromRandom())
+      const lockingScript = await new PushDrop(owner).lock(
+        fields.map(field => [...field]),
+        [2, 'admin user management token'],
+        '1',
+        'self',
+        true,
+        true
+      )
+      return new Transaction(1, [], [{ satoshis: 1, lockingScript }], 0)
+    }
+
+    test('strips verified trailing signature before interpreting optional profiles', async () => {
       const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
       const payloadFields = Array.from({ length: 11 }, () => Random(32))
-      const signingKey = PrivateKey.fromRandom()
-      const validSignature = signingKey.sign(payloadFields.flat()).toDER()
-
-      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
-        outputs: [{ lockingScript: {} as any }],
-        id: () => 'txid123'
-      } as any)
-      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
-        fields: [...payloadFields, validSignature],
-        lockingPublicKey: signingKey.toPublicKey()
-      } as any)
+      const transaction = await lookupTransaction(payloadFields)
 
       const parsed = (interactor as any).parseLookupAnswer({
         type: 'output-list',
-        outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        outputs: [{ beef: transaction.toBEEF(), outputIndex: 0 }]
       }) as UMPToken
 
       expect(parsed).toBeDefined()
       expect(parsed.passwordSalt).toEqual(payloadFields[0])
       expect(parsed.profilesEncrypted).toBeUndefined()
-
-      fromBeefSpy.mockRestore()
-      decodeSpy.mockRestore()
+      expect(parsed.currentOutpoint).toBe(`${transaction.id('hex')}.0`)
     })
 
-    test('does not strip DER-like trailing field when signature verification fails', () => {
+    test('rejects a canonical token when its trailing field signature is invalid', async () => {
       const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
       const payloadFields = Array.from({ length: 11 }, () => Random(32))
-      const derLikeButInvalidForPayload = [0x30, 0x06, 1, 2, 3, 4, 5, 6]
-
-      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
-        outputs: [{ lockingScript: {} as any }],
-        id: () => 'txid124'
-      } as any)
-      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
-        fields: [...payloadFields, derLikeButInvalidForPayload],
-        lockingPublicKey: PrivateKey.fromRandom().toPublicKey()
-      } as any)
+      const transaction = await lookupTransaction(payloadFields)
+      const chunks = transaction.outputs[0].lockingScript.chunks.map(chunk => ({
+        op: chunk.op,
+        ...(chunk.data == null ? {} : { data: [...chunk.data] })
+      }))
+      const signature = chunks[2 + payloadFields.length].data!
+      signature[signature.length - 1] ^= 1
+      transaction.outputs[0].lockingScript = new LockingScript(chunks)
 
       const parsed = (interactor as any).parseLookupAnswer({
         type: 'output-list',
-        outputs: [{ beef: [4, 5, 6], outputIndex: 0 }]
+        outputs: [{ beef: transaction.toBEEF(), outputIndex: 0 }]
       }) as UMPToken
 
-      expect(parsed).toBeDefined()
-      expect(parsed.profilesEncrypted).toEqual(derLikeButInvalidForPayload)
-
-      fromBeefSpy.mockRestore()
-      decodeSpy.mockRestore()
+      expect(parsed).toBeUndefined()
     })
 
-    test('parses valid v3 KDF metadata from a lookup token', () => {
+    test('parses valid v3 KDF metadata from a field-signed lookup token', async () => {
       const interactor = new OverlayUMPTokenInteractor({} as any, {} as any)
       const payloadFields = Array.from({ length: 11 }, () => Random(32))
       const protocolFields = [
@@ -1067,17 +1672,11 @@ describe('CWIStyleWalletManager Tests', () => {
           'utf8'
         )
       ]
-      const fromBeefSpy = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
-        outputs: [{ lockingScript: {} as any }],
-        id: () => 'txid125'
-      } as any)
-      const decodeSpy = jest.spyOn(PushDrop, 'decode').mockReturnValue({
-        fields: protocolFields
-      } as any)
+      const transaction = await lookupTransaction(protocolFields)
 
       const parsed = (interactor as any).parseLookupAnswer({
         type: 'output-list',
-        outputs: [{ beef: [7, 8, 9], outputIndex: 0 }]
+        outputs: [{ beef: transaction.toBEEF(), outputIndex: 0 }]
       }) as UMPToken
 
       expect(parsed).toMatchObject({
@@ -1089,11 +1688,8 @@ describe('CWIStyleWalletManager Tests', () => {
           parallelism: 1,
           hashLength: 32
         },
-        currentOutpoint: 'txid125.0'
+        currentOutpoint: `${transaction.id('hex')}.0`
       })
-
-      fromBeefSpy.mockRestore()
-      decodeSpy.mockRestore()
     })
   })
 })

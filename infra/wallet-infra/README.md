@@ -8,6 +8,20 @@ See [Service Resource Profiles](../../docs/reference/service-resource-profiles.m
 for RPC ceilings, API/monitor role separation, official-image provider settings,
 and Wallet Storage HPA prerequisites.
 
+## Backup and disaster recovery
+
+Wallet users need both recoverable root keys and wallet records/derivation
+metadata. This service stores data; its server identity key does not replace a
+user's root key. Operators must provide consistent encrypted database backups,
+versioned retention, independent restore access and measured recovery objectives.
+Replication and `/healthz` do not prove backup recoverability.
+
+Use [Wallet backup and recovery](../../docs/guides/wallet-backup-recovery.md),
+[BRC-38/39 per-user portability](../../docs/guides/wallet-data-portability.md) and
+[the recovery drill](../../docs/guides/wallet-recovery-drill.md). Include schema,
+required external stores and secret-store access in an isolated operator
+restore test; review background-job side effects before activating the copy.
+
 ## Key Features
 
 1. #### Out-of-the-Box UTXO Management

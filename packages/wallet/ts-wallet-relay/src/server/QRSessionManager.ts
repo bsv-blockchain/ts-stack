@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto'
 import type { Session, SessionStatus } from '../types.js'
+import { DEFAULT_MAX_SESSIONS, MAX_CONFIGURED_SESSIONS } from '../shared/validation.js'
 
 const PAIRING_TTL_MS = 120 * 1000 // 2 min QR expiry
 const PAIRING_GRACE_MS = 30 * 1000 // extra window once mobile WS has opened
@@ -11,7 +12,7 @@ export interface QRSessionManagerOptions {
   /**
    * Maximum number of sessions held in memory at once.
    * `createSession` throws with code 429 when the cap is reached.
-   * Default: unlimited.
+   * Default: 1000.
    */
   maxSessions?: number
 }
@@ -23,7 +24,7 @@ export interface QRSessionManagerOptions {
  * and the BSV wallet keyID.
  *
  * Pending sessions that were never scanned expire after ~3.5 min.
- * Connected sessions expire after 30 days.
+ * Connected sessions expire after 24 hours.
  */
 export class QRSessionManager {
   private readonly sessions = new Map<string, Session>()
@@ -32,7 +33,14 @@ export class QRSessionManager {
   private readonly maxSessions: number
 
   constructor(options?: QRSessionManagerOptions) {
-    this.maxSessions = options?.maxSessions ?? Infinity
+    this.maxSessions = options?.maxSessions ?? DEFAULT_MAX_SESSIONS
+    if (
+      !Number.isSafeInteger(this.maxSessions) ||
+      this.maxSessions < 1 ||
+      this.maxSessions > MAX_CONFIGURED_SESSIONS
+    ) {
+      throw new RangeError(`maxSessions must be an integer from 1 to ${MAX_CONFIGURED_SESSIONS}`)
+    }
     this.gcTimer = setInterval(() => this.gc(), GC_INTERVAL_MS).unref()
   }
 
@@ -47,6 +55,9 @@ export class QRSessionManager {
   }
 
   createSession(): Session {
+    // Reclaim sessions whose absolute TTL elapsed before applying the cap. The
+    // periodic sweep is only a fallback, not an extra retention window.
+    this.gc()
     if (this.sessions.size >= this.maxSessions) {
       const err = new Error('Session limit reached') as Error & { code: number }
       err.code = 429
@@ -60,7 +71,7 @@ export class QRSessionManager {
       status: 'pending',
       createdAt: now,
       // Short TTL — extended to SESSION_TTL_MS when the session becomes connected.
-      // This ensures unscanned QR codes are GC'd quickly rather than after 30 days.
+      // This ensures unscanned QR codes are GC'd quickly rather than using the 24 h connected TTL.
       expiresAt: now + PENDING_EXPIRY_MS,
       desktopToken
     }
@@ -71,6 +82,14 @@ export class QRSessionManager {
   getSession(id: string): Session | null {
     const session = this.sessions.get(id)
     if (!session) return null
+    if (
+      session.status !== 'pending' &&
+      session.status !== 'expired' &&
+      Date.now() > session.expiresAt
+    ) {
+      session.status = 'expired'
+      this.onExpired?.(id)
+    }
     // Lazily expire pending sessions past their pairing window.
     // Respect the grace window: if the mobile WS has already opened (pairingStartedAt is
     // set), don't flip to 'expired' for another PAIRING_GRACE_MS. This prevents a race
@@ -78,7 +97,10 @@ export class QRSessionManager {
     // still in flight when the caller polls session status.
     if (session.status === 'pending' && Date.now() > session.createdAt + PAIRING_TTL_MS) {
       const gracedUntil = (session.pairingStartedAt ?? 0) + PAIRING_GRACE_MS
-      if (Date.now() > gracedUntil) session.status = 'expired'
+      if (Date.now() > gracedUntil) {
+        session.status = 'expired'
+        this.onExpired?.(id)
+      }
     }
     return session
   }
@@ -86,20 +108,39 @@ export class QRSessionManager {
   /** Mark that a mobile WS has opened for this session, starting the grace window. */
   setPairingStarted(id: string): void {
     const session = this.sessions.get(id)
-    if (session?.status === 'pending') session.pairingStartedAt = Date.now()
+    if (session?.status === 'pending' && session.pairingStartedAt === undefined) {
+      session.pairingStartedAt = Date.now()
+    }
   }
 
   setStatus(id: string, status: SessionStatus): void {
     const session = this.sessions.get(id)
     if (!session) return
+    const previous = session.status
     session.status = status
-    // Extend lifetime to full SESSION_TTL_MS once a mobile wallet connects.
-    if (status === 'connected') session.expiresAt = Date.now() + SESSION_TTL_MS
+    // Establish one absolute connected-session lifetime. Reconnects must not
+    // silently renew an authorization that was issued for 24 hours.
+    if (status === 'connected' && session.connectedAt === undefined) {
+      session.connectedAt = Date.now()
+      session.expiresAt = session.connectedAt + SESSION_TTL_MS
+    }
+    if (status === 'expired' && previous !== 'expired') this.onExpired?.(id)
   }
 
   setMobileIdentityKey(id: string, key: string): void {
     const session = this.sessions.get(id)
     if (session) session.mobileIdentityKey = key
+  }
+
+  /** Record the backend identity key embedded in this session's QR. */
+  setBackendIdentityKey(id: string, key: string): void {
+    const session = this.sessions.get(id)
+    if (session) session.backendIdentityKey = key
+  }
+
+  /** Remove a partially created or explicitly retired session immediately. */
+  deleteSession(id: string): void {
+    if (this.sessions.delete(id)) this.onExpired?.(id)
   }
 
   /**
@@ -117,7 +158,7 @@ export class QRSessionManager {
     for (const [id, session] of this.sessions) {
       if (now > session.expiresAt) {
         this.sessions.delete(id)
-        this.onExpired?.(id)
+        if (session.status !== 'expired') this.onExpired?.(id)
       }
     }
   }

@@ -1,4 +1,4 @@
-import * as sdk from '../../../sdk'
+import type * as sdk from '../../../sdk'
 
 export interface TableUser extends sdk.EntityTimeStamp {
   created_at: Date

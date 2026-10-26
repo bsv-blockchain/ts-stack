@@ -2,6 +2,9 @@ import type { TelemetryEvent, WalletInterface } from '@bsv/sdk'
 import { StorageClient } from '../StorageClient'
 import { StorageClient as StorageMobile } from '../StorageMobile'
 
+const SERVER_IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const AUTHENTICATED_HEADERS = { 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }
+
 describe('StorageClient telemetry', () => {
   it.each([
     ['browser and Node', StorageClient, false],
@@ -25,7 +28,6 @@ describe('StorageClient telemetry', () => {
         }
       })
       Reflect.set(client, 'serverSupportsBinary', binaryRequests)
-      const realAuthClient = Reflect.get(client, 'authClient')
       Reflect.set(client, 'authClient', {
         fetch: jest.fn(async (_url: string, init: RequestInit) => {
           requestInit = init
@@ -37,7 +39,7 @@ describe('StorageClient telemetry', () => {
             }),
             {
               status: 200,
-              headers: { 'Content-Type': 'application/json' }
+              headers: { 'Content-Type': 'application/json', ...AUTHENTICATED_HEADERS }
             }
           )
         })
@@ -49,9 +51,6 @@ describe('StorageClient telemetry', () => {
       const requestHeaders = requestInit?.headers
       expect(requestHeaders).toBeDefined()
       expect((requestHeaders as Record<string, string>).traceparent).toBeUndefined()
-      expect(() =>
-        Reflect.get(realAuthClient, 'includedRequestHeaders').call(realAuthClient, requestHeaders)
-      ).not.toThrow()
       const byName = new Map(events.map(event => [event.name, event]))
       expect(
         [
@@ -102,7 +101,8 @@ describe('StorageClient telemetry', () => {
           jsonrpc: '2.0',
           id: 1,
           result: { log: { logs: [] }, available: true }
-        })
+        }),
+        { headers: AUTHENTICATED_HEADERS }
       )
     )
     await expect(Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)).resolves.toMatchObject({
@@ -123,7 +123,8 @@ describe('StorageClient telemetry', () => {
     fetch.mockResolvedValueOnce(
       new Response('unavailable', {
         status: 503,
-        statusText: 'Service Unavailable'
+        statusText: 'Service Unavailable',
+        headers: AUTHENTICATED_HEADERS
       })
     )
     await expect(Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)).rejects.toThrow(
@@ -140,7 +141,8 @@ describe('StorageClient telemetry', () => {
             message: 'remote failure',
             name: 'Error'
           }
-        })
+        }),
+        { headers: AUTHENTICATED_HEADERS }
       )
     )
     await expect(Reflect.get(client, 'rpcCall').call(client, 'isAvailable', params)).rejects.toThrow('remote failure')

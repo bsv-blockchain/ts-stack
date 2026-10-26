@@ -35,7 +35,7 @@ function toArrayBuffer(bytes: number[]): ArrayBuffer {
  */
 function mockGlobalFetch(responseBytes: number[]): jest.Mock {
   const mock = jest.fn().mockResolvedValue({
-    arrayBuffer: () => Promise.resolve(toArrayBuffer(responseBytes)),
+    arrayBuffer: () => Promise.resolve(toArrayBuffer(responseBytes))
   } as unknown as Response)
   global.fetch = mock
   return mock
@@ -61,8 +61,17 @@ afterEach(() => {
 
 describe('HTTPWalletWire – constructor', () => {
   it('stores the baseUrl', () => {
-    const wire = new HTTPWalletWire('example.com', 'http://my-server:9000')
-    expect(wire.baseUrl).toBe('http://my-server:9000')
+    const wire = new HTTPWalletWire('example.com', 'https://my-server.example:9000/')
+    expect(wire.baseUrl).toBe('https://my-server.example:9000')
+  })
+
+  it.each([
+    'http://wallet.example:9000',
+    'https://user:password@wallet.example',
+    'https://wallet.example/rpc',
+    'https://wallet.example#rpc'
+  ])('rejects unsafe base URL %s', baseUrl => {
+    expect(() => new HTTPWalletWire('example.com', baseUrl)).toThrow()
   })
 
   it('uses http://localhost:3301 as the default baseUrl', () => {
@@ -96,7 +105,7 @@ describe('HTTPWalletWire – constructor', () => {
         throw new TypeError('Illegal invocation')
       }
       return {
-        arrayBuffer: async () => toArrayBuffer([1, 2, 3]),
+        arrayBuffer: async () => toArrayBuffer([1, 2, 3])
       } as unknown as Response
     })
     global.fetch = receiverSensitiveFetch as unknown as typeof fetch
@@ -138,9 +147,7 @@ describe('HTTPWalletWire – transmitToWallet request', () => {
     mockGlobalFetch([1, 2, 3])
     const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
 
-    const result = await wire.transmitToWalletUint8Array(
-      Uint8Array.from(buildFrame('getVersion'))
-    )
+    const result = await wire.transmitToWalletUint8Array(Uint8Array.from(buildFrame('getVersion')))
 
     expect(result).toEqual(new Uint8Array([1, 2, 3]))
   })
@@ -177,6 +184,16 @@ describe('HTTPWalletWire – transmitToWallet request', () => {
     expect(headers['Content-Type']).toBe('application/octet-stream')
   })
 
+  it('refuses HTTP redirects so wallet requests cannot be forwarded to another origin', async () => {
+    const mockFetch = mockGlobalFetch([])
+    const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
+
+    await wire.transmitToWallet(buildFrame('getVersion'))
+
+    const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+    expect(init.redirect).toBe('error')
+  })
+
   it('sets Origin header to the originator encoded in the message frame', async () => {
     const mockFetch = mockGlobalFetch([])
     const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
@@ -197,6 +214,16 @@ describe('HTTPWalletWire – transmitToWallet request', () => {
     const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
     const headers = init.headers as Record<string, string>
     expect(headers['Origin']).toBe('')
+  })
+
+  it('rejects a frame that attempts to override the configured originator', async () => {
+    const mockFetch = mockGlobalFetch([])
+    const wire = new HTTPWalletWire('trusted.example', 'http://localhost:3301')
+
+    await expect(
+      wire.transmitToWallet(buildFrame('getVersion', 'attacker.example'))
+    ).rejects.toThrow('does not match')
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 
   it('sends a Uint8Array body containing the payload bytes', async () => {
@@ -244,6 +271,65 @@ describe('HTTPWalletWire – transmitToWallet response', () => {
     const result = await wire.transmitToWallet(buildFrame('getVersion'))
     expect(result).toEqual([])
   })
+
+  it('rejects an oversized response before buffering its body', async () => {
+    const arrayBuffer = jest.fn()
+    const mockFetch = jest.fn().mockResolvedValue({
+      headers: new Headers({ 'content-length': String(256 * 1024 * 1024 + 1) }),
+      body: null,
+      arrayBuffer
+    } as unknown as Response)
+    const wire = new HTTPWalletWire(
+      undefined,
+      'http://localhost:3301',
+      mockFetch as unknown as typeof fetch
+    )
+
+    await expect(wire.transmitToWallet(buildFrame('getVersion'))).rejects.toThrow(
+      'maximum permitted size'
+    )
+    expect(arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-success HTTP response before reading its body', async () => {
+    const arrayBuffer = jest.fn()
+    const mockFetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      headers: new Headers(),
+      body: null,
+      arrayBuffer
+    } as unknown as Response)
+    const wire = new HTTPWalletWire(
+      undefined,
+      'http://localhost:3301',
+      mockFetch as unknown as typeof fetch
+    )
+
+    await expect(wire.transmitToWallet(buildFrame('getVersion'))).rejects.toThrow(
+      'HTTP status 503'
+    )
+    expect(arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed Content-Length header', async () => {
+    const arrayBuffer = jest.fn()
+    const mockFetch = jest.fn().mockResolvedValue({
+      headers: new Headers({ 'content-length': 'not-a-number' }),
+      body: null,
+      arrayBuffer
+    } as unknown as Response)
+    const wire = new HTTPWalletWire(
+      undefined,
+      'http://localhost:3301',
+      mockFetch as unknown as typeof fetch
+    )
+
+    await expect(wire.transmitToWallet(buildFrame('getVersion'))).rejects.toThrow(
+      'invalid Content-Length'
+    )
+    expect(arrayBuffer).not.toHaveBeenCalled()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -255,7 +341,9 @@ describe('HTTPWalletWire – network errors', () => {
     mockGlobalFetchWithNetworkError('Failed to connect')
     const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
 
-    await expect(wire.transmitToWallet(buildFrame('getVersion'))).rejects.toThrow('Failed to connect')
+    await expect(wire.transmitToWallet(buildFrame('getVersion'))).rejects.toThrow(
+      'Failed to connect'
+    )
   })
 })
 
@@ -290,10 +378,10 @@ describe('HTTPWalletWire – call-name routing', () => {
     'getHeight',
     'getHeaderForHeight',
     'getNetwork',
-    'getVersion',
+    'getVersion'
   ]
 
-  it.each(callsToTest)('routes %s to the correct URL segment', async (callName) => {
+  it.each(callsToTest)('routes %s to the correct URL segment', async callName => {
     const mockFetch = mockGlobalFetch([])
     const wire = new HTTPWalletWire(undefined, 'http://localhost:3301')
 
@@ -313,7 +401,7 @@ describe('HTTPWalletWire – httpClient injection', () => {
     const globalMock = jest.fn() // must NOT be called
     global.fetch = globalMock
     const injected = jest.fn().mockResolvedValue({
-      arrayBuffer: () => Promise.resolve(toArrayBuffer([])),
+      arrayBuffer: () => Promise.resolve(toArrayBuffer([]))
     } as unknown as Response)
 
     const wire = new HTTPWalletWire(

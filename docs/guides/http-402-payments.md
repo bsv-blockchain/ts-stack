@@ -379,11 +379,19 @@ npx ts-node main.ts
 → If cache timeout is very long, client may use stale payments for different resources. Use moderate timeout (30 min is safe)
 
 **"Replay protection"**
-→ For `@bsv/402-pay`, freshness fields bind the proof but the wallet must also
-avoid newly accepting the same transaction twice. For
+→ For `@bsv/402-pay`, freshness bounds the replay window, wallet
+internalization validates the remittance, and an independent atomic replay
+store admits a transaction ID once. Its default store is bounded but
+process-local; inject one shared durable store in every process or node. The
+wallet's optional `isMerge` detail is only defense in depth because it is not
+part of the public BRC-100 result shape. For
 `@bsv/payment-express-middleware`, inject a durable atomic
 transaction-ID replay store in multi-process deployments; its derivation
 prefix is not a single-use replay database.
+
+If payment processing fails after wallet work begins, the middleware returns
+`503` without a new challenge. Treat that result as ambiguous and reconcile the
+transaction before asking the client to pay again.
 
 ## What to read next
 

@@ -1,12 +1,16 @@
-import { defaultHttpClient, HttpClient } from '@bsv/sdk'
+import { createPublicHTTPSFetch, defaultHttpClient, HttpClient } from '@bsv/sdk'
 import { ChaintracksDownloadOptions, ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { wait } from '../../../../utility/utilityHelpers'
+import { WERR_INVALID_PARAMETER } from '../../../../sdk'
 
 const DEFAULT_MAX_RETRIES = 3
 const DEFAULT_RETRY_MSECS = 1000
 const DEFAULT_MAX_RETRY_MSECS = 2 * 60 * 1000
 const DEFAULT_TIMEOUT_MSECS = 30 * 1000
 const DEFAULT_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+const MAX_RETRIES = 100
+const MAX_TIMEOUT_MSECS = 60 * 60 * 1000
+const MAX_RESPONSE_BYTES = 512 * 1024 * 1024
 
 export interface ChaintracksFetchOptions {
   /** Number of retries after the initial request. Defaults to three. */
@@ -19,6 +23,10 @@ export interface ChaintracksFetchOptions {
   maxRetryMsecs?: number
   /** Testable jitter source in the inclusive range 0..1. */
   random?: () => number
+  /** Fetch implementation for operator-configured sources. */
+  fetch?: typeof fetch
+  /** Public-network fetch implementation; injectable for deterministic tests. */
+  publicNetworkFetch?: typeof fetch
 }
 
 export class ChaintracksFetchError extends Error {
@@ -63,10 +71,15 @@ function fetchError(url: string, response: Response, kind: string): ChaintracksF
   )
 }
 
-function positiveSafeInteger(value: number | undefined, fallback: number, name: string): number {
+function boundedPositiveSafeInteger(
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+  name: string
+): number {
   const resolved = value ?? fallback
-  if (!Number.isSafeInteger(resolved) || resolved < 1) {
-    throw new Error(`${name} must be a positive safe integer`)
+  if (!Number.isSafeInteger(resolved) || resolved < 1 || resolved > maximum) {
+    throw new Error(`${name} must be a positive safe integer no greater than ${maximum}`)
   }
   return resolved
 }
@@ -86,22 +99,42 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
   private readonly retryMsecs: number
   private readonly maxRetryMsecs: number
   private readonly random: () => number
+  private readonly fetcher: typeof fetch
+  private readonly publicNetworkFetch: typeof fetch
 
   constructor(options: ChaintracksFetchOptions = {}) {
     const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES
-    if (!Number.isSafeInteger(maxRetries) || maxRetries < 0) {
-      throw new Error('maxRetries must be a non-negative safe integer')
+    if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || maxRetries > MAX_RETRIES) {
+      throw new Error(`maxRetries must be a non-negative safe integer no greater than ${MAX_RETRIES}`)
     }
     this.maxRetries = maxRetries
-    this.timeoutMsecs = positiveSafeInteger(options.timeoutMsecs, DEFAULT_TIMEOUT_MSECS, 'timeoutMsecs')
-    this.maxResponseBytes = positiveSafeInteger(
+    this.timeoutMsecs = boundedPositiveSafeInteger(
+      options.timeoutMsecs,
+      DEFAULT_TIMEOUT_MSECS,
+      MAX_TIMEOUT_MSECS,
+      'timeoutMsecs'
+    )
+    this.maxResponseBytes = boundedPositiveSafeInteger(
       options.maxResponseBytes,
       DEFAULT_MAX_RESPONSE_BYTES,
+      MAX_RESPONSE_BYTES,
       'maxResponseBytes'
     )
-    this.retryMsecs = positiveSafeInteger(options.retryMsecs, DEFAULT_RETRY_MSECS, 'retryMsecs')
-    this.maxRetryMsecs = positiveSafeInteger(options.maxRetryMsecs, DEFAULT_MAX_RETRY_MSECS, 'maxRetryMsecs')
+    this.retryMsecs = boundedPositiveSafeInteger(
+      options.retryMsecs,
+      DEFAULT_RETRY_MSECS,
+      MAX_TIMEOUT_MSECS,
+      'retryMsecs'
+    )
+    this.maxRetryMsecs = boundedPositiveSafeInteger(
+      options.maxRetryMsecs,
+      DEFAULT_MAX_RETRY_MSECS,
+      MAX_TIMEOUT_MSECS,
+      'maxRetryMsecs'
+    )
     this.random = options.random ?? Math.random
+    this.fetcher = options.fetch ?? fetch
+    this.publicNetworkFetch = options.publicNetworkFetch ?? createPublicHTTPSFetch()
   }
 
   async download(url: string, maxResponseBytes?: number, options?: ChaintracksDownloadOptions): Promise<Uint8Array> {
@@ -110,7 +143,7 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
         ? this.maxResponseBytes
         : Math.min(
             this.maxResponseBytes,
-            positiveSafeInteger(maxResponseBytes, this.maxResponseBytes, 'maxResponseBytes')
+            boundedPositiveSafeInteger(maxResponseBytes, this.maxResponseBytes, MAX_RESPONSE_BYTES, 'maxResponseBytes')
           )
     return await this.requestBytes(
       url,
@@ -134,7 +167,7 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       'fetch JSON',
       this.maxResponseBytes
     )
-    return JSON.parse(new TextDecoder().decode(bytes)) as R
+    return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as R
   }
 
   private async requestBytes(
@@ -149,7 +182,14 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), this.timeoutMsecs)
       try {
-        return await this.requestAttempt(url, init, kind, maxResponseBytes, controller)
+        return await this.requestAttempt(
+          url,
+          init,
+          kind,
+          maxResponseBytes,
+          controller,
+          downloadOptions?.publicNetworkOnly === true
+        )
       } catch (error) {
         const timedOut = controller.signal.aborted
         let fetchFailure: ChaintracksFetchError
@@ -175,26 +215,45 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     init: RequestInit,
     kind: string,
     maxResponseBytes: number,
-    controller: AbortController
+    controller: AbortController,
+    publicNetworkOnly: boolean
   ): Promise<Uint8Array> {
-    const response = await fetch(url, { ...init, signal: controller.signal })
+    const fetcher = publicNetworkOnly ? this.publicNetworkFetch : this.fetcher
+    const response = await fetcher(url, {
+      ...init,
+      redirect: 'error',
+      signal: controller.signal
+    })
     if (!response.ok) {
       await response.body?.cancel().catch(() => undefined)
       throw fetchError(url, response, kind)
     }
-    return await this.readResponseBytes(url, response, kind, maxResponseBytes)
+    return await this.readResponseBytes(url, response, kind, maxResponseBytes, controller.signal)
   }
 
   private async readResponseBytes(
     url: string,
     response: Response,
     kind: string,
-    maxResponseBytes: number
+    maxResponseBytes: number,
+    signal: AbortSignal
   ): Promise<Uint8Array> {
-    const contentLength = Number(response.headers.get('content-length'))
-    if (Number.isFinite(contentLength) && contentLength > maxResponseBytes) {
-      await response.body?.cancel().catch(() => undefined)
-      throw this.responseTooLarge(url, response, kind, contentLength, maxResponseBytes)
+    const contentLengthHeader = response.headers.get('content-length')
+    if (contentLengthHeader != null) {
+      if (!/^(0|[1-9]\d*)$/.test(contentLengthHeader)) {
+        await response.body?.cancel().catch(() => undefined)
+        throw new ChaintracksFetchError(
+          `Failed to ${kind} from ${url}: invalid Content-Length`,
+          url,
+          response.status,
+          'Invalid Content-Length'
+        )
+      }
+      const contentLength = Number(contentLengthHeader)
+      if (!Number.isSafeInteger(contentLength) || contentLength > maxResponseBytes) {
+        await response.body?.cancel().catch(() => undefined)
+        throw this.responseTooLarge(url, response, kind, contentLength, maxResponseBytes)
+      }
     }
 
     if (response.body == null) return new Uint8Array()
@@ -203,7 +262,7 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
     let total = 0
     try {
       for (;;) {
-        const { done, value } = await reader.read()
+        const { done, value } = await this.readStreamChunk(reader, signal)
         if (done) break
         total += value.length
         if (total > maxResponseBytes) {
@@ -223,6 +282,34 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
       offset += chunk.length
     }
     return bytes
+  }
+
+  private async readStreamChunk(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    signal: AbortSignal
+  ): Promise<ReadableStreamReadResult<Uint8Array>> {
+    if (signal.aborted) throw new DOMException('aborted', 'AbortError')
+    return await new Promise<ReadableStreamReadResult<Uint8Array>>((resolve, reject) => {
+      let settled = false
+      const finish = (
+        callback: (value: never) => void,
+        value: ReadableStreamReadResult<Uint8Array> | unknown
+      ): void => {
+        if (settled) return
+        settled = true
+        signal.removeEventListener('abort', onAbort)
+        callback(value as never)
+      }
+      const onAbort = () => {
+        void reader.cancel().catch(() => undefined)
+        finish(reject, new DOMException('aborted', 'AbortError'))
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+      reader.read().then(
+        value => finish(resolve, value),
+        error => finish(reject, error)
+      )
+    })
   }
 
   private responseTooLarge(
@@ -249,8 +336,35 @@ export class ChaintracksFetch implements ChaintracksFetchApi {
   }
 
   pathJoin(baseUrl: string, subpath: string): string {
+    if (typeof baseUrl !== 'string' || baseUrl.length === 0 || baseUrl.length > 2048) {
+      throw new WERR_INVALID_PARAMETER('baseUrl', 'a URL no longer than 2048 characters')
+    }
+    if (typeof subpath !== 'string' || subpath.length === 0 || subpath.length > 2048) {
+      throw new WERR_INVALID_PARAMETER('subpath', 'a non-empty relative URL path no longer than 2048 characters')
+    }
+    if (subpath.startsWith('//')) {
+      throw new WERR_INVALID_PARAMETER('subpath', 'a relative URL path rather than a network-path reference')
+    }
     const cleanSubpath = subpath.replace(/^\/+/, '')
-    if (!baseUrl.endsWith('/')) baseUrl += '/'
-    return new URL(cleanSubpath, baseUrl).toString()
+    if (
+      !/^[A-Za-z0-9._~%/-]+$/.test(cleanSubpath) ||
+      cleanSubpath.split('/').some(segment => {
+        if (segment.length === 0) return true
+        try {
+          const decoded = decodeURIComponent(segment)
+          return decoded === '.' || decoded === '..' || /[\\/?#]/.test(decoded)
+        } catch {
+          return true
+        }
+      })
+    ) {
+      throw new WERR_INVALID_PARAMETER('subpath', 'a canonical relative URL path without traversal or delimiters')
+    }
+    const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`)
+    const joined = new URL(cleanSubpath, base)
+    if (joined.origin !== base.origin || !joined.pathname.startsWith(base.pathname)) {
+      throw new WERR_INVALID_PARAMETER('subpath', 'contained by the configured base URL')
+    }
+    return joined.toString()
   }
 }

@@ -17,12 +17,15 @@ import {
   PrivateKey,
   ProtoWallet,
   PublicKey,
+  PushDrop,
   Transaction,
   Utils,
   VerifiableCertificate
 } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import IdentityTopicManager from '../identity/IdentityTopicManager.js'
+import { IdentityLookupService } from '../identity/IdentityLookupService.js'
+import type { IdentityStorageManager } from '../identity/IdentityStorageManager.js'
 
 // ---------------------------------------------------------------------------
 // Helpers (same PushDrop builder as other test files)
@@ -87,7 +90,7 @@ function buildCertificateOutput(): Transaction {
     certifier: key.toPublicKey().toString(),
     revocationOutpoint: 'deadbeef'.repeat(8) + '.0',
     fields: { name: 'encrypted-blob' },
-    keyring: {},
+    keyring: { name: 'encrypted-key' },
     signature: 'invalidsig'
   }
   const certBytes = Utils.toArray(JSON.stringify(certData), 'utf8')
@@ -112,7 +115,7 @@ describe('IdentityTopicManager', () => {
       { op: 0x76 }, // OP_DUP
       { op: 0xa9 }, // OP_HASH160
       { op: 0x88 }, // OP_EQUALVERIFY
-      { op: 0xac }  // OP_CHECKSIG
+      { op: 0xac } // OP_CHECKSIG
     ])
     const tx = buildTxWithInput([badScript])
 
@@ -151,34 +154,70 @@ describe('IdentityTopicManager', () => {
   })
 
   it('rejects an output whose certificate signature is invalid', async () => {
+    const tx = buildCertificateOutput()
+    const lockingPublicKey = PushDrop.decode(
+      tx.outputs[0].lockingScript
+    ).lockingPublicKey.toString()
+    jest
+      .spyOn(ProtoWallet.prototype, 'getPublicKey')
+      .mockResolvedValue({ publicKey: lockingPublicKey })
     jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
     jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(false)
     const decryptFields = jest.spyOn(VerifiableCertificate.prototype, 'decryptFields')
 
-    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
 
     expect(result.outputsToAdmit).toEqual([])
     expect(decryptFields).not.toHaveBeenCalled()
   })
 
   it('rejects an output without publicly revealed certificate attributes', async () => {
+    const tx = buildCertificateOutput()
+    const lockingPublicKey = PushDrop.decode(
+      tx.outputs[0].lockingScript
+    ).lockingPublicKey.toString()
+    jest
+      .spyOn(ProtoWallet.prototype, 'getPublicKey')
+      .mockResolvedValue({ publicKey: lockingPublicKey })
     jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
     jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(true)
     jest.spyOn(VerifiableCertificate.prototype, 'decryptFields').mockResolvedValue({})
 
-    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
 
     expect(result.outputsToAdmit).toEqual([])
   })
 
   it('admits an output with a valid signature and publicly revealed attributes', async () => {
+    const tx = buildCertificateOutput()
+    const lockingPublicKey = PushDrop.decode(
+      tx.outputs[0].lockingScript
+    ).lockingPublicKey.toString()
+    jest
+      .spyOn(ProtoWallet.prototype, 'getPublicKey')
+      .mockResolvedValue({ publicKey: lockingPublicKey })
     jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
     jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(true)
-    jest.spyOn(VerifiableCertificate.prototype, 'decryptFields').mockResolvedValue({ name: 'Alice' })
+    jest
+      .spyOn(VerifiableCertificate.prototype, 'decryptFields')
+      .mockResolvedValue({ name: 'Alice' })
 
-    const result = await manager.identifyAdmissibleOutputs(buildCertificateOutput().toBEEF(), [])
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
 
     expect(result.outputsToAdmit).toEqual([0])
+  })
+
+  it('rejects a validly signed field payload locked to a different public key', async () => {
+    const tx = buildCertificateOutput()
+    jest.spyOn(ProtoWallet.prototype, 'getPublicKey').mockResolvedValue({
+      publicKey: PrivateKey.fromRandom().toPublicKey().toString()
+    })
+    const verify = jest.spyOn(ProtoWallet.prototype, 'verifySignature')
+
+    const result = await manager.identifyAdmissibleOutputs(tx.toBEEF(), [])
+
+    expect(result.outputsToAdmit).toEqual([])
+    expect(verify).not.toHaveBeenCalled()
   })
 
   it('returns empty results for malformed BEEF bytes', async () => {
@@ -221,5 +260,75 @@ describe('IdentityTopicManager', () => {
 
   afterEach(() => {
     jest.restoreAllMocks()
+  })
+})
+
+describe('IdentityLookupService spend authentication', () => {
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('derives a replay tombstone from the authenticated source output', async () => {
+    const revelationTransaction = buildCertificateOutput()
+    const lockingPublicKey = PushDrop.decode(
+      revelationTransaction.outputs[0].lockingScript
+    ).lockingPublicKey.toString()
+    jest.spyOn(ProtoWallet.prototype, 'getPublicKey').mockResolvedValue({
+      publicKey: lockingPublicKey
+    })
+    jest.spyOn(ProtoWallet.prototype, 'verifySignature').mockResolvedValue({ valid: true })
+    jest.spyOn(VerifiableCertificate.prototype, 'verify').mockResolvedValue(true)
+    jest
+      .spyOn(VerifiableCertificate.prototype, 'decryptFields')
+      .mockResolvedValue({ name: 'Alice' })
+
+    const spendingTransaction = new Transaction()
+    spendingTransaction.addInput({
+      sourceTransaction: revelationTransaction,
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    spendingTransaction.addOutput({ lockingScript: new LockingScript([]), satoshis: 1 })
+
+    const revokeRecord = jest.fn(async () => {})
+    const storage = { revokeRecord } as unknown as IdentityStorageManager
+    const service = new IdentityLookupService(storage)
+
+    expect(service.spendNotificationMode).toBe('whole-tx')
+    await service.outputSpent({
+      mode: 'whole-tx',
+      topic: 'tm_identity',
+      txid: revelationTransaction.id('hex'),
+      outputIndex: 0,
+      spendingAtomicBEEF: spendingTransaction.toAtomicBEEF()
+    })
+
+    expect(revokeRecord).toHaveBeenCalledWith(
+      revelationTransaction.id('hex'),
+      0,
+      expect.objectContaining({ subject: expect.any(String), keyring: { name: 'encrypted-key' } })
+    )
+  })
+
+  it('rejects a spend notification that does not spend the claimed revelation', async () => {
+    const source = buildCertificateOutput()
+    const spendingTransaction = new Transaction()
+    spendingTransaction.addInput({
+      sourceTransaction: source,
+      sourceOutputIndex: 0,
+      unlockingScript: new LockingScript([])
+    })
+    spendingTransaction.addOutput({ lockingScript: new LockingScript([]), satoshis: 1 })
+
+    const service = new IdentityLookupService({} as unknown as IdentityStorageManager)
+    await expect(
+      service.outputSpent({
+        mode: 'whole-tx',
+        topic: 'tm_identity',
+        txid: '00'.repeat(32),
+        outputIndex: 0,
+        spendingAtomicBEEF: spendingTransaction.toAtomicBEEF()
+      })
+    ).rejects.toThrow('does not contain exactly one matching input')
   })
 })

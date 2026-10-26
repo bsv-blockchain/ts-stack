@@ -17,7 +17,10 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
     app = express()
     paymailClient = new PaymailClient()
     const route = new SimpleP2pOrdinalReceiveRoute({
-      domainLogicHandler: () => ({ txid: 'accepted-txid', note: 'accepted' }),
+      domainLogicHandler: (_params, body) => ({
+        txid: Transaction.fromHex((body as { hex: string }).hex).id('hex'),
+        note: 'accepted'
+      }),
       verifySignature: true,
       paymailClient
     })
@@ -64,7 +67,7 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
       })
 
     expect(response.statusCode).toBe(200)
-    expect(response.body).toEqual({ txid: 'accepted-txid', note: 'accepted' })
+    expect(response.body).toEqual({ txid: transaction.id('hex'), note: 'accepted' })
   })
 
   it('rejects malformed transactions before signature or ownership work', async () => {
@@ -76,13 +79,13 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
         metadata: {
           sender: 'halfinny@vistamail.org',
           pubkey: '02abc',
-          signature: 'invalid'
+          signature: `${'A'.repeat(87)}=`
         },
         reference: 'ordinal-reference'
       })
 
     expect(response.statusCode).toBe(400)
-    expect(response.text).toContain('Invalid body')
+    expect(response.text).toContain('fails to match the required pattern')
     expect(verifyPublicKey).not.toHaveBeenCalled()
   })
 
@@ -97,7 +100,7 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
         metadata: {
           sender: 'halfinny@vistamail.org',
           pubkey: privateKey.toPublicKey().toString(),
-          signature: 'invalid'
+          signature: `${'A'.repeat(87)}=`
         },
         reference: 'ordinal-reference'
       })
@@ -151,7 +154,9 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
     const unsignedApp = express()
     const route = new SimpleP2pOrdinalReceiveRoute({
       endpoint: '/custom-ordinal/:paymail',
-      domainLogicHandler: () => ({ txid: 'unsigned-txid' }),
+      domainLogicHandler: (_params, body) => ({
+        txid: Transaction.fromHex((body as { hex: string }).hex).id('hex')
+      }),
       verifySignature: false,
       paymailClient
     })
@@ -165,7 +170,10 @@ describe('#Paymail Server - Simple Ordinal P2P Receive Transaction', () => {
     })
 
     expect(response.statusCode).toBe(200)
-    expect(response.body).toEqual({ txid: 'unsigned-txid', note: '' })
+    expect(response.body).toEqual({
+      txid: Transaction.fromHex(RAW_TRANSACTION).id('hex'),
+      note: ''
+    })
   })
 
   it('validates request shape before ordinal transaction processing', async () => {

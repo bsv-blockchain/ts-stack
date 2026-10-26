@@ -65,6 +65,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 | [mintAndRedeemPushDropToken](#function-mintandredeempushdroptoken) |
 | [mintPushDropToken](#function-mintpushdroptoken)                   |
 | [redeemPushDropToken](#function-redeempushdroptoken)               |
+| [snapshotPushDropArgs](#function-snapshotpushdropargs)             |
+| [snapshotPushDropToken](#function-snapshotpushdroptoken)           |
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
@@ -98,9 +100,13 @@ export async function mintAndRedeemPushDropToken() {
     counterparty: 'self',
     fields
   }
-  const token: PushDropToken = await mintPushDropToken(setup, 42, args)
-  await wait(5000)
-  await redeemPushDropToken(setup, token)
+  try {
+    const token: PushDropToken = await mintPushDropToken(setup, 42, args)
+    await wait(5000)
+    await redeemPushDropToken(setup, token)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 ```
 
@@ -116,24 +122,31 @@ Mint a new PushDrop token.
 
 ```ts
 export async function mintPushDropToken(
-  setup: SetupWallet,
-  satoshis: number,
-  args: PushDropArgs,
-  options?: CreateActionOptions,
-  description?: string,
-  labels?: string[],
-  outputDescription?: string,
-  tags?: string[]
+  ...[setup, satoshis, args, options, description, labels, outputDescription, tags]: [
+    setup: SetupWallet,
+    satoshis: number,
+    args: PushDropArgs,
+    options?: CreateActionOptions,
+    description?: string,
+    labels?: string[],
+    outputDescription?: string,
+    tags?: string[]
+  ]
 ): Promise<PushDropToken> {
+  assertSatoshis(satoshis)
+  const safeArgs = snapshotPushDropArgs(args)
+  const safeOptions = snapshotCreateActionOptions(
+    options ?? { randomizeOutputs: false, acceptDelayedBroadcast: false }
+  )
   const t = new PushDrop(setup.wallet)
   const lock = await t.lock(
-    args.fields,
-    args.protocolID,
-    args.keyID,
-    args.counterparty,
-    args.counterparty === 'self',
-    args.includeSignature,
-    args.lockPosition
+    safeArgs.fields,
+    safeArgs.protocolID,
+    safeArgs.keyID,
+    safeArgs.counterparty,
+    safeArgs.counterparty === 'self',
+    safeArgs.includeSignature,
+    safeArgs.lockPosition
   )
   const lockingScript = lock.toHex()
   const label = 'mintPushDropToken'
@@ -142,28 +155,31 @@ export async function mintPushDropToken(
       {
         lockingScript,
         satoshis,
-        outputDescription: outputDescription || label,
-        tags: tags || ['relinquish'],
+        outputDescription: outputDescription ?? label,
+        tags: snapshotStringArray(tags ?? ['relinquish'], 'Output tags', 100, 300),
         customInstructions: JSON.stringify({
-          protocolID: args.protocolID,
-          keyID: args.keyID,
-          counterparty: args.counterparty,
+          protocolID: safeArgs.protocolID,
+          keyID: safeArgs.keyID,
+          counterparty: safeArgs.counterparty,
           type: 'PushDrop'
         })
       }
     ],
-    options: options || {
-      randomizeOutputs: false,
-      acceptDelayedBroadcast: false
-    },
-    labels: labels || [label],
-    description: description || label
+    options: safeOptions,
+    labels: snapshotStringArray(labels ?? [label], 'Action labels', 100, 300),
+    description: description ?? label
   })
-  const beef = Beef.fromBinary(car.tx!)
-  const outpoint = `${car.txid!}.0`
+  if (car.tx == null || car.txid == null) throw new Error('Wallet did not return the minted token')
+  const transaction = Transaction.fromAtomicBEEF(car.tx)
+  if (car.txid.toLowerCase() !== transaction.id('hex')) {
+    throw new Error('Wallet token transaction ID does not match its transaction')
+  }
+  const outputIndex = findRequestedOutputIndex(transaction, lockingScript, satoshis)
+  const beef = Beef.fromBinary(transaction.toAtomicBEEF())
+  const outpoint = `${transaction.id('hex')}.${outputIndex}`
   if (!options)
     console.log(`
-PushDropArgs ${JSON.stringify(args)}
+PushDropArgs ${JSON.stringify(safeArgs)}
 PushDrop token minter's identityKey ${setup.identityKey}
 token outpoint ${outpoint}
 token decoded ${JSON.stringify(PushDrop.decode(lock))}
@@ -173,17 +189,17 @@ ${beef.toHex()}
 ${beef.toLogString()}
 `)
   return {
-    args,
+    args: safeArgs,
     beef,
     outpoint,
     fromIdentityKey: setup.identityKey,
     satoshis,
-    noSendChange: car.noSendChange
+    noSendChange: car.noSendChange == null ? undefined : [...car.noSendChange]
   }
 }
 ```
 
-See also: [PushDropArgs](./pushdrop.md#interface-pushdropargs), [PushDropToken](./pushdrop.md#interface-pushdroptoken)
+See also: [PushDropArgs](./pushdrop.md#interface-pushdropargs), [PushDropToken](./pushdrop.md#interface-pushdroptoken), [assertSatoshis](./README.md#function-assertsatoshis), [findRequestedOutputIndex](./README.md#function-findrequestedoutputindex), [snapshotCreateActionOptions](./README.md#function-snapshotcreateactionoptions), [snapshotPushDropArgs](./pushdrop.md#function-snapshotpushdropargs), [snapshotStringArray](./README.md#function-snapshotstringarray)
 
 Returns
 
@@ -225,8 +241,15 @@ export async function redeemPushDropToken(
   beef: Beef
   noSendChange?: string[]
 }> {
-  const { args, fromIdentityKey, satoshis, beef: inputBeef, outpoint } = token
-  const { keyDeriver } = setup
+  const safeToken = snapshotPushDropToken(token)
+  const { args, fromIdentityKey, satoshis, beef: inputBeef, outpoint } = safeToken
+  const safeOptions = snapshotCreateActionOptions(options ?? { acceptDelayedBroadcast: false })
+  const safeLabels = snapshotStringArray(
+    labels ?? ['redeemPushDropToken'],
+    'Action labels',
+    100,
+    300
+  )
   const t = new PushDrop(setup.wallet)
   const unlock = t.unlock(args.protocolID, args.keyID, fromIdentityKey, 'all', false, satoshis)
   const label = 'redeemPushDropToken'
@@ -239,27 +262,42 @@ export async function redeemPushDropToken(
         inputDescription: inputDescription || label
       }
     ],
-    labels: labels || [label],
-    description: description || label,
-    options: options
+    labels: safeLabels,
+    description: description ?? label,
+    options: safeOptions
   })
-  const st = car.signableTransaction!
-  const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!
-  tx.inputs[0].unlockingScriptTemplate = unlock
-  await tx.sign()
-  const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
-  const signArgs: SignActionArgs = {
-    reference: st.reference,
-    spends: { 0: { unlockingScript } },
-    options: options || {
-      acceptDelayedBroadcast: false
+  const st = car.signableTransaction
+  if (st == null) throw new Error('Wallet did not return a signable PushDrop transaction')
+  let signed: Transaction
+  try {
+    const tx = Transaction.fromAtomicBEEF(st.tx)
+    const inputIndex = findRequestedInputIndex(tx, outpoint)
+    tx.inputs[inputIndex].unlockingScriptTemplate = unlock
+    await tx.sign()
+    const unlockingScript = tx.inputs[inputIndex].unlockingScript
+    if (unlockingScript == null) throw new Error('PushDrop signer produced no unlocking script')
+    const signArgs: SignActionArgs = {
+      reference: st.reference,
+      spends: { [inputIndex]: { unlockingScript: unlockingScript.toHex() } },
+      options: {
+        acceptDelayedBroadcast: safeOptions.acceptDelayedBroadcast,
+        returnTXIDOnly: false,
+        noSend: safeOptions.noSend,
+        sendWith: safeOptions.sendWith == null ? undefined : [...safeOptions.sendWith]
+      }
     }
+    const sar = await setup.wallet.signAction(signArgs)
+    if (sar.tx == null) throw new Error('Wallet did not return the signed PushDrop transaction')
+    signed = Transaction.fromAtomicBEEF(sar.tx)
+    assertSameSignedTransaction(tx, signed)
+  } catch (error) {
+    try {
+      await setup.wallet.abortAction({ reference: st.reference })
+    } catch {}
+    throw error
   }
-  const sar = await setup.wallet.signAction(signArgs)
   {
-    const beef = Beef.fromBinary(sar.tx!)
-    const txid = sar.txid!
+    const beef = Beef.fromBinary(signed.toAtomicBEEF())
     if (!options)
       console.log(`
 PushDrop redeemer's identityKey ${setup.identityKey}
@@ -269,13 +307,13 @@ ${beef.toLogString()}
 `)
   }
   return {
-    beef,
-    noSendChange: car.noSendChange
+    beef: Beef.fromBinary(signed.toAtomicBEEF()),
+    noSendChange: car.noSendChange == null ? undefined : [...car.noSendChange]
   }
 }
 ```
 
-See also: [PushDropToken](./pushdrop.md#interface-pushdroptoken)
+See also: [PushDropToken](./pushdrop.md#interface-pushdroptoken), [assertSameSignedTransaction](./README.md#function-assertsamesignedtransaction), [findRequestedInputIndex](./README.md#function-findrequestedinputindex), [sendWith](./nosend.md#function-sendwith), [snapshotCreateActionOptions](./README.md#function-snapshotcreateactionoptions), [snapshotPushDropToken](./pushdrop.md#function-snapshotpushdroptoken), [snapshotStringArray](./README.md#function-snapshotstringarray)
 
 Argument Details
 
@@ -286,6 +324,30 @@ Argument Details
   - The minted token to redeem.
 - **options**
   - Optional. Default options disable output randomization and disable allowing delayed broadcast.
+
+Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+
+---
+
+##### Function: snapshotPushDropArgs
+
+```ts
+export function snapshotPushDropArgs(value: PushDropArgs): PushDropArgs
+```
+
+See also: [PushDropArgs](./pushdrop.md#interface-pushdropargs)
+
+Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+
+---
+
+##### Function: snapshotPushDropToken
+
+```ts
+export function snapshotPushDropToken(value: PushDropToken): PushDropToken
+```
+
+See also: [PushDropToken](./pushdrop.md#interface-pushdroptoken)
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 

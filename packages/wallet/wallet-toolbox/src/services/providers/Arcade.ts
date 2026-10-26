@@ -1,14 +1,5 @@
-import {
-  Beef,
-  defaultHttpClient,
-  HexString,
-  HttpClient,
-  HttpClientResponse,
-  HttpClientRequestOptions,
-  MerklePath,
-  Random,
-  Utils
-} from '@bsv/sdk'
+import { Beef, HexString, HttpClient, HttpClientResponse, HttpClientRequestOptions, MerklePath, Random } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import {
   GetMerklePathResult,
   GetStatusForTxidsResult,
@@ -20,20 +11,51 @@ import {
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { ReqHistoryNote } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
+import { normalizeTxid, validateMerklePathResult } from '../validateMerklePathResult'
+import {
+  MAX_POST_BEEF_BYTES,
+  normalizePostRawHex,
+  normalizePostTxids,
+  snapshotPostBeefRequest,
+  validatePostBeefResultOrServiceError,
+  validatePostTxResultOrServiceError
+} from '../validatePostBeefResult'
+import { validateStatusForTxidsResult } from '../validateStatusForTxidsResult'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 // Shared wire-contract types only (no behavior coupling): Arcade is ARC-compatible on the
 // configuration and `getTxData` response shape, so it reuses those interfaces.
 import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
 import { classifyArcadeRejection } from './arcadeStatus'
+import { normalizeArcProviderConfig } from './arcProviderConfig'
+import { validateArcTxData } from './arcTxDataValidation'
+
+/**
+ * Arcade's API-key middleware answers 401 for a missing-but-required, malformed, unknown,
+ * revoked or expired key, and 403 for a key not allowed to make the call. Both are decided
+ * before the transaction is parsed, so they say nothing about the transaction.
+ */
+function isArcadeAuthStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403
+}
+
+/**
+ * Arcade-specific service-error classification: ARC's transient statuses (408, 429, 476, 5xx,
+ * rate-limit/backpressure details) plus Arcade's credential refusals. A refused API key must be
+ * a service error so the wallet fails over or retries instead of marking the transaction invalid.
+ */
+function isArcadeServiceErrorStatus(status: number | undefined, detail?: string): boolean {
+  return isArcadeAuthStatus(status) || isArcServiceErrorStatus(status, detail)
+}
 
 function defaultDeploymentId(): string {
-  return `ts-sdk-${Utils.toHex(Random(16))}`
+  return `ts-sdk-${toHex(Random(16))}`
 }
 
 // Storage sendWith can aggregate many transactions into one BEEF. Arcade accepts
 // one EF transaction per request, so submit independent transactions concurrently
 // while preserving dependency order and avoiding an unbounded burst.
 export const ARCADE_POST_BEEF_CONCURRENCY = 4
+export { validateArcTxData as validateArcadeTxData } from './arcTxDataValidation'
 
 interface ArcadePostNoteContext {
   nn: () => { name: string; when: string }
@@ -79,22 +101,13 @@ export class Arcade {
   constructor(URL: string, config?: string | ArcConfig, name?: string) {
     this.name = name ?? 'arcade'
     this.URL = URL
-    if (typeof config === 'string') {
-      this.apiKey = config
-      this.httpClient = defaultHttpClient()
-      this.deploymentId = defaultDeploymentId()
-      this.callbackToken = undefined
-      this.callbackUrl = undefined
-    } else {
-      const configObj: ArcConfig = config ?? {}
-      const { apiKey, deploymentId, httpClient, callbackToken, callbackUrl, headers } = configObj
-      this.apiKey = apiKey
-      this.httpClient = httpClient ?? defaultHttpClient()
-      this.deploymentId = deploymentId ?? defaultDeploymentId()
-      this.callbackToken = callbackToken
-      this.callbackUrl = callbackUrl
-      this.headers = headers
-    }
+    const normalized = normalizeArcProviderConfig(config, defaultDeploymentId)
+    this.apiKey = normalized.apiKey
+    this.httpClient = normalized.httpClient
+    this.deploymentId = normalized.deploymentId
+    this.callbackToken = normalized.callbackToken
+    this.callbackUrl = normalized.callbackUrl
+    this.headers = normalized.headers
   }
 
   /** Constructs a dictionary of the default & supplied request headers. */
@@ -117,8 +130,8 @@ export class Arcade {
     }
 
     if (this.headers != null) {
-      for (const key in this.headers) {
-        headers[key] = this.headers[key]
+      for (const [key, value] of Object.entries(this.headers)) {
+        headers[key] = value
       }
     }
 
@@ -193,7 +206,15 @@ export class Arcade {
         note.detail = responseData.detail
       }
     }
-    result.serviceError = isArcServiceErrorStatus(numericStatus, errorData.detail)
+    if (isArcadeAuthStatus(numericStatus)) {
+      const reason =
+        this.apiKey != null && this.apiKey !== ''
+          ? 'Arcade refused the configured API key'
+          : 'Arcade requires an API key'
+      errorData.detail ??= reason
+      note.detail ??= reason
+    }
+    result.serviceError = isArcadeServiceErrorStatus(numericStatus, errorData.detail)
     result.notes!.push(note)
   }
 
@@ -229,10 +250,12 @@ export class Arcade {
    * txid is taken from `txids` when supplied (Arcade derives the same txid from the parsed tx).
    */
   async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
-    let txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
+    rawTx = normalizePostRawHex(rawTx, MAX_POST_BEEF_BYTES)
+    let txid = toHex(doubleSha256BE(toArray(rawTx, 'hex')))
     if (txids == null) {
       txids = [txid]
     } else {
+      txids = normalizePostTxids(txids)
       txid = txids.at(-1)!
     }
 
@@ -268,7 +291,7 @@ export class Arcade {
       this.applyPostRawTxCatch(r, error_, notes)
     }
 
-    return r
+    return validatePostTxResultOrServiceError(r, txid, this.name)
   }
 
   /**
@@ -284,6 +307,9 @@ export class Arcade {
    * broadcast the (valid) transaction.
    */
   async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+    const request = snapshotPostBeefRequest(beef, txids)
+    beef = Beef.fromBinaryStrict(request.beefBytes)
+    txids = request.txids
     const r: PostBeefResult = {
       name: this.name,
       status: 'success',
@@ -345,19 +371,27 @@ export class Arcade {
     }
     if (r.txidResults.some(result => result.status === 'error')) r.status = 'error'
 
-    return r
+    return validatePostBeefResultOrServiceError(r, txids, this.name)
   }
 
   /** Look up a transaction's current status (and merkle path once mined) via `GET /tx/{txid}`. */
   async getTxData(txid: string): Promise<ArcMinerGetTxData> {
+    const normalizedTxid = normalizeTxid(txid)
     const requestOptions: HttpClientRequestOptions = {
       method: 'GET',
-      headers: this.requestHeaders()
+      headers: this.requestHeaders(),
+      signal: AbortSignal.timeout(1000 * 30)
     }
 
-    const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/tx/${txid}`, requestOptions)
+    const response = await this.httpClient.request<ArcMinerGetTxData>(
+      `${this.URL}/tx/${normalizedTxid}`,
+      requestOptions
+    )
 
-    return response.data
+    if (!response.ok || Number(response.status) !== 200) {
+      throw new WERR_INVALID_OPERATION(`Arcade transaction data response ${String(response.status)}`)
+    }
+    return validateArcTxData(response.data, normalizedTxid, Number(response.status))
   }
 
   /**
@@ -369,6 +403,7 @@ export class Arcade {
    * observations whose proof is validated separately.
    */
   async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> {
+    const normalizedTxids = txids.map((txid, index) => normalizeTxid(txid, `txids[${index}]`))
     const r: GetStatusForTxidsResult = {
       name: this.name,
       status: 'success',
@@ -376,24 +411,26 @@ export class Arcade {
     }
     let firstError: WalletError | undefined
     r.results = await Promise.all(
-      txids.map(async txid => {
+      normalizedTxids.map(async txid => {
         try {
           const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/tx/${txid}`, {
             method: 'GET',
-            headers: this.requestHeaders()
+            headers: this.requestHeaders(),
+            signal: AbortSignal.timeout(1000 * 30)
           })
           if (Number(response.status) === 404) return { txid, status: 'unknown' as const, depth: undefined }
           if (!response.ok || Number(response.status) !== 200) {
             throw new WERR_INVALID_OPERATION(`Arcade transaction status response ${String(response.status)}`)
           }
-          const status = response.data.txStatus
+          const data = validateArcTxData(response.data, txid, Number(response.status))
+          const status = data.txStatus
           if (status === 'MINED' || status === 'IMMUTABLE') {
             return { txid, status: 'mined' as const, depth: 1 }
           }
           if (status === 'ACCEPTED_BY_NETWORK' || status === 'SEEN_ON_NETWORK' || status === 'SEEN_MULTIPLE_NODES') {
             return { txid, status: 'known' as const, depth: 0 }
           }
-          const classification = classifyArcadeRejection(response.data)
+          const classification = classifyArcadeRejection(data)
           return {
             txid,
             status: 'unknown' as const,
@@ -403,9 +440,9 @@ export class Arcade {
               ? {
                   terminal: true,
                   inputConflict: classification.inputConflict,
-                  statusCode: response.data.status,
-                  description: (response.data.extraInfo || classification.reason).slice(0, 512),
-                  competingTxs: (response.data.competingTxs ?? []).slice(0, 24)
+                  statusCode: data.status,
+                  description: data.extraInfo || classification.reason,
+                  competingTxs: data.competingTxs ?? []
                 }
               : {})
           }
@@ -419,7 +456,7 @@ export class Arcade {
       r.status = 'error'
       r.error = firstError
     }
-    return r
+    return r.status === 'success' ? validateStatusForTxidsResult(r, normalizedTxids, this.name) : r
   }
 
   /**
@@ -457,22 +494,25 @@ export class Arcade {
       const merklePath = MerklePath.fromHex(data.merklePath)
       // Resolve the canonical header from our own chaintracker; throws if the block is unknown.
       const header = await services.hashToHeader(data.blockHash)
-      const computedRoot = merklePath.computeRoot(txid)
-      if (computedRoot !== header.merkleRoot) {
+      if (header.hash.toLowerCase() !== data.blockHash.toLowerCase()) {
+        throw new Error('Arcade proof header did not match its requested block hash.')
+      }
+      let validated
+      try {
+        validated = validateMerklePathResult(txid, { merklePath, header })
+      } catch {
         // Arcade's BUMP does not reconcile with the canonical block — reject and fall through.
         r.notes!.push({
           ...nn(),
           what: 'getMerklePathArcadeRootMismatch',
           txid,
-          computedRoot,
-          headerRoot: header.merkleRoot,
           blockHash: data.blockHash
         })
         return r
       }
 
-      r.merklePath = merklePath
-      r.header = header
+      r.merklePath = validated.merklePath
+      r.header = validated.header
       r.notes!.push({
         ...nn(),
         what: 'getMerklePathArcadeSuccess',

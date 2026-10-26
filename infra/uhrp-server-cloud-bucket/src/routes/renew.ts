@@ -1,29 +1,29 @@
 import { Request, Response } from 'express'
-import { Storage } from '@google-cloud/storage'
+import { extendObjectRetention } from '../utils/extendObjectRetention'
+import { createGoogleCloudStorage } from '../utils/googleCloudStorage'
+import { PublicKey, PushDrop, SHIPBroadcaster, StorageUtils, Utils } from '@bsv/sdk'
 import getPriceForFile from '../utils/getPriceForFile'
 import { getWallet } from '../utils/walletSingleton'
-import { PushDrop, SHIPBroadcaster, Transaction, Utils } from '@bsv/sdk'
-import { getMetadata } from '../utils/getMetadata'
 import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
 import { readResourceLimit } from '../security/edgePolicy'
 import { uhrpNetwork } from '../utils/network'
 import { getChirpStore } from '../chirp/store'
+import { advertisementTags, createAdvertisementMetadata } from '../utils/advertisementMetadata'
+import { completeUhrpAction } from '../utils/completeUhrpAction'
+import {
+  listVerifiedAdvertisements,
+  type VerifiedStoredAdvertisement
+} from '../utils/storedAdvertisements'
+import { decodeAndVerifyUHRPAdvertisement } from '../utils/uhrpTokenValidation'
 
-const storage = new Storage()
+const storage = createGoogleCloudStorage()
 const GCP_BUCKET_NAME = process.env.GCP_BUCKET_NAME as string
 const { lookupPreset } = uhrpNetwork()
 
 interface RenewRequest extends Request {
-  auth: {
-    identityKey: string
-  }
-  body: {
-    uhrpUrl: string
-    additionalMinutes: number
-    limit?: number
-    offset?: number
-  }
+  auth: { identityKey: string }
+  body: { uhrpUrl: string; additionalMinutes: number; limit?: number; offset?: number }
 }
 
 interface RenewResponse {
@@ -35,255 +35,146 @@ interface RenewResponse {
   description?: string
 }
 
-interface AdvertisementOutput {
-  outpoint: string
-  tags?: string[]
-}
-
-async function calculateRenewalAmount(size: string, additionalMinutes: number): Promise<number> {
-  const fileSize = Number.parseInt(size, 10) || 0
-  return fileSize > 0 ? await getPriceForFile({ fileSize, retentionPeriod: additionalMinutes }) : 0
-}
-
-function findFarthestAdvertisement(
-  outputs: AdvertisementOutput[]
-): AdvertisementOutput | undefined {
-  return outputs
-    .map(advertisement => {
-      const expiryTag = advertisement.tags?.find(tag => tag.startsWith('expiry_time_'))
-      const expiry =
-        expiryTag == null ? 0 : Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
-      return { advertisement, expiry }
-    })
-    .reduce<{ advertisement?: AdvertisementOutput; expiry: number }>(
-      (farthest, candidate) => (candidate.expiry > farthest.expiry ? candidate : farthest),
-      { expiry: 0 }
-    ).advertisement
-}
-
-function buildRenewalTags(
-  previousAdvertisement: AdvertisementOutput,
-  uhrpUrl: string,
-  objectIdentifier: string,
-  expiryTime: number
-): string[] {
-  const uploaderTags =
-    previousAdvertisement.tags
-      ?.filter(tag => tag.startsWith('uploader_identity_key_'))
-      .slice(0, 1) ?? []
-  return uploaderTags.concat(
-    `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
-    `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`,
-    `expiry_time_${expiryTime}`
+function farthest(values: VerifiedStoredAdvertisement[]): VerifiedStoredAdvertisement | undefined {
+  return values.reduce<VerifiedStoredAdvertisement | undefined>(
+    (current, candidate) =>
+      current == null || candidate.metadata.expiryTime > current.metadata.expiryTime
+        ? candidate
+        : current,
+    undefined
   )
 }
 
 const renewHandler = async (req: RenewRequest, res: Response<RenewResponse>) => {
   try {
-    const { identityKey } = req.auth
-    if (!identityKey) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'ERR_MISSING_IDENTITY_KEY',
-        description: 'Missing authfetch identityKey.'
-      })
+    const identityKey = req.auth?.identityKey
+    if (typeof identityKey !== 'string' || identityKey === 'unknown') {
+      return res.status(400).json({ status: 'error', code: 'ERR_MISSING_IDENTITY_KEY', description: 'Missing authfetch identityKey.' })
     }
-
-    const { uhrpUrl, additionalMinutes, limit, offset } = req.body
-    if (!uhrpUrl || !additionalMinutes) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'ERR_MISSING_FIELDS',
-        description: 'Missing objectIdentifier or additionalMinutes.'
-      })
+    if (!/^(?:02|03)[0-9a-f]{64}$/i.test(identityKey)) {
+      return res.status(400).json({ status: 'error', code: 'ERR_INVALID_IDENTITY_KEY', description: 'The authenticated identity key is invalid.' })
     }
-    const maxRetentionMinutes = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
+    PublicKey.fromString(identityKey)
+    const { uhrpUrl: requestedUrl, additionalMinutes, limit, offset } = req.body ?? {}
+    if (typeof requestedUrl !== 'string' || additionalMinutes === undefined) {
+      return res.status(400).json({ status: 'error', code: 'ERR_MISSING_FIELDS', description: 'Missing uhrpUrl or additionalMinutes.' })
+    }
+    let uhrpUrl: string
+    try { uhrpUrl = StorageUtils.getURLForHash(StorageUtils.getHashFromURL(requestedUrl)) } catch {
+      return res.status(400).json({ status: 'error', code: 'ERR_INVALID_UHRP_URL', description: 'The UHRP URL is invalid.' })
+    }
+    const maximum = readResourceLimit('UHRP', 'MAX_RETENTION_MINUTES', 525_600)
     if (
-      !Number.isSafeInteger(additionalMinutes) ||
-      additionalMinutes <= 0 ||
-      (maxRetentionMinutes !== -1 && additionalMinutes > maxRetentionMinutes)
-    ) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'ERR_INVALID_TIME',
-        description: 'Additional Minutes must be a positive integer'
-      })
-    }
+      !Number.isSafeInteger(additionalMinutes) || additionalMinutes <= 0 ||
+      (maximum !== -1 && additionalMinutes > maximum)
+    ) return res.status(400).json({ status: 'error', code: 'ERR_INVALID_TIME', description: 'Additional Minutes must be a positive integer' })
+
     const pagination = normalizeUhrpPagination(limit, offset)
-    const {
-      objectIdentifier,
-      size,
-      expiryTime: prevExpiryTime
-    } = await getMetadata(uhrpUrl, identityKey, pagination.limit, pagination.offset)
-
-    // Convert to MS to create an ISO string
-    const newExpiryTimeSeconds = prevExpiryTime + additionalMinutes * 60
-    const newCustomTimeIso = new Date(newExpiryTimeSeconds * 1000).toISOString()
-
-    const amount = await calculateRenewalAmount(size, additionalMinutes)
-
-    // When multiple advertisements match, renew the one with the farthest expiry.
     const wallet = await getWallet()
-    const { outputs, BEEF } = await wallet.listOutputs({
-      basket: 'uhrp advertisements',
-      tags: [
-        `uhrp_url_${Utils.toHex(Utils.toArray(uhrpUrl, 'utf8'))}`,
-        `object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`
-      ],
-      tagQueryMode: 'all',
-      includeTags: true,
-      include: 'entire transactions',
-      ...pagination
+    const { advertisements, BEEF } = await listVerifiedAdvertisements({
+      uhrpUrl, uploaderIdentityKey: identityKey, ...pagination
     })
-
-    if (!outputs || outputs.length === 0) {
-      return res.status(404).json({
-        status: 'error',
-        code: 'ERR_OLD_ADVERTISEMENT_NOT_FOUND',
-        description: `Couldn't find old advertisement output for ${uhrpUrl}`
-      })
+    const previous = farthest(advertisements)
+    if (previous == null || BEEF == null) {
+      return res.status(404).json({ status: 'error', code: 'ERR_OLD_ADVERTISEMENT_NOT_FOUND', description: `Couldn't find an authenticated old advertisement for ${uhrpUrl}` })
     }
-
-    const prevAdvertisement = findFarthestAdvertisement(outputs)
-
-    if (!prevAdvertisement || !BEEF) {
-      return res.status(404).json({
-        status: 'error',
-        code: 'ERR_OLD_ADVERTISEMENT_NOT_FOUND',
-        description: `Couldn't find old advertisement output for ${uhrpUrl}`
-      })
+    if (Date.now() > previous.metadata.expiryTime * 1000) {
+      return res.status(410).json({ status: 'error', code: 'ERR_ADVERTISEMENT_EXPIRED', description: `The advertisement for ${uhrpUrl} has expired` })
     }
-
-    const [prevTxid, outputIndex] = prevAdvertisement.outpoint.split('.')
-    const parsedTx = Transaction.fromBEEF(BEEF, prevTxid)
-    const prevLockingScript = parsedTx.outputs[Number(outputIndex)].lockingScript
-    const { fields: prevFields } = PushDrop.decode(prevLockingScript)
-
-    // Building the new action's locking script
-    const fields: number[][] = [
-      prevFields[0],
-      prevFields[1],
-      prevFields[2],
-      new Utils.Writer().writeVarIntNum(newExpiryTimeSeconds).toArray(),
-      prevFields[4]
-    ]
-
+    const identifier = previous.metadata.objectIdentifier
+    const isChirpRoot = new URL(previous.metadata.hostedFileLocation).pathname ===
+      `/chirp/v1/${identifier}/objects/${identifier}`
+    const objectFile = storage.bucket(GCP_BUCKET_NAME).file(
+      isChirpRoot ? `chirp/v1/objects/${identifier}` : `cdn/${identifier}`
+    )
+    const [gcsMetadata] = await objectFile.getMetadata()
+    const gcsSize = typeof gcsMetadata.size === 'string' ? Number(gcsMetadata.size) : gcsMetadata.size
+    if (!Number.isSafeInteger(gcsSize) || gcsSize !== previous.metadata.fileSize) {
+      throw new Error('GCS object size does not match the authenticated advertisement')
+    }
+    const extensionSeconds = additionalMinutes * 60
+    const newExpiryTime = previous.metadata.expiryTime + extensionSeconds
+    if (!Number.isSafeInteger(extensionSeconds) || !Number.isSafeInteger(newExpiryTime)) {
+      return res.status(400).json({ status: 'error', code: 'ERR_INVALID_TIME', description: 'Renewal expiry exceeds the supported range' })
+    }
+    const amount = await getPriceForFile({
+      fileSize: previous.metadata.fileSize,
+      retentionPeriod: additionalMinutes
+    })
+    const source = await decodeAndVerifyUHRPAdvertisement(previous.lockingScript)
     const pushdrop = new PushDrop(wallet)
     const newLockingScript = await pushdrop.lock(
-      fields,
-      [2, 'uhrp advertisement'],
-      '1',
-      'anyone',
-      true
-    )
-
-    const newTags = buildRenewalTags(
-      prevAdvertisement,
-      uhrpUrl,
-      objectIdentifier,
-      newExpiryTimeSeconds
-    )
-
-    const { signableTransaction } = await wallet.createAction({
-      inputBEEF: BEEF,
-      inputs: [
-        {
-          outpoint: prevAdvertisement.outpoint,
-          unlockingScriptLength: 74,
-          inputDescription: 'Redeeming old advertisement'
-        }
+      [
+        Utils.toArray(source.hostIdentityKey, 'hex'), source.hash,
+        Utils.toArray(source.hostedFileLocation, 'utf8'),
+        new Utils.Writer().writeVarIntNum(newExpiryTime).toArray(),
+        new Utils.Writer().writeVarIntNum(source.fileSize).toArray()
       ],
-      outputs: [
-        {
-          lockingScript: newLockingScript.toHex(),
-          satoshis: 1,
-          basket: 'uhrp advertisements',
-          outputDescription: 'UHRP advertisement token (renewed)',
-          tags: newTags
-        }
-      ],
-      description: `Renew advertisement for uhrpUrl ${uhrpUrl}`,
-      options: {
-        randomizeOutputs: false
-      }
+      [2, 'uhrp advertisement'], '1', 'anyone', true
+    )
+    const renewed = await decodeAndVerifyUHRPAdvertisement(newLockingScript)
+    if (
+      renewed.hostIdentityKey !== source.hostIdentityKey || Utils.toHex(renewed.hash) !== previous.metadata.hash ||
+      renewed.hostedFileLocation !== previous.metadata.hostedFileLocation ||
+      renewed.expiryTime !== newExpiryTime || renewed.fileSize !== previous.metadata.fileSize
+    ) throw new Error('Wallet created a substituted renewed UHRP advertisement')
+    const { customInstructions, metadata } = createAdvertisementMetadata({
+      objectIdentifier: previous.metadata.objectIdentifier,
+      uploaderIdentityKey: previous.metadata.uploaderIdentityKey,
+      hostedFileLocation: previous.metadata.hostedFileLocation,
+      hash: renewed.hash, expiryTime: newExpiryTime, fileSize: previous.metadata.fileSize,
+      contentType: previous.metadata.contentType
     })
+    const unlocker = pushdrop.unlock(
+      [2, 'uhrp advertisement'], '1', 'anyone', 'all', false,
+      previous.satoshis, previous.lockingScript
+    )
+    const transaction = await completeUhrpAction(
+      wallet,
+      {
+        inputBEEF: BEEF,
+        inputs: [{ outpoint: previous.outpoint, unlockingScriptLength: 74, inputDescription: 'Redeeming old advertisement' }],
+        outputs: [{
+          lockingScript: newLockingScript.toHex(), satoshis: 1,
+          basket: 'uhrp advertisements', outputDescription: 'UHRP advertisement token (renewed)',
+          tags: advertisementTags(metadata), customInstructions
+        }],
+        description: `Renew advertisement for uhrpUrl ${uhrpUrl}`,
+        options: { randomizeOutputs: false }
+      },
+      { outpoint: previous.outpoint, sign: async (tx, inputIndex) => await unlocker.sign(tx, inputIndex) }
+    )
+    const txid = transaction.id('hex')
+    if (transaction.outputs.filter(output =>
+      output.satoshis === 1 && output.lockingScript.toHex() === newLockingScript.toHex()
+    ).length !== 1) throw new Error('Wallet did not create exactly one renewed UHRP advertisement')
 
-    if (!signableTransaction) {
-      return res.status(404).json({
-        status: 'error',
-        code: 'ERR_CREATE_ACTION_FAILED',
-        description: `Old advertisement could not be redeemed and new advertisement could not be created for uhrpUrl ${uhrpUrl}`
-      })
+    if (isChirpRoot) {
+      const extended = await getChirpStore().extendRootLease(identifier, newExpiryTime)
+      if (!extended) throw new Error('CHIRP root lease is not active')
+    } else {
+      await extendObjectRetention(objectFile, newExpiryTime)
     }
-
-    const unlocker = pushdrop.unlock([2, 'uhrp advertisement'], '1', 'anyone')
-    const partialTx = Transaction.fromAtomicBEEF(signableTransaction.tx)
-    const unlockingScript = await unlocker.sign(partialTx, 0)
-    const { tx, txid } = await wallet.signAction({
-      reference: signableTransaction.reference,
-      spends: {
-        0: {
-          unlockingScript: unlockingScript.toHex()
-        }
-      }
-    })
-    if (!txid || !tx) {
-      return res.status(400).json({
-        status: 'error',
-        code: 'ERR_SIGNING_OLD_ADVERTISEMENT'
-      })
-    }
-
-    const broadcaster = new SHIPBroadcaster(['tm_uhrp'], {
-      // Keep the service buildable against the last published SDK during the coordinated release.
+    const result = await new SHIPBroadcaster(['tm_uhrp'], {
       networkPreset: lookupPreset as 'mainnet' | 'testnet'
-    })
-
-    // Make storage durable before publishing the replacement advertisement. An ambiguous
-    // broadcast intentionally leaves the extended lease in place for safe reconciliation.
-    const chirpLeaseExtended = await getChirpStore().extendRootLease(
-      objectIdentifier,
-      newExpiryTimeSeconds
-    )
-    if (!chirpLeaseExtended) {
-      await storage
-        .bucket(GCP_BUCKET_NAME)
-        .file(`cdn/${objectIdentifier}`)
-        .setMetadata({ customTime: newCustomTimeIso })
+    }).broadcast(transaction)
+    if (result.status !== 'success' || result.txid.toLowerCase() !== txid) {
+      return res.status(502).json({ status: 'error', code: 'ERR_ADVERTISEMENT_BROADCAST', description: 'The renewed advertisement was not accepted by the overlay.' })
     }
-    await broadcaster.broadcast(Transaction.fromAtomicBEEF(tx))
-
     return res.status(200).json({
-      status: 'success',
-      prevExpiryTime,
-      newExpiryTime: newExpiryTimeSeconds,
-      amount
+      status: 'success', prevExpiryTime: previous.metadata.expiryTime,
+      newExpiryTime, amount
     })
   } catch (error) {
     log.error({ operation: 'renew.handle', outcome: 'error', err: error }, 'Renew handler failed')
-    return res.status(500).json({
-      status: 'error',
-      code: 'ERR_INTERNAL_RENEW',
-      description: 'An error occurred while handling the renewal.'
-    })
+    return res.status(500).json({ status: 'error', code: 'ERR_INTERNAL_RENEW', description: 'An error occurred while handling the renewal.' })
   }
 }
 
 export default {
-  type: 'post',
-  path: '/renew',
-  summary:
-    'Renews storage time by adding additionalMinutes to the GCS customTime of a file found by uhrpUrl.',
-  parameters: {
-    uhrpUrl: 'The UHRP URL (e.g. "uhrp://somehash")',
-    additionalMinutes: 'Number of minutes to extend'
-  },
-  exampleResponse: {
-    status: 'success',
-    newExpiryTime: 28921659000, // New expiry time in seconds
-    prevExpiryTime: 28921599000, // Previous expiry time in seconds
-    amount: 42
-  },
-  errors: ['ERR_MISSING_FIELDS', 'ERR_NOT_FOUND', 'ERR_INTERNAL_RENEW'],
+  type: 'post', path: '/renew', summary: 'Renews an authenticated UHRP advertisement.',
+  parameters: { uhrpUrl: 'The UHRP URL', additionalMinutes: 'Number of minutes to extend' },
+  exampleResponse: { status: 'success', newExpiryTime: 28921659000, prevExpiryTime: 28921599000, amount: 42 },
+  errors: ['ERR_MISSING_FIELDS', 'ERR_INVALID_UHRP_URL', 'ERR_OLD_ADVERTISEMENT_NOT_FOUND', 'ERR_ADVERTISEMENT_BROADCAST', 'ERR_INTERNAL_RENEW'],
   func: renewHandler
 }

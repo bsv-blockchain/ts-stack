@@ -35,7 +35,7 @@ export type { AllowedOrigins } from './shared/originMatcher.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export { PROTOCOL_ID } from './types.js'
+export { PROTOCOL_ID, DESKTOP_WS_PROTOCOL, DESKTOP_TOKEN_PROTOCOL_PREFIX } from './types.js'
 export type {
   WalletLike,
   WireEnvelope,
@@ -48,3 +48,4 @@ export type {
   ParseResult
 } from './types.js'
 export type { CryptoParams } from './shared/crypto.js'
+export type { LocalNetworkHttpOptions } from './shared/validation.js'

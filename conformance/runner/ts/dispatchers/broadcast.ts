@@ -233,7 +233,7 @@ async function dispatchMerklePathSdkFailure(
   const arc = new ARC('https://arc.example.com', {
     httpClient: new FetchHttpClient(mockFetch as unknown as typeof fetch)
   })
-  const tx = buildSyntheticTx(rawTx)
+  const tx = buildSyntheticTx(rawTx, txid)
   const result = await arc.broadcast(tx as any)
 
   expect(result.status).toBe('error')

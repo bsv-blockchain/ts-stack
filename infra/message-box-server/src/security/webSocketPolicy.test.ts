@@ -2,6 +2,7 @@ import { PrivateKey } from '@bsv/sdk'
 import {
   authenticatedWebSocketIdentity,
   isIdentityOwnedRoom,
+  MAX_WEB_SOCKET_MESSAGE_BOX_BYTES,
   messageBoxFromRecipientRoom,
   WebSocketPolicyError
 } from './webSocketPolicy.js'
@@ -37,6 +38,18 @@ describe('Message Box WebSocket policy', () => {
     ).toBe(true)
     expect(isIdentityOwnedRoom(authenticatedIdentity, `${authenticatedIdentity}-`)).toBe(false)
     expect(isIdentityOwnedRoom(authenticatedIdentity, `${otherIdentity}-payment_inbox`)).toBe(false)
+    expect(isIdentityOwnedRoom(authenticatedIdentity, `${authenticatedIdentity}- inbox`)).toBe(
+      false
+    )
+    expect(isIdentityOwnedRoom(authenticatedIdentity, `${authenticatedIdentity}-inbox\n`)).toBe(
+      false
+    )
+    expect(
+      isIdentityOwnedRoom(
+        authenticatedIdentity,
+        `${authenticatedIdentity}-${'x'.repeat(MAX_WEB_SOCKET_MESSAGE_BOX_BYTES + 1)}`
+      )
+    ).toBe(false)
   })
 
   it('derives a message box only from the recipient-owned room', () => {
@@ -45,6 +58,10 @@ describe('Message Box WebSocket policy', () => {
     ).toBe('payment_inbox')
     expect(
       messageBoxFromRecipientRoom(authenticatedIdentity, `${otherIdentity}-payment_inbox`)
+    ).toBeUndefined()
+    const uncompressed = PrivateKey.fromRandom().toPublicKey().encode(false, 'hex') as string
+    expect(
+      messageBoxFromRecipientRoom(uncompressed, `${uncompressed}-payment_inbox`)
     ).toBeUndefined()
   })
 })

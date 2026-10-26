@@ -7,7 +7,7 @@
 import { Router, Request, Response } from 'express'
 import { Chaintracks, Services } from '@bsv/wallet-toolbox'
 import { log } from './logger'
-import { parseHeaderHeight, parseHeaderRange } from './resourceLimits'
+import { parseHeaderHeight, parseHeaderRange, parseSubmittedHeader } from './resourceLimits'
 
 interface ApiResponse {
   status: 'success' | 'error'
@@ -216,30 +216,18 @@ export function createV1Routes(options: V1RoutesOptions): Router {
   // POST /addHeaderHex - Submit new block header
   router.post('/addHeaderHex', async (req: Request, res: Response) => {
     try {
-      const { version, previousHash, merkleRoot, time, bits, nonce } = req.body
-
-      if (
-        version === undefined ||
-        !previousHash ||
-        !merkleRoot ||
-        time === undefined ||
-        bits === undefined ||
-        nonce === undefined
-      ) {
-        return res.status(400).json(error('ERR_INVALID_PARAMS', 'Missing required header fields'))
-      }
-
-      await chaintracks.addHeader({
-        version,
-        previousHash,
-        merkleRoot,
-        time,
-        bits,
-        nonce
-      })
+      const header = parseSubmittedHeader(req.body)
+      await chaintracks.addHeader(header)
 
       res.json(success(true))
     } catch (err) {
+      if (err instanceof RangeError || err instanceof TypeError) {
+        return res.status(400).json(error('ERR_INVALID_PARAMS', err.message))
+      }
+      if ((err as { code?: unknown })?.code === 'ERR_CHAINTRACKS_QUEUE_CAPACITY') {
+        res.setHeader('Retry-After', '1')
+        return res.status(503).json(error('ERR_SERVER_BUSY', 'Header submission queue is full'))
+      }
       log.error({ operation: 'v1.add_header', outcome: 'error', err }, 'Failed to add header')
       res.status(500).json(error('ERR_INTERNAL', 'Failed to add header'))
     }

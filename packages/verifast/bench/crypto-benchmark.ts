@@ -1,7 +1,7 @@
+import { sha256 } from '@bsv/sdk/primitives/Hash'
 import {
   BigNumber,
   ECDSA,
-  Hash,
   KeyDeriver,
   PrivateKey,
   ProtoWallet,
@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   const publicKey = privateKey.toPublicKey()
   const publicKeyBytes = Uint8Array.from(publicKey.encode(true) as number[])
   const counterparty = new PrivateKey(99).toPublicKey()
-  const digest = Uint8Array.from(Hash.sha256([1, 2, 3, 4]))
+  const digest = Uint8Array.from(sha256([1, 2, 3, 4]))
   const digestNumber = new BigNumber(Array.from(digest))
   const signature = ECDSA.sign(digestNumber, privateKey, true)
   const signatureBytes = Uint8Array.from(signature.toDER() as number[])

@@ -111,6 +111,24 @@ describe('VerifiableCertificate', () => {
       )
     })
 
+    it('rejects accessor and inherited keyring fields without invoking accessors', async () => {
+      let getterCalls = 0
+      const accessorKeyring: Record<string, unknown> = {}
+      Object.defineProperty(accessorKeyring, 'name', {
+        enumerable: true,
+        get: () => {
+          getterCalls++
+          return verifiableCert.keyring.name
+        }
+      })
+      verifiableCert.keyring = accessorKeyring as never
+      await expect(verifiableCert.decryptFields(verifierWallet)).rejects.toThrow('data property')
+      expect(getterCalls).toBe(0)
+
+      verifiableCert.keyring = Object.create({ name: 'inherited' })
+      await expect(verifiableCert.decryptFields(verifierWallet)).rejects.toThrow('plain object')
+    })
+
     it('should be able to decrypt fields using the anyone wallet', async () => {
       const { certificateFields, masterKeyring } = await MasterCertificate.createCertificateFields(
         subjectWallet,

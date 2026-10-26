@@ -1,4 +1,11 @@
 import {
+  CERTIFICATE_COMPATIBILITY_CALL,
+  CERTIFICATE_COMPATIBILITY_VERSION,
+  COMPATIBLE_CERTIFICATE_CALLS,
+  writeCertificateType,
+  decodeWireCertificate
+} from './CertificateWireCompatibility.js'
+import {
   AcquireCertificateArgs,
   AcquireCertificateResult,
   SecurityLevel,
@@ -46,11 +53,26 @@ import {
   ActionStatus,
   SendWithResultStatus
 } from '../Wallet.interfaces.js'
-import WalletWire from './WalletWire.js'
+import WalletWire, { MAX_WALLET_WIRE_FRAME_BYTES } from './WalletWire.js'
 import Certificate from '../../auth/certificates/Certificate.js'
-import * as Utils from '../../primitives/utils.js'
+import {
+  ReaderUint8Array,
+  WriterUint8Array,
+  toBase64,
+  toHex,
+  toUTF8Strict,
+  toUint8Array as UtilsToUint8Array
+} from '../../primitives/utils.js'
 import calls, { CallType } from './WalletWireCalls.js'
-import { WalletError } from '../WalletError.js'
+import { WalletError, walletErrors } from '../WalletError.js'
+import PublicKey from '../../primitives/PublicKey.js'
+import { validateOriginator } from '../validationHelpers.js'
+import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
+import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
+import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
+
+const MAX_WIRE_RESPONSE_COLLECTION_ITEMS = 100_000
 
 const ACTION_STATUS_MAP: Record<number, ActionStatus> = {
   1: 'completed',
@@ -73,42 +95,124 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.wire = wire
   }
 
-  private async transmit(
-    call: CallType,
+  readonly #certificateProfiles = new WeakMap<WalletWire, Promise<boolean>>()
+
+  async #supportsCertificateCompatibility(
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    wire: WalletWire = this.wire
+  ): Promise<boolean> {
+    const cached = this.#certificateProfiles.get(wire)
+    if (cached !== undefined) return await cached
+    const probe = this.#probeCertificateCompatibility(originator, wire)
+    this.#certificateProfiles.set(wire, probe)
+    try {
+      return await probe
+    } catch (error) {
+      this.#certificateProfiles.delete(wire)
+      throw error
+    }
+  }
+
+  async #probeCertificateCompatibility(
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    wire: WalletWire = this.wire
+  ): Promise<boolean> {
+    let result: Uint8Array
+    try {
+      result = await this.#transmit(
+        CERTIFICATE_COMPATIBILITY_CALL,
+        originator,
+        [0, CERTIFICATE_COMPATIBILITY_VERSION],
+        false,
+        wire
+      )
+    } catch (error) {
+      // Old processors explicitly reject unknown call IDs; transport/auth failures
+      // and malformed responses must never silently downgrade an invocation.
+      if (
+        error instanceof WalletError &&
+        (error.code === walletErrors.unsupportedAction ||
+          (error.code === walletErrors.unknownError && error.message === 'Invalid call code: 29'))
+      )
+        return false
+      throw error
+    }
+    if (result.length !== 1 || result[0] !== CERTIFICATE_COMPATIBILITY_VERSION) {
+      throw new Error('Invalid certificate compatibility capability response')
+    }
+    return true
+  }
+
+  async #transmit(
+    call: CallType | typeof CERTIFICATE_COMPATIBILITY_CALL,
     originator: OriginatorDomainNameStringUnder250Bytes = '',
-    params: readonly number[] | Uint8Array = []
+    params: readonly number[] | Uint8Array = [],
+    compatibility: boolean = false,
+    wire: WalletWire = this.wire
   ): Promise<Uint8Array> {
-    const originatorArray = Utils.toUint8Array(originator, 'utf8')
-    const frameWriter = new Utils.WriterUint8Array(
-      undefined,
-      2 + originatorArray.length + params.length
-    )
-    frameWriter.writeUInt8(calls[call])
+    const normalizedOriginator = originator === '' ? '' : validateOriginator(originator)!
+    const originatorArray = UtilsToUint8Array(normalizedOriginator, 'utf8')
+    const frameWriter = new WriterUint8Array(undefined, 2 + originatorArray.length + params.length)
+    const callCode = typeof call === 'number' ? call : calls[call]
+    frameWriter.writeUInt8(compatibility ? CERTIFICATE_COMPATIBILITY_CALL : callCode)
     frameWriter.writeUInt8(originatorArray.length)
     frameWriter.write(originatorArray)
+    if (compatibility) {
+      if (typeof call === 'number' || !COMPATIBLE_CERTIFICATE_CALLS.has(calls[call])) {
+        throw new Error('Invalid certificate compatibility operation')
+      }
+      frameWriter.write([1, CERTIFICATE_COMPATIBILITY_VERSION, calls[call]])
+    }
     if (params.length > 0) {
       frameWriter.write(params)
     }
     const frame = frameWriter.toUint8ArrayZeroCopy()
-    const result =
-      this.wire.transmitToWalletUint8Array === undefined
-        ? Uint8Array.from(await this.wire.transmitToWallet(Array.from(frame)))
-        : await this.wire.transmitToWalletUint8Array(frame)
-    const resultReader = new Utils.ReaderUint8Array(result)
+    if (frame.length > MAX_WALLET_WIRE_FRAME_BYTES) {
+      throw new Error('Wallet Wire request exceeds the maximum permitted size')
+    }
+    let result: Uint8Array
+    if (wire.transmitToWalletUint8Array === undefined) {
+      const legacyResult: unknown = await wire.transmitToWallet(Array.from(frame))
+      if (!Array.isArray(legacyResult) || legacyResult.length > MAX_WALLET_WIRE_FRAME_BYTES) {
+        throw new Error('Wallet Wire response exceeds the maximum permitted size')
+      }
+      for (let i = 0; i < legacyResult.length; i++) {
+        if (
+          !Object.prototype.hasOwnProperty.call(legacyResult, i) ||
+          !Number.isInteger(legacyResult[i]) ||
+          legacyResult[i] < 0 ||
+          legacyResult[i] > 255
+        ) {
+          throw new Error('Wallet Wire response must be a dense byte array')
+        }
+      }
+      result = Uint8Array.from(legacyResult)
+    } else {
+      const compactResult: unknown = await wire.transmitToWalletUint8Array(frame)
+      if (
+        !(compactResult instanceof Uint8Array) ||
+        compactResult.length > MAX_WALLET_WIRE_FRAME_BYTES
+      ) {
+        throw new Error('Wallet Wire response exceeds the maximum permitted size')
+      }
+      result = compactResult
+    }
+    const resultReader = new ReaderUint8Array(result)
     const errorByte = resultReader.readUInt8()
     if (errorByte === 0) {
       const resultFrame = resultReader.readView()
       return resultFrame
     } else {
       // Deserialize the error message length
-      const errorMessageLength = resultReader.readVarIntNum()
+      const errorMessageLength = resultReader.readVarIntNumStrict(false)
       const errorMessageBytes = resultReader.read(errorMessageLength)
-      const errorMessage = Utils.toUTF8(errorMessageBytes)
+      const errorMessage = toUTF8Strict(errorMessageBytes)
 
       // Deserialize the stack trace length
-      const stackTraceLength = resultReader.readVarIntNum()
+      const stackTraceLength = resultReader.readVarIntNumStrict(false)
       const stackTraceBytes = resultReader.read(stackTraceLength)
-      const stackTrace = Utils.toUTF8(stackTraceBytes)
+      const stackTrace = toUTF8Strict(stackTraceBytes)
+      this.#assertResponseConsumed(resultReader, String(call))
 
       // Construct a custom wallet error
       const e = new WalletError(errorMessage, errorByte, stackTrace)
@@ -120,7 +224,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
-    const paramWriter = new Utils.WriterUint8Array(
+    validateWalletArgs('createAction', args)
+    const bindingRequest = snapshotWalletResultRequest('createAction', args)
+    const paramWriter = new WriterUint8Array(
       undefined,
       Math.max(
         256,
@@ -137,7 +243,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     )
 
     // Serialize description
-    this.writeUTF8(paramWriter, args.description)
+    this.#writeUTF8(paramWriter, args.description)
 
     // input BEEF
     if (args.inputBEEF == null) {
@@ -153,7 +259,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     } else {
       paramWriter.writeVarIntNum(args.inputs.length)
       for (const input of args.inputs) {
-        this.serializeCreateActionInput(paramWriter, input)
+        this.#serializeCreateActionInput(paramWriter, input)
       }
     }
 
@@ -163,58 +269,69 @@ export default class WalletWireTransceiver implements WalletInterface {
     } else {
       paramWriter.writeVarIntNum(args.outputs.length)
       for (const output of args.outputs) {
-        this.serializeCreateActionOutput(paramWriter, output)
+        this.#serializeCreateActionOutput(paramWriter, output)
       }
     }
 
     // Serialize lockTime, version
-    this.writeOptionalVarInt(paramWriter, args.lockTime)
-    this.writeOptionalVarInt(paramWriter, args.version)
+    this.#writeOptionalVarInt(paramWriter, args.lockTime)
+    this.#writeOptionalVarInt(paramWriter, args.version)
 
     // Serialize labels
-    this.writeUTF8Array(paramWriter, args.labels)
+    this.#writeUTF8Array(paramWriter, args.labels)
 
     // Serialize options
-    this.serializeCreateActionOptions(paramWriter, args.options)
+    this.#serializeCreateActionOptions(paramWriter, args.options)
 
     // Transmit and parse response
-    const result = await this.transmit(
+    const result = await this.#transmit(
       'createAction',
       originator,
       paramWriter.toUint8ArrayZeroCopy()
     )
-    return this.parseCreateActionResult(result)
+    return validateWalletResult(
+      'createAction',
+      this.#parseCreateActionResult(result),
+      bindingRequest
+    )
   }
 
-  private parseCreateActionResult(result: Uint8Array): CreateActionResult {
-    const resultReader = new Utils.ReaderUint8Array(result)
+  #parseCreateActionResult(result: Uint8Array): CreateActionResult {
+    const resultReader = new ReaderUint8Array(result)
     const response: CreateActionResult = {}
 
-    if (resultReader.readInt8() === 1) {
-      response.txid = Utils.toHex(resultReader.read(32))
+    if (this.#readBooleanFlag(resultReader, 'createAction txid present')) {
+      response.txid = toHex(resultReader.read(32))
     }
 
-    if (resultReader.readInt8() === 1) {
-      response.tx = resultReader.readView(resultReader.readVarIntNum())
+    if (this.#readBooleanFlag(resultReader, 'createAction tx present')) {
+      response.tx = resultReader.readView(resultReader.readVarIntNumStrict(false))
     }
 
-    const noSendChangeLength = resultReader.readVarIntNum()
+    const noSendChangeLength = resultReader.readVarIntNumStrict()
     if (noSendChangeLength >= 0) {
+      this.#requireResponseCollectionLength(
+        resultReader,
+        noSendChangeLength,
+        'createAction noSendChange',
+        33
+      )
       response.noSendChange = []
       for (let i = 0; i < noSendChangeLength; i++) {
-        response.noSendChange.push(this.readOutpoint(resultReader))
+        response.noSendChange.push(this.#readOutpoint(resultReader))
       }
     }
 
-    const sendWithResults = this.readSendWithResults(resultReader)
+    const sendWithResults = this.#readSendWithResults(resultReader)
     if (sendWithResults != null) response.sendWithResults = sendWithResults
 
-    if (resultReader.readInt8() === 1) {
-      const tx = resultReader.readView(resultReader.readVarIntNum())
-      const referenceBytes = resultReader.read(resultReader.readVarIntNum())
-      response.signableTransaction = { tx, reference: Utils.toBase64(referenceBytes) }
+    if (this.#readBooleanFlag(resultReader, 'createAction signableTransaction present')) {
+      const tx = resultReader.readView(resultReader.readVarIntNumStrict(false))
+      const referenceBytes = resultReader.read(resultReader.readVarIntNumStrict(false))
+      response.signableTransaction = { tx, reference: toBase64(referenceBytes) }
     }
 
+    this.#assertResponseConsumed(resultReader, 'createAction')
     return response
   }
 
@@ -222,7 +339,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('signAction', args)
+    const bindingRequest = snapshotWalletResultRequest('signAction', args)
+    const paramWriter = new WriterUint8Array()
 
     // Serialize spends
     const spendIndexes = Object.keys(args.spends)
@@ -230,55 +349,74 @@ export default class WalletWireTransceiver implements WalletInterface {
     for (const index of spendIndexes) {
       paramWriter.writeVarIntNum(Number(index))
       const spend = args.spends[Number(index)]
-      const unlockingScriptBytes = Utils.toUint8Array(spend.unlockingScript, 'hex')
+      const unlockingScriptBytes = UtilsToUint8Array(spend.unlockingScript, 'hex')
       paramWriter.writeVarIntNum(unlockingScriptBytes.length)
       paramWriter.write(unlockingScriptBytes)
-      this.writeOptionalVarInt(paramWriter, spend.sequenceNumber)
+      this.#writeOptionalVarInt(paramWriter, spend.sequenceNumber)
     }
 
     // Serialize reference
-    const referenceBytes = Utils.toUint8Array(args.reference, 'base64')
+    const referenceBytes = UtilsToUint8Array(args.reference, 'base64')
     paramWriter.writeVarIntNum(referenceBytes.length)
     paramWriter.write(referenceBytes)
 
     // Serialize options
-    this.serializeSignActionOptions(paramWriter, args.options)
+    this.#serializeSignActionOptions(paramWriter, args.options)
 
     // Transmit and parse response
-    const result = await this.transmit('signAction', originator, paramWriter.toUint8ArrayZeroCopy())
-    const resultReader = new Utils.ReaderUint8Array(result)
+    const result = await this.#transmit(
+      'signAction',
+      originator,
+      paramWriter.toUint8ArrayZeroCopy()
+    )
+    const resultReader = new ReaderUint8Array(result)
 
     const response: SignActionResult = {}
-    if (resultReader.readInt8() === 1) {
-      response.txid = Utils.toHex(resultReader.read(32))
+    if (this.#readBooleanFlag(resultReader, 'signAction txid present')) {
+      response.txid = toHex(resultReader.read(32))
     }
-    if (resultReader.readInt8() === 1) {
-      response.tx = resultReader.readView(resultReader.readVarIntNum())
+    if (this.#readBooleanFlag(resultReader, 'signAction tx present')) {
+      response.tx = resultReader.readView(resultReader.readVarIntNumStrict(false))
     }
-    const sendWithResults = this.readSendWithResults(resultReader)
+    const sendWithResults = this.#readSendWithResults(resultReader)
     if (sendWithResults != null) response.sendWithResults = sendWithResults
 
-    return response
+    this.#assertResponseConsumed(resultReader, 'signAction')
+    return validateWalletResult('signAction', response, bindingRequest)
   }
 
   async abortAction(
     args: { reference: Base64String },
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<{ aborted: true }> {
-    await this.transmit('abortAction', originator, Utils.toUint8Array(args.reference, 'base64'))
-    return { aborted: true }
+  ): Promise<{ aborted: boolean }> {
+    validateWalletArgs('abortAction', args)
+    try {
+      const result = await this.#transmit(
+        'abortAction',
+        originator,
+        UtilsToUint8Array(args.reference, 'base64')
+      )
+      this.#requireEmptyResponse(result, 'abortAction')
+      return { aborted: true }
+    } catch (error) {
+      if (error instanceof WalletError && error.code === walletErrors.abortRefused) {
+        return { aborted: false }
+      }
+      throw error
+    }
   }
 
   async listActions(
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('listActions', args)
+    const paramWriter = new WriterUint8Array()
 
     // Serialize labels (always-present array, no -1 sentinel)
     paramWriter.writeVarIntNum(args.labels.length)
     for (const label of args.labels) {
-      this.writeUTF8(paramWriter, label)
+      this.#writeUTF8(paramWriter, label)
     }
 
     // Serialize labelQueryMode
@@ -295,69 +433,107 @@ export default class WalletWireTransceiver implements WalletInterface {
       args.includeOutputs,
       args.includeOutputLockingScripts
     ]) {
-      this.writeOptionalBool(paramWriter, option)
+      this.#writeOptionalBool(paramWriter, option)
     }
 
-    this.writeOptionalVarInt(paramWriter, args.limit)
-    this.writeOptionalVarInt(paramWriter, args.offset)
-    this.writeOptionalBool(paramWriter, args.seekPermission)
+    this.#writeOptionalVarInt(paramWriter, args.limit)
+    this.#writeOptionalVarInt(paramWriter, args.offset)
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
 
-    const result = await this.transmit('listActions', originator, paramWriter.toUint8Array())
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const totalActions = resultReader.readVarIntNum()
+    const result = await this.#transmit('listActions', originator, paramWriter.toUint8Array())
+    const resultReader = new ReaderUint8Array(result)
+    const totalActions = this.#requireInteger(
+      resultReader.readVarIntNumStrict(false),
+      'listActions totalActions',
+      0,
+      0xffffffff
+    )
     const actions: ListActionsResult['actions'] = []
-    for (let i = 0; i < totalActions; i++) {
-      actions.push(this.parseAction(resultReader))
+    while (!resultReader.eof()) {
+      this.#requirePageCapacity(actions.length, args.limit, 'listActions')
+      actions.push(this.#parseAction(resultReader))
     }
+    this.#assertPageCount(actions.length, totalActions, 'listActions')
     return { totalActions, actions }
   }
 
-  private parseActionStatus(code: number): ActionStatus {
+  #parseActionStatus(code: number): ActionStatus {
     const status = ACTION_STATUS_MAP[code]
     if (status == null) throw new Error(`Unknown status code: ${code}`)
     return status
   }
 
-  private parseAction(reader: Utils.ReaderUint8Array): ListActionsResult['actions'][number] {
-    const txid = Utils.toHex(reader.read(32))
-    const satoshis = reader.readVarIntNum()
-    const status = this.parseActionStatus(reader.readInt8())
-    const isOutgoing = reader.readInt8() === 1
-    const description = Utils.toUTF8(reader.read(reader.readVarIntNum()))
+  #readActionSatoshis(reader: ReaderUint8Array): number {
+    // Action history is a signed net amount. Legacy wallet wire encodes negative
+    // values as 0xff followed by signed little-endian int64. This exception is
+    // field-specific: counts, lengths and individual output values stay unsigned.
+    let value: number
+    if (
+      reader.remaining() >= 9 &&
+      reader.bin[reader.pos] === 0xff &&
+      reader.bin[reader.pos + 8] >= 0x80
+    ) {
+      reader.skip(1)
+      value = reader.readInt64LEBn().toNumber()
+    } else {
+      value = reader.readVarIntNumStrict(false)
+    }
+    return this.#requireInteger(value, 'listActions satoshis', -21e14, 21e14)
+  }
+
+  #parseAction(reader: ReaderUint8Array): ListActionsResult['actions'][number] {
+    const txid = toHex(reader.read(32))
+    const satoshis = this.#readActionSatoshis(reader)
+    const status = this.#parseActionStatus(reader.readInt8())
+    const isOutgoing = this.#readBooleanFlag(reader, 'listActions isOutgoing')
+    const description = toUTF8Strict(reader.read(reader.readVarIntNumStrict(false)))
 
     const action: any = { txid, satoshis, status, isOutgoing, description, version: 0, lockTime: 0 }
 
-    const labelsLen = reader.readVarIntNum()
+    const labelsLen = reader.readVarIntNumStrict()
     if (labelsLen >= 0) {
+      this.#requireResponseCollectionLength(reader, labelsLen, 'listActions labels')
       action.labels = []
       for (let j = 0; j < labelsLen; j++) {
-        action.labels.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+        action.labels.push(toUTF8Strict(reader.read(reader.readVarIntNumStrict(false))))
       }
     }
 
-    action.version = reader.readVarIntNum()
-    action.lockTime = reader.readVarIntNum()
+    action.version = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions version',
+      0,
+      0xffffffff
+    )
+    action.lockTime = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions lockTime',
+      0,
+      0xffffffff
+    )
 
-    const inputsLen = reader.readVarIntNum()
+    const inputsLen = reader.readVarIntNumStrict()
     if (inputsLen >= 0) {
+      this.#requireResponseCollectionLength(reader, inputsLen, 'listActions inputs')
       action.inputs = []
       for (let k = 0; k < inputsLen; k++) {
-        action.inputs.push(this.parseActionInput(reader))
+        action.inputs.push(this.#parseActionInput(reader))
       }
     }
 
-    const outputsLen = reader.readVarIntNum()
+    const outputsLen = reader.readVarIntNumStrict()
     if (outputsLen >= 0) {
+      this.#requireResponseCollectionLength(reader, outputsLen, 'listActions outputs')
       action.outputs = []
       for (let l = 0; l < outputsLen; l++) {
-        action.outputs.push(this.parseActionOutput(reader))
+        action.outputs.push(this.#parseActionOutput(reader))
       }
     }
 
     return action
   }
 
-  private parseActionInput(reader: Utils.ReaderUint8Array): {
+  #parseActionInput(reader: ReaderUint8Array): {
     sourceOutpoint: OutpointString
     sourceSatoshis: SatoshiValue
     sourceLockingScript?: HexString
@@ -365,14 +541,24 @@ export default class WalletWireTransceiver implements WalletInterface {
     inputDescription: DescriptionString5to50Bytes
     sequenceNumber: PositiveIntegerOrZero
   } {
-    const sourceOutpoint = this.readOutpoint(reader)
-    const sourceSatoshis = reader.readVarIntNum()
-    const srcLockLen = reader.readVarIntNum()
-    const sourceLockingScript = srcLockLen >= 0 ? Utils.toHex(reader.read(srcLockLen)) : undefined
-    const unlockLen = reader.readVarIntNum()
-    const unlockingScript = unlockLen >= 0 ? Utils.toHex(reader.read(unlockLen)) : undefined
-    const inputDescription = Utils.toUTF8(reader.read(reader.readVarIntNum()))
-    const sequenceNumber = reader.readVarIntNum()
+    const sourceOutpoint = this.#readOutpoint(reader)
+    const sourceSatoshis = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions input sourceSatoshis',
+      0,
+      21e14
+    )
+    const srcLockLen = reader.readVarIntNumStrict()
+    const sourceLockingScript = srcLockLen >= 0 ? toHex(reader.read(srcLockLen)) : undefined
+    const unlockLen = reader.readVarIntNumStrict()
+    const unlockingScript = unlockLen >= 0 ? toHex(reader.read(unlockLen)) : undefined
+    const inputDescription = toUTF8Strict(reader.read(reader.readVarIntNumStrict(false)))
+    const sequenceNumber = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions input sequenceNumber',
+      0,
+      0xffffffff
+    )
     return {
       sourceOutpoint,
       sourceSatoshis,
@@ -383,7 +569,7 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
   }
 
-  private parseActionOutput(reader: Utils.ReaderUint8Array): {
+  #parseActionOutput(reader: ReaderUint8Array): {
     outputIndex: PositiveIntegerOrZero
     satoshis: SatoshiValue
     lockingScript?: HexString
@@ -393,23 +579,34 @@ export default class WalletWireTransceiver implements WalletInterface {
     tags: OutputTagStringUnder300Bytes[]
     customInstructions?: string
   } {
-    const outputIndex = reader.readVarIntNum()
-    const satoshis = reader.readVarIntNum()
-    const lockLen = reader.readVarIntNum()
-    const lockingScript = lockLen >= 0 ? Utils.toHex(reader.read(lockLen)) : undefined
-    const spendable = reader.readInt8() === 1
-    const outputDescription = Utils.toUTF8(reader.read(reader.readVarIntNum()))
-    const basketLen = reader.readVarIntNum()
-    const basket = basketLen >= 0 ? Utils.toUTF8(reader.read(basketLen)) : undefined
-    const tagsLen = reader.readVarIntNum()
+    const outputIndex = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions output outputIndex',
+      0,
+      0xffffffff
+    )
+    const satoshis = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listActions output satoshis',
+      0,
+      21e14
+    )
+    const lockLen = reader.readVarIntNumStrict()
+    const lockingScript = lockLen >= 0 ? toHex(reader.read(lockLen)) : undefined
+    const spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
+    const outputDescription = toUTF8Strict(reader.read(reader.readVarIntNumStrict(false)))
+    const basketLen = reader.readVarIntNumStrict()
+    const basket = basketLen >= 0 ? toUTF8Strict(reader.read(basketLen)) : undefined
+    const tagsLen = reader.readVarIntNumStrict()
     const tags: string[] = []
     if (tagsLen >= 0) {
+      this.#requireResponseCollectionLength(reader, tagsLen, 'listActions output tags')
       for (let m = 0; m < tagsLen; m++) {
-        tags.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+        tags.push(toUTF8Strict(reader.read(reader.readVarIntNumStrict(false))))
       }
     }
-    const custLen = reader.readVarIntNum()
-    const customInstructions = custLen >= 0 ? Utils.toUTF8(reader.read(custLen)) : undefined
+    const custLen = reader.readVarIntNumStrict()
+    const customInstructions = custLen >= 0 ? toUTF8Strict(reader.read(custLen)) : undefined
     return {
       outputIndex,
       satoshis,
@@ -426,24 +623,30 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ accepted: true }> {
-    const paramWriter = new Utils.WriterUint8Array(undefined, Math.max(256, args.tx.length + 4096))
+    validateWalletArgs('internalizeAction', args)
+    const paramWriter = new WriterUint8Array(undefined, Math.max(256, args.tx.length + 4096))
     paramWriter.writeVarIntNum(args.tx.length)
     paramWriter.write(args.tx)
     paramWriter.writeVarIntNum(args.outputs.length)
     for (const out of args.outputs) {
-      this.serializeInternalizeOutput(paramWriter, out)
+      this.#serializeInternalizeOutput(paramWriter, out)
     }
-    this.writeUTF8Array(paramWriter, typeof args.labels === 'object' ? args.labels : undefined)
-    const descriptionAsArray = Utils.toUint8Array(args.description)
+    this.#writeUTF8Array(paramWriter, typeof args.labels === 'object' ? args.labels : undefined)
+    const descriptionAsArray = UtilsToUint8Array(args.description)
     paramWriter.writeVarIntNum(descriptionAsArray.length)
     paramWriter.write(descriptionAsArray)
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    await this.transmit('internalizeAction', originator, paramWriter.toUint8ArrayZeroCopy())
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const result = await this.#transmit(
+      'internalizeAction',
+      originator,
+      paramWriter.toUint8ArrayZeroCopy()
+    )
+    this.#requireEmptyResponse(result, 'internalizeAction')
     return { accepted: true }
   }
 
-  private serializeInternalizeOutput(
-    writer: Utils.WriterUint8Array,
+  #serializeInternalizeOutput(
+    writer: WriterUint8Array,
     out: InternalizeActionArgs['outputs'][number]
   ): void {
     writer.writeVarIntNum(out.outputIndex)
@@ -452,24 +655,24 @@ export default class WalletWireTransceiver implements WalletInterface {
         throw new Error('Payment remittance is required for wallet payment')
       }
       writer.writeUInt8(1)
-      writer.write(Utils.toUint8Array(out.paymentRemittance.senderIdentityKey, 'hex'))
-      const prefix = Utils.toUint8Array(out.paymentRemittance.derivationPrefix, 'base64')
+      writer.write(UtilsToUint8Array(out.paymentRemittance.senderIdentityKey, 'hex'))
+      const prefix = UtilsToUint8Array(out.paymentRemittance.derivationPrefix, 'base64')
       writer.writeVarIntNum(prefix.length)
       writer.write(prefix)
-      const suffix = Utils.toUint8Array(out.paymentRemittance.derivationSuffix, 'base64')
+      const suffix = UtilsToUint8Array(out.paymentRemittance.derivationSuffix, 'base64')
       writer.writeVarIntNum(suffix.length)
       writer.write(suffix)
     } else {
       writer.writeUInt8(2)
-      const basket = Utils.toUint8Array(out.insertionRemittance?.basket, 'utf8')
+      const basket = UtilsToUint8Array(out.insertionRemittance?.basket, 'utf8')
       writer.writeVarIntNum(basket.length)
       writer.write(basket)
-      this.writeOptionalUTF8(writer, out.insertionRemittance?.customInstructions)
+      this.#writeOptionalUTF8(writer, out.insertionRemittance?.customInstructions)
       const tags = out.insertionRemittance?.tags
       if (typeof tags === 'object') {
         writer.writeVarIntNum(tags.length)
         for (const tag of tags) {
-          const t = Utils.toUint8Array(tag, 'utf8')
+          const t = UtilsToUint8Array(tag, 'utf8')
           writer.writeVarIntNum(t.length)
           writer.write(t)
         }
@@ -483,12 +686,14 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
-    const paramWriter = new Utils.WriterUint8Array()
-    this.writeUTF8(paramWriter, args.basket)
+    validateWalletArgs('listOutputs', args)
+    const bindingRequest = snapshotWalletResultRequest('listOutputs', args)
+    const paramWriter = new WriterUint8Array()
+    this.#writeUTF8(paramWriter, args.basket)
     if (typeof args.tags === 'object') {
       paramWriter.writeVarIntNum(args.tags.length)
       for (const tag of args.tags) {
-        this.writeUTF8(paramWriter, tag)
+        this.#writeUTF8(paramWriter, tag)
       }
     } else {
       paramWriter.writeVarIntNum(0)
@@ -499,48 +704,70 @@ export default class WalletWireTransceiver implements WalletInterface {
     if (args.include === 'locking scripts') paramWriter.writeInt8(1)
     else if (args.include === 'entire transactions') paramWriter.writeInt8(2)
     else paramWriter.writeInt8(-1)
-    this.writeOptionalBool(paramWriter, args.includeCustomInstructions)
-    this.writeOptionalBool(paramWriter, args.includeTags)
-    this.writeOptionalBool(paramWriter, args.includeLabels)
-    this.writeOptionalVarInt(paramWriter, args.limit)
-    this.writeOptionalVarInt(paramWriter, args.offset)
-    this.writeOptionalBool(paramWriter, args.seekPermission)
+    this.#writeOptionalBool(paramWriter, args.includeCustomInstructions)
+    this.#writeOptionalBool(paramWriter, args.includeTags)
+    this.#writeOptionalBool(paramWriter, args.includeLabels)
+    this.#writeOptionalVarInt(paramWriter, args.limit)
+    this.#writeOptionalVarInt(paramWriter, args.offset)
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
 
-    const result = await this.transmit('listOutputs', originator, paramWriter.toUint8Array())
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const totalOutputs = resultReader.readVarIntNum()
-    const beefLength = resultReader.readVarIntNum()
+    const result = await this.#transmit('listOutputs', originator, paramWriter.toUint8Array())
+    const resultReader = new ReaderUint8Array(result)
+    if (isModuleBalanceQuery(args.basket)) {
+      const balance = toUTF8Strict(resultReader.read(resultReader.readVarIntNumStrict(false)))
+      if (!resultReader.eof()) throw new Error('Invalid listOutputs module balance response')
+      return validateWalletResult(
+        'listOutputs',
+        { totalOutputs: balance, outputs: [] },
+        bindingRequest
+      )
+    }
+    const totalOutputs = this.#requireInteger(
+      resultReader.readVarIntNumStrict(false),
+      'listOutputs totalOutputs',
+      0,
+      0xffffffff
+    )
+    const beefLength = resultReader.readVarIntNumStrict()
     const BEEF = beefLength >= 0 ? resultReader.readView(beefLength) : undefined
     const outputs: ListOutputsResult['outputs'] = []
-    for (let i = 0; i < totalOutputs; i++) {
-      outputs.push(this.parseListOutputEntry(resultReader))
+    while (!resultReader.eof()) {
+      this.#requirePageCapacity(outputs.length, args.limit, 'listOutputs')
+      outputs.push(this.#parseListOutputEntry(resultReader))
     }
-    return { totalOutputs, BEEF, outputs }
+    this.#assertPageCount(outputs.length, totalOutputs, 'listOutputs')
+    return validateWalletResult('listOutputs', { totalOutputs, BEEF, outputs }, bindingRequest)
   }
 
-  private parseListOutputEntry(
-    reader: Utils.ReaderUint8Array
-  ): ListOutputsResult['outputs'][number] {
-    const outpoint = this.readOutpoint(reader)
-    const satoshis = reader.readVarIntNum()
+  #parseListOutputEntry(reader: ReaderUint8Array): ListOutputsResult['outputs'][number] {
+    const outpoint = this.#readOutpoint(reader)
+    const satoshis = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'listOutputs satoshis',
+      0,
+      21e14
+    )
     const output: ListOutputsResult['outputs'][number] = { spendable: true, outpoint, satoshis }
-    const scriptLen = reader.readVarIntNum()
-    if (scriptLen >= 0) output.lockingScript = Utils.toHex(reader.read(scriptLen))
-    const custLen = reader.readVarIntNum()
-    if (custLen >= 0) output.customInstructions = Utils.toUTF8(reader.read(custLen))
-    const tagsLen = reader.readVarIntNum()
+    const scriptLen = reader.readVarIntNumStrict()
+    if (scriptLen >= 0) output.lockingScript = toHex(reader.read(scriptLen))
+    output.spendable = this.#readBooleanFlag(reader, 'listOutputs spendable')
+    const custLen = reader.readVarIntNumStrict()
+    if (custLen >= 0) output.customInstructions = toUTF8Strict(reader.read(custLen))
+    const tagsLen = reader.readVarIntNumStrict()
     if (tagsLen !== -1) {
+      this.#requireResponseCollectionLength(reader, tagsLen, 'listOutputs tags')
       const tags: OutputTagStringUnder300Bytes[] = []
       for (let i = 0; i < tagsLen; i++) {
-        tags.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+        tags.push(toUTF8Strict(reader.read(reader.readVarIntNumStrict(false))))
       }
       output.tags = tags
     }
-    const labelsLen = reader.readVarIntNum()
+    const labelsLen = reader.readVarIntNumStrict()
     if (labelsLen !== -1) {
+      this.#requireResponseCollectionLength(reader, labelsLen, 'listOutputs labels')
       const labels: LabelStringUnder300Bytes[] = []
       for (let i = 0; i < labelsLen; i++) {
-        labels.push(Utils.toUTF8(reader.read(reader.readVarIntNum())))
+        labels.push(toUTF8Strict(reader.read(reader.readVarIntNumStrict(false))))
       }
       output.labels = labels
     }
@@ -551,26 +778,39 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: { basket: BasketStringUnder300Bytes; output: OutpointString },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ relinquished: true }> {
-    const paramWriter = new Utils.WriterUint8Array()
-    const basketAsArray = Utils.toUint8Array(args.basket, 'utf8')
+    validateWalletArgs('relinquishOutput', args)
+    const paramWriter = new WriterUint8Array()
+    const basketAsArray = UtilsToUint8Array(args.basket, 'utf8')
     paramWriter.writeVarIntNum(basketAsArray.length)
     paramWriter.write(basketAsArray)
-    paramWriter.write(this.encodeOutpoint(args.output))
-    await this.transmit('relinquishOutput', originator, paramWriter.toUint8Array())
+    paramWriter.write(this.#encodeOutpoint(args.output))
+    const result = await this.#transmit('relinquishOutput', originator, paramWriter.toUint8Array())
+    this.#requireEmptyResponse(result, 'relinquishOutput')
     return { relinquished: true }
   }
 
-  private encodeOutpoint(outpoint: OutpointString): Uint8Array {
-    const writer = new Utils.WriterUint8Array()
-    const [txid, index] = outpoint.split('.')
-    writer.write(Utils.toUint8Array(txid, 'hex'))
-    writer.writeVarIntNum(Number(index))
+  #encodeOutpoint(outpoint: OutpointString): Uint8Array {
+    const writer = new WriterUint8Array()
+    if (typeof outpoint !== 'string') throw new Error('Invalid outpoint: expected a string')
+    const parts = outpoint.split('.')
+    if (parts.length !== 2 || !/^(?:0|[1-9]\d*)$/.test(parts[1])) {
+      throw new Error(`Invalid outpoint: ${outpoint}`)
+    }
+    const txid = UtilsToUint8Array(parts[0], 'hex')
+    if (txid.length !== 32) throw new Error('Invalid outpoint txid length')
+    writer.write(txid)
+    writer.writeVarIntNum(this.#requireInteger(Number(parts[1]), 'outpoint index', 0, 0xffffffff))
     return writer.toUint8Array()
   }
 
-  private readOutpoint(reader: Utils.ReaderUint8Array): OutpointString {
-    const txid = Utils.toHex(reader.read(32))
-    const index = reader.readVarIntNum()
+  #readOutpoint(reader: ReaderUint8Array): OutpointString {
+    const txid = toHex(reader.read(32))
+    const index = this.#requireInteger(
+      reader.readVarIntNumStrict(false),
+      'outpoint index',
+      0,
+      0xffffffff
+    )
     return `${txid}.${index}`
   }
 
@@ -587,15 +827,16 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ publicKey: PubKeyHex }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('getPublicKey', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.writeUInt8(args.identityKey ? 1 : 0)
     if (args.identityKey) {
-      paramWriter.write(this.encodePrivilegedParams(args.privileged, args.privilegedReason))
+      paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
     } else {
       args.protocolID ??= [SecurityLevels.Silent, 'default']
       args.keyID ??= ''
       paramWriter.write(
-        this.encodeKeyRelatedParams(
+        this.#encodeKeyRelatedParams(
           args.protocolID,
           args.keyID,
           args.counterparty,
@@ -611,11 +852,13 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
 
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
 
-    const result = await this.transmit('getPublicKey', originator, paramWriter.toUint8Array())
+    const result = await this.#transmit('getPublicKey', originator, paramWriter.toUint8Array())
+    this.#requireResponseLength(result, 33, 'getPublicKey')
+    PublicKey.fromDER(Array.from(result))
     return {
-      publicKey: Utils.toHex(result)
+      publicKey: toHex(result)
     }
   }
 
@@ -635,33 +878,49 @@ export default class WalletWireTransceiver implements WalletInterface {
     encryptedLinkage: Byte[]
     encryptedLinkageProof: number[]
   }> {
-    const paramWriter = new Utils.WriterUint8Array()
-    paramWriter.write(this.encodePrivilegedParams(args.privileged, args.privilegedReason))
-    paramWriter.write(Utils.toUint8Array(args.counterparty, 'hex'))
-    paramWriter.write(Utils.toUint8Array(args.verifier, 'hex'))
-    const result = await this.transmit(
+    validateWalletArgs('revealCounterpartyKeyLinkage', args)
+    const bindingRequest = snapshotWalletResultRequest('revealCounterpartyKeyLinkage', args)
+    const paramWriter = new WriterUint8Array()
+    paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
+    paramWriter.write(UtilsToUint8Array(args.counterparty, 'hex'))
+    paramWriter.write(UtilsToUint8Array(args.verifier, 'hex'))
+    const result = await this.#transmit(
       'revealCounterpartyKeyLinkage',
       originator,
       paramWriter.toUint8Array()
     )
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const prover = Utils.toHex(resultReader.read(33))
-    const verifier = Utils.toHex(resultReader.read(33))
-    const counterparty = Utils.toHex(resultReader.read(33))
-    const revelationTimeLength = resultReader.readVarIntNum()
-    const revelationTime = Utils.toUTF8(resultReader.read(revelationTimeLength))
-    const encryptedLinkageLength = resultReader.readVarIntNum()
+    const resultReader = new ReaderUint8Array(result)
+    const prover = this.#readCompressedPublicKey(
+      resultReader,
+      'revealCounterpartyKeyLinkage prover'
+    )
+    const verifier = this.#readCompressedPublicKey(
+      resultReader,
+      'revealCounterpartyKeyLinkage verifier'
+    )
+    const counterparty = this.#readCompressedPublicKey(
+      resultReader,
+      'revealCounterpartyKeyLinkage counterparty'
+    )
+    const revelationTimeLength = resultReader.readVarIntNumStrict(false)
+    const revelationTime = toUTF8Strict(resultReader.read(revelationTimeLength))
+    const encryptedLinkageLength = resultReader.readVarIntNumStrict(false)
     const encryptedLinkage = resultReader.read(encryptedLinkageLength)
-    const encryptedLinkageProofLength = resultReader.readVarIntNum()
+    const encryptedLinkageProofLength = resultReader.readVarIntNumStrict(false)
     const encryptedLinkageProof = resultReader.read(encryptedLinkageProofLength)
-    return {
-      prover,
-      verifier,
-      counterparty,
-      revelationTime,
-      encryptedLinkage: Array.from(encryptedLinkage),
-      encryptedLinkageProof: Array.from(encryptedLinkageProof)
-    }
+    this.#assertResponseConsumed(resultReader, 'revealCounterpartyKeyLinkage')
+    return validateWalletResult(
+      'revealCounterpartyKeyLinkage',
+      {
+        prover,
+        verifier,
+        counterparty,
+        revelationTime,
+        encryptedLinkage: Array.from(encryptedLinkage),
+        encryptedLinkageProof: Array.from(encryptedLinkageProof)
+      },
+      bindingRequest
+    )
   }
 
   async revealSpecificKeyLinkage(
@@ -684,9 +943,11 @@ export default class WalletWireTransceiver implements WalletInterface {
     encryptedLinkageProof: Byte[]
     proofType: Byte
   }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('revealSpecificKeyLinkage', args)
+    const bindingRequest = snapshotWalletResultRequest('revealSpecificKeyLinkage', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -694,36 +955,47 @@ export default class WalletWireTransceiver implements WalletInterface {
         args.privilegedReason
       )
     )
-    paramWriter.write(Utils.toUint8Array(args.verifier, 'hex'))
-    const result = await this.transmit(
+    paramWriter.write(UtilsToUint8Array(args.verifier, 'hex'))
+    const result = await this.#transmit(
       'revealSpecificKeyLinkage',
       originator,
       paramWriter.toUint8Array()
     )
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const prover = Utils.toHex(resultReader.read(33))
-    const verifier = Utils.toHex(resultReader.read(33))
-    const counterparty = Utils.toHex(resultReader.read(33))
-    const securityLevel = resultReader.readUInt8()
-    const protocolLength = resultReader.readVarIntNum()
-    const protocol = Utils.toUTF8(resultReader.read(protocolLength))
-    const keyIDLength = resultReader.readVarIntNum()
-    const keyID = Utils.toUTF8(resultReader.read(keyIDLength))
-    const encryptedLinkageLength = resultReader.readVarIntNum()
+    const resultReader = new ReaderUint8Array(result)
+    const prover = this.#readCompressedPublicKey(resultReader, 'revealSpecificKeyLinkage prover')
+    const verifier = this.#readCompressedPublicKey(
+      resultReader,
+      'revealSpecificKeyLinkage verifier'
+    )
+    const counterparty = this.#readCompressedPublicKey(
+      resultReader,
+      'revealSpecificKeyLinkage counterparty'
+    )
+    const securityLevel = this.#readSecurityLevel(resultReader, 'revealSpecificKeyLinkage')
+    const protocolLength = resultReader.readVarIntNumStrict(false)
+    const protocol = toUTF8Strict(resultReader.read(protocolLength))
+    const keyIDLength = resultReader.readVarIntNumStrict(false)
+    const keyID = toUTF8Strict(resultReader.read(keyIDLength))
+    const encryptedLinkageLength = resultReader.readVarIntNumStrict(false)
     const encryptedLinkage = resultReader.read(encryptedLinkageLength)
-    const encryptedLinkageProofLength = resultReader.readVarIntNum()
+    const encryptedLinkageProofLength = resultReader.readVarIntNumStrict(false)
     const encryptedLinkageProof = resultReader.read(encryptedLinkageProofLength)
     const proofType = resultReader.readUInt8()
-    return {
-      prover,
-      verifier,
-      counterparty,
-      protocolID: [securityLevel as SecurityLevel, protocol],
-      keyID,
-      encryptedLinkage: Array.from(encryptedLinkage),
-      encryptedLinkageProof: Array.from(encryptedLinkageProof),
-      proofType
-    }
+    this.#assertResponseConsumed(resultReader, 'revealSpecificKeyLinkage')
+    return validateWalletResult(
+      'revealSpecificKeyLinkage',
+      {
+        prover,
+        verifier,
+        counterparty,
+        protocolID: [securityLevel, protocol],
+        keyID,
+        encryptedLinkage: Array.from(encryptedLinkage),
+        encryptedLinkageProof: Array.from(encryptedLinkageProof),
+        proofType
+      },
+      bindingRequest
+    )
   }
 
   async encrypt(
@@ -738,9 +1010,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ ciphertext: Byte[] }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('encrypt', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -751,9 +1024,11 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.plaintext.length)
     paramWriter.write(args.plaintext)
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
     return {
-      ciphertext: Array.from(await this.transmit('encrypt', originator, paramWriter.toUint8Array()))
+      ciphertext: Array.from(
+        await this.#transmit('encrypt', originator, paramWriter.toUint8Array())
+      )
     }
   }
 
@@ -769,9 +1044,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ plaintext: Byte[] }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('decrypt', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -782,9 +1058,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.ciphertext.length)
     paramWriter.write(args.ciphertext)
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
     return {
-      plaintext: Array.from(await this.transmit('decrypt', originator, paramWriter.toUint8Array()))
+      plaintext: Array.from(await this.#transmit('decrypt', originator, paramWriter.toUint8Array()))
     }
   }
 
@@ -800,9 +1076,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ hmac: Byte[] }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('createHmac', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -813,10 +1090,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    return {
-      hmac: Array.from(await this.transmit('createHmac', originator, paramWriter.toUint8Array()))
-    }
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const hmac = await this.#transmit('createHmac', originator, paramWriter.toUint8Array())
+    this.#requireResponseLength(hmac, 32, 'createHmac')
+    return { hmac: Array.from(hmac) }
   }
 
   async verifyHmac(
@@ -832,9 +1109,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ valid: true }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('verifyHmac', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -846,8 +1124,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     paramWriter.writeVarIntNum(args.data.length)
     paramWriter.write(args.data)
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    await this.transmit('verifyHmac', originator, paramWriter.toUint8Array())
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const result = await this.#transmit('verifyHmac', originator, paramWriter.toUint8Array())
+    this.#requireEmptyResponse(result, 'verifyHmac')
     return { valid: true }
   }
 
@@ -864,9 +1143,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ signature: Byte[] }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('createSignature', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -884,12 +1164,16 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(args.hashToDirectlySign)
     }
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    return {
-      signature: Array.from(
-        await this.transmit('createSignature', originator, paramWriter.toUint8Array())
-      )
-    }
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    return validateWalletResult(
+      'createSignature',
+      {
+        signature: Array.from(
+          await this.#transmit('createSignature', originator, paramWriter.toUint8Array())
+        )
+      },
+      args
+    )
   }
 
   async verifySignature(
@@ -907,9 +1191,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ valid: true }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('verifySignature', args)
+    const paramWriter = new WriterUint8Array()
     paramWriter.write(
-      this.encodeKeyRelatedParams(
+      this.#encodeKeyRelatedParams(
         args.protocolID,
         args.keyID,
         args.counterparty,
@@ -933,8 +1218,9 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(args.hashToDirectlyVerify ?? [])
     }
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    await this.transmit('verifySignature', originator, paramWriter.toUint8Array())
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const result = await this.#transmit('verifySignature', originator, paramWriter.toUint8Array())
+    this.#requireEmptyResponse(result, 'verifySignature')
     return { valid: true }
   }
 
@@ -945,12 +1231,12 @@ export default class WalletWireTransceiver implements WalletInterface {
   ])
 
   /** Writes an optional boolean as Int8: 1/0 if present, -1 if absent. */
-  private writeOptionalBool(writer: Utils.WriterUint8Array, val: boolean | undefined): void {
+  #writeOptionalBool(writer: WriterUint8Array, val: boolean | undefined): void {
     writer.writeInt8(WalletWireTransceiver.OPTIONAL_BOOLEAN_WIRE_VALUES.get(val)!)
   }
 
   /** Writes an optional number as VarInt: the value if present, -1 if absent. */
-  private writeOptionalVarInt(writer: Utils.WriterUint8Array, val: number | undefined): void {
+  #writeOptionalVarInt(writer: WriterUint8Array, val: number | undefined): void {
     if (typeof val === 'number') {
       writer.writeVarIntNum(val)
     } else {
@@ -959,16 +1245,16 @@ export default class WalletWireTransceiver implements WalletInterface {
   }
 
   /** Writes a UTF-8 string as (VarInt length, bytes). */
-  private writeUTF8(writer: Utils.WriterUint8Array, val: string | undefined): void {
-    const bytes = Utils.toUint8Array(val ?? '', 'utf8')
+  #writeUTF8(writer: WriterUint8Array, val: string | undefined): void {
+    const bytes = UtilsToUint8Array(val ?? '', 'utf8')
     writer.writeVarIntNum(bytes.length)
     writer.write(bytes)
   }
 
   /** Writes an optional UTF-8 string: (VarInt length, bytes) if non-empty, -1 if absent/empty. */
-  private writeOptionalUTF8(writer: Utils.WriterUint8Array, val: string | undefined): void {
+  #writeOptionalUTF8(writer: WriterUint8Array, val: string | undefined): void {
     if (val != null && val !== '') {
-      const bytes = Utils.toUint8Array(val, 'utf8')
+      const bytes = UtilsToUint8Array(val, 'utf8')
       writer.writeVarIntNum(bytes.length)
       writer.write(bytes)
     } else {
@@ -977,13 +1263,13 @@ export default class WalletWireTransceiver implements WalletInterface {
   }
 
   /** Writes an array of UTF-8 strings as (VarInt count, ...items). -1 if null. */
-  private writeUTF8Array(writer: Utils.WriterUint8Array, arr: string[] | undefined): void {
+  #writeUTF8Array(writer: WriterUint8Array, arr: string[] | undefined): void {
     if (arr == null) {
       writer.writeVarIntNum(-1)
     } else {
       writer.writeVarIntNum(arr.length)
       for (const item of arr) {
-        const bytes = Utils.toUint8Array(item, 'utf8')
+        const bytes = UtilsToUint8Array(item, 'utf8')
         writer.writeVarIntNum(bytes.length)
         writer.write(bytes)
       }
@@ -991,32 +1277,35 @@ export default class WalletWireTransceiver implements WalletInterface {
   }
 
   /** Writes an array of hex-encoded txids (each 32 bytes) as (VarInt count, ...items). -1 if null. */
-  private writeTxidArray(writer: Utils.WriterUint8Array, arr: string[] | undefined): void {
+  #writeTxidArray(writer: WriterUint8Array, arr: string[] | undefined): void {
     if (arr == null) {
       writer.writeVarIntNum(-1)
     } else {
       writer.writeVarIntNum(arr.length)
       for (const txid of arr) {
-        writer.write(Utils.toUint8Array(txid, 'hex'))
+        writer.write(UtilsToUint8Array(txid, 'hex'))
       }
     }
   }
 
   /** Reads a list of SendWithResults entries from a binary reader. */
-  private readSendWithResults(
-    reader: Utils.ReaderUint8Array
+  #readSendWithResults(
+    reader: ReaderUint8Array
   ): Array<{ txid: TXIDHexString; status: SendWithResultStatus }> | undefined {
-    const len = reader.readVarIntNum()
+    const len = reader.readVarIntNumStrict()
     if (len < 0) return undefined
+    this.#requireResponseCollectionLength(reader, len, 'sendWithResults', 33, 1001)
     const results: Array<{ txid: TXIDHexString; status: SendWithResultStatus }> = []
     for (let i = 0; i < len; i++) {
-      const txid = Utils.toHex(reader.read(32))
+      const txid = toHex(reader.read(32))
       const code = reader.readInt8()
       let status: SendWithResultStatus = 'unproven'
       if (code === 2) {
         status = 'sending'
       } else if (code === 3) {
         status = 'failed'
+      } else if (code !== 1) {
+        throw new Error(`Unknown sendWith result status code: ${code}`)
       }
       results.push({ txid, status })
     }
@@ -1024,8 +1313,8 @@ export default class WalletWireTransceiver implements WalletInterface {
   }
 
   /** Serializes a single createAction input to the writer. */
-  private serializeCreateActionInput(
-    writer: Utils.WriterUint8Array,
+  #serializeCreateActionInput(
+    writer: WriterUint8Array,
     input: {
       outpoint: OutpointString
       unlockingScript?: string
@@ -1034,10 +1323,10 @@ export default class WalletWireTransceiver implements WalletInterface {
       sequenceNumber?: number
     }
   ): void {
-    writer.write(this.encodeOutpoint(input.outpoint))
+    writer.write(this.#encodeOutpoint(input.outpoint))
 
     if (input.unlockingScript != null && input.unlockingScript !== '') {
-      const bytes = Utils.toUint8Array(input.unlockingScript, 'hex')
+      const bytes = UtilsToUint8Array(input.unlockingScript, 'hex')
       writer.writeVarIntNum(bytes.length)
       writer.write(bytes)
     } else {
@@ -1045,13 +1334,13 @@ export default class WalletWireTransceiver implements WalletInterface {
       writer.writeVarIntNum(input.unlockingScriptLength ?? 0)
     }
 
-    this.writeUTF8(writer, input.inputDescription)
-    this.writeOptionalVarInt(writer, input.sequenceNumber)
+    this.#writeUTF8(writer, input.inputDescription)
+    this.#writeOptionalVarInt(writer, input.sequenceNumber)
   }
 
   /** Serializes a single createAction output to the writer. */
-  private serializeCreateActionOutput(
-    writer: Utils.WriterUint8Array,
+  #serializeCreateActionOutput(
+    writer: WriterUint8Array,
     output: {
       lockingScript: string
       satoshis: number
@@ -1061,19 +1350,19 @@ export default class WalletWireTransceiver implements WalletInterface {
       tags?: string[]
     }
   ): void {
-    const lockingBytes = Utils.toUint8Array(output.lockingScript, 'hex')
+    const lockingBytes = UtilsToUint8Array(output.lockingScript, 'hex')
     writer.writeVarIntNum(lockingBytes.length)
     writer.write(lockingBytes)
     writer.writeVarIntNum(output.satoshis)
-    this.writeUTF8(writer, output.outputDescription)
-    this.writeOptionalUTF8(writer, output.basket)
-    this.writeOptionalUTF8(writer, output.customInstructions)
-    this.writeUTF8Array(writer, output.tags)
+    this.#writeUTF8(writer, output.outputDescription)
+    this.#writeOptionalUTF8(writer, output.basket)
+    this.#writeOptionalUTF8(writer, output.customInstructions)
+    this.#writeUTF8Array(writer, output.tags)
   }
 
   /** Serializes createAction options to the writer (Int8 presence byte + fields). */
-  private serializeCreateActionOptions(
-    writer: Utils.WriterUint8Array,
+  #serializeCreateActionOptions(
+    writer: WriterUint8Array,
     options:
       | {
           signAndProcess?: boolean
@@ -1093,27 +1382,27 @@ export default class WalletWireTransceiver implements WalletInterface {
       return
     }
     writer.writeInt8(1)
-    this.writeOptionalBool(writer, options.signAndProcess)
-    this.writeOptionalBool(writer, options.acceptDelayedBroadcast)
+    this.#writeOptionalBool(writer, options.signAndProcess)
+    this.#writeOptionalBool(writer, options.acceptDelayedBroadcast)
     writer.writeInt8(options.trustSelf === 'known' ? 1 : -1)
-    this.writeTxidArray(writer, options.knownTxids)
-    this.writeOptionalBool(writer, options.returnTXIDOnly)
-    this.writeOptionalBool(writer, options.noSend)
+    this.#writeTxidArray(writer, options.knownTxids)
+    this.#writeOptionalBool(writer, options.returnTXIDOnly)
+    this.#writeOptionalBool(writer, options.noSend)
     if (options.noSendChange == null) {
       writer.writeVarIntNum(-1)
     } else {
       writer.writeVarIntNum(options.noSendChange.length)
       for (const outpoint of options.noSendChange) {
-        writer.write(this.encodeOutpoint(outpoint))
+        writer.write(this.#encodeOutpoint(outpoint))
       }
     }
-    this.writeTxidArray(writer, options.sendWith)
-    this.writeOptionalBool(writer, options.randomizeOutputs)
+    this.#writeTxidArray(writer, options.sendWith)
+    this.#writeOptionalBool(writer, options.randomizeOutputs)
   }
 
   /** Serializes signAction options to the writer (Int8 presence byte + fields). */
-  private serializeSignActionOptions(
-    writer: Utils.WriterUint8Array,
+  #serializeSignActionOptions(
+    writer: WriterUint8Array,
     options:
       | {
           acceptDelayedBroadcast?: boolean
@@ -1128,25 +1417,25 @@ export default class WalletWireTransceiver implements WalletInterface {
       return
     }
     writer.writeInt8(1)
-    this.writeOptionalBool(writer, options.acceptDelayedBroadcast)
-    this.writeOptionalBool(writer, options.returnTXIDOnly)
-    this.writeOptionalBool(writer, options.noSend)
-    this.writeTxidArray(writer, options.sendWith)
+    this.#writeOptionalBool(writer, options.acceptDelayedBroadcast)
+    this.#writeOptionalBool(writer, options.returnTXIDOnly)
+    this.#writeOptionalBool(writer, options.noSend)
+    this.#writeTxidArray(writer, options.sendWith)
   }
 
-  private encodeKeyRelatedParams(
+  #encodeKeyRelatedParams(
     protocolID: [SecurityLevel, ProtocolString5To400Bytes],
     keyID: KeyIDStringUnder800Bytes,
     counterparty?: PubKeyHex,
     privileged?: boolean,
     privilegedReason?: string
   ): Uint8Array {
-    const paramWriter = new Utils.WriterUint8Array()
+    const paramWriter = new WriterUint8Array()
     paramWriter.writeUInt8(protocolID[0])
-    const protocolAsArray = Utils.toUint8Array(protocolID[1], 'utf8')
+    const protocolAsArray = UtilsToUint8Array(protocolID[1], 'utf8')
     paramWriter.writeVarIntNum(protocolAsArray.length)
     paramWriter.write(protocolAsArray)
-    const keyIDAsArray = Utils.toUint8Array(keyID, 'utf8')
+    const keyIDAsArray = UtilsToUint8Array(keyID, 'utf8')
     paramWriter.writeVarIntNum(keyIDAsArray.length)
     paramWriter.write(keyIDAsArray)
     if (typeof counterparty !== 'string') {
@@ -1156,9 +1445,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     } else if (counterparty === 'anyone') {
       paramWriter.writeUInt8(12)
     } else {
-      paramWriter.write(Utils.toUint8Array(counterparty, 'hex'))
+      paramWriter.write(UtilsToUint8Array(counterparty, 'hex'))
     }
-    paramWriter.write(this.encodePrivilegedParams(privileged, privilegedReason))
+    paramWriter.write(this.#encodePrivilegedParams(privileged, privilegedReason))
     return paramWriter.toUint8Array()
   }
 
@@ -1166,15 +1455,17 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
-    const paramWriter = new Utils.WriterUint8Array()
-    paramWriter.write(Utils.toUint8Array(args.type, 'base64'))
-    paramWriter.write(Utils.toUint8Array(args.certifier, 'hex'))
+    validateWalletArgs('acquireCertificate', args)
+    const bindingRequest = snapshotWalletResultRequest('acquireCertificate', args)
+    const paramWriter = new WriterUint8Array()
+    paramWriter.write(UtilsToUint8Array(args.type, 'base64'))
+    paramWriter.write(UtilsToUint8Array(args.certifier, 'hex'))
 
     const fieldEntries = Object.entries(args.fields)
     paramWriter.writeVarIntNum(fieldEntries.length)
     for (const [key, value] of fieldEntries) {
-      const keyAsArray = Utils.toUint8Array(key, 'utf8')
-      const valueAsArray = Utils.toUint8Array(value, 'utf8')
+      const keyAsArray = UtilsToUint8Array(key, 'utf8')
+      const valueAsArray = UtilsToUint8Array(value, 'utf8')
 
       paramWriter.writeVarIntNum(keyAsArray.length)
       paramWriter.write(keyAsArray)
@@ -1183,55 +1474,61 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.write(valueAsArray)
     }
 
-    paramWriter.write(this.encodePrivilegedParams(args.privileged, args.privilegedReason))
+    paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
     paramWriter.writeUInt8(args.acquisitionProtocol === 'direct' ? 1 : 2)
 
     if (args.acquisitionProtocol === 'direct') {
-      paramWriter.write(Utils.toUint8Array(args.serialNumber, 'base64'))
-      paramWriter.write(this.encodeOutpoint(args.revocationOutpoint ?? ''))
-      const signatureAsArray = Utils.toUint8Array(args.signature, 'hex')
+      paramWriter.write(UtilsToUint8Array(args.serialNumber, 'base64'))
+      paramWriter.write(this.#encodeOutpoint(args.revocationOutpoint ?? ''))
+      const signatureAsArray = UtilsToUint8Array(args.signature, 'hex')
       paramWriter.writeVarIntNum(signatureAsArray.length)
       paramWriter.write(signatureAsArray)
 
       const keyringRevealerAsArray =
-        args.keyringRevealer === 'certifier'
-          ? [11]
-          : Utils.toUint8Array(args.keyringRevealer, 'hex')
+        args.keyringRevealer === 'certifier' ? [11] : UtilsToUint8Array(args.keyringRevealer, 'hex')
       paramWriter.write(keyringRevealerAsArray)
 
       const keyringKeys = Object.keys(args.keyringForSubject ?? {})
       paramWriter.writeVarIntNum(keyringKeys.length)
       for (const key of keyringKeys) {
-        const keyringKeysAsArray = Utils.toUint8Array(key, 'utf8')
+        const keyringKeysAsArray = UtilsToUint8Array(key, 'utf8')
         paramWriter.writeVarIntNum(keyringKeysAsArray.length)
         paramWriter.write(keyringKeysAsArray)
-        const keyringForSubjectAsArray = Utils.toUint8Array(args.keyringForSubject?.[key], 'base64')
+        const keyringForSubjectAsArray = UtilsToUint8Array(args.keyringForSubject?.[key], 'base64')
         paramWriter.writeVarIntNum(keyringForSubjectAsArray.length)
         paramWriter.write(keyringForSubjectAsArray)
       }
     } else {
-      const certifierUrlAsArray = Utils.toUint8Array(args.certifierUrl, 'utf8')
+      const certifierUrlAsArray = UtilsToUint8Array(args.certifierUrl, 'utf8')
       paramWriter.writeVarIntNum(certifierUrlAsArray.length)
       paramWriter.write(certifierUrlAsArray)
     }
 
-    const result = await this.transmit('acquireCertificate', originator, paramWriter.toUint8Array())
+    const result = await this.#transmit(
+      'acquireCertificate',
+      originator,
+      paramWriter.toUint8Array()
+    )
     const cert = Certificate.fromBinary(result)
-    return {
-      ...cert,
-      signature: cert.signature as string
-    }
+    return validateWalletResult(
+      'acquireCertificate',
+      {
+        ...cert,
+        signature: cert.signature as string
+      },
+      bindingRequest
+    )
   }
 
-  private encodePrivilegedParams(privileged?: boolean, privilegedReason?: string): Uint8Array {
-    const paramWriter = new Utils.WriterUint8Array()
+  #encodePrivilegedParams(privileged?: boolean, privilegedReason?: string): Uint8Array {
+    const paramWriter = new WriterUint8Array()
     if (typeof privileged === 'boolean') {
       paramWriter.writeInt8(privileged ? 1 : 0)
     } else {
       paramWriter.writeInt8(-1)
     }
     if (typeof privilegedReason === 'string') {
-      const privilegedReasonAsArray = Utils.toUint8Array(privilegedReason, 'utf8')
+      const privilegedReasonAsArray = UtilsToUint8Array(privilegedReason, 'utf8')
       paramWriter.writeInt8(privilegedReasonAsArray.length)
       paramWriter.write(privilegedReasonAsArray)
     } else {
@@ -1251,15 +1548,25 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('listCertificates', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args, types: [...args.types], certifiers: [...args.certifiers] }
+    const bindingRequest = snapshotWalletResultRequest('listCertificates', args)
+    const compatibility =
+      args.types.length === 0 ||
+      args.types.some(type => UtilsToUint8Array(type, 'base64').length !== 32)
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
+    const paramWriter = new WriterUint8Array()
     paramWriter.writeVarIntNum(args.certifiers.length)
     for (const certifier of args.certifiers) {
-      paramWriter.write(Utils.toUint8Array(certifier, 'hex'))
+      paramWriter.write(UtilsToUint8Array(certifier, 'hex'))
     }
 
     paramWriter.writeVarIntNum(args.types.length)
     for (const type of args.types) {
-      paramWriter.write(Utils.toUint8Array(type, 'base64'))
+      writeCertificateType(paramWriter, type, compatibility)
     }
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
@@ -1271,29 +1578,56 @@ export default class WalletWireTransceiver implements WalletInterface {
     } else {
       paramWriter.writeVarIntNum(-1)
     }
-    paramWriter.write(this.encodePrivilegedParams(args.privileged, args.privilegedReason))
-    const result = await this.transmit('listCertificates', originator, paramWriter.toUint8Array())
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const totalCertificates = resultReader.readVarIntNum()
+    paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
+    const result = await this.#transmit(
+      'listCertificates',
+      originator,
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
+    )
+    const resultReader = new ReaderUint8Array(result)
+    const totalCertificates = this.#requireInteger(
+      resultReader.readVarIntNumStrict(false),
+      'listCertificates totalCertificates',
+      0,
+      0xffffffff
+    )
     const certificates: CertificateResult[] = []
-    for (let i = 0; i < totalCertificates; i++) {
-      const certificateLength = resultReader.readVarIntNum()
+    while (!resultReader.eof()) {
+      this.#requirePageCapacity(certificates.length, args.limit, 'listCertificates')
+      const certificateLength = resultReader.readVarIntNumStrict(false)
       const certificateBin = resultReader.read(certificateLength)
-      const cert = Certificate.fromBinary(certificateBin)
+      const cert = decodeWireCertificate(certificateBin, compatibility)
       const keyringForVerifier: Record<string, string> = {}
-      if (resultReader.readInt8() === 1) {
-        const numFields = resultReader.readVarIntNum()
+      if (this.#readBooleanFlag(resultReader, 'listCertificates keyring present')) {
+        const numFields = resultReader.readVarIntNumStrict(false)
+        this.#requireResponseCollectionLength(resultReader, numFields, 'listCertificates keyring')
         for (let i = 0; i < numFields; i++) {
-          const fieldKeyLength = resultReader.readVarIntNum()
-          const fieldKey = Utils.toUTF8(resultReader.read(fieldKeyLength))
-          const fieldValueLength = resultReader.readVarIntNum()
-          keyringForVerifier[fieldKey] = Utils.toBase64(resultReader.read(fieldValueLength))
+          const fieldKeyLength = resultReader.readVarIntNumStrict(false)
+          const fieldKey = this.#readRecordKey(
+            resultReader,
+            fieldKeyLength,
+            'listCertificates keyring'
+          )
+          const fieldValueLength = resultReader.readVarIntNumStrict(false)
+          this.#setUniqueWireRecordEntry(
+            keyringForVerifier,
+            fieldKey,
+            toBase64(resultReader.read(fieldValueLength)),
+            'listCertificates keyring'
+          )
         }
       }
-      const verifierLength = resultReader.readVarIntNum()
+      const verifierLength = resultReader.readVarIntNumStrict(false)
       let verifier: string | undefined
       if (verifierLength > 0) {
-        verifier = Utils.toUTF8(resultReader.read(verifierLength))
+        if (verifierLength !== 33) {
+          throw new Error(
+            `Invalid listCertificates verifier length: expected 33 bytes, received ${verifierLength}`
+          )
+        }
+        verifier = this.#readCompressedPublicKey(resultReader, 'listCertificates verifier')
       }
       certificates.push({
         ...cert,
@@ -1302,35 +1636,57 @@ export default class WalletWireTransceiver implements WalletInterface {
         verifier
       })
     }
-    return {
-      totalCertificates,
-      certificates
-    }
+    this.#assertPageCount(certificates.length, totalCertificates, 'listCertificates')
+    return validateWalletResult(
+      'listCertificates',
+      {
+        totalCertificates,
+        certificates
+      },
+      bindingRequest
+    )
   }
 
   async proveCertificate(
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
-    const paramWriter = new Utils.WriterUint8Array()
-    const typeAsArray = Utils.toUint8Array(args.certificate.type, 'base64')
-    paramWriter.write(typeAsArray)
-    const subjectAsArray = Utils.toUint8Array(args.certificate.subject, 'hex')
+    validateWalletArgs('proveCertificate', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = {
+      ...args,
+      certificate: {
+        ...args.certificate,
+        ...(args.certificate.fields === undefined ? {} : { fields: { ...args.certificate.fields } })
+      },
+      fieldsToReveal: [...args.fieldsToReveal]
+    }
+    const bindingRequest = snapshotWalletResultRequest('proveCertificate', args)
+    const compatibility =
+      UtilsToUint8Array(args.certificate.type, 'base64').length !== 32
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
+    const paramWriter = new WriterUint8Array()
+    writeCertificateType(paramWriter, args.certificate.type!, compatibility)
+    const subjectAsArray = UtilsToUint8Array(args.certificate.subject, 'hex')
     paramWriter.write(subjectAsArray)
-    const serialNumberAsArray = Utils.toUint8Array(args.certificate.serialNumber, 'base64')
+    const serialNumberAsArray = UtilsToUint8Array(args.certificate.serialNumber, 'base64')
     paramWriter.write(serialNumberAsArray)
-    const certifierAsArray = Utils.toUint8Array(args.certificate.certifier, 'hex')
+    const certifierAsArray = UtilsToUint8Array(args.certificate.certifier, 'hex')
     paramWriter.write(certifierAsArray)
-    const revocationOutpointAsArray = this.encodeOutpoint(args.certificate.revocationOutpoint ?? '')
+    const revocationOutpointAsArray = this.#encodeOutpoint(
+      args.certificate.revocationOutpoint ?? ''
+    )
     paramWriter.write(revocationOutpointAsArray)
-    const signatureAsArray = Utils.toUint8Array(args.certificate.signature, 'hex')
+    const signatureAsArray = UtilsToUint8Array(args.certificate.signature, 'hex')
     paramWriter.writeVarIntNum(signatureAsArray.length)
     paramWriter.write(signatureAsArray)
     const fieldEntries = Object.entries(args.certificate.fields ?? {})
     paramWriter.writeVarIntNum(fieldEntries.length)
     for (const [key, value] of fieldEntries) {
-      const keyAsArray = Utils.toUint8Array(key, 'utf8')
-      const valueAsArray = Utils.toUint8Array(value, 'utf8')
+      const keyAsArray = UtilsToUint8Array(key, 'utf8')
+      const valueAsArray = UtilsToUint8Array(value, 'utf8')
       paramWriter.writeVarIntNum(keyAsArray.length)
       paramWriter.write(keyAsArray)
       paramWriter.writeVarIntNum(valueAsArray.length)
@@ -1338,25 +1694,42 @@ export default class WalletWireTransceiver implements WalletInterface {
     }
     paramWriter.writeVarIntNum(args.fieldsToReveal.length)
     for (const field of args.fieldsToReveal) {
-      const fieldAsArray = Utils.toUint8Array(field, 'utf8')
+      const fieldAsArray = UtilsToUint8Array(field, 'utf8')
       paramWriter.writeVarIntNum(fieldAsArray.length)
       paramWriter.write(fieldAsArray)
     }
-    paramWriter.write(Utils.toUint8Array(args.verifier, 'hex'))
-    paramWriter.write(this.encodePrivilegedParams(args.privileged, args.privilegedReason))
-    const result = await this.transmit('proveCertificate', originator, paramWriter.toUint8Array())
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const numFields = resultReader.readVarIntNum()
+    paramWriter.write(UtilsToUint8Array(args.verifier, 'hex'))
+    paramWriter.write(this.#encodePrivilegedParams(args.privileged, args.privilegedReason))
+    const result = await this.#transmit(
+      'proveCertificate',
+      originator,
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
+    )
+    const resultReader = new ReaderUint8Array(result)
+    const numFields = resultReader.readVarIntNumStrict(false)
+    this.#requireResponseCollectionLength(resultReader, numFields, 'proveCertificate keyring')
     const keyringForVerifier: Record<string, string> = {}
     for (let i = 0; i < numFields; i++) {
-      const fieldKeyLength = resultReader.readVarIntNum()
-      const fieldKey = Utils.toUTF8(resultReader.read(fieldKeyLength))
-      const fieldValueLength = resultReader.readVarIntNum()
-      keyringForVerifier[fieldKey] = Utils.toBase64(resultReader.read(fieldValueLength))
+      const fieldKeyLength = resultReader.readVarIntNumStrict(false)
+      const fieldKey = this.#readRecordKey(resultReader, fieldKeyLength, 'proveCertificate keyring')
+      const fieldValueLength = resultReader.readVarIntNumStrict(false)
+      this.#setUniqueWireRecordEntry(
+        keyringForVerifier,
+        fieldKey,
+        toBase64(resultReader.read(fieldValueLength)),
+        'proveCertificate keyring'
+      )
     }
-    return {
-      keyringForVerifier
-    }
+    this.#assertResponseConsumed(resultReader, 'proveCertificate')
+    return validateWalletResult(
+      'proveCertificate',
+      {
+        keyringForVerifier
+      },
+      bindingRequest
+    )
   }
 
   async relinquishCertificate(
@@ -1367,18 +1740,36 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ relinquished: true }> {
-    const paramWriter = new Utils.WriterUint8Array()
-    const typeAsArray = Utils.toUint8Array(args.type, 'base64')
-    paramWriter.write(typeAsArray)
-    const serialNumberAsArray = Utils.toUint8Array(args.serialNumber, 'base64')
+    validateWalletArgs('relinquishCertificate', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args }
+    const compatibility =
+      UtilsToUint8Array(args.type, 'base64').length !== 32
+        ? await this.#supportsCertificateCompatibility(originator, targetWire)
+        : false
+    const paramWriter = new WriterUint8Array()
+    writeCertificateType(paramWriter, args.type, compatibility)
+    const serialNumberAsArray = UtilsToUint8Array(args.serialNumber, 'base64')
     paramWriter.write(serialNumberAsArray)
-    const certifierAsArray = Utils.toUint8Array(args.certifier, 'hex')
+    const certifierAsArray = UtilsToUint8Array(args.certifier, 'hex')
     paramWriter.write(certifierAsArray)
-    await this.transmit('relinquishCertificate', originator, paramWriter.toUint8Array())
+    const result = await this.#transmit(
+      'relinquishCertificate',
+      originator,
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
+    )
+    this.#requireEmptyResponse(result, 'relinquishCertificate')
     return { relinquished: true }
   }
 
-  private parseDiscoveryResult(result: Uint8Array): {
+  #parseDiscoveryResult(
+    result: Uint8Array,
+    requestedLimit: number | undefined,
+    compatibility: boolean = false
+  ): {
     totalCertificates: number
     certificates: Array<{
       type: Base64String
@@ -1398,8 +1789,13 @@ export default class WalletWireTransceiver implements WalletInterface {
       decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }>
   } {
-    const resultReader = new Utils.ReaderUint8Array(result)
-    const totalCertificates = resultReader.readVarIntNum()
+    const resultReader = new ReaderUint8Array(result)
+    const totalCertificates = this.#requireInteger(
+      resultReader.readVarIntNumStrict(false),
+      'discovery totalCertificates',
+      0,
+      0xffffffff
+    )
     const certificates: Array<{
       type: Base64String
       subject: PubKeyHex
@@ -1417,34 +1813,57 @@ export default class WalletWireTransceiver implements WalletInterface {
       publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
       decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
     }> = []
-    for (let i = 0; i < totalCertificates; i++) {
-      const certBinLen = resultReader.readVarIntNum()
+    while (!resultReader.eof()) {
+      this.#requirePageCapacity(certificates.length, requestedLimit, 'discover')
+      const certBinLen = resultReader.readVarIntNumStrict(false)
       const certBin = resultReader.read(certBinLen)
-      const cert = Certificate.fromBinary(certBin)
-      const nameLength = resultReader.readVarIntNum()
-      const name = Utils.toUTF8(resultReader.read(nameLength))
-      const iconUrlLength = resultReader.readVarIntNum()
-      const iconUrl = Utils.toUTF8(resultReader.read(iconUrlLength))
-      const descriptionLength = resultReader.readVarIntNum()
-      const description = Utils.toUTF8(resultReader.read(descriptionLength))
-      const trust = resultReader.readUInt8()
+      const cert = decodeWireCertificate(certBin, compatibility)
+      const nameLength = resultReader.readVarIntNumStrict(false)
+      const name = toUTF8Strict(resultReader.read(nameLength))
+      const iconUrlLength = resultReader.readVarIntNumStrict(false)
+      const iconUrl = toUTF8Strict(resultReader.read(iconUrlLength))
+      const descriptionLength = resultReader.readVarIntNumStrict(false)
+      const description = toUTF8Strict(resultReader.read(descriptionLength))
+      const trust = this.#requireInteger(resultReader.readUInt8(), 'discovery trust', 1, 10)
       const publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String> = {}
-      const numPublicKeyringEntries = resultReader.readVarIntNum()
+      const numPublicKeyringEntries = resultReader.readVarIntNumStrict(false)
+      this.#requireResponseCollectionLength(
+        resultReader,
+        numPublicKeyringEntries,
+        'discovery public keyring'
+      )
       for (let j = 0; j < numPublicKeyringEntries; j++) {
-        const fieldKeyLen = resultReader.readVarIntNum()
-        const fieldKey = Utils.toUTF8(resultReader.read(fieldKeyLen))
-        const fieldValueLen = resultReader.readVarIntNum()
-        publiclyRevealedKeyring[fieldKey] = resultReader.read(
-          fieldValueLen
-        ) as unknown as Base64String
+        const fieldKeyLen = resultReader.readVarIntNumStrict(false)
+        const fieldKey = this.#readRecordKey(resultReader, fieldKeyLen, 'discovery public keyring')
+        const fieldValueLen = resultReader.readVarIntNumStrict(false)
+        this.#setUniqueWireRecordEntry(
+          publiclyRevealedKeyring,
+          fieldKey,
+          toBase64(resultReader.read(fieldValueLen)),
+          'discovery public keyring'
+        )
       }
       const decryptedFields: Record<CertificateFieldNameUnder50Bytes, string> = {}
-      const numDecryptedFields = resultReader.readVarIntNum()
+      const numDecryptedFields = resultReader.readVarIntNumStrict(false)
+      this.#requireResponseCollectionLength(
+        resultReader,
+        numDecryptedFields,
+        'discovery decrypted fields'
+      )
       for (let k = 0; k < numDecryptedFields; k++) {
-        const fieldKeyLen = resultReader.readVarIntNum()
-        const fieldKey = Utils.toUTF8(resultReader.read(fieldKeyLen))
-        const fieldValueLen = resultReader.readVarIntNum()
-        decryptedFields[fieldKey] = Utils.toUTF8(resultReader.read(fieldValueLen))
+        const fieldKeyLen = resultReader.readVarIntNumStrict(false)
+        const fieldKey = this.#readRecordKey(
+          resultReader,
+          fieldKeyLen,
+          'discovery decrypted fields'
+        )
+        const fieldValueLen = resultReader.readVarIntNumStrict(false)
+        this.#setUniqueWireRecordEntry(
+          decryptedFields,
+          fieldKey,
+          toUTF8Strict(resultReader.read(fieldValueLen)),
+          'discovery decrypted fields'
+        )
       }
       certificates.push({
         ...cert,
@@ -1454,6 +1873,7 @@ export default class WalletWireTransceiver implements WalletInterface {
         decryptedFields
       })
     }
+    this.#assertPageCount(certificates.length, totalCertificates, 'discover')
     return {
       totalCertificates,
       certificates
@@ -1469,8 +1889,14 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    const paramWriter = new Utils.WriterUint8Array()
-    paramWriter.write(Utils.toUint8Array(args.identityKey, 'hex'))
+    validateWalletArgs('discoverByIdentityKey', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args }
+    const bindingRequest = snapshotWalletResultRequest('discoverByIdentityKey', args)
+    const compatibility = await this.#supportsCertificateCompatibility(originator, targetWire)
+    const paramWriter = new WriterUint8Array()
+    paramWriter.write(UtilsToUint8Array(args.identityKey, 'hex'))
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
     } else {
@@ -1482,13 +1908,19 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    const result = await this.transmit(
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const result = await this.#transmit(
       'discoverByIdentityKey',
       originator,
-      paramWriter.toUint8Array()
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
     )
-    return this.parseDiscoveryResult(result)
+    return validateWalletResult(
+      'discoverByIdentityKey',
+      this.#parseDiscoveryResult(result, args.limit, compatibility),
+      bindingRequest
+    )
   }
 
   async discoverByAttributes(
@@ -1500,14 +1932,22 @@ export default class WalletWireTransceiver implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('discoverByAttributes', args)
+    // Pin the endpoint and own request data before asynchronous negotiation.
+    const targetWire = this.wire
+    args = { ...args, attributes: { ...args.attributes } }
+    const bindingRequest = snapshotWalletResultRequest('discoverByAttributes', args)
+    const compatibility = await this.#supportsCertificateCompatibility(originator, targetWire)
+    const paramWriter = new WriterUint8Array()
     const attributeKeys = Object.keys(args.attributes)
     paramWriter.writeVarIntNum(attributeKeys.length)
     for (const attrKey of attributeKeys) {
-      paramWriter.writeVarIntNum(attrKey.length)
-      paramWriter.write(Utils.toUint8Array(attrKey, 'utf8'))
-      paramWriter.writeVarIntNum(args.attributes[attrKey].length)
-      paramWriter.write(Utils.toUint8Array(args.attributes[attrKey], 'utf8'))
+      const attrKeyBytes = UtilsToUint8Array(attrKey, 'utf8')
+      const attrValueBytes = UtilsToUint8Array(args.attributes[attrKey], 'utf8')
+      paramWriter.writeVarIntNum(attrKeyBytes.length)
+      paramWriter.write(attrKeyBytes)
+      paramWriter.writeVarIntNum(attrValueBytes.length)
+      paramWriter.write(attrValueBytes)
     }
     if (typeof args.limit === 'number') {
       paramWriter.writeVarIntNum(args.limit)
@@ -1520,20 +1960,33 @@ export default class WalletWireTransceiver implements WalletInterface {
       paramWriter.writeVarIntNum(-1)
     }
     // Serialize seekPermission
-    this.writeOptionalBool(paramWriter, args.seekPermission)
-    const result = await this.transmit(
+    this.#writeOptionalBool(paramWriter, args.seekPermission)
+    const result = await this.#transmit(
       'discoverByAttributes',
       originator,
-      paramWriter.toUint8Array()
+      paramWriter.toUint8Array(),
+      compatibility,
+      targetWire
     )
-    return this.parseDiscoveryResult(result)
+    return validateWalletResult(
+      'discoverByAttributes',
+      this.#parseDiscoveryResult(result, args.limit, compatibility),
+      bindingRequest
+    )
   }
 
   async isAuthenticated(
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ authenticated: true }> {
-    const result = await this.transmit('isAuthenticated', originator)
+    validateWalletArgs('isAuthenticated', args)
+    const result = await this.#transmit('isAuthenticated', originator)
+    this.#requireResponseLength(result, 1, 'isAuthenticated')
+    if (result[0] !== 0 && result[0] !== 1) {
+      throw new Error('Wallet returned an invalid authentication verdict')
+    }
+    // The historical interface annotation says `true`, but implementations
+    // and the wire protocol legitimately report an exact false verdict.
     // @ts-expect-error
     return { authenticated: result[0] === 1 }
   }
@@ -1542,7 +1995,9 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ authenticated: true }> {
-    await this.transmit('waitForAuthentication', originator)
+    validateWalletArgs('waitForAuthentication', args)
+    const result = await this.#transmit('waitForAuthentication', originator)
+    this.#requireEmptyResponse(result, 'waitForAuthentication')
     return { authenticated: true }
   }
 
@@ -1550,22 +2005,33 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ height: PositiveInteger }> {
-    const result = await this.transmit('getHeight', originator)
-    const resultReader = new Utils.ReaderUint8Array(result)
-    return {
-      height: resultReader.readVarIntNum()
-    }
+    validateWalletArgs('getHeight', args)
+    const result = await this.#transmit('getHeight', originator)
+    const resultReader = new ReaderUint8Array(result)
+    const height = resultReader.readVarIntNumStrict(false)
+    this.#assertResponseConsumed(resultReader, 'getHeight')
+    if (height < 1 || height > 0xffffffff) throw new Error('Wallet returned an invalid height')
+    return { height }
   }
 
   async getHeaderForHeight(
     args: { height: PositiveInteger },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ header: HexString }> {
-    const paramWriter = new Utils.WriterUint8Array()
+    validateWalletArgs('getHeaderForHeight', args)
+    if (!Number.isInteger(args.height) || args.height < 1 || args.height > 0xffffffff) {
+      throw new Error('getHeaderForHeight requires a height from 1 to 4294967295')
+    }
+    const paramWriter = new WriterUint8Array()
     paramWriter.writeVarIntNum(args.height)
-    const header = await this.transmit('getHeaderForHeight', originator, paramWriter.toUint8Array())
+    const header = await this.#transmit(
+      'getHeaderForHeight',
+      originator,
+      paramWriter.toUint8Array()
+    )
+    this.#requireResponseLength(header, 80, 'getHeaderForHeight')
     return {
-      header: Utils.toHex(header)
+      header: toHex(header)
     }
   }
 
@@ -1573,7 +2039,10 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ network: 'mainnet' | 'testnet' }> {
-    const net = await this.transmit('getNetwork', originator)
+    validateWalletArgs('getNetwork', args)
+    const net = await this.#transmit('getNetwork', originator)
+    this.#requireResponseLength(net, 1, 'getNetwork')
+    if (net[0] !== 0 && net[0] !== 1) throw new Error('Wallet returned an invalid network')
     return {
       network: net[0] === 0 ? 'mainnet' : 'testnet'
     }
@@ -1583,9 +2052,114 @@ export default class WalletWireTransceiver implements WalletInterface {
     args: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{ version: VersionString7To30Bytes }> {
-    const version = await this.transmit('getVersion', originator)
-    return {
-      version: Utils.toUTF8(version)
+    validateWalletArgs('getVersion', args)
+    const version = await this.#transmit('getVersion', originator)
+    if (version.length < 7 || version.length > 30) {
+      throw new Error('Wallet returned an invalid version')
     }
+    return {
+      version: toUTF8Strict(version)
+    }
+  }
+
+  #assertResponseConsumed(reader: ReaderUint8Array, call: string): void {
+    if (!reader.eof()) throw new Error(`Wallet Wire ${call} response contains trailing data`)
+  }
+
+  #assertPageCount(returned: number, total: number, call: string): void {
+    if (returned > total) {
+      throw new Error(
+        `Wallet Wire ${call} response returned ${returned} records but declared a total of ${total}`
+      )
+    }
+  }
+
+  #requirePageCapacity(returned: number, requestedLimit: number | undefined, call: string): void {
+    const maximum = requestedLimit ?? 10
+    if (returned >= maximum) {
+      throw new Error(`Wallet Wire ${call} response exceeds the requested page limit of ${maximum}`)
+    }
+  }
+
+  #requireResponseCollectionLength(
+    reader: ReaderUint8Array,
+    length: number,
+    fieldName: string,
+    minimumBytesPerItem = 1,
+    maximum = MAX_WIRE_RESPONSE_COLLECTION_ITEMS
+  ): number {
+    if (!Number.isSafeInteger(length) || length < 0 || length > maximum) {
+      throw new Error(`Wallet Wire ${fieldName} exceeds the maximum collection size of ${maximum}`)
+    }
+    if (length > Math.floor(reader.remaining() / minimumBytesPerItem)) {
+      throw new Error(`Wallet Wire ${fieldName} count exceeds the remaining response data`)
+    }
+    return length
+  }
+
+  #readBooleanFlag(reader: ReaderUint8Array, fieldName: string): boolean {
+    const flag = reader.readInt8()
+    if (flag !== 0 && flag !== 1) {
+      throw new Error(`Invalid ${fieldName} flag: expected 0 or 1, received ${flag}`)
+    }
+    return flag === 1
+  }
+
+  #readRecordKey(
+    reader: ReaderUint8Array,
+    length: number,
+    recordName: string
+  ): CertificateFieldNameUnder50Bytes {
+    if (length < 1 || length > 50) {
+      throw new Error(`Invalid ${recordName} key length: expected 1–50 bytes, received ${length}`)
+    }
+    const key = toUTF8Strict(reader.read(length))
+    if (isUnsafeRecordKey(key)) throw new Error(`Unsafe ${recordName} key: ${key}`)
+    return key
+  }
+
+  #setUniqueWireRecordEntry<T>(
+    record: Record<string, T>,
+    key: string,
+    value: T,
+    recordName: string
+  ): void {
+    if (Object.prototype.hasOwnProperty.call(record, key)) {
+      throw new Error(`Duplicate ${recordName} key: ${key}`)
+    }
+    record[key] = value
+  }
+
+  #readCompressedPublicKey(reader: ReaderUint8Array, _fieldName: string): PubKeyHex {
+    const bytes = reader.read(33)
+    PublicKey.fromDER(Array.from(bytes))
+    return toHex(bytes)
+  }
+
+  #readSecurityLevel(reader: ReaderUint8Array, fieldName: string): SecurityLevel {
+    const securityLevel = reader.readUInt8()
+    if (securityLevel !== 0 && securityLevel !== 1 && securityLevel !== 2) {
+      throw new Error(`Invalid ${fieldName} security level: ${securityLevel}`)
+    }
+    return securityLevel
+  }
+
+  #requireInteger(value: number, fieldName: string, minimum: number, maximum: number): number {
+    if (!Number.isSafeInteger(value) || value < minimum || value > maximum) {
+      throw new Error(
+        `Invalid ${fieldName}: expected an integer from ${minimum} to ${maximum}, received ${String(value)}`
+      )
+    }
+    return value
+  }
+
+  #requireResponseLength(result: Uint8Array, length: number, call: string): void {
+    if (result.length !== length) {
+      throw new Error(`Wallet Wire ${call} response has an invalid length`)
+    }
+  }
+
+  #requireEmptyResponse(result: Uint8Array, call: string): void {
+    this.#requireResponseLength(result, 0, call)
   }
 }

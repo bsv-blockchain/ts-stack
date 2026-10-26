@@ -16,7 +16,7 @@ let mockIsAuthenticated: jest.Mock
 const session = (status: SessionInfo['status']): SessionInfo => ({
   sessionId: 'session-1',
   status,
-  qrDataUrl: 'data:image/png;base64,test',
+  qrDataUrl: 'data:image/png;base64,iVBORw0KGgo=',
   pairingUri: 'wallet://pair?topic=session-1'
 })
 
@@ -36,7 +36,7 @@ describe('QRDisplay', () => {
   it('renders the QR code and human-readable connection state', () => {
     render(<QRDisplay session={session('connected')} onRefresh={jest.fn()} />)
 
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,test')
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgo=')
     expect(screen.getByText('Mobile connected')).toHaveAttribute('data-qr-status', 'connected')
     expect(screen.queryByRole('button', { name: 'Generate new QR' })).not.toBeInTheDocument()
   })
@@ -132,7 +132,7 @@ describe('WalletConnectionModal', () => {
   })
 
   it('calls back without rendering choices when a local wallet is authenticated', async () => {
-    mockIsAuthenticated.mockResolvedValueOnce(true)
+    mockIsAuthenticated.mockResolvedValueOnce({ authenticated: true })
     const onLocalWallet = jest.fn()
     render(<WalletConnectionModal onLocalWallet={onLocalWallet} onMobileQR={jest.fn()} />)
 
@@ -147,7 +147,7 @@ describe('WalletConnectionModal', () => {
   })
 
   it('offers install and mobile choices when no local wallet is available', async () => {
-    mockIsAuthenticated.mockResolvedValueOnce(false)
+    mockIsAuthenticated.mockResolvedValueOnce({ authenticated: false })
     const onMobileQR = jest.fn()
     render(
       <WalletConnectionModal
@@ -168,6 +168,19 @@ describe('WalletConnectionModal', () => {
       'https://desktop.bsvb.tech'
     )
     expect(onMobileQR).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not treat a truthy malformed authentication result as authenticated', async () => {
+    mockIsAuthenticated.mockResolvedValueOnce({ authenticated: 'true' })
+    const onLocalWallet = jest.fn()
+    render(<WalletConnectionModal onLocalWallet={onLocalWallet} onMobileQR={jest.fn()} />)
+
+    await act(async () => {
+      await jest.runAllTimersAsync()
+    })
+
+    expect(onLocalWallet).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Connect via Mobile QR' })).toBeInTheDocument()
   })
 
   it('supports custom fallback content', async () => {

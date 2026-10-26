@@ -2,6 +2,12 @@ import { ChainTracker, MerklePath } from '@bsv/sdk'
 import { WalletError } from '../sdk/WalletError'
 import { GetMerklePathResult, WalletServices } from '../sdk/WalletServices.interfaces'
 import { WERR_INVALID_OPERATION } from '../sdk/WERR_errors'
+import {
+  copyMerklePath,
+  copyValidatedBlockHeader,
+  normalizeTxid,
+  snapshotMerklePathResult
+} from './validateMerklePathResult'
 
 /**
  * Reject proof-provider results unless at least one returned path proves the
@@ -13,34 +19,39 @@ export async function validateCanonicalMerklePathResult(
   result: GetMerklePathResult,
   chaintracker: ChainTracker
 ): Promise<void> {
-  if (result.merklePath == null) {
-    throw result.error ?? new WERR_INVALID_OPERATION('Proof provider returned no Merkle path')
+  const requestedTxid = normalizeTxid(txid)
+  const snapshot = snapshotMerklePathResult(result, true) as GetMerklePathResult & {
+    merklePath?: MerklePath | MerklePath[]
+  }
+  if (snapshot.merklePath == null) {
+    throw snapshot.error ?? new WERR_INVALID_OPERATION('Proof provider returned no Merkle path')
   }
 
-  const paths = (Array.isArray(result.merklePath as unknown)
-    ? result.merklePath
-    : [result.merklePath]) as unknown as MerklePath[]
-  const canonical = []
+  const paths = Array.isArray(snapshot.merklePath) ? snapshot.merklePath : [snapshot.merklePath]
+  const header = snapshot.header == null ? undefined : copyValidatedBlockHeader(snapshot.header, false, false)
+  const canonical: MerklePath[] = []
   for (const path of paths) {
-    // Compound proofs can mark several transactions; membership is determined
-    // by the requested hash, independently of optional txid markers.
-    if (!path.path[0]?.some(candidate => candidate.hash === txid)) continue
-
-    const merkleRoot = path.computeRoot(txid)
-    if (
-      result.header != null &&
-      (path.blockHeight !== result.header.height || merkleRoot !== result.header.merkleRoot)
-    ) {
-      continue
+    try {
+      const proof = copyMerklePath(requestedTxid, path)
+      if (header != null && (proof.merklePath.blockHeight !== header.height || proof.root !== header.merkleRoot)) {
+        continue
+      }
+      if ((await chaintracker.isValidRootForHeight(proof.root, proof.merklePath.blockHeight)) !== true) continue
+      canonical.push(proof.merklePath)
+    } catch {
+      // A malformed or unrelated path is not allowed to hide a later valid
+      // candidate in a legacy multi-proof response.
     }
-    if (!(await chaintracker.isValidRootForHeight(merkleRoot, path.blockHeight))) continue
-    canonical.push(path)
   }
 
   if (canonical.length === 0) {
     throw new WERR_INVALID_OPERATION('Proof provider returned no Merkle path on the active chain')
   }
-  result.merklePath = canonical[0]
+  Object.assign(result, {
+    ...snapshot,
+    merklePath: canonical[0],
+    ...(header == null ? {} : { header })
+  })
 }
 
 /**
@@ -57,21 +68,29 @@ export async function getCanonicalMerklePath(
     await validateCanonicalMerklePathResult(txid, result, chaintracker)
   }
 
-  const result = await services.getMerklePath(txid)
+  let result: GetMerklePathResult
+  try {
+    result = snapshotMerklePathResult(await services.getMerklePath(normalizeTxid(txid)), true) as GetMerklePathResult
+  } catch (cause) {
+    return { error: WalletError.fromUnknown(cause), notes: [] }
+  }
   const returnedProof = result.merklePath != null
   try {
     await validate(result)
     return result
   } catch (cause) {
     if (returnedProof && services.getValidatedMerklePath != null) {
-      const fallback = await services.getValidatedMerklePath(txid, validate)
+      let fallbackNotes: GetMerklePathResult['notes'] = []
       try {
-        await validate(fallback)
-        return fallback
+        const fallback = await services.getValidatedMerklePath(normalizeTxid(txid), validate)
+        const snapshot = snapshotMerklePathResult(fallback, true) as GetMerklePathResult
+        fallbackNotes = snapshot.notes ?? []
+        await validate(snapshot)
+        return snapshot
       } catch (error_) {
         return {
           error: WalletError.fromUnknown(error_),
-          notes: [...(result.notes ?? []), ...(fallback.notes ?? [])]
+          notes: [...(result.notes ?? []), ...fallbackNotes]
         }
       }
     }

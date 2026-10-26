@@ -6,13 +6,13 @@ import {
   P2PKH,
   PrivateKey,
   Beef,
-  BEEF_V1,
   MerklePath,
   UnlockingScript
 } from '@bsv/sdk'
-import { ARC } from '../ARC'
+import { ARC, type ArcConfig } from '../ARC'
 import { Arcade } from '../Arcade'
 import { BlockHeader, WalletServices } from '../../../sdk/WalletServices.interfaces'
+import { blockHash } from '../../chaintracker/chaintracks/util/blockHeaderUtilities'
 
 /**
  * Unit tests for the Arcade (bsv-blockchain/arcade) broadcaster.
@@ -96,51 +96,89 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade getTxData hits URL + /tx/{txid}', async () => {
       const captured: CapturedRequest[] = []
+      const txid = 'de'.repeat(32)
       const http = mockHttpClient(
-        { ok: true, status: 200, statusText: 'OK', data: { txid: 'deadbeef', txStatus: 'MINED' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid, txStatus: 'MINED' } },
         captured
       )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
-      await arc.getTxData('deadbeef')
-      expect(captured[0].url).toBe('https://arcade.example/tx/deadbeef')
+      await arc.getTxData(txid)
+      expect(captured[0].url).toBe(`https://arcade.example/tx/${txid}`)
+    })
+
+    test('standard ARC rejects mismatched or malformed transaction status data', async () => {
+      const txid = 'de'.repeat(32)
+      const wrongTxid = 'ad'.repeat(32)
+      const mismatched = new ARC('https://arc.example', {
+        httpClient: mockHttpClient(
+          { ok: true, status: 200, statusText: 'OK', data: { txid: wrongTxid, txStatus: 'MINED' } },
+          []
+        )
+      })
+      await expect(mismatched.getTxData(txid)).rejects.toThrow('malformed transaction data')
+
+      const data = Object.defineProperty({ txid }, 'txStatus', {
+        enumerable: true,
+        get: () => {
+          throw new Error('accessor invoked')
+        }
+      })
+      const accessorBacked = new ARC('https://arc.example', {
+        httpClient: mockHttpClient({ ok: true, status: 200, statusText: 'OK', data }, [])
+      })
+      await expect(accessorBacked.getTxData(txid)).rejects.toThrow('malformed transaction data')
+
+      const failed = new ARC('https://arc.example', {
+        httpClient: mockHttpClient(
+          { ok: false, status: 503, statusText: 'Unavailable', data: { txid, txStatus: 'MINED' } },
+          []
+        )
+      })
+      await expect(failed.getTxData(txid)).rejects.toThrow('response 503')
     })
   })
 
   describe('shared transaction status provider', () => {
     test('maps only network-observed Arcade states to known or mined', async () => {
+      const accepted = '01'.repeat(32)
+      const mined = '02'.repeat(32)
+      const rejected = '03'.repeat(32)
+      const missing = '04'.repeat(32)
       const captured: CapturedRequest[] = []
       const http = mockHttpClientSequence(
         [
-          { ok: true, status: 200, statusText: 'OK', data: { txid: 'accepted', txStatus: 'ACCEPTED_BY_NETWORK' } },
-          { ok: true, status: 200, statusText: 'OK', data: { txid: 'mined', txStatus: 'MINED' } },
-          { ok: true, status: 200, statusText: 'OK', data: { txid: 'rejected', txStatus: 'REJECTED' } },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: accepted, txStatus: 'ACCEPTED_BY_NETWORK' } },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: mined, txStatus: 'MINED' } },
+          { ok: true, status: 200, statusText: 'OK', data: { txid: rejected, txStatus: 'REJECTED' } },
           { ok: false, status: 404, statusText: 'Not Found', data: { error: 'not found' } }
         ],
         captured
       )
       const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([
-        'accepted',
-        'mined',
-        'rejected',
-        'missing'
+        accepted,
+        mined,
+        rejected,
+        missing
       ])
 
       expect(result.status).toBe('success')
       expect(result.results).toEqual([
-        { txid: 'accepted', status: 'known', depth: 0 },
-        { txid: 'mined', status: 'mined', depth: 1 },
-        { txid: 'rejected', status: 'unknown', depth: undefined, providerStatus: 'REJECTED' },
-        { txid: 'missing', status: 'unknown', depth: undefined }
+        { txid: accepted, status: 'known', depth: 0 },
+        { txid: mined, status: 'mined', depth: 1 },
+        { txid: rejected, status: 'unknown', depth: undefined, providerStatus: 'REJECTED' },
+        { txid: missing, status: 'unknown', depth: undefined }
       ])
       expect(captured.map(request => request.url)).toEqual([
-        'https://arcade.example/tx/accepted',
-        'https://arcade.example/tx/mined',
-        'https://arcade.example/tx/rejected',
-        'https://arcade.example/tx/missing'
+        `https://arcade.example/tx/${accepted}`,
+        `https://arcade.example/tx/${mined}`,
+        `https://arcade.example/tx/${rejected}`,
+        `https://arcade.example/tx/${missing}`
       ])
     })
 
     test('surfaces an orphan-mempool verdict as durable input-conflict evidence', async () => {
+      const loser = '11'.repeat(32)
+      const winner = '22'.repeat(32)
       const http = mockHttpClient(
         {
           ok: true,
@@ -148,38 +186,76 @@ describe('Arcade broadcaster', () => {
           statusText: 'OK',
           data: {
             status: 200,
-            txid: 'loser',
+            txid: loser,
             txStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
             extraInfo: 'input conflict',
-            competingTxs: ['winner']
+            competingTxs: [winner]
           }
         },
         []
       )
 
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids(['loser'])
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([loser])
 
       expect(result.results[0]).toMatchObject({
-        txid: 'loser',
+        txid: loser,
         status: 'unknown',
         terminal: true,
         inputConflict: true,
         providerStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
-        competingTxs: ['winner']
+        competingTxs: [winner]
       })
     })
 
     test('returns an inconclusive provider result on transport or server failure', async () => {
+      const txid = '33'.repeat(32)
       const captured: CapturedRequest[] = []
       const http = mockHttpClient(
         { ok: false, status: 503, statusText: 'Service Unavailable', data: { error: 'backpressure' } },
         captured
       )
-      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids(['txid'])
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
 
       expect(result.status).toBe('error')
-      expect(result.results).toEqual([{ txid: 'txid', status: 'unknown', depth: undefined }])
+      expect(result.results).toEqual([{ txid, status: 'unknown', depth: undefined }])
       expect(result.error).toBeDefined()
+    })
+
+    test('rejects a status response bound to a different transaction id', async () => {
+      const txid = '44'.repeat(32)
+      const http = mockHttpClient(
+        {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: { txid: '55'.repeat(32), txStatus: 'MINED' }
+        },
+        []
+      )
+
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
+
+      expect(result.status).toBe('error')
+      expect(result.results).toEqual([{ txid, status: 'unknown', depth: undefined }])
+    })
+
+    test('does not invoke accessor-backed Arcade response fields', async () => {
+      const txid = '66'.repeat(32)
+      let invoked = false
+      const data = { txid, txStatus: 'MINED' }
+      Object.defineProperty(data, 'extraInfo', {
+        enumerable: true,
+        get: () => {
+          invoked = true
+          return 'hidden'
+        }
+      })
+      const http = mockHttpClient({ ok: true, status: 200, statusText: 'OK', data }, [])
+
+      const result = await new Arcade('https://arcade.example', { httpClient: http }).getStatusForTxids([txid])
+
+      expect(result.status).toBe('error')
+      expect(invoked).toBe(false)
     })
   })
 
@@ -414,13 +490,16 @@ describe('Arcade broadcaster', () => {
       'IMMUTABLE'
     ])('standard ARC postBeef accepts extra txid status %s', async txStatus => {
       const captured: CapturedRequest[] = []
-      const primaryTxid = '22'.repeat(32)
-      const extraTxid = '11'.repeat(32)
-      const beef = {
-        version: BEEF_V1,
-        txs: [],
-        toHex: () => RAW_TX
-      } as unknown as Beef
+      const lock = new P2PKH().lock(PrivateKey.fromHex('44'.repeat(32)).toPublicKey().toAddress())
+      const extraTx = new Transaction()
+      extraTx.addOutput({ satoshis: 1, lockingScript: lock })
+      const primaryTx = new Transaction()
+      primaryTx.addOutput({ satoshis: 2, lockingScript: lock })
+      const beef = new Beef()
+      beef.mergeTransaction(extraTx)
+      beef.mergeTransaction(primaryTx)
+      const primaryTxid = primaryTx.id('hex')
+      const extraTxid = extraTx.id('hex')
       const http = mockHttpClientSequence(
         [
           {
@@ -463,6 +542,66 @@ describe('Arcade broadcaster', () => {
       expect(headers['X-CallbackToken']).toBe('wallet-token')
       // SSE (pull) flow: no callbackUrl configured → header omitted
       expect(headers['X-CallbackUrl']).toBeUndefined()
+    })
+
+    test.each([
+      {
+        name: 'standard ARC',
+        create: (config: ArcConfig) => new ARC('https://arc.example', config),
+        response: {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: { txid: 'abc', extraInfo: '', txStatus: 'SEEN_ON_NETWORK' }
+        }
+      },
+      {
+        name: 'Arcade',
+        create: (config: ArcConfig) => new Arcade('https://arcade.example', config),
+        response: {
+          ok: true,
+          status: 202,
+          statusText: 'Accepted',
+          data: { txid: 'abc', status: 202, txStatus: 'RECEIVED' }
+        }
+      }
+    ])('$name snapshots credentials and custom headers', async ({ create, response }) => {
+      const captured: CapturedRequest[] = []
+      const headers = { 'X-Tenant': 'original' }
+      const config: ArcConfig = {
+        httpClient: mockHttpClient(response, captured),
+        apiKey: 'original-key',
+        callbackToken: 'original-token',
+        headers
+      }
+      const provider = create(config)
+
+      config.apiKey = 'mutated-key'
+      config.callbackToken = 'mutated-token'
+      headers['X-Tenant'] = 'mutated'
+      await provider.postRawTx(RAW_TX)
+
+      const sent = captured[0].options.headers as Record<string, string>
+      expect(sent.Authorization).toBe('Bearer original-key')
+      expect(sent['X-CallbackToken']).toBe('original-token')
+      expect(sent['X-Tenant']).toBe('original')
+    })
+
+    test.each([
+      ['standard ARC', (config: ArcConfig) => new ARC('https://arc.example', config)],
+      ['Arcade', (config: ArcConfig) => new Arcade('https://arcade.example', config)]
+    ])('%s rejects accessor-backed and prototype-bearing configuration', (_name, create) => {
+      const getter = jest.fn(() => 'stolen')
+      const accessorConfig: Record<string, unknown> = {}
+      Object.defineProperty(accessorConfig, 'apiKey', { enumerable: true, get: getter })
+      expect(() => create(accessorConfig as ArcConfig)).toThrow('accessor-free')
+      expect(getter).not.toHaveBeenCalled()
+
+      const inheritedHeaders = Object.assign(Object.create({ Authorization: 'inherited' }), {
+        'X-Tenant': 'own'
+      }) as Record<string, string>
+      expect(() => create({ headers: inheritedHeaders })).toThrow('accessor-free')
+      expect(() => create({ headers: { 'X-Tenant': undefined as unknown as string } })).toThrow('must be a string')
     })
   })
 
@@ -540,12 +679,17 @@ describe('Arcade broadcaster', () => {
 
     test('Arcade posts EF hex (with EF marker, not a BEEF prefix) to /tx', async () => {
       const captured: CapturedRequest[] = []
+      const { beef, spendTxid } = buildBeef()
       const http = mockHttpClient(
-        { ok: true, status: 202, statusText: 'Accepted', data: { txid: '', status: 202, txStatus: 'RECEIVED' } },
+        {
+          ok: true,
+          status: 202,
+          statusText: 'Accepted',
+          data: { txid: spendTxid, status: 202, txStatus: 'RECEIVED' }
+        },
         captured
       )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
-      const { beef, spendTxid } = buildBeef()
 
       const r = await arc.postBeef(beef, [spendTxid])
 
@@ -560,12 +704,17 @@ describe('Arcade broadcaster', () => {
 
     test('reconstructs EF from a bundle parsed from binary (no pre-linked ancestry)', async () => {
       const captured: CapturedRequest[] = []
+      const { beef, spendTxid } = buildBeef()
       const http = mockHttpClient(
-        { ok: true, status: 202, statusText: 'Accepted', data: { txid: '', status: 202, txStatus: 'RECEIVED' } },
+        {
+          ok: true,
+          status: 202,
+          statusText: 'Accepted',
+          data: { txid: spendTxid, status: 202, txStatus: 'RECEIVED' }
+        },
         captured
       )
       const arc = new Arcade('https://arcade.example', { httpClient: http })
-      const { beef, spendTxid } = buildBeef()
       // A wire/storage bundle arrives as binary: its transactions carry no
       // sourceTransaction links until ancestry is attached during extraction.
       const rehydrated = Beef.fromBinary(beef.toBinary())
@@ -582,12 +731,17 @@ describe('Arcade broadcaster', () => {
 
     test('standard ARC still posts BEEF (regression guard for the non-arcade path)', async () => {
       const captured: CapturedRequest[] = []
+      const { beef, spendTxid } = buildBeef()
       const http = mockHttpClient(
-        { ok: true, status: 200, statusText: 'OK', data: { txid: '', extraInfo: '', txStatus: 'SEEN_ON_NETWORK' } },
+        {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          data: { txid: spendTxid, extraInfo: '', txStatus: 'SEEN_ON_NETWORK' }
+        },
         captured
       )
       const arc = new ARC('https://arc.example', { httpClient: http })
-      const { beef, spendTxid } = buildBeef()
 
       await arc.postBeef(beef, [spendTxid])
 
@@ -604,11 +758,7 @@ describe('Arcade broadcaster', () => {
       const arc = new Arcade('https://arcade.example', { httpClient: http })
       const { beef, orphanTxid } = buildBeef()
 
-      const r = await arc.postBeef(beef, [orphanTxid])
-
-      expect(r.status).toBe('error')
-      const tr = r.txidResults.find(t => t.txid === orphanTxid)
-      expect(tr?.serviceError).toBe(true)
+      await expect(arc.postBeef(beef, [orphanTxid])).rejects.toThrow('exact ID')
       expect(captured).toHaveLength(0)
     })
 
@@ -678,14 +828,22 @@ describe('Arcade broadcaster', () => {
   describe('getMerklePath provider (proof acquisition)', () => {
     // Real mined transaction + its BUMP from mainnet Arcade (block 955122).
     const F283_TXID = 'f283c15af7fb9301ef35445eaa76e92d36382880078490b2f4fbae55b6f9551a'
-    const F283_BLOCKHASH = '000000000000000001577b6b5eaa6a75c6463ba6f143a2340026ccf923ba34fe'
     const F283_HEIGHT = 955122
     const F283_ROOT = '9c95627dacbf19591f68448630d9d9ae1b18fda1c4ca6acc84fd660f66d9f1bf'
     const F283_BUMP =
       'fef2920e00120222021a55f9b655aefbf4b2908407802838362de976aa5e4435ef0193fbf75ac183f2230057eead000df51a926a9f6b3b330f4b028c1f1c27fb218ae408e78feb2a30fa800110005fc2894e94e9009ce8102e1beb99b6a99c352e13502f53fb94e853e3d563bf4d010900d139cc229d5599c75ec9fd094da6faba3e7b97e64b8977317fa84401c17a895f0105000740a1ee710d80805c05d3e835c95d4174ad38695912e96a1c01bc17b282151d01030071c33071477ce0c6a96475bd024ecb8fa555138f47c5bf5fe7f28bf02b42f1020100008cc12b2dc5e57ceb205289260a82114e92101c496f3ccfb4c569b613d8e96a1a01010078224ee8acd16aa820d2a4bf8f022038ff95e9ceee990f08d98c17bb21a7ce8601010083f5508c315f3b7d3352e9fac3eaa6c76c0d4069558473386d31972f40c843f8010100901f20844e8ede781d7c1e8893f725c6bda494899a45a74b175f38d4e1862d76010100903877404503535b4e171ac8c92ab1c6406ab3ac81c89ad87013bb8deb39a7ca010100cdeccbedd2e94eee765e4ea01c0898789df7e9e1825130b7b73db655abd040a501010048ef4e124408fec09fd605875a54cc9bd79557e3ffc68c5011d0f50cdefb59f4010100f5714c108080ed499e7840c3f3e4a52d642723f2c5819ba502c0c00761ad892c010100c31f41af367fbb7f0d31b353a2a4b396e75bf02f122d239da9a1721f24f0dd2e0101008f44d227bcd7b051838ff8f4bffaa418660f440def819cc5a050bad07ef597e9010100c77390cde6d159a78f1543e252b9ab3984f409003d127958be1d91a387ee1c610101008954773b6594d2a1ff601726ff3aa9218282b7ff708cad72c148387f2913abfa010100198bbe74ae81436e36ba87948c8d8a452f30c859af710d71c923030ac2270a39'
 
-    const header = (merkleRoot: string): BlockHeader =>
-      ({ height: F283_HEIGHT, hash: F283_BLOCKHASH, merkleRoot }) as unknown as BlockHeader
+    const header = (merkleRoot: string): BlockHeader => {
+      const base = {
+        version: 1,
+        previousHash: '00'.repeat(32),
+        merkleRoot,
+        time: 1,
+        bits: 0,
+        nonce: 0
+      }
+      return { ...base, height: F283_HEIGHT, hash: blockHash(base) }
+    }
 
     // Minimal WalletServices stub exposing only hashToHeader (all this provider uses).
     const fakeServices = (h: BlockHeader | Error): WalletServices =>
@@ -703,7 +861,13 @@ describe('Arcade broadcaster', () => {
           ok: true,
           status: 200,
           statusText: 'OK',
-          data: { txid: F283_TXID, txStatus, blockHeight: F283_HEIGHT, blockHash: F283_BLOCKHASH, merklePath }
+          data: {
+            txid: F283_TXID,
+            txStatus,
+            blockHeight: F283_HEIGHT,
+            blockHash: header(F283_ROOT).hash,
+            merklePath
+          }
         },
         captured
       )
@@ -738,5 +902,167 @@ describe('Arcade broadcaster', () => {
       expect(r.merklePath).toBeUndefined()
       expect(r.error).toBeDefined()
     })
+  })
+})
+
+/**
+ * bsv-blockchain/arcade API-key authorization: a key is presented as
+ * `Authorization: Bearer bsvb_…`; a refused key is answered 401 (403 for a key not allowed to make
+ * the call) before the transaction is parsed, and an exhausted quota 429 with Retry-After.
+ */
+describe('Arcade API key', () => {
+  // Shaped like an Arcade key (bsvb_ + 43 base62 + _ + 6 base62) but not a real one.
+  const API_KEY = 'bsvb_0000000000000000000000000000000000000000000_000000'
+  const TXID = 'ab'.repeat(32)
+
+  const refused = (status: 401 | 403): Partial<HttpClientResponse<unknown>> => ({
+    ok: false,
+    status,
+    statusText: status === 401 ? 'Unauthorized' : 'Forbidden',
+    data: { error: 'invalid api key' }
+  })
+
+  test('sends the key as a bearer token on every Arcade request', async () => {
+    const captured: CapturedRequest[] = []
+    const http = mockHttpClientSequence(
+      [
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: TXID, status: 202, txStatus: 'RECEIVED' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } }
+      ],
+      captured
+    )
+    const arc = new Arcade('https://arcade.example', { httpClient: http, apiKey: API_KEY })
+
+    await arc.postRawTx(RAW_TX, [TXID])
+    await arc.getTxData(TXID)
+    await arc.getStatusForTxids([TXID])
+
+    expect(captured.map(c => `${c.options.method ?? 'GET'} ${c.url}`)).toEqual([
+      'POST https://arcade.example/tx',
+      `GET https://arcade.example/tx/${TXID}`,
+      `GET https://arcade.example/tx/${TXID}`
+    ])
+    for (const c of captured) {
+      expect((c.options.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`)
+    }
+  })
+
+  test('sends no Authorization header when no key is configured', async () => {
+    const captured: CapturedRequest[] = []
+    const http = mockHttpClientSequence(
+      [
+        { ok: true, status: 202, statusText: 'Accepted', data: { txid: TXID, status: 202, txStatus: 'RECEIVED' } },
+        { ok: true, status: 200, statusText: 'OK', data: { txid: TXID, txStatus: 'SEEN_ON_NETWORK' } }
+      ],
+      captured
+    )
+    const arc = new Arcade('https://arcade.example', { httpClient: http })
+
+    await arc.postRawTx(RAW_TX, [TXID])
+    await arc.getTxData(TXID)
+
+    expect(captured).toHaveLength(2)
+    for (const c of captured) {
+      expect(c.options.headers as Record<string, string>).not.toHaveProperty('Authorization')
+    }
+  })
+
+  test.each([401, 403] as const)(
+    'HTTP %i (key refused) → serviceError=true, never an invalid-transaction verdict',
+    async status => {
+      const captured: CapturedRequest[] = []
+      const arc = new Arcade('https://arcade.example', {
+        httpClient: mockHttpClient(refused(status), captured),
+        apiKey: API_KEY
+      })
+
+      const r = await arc.postRawTx(RAW_TX, [TXID])
+
+      expect(r.status).toBe('error')
+      expect(r.serviceError).toBe(true)
+      expect(r.doubleSpend).toBeFalsy()
+      expect(r.data).toMatchObject({ status: String(status), detail: 'Arcade refused the configured API key' })
+      expect(r.notes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            what: 'postRawTxError',
+            status,
+            detail: 'Arcade refused the configured API key'
+          })
+        ])
+      )
+    }
+  )
+
+  test('HTTP 401 without a configured key says the instance requires one', async () => {
+    const arc = new Arcade('https://arcade.example', { httpClient: mockHttpClient(refused(401), []) })
+
+    const r = await arc.postRawTx(RAW_TX, [TXID])
+
+    expect(r.serviceError).toBe(true)
+    expect(r.data).toMatchObject({ detail: 'Arcade requires an API key' })
+  })
+
+  test('HTTP 429 (quota exhausted) → serviceError=true', async () => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(
+        { ok: false, status: 429, statusText: 'Too Many Requests', data: { error: 'rate limit exceeded' } },
+        []
+      ),
+      apiKey: API_KEY
+    })
+
+    const r = await arc.postRawTx(RAW_TX, [TXID])
+
+    expect(r.status).toBe('error')
+    expect(r.serviceError).toBe(true)
+  })
+
+  test('postBeef: a refused key marks every txid a service error so the wallet fails over or retries', async () => {
+    const key = PrivateKey.fromRandom()
+    const lock = new P2PKH().lock(key.toAddress())
+    const parent = new Transaction()
+    parent.addInput({ sourceTXID: '00'.repeat(32), sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
+    parent.addOutput({ lockingScript: lock, satoshis: 1000 })
+    const child = new Transaction()
+    child.addInput({ sourceTransaction: parent, sourceOutputIndex: 0, unlockingScript: new UnlockingScript() })
+    child.addOutput({ lockingScript: lock, satoshis: 900 })
+    const beef = new Beef()
+    beef.mergeTransaction(parent)
+    beef.mergeTransaction(child)
+    const childTxid = child.id('hex')
+
+    const captured: CapturedRequest[] = []
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(401), captured),
+      apiKey: API_KEY
+    })
+
+    const r = await arc.postBeef(beef, [childTxid])
+
+    // the request really reached Arcade (EF was built) and was refused there
+    expect(captured).toHaveLength(1)
+    expect((captured[0].options.headers as Record<string, string>).Authorization).toBe(`Bearer ${API_KEY}`)
+    expect(r.status).toBe('error')
+    expect(r.txidResults).toHaveLength(1)
+    expect(r.txidResults[0]).toMatchObject({ txid: childTxid, status: 'error', serviceError: true })
+  })
+
+  test.each([401, 403] as const)('getTxData rejects on HTTP %i instead of reporting the tx unknown', async status => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(status), []),
+      apiKey: API_KEY
+    })
+    await expect(arc.getTxData(TXID)).rejects.toThrow(`Arcade transaction data response ${status}`)
+  })
+
+  test('getStatusForTxids on HTTP 401 is an inconclusive provider error, not "unknown"', async () => {
+    const arc = new Arcade('https://arcade.example', {
+      httpClient: mockHttpClient(refused(401), []),
+      apiKey: API_KEY
+    })
+    const r = await arc.getStatusForTxids([TXID])
+    expect(r.status).toBe('error')
   })
 })

@@ -59,7 +59,10 @@ function makeRequest(paymentHeader?: string | string[]): PaymentRequest {
   } as unknown as PaymentRequest
 }
 
-function makeAtomicPayment(satoshis = 100): {
+function makeAtomicPayment(
+  satoshis = 100,
+  unlockingScriptBytes = 1
+): {
   header: string
   transaction: string
   transactionId: string
@@ -68,7 +71,7 @@ function makeAtomicPayment(satoshis = 100): {
   transaction.addInput({
     sourceTXID: '0'.repeat(64),
     sourceOutputIndex: 0xffffffff,
-    unlockingScript: Script.fromHex('00'),
+    unlockingScript: Script.fromBinary(Array.from({ length: unlockingScriptBytes }, () => 0)),
     sequence: 0xffffffff
   })
   transaction.addOutput({
@@ -86,6 +89,47 @@ function makeAtomicPayment(satoshis = 100): {
       derivationPrefix: DERIVATION_PREFIX,
       derivationSuffix: DERIVATION_SUFFIX,
       transaction: encoded
+    })
+  }
+}
+
+function makeOverinclusiveAtomicPayment(): {
+  header: string
+  transaction: string
+  normalizedTransaction: string
+  unrelatedTransactionId: string
+} {
+  const dependency = new Transaction()
+  dependency.addOutput({ lockingScript: Script.fromASM('OP_TRUE'), satoshis: 101 })
+
+  const payment = new Transaction()
+  payment.addInput({
+    sourceTransaction: dependency,
+    sourceOutputIndex: 0,
+    unlockingScript: Script.fromASM('OP_TRUE')
+  })
+  payment.addOutput({ lockingScript: Script.fromASM('OP_TRUE'), satoshis: 100 })
+
+  const unrelated = new Transaction()
+  unrelated.addOutput({ lockingScript: Script.fromASM('OP_TRUE'), satoshis: 1_000 })
+
+  const beef = new Beef()
+  beef.mergeTransaction(dependency)
+  beef.mergeTransaction(payment)
+  beef.mergeTransaction(unrelated)
+  const transactionId = payment.id('hex')
+  const atomicPrefix = beef.toBinaryAtomic(transactionId).slice(0, 36)
+  const overinclusive = [...atomicPrefix, ...beef.toBinary()]
+  const transaction = Utils.toBase64(overinclusive)
+  const normalizedTransaction = Utils.toBase64(beef.toBinaryAtomic(transactionId))
+  return {
+    transaction,
+    normalizedTransaction,
+    unrelatedTransactionId: unrelated.id('hex'),
+    header: JSON.stringify({
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
+      transaction
     })
   }
 }
@@ -139,15 +183,12 @@ describe('createPaymentMiddleware configuration', () => {
     ).toThrow('logger')
   })
 
-  it.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid maximum header size %s',
+  it.each([undefined, 0, -1, 1.5, 8, Number.MAX_SAFE_INTEGER + 1])(
+    'accepts the deprecated header-size option without enforcing it (%s)',
     maxPaymentHeaderBytes => {
       expect(() =>
-        createPaymentMiddleware({
-          wallet: makeWallet(),
-          maxPaymentHeaderBytes
-        })
-      ).toThrow(RangeError)
+        createPaymentMiddleware({ wallet: makeWallet(), maxPaymentHeaderBytes })
+      ).not.toThrow()
     }
   )
 })
@@ -288,15 +329,34 @@ describe('createPaymentMiddleware request handling', () => {
     expect(response.body?.code).toBe('ERR_MALFORMED_PAYMENT')
   })
 
-  it('rejects oversized payment headers before parsing', async () => {
-    const { response } = await invoke(
-      {
-        wallet: makeWallet(),
-        maxPaymentHeaderBytes: 8
-      },
-      makeRequest(makeAtomicPayment().header)
-    )
+  it.each([undefined, 8, 64 * 1024, 256 * 1024])(
+    'validates a received payment larger than 1 MiB despite legacy limit %s',
+    async maxPaymentHeaderBytes => {
+      const payment = makeAtomicPayment(100, 1024 * 1024)
+      expect(Buffer.byteLength(payment.header)).toBeGreaterThan(1024 * 1024)
+      const wallet = makeWallet()
+      const request = makeRequest(payment.header)
+      const accepted = await invoke({ wallet, maxPaymentHeaderBytes }, request)
+      expect(accepted.next).toHaveBeenCalledTimes(1)
+      expect(request.payment).toMatchObject({
+        accepted: true,
+        satoshisPaid: 100,
+        txid: payment.transactionId
+      })
+      expect(wallet.verifyHmac).toHaveBeenCalledTimes(1)
+      expect(wallet.internalizeAction).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('still rejects malformed large payment contents without calling the wallet', async () => {
+    const wallet = makeWallet()
+    const payment = JSON.parse(makeAtomicPayment().header)
+    payment.transaction = 'x'.repeat(1024 * 1024) + '*'
+    const { response, next } = await invoke({ wallet }, makeRequest(JSON.stringify(payment)))
     expect(response.body?.code).toBe('ERR_MALFORMED_PAYMENT')
+    expect(next).not.toHaveBeenCalled()
+    expect(wallet.verifyHmac).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
   })
 
   it('rejects false and failed nonce verification without exposing errors', async () => {
@@ -374,7 +434,8 @@ describe('createPaymentMiddleware request handling', () => {
 
   it.each([
     { accepted: false, isMerge: false },
-    { accepted: true, isMerge: true }
+    { accepted: true, isMerge: true },
+    { accepted: true, isMerge: 'false' }
   ])('does not authorize a wallet result of %j', async result => {
     const wallet = makeWallet({
       internalizeAction: jest.fn().mockResolvedValue(result)
@@ -385,7 +446,43 @@ describe('createPaymentMiddleware request handling', () => {
     expect(next).not.toHaveBeenCalled()
   })
 
-  it('retains the replay claim after an ambiguous internalization error', async () => {
+  it('requires wallet verdict fields to be own data properties without invoking accessors', async () => {
+    const payment = makeAtomicPayment()
+    const inherited = Object.create({ accepted: true, isMerge: false })
+    const getter = jest.fn(() => true)
+    const accessorBacked = Object.defineProperty({ accepted: true }, 'isMerge', { get: getter })
+
+    for (const result of [inherited, accessorBacked]) {
+      const replayStore: PaymentReplayStore = { claim: jest.fn().mockResolvedValue(true) }
+      const wallet = makeWallet({
+        internalizeAction: jest.fn().mockResolvedValue(result)
+      })
+      const { response, next } = await invoke({ wallet, replayStore }, makeRequest(payment.header))
+      expect(response.statusCode).toBe(409)
+      expect(response.body?.code).toBe('ERR_PAYMENT_REPLAYED')
+      expect(replayStore.claim).not.toHaveBeenCalled()
+      expect(next).not.toHaveBeenCalled()
+    }
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  it('normalizes overinclusive Atomic BEEF before wallet work and the application receipt', async () => {
+    const payment = makeOverinclusiveAtomicPayment()
+    const wallet = makeWallet()
+    const request = makeRequest(payment.header)
+
+    const { next } = await invoke({ wallet }, request)
+
+    expect(next).toHaveBeenCalledTimes(1)
+    const internalized = Beef.fromBinaryStrict(
+      (wallet.internalizeAction as jest.Mock).mock.calls[0][0].tx
+    )
+    expect(internalized.findTxid(payment.unrelatedTransactionId)).toBeUndefined()
+    expect(request.payment?.tx).toBe(payment.normalizedTransaction)
+    expect(request.payment?.tx).not.toBe(payment.transaction)
+  })
+
+  it('does not let invalid remittance material poison the replay store', async () => {
     const replayStore: PaymentReplayStore = {
       claim: jest.fn().mockResolvedValue(true)
     }
@@ -402,12 +499,33 @@ describe('createPaymentMiddleware request handling', () => {
       makeRequest(makeAtomicPayment().header)
     )
     expect(logger.warn).toHaveBeenCalledTimes(1)
+    expect(replayStore.claim).not.toHaveBeenCalled()
     expect(JSON.stringify((logger.warn as jest.Mock).mock.calls)).not.toContain('wallet secret')
     expect(response.body).toEqual({
       status: 'error',
       code: 'ERR_PAYMENT_FAILED',
       description: 'The payment could not be accepted.'
     })
+    expect(next).not.toHaveBeenCalled()
+  })
+
+  it('contains logger failures without changing the fail-closed payment response', async () => {
+    const wallet = makeWallet({
+      internalizeAction: jest.fn().mockRejectedValue(new Error('wallet unavailable'))
+    })
+    const logger: PaymentLogger = {
+      warn: jest.fn(() => {
+        throw new Error('logger failed')
+      })
+    }
+
+    const { response, next } = await invoke(
+      { wallet, logger },
+      makeRequest(makeAtomicPayment().header)
+    )
+
+    expect(response.statusCode).toBe(400)
+    expect(response.body?.code).toBe('ERR_PAYMENT_FAILED')
     expect(next).not.toHaveBeenCalled()
   })
 

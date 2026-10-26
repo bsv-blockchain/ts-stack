@@ -1,4 +1,4 @@
-import { Utils } from '@bsv/sdk'
+import { toUTF8 } from '@bsv/sdk/primitives/utils'
 import { errorMessage } from './errorMessage.js'
 
 interface Bsv20Payload {
@@ -16,7 +16,7 @@ export function assertValidBsv20Payload(data: number[] | undefined): void {
   try {
     if (data === undefined) throw new Error('Missing JSON payload')
 
-    const payload: unknown = JSON.parse(Utils.toUTF8(data))
+    const payload: unknown = JSON.parse(toUTF8(data))
     if (!isRecord(payload)) throw new Error('Malformed JSON payload')
 
     const { p, op, amt, id } = payload as Bsv20Payload

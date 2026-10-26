@@ -2,6 +2,10 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import { BanService } from '../BanService.js'
 import { Db } from 'mongodb'
 
+const TXID_A = 'ab'.repeat(32)
+const TXID_B = 'cd'.repeat(32)
+const TXID_C = 'ef'.repeat(32)
+
 describe('BanService', () => {
   let banService: BanService
   let mockCollection: any
@@ -11,16 +15,16 @@ describe('BanService', () => {
     jest.clearAllMocks()
 
     mockCollection = {
-      createIndex: jest.fn<any>().mockResolvedValue(undefined),
-      updateOne: jest.fn<any>().mockResolvedValue({}),
-      deleteOne: jest.fn<any>().mockResolvedValue({}),
-      findOne: jest.fn<any>().mockResolvedValue(null),
-      find: jest.fn<any>().mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+      createIndex: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+      updateOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+      deleteOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({}),
+      findOne: jest.fn<(...args: any[]) => any>().mockResolvedValue(null),
+      find: jest.fn<(...args: any[]) => any>().mockReturnValue({
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       }),
-      countDocuments: jest.fn<any>().mockResolvedValue(0)
+      countDocuments: jest.fn<(...args: any[]) => any>().mockResolvedValue(0)
     }
 
     mockDb = {
@@ -136,14 +140,14 @@ describe('BanService', () => {
 
   describe('banOutpoint', () => {
     it('should upsert an outpoint ban with formatted value', async () => {
-      await banService.banOutpoint('abc123', 0)
+      await banService.banOutpoint(TXID_A, 0)
 
       expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { type: 'outpoint', value: 'abc123.0' },
+        { type: 'outpoint', value: `${TXID_A}.0` },
         {
           $set: expect.objectContaining({
             type: 'outpoint',
-            value: 'abc123.0',
+            value: `${TXID_A}.0`,
             domain: undefined,
             reason: 'Manually banned'
           })
@@ -153,13 +157,13 @@ describe('BanService', () => {
     })
 
     it('should include domain, reason, and bannedBy when provided', async () => {
-      await banService.banOutpoint('txid456', 2, 'Stale token', 'https://host.com', 'admin-key')
+      await banService.banOutpoint(TXID_B, 2, 'Stale token', 'https://host.com', 'admin-key')
 
       expect(mockCollection.updateOne).toHaveBeenCalledWith(
-        { type: 'outpoint', value: 'txid456.2' },
+        { type: 'outpoint', value: `${TXID_B}.2` },
         {
           $set: expect.objectContaining({
-            value: 'txid456.2',
+            value: `${TXID_B}.2`,
             domain: 'https://host.com',
             reason: 'Stale token',
             bannedBy: 'admin-key'
@@ -178,11 +182,11 @@ describe('BanService', () => {
 
   describe('unbanOutpoint', () => {
     it('should delete an outpoint ban', async () => {
-      await banService.unbanOutpoint('txid789', 1)
+      await banService.unbanOutpoint(TXID_C, 1)
 
       expect(mockCollection.deleteOne).toHaveBeenCalledWith({
         type: 'outpoint',
-        value: 'txid789.1'
+        value: `${TXID_C}.1`
       })
     })
 
@@ -195,21 +199,21 @@ describe('BanService', () => {
 
   describe('isOutpointBanned', () => {
     it('should return true when outpoint is banned', async () => {
-      mockCollection.findOne.mockResolvedValue({ type: 'outpoint', value: 'abc.0' })
+      mockCollection.findOne.mockResolvedValue({ type: 'outpoint', value: `${TXID_A}.0` })
 
-      const result = await banService.isOutpointBanned('abc', 0)
+      const result = await banService.isOutpointBanned(TXID_A, 0)
 
       expect(result).toBe(true)
       expect(mockCollection.findOne).toHaveBeenCalledWith({
         type: 'outpoint',
-        value: 'abc.0'
+        value: `${TXID_A}.0`
       })
     })
 
     it('should return false when outpoint is not banned', async () => {
       mockCollection.findOne.mockResolvedValue(null)
 
-      const result = await banService.isOutpointBanned('xyz', 5)
+      const result = await banService.isOutpointBanned(TXID_B, 5)
 
       expect(result).toBe(false)
     })
@@ -228,8 +232,8 @@ describe('BanService', () => {
         { type: 'outpoint', value: 'tx.0', bannedAt: new Date() }
       ]
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue(mockBans)
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue(mockBans)
         })
       })
 
@@ -241,8 +245,8 @@ describe('BanService', () => {
 
     it('should filter by type when provided', async () => {
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       })
 
@@ -253,8 +257,8 @@ describe('BanService', () => {
 
     it('should filter by outpoint type', async () => {
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({
-          toArray: jest.fn<any>().mockResolvedValue([])
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({
+          toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([])
         })
       })
 
@@ -264,11 +268,11 @@ describe('BanService', () => {
     })
 
     it('should apply bounded pagination to MongoDB', async () => {
-      const toArray = jest.fn<any>().mockResolvedValue([])
-      const limit = jest.fn<any>().mockReturnValue({ toArray, limit: jest.fn(), skip: jest.fn() })
-      const skip = jest.fn<any>().mockReturnValue({ limit, toArray, skip: jest.fn() })
+      const toArray = jest.fn<(...args: any[]) => any>().mockResolvedValue([])
+      const limit = jest.fn<(...args: any[]) => any>().mockReturnValue({ toArray, limit: jest.fn(), skip: jest.fn() })
+      const skip = jest.fn<(...args: any[]) => any>().mockReturnValue({ limit, toArray, skip: jest.fn() })
       mockCollection.find.mockReturnValue({
-        sort: jest.fn<any>().mockReturnValue({ skip, limit, toArray })
+        sort: jest.fn<(...args: any[]) => any>().mockReturnValue({ skip, limit, toArray })
       })
 
       await banService.listBans('domain', 25, 50)
@@ -299,17 +303,17 @@ describe('BanService', () => {
     })
 
     it('should delete an outpoint ban', async () => {
-      await banService.removeBan('outpoint', 'txid.0')
+      await banService.removeBan('outpoint', `${TXID_A}.0`)
 
       expect(mockCollection.deleteOne).toHaveBeenCalledWith({
         type: 'outpoint',
-        value: 'txid.0'
+        value: `${TXID_A}.0`
       })
     })
 
     it('should reject non-string type (NoSQL injection prevention)', async () => {
       await expect(banService.removeBan({ $ne: '' } as any, 'value')).rejects.toThrow(
-        'Invalid input: expected a string value'
+        'Invalid ban type'
       )
     })
 

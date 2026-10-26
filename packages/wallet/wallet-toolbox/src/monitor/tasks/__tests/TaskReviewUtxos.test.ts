@@ -1,7 +1,10 @@
 import { TaskReviewUtxos } from '../TaskReviewUtxos'
 import { specOpInvalidChange } from '../../../sdk'
 
-function makeUser(userId: number, identityKey = `key-${userId}`): any {
+const KEY_1 = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const KEY_2 = '0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
+function makeUser(userId: number, identityKey = userId === 1 ? KEY_1 : KEY_2): any {
   const now = new Date()
   return {
     created_at: now,
@@ -49,11 +52,11 @@ describe('TaskReviewUtxos', () => {
     })
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.reviewByIdentityKey('key-1')
+    const log = await task.reviewByIdentityKey(KEY_1)
 
-    expect(m.findUsers).toHaveBeenCalledWith({ partial: { identityKey: 'key-1' } })
+    expect(m.findUsers).toHaveBeenCalledWith({ partial: { identityKey: KEY_1 } })
     expect(m.listOutputs).toHaveBeenCalledWith(
-      { userId: 1, identityKey: 'key-1' },
+      { userId: 1, identityKey: KEY_1 },
       expect.objectContaining({
         basket: specOpInvalidChange,
         tags: ['all'],
@@ -72,10 +75,10 @@ describe('TaskReviewUtxos', () => {
     const m = makeMonitor(users, { 1: [makeOutput('tx1.0', 50, false)] })
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    await task.reviewByIdentityKey('key-1', 'change')
+    await task.reviewByIdentityKey(KEY_1, 'change')
 
     expect(m.listOutputs).toHaveBeenCalledWith(
-      { userId: 1, identityKey: 'key-1' },
+      { userId: 1, identityKey: KEY_1 },
       expect.objectContaining({
         tags: []
       })
@@ -87,10 +90,10 @@ describe('TaskReviewUtxos', () => {
     const m = makeMonitor(users, { 1: [makeOutput('tx1.0', 50, false)] })
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.reviewByIdentityKey('key-1', 'all', true)
+    const log = await task.reviewByIdentityKey(KEY_1, 'all', true)
 
     expect(m.listOutputs).toHaveBeenCalledWith(
-      { userId: 1, identityKey: 'key-1' },
+      { userId: 1, identityKey: KEY_1 },
       expect.objectContaining({ tags: ['release', 'all'] })
     )
     expect(log).toContain('confirmed spent and updated to unspendable')
@@ -101,23 +104,21 @@ describe('TaskReviewUtxos', () => {
     const m = makeMonitor(users, {})
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.reviewByIdentityKey('key-1')
+    const log = await task.reviewByIdentityKey(KEY_1)
 
-    expect(log).toBe('userId 1: no invalid utxos found, key-1\n')
+    expect(log).toBe(`userId 1: no invalid utxos found, ${KEY_1}\n`)
   })
 
   test('4 reviewByIdentityKey reports when the identity key does not exist', async () => {
     const m = makeMonitor([], {})
     const task = new TaskReviewUtxos(m.monitor as any)
 
-    const log = await task.reviewByIdentityKey('missing-key')
-
+    await expect(task.reviewByIdentityKey('missing-key')).rejects.toThrow('canonical compressed public key')
     expect(m.listOutputs).not.toHaveBeenCalled()
-    expect(log).toBe('identityKey missing-key was not found\n')
   })
 
   test('4a paged operator review reports unknowns and a continuation without timing out on the whole wallet', async () => {
-    const user = makeUser(1, 'key-1')
+    const user = makeUser(1, KEY_1)
     const outputs = [
       {
         outputId: 1,
@@ -162,7 +163,7 @@ describe('TaskReviewUtxos', () => {
     }
     const task = new TaskReviewUtxos(monitor as any)
 
-    const result = await task.reviewPageByIdentityKey('key-1', 'all', false, 2, 0)
+    const result = await task.reviewPageByIdentityKey(KEY_1, 'all', false, 2, 0)
 
     expect(sp.findOutputs).toHaveBeenCalledWith(expect.objectContaining({ paged: { limit: 2, offset: 0 } }))
     expect(result).toMatchObject({
@@ -186,11 +187,11 @@ describe('TaskReviewUtxos', () => {
     }
     const task = new TaskReviewUtxos(monitor as any)
 
-    const result = await task.reviewPageByIdentityKey('missing-key')
+    const result = await task.reviewPageByIdentityKey(KEY_2)
 
     expect(result).toMatchObject({
       found: false,
-      identityKey: 'missing-key',
+      identityKey: KEY_2,
       mode: 'all',
       release: false,
       offset: 0,
@@ -200,11 +201,11 @@ describe('TaskReviewUtxos', () => {
       checked: 0,
       unknown: 0
     })
-    expect(result.log).toBe('identityKey missing-key was not found\n')
+    expect(result.log).toBe(`identityKey ${KEY_2} was not found\n`)
   })
 
   test('4c paged change review safely returns an empty page when the default basket is absent', async () => {
-    const user = makeUser(1, 'key-1')
+    const user = makeUser(1, KEY_1)
     const sp = {
       findUsers: jest.fn().mockResolvedValue([user]),
       findOutputBaskets: jest.fn().mockResolvedValue([]),
@@ -217,22 +218,23 @@ describe('TaskReviewUtxos', () => {
     }
     const task = new TaskReviewUtxos(monitor as any)
 
-    const result = await task.reviewPageByIdentityKey('key-1', 'change', true, 999.9, -5.2)
+    await expect(task.reviewPageByIdentityKey(KEY_1, 'change', true, 999.9, -5.2)).rejects.toThrow('pageLimit')
 
-    expect(sp.findOutputBaskets).toHaveBeenCalledWith({ partial: { userId: 1, name: 'default' } })
+    expect(sp.findOutputBaskets).not.toHaveBeenCalled()
     expect(sp.findOutputs).not.toHaveBeenCalled()
-    expect(result).toMatchObject({
-      found: true,
-      userId: 1,
-      mode: 'change',
-      release: true,
-      offset: 0,
-      pageLimit: 250,
-      sourceScanned: 0,
-      complete: true,
-      released: 0
-    })
-    expect(result.log).toBe('userId 1: no invalid utxos found, key-1\n')
+  })
+
+  test('4d rejects invalid control values and copies constructor tags', async () => {
+    const m = makeMonitor([], {})
+    const tags = ['all']
+    const task = new TaskReviewUtxos(m.monitor as any, 0, 10, 0, tags)
+    tags[0] = 'release'
+
+    expect(task.tags).toEqual(['all'])
+    await expect(task.reviewPageByIdentityKey(KEY_1, 'all', false, Number.NaN, 0)).rejects.toThrow('pageLimit')
+    await expect(task.reviewPageByIdentityKey(KEY_1, 'invalid' as never, false)).rejects.toThrow('mode')
+    await expect(task.reviewPageByIdentityKey(KEY_1, 'all', 'yes' as never)).rejects.toThrow('release')
+    expect(() => new TaskReviewUtxos(m.monitor as any, -1)).toThrow('triggerMsecs')
   })
 
   test('5 trigger and runTask are stubbed out', async () => {

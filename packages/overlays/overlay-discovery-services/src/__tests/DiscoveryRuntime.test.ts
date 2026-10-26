@@ -6,6 +6,9 @@ import { SLAPLookupService } from '../SLAP/SLAPLookupService.js'
 import { SLAPTopicManager } from '../SLAP/SLAPTopicManager.js'
 import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
 
+const validIdentityKey = '02fe8d1eb1bcb3432b1db5833ff5f2226d9cb5e65cee430558c18ed3a3c86ce1af'
+const assetId = `${'0123456789abcdef'.repeat(4)}_0`
+
 async function makeCustomAdvertisementScript(
   protocol: 'SHIP' | 'SLAP',
   fields: number[][]
@@ -72,6 +75,29 @@ describe('discovery topic managers', () => {
       expect(console.warn).not.toHaveBeenCalled()
     }
   )
+
+  it.each([
+    ['SHIP', `tm_color_${assetId}`, SHIPTopicManager],
+    ['SHIP', 'tm_uhrp_files', SHIPTopicManager],
+    ['SLAP', `ls_color_${assetId}`, SLAPTopicManager],
+    ['SLAP', 'ls_uhrp_files', SLAPTopicManager]
+  ] as const)('admits %s advertisements for %s', async (protocol, name, Manager) => {
+    const script = await makeAdvertisementScript(protocol, name)
+    const result = await new Manager().identifyAdmissibleOutputs(makeBEEF(script), [])
+    expect(result).toEqual({ outputsToAdmit: [0], coinsToRetain: [] })
+  })
+
+  it.each([
+    ['SHIP', ['tm_', 'tm__x', 'tm_x_', 'tm_Color', 'tm_' + 'a'.repeat(297), `color_${assetId}`]],
+    ['SLAP', ['ls_', 'ls__x', 'ls_x_', 'ls_Color', 'ls_' + 'a'.repeat(297), `color_${assetId}`]]
+  ] as const)('refuses noncanonical %s advertisement names', async (protocol, names) => {
+    const scripts = await Promise.all(
+      names.map(async name => await makeAdvertisementScript(protocol, name))
+    )
+    await expect(
+      Promise.all(scripts.map(async script => await isAdmissibleDiscoveryOutput(script, protocol)))
+    ).resolves.toEqual(names.map(() => false))
+  })
 
   it.each([
     ['SHIP', SHIPTopicManager],
@@ -158,7 +184,7 @@ describe('SHIP lookup service', () => {
     const { service, storage } = makeService()
 
     await service.lookup({ service: 'ls_ship', query: 'findAll' } as never)
-    expect(storage.findAll).toHaveBeenLastCalledWith()
+    expect(storage.findAll).toHaveBeenLastCalledWith(1000, 0, 'desc')
 
     await service.lookup({
       service: 'ls_ship',
@@ -171,7 +197,7 @@ describe('SHIP lookup service', () => {
       query: {
         domain: 'https://example.com',
         topics: ['tm_a'],
-        identityKey: 'identity',
+        identityKey: validIdentityKey,
         limit: 3,
         skip: 2,
         sortOrder: 'asc'
@@ -180,7 +206,7 @@ describe('SHIP lookup service', () => {
     expect(storage.findRecord).toHaveBeenLastCalledWith({
       domain: 'https://example.com',
       topics: ['tm_a'],
-      identityKey: 'identity',
+      identityKey: validIdentityKey,
       limit: 3,
       skip: 2,
       sortOrder: 'asc'
@@ -192,28 +218,74 @@ describe('SHIP lookup service', () => {
     [{ service: 'other', query: 'findAll' }, 'Lookup service not supported!'],
     [{ service: 'ls_ship', query: 'unsupported' }, 'Invalid query format'],
     [{ service: 'ls_ship', query: { limit: -1 } }, 'query.limit'],
+    [{ service: 'ls_ship', query: { limit: 1.5 } }, 'query.limit'],
+    [{ service: 'ls_ship', query: { limit: Number.NaN } }, 'query.limit'],
+    [{ service: 'ls_ship', query: { limit: Number.POSITIVE_INFINITY } }, 'query.limit'],
+    [{ service: 'ls_ship', query: { limit: 1001 } }, 'query.limit'],
     [{ service: 'ls_ship', query: { skip: '1' } }, 'query.skip'],
+    [{ service: 'ls_ship', query: { skip: 1_000_001 } }, 'query.skip'],
     [{ service: 'ls_ship', query: { sortOrder: 'sideways' } }, 'query.sortOrder'],
+    [{ service: 'ls_ship', query: { findAll: 'true' } }, 'query.findAll'],
     [{ service: 'ls_ship', query: { domain: 1 } }, 'query.domain'],
+    [{ service: 'ls_ship', query: { domain: '' } }, 'query.domain'],
     [{ service: 'ls_ship', query: { topics: 'tm_a' } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: [] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { topics: [1, 2] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { topics: [null] } }, 'query.topics'],
     [{ service: 'ls_ship', query: { topics: ['tm_a', 2] } }, 'query.topics'],
-    [{ service: 'ls_ship', query: { identityKey: 1 } }, 'query.identityKey']
+    [{ service: 'ls_ship', query: { topics: ['tm_a', 'tm_a'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['ls_wrong'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm__x'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_x_'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_Color'] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: ['tm_' + 'a'.repeat(297)] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { topics: [`color_${assetId}`] } }, 'query.topics'],
+    [{ service: 'ls_ship', query: { identityKey: 1 } }, 'query.identityKey'],
+    [{ service: 'ls_ship', query: { identityKey: '02'.padEnd(66, '0') } }, 'query.identityKey'],
+    [{ service: 'ls_ship', query: { unexpected: true } }, 'unexpected field']
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
   })
 
-  it('accepts a zero limit and accurately reports the lower bound', async () => {
+  it('accepts BRC-207 per-asset topic names in topic filters', async () => {
+    const { service, storage } = makeService()
+    const topics = [`tm_color_${assetId}`, 'tm_uhrp_files', 'tm_' + 'a'.repeat(253)]
+
+    await service.lookup({ service: 'ls_ship', query: { topics } } as never)
+    expect(storage.findRecord).toHaveBeenLastCalledWith({
+      domain: undefined,
+      topics,
+      identityKey: undefined,
+      limit: 1000,
+      skip: 0,
+      sortOrder: 'desc'
+    })
+  })
+
+  it('treats a zero limit as an empty page instead of MongoDB no-limit', async () => {
     const { service, storage } = makeService()
 
-    await service.lookup({ service: 'ls_ship', query: { findAll: true, limit: 0 } } as never)
-    expect(storage.findAll).toHaveBeenLastCalledWith(0, undefined, undefined)
+    await expect(
+      service.lookup({ service: 'ls_ship', query: { findAll: true, limit: 0 } } as never)
+    ).resolves.toEqual([])
+    expect(storage.findAll).not.toHaveBeenCalled()
 
     await expect(
       service.lookup({ service: 'ls_ship', query: { limit: -1 } } as never)
-    ).rejects.toThrow('query.limit must be a non-negative number if provided')
+    ).rejects.toThrow('query.limit must be an integer from 0 to 1000')
+  })
+
+  it('rejects accessor-backed query objects without invoking their getter', async () => {
+    const { service } = makeService()
+    const getter = jest.fn(() => 'https://example.com')
+    const query = Object.defineProperty({}, 'domain', { enumerable: true, get: getter })
+
+    await expect(service.lookup({ service: 'ls_ship', query } as never)).rejects.toThrow(
+      'data properties'
+    )
+    expect(getter).not.toHaveBeenCalled()
   })
 
   it('preserves the plain Error contract for a non-object query', async () => {
@@ -243,20 +315,20 @@ describe('SHIP lookup service', () => {
       mode: 'locking-script',
       topic: 'tm_ship',
       lockingScript: wrongProtocol,
-      txid: 'wrong',
+      txid: '11'.repeat(32),
       outputIndex: 0
     } as never)
     await service.outputAdmittedByTopic({
       mode: 'locking-script',
       topic: 'tm_ship',
       lockingScript: valid,
-      txid: 'txid',
+      txid: '22'.repeat(32),
       outputIndex: 1
     } as never)
 
     expect(storage.storeSHIPRecord).toHaveBeenCalledTimes(1)
     expect(storage.storeSHIPRecord).toHaveBeenCalledWith(
-      'txid',
+      '22'.repeat(32),
       1,
       expect.any(String),
       'https://example.com',
@@ -275,14 +347,14 @@ describe('SHIP lookup service', () => {
     await service.outputSpent({
       mode: 'none',
       topic: 'tm_ship',
-      txid: 'spent',
+      txid: '33'.repeat(32),
       outputIndex: 2
     } as never)
-    await service.outputEvicted('evicted', 3)
+    await service.outputEvicted('44'.repeat(32), 3)
 
     expect(storage.deleteSHIPRecord).toHaveBeenCalledTimes(2)
-    expect(storage.deleteSHIPRecord).toHaveBeenNthCalledWith(1, 'spent', 2)
-    expect(storage.deleteSHIPRecord).toHaveBeenNthCalledWith(2, 'evicted', 3)
+    expect(storage.deleteSHIPRecord).toHaveBeenNthCalledWith(1, '33'.repeat(32), 2)
+    expect(storage.deleteSHIPRecord).toHaveBeenNthCalledWith(2, '44'.repeat(32), 3)
   })
 
   it('exposes documentation and metadata', async () => {
@@ -307,7 +379,7 @@ describe('SLAP lookup service', () => {
     const { service, storage } = makeService()
 
     await service.lookup({ service: 'ls_slap', query: 'findAll' } as never)
-    expect(storage.findAll).toHaveBeenLastCalledWith()
+    expect(storage.findAll).toHaveBeenLastCalledWith(1000, 0, 'desc')
 
     await service.lookup({
       service: 'ls_slap',
@@ -321,21 +393,24 @@ describe('SLAP lookup service', () => {
     } as never)
     expect(storage.findRecord).toHaveBeenLastCalledWith({
       domain: 'https://example.com',
-      limit: 3
+      limit: 3,
+      skip: 0,
+      sortOrder: 'desc'
     })
 
     await service.lookup({
       service: 'ls_slap',
       query: {
         service: 'ls_example',
-        identityKey: 'identity',
+        identityKey: validIdentityKey,
         skip: 2,
         sortOrder: 'asc'
       }
     } as never)
     expect(storage.findRecord).toHaveBeenLastCalledWith({
       service: 'ls_example',
-      identityKey: 'identity',
+      identityKey: validIdentityKey,
+      limit: 1000,
       skip: 2,
       sortOrder: 'asc'
     })
@@ -346,15 +421,40 @@ describe('SLAP lookup service', () => {
     [{ service: 'other', query: 'findAll' }, 'Lookup service not supported!'],
     [{ service: 'ls_slap', query: 1 }, 'Invalid query format'],
     [{ service: 'ls_slap', query: { limit: '1' } }, 'query.limit'],
+    [{ service: 'ls_slap', query: { limit: 1.5 } }, 'query.limit'],
+    [{ service: 'ls_slap', query: { limit: 1001 } }, 'query.limit'],
     [{ service: 'ls_slap', query: { skip: -1 } }, 'query.skip'],
     [{ service: 'ls_slap', query: { sortOrder: 'sideways' } }, 'query.sortOrder'],
+    [{ service: 'ls_slap', query: { findAll: 1 } }, 'query.findAll'],
     [{ service: 'ls_slap', query: { domain: 1 } }, 'query.domain'],
     [{ service: 'ls_slap', query: { service: 1 } }, 'query.service'],
-    [{ service: 'ls_slap', query: { identityKey: 1 } }, 'query.identityKey']
+    [{ service: 'ls_slap', query: { service: 'tm_wrong' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls__x' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_x_' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_Color' } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: 'ls_' + 'a'.repeat(297) } }, 'query.service'],
+    [{ service: 'ls_slap', query: { service: `color_${assetId}` } }, 'query.service'],
+    [{ service: 'ls_slap', query: { identityKey: 1 } }, 'query.identityKey'],
+    [{ service: 'ls_slap', query: { unexpected: true } }, 'unexpected field']
   ])('rejects invalid lookup question %#', async (question, message) => {
     const { service } = makeService()
     await expect(service.lookup(question as never)).rejects.toThrow(message)
   })
+
+  it.each([`ls_color_${assetId}`, 'ls_uhrp_files', 'ls_' + 'a'.repeat(253)])(
+    'accepts lookup service name %s in service filters',
+    async name => {
+      const { service, storage } = makeService()
+      await service.lookup({ service: 'ls_slap', query: { service: name } } as never)
+      expect(storage.findRecord).toHaveBeenLastCalledWith({
+        service: name,
+        limit: 1000,
+        skip: 0,
+        sortOrder: 'desc'
+      })
+    }
+  )
 
   it('preserves the plain Error contract for a non-object query', async () => {
     const { service } = makeService()
@@ -383,20 +483,20 @@ describe('SLAP lookup service', () => {
       mode: 'locking-script',
       topic: 'tm_slap',
       lockingScript: wrongProtocol,
-      txid: 'wrong',
+      txid: '55'.repeat(32),
       outputIndex: 0
     } as never)
     await service.outputAdmittedByTopic({
       mode: 'locking-script',
       topic: 'tm_slap',
       lockingScript: valid,
-      txid: 'txid',
+      txid: '66'.repeat(32),
       outputIndex: 1
     } as never)
 
     expect(storage.storeSLAPRecord).toHaveBeenCalledTimes(1)
     expect(storage.storeSLAPRecord).toHaveBeenCalledWith(
-      'txid',
+      '66'.repeat(32),
       1,
       expect.any(String),
       'https://example.com',
@@ -415,14 +515,14 @@ describe('SLAP lookup service', () => {
     await service.outputSpent({
       mode: 'none',
       topic: 'tm_slap',
-      txid: 'spent',
+      txid: '77'.repeat(32),
       outputIndex: 2
     } as never)
-    await service.outputEvicted('evicted', 3)
+    await service.outputEvicted('88'.repeat(32), 3)
 
     expect(storage.deleteSLAPRecord).toHaveBeenCalledTimes(2)
-    expect(storage.deleteSLAPRecord).toHaveBeenNthCalledWith(1, 'spent', 2)
-    expect(storage.deleteSLAPRecord).toHaveBeenNthCalledWith(2, 'evicted', 3)
+    expect(storage.deleteSLAPRecord).toHaveBeenNthCalledWith(1, '77'.repeat(32), 2)
+    expect(storage.deleteSLAPRecord).toHaveBeenNthCalledWith(2, '88'.repeat(32), 3)
   })
 
   it('exposes documentation and metadata', async () => {

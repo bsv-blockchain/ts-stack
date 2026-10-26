@@ -52,7 +52,41 @@ env:
   WAB_DIR: infra/wab
 
 jobs:
+  source:
+    name: Verify Marketplace source without publisher credentials
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify trusted release source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          git fetch origin main
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "::error::Manual Marketplace releases must run from main."
+              exit 1
+            fi
+          elif ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Marketplace release tags must point to a commit reachable from main."
+            exit 1
+          fi
+
+  full-mutation:
+    name: Qualify exact source before Marketplace publication
+    needs: source
+    permissions:
+      contents: read
+    uses: ./.github/workflows/mutation-tests.yml
+
   publish:
+    needs: [source, full-mutation]
+    if: needs.source.result == 'success' && needs.full-mutation.result == 'success' && needs.full-mutation.outputs.qualified-sha == github.sha
     name: Publish WAB to Marketplace
     runs-on: ubuntu-latest
     permissions:
@@ -64,6 +98,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.22.1'
+          package-manager-cache: false
 
       - name: Verify trusted release source
         env:
@@ -81,28 +120,35 @@ jobs:
           fi
 
       - name: Require WAB_MP_ROLE_ARN
+        env:
+          ROLE_ARN: ${{ vars.WAB_MP_ROLE_ARN }}
         run: |
-          if [ -z "${{ vars.WAB_MP_ROLE_ARN }}" ]; then
+          if [ -z "$ROLE_ARN" ]; then
             echo "::error::Repository variable WAB_MP_ROLE_ARN is not set. Create the seller-account OIDC role and set the var before running this workflow."
             exit 1
           fi
 
       - name: Resolve version from package.json
         id: ver
+        env:
+          VERSION_OVERRIDE: ${{ github.event.inputs.version_override }}
         run: |
           # The version name is ALWAYS package.json; the git tag is only the trigger (keep decoupled).
-          if [ -n "${{ github.event.inputs.version_override }}" ]; then
-            VERSION="${{ github.event.inputs.version_override }}"
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            VERSION="$VERSION_OVERRIDE"
           else
             VERSION="$(node -p "require('./${WAB_DIR}/package.json').version")"
           fi
-          [ -n "$VERSION" ] || { echo "No version found"; exit 1; }
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]{0,63})?$ ]]; then
+            echo "::error::Marketplace version must be a bounded semantic version."
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "title=v$VERSION" >> "$GITHUB_OUTPUT"
           echo "Resolved WAB version: $VERSION (Marketplace title: v$VERSION)"
 
       - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.WAB_MP_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -111,9 +157,10 @@ jobs:
       # Immutable Marketplace version titles must not be re-submitted on API/parse errors.
       - name: Skip if this version is already published
         id: exists
+        env:
+          TITLE: ${{ steps.ver.outputs.title }}
         run: |
           set -euo pipefail
-          TITLE="${{ steps.ver.outputs.title }}"
           # Use DetailsDocument (clean JSON). The legacy `Details` field returns non-strict JSON
           # (raw newlines in release notes) which breaks jq.
           DOC="$(aws marketplace-catalog describe-entity \
@@ -155,8 +202,11 @@ jobs:
       - name: Build image for security gate
         if: steps.exists.outputs.already == 'false'
         id: image
+        env:
+          CREATED: ${{ steps.source.outputs.created }}
+          SOURCE_DATE_EPOCH: ${{ steps.source.outputs.source_date_epoch }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
           LICENSE="$(jq -er --arg path "$WAB_DIR" \
             '.components[] | select(.path == $path) | .license' \
             governance/container-images.json)"
@@ -165,8 +215,8 @@ jobs:
             --platform linux/amd64 \
             --build-arg "APP_COMMIT=${GITHUB_SHA}" \
             --build-arg "APP_VERSION=${VERSION}" \
-            --build-arg "SOURCE_DATE_EPOCH=${{ steps.source.outputs.source_date_epoch }}" \
-            --label "org.opencontainers.image.created=${{ steps.source.outputs.created }}" \
+            --build-arg "SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}" \
+            --label "org.opencontainers.image.created=${CREATED}" \
             --label "org.opencontainers.image.title=Wallet Authentication Backend" \
             --label "org.opencontainers.image.description=Multi-factor authentication backend for BSV wallets" \
             --label "org.opencontainers.image.vendor=BSV Blockchain" \
@@ -196,7 +246,7 @@ jobs:
 
       - name: Generate SPDX image SBOM
         if: steps.exists.outputs.already == 'false'
-        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: ${{ steps.image.outputs.image }}
           format: spdx-json
@@ -233,14 +283,14 @@ jobs:
       # digest instead.
       - name: Attest Marketplace build provenance
         if: steps.exists.outputs.already == 'false'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.MP_ECR_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.MP_ECR_REPO }}
           subject-digest: ${{ steps.push.outputs.digest }}
 
       - name: Attest Marketplace SPDX SBOM
         if: steps.exists.outputs.already == 'false'
-        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-name: ${{ env.MP_ECR_ACCOUNT }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.MP_ECR_REPO }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -286,9 +336,10 @@ jobs:
       - name: Register new version on the listing (AddDeliveryOptions)
         if: steps.exists.outputs.already == 'false'
         id: changeset
+        env:
+          TITLE: ${{ steps.ver.outputs.title }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
-          VERSION="${{ steps.ver.outputs.version }}"
-          TITLE="${{ steps.ver.outputs.title }}"
           IMAGE="${MP_ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/${MP_ECR_REPO}:${VERSION}"
 
           # DeliveryOptionTitle and CompatibleServices match the live listing (verified via
@@ -326,9 +377,10 @@ jobs:
 
       - name: Wait for change set to settle (scan can take minutes–hours)
         if: steps.exists.outputs.already == 'false'
+        env:
+          CS_ID: ${{ steps.changeset.outputs.change_set_id }}
         run: |
           set -euo pipefail
-          CS_ID="${{ steps.changeset.outputs.change_set_id }}"
           [ -n "$CS_ID" ] || { echo "No change_set_id from previous step"; exit 1; }
           for i in $(seq 1 60); do
             STATUS=$(aws marketplace-catalog describe-change-set \

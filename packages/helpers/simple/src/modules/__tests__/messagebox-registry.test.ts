@@ -11,15 +11,20 @@ jest.mock('@bsv/message-box-client', () => ({
 const IDENTITY_KEY = '030dbed53c3613c887ad36e8bde365c2e58f6196735a589cd09d6bc316fa550df4'
 const REGISTRY_URL = 'https://registry.example/api'
 
-function jsonResponse(value: unknown): Response {
-  return { json: jest.fn().mockResolvedValue(value) } as unknown as Response
+function jsonResponse(value: unknown, status = 200, headers?: Record<string, string>): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { 'Content-Type': 'application/json', ...Object.fromEntries(new Headers(headers)) }
+  })
 }
 
-function createCore(): WalletCore {
+function createCore(defaultOverrides: Record<string, unknown> = {}): WalletCore {
   return {
     defaults: {
       messageBoxHost: 'https://messagebox.example',
-      registryUrl: REGISTRY_URL
+      registryUrl: REGISTRY_URL,
+      registryFetch: async (...args: Parameters<typeof fetch>) => await globalThis.fetch(...args),
+      ...defaultOverrides
     },
     getClient: jest.fn().mockReturnValue({}),
     getIdentityKey: jest.fn().mockReturnValue(IDENTITY_KEY)
@@ -43,10 +48,8 @@ describe('MessageBox identity-registry methods', () => {
     expect(PeerPayClient).toHaveBeenCalledWith(
       expect.objectContaining({ messageBoxHost: 'https://messagebox.example' })
     )
-    expect(fetch).toHaveBeenCalledWith(
-      `${REGISTRY_URL}?action=register`,
-      expect.objectContaining({ method: 'POST' })
-    )
+    expect(jest.mocked(fetch).mock.calls[0][0].toString()).toBe(`${REGISTRY_URL}?action=register`)
+    expect(jest.mocked(fetch).mock.calls[0][1]).toEqual(expect.objectContaining({ method: 'POST' }))
   })
 
   it('returns the first registered MessageBox handle', async () => {
@@ -58,8 +61,11 @@ describe('MessageBox identity-registry methods', () => {
     const methods = createMessageBoxMethods(createCore())
 
     await expect(methods.getMessageBoxHandle()).resolves.toBe('alice')
-    expect(fetch).toHaveBeenCalledWith(
+    expect(jest.mocked(fetch).mock.calls[0][0].toString()).toBe(
       `${REGISTRY_URL}?action=list&identityKey=${encodeURIComponent(IDENTITY_KEY)}`
+    )
+    expect(jest.mocked(fetch).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ redirect: 'error', signal: expect.any(AbortSignal) })
     )
   })
 
@@ -85,9 +91,8 @@ describe('MessageBox identity-registry methods', () => {
 
     await expect(methods.revokeMessageBoxCertification()).resolves.toBeUndefined()
     expect(fetch).toHaveBeenCalledTimes(3)
-    expect(fetch).toHaveBeenNthCalledWith(
-      2,
-      `${REGISTRY_URL}?action=revoke`,
+    expect(jest.mocked(fetch).mock.calls[1][0].toString()).toBe(`${REGISTRY_URL}?action=revoke`)
+    expect(jest.mocked(fetch).mock.calls[1][1]).toEqual(
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ tag: 'alice', identityKey: IDENTITY_KEY })
@@ -95,11 +100,13 @@ describe('MessageBox identity-registry methods', () => {
     )
   })
 
-  it('does not revoke certifications when the registry list fails', async () => {
+  it('does not report successful revocation when the registry list fails', async () => {
     jest.mocked(fetch).mockResolvedValue(jsonResponse({ success: false }))
     const methods = createMessageBoxMethods(createCore())
 
-    await expect(methods.revokeMessageBoxCertification()).resolves.toBeUndefined()
+    await expect(methods.revokeMessageBoxCertification()).rejects.toThrow(
+      'MessageBox revocation failed: Registry list failed'
+    )
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
@@ -130,5 +137,67 @@ describe('MessageBox identity-registry methods', () => {
       { tag: 'alice@bsv', createdAt: '2026-07-26T00:00:00.000Z' }
     ])
     await expect(methods.revokeIdentityTag('alice@bsv')).resolves.toBeUndefined()
+  })
+
+  it('rejects truthy non-boolean operation verdicts and HTTP failures', async () => {
+    const methods = createMessageBoxMethods(createCore())
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ success: 'false', tag: 'alice' }))
+
+    await expect(methods.registerIdentityTag('alice')).rejects.toThrow('Registration failed')
+
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ success: true, tag: 'alice' }, 500))
+    await expect(methods.registerIdentityTag('alice')).rejects.toThrow('Registry returned HTTP 500')
+  })
+
+  it('rejects malformed and oversized lookup results', async () => {
+    const methods = createMessageBoxMethods(createCore())
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true, results: [{ tag: 'alice', identityKey: 'not-a-key' }] })
+      )
+
+    await expect(methods.lookupIdentityByTag('alice')).rejects.toThrow(
+      'Registry identityKey must be a compressed public key'
+    )
+
+    jest.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
+        success: true,
+        results: Array.from({ length: 257 }, () => ({ tag: 'alice', identityKey: IDENTITY_KEY }))
+      })
+    )
+    await expect(methods.lookupIdentityByTag('alice')).rejects.toThrow(
+      'Registry returned a malformed lookup collection'
+    )
+
+    jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ success: true, results: [null] }))
+    await expect(methods.lookupIdentityByTag('alice')).rejects.toThrow(
+      'Registry returned a malformed lookup row'
+    )
+  })
+
+  it('rejects declared oversized registry responses before consuming the body', async () => {
+    const methods = createMessageBoxMethods(createCore())
+    jest
+      .mocked(fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({ success: true }, 200, { 'Content-Length': String(256 * 1024 + 1) })
+      )
+
+    await expect(methods.registerIdentityTag('alice')).rejects.toThrow(
+      'Registry response exceeds the configured limit'
+    )
+  })
+
+  it('rejects private registry destinations unless an explicit trusted transport is supplied', async () => {
+    const methods = createMessageBoxMethods(
+      createCore({ registryUrl: 'https://127.0.0.1/private-registry', registryFetch: undefined })
+    )
+
+    await expect(methods.registerIdentityTag('alice')).rejects.toThrow(
+      'Restricted HTTPS request targets a non-public address'
+    )
+    expect(fetch).not.toHaveBeenCalled()
   })
 })

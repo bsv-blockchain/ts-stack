@@ -106,8 +106,16 @@ export type PubKeyHex = HexString // NOSONAR
 export type Base64String = string // NOSONAR
 
 /**
+ * @typedef {string} DecimalString
+ * A canonical nonnegative decimal integer, matching `0|[1-9][0-9]*`, with no upper bound.
+ */
+export type DecimalString = string // NOSONAR
+
+/**
  * @typedef {string} OriginatorDomainNameStringUnder250Bytes
  * Represents the fully qualified domain name (FQDN) of the application that originates the request.
+ * An optional numeric port is accepted at wallet boundaries for compatibility,
+ * but all ports on the same hostname share one originator permission scope.
  */
 export type OriginatorDomainNameStringUnder250Bytes = string // NOSONAR
 
@@ -209,7 +217,7 @@ export type WalletNetwork = 'mainnet' | 'testnet'
 export enum SecurityLevels {
   Silent = 0,
   App = 1,
-  Counterparty = 2,
+  Counterparty = 2
 }
 
 /**
@@ -286,10 +294,10 @@ export interface CreateActionOutput {
  * @param {BooleanDefaultTrue} [acceptDelayedBroadcast] - Optional. If true, the transaction will be sent to the network by a background process; use `noSend` and `sendWith` options to batch chained transactions. If false, the transaction will be broadcast to the network and any errors returned in result; note that rapidly sent chained transactions may still fail due to network propagation delays.
  * @param {'known'} [trustSelf] - Optional. If `known`, input transactions may omit supporting validity proof data for TXIDs known to this wallet.
  * @param {TXIDHexString[]} [knownTxids] - Optional. When working with large chained transactions using `noSend` and `sendWith` options, include TXIDs of inputs that may be assumed to be valid even if not already known by this wallet.
- * @param {BooleanDefaultFalse} [returnTXIDOnly] - Optional. If true, only a TXID will be returned instead of a transaction.
+ * @param {BooleanDefaultFalse} [returnTXIDOnly] - Optional. If true, only a TXID will be returned instead of a transaction. This deliberately omits the transaction evidence a caller would otherwise use to verify that the wallet preserved the requested inputs, outputs, version, and lock time. Applications that require that proof must not enable this option. It can reduce latency and transfer work in performance-critical paths, but accepting the selected wallet and transport without transaction evidence is the caller's explicit tradeoff.
  * @param {BooleanDefaultFalse} [noSend] - Optional. If true, the transaction will be constructed but not sent to the network. Supports the creation of chained batches of transactions using the `sendWith` option.
  * @param {OutPoint[]} [noSendChange] - Optional. Valid when `noSend` is true. May contain `noSendChange` outpoints previously returned by prior `noSend` actions in the same batch of chained actions.
- * @param {TXIDHexString[]} [sendWith] - Optional. Sends a batch of actions previously created as `noSend` actions to the network; either synchronously if `acceptDelayedBroadcast` is true or by a background process.
+ * @param {TXIDHexString[]} [sendWith] - Optional. Sends a batch of actions previously created as `noSend` actions to the network; synchronously if `acceptDelayedBroadcast` is false or by a background process if true. One atomic broadcast set may contain at most 1,000 unique transactions; when this call also creates a transaction, `sendWith` may contain at most 999 because the new transaction joins the same set.
  * @param {BooleanDefaultTrue} [randomizeOutputs] — optional. When set to false, the wallet will avoid randomizing the order of outputs within the transaction.
  */
 export interface CreateActionOptions {
@@ -323,6 +331,9 @@ export interface SendWithResult {
 export type ReviewActionResultStatus = 'success' | 'doubleSpend' | 'serviceError' | 'invalidTx'
 
 export interface ReviewActionResult {
+  /** Empty only when storage detects an explicit-input double spend before construction.
+   * Structured JSON consumers must bind the competing evidence to the request.
+   */
   txid: TXIDHexString
   status: ReviewActionResultStatus
   /**
@@ -364,7 +375,9 @@ export interface CreateActionResult {
    * tx binary (e.g. `Transaction.fromBinary(tx)`) will fail or produce a
    * transaction with empty `sourceTransaction` on every input.
    *
-   * Absent when `options.returnTXIDOnly === true`.
+   * Absent only when `options.returnTXIDOnly === true`. Retaining the default
+   * full result lets SDK wallet boundaries bind the committed transaction to
+   * every caller-requested input, output, sequence, version, and lock time.
    */
   tx?: AtomicBEEF
   noSendChange?: OutpointString[]
@@ -406,9 +419,9 @@ export interface SignActionSpend {
  * @param {BooleanDefaultTrue} [acceptDelayedBroadcast] - Optional. If true, transaction will be sent to the network by a background process; use `noSend` and `sendWith` options to batch chained transactions. If false, transaction will be broadcast to the network and any errors returned in result; note that rapidly sent chained transactions may still fail due to network propagation delays.
  * @param {'known'} [trustSelf] - Optional. If `known`, input transactions may omit supporting validity proof data for TXIDs known to this wallet or included in `knownTxids`.
  * @param {TXIDHexString[]} [knownTxids] - Optional. When working with large chained transactions using `noSend` and `sendWith` options, include TXIDs of inputs that may be assumed to be valid even if not already known by this wallet.
- * @param {BooleanDefaultFalse} [returnTXIDOnly] - Optional. If true, only a TXID will be returned instead of a transaction.
+ * @param {BooleanDefaultFalse} [returnTXIDOnly] - Optional. If true, only a TXID will be returned instead of a transaction. This deliberately omits the transaction evidence needed to compare the signed transaction with the previously authorized template; use it only when the wallet and transport are fully trusted for final transaction selection.
  * @param {BooleanDefaultFalse} [noSend] - Optional. If true, the transaction will be constructed but not sent to the network. Supports the creation of chained batches of transactions using the `sendWith` option.
- * @param {TXIDHexString[]} [sendWith] - Optional. Sends a batch of actions previously created as `noSend` actions to the network; either synchronously if `acceptDelayedBroadcast` is true or by a background process.
+ * @param {TXIDHexString[]} [sendWith] - Optional. Sends a batch of actions previously created as `noSend` actions to the network; synchronously if `acceptDelayedBroadcast` is false or by a background process if true. One atomic broadcast set may contain at most 1,000 unique transactions; `sendWith` may contain at most 999 because the signed transaction joins the same set.
  */
 export interface SignActionOptions {
   acceptDelayedBroadcast?: BooleanDefaultTrue
@@ -468,11 +481,11 @@ export type AcquireCertificateResult = WalletCertificate
 /**
  * @param {LabelStringUnder300Bytes[]} labels - An array of labels used to filter actions.
  * @param {'any' | 'all'} [labelQueryMode] - Specifies how to match labels (default is any which matches any of the labels).
- * @param {BooleanDefaultFalse} [includeLabels] - Whether to include transaction labels in the result set.
- * @param {BooleanDefaultFalse} [includeInputs] - Whether to include input details in the result set.
+ * @param {BooleanDefaultFalse} [includeLabels] - Whether to include transaction labels in the result set. Set this to true whenever local security/accounting logic must independently verify a nonempty `labels` filter; otherwise the wallet's filtered answer is authoritative because the result contains no label evidence.
+ * @param {BooleanDefaultFalse} [includeInputs] - Whether to include input details in the result set. When true, shared substrate validation rejects an action that omits its input array.
  * @param {BooleanDefaultFalse} [includeInputSourceLockingScripts] - Whether to include input source locking scripts in the result set.
  * @param {BooleanDefaultFalse} [includeInputUnlockingScripts] - Whether to include input unlocking scripts in the result set.
- * @param {BooleanDefaultFalse} [includeOutputs] - Whether to include output details in the result set.
+ * @param {BooleanDefaultFalse} [includeOutputs] - Whether to include output details in the result set. When true, shared substrate validation rejects an action that omits its output array.
  * @param {BooleanDefaultFalse} [includeOutputLockingScripts] - Whether to include output locking scripts in the result set.
  * @param {PositiveIntegerDefault10Max10000} [limit] - The maximum number of transactions to retrieve.
  * @param {PositiveIntegerOrZero} [offset] - Number of transactions to skip before starting to return the results.
@@ -497,6 +510,7 @@ export interface WalletActionInput {
   sourceSatoshis: SatoshiValue
   sourceLockingScript?: HexString
   unlockingScript?: HexString
+  /** Stored history may use an empty string when no display description was recorded. */
   inputDescription: DescriptionString5to50Bytes
   sequenceNumber: PositiveIntegerOrZero
 }
@@ -504,20 +518,24 @@ export interface WalletActionInput {
 export interface WalletActionOutput {
   satoshis: SatoshiValue
   lockingScript?: HexString
+  /** Basket outputs are spendable by definition; `false` is not a valid basket result. */
   spendable: boolean
   customInstructions?: string
 
   tags: OutputTagStringUnder300Bytes[]
 
   outputIndex: PositiveIntegerOrZero
+  /** Stored history may use an empty string when no display description was recorded. */
   outputDescription: DescriptionString5to50Bytes
 
+  /** Empty when the historical output was not assigned to a basket. */
   basket: BasketStringUnder300Bytes
 }
 
 export interface WalletOutput {
   satoshis: SatoshiValue
   lockingScript?: HexString
+  /** Basket outputs are spendable by definition; `false` is not a valid `listOutputs` result. */
   spendable: boolean
   customInstructions?: string
 
@@ -533,6 +551,7 @@ export interface WalletAction {
   satoshis: SatoshiValue
   status: ActionStatus
   isOutgoing: boolean
+  /** Stored history may use an empty string when no display description was recorded. */
   description: DescriptionString5to50Bytes
   labels?: LabelStringUnder300Bytes[]
   version: PositiveIntegerOrZero
@@ -601,14 +620,14 @@ export interface InternalizeActionResult {
 }
 
 /**
- * @param {BasketStringUnder300Bytes} basket - The associated basket name whose outputs should be listed.
- * @param {OutputTagStringUnder300Bytes[]} [tags] - Filter outputs based on these tags.
+ * @param {BasketStringUnder300Bytes} basket - The associated basket name whose outputs should be listed. Basket membership is wallet-owned local metadata and is not repeated in `WalletOutput`; callers must trust the selected wallet for this filter.
+ * @param {OutputTagStringUnder300Bytes[]} [tags] - Filter outputs based on these tags. Set `includeTags` to true whenever local logic must independently verify the filter.
  * @param {'all' | 'any'} [tagQueryMode] - Filter mode, defining whether all or any of the tags must match. By default, any tag can match.
  * @param {'locking scripts' | 'entire transactions'} [include] - Whether to include locking scripts (with each output) or entire transactions (as aggregated BEEF, at the top level) in the result. By default, unless specified, neither are returned.
  * @param {BooleanDefaultFalse} [includeEntireTransactions] - Whether to include the entire transaction(s) in the result.
- * @param {BooleanDefaultFalse} [includeCustomInstructions] - Whether custom instructions should be returned in the result.
- * @param {BooleanDefaultFalse} [includeTags] - Whether the tags associated with the output should be returned.
- * @param {BooleanDefaultFalse} [includeLabels] - Whether the labels associated with the transaction containing the output should be returned.
+ * @param {BooleanDefaultFalse} [includeCustomInstructions] - Whether custom instructions should be returned in the result. The current optional result field cannot distinguish "none stored" from a wallet omitting them; security-sensitive consumers must use a trusted wallet or separately authenticate the instruction payload.
+ * @param {BooleanDefaultFalse} [includeTags] - Whether the tags associated with the output should be returned. When true, shared substrate validation requires an explicit array and can verify a requested tag query.
+ * @param {BooleanDefaultFalse} [includeLabels] - Whether the labels associated with the transaction containing the output should be returned. When true, shared substrate validation requires an explicit array.
  * @param {PositiveIntegerDefault10Max10000} [limit] - Optional limit on the number of outputs to return.
  * @param {number} [offset] - If positive or zero: Number of outputs to skip before starting to return results, oldest first.
  * If negative: Outputs are returned newest first and offset of -1 is the newest output.
@@ -629,8 +648,12 @@ export interface ListOutputsArgs {
   seekPermission?: BooleanDefaultTrue
 }
 
+/**
+ * @param totalOutputs - The number of matching outputs. For a BRC-112 module balance query
+ * (`p <module> balance <basket>`) it is instead the exact balance as a `DecimalString`, with no outputs and no BEEF.
+ */
 export interface ListOutputsResult {
-  totalOutputs: PositiveIntegerOrZero
+  totalOutputs: PositiveIntegerOrZero | DecimalString
   BEEF?: BEEF
   outputs: WalletOutput[]
 }
@@ -711,6 +734,11 @@ export interface KeyLinkageResult {
   encryptedLinkageProof: Byte[]
   prover: PubKeyHex
   verifier: PubKeyHex
+  /**
+   * The resolved compressed public key, never the symbolic request value. For
+   * `revealSpecificKeyLinkage`, `self` resolves to `prover` and `anyone`
+   * resolves to the canonical public key of private key 1.
+   */
   counterparty: PubKeyHex
 }
 
@@ -834,10 +862,20 @@ export interface AcquireCertificateArgs {
 }
 
 export interface WalletCertificate {
+  /** Exactly 32 decoded bytes for new acquisition; existing operations also support bounded historical types. */
   type: Base64String
   subject: PubKeyHex
   serialNumber: Base64String
   certifier: PubKeyHex
+  /**
+   * Token outpoint whose spend revokes the certificate. Certificate signature
+   * verification checks the supplied certificate data but does not query this
+   * outpoint or establish its current unspent state. A caller that trusts the
+   * certifier to provide the correct revocation outpoint may accept that trust
+   * boundary. A caller that does not must independently establish both that the
+   * outpoint is the applicable revocation token and that it is currently
+   * unspent before treating the certificate as current authorization.
+   */
   revocationOutpoint: OutpointString
   signature: HexString
   fields: Record<CertificateFieldNameUnder50Bytes, string>
@@ -852,10 +890,7 @@ export interface IdentityCertifier {
 
 export interface IdentityCertificate extends WalletCertificate {
   certifierInfo: IdentityCertifier
-  publiclyRevealedKeyring: Record<
-  CertificateFieldNameUnder50Bytes,
-  Base64String
-  >
+  publiclyRevealedKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>
   decryptedFields: Record<CertificateFieldNameUnder50Bytes, string>
 }
 
@@ -927,6 +962,10 @@ export interface AuthenticatedResult {
 }
 
 export interface GetHeightResult {
+  /**
+   * The selected wallet's current chain-height assertion. This value is not a
+   * self-authenticating proof of active-chain state.
+   */
   height: PositiveInteger
 }
 
@@ -938,10 +977,16 @@ export interface GetHeaderArgs {
 }
 
 export interface GetHeaderResult {
+  /**
+   * Exactly 80 serialized header bytes supplied by the selected wallet. A
+   * header does not encode its height, so this result alone does not prove
+   * membership at the requested height or on the active network chain.
+   */
   header: HexString
 }
 
 export interface GetNetworkResult {
+  /** The selected wallet's network assertion, not independent chain evidence. */
   network: WalletNetwork
 }
 

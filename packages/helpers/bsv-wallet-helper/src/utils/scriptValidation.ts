@@ -1,4 +1,5 @@
-import { LockingScript, Script, Utils } from '@bsv/sdk'
+import { toArray, toBase64, toUTF8 } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP, Script } from '@bsv/sdk'
 import { ORDINAL_MAP_PREFIX } from './constants'
 
 /** Accepted input types for script validation functions. */
@@ -13,15 +14,86 @@ const SCRIPT_TEMPLATES = {
     prefix: '76a914',
     suffix: '88ac',
     hashLength: 20
-  },
-  ordinalEnvelope: {
-    // OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0 (BSV-20 standard)
-    start: '0063036f726451126170706c69636174696f6e2f6273762d323000'
-  },
-  opReturn: {
-    // OP_RETURN opcode
-    opcode: '6a'
   }
+}
+
+const ORD_BYTES = toArray('ord')
+
+function parsedChunks(input: ScriptInput): Script['chunks'] {
+  return (typeof input === 'string' ? Script.fromHex(input) : input).chunks
+}
+
+function dataEquals(actual: number[] | undefined, expected: number[]): boolean {
+  return (
+    actual?.length === expected.length && actual.every((byte, index) => byte === expected[index])
+  )
+}
+
+function isOrdinalHeaderAt(chunks: Script['chunks'], start: number): boolean {
+  return (
+    chunks[start]?.op === OP.OP_0 &&
+    chunks[start + 1]?.op === OP.OP_IF &&
+    dataEquals(chunks[start + 2]?.data, ORD_BYTES) &&
+    chunks[start + 3]?.op === OP.OP_1 &&
+    chunks[start + 4]?.data != null &&
+    chunks[start + 4].data!.length > 0 &&
+    chunks[start + 5]?.op === OP.OP_0
+  )
+}
+
+function matchingEndif(chunks: Script['chunks'], start: number): number | undefined {
+  let depth = 1
+  for (let index = start + 2; index < chunks.length; index++) {
+    if (chunks[index].op === OP.OP_IF || chunks[index].op === OP.OP_NOTIF) depth++
+    if (chunks[index].op === OP.OP_ENDIF) depth--
+    if (depth === 0) return index
+  }
+  return undefined
+}
+
+function findOrdinalHeader(chunks: Script['chunks']): number | undefined {
+  for (let start = 0; start <= chunks.length - 6; start++) {
+    if (isOrdinalHeaderAt(chunks, start)) return start
+  }
+  return undefined
+}
+
+function findOrdinalEnvelope(chunks: Script['chunks']): { start: number; end: number } | undefined {
+  for (let start = 0; start <= chunks.length - 8; start++) {
+    if (!isOrdinalHeaderAt(chunks, start)) continue
+    const end = matchingEndif(chunks, start)
+    const standardData = chunks[start + 6]?.data
+    if (end === start + 7 && standardData != null && standardData.length > 0) {
+      return { start, end }
+    }
+    const extendedData = chunks[start + 8]?.data
+    if (
+      end === start + 9 &&
+      standardData != null &&
+      standardData.length > 0 &&
+      chunks[start + 7]?.op === OP.OP_0 &&
+      extendedData != null &&
+      extendedData.length > 0
+    ) {
+      return { start, end }
+    }
+  }
+  return undefined
+}
+
+function hasP2PKHSequence(chunks: Script['chunks'], afterIndex: number): boolean {
+  for (let index = afterIndex + 1; index <= chunks.length - 5; index++) {
+    if (
+      chunks[index].op === OP.OP_DUP &&
+      chunks[index + 1].op === OP.OP_HASH160 &&
+      chunks[index + 2].data?.length === 20 &&
+      chunks[index + 3].op === OP.OP_EQUALVERIFY &&
+      chunks[index + 4].op === OP.OP_CHECKSIG
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 /**
@@ -191,19 +263,9 @@ export function isOrdinal(input: ScriptInput): boolean {
   validateInput(input, 'isOrdinal')
 
   try {
-    const hex = typeof input === 'string' ? input : scriptToHex(input)
-
-    // Must contain ordinal envelope
-    if (!hasOrd(hex)) {
-      return false
-    }
-
-    // Must end with P2PKH pattern (OP_DUP OP_HASH160 <20 bytes> OP_EQUALVERIFY OP_CHECKSIG)
-    // Find the P2PKH pattern: 76a914[20 bytes]88ac
-    const p2pkhPattern = /76a914[0-9a-fA-F]{40}88ac/
-    const hasP2PKH = p2pkhPattern.test(hex)
-
-    return hasP2PKH
+    const chunks = parsedChunks(input)
+    const envelope = findOrdinalEnvelope(chunks)
+    return envelope !== undefined && hasP2PKHSequence(chunks, envelope.end)
   } catch {
     // Malformed or unrecognised script bytes — treat as non-ordinal rather than throwing.
     return false
@@ -253,12 +315,7 @@ export function hasOrd(input: ScriptInput): boolean {
   validateInput(input, 'hasOrd')
 
   try {
-    const hex = typeof input === 'string' ? input : scriptToHex(input)
-    const { start } = SCRIPT_TEMPLATES.ordinalEnvelope
-
-    // Check if the hex contains the ordinal envelope start pattern
-    // OP_0 OP_IF 'ord' = 0063036f7264
-    return hex.includes(start)
+    return findOrdinalEnvelope(parsedChunks(input)) !== undefined
   } catch {
     // Malformed or unrecognised script bytes — treat as no-ord rather than throwing.
     return false
@@ -303,42 +360,7 @@ export function hasOpReturnData(input: ScriptInput): boolean {
   validateInput(input, 'hasOpReturnData')
 
   try {
-    if (typeof input === 'string') {
-      // For hex strings, check if OP_RETURN opcode (0x6a) exists at any opcode position
-      // We need to be more sophisticated than just checking if '6a' appears anywhere
-
-      // First try to parse as a script and check ASM
-      try {
-        const script = Script.fromHex(input)
-        const asm = script.toASM()
-        if (asm.includes('OP_RETURN')) {
-          return true
-        }
-      } catch {
-        // Parsing failed — fall through to heuristic opcode scan below.
-      }
-
-      // Manual check: look for '6a' opcode in the hex string
-      // We check if '6a' appears at the start or after a space-equivalent position
-      // This is a heuristic check for the common case where scripts are concatenated
-      if (input.startsWith('6a')) {
-        return true // Starts with OP_RETURN
-      }
-
-      // Check for OP_RETURN after other opcodes
-      // Common patterns: ...88ac6a... (P2PKH followed by OP_RETURN)
-      // We look for specific terminating opcodes followed by '6a'
-      const patterns = [
-        /88ac6a/, // OP_CHECKSIG followed by OP_RETURN
-        /686a/, // OP_ENDIF followed by OP_RETURN
-        /ae6a/ // OP_CHECKMULTISIG followed by OP_RETURN
-      ]
-
-      return patterns.some(pattern => pattern.test(input))
-    } else {
-      // For Script objects, use ASM which clearly identifies OP_RETURN as an opcode
-      return input.toASM().includes('OP_RETURN')
-    }
+    return parsedChunks(input).some(chunk => chunk.op === OP.OP_RETURN)
   } catch {
     // Malformed or unrecognised script bytes — treat as no-OP_RETURN rather than throwing.
     return false
@@ -439,26 +461,26 @@ function requiredInscriptionData(
   return data
 }
 
-function inscriptionContentType(chunks: Script['chunks']): string {
-  const data = requiredInscriptionData(chunks, 6, 'content type data')
-  return Utils.toUTF8(data)
+function inscriptionContentType(chunks: Script['chunks'], index: number): string {
+  const data = requiredInscriptionData(chunks, index, 'content type data')
+  return toUTF8(data)
 }
 
 function inscriptionDataB64(chunks: Script['chunks'], index: number): string {
   return Buffer.from(requiredInscriptionData(chunks, index, 'inscription data')).toString('base64')
 }
 
-function parseFullInscription(chunks: Script['chunks']): InscriptionData {
+function parseFullInscription(chunks: Script['chunks'], start: number): InscriptionData {
   return {
-    contentType: inscriptionContentType(chunks),
-    dataB64: inscriptionDataB64(chunks, 8)
+    contentType: inscriptionContentType(chunks, start + 6),
+    dataB64: inscriptionDataB64(chunks, start + 8)
   }
 }
 
-function parseShortInscription(chunks: Script['chunks']): InscriptionData {
+function parseStandardInscription(chunks: Script['chunks'], start: number): InscriptionData {
   return {
-    contentType: 'application/octet-stream',
-    dataB64: inscriptionDataB64(chunks, 6)
+    contentType: inscriptionContentType(chunks, start + 4),
+    dataB64: inscriptionDataB64(chunks, start + 6)
   }
 }
 
@@ -502,8 +524,8 @@ export function extractInscriptionData(input: ScriptInput): InscriptionData | nu
   const script = typeof input === 'string' ? Script.fromHex(input) : input
   const chunks = script.chunks
 
-  // Check if this has an ordinal envelope
-  if (!hasOrd(input)) {
+  const start = findOrdinalHeader(chunks)
+  if (start === undefined) {
     return null // No ordinal envelope, not an error
   }
 
@@ -530,16 +552,16 @@ export function extractInscriptionData(input: ScriptInput): InscriptionData | nu
   // 7: OP_ENDIF (0x68)
 
   // Find OP_ENDIF to determine where the envelope ends
-  const endifIndex = chunks.findIndex(chunk => chunk.op === 0x68) // OP_ENDIF
-  if (endifIndex === -1) {
+  const endifIndex = matchingEndif(chunks, start)
+  if (endifIndex === undefined) {
     throw new Error('extractInscriptionData: Malformed ordinal script - missing OP_ENDIF')
   }
 
-  if (endifIndex === 9) {
-    return parseFullInscription(chunks)
+  if (endifIndex === start + 9) {
+    return parseFullInscription(chunks, start)
   }
-  if (endifIndex === 7) {
-    return parseShortInscription(chunks)
+  if (endifIndex === start + 7) {
+    return parseStandardInscription(chunks, start)
   }
   throw new Error(
     `extractInscriptionData: Unexpected OP_ENDIF position at index ${endifIndex}. Expected 7 (without content type) or 9 (with content type)`
@@ -561,7 +583,7 @@ function decodeMapChunk(
 ): string | null {
   if (chunk?.data == null || chunk.data.length === 0) return null
   try {
-    return Utils.toUTF8(chunk.data)
+    return toUTF8(chunk.data)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     throw new Error(`extractMapMetadata: Invalid UTF-8 in ${description}: ${message}`)
@@ -572,14 +594,28 @@ function parseMapKeyValuePairs(
   chunks: Array<{ data?: number[] }>,
   startIndex: number
 ): Record<string, string> {
-  const metadata: Record<string, string> = {}
-  for (let index = startIndex; index < chunks.length - 1; index += 2) {
+  if ((chunks.length - startIndex) % 2 !== 0) {
+    throw new Error('extractMapMetadata: MAP metadata must contain complete key-value pairs')
+  }
+  const metadata = Object.create(null) as Record<string, string>
+  for (let index = startIndex; index < chunks.length; index += 2) {
     const keyChunk = chunks[index]
     const valueChunk = chunks[index + 1]
-    if (keyChunk?.data == null || valueChunk?.data == null) break
+    if (keyChunk?.data == null || valueChunk?.data == null) {
+      throw new Error('extractMapMetadata: MAP keys and values must be pushed data')
+    }
     const key = decodeMapChunk(keyChunk, 'metadata key-value pair')
     const value = decodeMapChunk(valueChunk, 'metadata key-value pair')
-    if (key != null && value != null) metadata[key] = value
+    if (key == null || value == null) {
+      throw new Error('extractMapMetadata: MAP keys and values must not be empty')
+    }
+    if (key === '__proto__' || key === 'prototype' || key === 'constructor') {
+      throw new Error(`extractMapMetadata: Unsafe metadata key "${key}"`)
+    }
+    if (Object.prototype.hasOwnProperty.call(metadata, key)) {
+      throw new Error(`extractMapMetadata: Duplicate metadata key "${key}"`)
+    }
+    metadata[key] = value
   }
   return metadata
 }
@@ -715,7 +751,7 @@ export function extractOpReturnData(input: ScriptInput): string[] | null {
     const chunk = chunks[i]
     if (chunk.data != null && chunk.data.length > 0) {
       // Convert byte array to base64 string
-      dataFields.push(Utils.toBase64(chunk.data))
+      dataFields.push(toBase64(chunk.data))
     }
   }
 

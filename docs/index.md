@@ -3,8 +3,8 @@ id: home
 title: ts-stack
 kind: meta
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: []
@@ -22,6 +22,14 @@ This repository is the TypeScript reference stack for BSV application developmen
 - **Conformance assets**: vectors in `conformance/vectors/` that other implementations can run to prove compatibility.
 
 ![BRC-100 desktop and mobile request flows](./assets/diagrams/brc100-wallet-flows.svg)
+
+## Wallet recovery
+
+Building or operating a wallet? Plan for **both root-key recovery and wallet-data
+recovery**. The [recovery guide](guides/wallet-backup-recovery.md) connects
+[BRC-38/39 integration](guides/wallet-data-portability.md), a
+[restore drill](guides/wallet-recovery-drill.md) and an
+[AI-agent brief](guides/wallet-recovery-agent-brief.md).
 
 ## Start Here
 

@@ -2,6 +2,24 @@ import BigNumber from '../BigNumber'
 import { Reader, encode, WriterUint8Array } from '../utils'
 
 describe('WriterUint8Array', () => {
+  it('grows from an explicitly zero initial capacity without hanging', () => {
+    expect(new WriterUint8Array(undefined, 0).write([1]).toArray()).toEqual([1])
+  })
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1, 1.5])(
+    'rejects an invalid initial capacity of %p',
+    capacity => {
+      expect(() => new WriterUint8Array(undefined, capacity)).toThrow(RangeError)
+    }
+  )
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 1.5])(
+    'rejects the invalid CompactSize number %p',
+    value => {
+      expect(() => new WriterUint8Array().writeVarIntNum(value)).toThrow(RangeError)
+    }
+  )
+
   it('should create a new buffer writer', () => {
     const bw = new WriterUint8Array()
     expect(bw).toBeDefined()

@@ -36,13 +36,6 @@ export class CertificationError extends SimpleError {
   }
 }
 
-export class DIDError extends SimpleError {
-  constructor(message: string) {
-    super(message, 'DID_ERROR')
-    this.name = 'DIDError'
-  }
-}
-
 export class CredentialError extends SimpleError {
   constructor(message: string) {
     super(message, 'CREDENTIAL_ERROR')

@@ -1,4 +1,5 @@
 import { Monitor } from '../Monitor'
+import { MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -13,27 +14,28 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 export class TaskFailAbandoned extends WalletMonitorTask {
   static readonly taskName = 'FailAbandoned'
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = 1000 * 60 * 5
   ) {
     super(monitor, TaskFailAbandoned.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run: nowMsecsSinceEpoch > this.lastRunMsecsSinceEpoch + this.triggerMsecs
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     const limit = 100
     let offset = 0
     for (;;) {
       const now = new Date()
       const abandoned = new Date(now.getTime() - this.monitor.options.abandonedMsecs)
-      const done = await this.storage.runAsStorageProvider(async sp => {
+      const page = await this.storage.runAsStorageProvider(async sp => {
         const txsAll = await sp.findTransactions({
           partial: {},
           status: ['unprocessed', 'unsigned'],
@@ -44,10 +46,13 @@ export class TaskFailAbandoned extends WalletMonitorTask {
           await sp.updateTransactionStatus('failed', tx.transactionId)
           log += `updated tx ${tx.transactionId} status to 'failed'\n`
         }
-        return txs.length < limit
+        return {
+          done: txsAll.length < limit,
+          retained: txsAll.length - txs.length
+        }
       })
-      if (done) break
-      offset += limit
+      if (page.done) break
+      offset += page.retained
     }
     return log
   }

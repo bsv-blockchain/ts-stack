@@ -10,15 +10,8 @@ function groupIntegerPart(integerPart: string, separator: string): string {
   return sign + groups.join(separator)
 }
 
-function trimInsignificantZeros(fixed: string): string {
-  if (!fixed.includes('.')) return fixed
-
-  let trimmed = fixed
-  while (trimmed.endsWith('0')) {
-    trimmed = trimmed.slice(0, -1)
-  }
-  return trimmed.endsWith('.') ? trimmed.slice(0, -1) : trimmed
-}
+const trimInsignificantZeros = (fixed: string): string =>
+  fixed.includes('.') ? fixed.replace(/(\.[0-9]*?[1-9])0+$|\.0+$/, '$1') : fixed
 
 const currencySymbols: Record<string, string> = {
   USD: '$',
@@ -44,8 +37,9 @@ function determineDecimalPlaces(
   decimalPlaces: number | undefined
 ): number {
   if (decimalPlaces !== undefined) return decimalPlaces
-  if (amount < 1 && amount !== 0) {
-    return Math.min(Math.max(2, -Math.floor(Math.log10(amount)) + 1), 4)
+  const magnitude = Math.abs(amount)
+  if (magnitude < 1 && magnitude !== 0) {
+    return Math.min(Math.max(2, -Math.floor(Math.log10(magnitude)) + 1), 4)
   }
   return ['BSV', 'SATS'].includes(currency) ? 8 : 2
 }
@@ -106,8 +100,28 @@ export function formatAmountWithCurrency(
   currency: string,
   options?: { decimalPlaces?: number; useCommas?: boolean; useUnderscores?: boolean }
 ): { formattedAmount: string; hoverText?: string } {
+  if (!Number.isFinite(amount)) throw new TypeError('amount must be a finite number')
+  if (typeof currency !== 'string') {
+    throw new TypeError('currency must be a non-empty string')
+  }
+  if (currency.trim() === '') {
+    throw new TypeError('currency must be a non-empty string')
+  }
   const { decimalPlaces, useCommas = true, useUnderscores = false } = options || {}
-  const decimals = determineDecimalPlaces(amount, currency, decimalPlaces)
+  if (
+    decimalPlaces !== undefined &&
+    (!Number.isInteger(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 100)
+  ) {
+    throw new RangeError('decimalPlaces must be an integer from 0 through 100')
+  }
+  if (typeof useCommas !== 'boolean') {
+    throw new TypeError('grouping options must be booleans')
+  }
+  if (typeof useUnderscores !== 'boolean') {
+    throw new TypeError('grouping options must be booleans')
+  }
+  const normalizedCurrency = currency.trim().toUpperCase()
+  const decimals = determineDecimalPlaces(amount, normalizedCurrency, decimalPlaces)
 
   // Format the amount with determined decimal places
   let fixed = amount.toFixed(decimals)
@@ -117,12 +131,12 @@ export function formatAmountWithCurrency(
   }
 
   const separator = groupingSeparator(useCommas, useUnderscores)
-  const formattedAmount = applyCurrency(formatFixedNumber(fixed, separator), currency)
+  const formattedAmount = applyCurrency(formatFixedNumber(fixed, separator), normalizedCurrency)
 
   // build result with hover text
-  if (amount < 0.01) {
+  if (Math.abs(amount) < 0.01) {
     return {
-      formattedAmount: smallAmountLabel(currency),
+      formattedAmount: smallAmountLabel(normalizedCurrency),
       hoverText: formattedAmount
     }
   }

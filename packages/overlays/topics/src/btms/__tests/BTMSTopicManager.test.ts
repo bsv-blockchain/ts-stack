@@ -56,7 +56,7 @@ function expectAdmitted(
 ): void {
   expect(admitted).toEqual({
     ...expected,
-    coinsRemoved: previousCoins.filter((coinIndex) => !expected.coinsToRetain.includes(coinIndex))
+    coinsRemoved: previousCoins.filter(coinIndex => !expected.coinsToRetain.includes(coinIndex))
   })
 }
 
@@ -69,6 +69,14 @@ describe('BTMS Topic Manager', () => {
     manager = new BTMSTopicManager()
     testPrivKey = PrivateKey.fromRandom()
     testPubKey = testPrivKey.toPublicKey()
+  })
+
+  it('documents the exact positive safe-integer amount contract', async () => {
+    const docs = await manager.getDocumentation()
+
+    expect(docs).toContain('canonical positive base-10 digits')
+    expect(docs).toContain('9007199254740991')
+    expect(docs).toMatch(/Signs,\s+leading\s+zeros,\s+decimal\s+points,\s+exponents,\s+zero/)
   })
 
   describe('Issuance outputs', () => {
@@ -115,8 +123,29 @@ describe('BTMS Topic Manager', () => {
       expectAdmitted(admitted, { outputsToAdmit: [], coinsToRetain: [] }, [])
     })
 
+    it.each(['9007199254740992', '01', '1e3'])(
+      'Rejects unsafe or non-canonical issuance amount %s',
+      async amount => {
+        const tx = new Transaction()
+        tx.addOutput({
+          lockingScript: createPushDropScript(testPubKey, ['ISSUE', amount]),
+          satoshis: 1000
+        })
+
+        const admitted = await manager.identifyAdmissibleOutputs(createBeefWithSources(tx), [])
+
+        expectAdmitted(admitted, { outputsToAdmit: [], coinsToRetain: [] }, [])
+      }
+    )
+
     it('Rejects output with too many fields', async () => {
-      const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '100', 'metadata', [1, 2, 3], 'extra'])
+      const lockingScript = createPushDropScript(testPubKey, [
+        'ISSUE',
+        '100',
+        'metadata',
+        [1, 2, 3],
+        'extra'
+      ])
       const tx = new Transaction()
       tx.addOutput({ lockingScript, satoshis: 1000 })
 
@@ -188,7 +217,11 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      const redeemScript = createPushDropScript(testPubKey, [`${sourceTxid}.0`, '100', 'metadata_1'])
+      const redeemScript = createPushDropScript(testPubKey, [
+        `${sourceTxid}.0`,
+        '100',
+        'metadata_1'
+      ])
       tx.addOutput({ lockingScript: redeemScript, satoshis: 1000 })
 
       const beef = createBeefWithSources(tx)
@@ -200,7 +233,12 @@ describe('BTMS Topic Manager', () => {
     it('Redeems a signed issuance output with metadata', async () => {
       const sourceTx = new Transaction()
       const sourceSignature = Array.from({ length: 64 }, (_, i) => (i * 13) % 256)
-      const issuanceScript = createPushDropScript(testPubKey, ['ISSUE', '100', 'metadata_1', sourceSignature])
+      const issuanceScript = createPushDropScript(testPubKey, [
+        'ISSUE',
+        '100',
+        'metadata_1',
+        sourceSignature
+      ])
       sourceTx.addOutput({ lockingScript: issuanceScript, satoshis: 1000 })
 
       const sourceTxid = sourceTx.id('hex')
@@ -212,7 +250,12 @@ describe('BTMS Topic Manager', () => {
         unlockingScript: new Script()
       })
       const destSignature = Array.from({ length: 64 }, (_, i) => (i * 17) % 256)
-      const redeemScript = createPushDropScript(testPubKey, [`${sourceTxid}.0`, '100', 'metadata_1', destSignature])
+      const redeemScript = createPushDropScript(testPubKey, [
+        `${sourceTxid}.0`,
+        '100',
+        'metadata_1',
+        destSignature
+      ])
       tx.addOutput({ lockingScript: redeemScript, satoshis: 1000 })
 
       const beef = createBeefWithSources(tx)
@@ -234,7 +277,11 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      const redeemScript = createPushDropScript(testPubKey, [`${sourceTxid}.0`, '100', 'metadata_changed'])
+      const redeemScript = createPushDropScript(testPubKey, [
+        `${sourceTxid}.0`,
+        '100',
+        'metadata_changed'
+      ])
       tx.addOutput({ lockingScript: redeemScript, satoshis: 1000 })
 
       const beef = createBeefWithSources(tx)
@@ -318,7 +365,11 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      const redeemScript = createPushDropScript(testPubKey, ['mock_assid.0', '100', 'metadata_changed'])
+      const redeemScript = createPushDropScript(testPubKey, [
+        'mock_assid.0',
+        '100',
+        'metadata_changed'
+      ])
       tx.addOutput({ lockingScript: redeemScript, satoshis: 1000 })
 
       const beef = createBeefWithSources(tx)
@@ -380,8 +431,14 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '75']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '25']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '75']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '25']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0])
@@ -400,8 +457,14 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '75']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '35']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '75']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '35']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0])
@@ -411,10 +474,16 @@ describe('BTMS Topic Manager', () => {
 
     it('Merges two tokens of the same asset into one output', async () => {
       const sourceTx1 = new Transaction()
-      sourceTx1.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '100']), satoshis: 1000 })
+      sourceTx1.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '100']),
+        satoshis: 1000
+      })
 
       const sourceTx2 = new Transaction()
-      sourceTx2.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '150']), satoshis: 1000 })
+      sourceTx2.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '150']),
+        satoshis: 1000
+      })
 
       const tx = new Transaction()
       tx.addInput({
@@ -427,7 +496,10 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '250']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid.0', '250']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0, 1])
@@ -437,10 +509,16 @@ describe('BTMS Topic Manager', () => {
 
     it('Does not merge two different assets into one output', async () => {
       const sourceTx1 = new Transaction()
-      sourceTx1.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid1.0', '100']), satoshis: 1000 })
+      sourceTx1.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid1.0', '100']),
+        satoshis: 1000
+      })
 
       const sourceTx2 = new Transaction()
-      sourceTx2.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid2.0', '150']), satoshis: 1000 })
+      sourceTx2.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid2.0', '150']),
+        satoshis: 1000
+      })
 
       const tx = new Transaction()
       tx.addInput({
@@ -453,7 +531,10 @@ describe('BTMS Topic Manager', () => {
         sourceOutputIndex: 0,
         unlockingScript: new Script()
       })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_assid1.0', '250']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_assid1.0', '250']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0, 1])
@@ -466,7 +547,10 @@ describe('BTMS Topic Manager', () => {
     it('Allows burning tokens by spending inputs without creating outputs', async () => {
       // Source transaction with tokens to burn
       const sourceTx = new Transaction()
-      sourceTx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']), satoshis: 1000 })
+      sourceTx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']),
+        satoshis: 1000
+      })
 
       // Transaction that spends the tokens but doesn't create any token outputs (burning)
       const tx = new Transaction()
@@ -488,10 +572,16 @@ describe('BTMS Topic Manager', () => {
     it('Allows partial burning - spending more inputs than outputs', async () => {
       // Source transactions with tokens
       const sourceTx1 = new Transaction()
-      sourceTx1.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']), satoshis: 1000 })
+      sourceTx1.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']),
+        satoshis: 1000
+      })
 
       const sourceTx2 = new Transaction()
-      sourceTx2.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '150']), satoshis: 1000 })
+      sourceTx2.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '150']),
+        satoshis: 1000
+      })
 
       // Transaction that spends 250 tokens but only outputs 100 (burning 150)
       const tx = new Transaction()
@@ -506,7 +596,10 @@ describe('BTMS Topic Manager', () => {
         unlockingScript: new Script()
       })
       // Only output 100 tokens, effectively burning 150
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0, 1])
@@ -518,10 +611,16 @@ describe('BTMS Topic Manager', () => {
     it('Allows burning entire balance across multiple assets', async () => {
       // Multiple assets to burn
       const goldSource = new Transaction()
-      goldSource.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']), satoshis: 1000 })
+      goldSource.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_gold.0', '100']),
+        satoshis: 1000
+      })
 
       const silverSource = new Transaction()
-      silverSource.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_silver.0', '200']), satoshis: 1000 })
+      silverSource.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_silver.0', '200']),
+        satoshis: 1000
+      })
 
       // Transaction that spends both but creates no token outputs
       const tx = new Transaction()
@@ -635,39 +734,99 @@ describe('BTMS Topic Manager', () => {
     it('Splits one asset, merges a second, issues a third, and transfers a fourth, all in the same transaction', async () => {
       // Source transactions
       const splitSource = new Transaction()
-      splitSource.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '100']), satoshis: 1000 })
+      splitSource.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '100']),
+        satoshis: 1000
+      })
 
       const merge1Source = new Transaction()
-      merge1Source.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '150']), satoshis: 1000 })
+      merge1Source.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '150']),
+        satoshis: 1000
+      })
 
       const merge2Source = new Transaction()
-      merge2Source.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '150']), satoshis: 1000 })
+      merge2Source.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '150']),
+        satoshis: 1000
+      })
 
       const transfer1Source = new Transaction()
-      transfer1Source.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '150']), satoshis: 1000 })
+      transfer1Source.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '150']),
+        satoshis: 1000
+      })
 
       const transfer2Source = new Transaction()
-      transfer2Source.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '150']), satoshis: 1000 })
+      transfer2Source.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '150']),
+        satoshis: 1000
+      })
 
       const burnSource = new Transaction()
-      burnSource.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_burnme.3', '1']), satoshis: 1000 })
+      burnSource.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_burnme.3', '1']),
+        satoshis: 1000
+      })
 
       // Main transaction
       const tx = new Transaction()
-      tx.addInput({ sourceTransaction: splitSource, sourceOutputIndex: 0, unlockingScript: new Script() })
-      tx.addInput({ sourceTransaction: merge1Source, sourceOutputIndex: 0, unlockingScript: new Script() })
-      tx.addInput({ sourceTransaction: merge2Source, sourceOutputIndex: 0, unlockingScript: new Script() })
-      tx.addInput({ sourceTransaction: transfer1Source, sourceOutputIndex: 0, unlockingScript: new Script() })
-      tx.addInput({ sourceTransaction: transfer2Source, sourceOutputIndex: 0, unlockingScript: new Script() })
-      tx.addInput({ sourceTransaction: burnSource, sourceOutputIndex: 0, unlockingScript: new Script() })
+      tx.addInput({
+        sourceTransaction: splitSource,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addInput({
+        sourceTransaction: merge1Source,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addInput({
+        sourceTransaction: merge2Source,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addInput({
+        sourceTransaction: transfer1Source,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addInput({
+        sourceTransaction: transfer2Source,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
+      tx.addInput({
+        sourceTransaction: burnSource,
+        sourceOutputIndex: 0,
+        unlockingScript: new Script()
+      })
 
       // Outputs: split(75,25), merge(300), issue(500), transfer(250,50)
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '75']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '25']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '300']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['ISSUE', '500']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '250']), satoshis: 1000 })
-      tx.addOutput({ lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '50']), satoshis: 1000 })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '75']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_split.0', '25']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_merge.0', '300']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['ISSUE', '500']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '250']),
+        satoshis: 1000
+      })
+      tx.addOutput({
+        lockingScript: createPushDropScript(testPubKey, ['mock_transfer.7', '50']),
+        satoshis: 1000
+      })
 
       const beef = createBeefWithSources(tx)
       const admitted = await manager.identifyAdmissibleOutputs(beef, [0, 1, 2, 3, 4, 5])

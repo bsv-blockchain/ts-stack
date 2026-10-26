@@ -76,8 +76,17 @@ describe('ProvenTx class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('ProvenTxTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('ProvenTxTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('ProvenTxTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('ProvenTxTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('ProvenTxTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('ProvenTxTests2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {
@@ -123,19 +132,7 @@ describe('ProvenTx class method tests', () => {
       getMerklePath: async (requestedTxid: string) => {
         if (requestedTxid === txid) {
           return {
-            merklePath: {
-              path: [[{ hash: txid, offset: 0 }]],
-              blockHeight: height,
-              toBinary: () => merklePathBinary,
-              computeRoot: () => merkleRoot,
-              verifyProof: () => true,
-              toHex: () => Buffer.from(merklePathBinary).toString('hex'),
-              indexOf: () => 0,
-              findOrComputeLeaf: () => ({ hash: txid, offset: 0 }),
-              verify: () => true,
-              combine: () => ({}) as bsv.MerklePath,
-              trim: () => ({}) as bsv.MerklePath
-            } as unknown as bsv.MerklePath,
+            merklePath: bsv.MerklePath.fromBinary(merklePathBinary),
             header: {
               version: 1,
               previousHash: 'prev-hash',

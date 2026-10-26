@@ -1,12 +1,13 @@
-import { AcquireCertificateResult, Validation } from '@bsv/sdk'
+import { type ValidAcquireDirectCertificateArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { AcquireCertificateResult } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableCertificateX } from '../../storage/schema/tables/TableCertificate'
 
-export async function acquireDirectCertificate (
+export async function acquireDirectCertificate(
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidAcquireDirectCertificateArgs
+  vargs: ValidAcquireDirectCertificateArgs
 ): Promise<AcquireCertificateResult> {
   const now = new Date()
   const newCert: TableCertificateX = {

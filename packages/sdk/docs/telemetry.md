@@ -36,7 +36,9 @@ Sinks should only enqueue work: telemetry export must not be awaited on a
 wallet, bridge, authentication, or storage request path.
 
 Long-lived hosts can pass `enabled: () => currentDiagnosticsPreference` to
-honor runtime opt-in/opt-out changes without reconstructing the wallet.
+honor runtime opt-in/opt-out changes without reconstructing the wallet. The
+predicate must return the literal boolean `true`; exceptions and malformed
+truthy values leave telemetry disabled.
 
 ## Timed and correlated work
 
@@ -73,11 +75,17 @@ Wallet Toolbox layers can use `contextFor`, `bindContext`, and `linkContext`
 without modifying or serializing wallet arguments. This is the portable
 browser and React Native propagation mechanism. Node hosts should provide a
 `TelemetryContextManager` backed by `AsyncLocalStorage` so database queries and
-other asynchronous descendants inherit the active request automatically.
+other asynchronous descendants inherit the active request automatically. The
+manager is diagnostic plumbing rather than an application-result participant:
+the application callback is invoked at most once, its own result or exception
+remains authoritative, and manager-only failures or substituted results are
+contained.
 
 `formatTraceparent` and `parseTraceparent` propagate context over HTTP using
 W3C Trace Context. Invalid, unsupported-version, oversized, and all-zero
-headers are ignored.
+headers are ignored. Contexts are copied, validated, and frozen before
+propagation; accessor-backed fields and coerced or out-of-byte-range flags are
+rejected.
 
 ## Runtime measurements
 
@@ -94,10 +102,12 @@ separate telemetry events. Those exporter events must be prevented from
 recursively reporting themselves.
 
 The event schema intentionally permits scalar attributes only. Names and values
-associated with passwords, private or presentation keys, recovery material,
-tokens, OTPs, Shamir shares, ciphertext, and snapshots are redacted. Common key
-encodings and large encoded blobs are also removed from diagnostic text. Error
-stacks are disabled by default and should be enabled only for a trusted sink.
+associated with passwords, credentials, authorization headers, cookies,
+sessions, private or presentation keys, recovery material, tokens, signatures,
+HMACs, certificates, revocation material, OTPs, Shamir shares, ciphertext, and
+snapshots are redacted. Basic/Bearer values, URL userinfo, common key encodings,
+and large encoded blobs are also removed from diagnostic text. Error stacks are
+disabled by default and should be enabled only for a trusted sink.
 
 Redaction is a defense in depth measure, not permission to attach sensitive
 objects. Producers and consumers must never add request payloads, keys, wallet

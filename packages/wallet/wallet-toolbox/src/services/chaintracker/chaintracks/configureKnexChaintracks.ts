@@ -23,7 +23,7 @@ export interface ResolvedDefaultKnexChaintracksParams extends ResolvedDefaultCha
   knexConfig?: Knex.Config
 }
 
-export function resolveDefaultKnexChaintracksArguments (
+export function resolveDefaultKnexChaintracksArguments(
   args: DefaultKnexChaintracksArguments
 ): ResolvedDefaultKnexChaintracksParams {
   const [chain, rootFolder = './data/', knexConfig, ...options] = args
@@ -34,14 +34,14 @@ export function resolveDefaultKnexChaintracksArguments (
   }
 }
 
-export function toDefaultKnexChaintracksArguments (
+export function toDefaultKnexChaintracksArguments(
   params: ResolvedDefaultKnexChaintracksParams
 ): DefaultKnexChaintracksArguments {
   const [chain, ...options] = toDefaultChaintracksArguments(params)
   return [chain, params.rootFolder, params.knexConfig, ...options]
 }
 
-export function createAndStartDefaultKnexChaintracks<TStorage extends ChaintracksOptions['storage']> (
+export function createAndStartDefaultKnexChaintracks<TStorage extends ChaintracksOptions['storage']>(
   args: DefaultKnexChaintracksArguments,
   createOptions: (...args: DefaultKnexChaintracksArguments) => ChaintracksOptions
 ): CreatedChaintracks<TStorage> {

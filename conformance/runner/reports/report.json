@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-08-25T23:43:06.103Z",
-  "totalVectors": 6690,
-  "totalFiles": 76,
+  "timestamp": "2026-09-24T05:41:55.330Z",
+  "totalVectors": 6700,
+  "totalFiles": 77,
   "parseErrors": 0,
   "suites": [
     {
@@ -84,6 +84,31 @@
         },
         {
           "name": "auth.brc31-handshake.16",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "auth.brc31-handshake.17",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "auth.brc31-handshake.18",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "auth.brc31-handshake.19",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "auth.brc31-handshake.20",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "auth.brc31-handshake.21",
           "pass": true,
           "error": null
         }
@@ -31491,6 +31516,11 @@
           "name": "wallet.brc100.listactions.16",
           "pass": true,
           "error": null
+        },
+        {
+          "name": "wallet.brc100.listactions.17",
+          "pass": true,
+          "error": null
         }
       ]
     },
@@ -33829,6 +33859,31 @@
         },
         {
           "name": "wallet.storage.adapterconformance.18",
+          "pass": true,
+          "error": null
+        }
+      ]
+    },
+    {
+      "name": "wallet/storage/sync-transfer",
+      "cases": [
+        {
+          "name": "wallet.storage.sync-transfer.frame",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.storage.sync-transfer.truncated",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.storage.sync-transfer.trailing",
+          "pass": true,
+          "error": null
+        },
+        {
+          "name": "wallet.storage.sync-transfer.short-header",
           "pass": true,
           "error": null
         }

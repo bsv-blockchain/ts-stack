@@ -12,7 +12,8 @@ import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { wait } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
 import { ChaintracksClientApi } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
-dotenv.config()
+import { safeDiagnostic } from '../services/chaintracker/chaintracks/util/safeDiagnostic'
+dotenv.config({ quiet: true })
 
 export interface MonitorDaemonSetup {
   chain?: Chain
@@ -121,63 +122,95 @@ export class MonitorDaemon {
   }
 
   async start(): Promise<void> {
+    if (this.doneListening != null || this.doneTasks != null) {
+      throw new WERR_INTERNAL('monitor daemon is already started')
+    }
     if (this.setup == null) await this.createSetup()
     if (this.setup?.monitor == null) throw new WERR_INTERNAL('createSetup failed to initialize setup')
 
-    const { monitor } = this.setup
+    const { monitor, chaintracks } = this.setup
+    await monitor.ready
+    this.doneListening = chaintracks?.startListening() ?? Promise.resolve()
+    try {
+      await this.doneListening
+    } catch (error) {
+      this.doneListening = undefined
+      this.doneTasks = undefined
+      throw error
+    }
 
     if (this.noRunTasks !== true) {
-      console.log('\n\nRunning startTasks\n\n')
       this.doneTasks = monitor.startTasks()
     }
   }
 
   async stop(): Promise<void> {
-    console.log('start of stop')
-
     if (this.setup == null || (this.doneTasks == null && this.noRunTasks !== true) || this.doneListening == null) {
       throw new WERR_INTERNAL('call start or createSetup first')
     }
 
     const { monitor } = this.setup
-
-    ;(monitor as Monitor).stopTasks()
-
-    if (this.doneTasks != null) await this.doneTasks
+    if (monitor == null) throw new WERR_INTERNAL('monitor daemon setup has no monitor')
+    monitor.stopTasks()
+    const results = await Promise.allSettled([this.doneTasks, this.doneListening].filter(p => p != null))
     this.doneTasks = undefined
-    await this.doneListening
     this.doneListening = undefined
+    const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (failure != null) throw WalletError.fromUnknown(failure.reason)
   }
 
   async destroy(): Promise<void> {
     if (this.setup == null) return
-    if (this.doneTasks != null || this.doneListening != null) await this.stop()
-    if (this.setup.storageProvider != null) await this.setup.storageProvider.destroy()
+    const setup = this.setup
+    const failures: unknown[] = []
+    if (this.doneTasks != null || this.doneListening != null) {
+      try {
+        await this.stop()
+      } catch (error) {
+        failures.push(error)
+      } finally {
+        this.doneTasks = undefined
+        this.doneListening = undefined
+      }
+    }
+    if (setup.monitor != null) {
+      try {
+        await setup.monitor.destroy()
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    if (setup.storageProvider != null) {
+      try {
+        await setup.storageProvider.destroy()
+      } catch (error) {
+        failures.push(error)
+      }
+    }
     this.setup = undefined
+    if (failures.length > 0) throw WalletError.fromUnknown(failures[0])
   }
 
   async runDaemon(): Promise<void> {
     this.stopDaemon = false
-    for (;;) {
+    while (!this.stopDaemon) {
       try {
         await this.start()
 
         while (!this.stopDaemon) {
           await wait(10 * 1000)
         }
-
-        console.log('stopping')
-
         await this.stop()
-
-        console.log('cleanup')
-
         await this.destroy()
-
-        console.log('done')
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
-        console.log(`\n\nrunWatchman Main Error Handler\n\ncode: ${e.code}\nDescription: ${e.description}\n\n\n`)
+        console.log(`monitor daemon error ${safeDiagnostic(e.code, 64)} ${safeDiagnostic(e.description)}`)
+        try {
+          await this.destroy()
+        } catch (cleanupError) {
+          console.log(`monitor daemon cleanup error ${safeDiagnostic(cleanupError)}`)
+        }
+        if (!this.stopDaemon) await wait(5000)
       }
     }
   }

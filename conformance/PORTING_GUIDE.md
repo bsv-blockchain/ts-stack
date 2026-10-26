@@ -280,3 +280,10 @@ nonce value. HTTP error/scenario rows remain structural scenario documentation.
 Certificate responses retain the v0.1 wire shape. Requesters enforce their own
 recorded certificate sets, including dynamic requests, and certificate listeners
 observe completed validation rather than vetoing it.
+
+The initial request is unsigned, and the initial-response nonce signature does
+not bind optional certificate/request members. Do not perform plaintext
+disclosure or protected side effects from an initial certificate callback.
+`RequestedCertificateSet` is a legacy allowlist: it does not prove that every
+listed type or field was supplied. Complete application authorization remains a
+separate check over the received certificates and decrypted fields.

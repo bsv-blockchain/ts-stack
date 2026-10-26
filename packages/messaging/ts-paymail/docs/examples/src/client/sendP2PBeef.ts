@@ -1,12 +1,21 @@
 import { PaymailClient } from '@bsv/paymail'
 import { MerklePath } from '@bsv/sdk'
-import { mockUser1, mockUser2 } from '../mockUser.js'
+import { mockUser1, mockUser2, type MockUser } from '../mockUser.js'
+import { requireSingleDestination } from './sendP2P.js'
 
-const client = new PaymailClient()
+export interface SendP2PBeefExampleOptions {
+  client?: PaymailClient
+  sender?: MockUser
+  receiver?: MockUser
+}
 
-;(async () => {
-  const sender = mockUser1
-  const receiver = mockUser2.getPaymail()
+export async function runSendP2PBeefExample(
+  options: SendP2PBeefExampleOptions = {}
+): Promise<void> {
+  const client = options.client ?? new PaymailClient()
+  const sender = options.sender ?? mockUser1
+  const receiverUser = options.receiver ?? mockUser2
+  const receiver = receiverUser.getPaymail()
   await sender.initWallet()
   const startingBalance = sender.getSatoshiBalance()
   console.log('sender starting balance', startingBalance)
@@ -16,10 +25,7 @@ const client = new PaymailClient()
   }
 
   const p2pDestination = await client.getP2pPaymentDestination(receiver, startingBalance - 1)
-
-  // example we are assuming only one output but in reality it can be many
-  const [destination] = p2pDestination.outputs
-  if (!destination) throw new Error('Paymail server returned no payment destination')
+  const destination = requireSingleDestination(p2pDestination.outputs)
   const { tx, reference } = await sender.getSpendingTransactionToScript(
     destination.script,
     startingBalance - 1
@@ -38,7 +44,11 @@ const client = new PaymailClient()
     note: 'hello world'
   })
   await sender.broadcastTransaction(tx)
-  mockUser1.processTransaction(tx, reference)
+  sender.processTransaction(tx, reference)
   console.log('sender updated balance', sender.getSatoshiBalance())
   await sender.closeWallet()
-})()
+}
+
+if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {
+  void runSendP2PBeefExample()
+}

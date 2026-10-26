@@ -1,6 +1,12 @@
-import { Beef, PrivateKey, PublicKey, SignActionArgs } from '@bsv/sdk'
+import { Beef, PrivateKey, PublicKey, SignActionArgs, Transaction } from '@bsv/sdk'
 import { Setup, SetupWallet } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
+import {
+  assertSameSignedTransaction,
+  assertSatoshis,
+  findRequestedInputIndex,
+  findRequestedOutputIndex
+} from './transactionSafety'
 
 /**
  * Example of moving satoshis from one wallet to another using the P2PKH template
@@ -27,16 +33,23 @@ export async function transferP2PKH() {
     env,
     rootKeyHex: env.devKeys[env.identityKey2]
   })
-
-  // create a new transaction with an output for setup2 in the amount of 42 satoshis.
-  const o = await outputP2PKH(setup1, setup2.identityKey, 42)
-
-  // use setup2 to consume the new output to demonstrate unlocking the output and adding it to the wallet's "change" outputs.
-  await inputP2PKH(setup2, o)
+  try {
+    const o = await outputP2PKH(setup1, setup2.identityKey, 42)
+    await inputP2PKH(setup2, o)
+  } finally {
+    await Promise.allSettled([setup1.wallet.destroy(), setup2.wallet.destroy()])
+  }
 }
 
+/**
+ * Creates a real mainnet P2PKH output. Verify both configured identities and the
+ * amount before invoking this explicitly named function.
+ *
+ * @publicbody
+ */
 export async function p2pkhToAddress() {
-  // obtain the secrets environment for the testnet network.
+  // This explicitly named example spends real mainnet funds. Verify both local
+  // identities and the amount before invoking it.
   const env = Setup.getEnv('main')
   // setup1 will be the sending wallet using the rootKey associated with identityKey, which is the default.
   const setup1 = await Setup.createWalletClient({ env })
@@ -46,8 +59,11 @@ export async function p2pkhToAddress() {
     rootKeyHex: env.devKeys[env.identityKey2]
   })
 
-  // create a new transaction with an output for setup2 in the amount of 42 satoshis.
-  await outputP2PKH(setup1, setup2.identityKey, 10)
+  try {
+    await outputP2PKH(setup1, setup2.identityKey, 10)
+  } finally {
+    await Promise.allSettled([setup1.wallet.destroy(), setup2.wallet.destroy()])
+  }
 }
 
 /**
@@ -83,6 +99,7 @@ export async function outputP2PKH(
   toIdentityKey: string
   satoshis: number
 }> {
+  assertSatoshis(satoshis)
   // Convert the destination identity key into its associated address and use that to generate a locking script.
   const address = PublicKey.fromString(toIdentityKey).toAddress()
   const lock = Setup.getLockP2PKH(address)
@@ -121,9 +138,14 @@ export async function outputP2PKH(
   // and when the "signAndProcess" option is allowed to default to true.
 
   // The `Beef` class is used here to decode the AtomicBEEF binary format of the new transaction.
-  const beef = Beef.fromBinary(car.tx!)
-  // The outpoint string is constructed from the new transaction's txid and the output index: zero.
-  const outpoint = `${car.txid!}.0`
+  if (car.tx == null || car.txid == null) throw new Error('Wallet did not return the P2PKH payment')
+  const transaction = Transaction.fromAtomicBEEF(car.tx)
+  if (car.txid.toLowerCase() !== transaction.id('hex')) {
+    throw new Error('Wallet P2PKH transaction ID does not match its transaction')
+  }
+  const outputIndex = findRequestedOutputIndex(transaction, lock.toHex(), satoshis)
+  const beef = Beef.fromBinary(transaction.toAtomicBEEF())
+  const outpoint = `${transaction.id('hex')}.${outputIndex}`
 
   console.log(`
 outputP2PKH to ${toIdentityKey}
@@ -231,35 +253,37 @@ export async function inputP2PKH(
    *
    * Once signed, capture the now valid `unlockingScript` valoue for the input and convert it to a hex string.
    */
-  const st = car.signableTransaction!
-  const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.at(-1)!.txid)!
-  tx.inputs[0].unlockingScriptTemplate = unlock
-  await tx.sign()
-  const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
-
-  /**
-   * Note that the `signArgs` use the `reference` property of the `signableTransaction` result to
-   * identify the `createAction` result to finish processing and optionally broadcasting.
-   */
-  const signArgs: SignActionArgs = {
-    reference: st.reference,
-    spends: { 0: { unlockingScript } },
-    options: {
-      // Force an immediate broadcast of the signed transaction.
-      acceptDelayedBroadcast: false
+  const st = car.signableTransaction
+  if (st == null) throw new Error('Wallet did not return a signable P2PKH transaction')
+  let signed: Transaction
+  try {
+    const tx = Transaction.fromAtomicBEEF(st.tx)
+    const inputIndex = findRequestedInputIndex(tx, o.outpoint)
+    tx.inputs[inputIndex].unlockingScriptTemplate = unlock
+    await tx.sign()
+    const unlockingScript = tx.inputs[inputIndex].unlockingScript
+    if (unlockingScript == null) throw new Error('P2PKH signer produced no unlocking script')
+    const signArgs: SignActionArgs = {
+      reference: st.reference,
+      spends: { [inputIndex]: { unlockingScript: unlockingScript.toHex() } },
+      options: { acceptDelayedBroadcast: false }
     }
+    const sar = await setup.wallet.signAction(signArgs)
+    if (sar.tx == null) throw new Error('Wallet did not return the signed P2PKH transaction')
+    signed = Transaction.fromAtomicBEEF(sar.tx)
+    assertSameSignedTransaction(tx, signed)
+  } catch (error) {
+    try {
+      await setup.wallet.abortAction({ reference: st.reference })
+    } catch {
+      // Preserve the signing failure rather than replacing it with cleanup failure.
+    }
+    throw error
   }
-
-  /**
-   * Calling `signAction` completes the action creation process when inputs must be signed
-   * using specific script templates.
-   */
-  const sar = await setup.wallet.signAction(signArgs)
 
   // This completes the example by logging evidence of what was created.
   {
-    const beef = Beef.fromBinary(sar.tx!)
+    const beef = Beef.fromBinary(signed.toAtomicBEEF())
 
     console.log(`
 inputP2PKH to ${setup.identityKey}
@@ -276,4 +300,4 @@ export async function p2pkh(): Promise<void> {
   await transferP2PKH()
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

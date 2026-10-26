@@ -25,3 +25,12 @@ the final site's links.
 Package versions, runtime support, conformance facts, and release instructions
 should come from repository-owned manifests and generated data rather than
 being duplicated manually in this application.
+
+The locked Mermaid 12 client uses DOMPurify 3.4.17 for the published shadow-root
+template and detached-node sanitization fixes. Its existing compatible diagram
+children and their license hashes are verified against the actual built bundle.
+Frontmatter compilation uses remark-mdx-frontmatter 6 with smol-toml instead of
+the vulnerable toml package; the obsolete TOML override and exception are removed.
+YAML/TOML metadata, named/default exports, explicit parser overrides and malformed
+TOML rejection are covered by owning compatibility fixtures. There is no author
+configuration migration and no deployed application/runtime dependency change.

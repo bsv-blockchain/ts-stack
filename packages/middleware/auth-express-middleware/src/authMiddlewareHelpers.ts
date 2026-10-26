@@ -1,6 +1,6 @@
+import { Writer, toArray } from '@bsv/sdk/primitives/utils'
 import { Request } from 'express'
-import { Utils, stringifyBRC100 } from '@bsv/sdk'
-
+import { stringifyBRC100 } from '@bsv/sdk'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const LOG_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
@@ -21,26 +21,83 @@ export function isLogLevelEnabled(configuredLevel: LogLevel, messageLevel: LogLe
  * key, which prevents CodeQL js/unvalidated-dynamic-method-call alerts.
  */
 export function getLogMethod(logger: typeof console, level: LogLevel): (...args: any[]) => void {
-  switch (level) {
-    case 'debug':
-      return (typeof logger.debug === 'function' ? logger.debug : logger.log).bind(logger)
-    case 'info':
-      return (typeof logger.info === 'function' ? logger.info : logger.log).bind(logger)
-    case 'warn':
-      return (typeof logger.warn === 'function' ? logger.warn : logger.log).bind(logger)
-    case 'error':
-      return (typeof logger.error === 'function' ? logger.error : logger.log).bind(logger)
-    default:
-      return logger.log.bind(logger)
+  try {
+    let selected: unknown
+    switch (level) {
+      case 'debug':
+        selected = typeof logger.debug === 'function' ? logger.debug : logger.log
+        break
+      case 'info':
+        selected = typeof logger.info === 'function' ? logger.info : logger.log
+        break
+      case 'warn':
+        selected = typeof logger.warn === 'function' ? logger.warn : logger.log
+        break
+      case 'error':
+        selected = typeof logger.error === 'function' ? logger.error : logger.log
+        break
+      default:
+        selected = logger.log
+    }
+    if (typeof selected !== 'function') return () => {}
+    return (...args: any[]): void => {
+      try {
+        Reflect.apply(selected, logger, args)
+      } catch {
+        // Optional diagnostics must never change authentication behavior.
+      }
+    }
+  } catch {
+    return () => {}
   }
+}
+
+function copyDenseByteArray(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const copy = Array.from({ length: value.length }, () => 0)
+  for (let index = 0; index < value.length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (
+      descriptor === undefined ||
+      !Object.prototype.hasOwnProperty.call(descriptor, 'value') ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      return undefined
+    }
+    copy[index] = descriptor.value
+  }
+  return copy
+}
+
+function canonicalUrlEncodedBody(value: unknown): URLSearchParams | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return undefined
+  const params = new URLSearchParams()
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') return undefined
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (
+      descriptor === undefined ||
+      !Object.prototype.hasOwnProperty.call(descriptor, 'value') ||
+      descriptor.enumerable !== true ||
+      typeof descriptor.value !== 'string'
+    ) {
+      return undefined
+    }
+    params.append(key, descriptor.value)
+  }
+  return params
 }
 
 /**
  * Write the URL pathname and search components to the binary writer.
  */
-export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void {
+export function writeUrlToWriter(parsedUrl: URL, writer: Writer): void {
   if (parsedUrl.pathname.length > 0) {
-    const pathnameAsArray = Utils.toArray(parsedUrl.pathname)
+    const pathnameAsArray = toArray(parsedUrl.pathname)
     writer.writeVarIntNum(pathnameAsArray.length)
     writer.write(pathnameAsArray)
   } else {
@@ -48,7 +105,7 @@ export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void {
   }
 
   if (parsedUrl.search.length > 0) {
-    const searchAsArray = Utils.toArray(parsedUrl.search)
+    const searchAsArray = toArray(parsedUrl.search)
     writer.writeVarIntNum(searchAsArray.length)
     writer.write(searchAsArray)
   } else {
@@ -59,26 +116,18 @@ export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void {
 /**
  * Collect and write signed request headers to the binary writer.
  */
-export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer): void {
+export function writeRequestHeadersToWriter(req: Request, writer: Writer): void {
   const includedHeaders: Array<[string, string]> = []
   for (let [k, v] of Object.entries(req.headers)) {
     k = k.toLowerCase()
-    // Normalise to a single string — Express may return string[] when a header
-    // is repeated (e.g. `Set-Cookie`).  Take the first value to avoid
-    // type-confusion (CodeQL js/type-confusion-through-parameter-tampering).
-    let headerValue = ''
-    if (Array.isArray(v)) {
-      headerValue = v[0]
-    } else if (typeof v === 'string') {
-      headerValue = v
-    }
-    if (k === 'content-type') {
-      headerValue = headerValue.split(';')[0].trim()
-    }
     if (
       (k.startsWith('x-bsv-') || k === 'content-type' || k === 'authorization') &&
       !k.startsWith('x-bsv-auth')
     ) {
+      if (typeof v !== 'string') {
+        throw new TypeError('Signed request headers must have one exact string value.')
+      }
+      const headerValue = k === 'content-type' ? v.split(';')[0].trim() : v
       includedHeaders.push([k, headerValue])
     }
   }
@@ -93,13 +142,24 @@ export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer):
 /**
  * Write a header pair (key + value) to the binary writer.
  */
-export function writeHeaderPair(writer: Utils.Writer, key: string, value: string): void {
-  const keyBytes = Utils.toArray(key, 'utf8')
+export function writeHeaderPair(writer: Writer, key: string, value: string): void {
+  const keyBytes = toArray(key, 'utf8')
   writer.writeVarIntNum(keyBytes.length)
   writer.write(keyBytes)
-  const valueBytes = Utils.toArray(value, 'utf8')
+  const valueBytes = toArray(value, 'utf8')
   writer.writeVarIntNum(valueBytes.length)
   writer.write(valueBytes)
+}
+
+function isBodylessParserPlaceholder(body: unknown, headers: Request['headers']): boolean {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return false
+  const prototype = Object.getPrototypeOf(body)
+  if (prototype !== Object.prototype && prototype !== null) return false
+  if (Reflect.ownKeys(body).length !== 0) return false
+  return (
+    headers['transfer-encoding'] === undefined &&
+    (headers['content-length'] === undefined || headers['content-length'] === '0')
+  )
 }
 
 /**
@@ -107,12 +167,21 @@ export function writeHeaderPair(writer: Utils.Writer, key: string, value: string
  */
 export function writeBodyToWriter(
   req: Request,
-  writer: Utils.Writer,
+  writer: Writer,
   logger?: typeof console,
   logLevel?: LogLevel
 ): void {
   const { body, headers } = req
   const debugLog = makeDebugLogger(logger, logLevel)
+
+  // Express 4/body-parser initializes req.body to {} even when HTTP framing
+  // declares no body. Preserve the same absent-body sentinel as Express 5.
+  // A framed JSON {} is real signed data and must still serialize as {}.
+  if (isBodylessParserPlaceholder(body, headers)) {
+    writer.writeVarIntNum(-1)
+    debugLog('[writeBodyToWriter] No valid body to write', undefined)
+    return
+  }
 
   // Inline-normalised content-type to a single string (Express may return string[]).
   // Inline narrowing rather than a helper so CodeQL's dataflow analysis can see
@@ -125,13 +194,11 @@ export function writeBodyToWriter(
     contentType = rawContentType[0].split(';', 1)[0].trim().toLowerCase()
   }
 
-  if (
-    Array.isArray(body) &&
-    body.every(item => Number.isInteger(item) && item >= 0 && item <= 255)
-  ) {
-    writer.writeVarIntNum(body.length)
-    writer.write(body)
-    debugLog('[writeBodyToWriter] Body recognized as number[]', { length: body.length })
+  const byteArray = copyDenseByteArray(body)
+  if (byteArray !== undefined) {
+    writer.writeVarIntNum(byteArray.length)
+    writer.write(byteArray)
+    debugLog('[writeBodyToWriter] Body recognized as number[]', { length: byteArray.length })
     return
   }
 
@@ -142,8 +209,8 @@ export function writeBodyToWriter(
     return
   }
 
-  if (contentType === 'application/json' && typeof body === 'object') {
-    const bodyAsArray = Utils.toArray(JSON.stringify(body), 'utf8')
+  if (contentType === 'application/json' && body !== undefined) {
+    const bodyAsArray = toArray(stringifyBRC100(body), 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
     debugLog('[writeBodyToWriter] Body recognized as JSON', { length: bodyAsArray.length })
@@ -153,12 +220,34 @@ export function writeBodyToWriter(
   if (
     contentType === 'application/x-www-form-urlencoded' &&
     body !== null &&
-    typeof body === 'object' &&
-    !Array.isArray(body) &&
-    Object.keys(body).length > 0
+    typeof body === 'object'
   ) {
-    const parsedBody = new URLSearchParams(body).toString()
-    const bodyAsArray = Utils.toArray(parsedBody, 'utf8')
+    const params = canonicalUrlEncodedBody(body)
+    if (params === undefined) {
+      throw new TypeError('URL-encoded request bodies must contain only exact string fields.')
+    }
+    if ([...params].length === 0) {
+      writer.writeVarIntNum(-1)
+      debugLog('[writeBodyToWriter] No valid body to write', undefined)
+      return
+    }
+    const parsedBody = params.toString()
+    const bodyAsArray = toArray(parsedBody, 'utf8')
+    writer.writeVarIntNum(bodyAsArray.length)
+    writer.write(bodyAsArray)
+    debugLog('[writeBodyToWriter] Body recognized as x-www-form-urlencoded', {
+      length: bodyAsArray.length
+    })
+    return
+  }
+
+  if (contentType === 'application/x-www-form-urlencoded' && typeof body === 'string') {
+    if (body.length === 0) {
+      writer.writeVarIntNum(-1)
+      debugLog('[writeBodyToWriter] No valid body to write', undefined)
+      return
+    }
+    const bodyAsArray = toArray(body, 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
     debugLog('[writeBodyToWriter] Body recognized as x-www-form-urlencoded', {
@@ -168,16 +257,20 @@ export function writeBodyToWriter(
   }
 
   if (contentType === 'text/plain' && typeof body === 'string' && body.length > 0) {
-    const bodyAsArray = Utils.toArray(body, 'utf8')
+    const bodyAsArray = toArray(body, 'utf8')
     writer.writeVarIntNum(bodyAsArray.length)
     writer.write(bodyAsArray)
     debugLog('[writeBodyToWriter] Body recognized as text/plain', { length: bodyAsArray.length })
     return
   }
 
-  // No valid body
-  writer.writeVarIntNum(-1)
-  debugLog('[writeBodyToWriter] No valid body to write', undefined)
+  if (body === undefined || (contentType === 'text/plain' && body === '')) {
+    writer.writeVarIntNum(-1)
+    debugLog('[writeBodyToWriter] No valid body to write', undefined)
+    return
+  }
+
+  throw new TypeError('The parsed request body cannot be represented canonically.')
 }
 
 /**
@@ -189,7 +282,7 @@ export function convertValueToArray(
 ): number[] {
   if (val === undefined || val === null) return []
   if (typeof val === 'string') {
-    return Utils.toArray(val, 'utf8')
+    return toArray(val, 'utf8')
   }
   if (val instanceof Buffer) {
     return Array.from(val)
@@ -197,17 +290,16 @@ export function convertValueToArray(
   if (val instanceof Uint8Array) {
     return Array.from(val)
   }
-  if (Array.isArray(val) && val.every(item => Number.isInteger(item) && item >= 0 && item <= 255)) {
-    return val
-  }
+  const byteArray = copyDenseByteArray(val)
+  if (byteArray !== undefined) return byteArray
   if (typeof val === 'object' && val !== null) {
     if (!responseHeaders['content-type']) {
       responseHeaders['content-type'] = 'application/json'
     }
-    return Utils.toArray(stringifyBRC100(val), 'utf8')
+    return toArray(stringifyBRC100(val), 'utf8')
   }
   if (typeof val === 'number' || typeof val === 'boolean' || typeof val === 'bigint') {
-    return Utils.toArray(val.toString(), 'utf8')
+    return toArray(val.toString(), 'utf8')
   }
   return []
 }

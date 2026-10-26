@@ -90,6 +90,7 @@ export async function createDestinationWallet(
     { basket: '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8' },
     'admin.com'
   )
+  if (typeof totalOutputs !== 'number') throw new Error('Wallet returned an invalid balance')
   return { wallet, balance: totalOutputs }
 }
 
@@ -185,6 +186,9 @@ export async function fundWallet(
     description: 'Incoming wallet funding payment from local wallet'
   }
   const result = await wallet.internalizeAction(directTransaction)
+  if (result.accepted !== true) {
+    throw new Error('The destination wallet did not accept the funding transaction')
+  }
   io.log(chalk.green(`🎉 Wallet funded! ${JSON.stringify(result)}`))
   io.log(chalk.blue(`🔗 View on WhatsOnChain: https://whatsonchain.com/tx/${transaction.txid}`))
 }

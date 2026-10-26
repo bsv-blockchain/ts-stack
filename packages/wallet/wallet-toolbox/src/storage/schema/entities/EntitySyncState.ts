@@ -108,7 +108,7 @@ export class EntitySyncState extends EntityBase<TableSyncState> {
     this.updated_at = new Date()
     this.updateApi(notSyncMap && this.id > 0)
     if (this.id === 0) {
-      await storage.insertSyncState(this.api)
+      await storage.insertSyncState(this.api, trx)
     } else {
       const update: Partial<TableSyncState> = { ...this.api }
       if (notSyncMap) delete update.syncMap

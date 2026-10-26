@@ -1,8 +1,9 @@
-import { wait } from '../../../../../utility/utilityHelpers'
 import { BlockHeader } from '../../Api/BlockHeaderApi'
 import { LiveIngestorWhatsOnChainPoll } from '../LiveIngestorWhatsOnChainPoll'
 import { WocGetHeadersHeader } from '../WhatsOnChainServices'
 import { ChaintracksFetchError } from '../../util/ChaintracksFetch'
+import { genesisHeader } from '../../util/blockHeaderUtilities'
+import { Chain } from '../../../../../sdk'
 
 describe('LiveIngestorWhatsOnChainPoll tests', () => {
   jest.setTimeout(99999999)
@@ -27,8 +28,11 @@ describe('LiveIngestorWhatsOnChainPoll tests', () => {
     const ingestor = new LiveIngestorWhatsOnChainPoll(options)
     ingestor.log = (...args: any[]) => capturedLogs.push(args.map(String).join(' '))
     const header = mockWocHeader()
-    const getHeaders = jest.fn()
-      .mockRejectedValueOnce(new ChaintracksFetchError('rate limited', 'https://woc.example/headers', 429, 'Too Many Requests', 1))
+    const getHeaders = jest
+      .fn()
+      .mockRejectedValueOnce(
+        new ChaintracksFetchError('rate limited', 'https://woc.example/headers', 429, 'Too Many Requests', 1)
+      )
       .mockImplementationOnce(async () => {
         ingestor.stopListening()
         return [header]
@@ -43,50 +47,65 @@ describe('LiveIngestorWhatsOnChainPoll tests', () => {
     expect(capturedLogs.some(l => l.includes('getHeaders failed') && l.includes('429'))).toBe(true)
   })
 
-  test('0 listen for first new header', async () => {
+  test('bounds the live header queue and drops excess validated headers', async () => {
+    const liveHeaders: BlockHeader[] = [{ ...genesisHeader('main') }]
+    const options = LiveIngestorWhatsOnChainPoll.createLiveIngestorWhatsOnChainOptions('main')
+    options.maxQueuedHeaders = 1
+    const ingestor = new LiveIngestorWhatsOnChainPoll(options)
+    const logs: string[] = []
+    ingestor.log = message => logs.push(String(message))
+    const incoming = mockWocHeader('test')
+    ingestor.woc = {
+      getHeaders: async () => {
+        ingestor.stopListening()
+        return [incoming]
+      }
+    } as unknown as typeof ingestor.woc
+
+    await ingestor.startListening(liveHeaders)
+
+    expect(liveHeaders).toHaveLength(1)
+    expect(liveHeaders[0].hash).toBe(genesisHeader('main').hash)
+    expect(logs.some(log => log.includes('queue capacity 1 reached'))).toBe(true)
+  })
+
+  test('accepts the first locally simulated valid header and stops cleanly', async () => {
     const liveHeaders: BlockHeader[] = []
     const options = LiveIngestorWhatsOnChainPoll.createLiveIngestorWhatsOnChainOptions('main')
+    options.idleWait = 1
     const ingestor = new LiveIngestorWhatsOnChainPoll(options)
-    const p = ingestor.startListening(liveHeaders)
-    let log = ''
-    let count = 0
-    for (;;) {
-      const h = liveHeaders.shift()
-      if (h != null) {
-        log += `${h.height} ${h.hash}\n`
-        count++
-      } else {
-        if (log) {
-          console.log(`LiveIngestorWhatsOnChain received ${count} headers:\n${log}`)
-          log = ''
-          break
-        }
-        // if (count >= 11) break
-        await wait(100)
+    const header = mockWocHeader()
+    ingestor.woc = {
+      getHeaders: async () => {
+        ingestor.stopListening()
+        return [header]
       }
-    }
-    ingestor.stopListening()
-    await p
-    expect(count).toBeGreaterThan(0)
+    } as unknown as typeof ingestor.woc
+
+    await ingestor.startListening(liveHeaders)
+
+    expect(liveHeaders).toHaveLength(1)
+    expect(liveHeaders[0].hash).toBe(header.hash)
   })
 })
 
-function mockWocHeader (): WocGetHeadersHeader {
+function mockWocHeader(chain: Chain = 'main'): WocGetHeadersHeader {
+  const header = genesisHeader(chain)
   return {
-    hash: '11'.repeat(32),
+    hash: header.hash,
     confirmations: 1,
     size: 1,
-    height: 123,
-    version: 1,
-    versionHex: '00000001',
-    merkleroot: '22'.repeat(32),
-    time: 1,
-    mediantime: 1,
-    nonce: 1,
-    bits: '1d00ffff',
+    height: header.height,
+    version: header.version,
+    versionHex: header.version.toString(16).padStart(8, '0'),
+    merkleroot: header.merkleRoot,
+    time: header.time,
+    mediantime: header.time,
+    nonce: header.nonce,
+    bits: header.bits.toString(16).padStart(8, '0'),
     difficulty: 1,
-    chainwork: '00',
-    previousblockhash: '33'.repeat(32),
+    chainwork: '00'.repeat(32),
+    previousblockhash: header.previousHash,
     nextblockhash: '',
     nTx: 1,
     num_tx: 1

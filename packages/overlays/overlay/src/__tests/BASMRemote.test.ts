@@ -1,10 +1,23 @@
 import { BASMProtocolError, BASMRemote } from '../BASMRemote'
+import { LockingScript, Transaction } from '@bsv/sdk'
 
 const ENDPOINT = 'https://peer.example/overlay'
 const TOPIC = 'tm_example'
 const ZERO = '0000000000000000000000000000000000000000000000000000000000000000'
-const TXID_1 = '0101010101010101010101010101010101010101010101010101010101010101'
-const TXID_2 = '0202020202020202020202020202020202020202020202020202020202020202'
+const RAW_TX_1 = new Transaction(
+  1,
+  [],
+  [{ satoshis: 1, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+  0
+).toHex()
+const RAW_TX_2 = new Transaction(
+  1,
+  [],
+  [{ satoshis: 2, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+  0
+).toHex()
+const TXID_1 = Transaction.fromHex(RAW_TX_1).id('hex')
+const TXID_2 = Transaction.fromHex(RAW_TX_2).id('hex')
 const TXID_3 = '0303030303030303030303030303030303030303030303030303030303030303'
 const BLOCK_HASH = '0404040404040404040404040404040404040404040404040404040404040404'
 const BASM_ROOT = '0505050505050505050505050505050505050505050505050505050505050505'
@@ -195,20 +208,20 @@ describe('BASMRemote', () => {
       'an extra transaction',
       { transactions: [{ txid: TXID_3, rawTx: 'aabb' }], missing: [TXID_1, TXID_2] }
     ],
-    ['an omitted transaction', { transactions: [{ txid: TXID_1, rawTx: 'aabb' }], missing: [] }],
+    ['an omitted transaction', { transactions: [{ txid: TXID_1, rawTx: RAW_TX_1 }], missing: [] }],
     [
       'a duplicate transaction',
       {
         transactions: [
-          { txid: TXID_1, rawTx: 'aabb' },
-          { txid: TXID_1, rawTx: 'ccdd' }
+          { txid: TXID_1, rawTx: RAW_TX_1 },
+          { txid: TXID_1, rawTx: RAW_TX_1 }
         ],
         missing: []
       }
     ],
     [
       'a transaction also reported missing',
-      { transactions: [{ txid: TXID_1, rawTx: 'aabb' }], missing: [TXID_1, TXID_2] }
+      { transactions: [{ txid: TXID_1, rawTx: RAW_TX_1 }], missing: [TXID_1, TXID_2] }
     ]
   ])('rejects a raw transaction response containing %s', async (_label, value) => {
     const remote = remoteFor(value)
@@ -238,7 +251,10 @@ describe('BASMRemote', () => {
     const remote = new BASMRemote(
       ENDPOINT,
       TOPIC,
-      async () => new Response('{"topic":"tm_example"}', { headers: { 'content-length': '11' } }),
+      async () =>
+        new Response('{"topic":"tm_example"}', {
+          headers: { 'content-length': '11', 'content-type': 'application/json' }
+        }),
       { maxResponseBytes: 10 }
     )
 
@@ -248,7 +264,12 @@ describe('BASMRemote', () => {
   })
 
   it('reports malformed successful JSON as a protocol error', async () => {
-    const remote = new BASMRemote(ENDPOINT, TOPIC, async () => new Response('{'), {})
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () => new Response('{', { headers: { 'content-type': 'application/json' } }),
+      {}
+    )
     await expect(remote.requestTopicAnchorTip()).rejects.toBeInstanceOf(BASMProtocolError)
     await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
       code: 'BASM_INVALID_RESPONSE'
@@ -320,7 +341,7 @@ describe('BASMRemote', () => {
         return response({ topic: TOPIC, anchors: [anchor(4), anchor(5)] })
       }
       return response({
-        transactions: [{ txid: TXID_2, rawTx: 'ccdd' }],
+        transactions: [{ txid: TXID_2, rawTx: RAW_TX_2 }],
         missing: [TXID_1]
       })
     })
@@ -330,7 +351,7 @@ describe('BASMRemote', () => {
       anchors: [anchor(4), anchor(5)]
     })
     await expect(remote.requestRawTransactions([TXID_1, TXID_2])).resolves.toEqual({
-      transactions: [{ txid: TXID_2, rawTx: 'ccdd' }],
+      transactions: [{ txid: TXID_2, rawTx: RAW_TX_2 }],
       missing: [TXID_1]
     })
   })
@@ -404,7 +425,10 @@ describe('BASMRemote', () => {
       TOPIC,
       async () =>
         new Response(payload, {
-          headers: { 'content-length': String(Buffer.byteLength(payload)) }
+          headers: {
+            'content-length': String(Buffer.byteLength(payload)),
+            'content-type': 'application/json'
+          }
         }),
       { maxResponseBytes: Buffer.byteLength(payload) }
     )
@@ -502,7 +526,12 @@ describe('BASMRemote', () => {
   })
 
   it('classifies malformed JSON on a failed HTTP response as an HTTP error', async () => {
-    const remote = new BASMRemote(ENDPOINT, TOPIC, async () => new Response('{', { status: 503 }))
+    const remote = new BASMRemote(
+      ENDPOINT,
+      TOPIC,
+      async () =>
+        new Response('{', { status: 503, headers: { 'content-type': 'application/json' } })
+    )
     await expect(remote.requestTopicAnchorTip()).rejects.toMatchObject({
       code: 'BASM_HTTP_ERROR'
     })

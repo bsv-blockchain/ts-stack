@@ -1,7 +1,60 @@
-import { ChainTracker, defaultHttpClient, HttpClient, WhatsOnChainConfig } from '@bsv/sdk'
+import {
+  ChainTracker,
+  defaultHttpClient,
+  HttpClient,
+  HttpClientRequestOptions,
+  HttpClientResponse,
+  WhatsOnChainConfig
+} from '@bsv/sdk'
 
 interface WhatsOnChainBlockHeader {
   merkleroot: string
+}
+
+const HEX_32_BYTES = /^[0-9a-fA-F]{64}$/
+const MAX_BLOCK_HEIGHT = 0x7fffffff
+const DEFAULT_REQUEST_TIMEOUT_MSECS = 30_000
+const MAX_REQUEST_TIMEOUT_MSECS = 60 * 60 * 1000
+
+type LocalWhatsOnChainConfig = WhatsOnChainConfig & { requestTimeoutMsecs?: number }
+
+function plainDataProperties(value: unknown, name: string): Record<string, PropertyDescriptor> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${name} must be an accessor-free plain data object.`)
+  }
+  const prototype = Object.getPrototypeOf(value)
+  const properties = Object.getOwnPropertyDescriptors(value)
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.keys(properties).length > 64 ||
+    Object.values(properties).some(property => property.get != null || property.set != null)
+  ) {
+    throw new Error(`${name} must be an accessor-free plain data object.`)
+  }
+  return properties
+}
+
+function firstHeaderHeight(value: unknown): number {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 2_000) {
+    throw new Error('WhatsOnChain block headers must be a bounded dense array.')
+  }
+  const properties = Object.getOwnPropertyDescriptors(value)
+  const expected = new Set(['length', ...Array.from({ length: value.length }, (_, index) => String(index))])
+  if (
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.keys(properties).length !== expected.size ||
+    Object.keys(properties).some(key => !expected.has(key)) ||
+    Object.values(properties).some(property => property.get != null || property.set != null)
+  ) {
+    throw new Error('WhatsOnChain block headers must be a bounded dense array.')
+  }
+  const header = plainDataProperties(properties['0'].value, 'WhatsOnChain block header')
+  const height = header.height?.value
+  if (!Number.isSafeInteger(height) || (height as number) < 0 || (height as number) > MAX_BLOCK_HEIGHT) {
+    throw new Error('WhatsOnChain returned an invalid block height.')
+  }
+  return height as number
 }
 
 /**
@@ -12,49 +65,106 @@ export default class SdkWhatsOnChain implements ChainTracker {
   readonly apiKey: string
   protected readonly URL: string
   protected readonly httpClient: HttpClient
+  protected readonly requestTimeoutMsecs: number
 
   /**
    * Constructs an instance of the WhatsOnChain ChainTracker.
+   * `tstn` and `regtest` have no WhatsOnChain service, so every request made for them is refused.
    *
-   * @param {'main' | 'test' | 'stn'} network - The BSV network to use when calling the WhatsOnChain API.
+   * @param {'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest'} network - The BSV network to use when calling the WhatsOnChain API.
    * @param {WhatsOnChainConfig} config - Configuration options for the WhatsOnChain ChainTracker.
    */
-  constructor(network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' = 'main', config: WhatsOnChainConfig = {}) {
-    const { apiKey, httpClient } = config
+  constructor(
+    network: 'main' | 'test' | 'stn' | 'ttn' | 'tstn' | 'regtest' = 'main',
+    config: LocalWhatsOnChainConfig = {}
+  ) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest'].includes(network)) {
+      throw new Error('WhatsOnChain network is invalid.')
+    }
+    const properties = plainDataProperties(config, 'WhatsOnChain config')
+    const apiKey = properties.apiKey?.value
+    const httpClient = properties.httpClient?.value
+    const requestTimeoutMsecs = properties.requestTimeoutMsecs?.value ?? DEFAULT_REQUEST_TIMEOUT_MSECS
+    if (
+      apiKey !== undefined &&
+      (typeof apiKey !== 'string' || apiKey.length > 4_096 || /\p{Cc}/u.test(apiKey))
+    ) {
+      throw new Error('WhatsOnChain API key is invalid.')
+    }
+    if (httpClient !== undefined && (httpClient == null || typeof httpClient.request !== 'function')) {
+      throw new Error('WhatsOnChain HTTP client is invalid.')
+    }
+    if (
+      !Number.isSafeInteger(requestTimeoutMsecs) ||
+      (requestTimeoutMsecs as number) < 1 ||
+      (requestTimeoutMsecs as number) > MAX_REQUEST_TIMEOUT_MSECS
+    ) {
+      throw new Error(`WhatsOnChain request timeout must be an integer from 1 through ${MAX_REQUEST_TIMEOUT_MSECS}.`)
+    }
     this.network = network
     if (network === 'ttn') {
       this.URL = 'https://api.woc-ttn.bsvblockchain.tech/v1/bsv/test'
-    } else if (network === 'tstn') {
-      // tstn has no WhatsOnChain / explorer service. The instance is constructed for
-      // interface completeness but is not registered as a Services provider, so this URL
-      // is never used for requests.
+    } else if (network === 'tstn' || network === 'regtest') {
+      // tstn and regtest have no WhatsOnChain / explorer service. The instance is constructed for
+      // interface completeness but is not registered as a Services provider, and `request`
+      // refuses to send anything for it, so a relative URL can never reach the page's origin.
       this.URL = ''
     } else {
       this.URL = `https://api.whatsonchain.com/v1/bsv/${network}`
     }
     this.httpClient = httpClient ?? defaultHttpClient()
     this.apiKey = apiKey ?? ''
+    this.requestTimeoutMsecs = requestTimeoutMsecs as number
+  }
+
+  /**
+   * False for networks with no WhatsOnChain service (tstn, regtest). Every request made by
+   * such an instance is refused.
+   */
+  get isAvailable(): boolean {
+    return this.URL !== ''
+  }
+
+  protected async request<T, Data = unknown>(
+    url: string,
+    options: HttpClientRequestOptions<Data>
+  ): Promise<HttpClientResponse<T>> {
+    if (!this.isAvailable) {
+      throw new Error(`WhatsOnChain has no service for network '${this.network}'.`)
+    }
+    const timeoutSignal = AbortSignal.timeout(this.requestTimeoutMsecs)
+    const signal = options.signal == null ? timeoutSignal : AbortSignal.any([options.signal, timeoutSignal])
+    return await this.httpClient.request<T, Data>(url, { ...options, signal })
   }
 
   async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    if (typeof root !== 'string' || !HEX_32_BYTES.test(root)) {
+      throw new Error('WhatsOnChain Merkle root must be 32 hex bytes.')
+    }
+    if (!Number.isSafeInteger(height) || height < 0 || height > MAX_BLOCK_HEIGHT) {
+      throw new Error(`WhatsOnChain height must be an integer from 0 through ${MAX_BLOCK_HEIGHT}.`)
+    }
+    root = root.toLowerCase()
     const requestOptions = {
       method: 'GET',
       headers: this.getHttpHeaders()
     }
 
-    const response = await this.httpClient.request<WhatsOnChainBlockHeader>(
+    const response = await this.request<WhatsOnChainBlockHeader>(
       `${this.URL}/block/${height}/header`,
       requestOptions
     )
     if (response.ok) {
-      const { merkleroot } = response.data
-      return merkleroot === root
+      const properties = plainDataProperties(response.data, 'WhatsOnChain block header')
+      const merkleRoot = properties.merkleroot?.value
+      if (typeof merkleRoot !== 'string' || !HEX_32_BYTES.test(merkleRoot)) {
+        throw new Error('WhatsOnChain returned an invalid Merkle root.')
+      }
+      return merkleRoot.toLowerCase() === root
     } else if (response.status === 404) {
       return false
     } else {
-      throw new Error(
-        `Failed to verify merkleroot for height ${height} because of an error: ${JSON.stringify(response.data)} `
-      )
+      throw new Error('Failed to verify Merkle root with WhatsOnChain.')
     }
   }
 
@@ -65,19 +175,17 @@ export default class SdkWhatsOnChain implements ChainTracker {
         headers: this.getHttpHeaders()
       }
 
-      const response = await this.httpClient.request<Array<{ height: number }>>(
+      const response = await this.request<Array<{ height: number }>>(
         `${this.URL}/block/headers`,
         requestOptions
       )
       if (response.ok) {
-        return response.data[0]!.height
+        return firstHeaderHeight(response.data)
       } else {
-        throw new Error(`Failed to get current height because of an error: ${JSON.stringify(response.data)} `)
+        throw new Error('Failed to get current height from WhatsOnChain.')
       }
-    } catch (error) {
-      throw new Error(
-        `Failed to get current height because of an error: ${error instanceof Error ? error.message : String(error)}`
-      )
+    } catch {
+      throw new Error('Failed to get current height from WhatsOnChain.')
     }
   }
 

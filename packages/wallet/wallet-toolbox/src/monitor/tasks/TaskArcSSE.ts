@@ -7,6 +7,7 @@ import { WalletMonitorTask } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
 import { quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
 import { classifyArcadeRejection, type ArcadeRejectionClassification } from '../../services/providers/arcadeStatus'
+import { safeDiagnostic } from '../../services/chaintracker/chaintracks/util/safeDiagnostic'
 import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
 
 interface ArcadeStatusNote extends ReqHistoryNote {
@@ -27,13 +28,18 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   static readonly taskName = 'ArcadeSSE'
 
   sseClient: ArcSSEClient | null = null
-  private readonly pendingEvents: Array<{ event: ArcSSEEvent; acknowledge: () => void }> = []
+  private readonly pendingEvents: Array<{
+    event: ArcSSEEvent
+    acknowledge: () => void
+    reject: (error: Error) => void
+  }> = []
 
   constructor(monitor: Monitor) {
     super(monitor, TaskArcadeSSE.taskName)
   }
 
   override async asyncSetup(): Promise<void> {
+    if (this.sseClient != null) return
     const callbackToken = this.monitor.options.callbackToken
     if (callbackToken == null || callbackToken === '') {
       await this.logSetupEvent('no callbackToken configured; SSE disabled')
@@ -56,12 +62,12 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     try {
       lastEventId = await this.monitor.options.loadLastSSEEventId?.()
     } catch (e) {
-      await this.logSetupEvent(`failed to load lastEventId: ${stringifyError(e)}`)
+      await this.logSetupEvent(`failed to load lastEventId: ${safeDiagnostic(e)}`)
     }
 
     const arcadeApiKey = (this.monitor.services as Services).options?.arcadeConfig?.apiKey
 
-    await this.logSetupEvent(`setting up SSE for arcadeUrl=${arcadeUrl}; lastEventId=${lastEventId ?? '(none)'}`)
+    await this.logSetupEvent('setting up configured Arcade SSE endpoint')
 
     this.sseClient = new ArcSSEClient({
       baseUrl: arcadeUrl,
@@ -70,11 +76,18 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       lastEventId,
       EventSourceClass,
       onEvent: async event =>
-        await new Promise<void>(acknowledge => {
-          this.pendingEvents.push({ event, acknowledge })
+        await new Promise<void>((acknowledge, reject) => {
+          // ArcSSEClient waits for this promise before dispatching the next
+          // event. Keep an independent one-item bound in case a replacement
+          // client violates that contract.
+          if (this.pendingEvents.length > 0) {
+            reject(new Error('Arcade SSE monitor event capacity was exceeded.'))
+            return
+          }
+          this.pendingEvents.push({ event: { ...event }, acknowledge, reject })
         }),
       onError: err => {
-        void this.logSetupEvent(`SSE error: ${err.message}`)
+        void this.logSetupEvent(`SSE error: ${safeDiagnostic(err)}`)
       }
     })
 
@@ -107,7 +120,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         try {
           await this.monitor.options.saveLastSSEEventId?.(pending.event.eventId)
         } catch (e) {
-          await this.logSetupEvent(`failed to persist lastEventId: ${stringifyError(e)}`)
+          await this.logSetupEvent(`failed to persist lastEventId: ${safeDiagnostic(e)}`)
           throw e
         }
       }
@@ -120,6 +133,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
   async fetchNow(): Promise<number> {
     if (this.sseClient == null) return 0
     return await this.sseClient.fetchEvents()
+  }
+
+  /** Close the live stream and reject any unacknowledged monitor event. */
+  close(): void {
+    this.sseClient?.close()
+    this.sseClient = null
+    const error = new Error('Arcade SSE monitor task closed.')
+    for (const pending of this.pendingEvents.splice(0)) pending.reject(error)
   }
 
   private async processStatusEvent(event: ArcSSEEvent): Promise<string> {
@@ -295,7 +316,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         this.monitor.chaintracksWithEvents || this.monitor.chaintracks,
         txid
       )
-      const ptx = await EntityProvenTx.fromReq(req, proof, false, this.monitor.options.maxRebroadcastAttempts ?? 0)
+      const ptx = await EntityProvenTx.fromReq(
+        req,
+        proof,
+        false,
+        this.monitor.options.maxRebroadcastAttempts ?? 0,
+        this.monitor.chaintracks
+      )
       if (ptx == null) {
         log += `    No validated merkle proof available from ${proof.name ?? 'configured services'}\n`
         return log
@@ -336,7 +363,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
       log += `    proved by ${proof.name ?? 'configured services'} at height ${height}, index ${index} => ${r.status}\n`
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = safeDiagnostic(err)
       log += `    error fetching proof: ${msg}\n`
       req.addHistoryNote({ when: new Date().toISOString(), what: 'arcProofError', error: msg })
       await req.updateStorageDynamicProperties(this.storage)
@@ -344,8 +371,4 @@ export class TaskArcadeSSE extends WalletMonitorTask {
 
     return log
   }
-}
-
-function stringifyError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }

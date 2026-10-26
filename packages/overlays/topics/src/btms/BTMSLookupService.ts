@@ -1,9 +1,26 @@
+import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { BTMSStorageManager } from './BTMSStorageManager.js'
-import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
-import { LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
+import {
+  AdmissionMode,
+  LookupFormula,
+  LookupQuestion,
+  LookupService,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
+import { LockingScript, PushDrop, Transaction } from '@bsv/sdk'
 import { Db } from 'mongodb'
-import { btmsProtocol, BTMSLookupResult, BTMSQuery, BTMSRecord } from './types.js'
-import docs from './BTMSLookupDocs.js'
+import { btmsProtocol, BTMSLookupResult, BTMSRecord } from './types.js'
+import docs from './BTMSLookupDocs.md.js'
+import {
+  readBoolean,
+  readInteger,
+  readSortOrder,
+  readString,
+  requireLookupQuery,
+  requirePublicKey
+} from '../shared/queryValidation.js'
 
 /**
  * Implements a lookup service for BTMS tokens
@@ -16,14 +33,14 @@ class BTMSLookupService implements LookupService {
   private static readonly TOPIC = 'tm_btms'
   private static readonly SERVICE_ID = 'ls_btms'
 
-  constructor (public storageManager: BTMSStorageManager) { }
+  constructor(public storageManager: BTMSStorageManager) {}
 
-  private isLikelySignatureField (field: number[]): boolean {
+  private isLikelySignatureField(field: number[]): boolean {
     if (field.length < 40) {
       return false
     }
-    const asText = Utils.toUTF8(field)
-    const roundTrip = Utils.toArray(asText, 'utf8')
+    const asText = toUTF8(field)
+    const roundTrip = toArray(asText, 'utf8')
     if (roundTrip.length !== field.length) {
       return true
     }
@@ -42,7 +59,11 @@ class BTMSLookupService implements LookupService {
     return printable / Math.max(asText.length, 1) < 0.8
   }
 
-  private decodeAdmittedToken (lockingScript: LockingScript, txid: string, outputIndex: number): {
+  private decodeAdmittedToken(
+    lockingScript: LockingScript,
+    txid: string,
+    outputIndex: number
+  ): {
     assetId: string
     amount: number
     metadata?: string
@@ -56,25 +77,23 @@ class BTMSLookupService implements LookupService {
       throw new Error(`BTMS token must have 2-4 fields, got ${decoded.fields.length}`)
     }
 
-    const assetIdField = Utils.toUTF8(decoded.fields[btmsProtocol.assetId])
-    const amountRaw = Utils.toUTF8(decoded.fields[btmsProtocol.amount])
+    const assetIdField = toUTF8(decoded.fields[btmsProtocol.assetId])
+    const amountRaw = toUTF8(decoded.fields[btmsProtocol.amount])
     const amount = Number(amountRaw)
-    if (!Number.isInteger(amount) || amount < 1) {
+    if (!/^[1-9]\d*$/.test(amountRaw) || !Number.isSafeInteger(amount)) {
       throw new Error(`Invalid token amount: ${amountRaw}`)
     }
 
     let metadata: string | undefined
     if (decoded.fields.length === 3) {
       if (!this.isLikelySignatureField(decoded.fields[btmsProtocol.metadata])) {
-        metadata = Utils.toUTF8(decoded.fields[btmsProtocol.metadata])
+        metadata = toUTF8(decoded.fields[btmsProtocol.metadata])
       }
     } else if (decoded.fields.length === 4) {
-      metadata = Utils.toUTF8(decoded.fields[btmsProtocol.metadata])
+      metadata = toUTF8(decoded.fields[btmsProtocol.metadata])
     }
 
-    const assetId = assetIdField === 'ISSUE'
-      ? `${txid}.${outputIndex}`
-      : assetIdField
+    const assetId = assetIdField === 'ISSUE' ? `${txid}.${outputIndex}` : assetIdField
 
     return {
       assetId,
@@ -84,7 +103,7 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') {
       throw new Error('Invalid payload mode')
     }
@@ -95,23 +114,20 @@ class BTMSLookupService implements LookupService {
     }
 
     try {
-      const { assetId, amount, metadata, ownerKey } = this.decodeAdmittedToken(lockingScript, txid, outputIndex)
-
-      await this.storageManager.storeRecord(
+      const { assetId, amount, metadata, ownerKey } = this.decodeAdmittedToken(
+        lockingScript,
         txid,
-        outputIndex,
-        assetId,
-        amount,
-        ownerKey,
-        metadata
+        outputIndex
       )
+
+      await this.storageManager.storeRecord(txid, outputIndex, assetId, amount, ownerKey, metadata)
     } catch (error) {
       console.error('Error processing BTMS output:', error)
       throw error
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== BTMSLookupService.TOPIC) return
@@ -119,41 +135,43 @@ class BTMSLookupService implements LookupService {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) {
-      throw new Error('A valid query must be provided')
-    }
-    if (question.service !== BTMSLookupService.SERVICE_ID) {
-      throw new Error('Lookup service not supported')
-    }
-
-    const query = question.query as BTMSQuery
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, BTMSLookupService.SERVICE_ID, [
+      'assetId',
+      'ownerKey',
+      'limit',
+      'skip',
+      'sortOrder',
+      'history'
+    ])
+    const assetId = readString(query, 'assetId', { maxBytes: 256 })
+    const ownerKey = requirePublicKey(readString(query, 'ownerKey', { maxBytes: 66 }), 'ownerKey')
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const sortOrder = readSortOrder(query)
+    const history = readBoolean(query, 'history')
 
     // Check if we have any filters to apply
-    const hasFilters = query.assetId || query.ownerKey
+    const hasFilters = assetId !== undefined || ownerKey !== undefined
 
     let results: BTMSRecord[]
 
     if (hasFilters) {
       results = await this.storageManager.findWithFilters(
         {
-          assetId: query.assetId,
-          ownerKey: query.ownerKey
+          assetId,
+          ownerKey
         },
-        query.limit,
-        query.skip,
-        query.sortOrder
+        limit,
+        skip,
+        sortOrder
       )
     } else {
-      results = await this.storageManager.findAllRecords(
-        query.limit,
-        query.skip,
-        query.sortOrder
-      )
+      results = await this.storageManager.findAllRecords(limit, skip, sortOrder)
     }
 
     const lookupResults: BTMSLookupResult[] = []
@@ -162,10 +180,10 @@ class BTMSLookupService implements LookupService {
       lookupResults.push({
         txid: result.txid,
         outputIndex: result.outputIndex,
-        history: query.history
+        history: history
           ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
-            return await this.historySelector(beef, outputIndex, result.assetId)
-          }
+              return await this.historySelector(beef, outputIndex, result.assetId)
+            }
           : undefined
       })
     }
@@ -176,7 +194,11 @@ class BTMSLookupService implements LookupService {
   /**
    * History selector for determining which outputs to include in chain tracking
    */
-  private async historySelector (beef: number[], outputIndex: number, assetId?: string): Promise<boolean> {
+  private async historySelector(
+    beef: number[],
+    outputIndex: number,
+    assetId?: string
+  ): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
       const output = tx.outputs[outputIndex]
@@ -198,11 +220,11 @@ class BTMSLookupService implements LookupService {
     }
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return docs
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -217,7 +239,7 @@ class BTMSLookupService implements LookupService {
 }
 
 // Factory function
-function create (db: Db): BTMSLookupService {
+function create(db: Db): BTMSLookupService {
   return new BTMSLookupService(new BTMSStorageManager(db))
 }
 export default create

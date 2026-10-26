@@ -3,6 +3,8 @@ import {
   LookupResolution,
   LockingScript,
   PrivateKey,
+  ProtoWallet,
+  PushDrop,
   Transaction,
   UnlockingScript,
   WalletInterface
@@ -90,29 +92,34 @@ function chainedTx(sourceTransaction?: Transaction): Transaction {
   return tx
 }
 
-function umpTokenLockingScript(
+async function umpTokenLockingScript(
   hashByte: number,
   opts: { recoveryByte?: number; fieldCount?: number; presentationLength?: number; recoveryLength?: number } = {}
-): LockingScript {
+): Promise<LockingScript> {
   const { recoveryByte = 1, fieldCount = 11, presentationLength = 32, recoveryLength = 32 } = opts
-  const pubkey = new PrivateKey(42).toPublicKey().encode(true) as number[]
   const fields = Array.from({ length: fieldCount }, (_, i) => {
     if (i === 6) return Array.from({ length: presentationLength }).fill(hashByte) as number[]
     if (i === 7) return Array.from({ length: recoveryLength }).fill(recoveryByte) as number[]
     return Array.from({ length: 32 }).fill(1) as number[]
   })
-  return new LockingScript([
-    { op: pubkey.length, data: pubkey },
-    { op: 172 }, // OP_CHECKSIG
-    ...fields.map(f => ({ op: f.length, data: f }))
-  ])
+  return await new PushDrop(new ProtoWallet(new PrivateKey(42))).lock(
+    fields,
+    [2, 'admin user management token'],
+    '1',
+    'self',
+    true,
+    true
+  )
 }
 
 function withoutSourceTransactions(tx: Transaction): Transaction {
   return Transaction.fromBinary(tx.toBinary())
 }
 
-function resolutionWithBeefs(beefs: number[][], progress: Partial<LookupResolution['progress']> = {}): LookupResolution {
+function resolutionWithBeefs(
+  beefs: number[][],
+  progress: Partial<LookupResolution['progress']> = {}
+): LookupResolution {
   const base = resolutionWith(beefs.length, progress)
   base.answer.outputs = beefs.map(beef => ({ beef, outputIndex: 0 }))
   return base
@@ -350,7 +357,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('prefers the proven continuation over an independently minted forked token', async () => {
     const predecessor = chainedTx()
-    predecessor.outputs[0].lockingScript = umpTokenLockingScript(3)
+    predecessor.outputs[0].lockingScript = await umpTokenLockingScript(3)
     const continuation = chainedTx(predecessor)
     const freshMint = chainedTx()
     freshMint.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
@@ -413,7 +420,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('refuses to pick a winner when a competing token has no examinable evidence', async () => {
     const predecessor = chainedTx()
-    predecessor.outputs[0].lockingScript = umpTokenLockingScript(3)
+    predecessor.outputs[0].lockingScript = await umpTokenLockingScript(3)
     const continuation = chainedTx(predecessor)
     const interactor = interactorWithParsedTokens(
       resolutionWithBeefs([continuation.toBEEF(true), [1, 2, 3]], {
@@ -431,9 +438,9 @@ describe('CWI account lookup diagnostics', () => {
 
   it('stays indeterminate when both forked tokens prove same-identity continuation', async () => {
     const predecessorA = chainedTx()
-    predecessorA.outputs[0].lockingScript = umpTokenLockingScript(3)
+    predecessorA.outputs[0].lockingScript = await umpTokenLockingScript(3)
     const predecessorB = chainedTx()
-    predecessorB.outputs[0].lockingScript = umpTokenLockingScript(3)
+    predecessorB.outputs[0].lockingScript = await umpTokenLockingScript(3)
     predecessorB.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
     const continuationA = chainedTx(predecessorA)
     const continuationB = chainedTx(predecessorB)
@@ -453,7 +460,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('recognizes continuation through the recovery hash when the presentation key rotated', async () => {
     const predecessor = chainedTx()
-    predecessor.outputs[0].lockingScript = umpTokenLockingScript(9, { recoveryByte: 1 })
+    predecessor.outputs[0].lockingScript = await umpTokenLockingScript(9, { recoveryByte: 1 })
     const continuation = chainedTx(predecessor)
     const freshMint = chainedTx()
     freshMint.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
@@ -473,7 +480,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('ignores a predecessor with malformed identity hashes', async () => {
     const predecessor = chainedTx()
-    predecessor.outputs[0].lockingScript = umpTokenLockingScript(3, {
+    predecessor.outputs[0].lockingScript = await umpTokenLockingScript(3, {
       presentationLength: 31,
       recoveryLength: 31
     })
@@ -515,7 +522,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('recognizes a twelve-field predecessor token (profiles present)', async () => {
     const predecessor = chainedTx()
-    predecessor.outputs[0].lockingScript = umpTokenLockingScript(3, { fieldCount: 12 })
+    predecessor.outputs[0].lockingScript = await umpTokenLockingScript(3, { fieldCount: 12 })
     const continuation = chainedTx(predecessor)
     const freshMint = chainedTx()
     freshMint.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })
@@ -535,7 +542,7 @@ describe('CWI account lookup diagnostics', () => {
 
   it('picks the continuation among a stale predecessor, its update, and an unrelated fork', async () => {
     const stale = chainedTx()
-    stale.outputs[0].lockingScript = umpTokenLockingScript(3)
+    stale.outputs[0].lockingScript = await umpTokenLockingScript(3)
     const continuation = chainedTx(stale)
     const unrelatedFork = chainedTx()
     unrelatedFork.addOutput({ satoshis: 2, lockingScript: new LockingScript([]) })

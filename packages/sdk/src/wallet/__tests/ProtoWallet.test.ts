@@ -393,6 +393,79 @@ describe('ProtoWallet', () => {
     expect(plaintext).toEqual(explicitSelfPlaintext)
     expect(plaintext).toEqual(sampleData)
   })
+
+  it('snapshots HMAC verification inputs before asynchronous key derivation', async () => {
+    const requestProtocol: [2, string] = [2, 'immutable hmac request']
+    const { hmac } = await user.createHmac({
+      data: sampleData,
+      protocolID: requestProtocol,
+      keyID: 'original-key',
+      counterparty: 'self'
+    })
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => {
+      resume = resolve
+    })
+    const keyDeriver = user.keyDeriver as any
+    const deriveSymmetricKey = keyDeriver.deriveSymmetricKey.bind(keyDeriver)
+    keyDeriver.deriveSymmetricKeyAsync = async (...derivation: any[]) => {
+      await gate
+      return deriveSymmetricKey(...derivation)
+    }
+    const args = {
+      data: [...sampleData],
+      hmac: [...hmac],
+      protocolID: [...requestProtocol] as [2, string],
+      keyID: 'original-key',
+      counterparty: 'self' as const
+    }
+
+    const pending = user.verifyHmac(args)
+    args.data[0] ^= 0xff
+    args.hmac[0] ^= 0xff
+    args.protocolID[1] = 'substituted hmac request'
+    args.keyID = 'substituted-key'
+    resume()
+
+    await expect(pending).resolves.toEqual({ valid: true })
+  })
+
+  it('snapshots signature verification inputs before asynchronous key derivation', async () => {
+    const requestProtocol: [2, string] = [2, 'immutable signature request']
+    const { signature } = await user.createSignature({
+      data: sampleData,
+      protocolID: requestProtocol,
+      keyID: 'original-key',
+      counterparty: 'self'
+    })
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => {
+      resume = resolve
+    })
+    const keyDeriver = user.keyDeriver as any
+    const derivePublicKey = keyDeriver.derivePublicKey.bind(keyDeriver)
+    keyDeriver.derivePublicKeyAsync = async (...derivation: any[]) => {
+      await gate
+      return derivePublicKey(...derivation)
+    }
+    const args = {
+      data: [...sampleData],
+      signature: [...signature],
+      protocolID: [...requestProtocol] as [2, string],
+      keyID: 'original-key',
+      counterparty: 'self' as const
+    }
+
+    const pending = user.verifySignature(args)
+    args.data[0] ^= 0xff
+    args.signature[args.signature.length - 1] ^= 0xff
+    args.protocolID[1] = 'substituted signature request'
+    args.keyID = 'substituted-key'
+    resume()
+
+    await expect(pending).resolves.toEqual({ valid: true })
+  })
+
   it('Efficiently executes hot code paths', async () => {
     const alicePriv = PrivateKey.fromRandom()
     const alice = new ProtoWallet(alicePriv)
@@ -573,6 +646,27 @@ describe('ProtoWallet', () => {
 
       // Compare linkage and expectedLinkage
       expect(linkage).toEqual(expectedLinkage)
+    })
+
+    it('returns canonical public keys for symbolic specific-linkage counterparties', async () => {
+      const verifier = PrivateKey.fromRandom().toPublicKey().toString()
+      const protocolID: [0 | 1 | 2, string] = [2, 'symbolic linkage']
+
+      const selfResult = await user.revealSpecificKeyLinkage({
+        counterparty: 'self',
+        verifier,
+        protocolID,
+        keyID: 'self-key'
+      })
+      expect(selfResult.counterparty).toBe(userKey.toPublicKey().toString())
+
+      const anyoneResult = await user.revealSpecificKeyLinkage({
+        counterparty: 'anyone',
+        verifier,
+        protocolID,
+        keyID: 'anyone-key'
+      })
+      expect(anyoneResult.counterparty).toBe(new PrivateKey(1).toPublicKey().toString())
     })
   })
 

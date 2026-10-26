@@ -1,25 +1,24 @@
+import { type ValidListActionsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
   Transaction as BsvTransaction,
   ActionStatus,
   ListActionsResult,
   WalletAction,
   WalletActionOutput,
-  WalletActionInput,
-  Validation
+  WalletActionInput
 } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
 import { partitionActionLabels } from './ListActionsSpecOp'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { TableTransaction } from '../schema/tables/TableTransaction'
-import { verifyOne } from '../../utility/utilityHelpers'
+import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 
-
-async function enrichActionLabels (
+async function enrichActionLabels(
   storage: StorageKnex,
   tx: Partial<TableTransaction>,
   action: WalletAction,
@@ -30,7 +29,7 @@ async function enrichActionLabels (
     action.labels = applyBrc153ReferenceLabel(action.labels, tx.reference)
   }
   if (timeFilterRequested) {
-    const ts = (tx.created_at != null) ? new Date(tx.created_at as any).getTime() : Number.NaN
+    const ts = tx.created_at != null ? new Date(tx.created_at as any).getTime() : Number.NaN
     if (!Number.isNaN(ts)) {
       const timeLabel = makeBrc114ActionTimeLabel(ts)
       if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
@@ -38,7 +37,7 @@ async function enrichActionLabels (
   }
 }
 
-async function enrichActionOutputs (
+async function enrichActionOutputs(
   storage: StorageKnex,
   tx: Partial<TableTransaction>,
   action: WalletAction,
@@ -64,7 +63,7 @@ async function enrichActionOutputs (
   }
 }
 
-async function enrichActionInputs (
+async function enrichActionInputs(
   storage: StorageKnex,
   tx: Partial<TableTransaction>,
   action: WalletAction,
@@ -95,13 +94,14 @@ async function enrichActionInputs (
   }
 }
 
-export async function listActions (
+export async function listActions(
   storage: StorageKnex,
   auth: AuthId,
-  vargs: Validation.ValidListActionsArgs
+  vargs: ValidListActionsArgs
 ): Promise<ListActionsResult> {
   const limit = vargs.limit
   const offset = vargs.offset
+  const userId = verifyId(auth.userId)
 
   const k = storage.toDb()
 
@@ -126,7 +126,7 @@ export async function listActions (
   if (labels.length > 0) {
     const q = k<TableTxLabel>('tx_labels')
       .where({
-        userId: auth.userId,
+        userId,
         isDeleted: false
       })
       .whereNotNull('txLabelId')
@@ -139,11 +139,15 @@ export async function listActions (
   const isQueryModeAll = vargs.labelQueryMode === 'all'
   if (isQueryModeAll && labelIds.length < labels.length)
   // all the required labels don't exist, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   if (!isQueryModeAll && labelIds.length === 0 && labels.length > 0)
   // any and only non-existing labels, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   const columns: string[] = [
     'created_at',
@@ -158,9 +162,10 @@ export async function listActions (
     'lockTime'
   ]
 
-  const stati: string[] = (specOp?.setStatusFilter == null)
-    ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
-    : specOp.setStatusFilter()
+  const stati: string[] =
+    specOp?.setStatusFilter == null
+      ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
+      : specOp.setStatusFilter()
 
   const noLabels = labelIds.length === 0
 
@@ -172,17 +177,30 @@ export async function listActions (
   }
 
   const makeWithLabelsQueries = () => {
-    const cteq = k.raw(`
-            SELECT ${columns.map(c => 't.' + c).join(',')},
+    // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+    const cteq = k.raw(
+      `
+            SELECT ${columns.map(() => '??').join(',')},
                     (SELECT COUNT(*)
                     FROM tx_labels_map AS m
-                    WHERE m.transactionId = t.transactionId
-                    AND m.txLabelId IN (${labelIds.join(',')})
+                    WHERE ?? = ??
+                    AND ?? IN (${labelIds.map(() => '?').join(',')})
                     ) AS lc
             FROM transactions AS t
-            WHERE t.userId = ${auth.userId}
-            AND t.status in (${stati.map(s => `'${s}'`).join(',')})
-            `)
+            WHERE ?? = ?
+            AND t.status in (${stati.map(() => '?').join(',')})
+            `,
+      [
+        ...columns.map(c => 't.' + c),
+        'm.transactionId',
+        't.transactionId',
+        'm.txLabelId',
+        ...labelIds,
+        't.userId',
+        userId,
+        ...stati
+      ]
+    )
 
     const q = k.with('tlc', cteq)
     q.from('tlc')
@@ -196,7 +214,7 @@ export async function listActions (
   }
 
   const makeWithoutLabelsQueries = () => {
-    const q = k('transactions').where('userId', auth.userId).whereIn('status', stati)
+    const q = k('transactions').where('userId', userId).whereIn('status', stati)
     applyTimestampFilters(q)
     const qcount = q.clone().count('transactionId as total')
     return { q, qcount }
@@ -208,7 +226,7 @@ export async function listActions (
 
   const txs: Array<Partial<TableTransaction>> = await q
 
-  if ((specOp?.postProcess) != null) {
+  if (specOp?.postProcess != null) {
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)
   }
 
@@ -238,7 +256,13 @@ export async function listActions (
         if (vargs.includeLabels) await enrichActionLabels(storage, tx, action, timeFilterRequested)
         if (vargs.includeOutputs) await enrichActionOutputs(storage, tx, action, !!vargs.includeOutputLockingScripts)
         if (vargs.includeInputs) {
-          await enrichActionInputs(storage, tx, action, !!vargs.includeInputSourceLockingScripts, !!vargs.includeInputUnlockingScripts)
+          await enrichActionInputs(
+            storage,
+            tx,
+            action,
+            !!vargs.includeInputSourceLockingScripts,
+            !!vargs.includeInputUnlockingScripts
+          )
         }
       })
     )

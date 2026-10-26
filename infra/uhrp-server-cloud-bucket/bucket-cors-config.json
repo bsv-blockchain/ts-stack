@@ -3,6 +3,6 @@
         "maxAgeSeconds": 3600,
         "method": [ "GET", "HEAD", "DELETE", "PUT", "POST", "OPTIONS" ],
         "origin": [ "*" ],
-        "responseHeader": [ "Content-Type", "access-control-allow-origin", "x-goog-custom-time", "x-goog-meta-uploaderidentitykey" ]
+        "responseHeader": [ "Content-Disposition", "Content-Length", "Content-Type", "access-control-allow-origin", "x-goog-custom-time", "x-goog-if-generation-match", "x-goog-meta-uploaderidentitykey" ]
     }
 ]

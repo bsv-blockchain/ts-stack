@@ -35,7 +35,7 @@ import type { PreparedBeefOptions } from './storage/methods/preparedBeef'
 // import { BHServiceClient } from './services/chaintracker'
 
 import * as dotenv from 'dotenv'
-dotenv.config()
+dotenv.config({ quiet: true })
 
 /**
  * The 'Setup` class provides static setup functions to construct BRC-100 compatible
@@ -93,14 +93,14 @@ DEV_KEYS = '{
     "${mainIdentityKey2}": "${mainPrivKey2.toString()}"
 }'
 `
-    console.log(log)
-
     return log
   }
 
   /**
    * Reads a .env file of the format created by `makeEnv`.
    *
+   * Returns the generated text without writing credentials to stdout; the
+   * caller must explicitly choose a protected destination.
    * Returns values for designated `chain`.
    *
    * Access private keys through the `devKeys` object: `devKeys[identityKey]`

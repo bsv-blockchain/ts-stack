@@ -2,7 +2,7 @@ openapi: '3.1.0'
 
 info:
   title: MessageBox Server HTTP API
-  version: '1.0.0'
+  version: '1.1.0'
   description: |
     REST API for the BSV MessageBox Server. All endpoints require BRC-103
     mutual authentication over the BRC-104 HTTP binding unless noted
@@ -98,9 +98,10 @@ components:
             back-compat but must not be used simultaneously.
         recipients:
           type: array
+          uniqueItems: true
           items:
             $ref: '#/components/schemas/PubKeyHex'
-          description: Preferred plural form. Takes precedence over `recipient` when both are present.
+          description: Preferred plural form. Takes precedence over `recipient` when both are present. Compressed and uncompressed encodings of the same key count as one recipient and must not be repeated.
         messageBox:
           type: string
           minLength: 1
@@ -189,8 +190,9 @@ components:
           items:
             $ref: '#/components/schemas/PaymentOutput'
           description: |
-            Output list. When a server delivery fee applies, output[0] must be the
-            server's delivery fee output. Subsequent outputs are recipient-side.
+            Output list. When a server delivery fee applies, output[0] must pay
+            the per-recipient delivery fee multiplied by the number of recipients.
+            Subsequent outputs are recipient-side.
         description:
           type: string
           minLength: 5
@@ -245,6 +247,8 @@ components:
           type: string
         recipientFee:
           type: integer
+          minimum: -1
+          maximum: 2147483647
           description: -1 = blocked, 0 = always allow, positive = satoshi amount required.
         status:
           $ref: '#/components/schemas/PermissionStatus'
@@ -351,6 +355,17 @@ paths:
         Inserts a message into each recipient's named message box. If the box
         does not exist it is created automatically.
 
+        **Live announcement** A stored message is announced to the recipient's
+        joined sockets on `sendMessage-<roomId>`, the same event a WebSocket
+        send broadcasts on. The announcement is best effort: it reaches only
+        the sockets held by the process that served this request, and a
+        request carrying `payment` is never announced, because the
+        announcement carries this request body rather than the stored row and
+        a recipient that acknowledged on it would discard the row before its
+        wallet internalized the output. Recipients must still poll
+        `/listMessages`, which is the only path that internalizes a recipient
+        payment. See `specs/messaging/authsocket-asyncapi.yaml`.
+
         **Payment logic**
         - If `deliveryFee > 0` (set by server policy) a payment is required
           with output[0] assigned to the server.
@@ -358,6 +373,10 @@ paths:
           per-recipient outputs must be included.
         - If a recipient has `recipientFee === -1` (blocked) the entire request
           fails with 403 before any DB writes.
+
+        Recipients must be unique after public-key canonicalization. Duplicate
+        compressed/uncompressed representations are rejected before fee or
+        message-ID allocation.
 
         **Deduplication**  Messages with a duplicate `messageId` are silently
         ignored (ON CONFLICT IGNORE). If the database raises a hard duplicate-key
@@ -988,6 +1007,10 @@ paths:
         `blockedRecipients` fields. Blocked recipients are still returned in
         the list; the caller decides whether to abort or proceed with the
         non-blocked subset.
+
+        Persisted recipient fees are safe integers from -1 through 2147483647;
+        server delivery fees are safe integers from 0 through 2147483647.
+        Invalid persisted values fail the quote closed.
       tags: [Permissions]
       parameters:
         - in: query
@@ -1032,9 +1055,13 @@ paths:
                         properties:
                           deliveryFee:
                             type: integer
+                            minimum: 0
+                            maximum: 2147483647
                             description: Server delivery fee in satoshis.
                           recipientFee:
                             type: integer
+                            minimum: -1
+                            maximum: 2147483647
                             description: Recipient-set fee in satoshis (-1 = blocked).
                   - title: MultiRecipientQuote
                     type: object
@@ -1057,8 +1084,12 @@ paths:
                               type: string
                             deliveryFee:
                               type: integer
+                              minimum: 0
+                              maximum: 2147483647
                             recipientFee:
                               type: integer
+                              minimum: -1
+                              maximum: 2147483647
                             status:
                               $ref: '#/components/schemas/PermissionStatus'
                       totals:

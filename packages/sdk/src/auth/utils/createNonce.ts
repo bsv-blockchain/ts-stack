@@ -4,7 +4,7 @@ import {
   Base64String,
   OriginatorDomainNameStringUnder250Bytes
 } from '../../wallet/Wallet.interfaces.js'
-import * as Utils from '../../primitives/utils.js'
+import { toBase64, toUTF8 } from '../../primitives/utils.js'
 import Random from '../../primitives/Random.js'
 
 /**
@@ -26,13 +26,36 @@ export async function createNonce(
   // Generate 16 random bytes for the first half of the data
   const firstHalf = Random(16)
   // Create an sha256 HMAC
-  const { hmac } = await wallet.createHmac({
-    protocolID: [2, 'server hmac'],
-    keyID: Utils.toUTF8(firstHalf),
-    data: firstHalf,
-    counterparty
-  }, originator)
+  const { hmac } = await wallet.createHmac(
+    {
+      protocolID: [2, 'server hmac'],
+      keyID: toUTF8(firstHalf),
+      data: firstHalf,
+      counterparty
+    },
+    originator
+  )
+  if (!isExactBytes(hmac, 32)) {
+    throw new Error('Wallet returned an invalid 32-byte nonce HMAC.')
+  }
   // Concatenate firstHalf and secondHalf as the nonce bytes
   const nonceBytes = [...firstHalf, ...hmac]
-  return Utils.toBase64(nonceBytes)
+  return toBase64(nonceBytes)
+}
+
+function isExactBytes(value: unknown, length: number): value is number[] {
+  if (!Array.isArray(value) || value.length !== length) return false
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (
+      descriptor == null ||
+      !Object.hasOwn(descriptor, 'value') ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      return false
+    }
+  }
+  return true
 }

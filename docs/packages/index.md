@@ -66,6 +66,7 @@ ts-stack contains packages organized into 8 domains. Each domain serves a specif
 - [@bsv/authsocket](./messaging/authsocket.md) — WebSocket protocol for authenticated messaging
 - [@bsv/authsocket-client](./messaging/authsocket-client.md) — Client library for Authsocket
 - [@bsv/paymail](./messaging/paymail.md) — Paymail protocol (payment address discovery)
+- [@bsv/webrtpay](./messaging/webrtpay.md) — Direct wallet-to-wallet payments over WebRTC data channels, authenticated with BRC-100 identity keys
 
 ### Middleware
 
@@ -87,7 +88,6 @@ Independent HTTP 402 flow:
 
 - [@bsv/templates](./helpers/templates.md) — Predefined `ScriptTemplate` examples for protocol engineers; `OpReturn` is one template among several
 - [@bsv/did](./helpers/did.md) — SD-JWT VC and optional `did:key` helpers for BSV SDK identity keys
-- [@bsv/did-client](./helpers/did-client.md) — DID resolver (Decentralized Identifiers)
 - [@bsv/simple](./helpers/simple.md) — Simplified API for common operations
 - [@bsv/wallet-helper](./helpers/wallet-helper.md) — Wallet utility functions
 - [@bsv/air-gap](./helpers/air-gap.md) — Fountain-coded optical QR transport for arbitrary bytes

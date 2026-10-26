@@ -117,8 +117,24 @@ export const GY_BIGINT = BigInt(
   '0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8'
 )
 
-// Cache for precomputed windowed tables keyed by 'window:x:y'
+// Windowed tables keyed by `window:x:y`. Generator tables stay for the
+// process lifetime. Every other point shares one recency-ordered cache.
+const GENERATOR_WNAF_TABLES: Map<string, JacobianPointBI[]> = new Map()
 const WNAF_TABLE_CACHE: Map<string, JacobianPointBI[]> = new Map()
+const WNAF_TABLE_CACHE_LIMIT = 64
+const wnafTableCacheKeys = (): string[] => [...WNAF_TABLE_CACHE.keys()]
+
+// Every named export of this module is published through `./primitives/*`.
+// Jest sets JEST_WORKER_ID, so tests can observe eviction without an export
+// that would publish the cached public-point coordinates.
+if (typeof process !== 'undefined' && process.env.JEST_WORKER_ID !== undefined) {
+  Object.assign(globalThis, {
+    __bsvSdkWnafTableCacheTest: {
+      limit: WNAF_TABLE_CACHE_LIMIT,
+      keys: wnafTableCacheKeys
+    }
+  })
+}
 
 export interface JacobianPointBI {
   X: bigint
@@ -178,8 +194,17 @@ export const jpNeg = (P: JacobianPointBI): JacobianPointBI => {
 
 const wnafTable = (window: number, P0: { x: bigint; y: bigint }): JacobianPointBI[] => {
   const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`
-  const cached = WNAF_TABLE_CACHE.get(key)
-  if (cached !== undefined) return cached
+  const isGenerator = P0.x === GX_BIGINT && P0.y === GY_BIGINT
+  const cache = isGenerator ? GENERATOR_WNAF_TABLES : WNAF_TABLE_CACHE
+  const cached = cache.get(key)
+  if (cached !== undefined) {
+    if (!isGenerator) {
+      // Refresh recency: Map iteration order is insertion order.
+      WNAF_TABLE_CACHE.delete(key)
+      WNAF_TABLE_CACHE.set(key, cached)
+    }
+    return cached
+  }
 
   const table = Array.from<unknown, JacobianPointBI>({ length: 1 << (window - 1) }, () => ({
     X: BI_ZERO,
@@ -192,7 +217,11 @@ const wnafTable = (window: number, P0: { x: bigint; y: bigint }): JacobianPointB
   for (let i = 1; i < table.length; i++) {
     table[i] = jpAdd(table[i - 1], doubled)
   }
-  WNAF_TABLE_CACHE.set(key, table)
+  cache.set(key, table)
+  if (!isGenerator && WNAF_TABLE_CACHE.size > WNAF_TABLE_CACHE_LIMIT) {
+    const oldest = WNAF_TABLE_CACHE.keys().next().value
+    if (oldest !== undefined) WNAF_TABLE_CACHE.delete(oldest)
+  }
   return table
 }
 
@@ -872,7 +901,7 @@ export default class Point extends BasePoint {
   mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point {
     const points = [this, p2]
     const coeffs = [k1, k2]
-    return this._endoWnafMulAdd(points, coeffs) as Point
+    return this.#_endoWnafMulAdd(points, coeffs) as Point
   }
 
   /**
@@ -893,7 +922,7 @@ export default class Point extends BasePoint {
   jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint {
     const points = [this, p2]
     const coeffs = [k1, k2]
-    return this._endoWnafMulAdd(points, coeffs, true) as JPoint
+    return this.#_endoWnafMulAdd(points, coeffs, true) as JPoint
   }
 
   /**
@@ -999,7 +1028,7 @@ export default class Point extends BasePoint {
     return res
   }
 
-  private _getBeta(): undefined | Point {
+  #_getBeta(): undefined | Point {
     if (typeof this.curve.endo !== 'object') {
       return
     }
@@ -1049,43 +1078,7 @@ export default class Point extends BasePoint {
     return beta
   }
 
-  private _fixedNafMul(k: BigNumber): Point {
-    if (typeof this.precomputed !== 'object' || this.precomputed === null) {
-      throw new Error('_fixedNafMul requires precomputed values for the point')
-    }
-    const doubles = this._getDoubles()
-
-    const naf = this.curve.getNAF(k, 1, this.curve._bitLength)
-    let I = (1 << (doubles.step + 1)) - (doubles.step % 2 === 0 ? 2 : 1)
-    I /= 3
-
-    // Translate into more windowed form
-    const repr: number[] = []
-    for (let j = 0; j < naf.length; j += doubles.step) {
-      let nafW = 0
-      for (let k = j + doubles.step - 1; k >= j; k--) {
-        nafW = (nafW << 1) + naf[k]
-      }
-      repr.push(nafW)
-    }
-
-    let a = new JPoint(null, null, null)
-    let b = new JPoint(null, null, null)
-    for (let i = I; i > 0; i--) {
-      for (let j = 0; j < repr.length; j++) {
-        const nafW = repr[j]
-        if (nafW === i) {
-          b = b.mixedAdd(doubles.points[j])
-        } else if (nafW === -i) {
-          b = b.mixedAdd(doubles.points[j].neg())
-        }
-      }
-      a = a.add(b)
-    }
-    return a.toP()
-  }
-
-  private _prepareWnafWindows(
+  #_prepareWnafWindows(
     defW: number,
     points: Point[],
     len: number,
@@ -1093,7 +1086,7 @@ export default class Point extends BasePoint {
     wnd: Point[][]
   ): void {
     for (let index = 0; index < len; index++) {
-      const nafPoints = points[index]._getNAFPoints(defW)
+      const nafPoints = points[index].#_getNAFPoints(defW)
       wndWidth[index] = nafPoints.wnd
       wnd[index] = nafPoints.points
     }
@@ -1134,7 +1127,7 @@ export default class Point extends BasePoint {
     return max
   }
 
-  private _prepareWnafRepresentations(
+  #_prepareWnafRepresentations(
     points: Point[],
     coeffs: BigNumber[],
     len: number,
@@ -1178,7 +1171,7 @@ export default class Point extends BasePoint {
     return { index, doubles }
   }
 
-  private _addWnafStep(accumulator: JPoint, len: number, tmp: BigNumber[], wnd: Point[][]): JPoint {
+  #_addWnafStep(accumulator: JPoint, len: number, tmp: BigNumber[], wnd: Point[][]): JPoint {
     const one = new BigNumber(1)
     const two = new BigNumber(2)
     let result = accumulator
@@ -1193,7 +1186,7 @@ export default class Point extends BasePoint {
     return result
   }
 
-  private _wnafMulAdd(
+  #_wnafMulAdd(
     defW: number,
     points: Point[],
     coeffs: BigNumber[],
@@ -1205,8 +1198,8 @@ export default class Point extends BasePoint {
     const wnd: Point[][] = Array.from({ length: scratchLength }, () => [])
     const naf: number[][] = Array.from({ length: scratchLength }, () => [])
 
-    this._prepareWnafWindows(defW, points, len, wndWidth, wnd)
-    const max = this._prepareWnafRepresentations(points, coeffs, len, wndWidth, wnd, naf)
+    this.#_prepareWnafWindows(defW, points, len, wndWidth, wnd)
+    const max = this.#_prepareWnafRepresentations(points, coeffs, len, wndWidth, wnd, naf)
 
     let acc = new JPoint(null, null, null)
     const tmp = this.curve._wnafT4
@@ -1216,7 +1209,7 @@ export default class Point extends BasePoint {
       index = step.index
       acc = acc.dblp(step.doubles)
       if (index < 0) break
-      acc = this._addWnafStep(acc, len, tmp, wnd)
+      acc = this.#_addWnafStep(acc, len, tmp, wnd)
       index--
     }
     // Zeroify references
@@ -1231,7 +1224,7 @@ export default class Point extends BasePoint {
     }
   }
 
-  private _endoWnafMulAdd(
+  #_endoWnafMulAdd(
     points: Point[],
     coeffs: BigNumber[], // Explicitly type coeffs
     jacobianResult?: boolean
@@ -1242,7 +1235,7 @@ export default class Point extends BasePoint {
     for (i = 0; i < points.length; i++) {
       const split = this.curve._endoSplit(coeffs[i])
       let p = points[i]
-      let beta: Point = p._getBeta() ?? new Point(null, null)
+      let beta: Point = p.#_getBeta() ?? new Point(null, null)
 
       if (split.k1.negative !== 0) {
         split.k1.ineg()
@@ -1259,7 +1252,7 @@ export default class Point extends BasePoint {
       ncoeffs[i * 2 + 1] = split.k2
     }
 
-    const res = this._wnafMulAdd(1, npoints, ncoeffs, i * 2, jacobianResult)
+    const res = this.#_wnafMulAdd(1, npoints, ncoeffs, i * 2, jacobianResult)
 
     // Clean-up references to points and coefficients
     for (let j = 0; j < i * 2; j++) {
@@ -1267,19 +1260,6 @@ export default class Point extends BasePoint {
       ncoeffs[j] = null as unknown as BigNumber
     }
     return res
-  }
-
-  private _hasDoubles(k: BigNumber): boolean {
-    if (this.precomputed == null) {
-      return false
-    }
-
-    const doubles = this.precomputed.doubles
-    if (typeof doubles !== 'object') {
-      return false
-    }
-
-    return doubles.points.length >= Math.ceil((k.bitLength() + 1) / doubles.step)
   }
 
   private _getDoubles(step?: number, power?: number): { step: number; points: any[] } {
@@ -1306,7 +1286,7 @@ export default class Point extends BasePoint {
     }
   }
 
-  private _getNAFPoints(wnd: number): { wnd: number; points: any[] } {
+  #_getNAFPoints(wnd: number): { wnd: number; points: any[] } {
     if (
       typeof this.precomputed === 'object' &&
       this.precomputed !== null &&

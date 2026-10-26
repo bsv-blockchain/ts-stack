@@ -19,28 +19,32 @@ export async function janitorOnIdentity(identityKey: string, chain: sdk.Chain): 
     rootKeyHex: env.devKeys[identityKey]
   })
 
-  const change = await setup.wallet.listOutputs({ basket: sdk.specOpInvalidChange })
+  try {
+    const change = await setup.wallet.listOutputs({ basket: sdk.specOpInvalidChange })
 
-  console.log(`
+    console.log(`
 
 Janitor list invalid change outputs for:
 .env ${env.chain} ${identityKey} ${setup.storage.getActiveStoreName()}
 `)
-  if (change.totalOutputs === 0) {
-    console.log('no invalid change outputs found.')
-  } else {
-    if (!setup.storage.isActiveEnabled) {
-      console.log(
-        'ACTIVE STORAGE IS NOT ENABLED! Wallet is not configured with currently active storage provider!'
-      )
-    }
+    if (change.totalOutputs === 0) {
+      console.log('no invalid change outputs found.')
+    } else {
+      if (!setup.storage.isActiveEnabled) {
+        console.log(
+          'ACTIVE STORAGE IS NOT ENABLED! Wallet is not configured with currently active storage provider!'
+        )
+      }
 
-    console.log('  satoshis |  vout | txid')
-    console.log('-----------|-------|--------------------------------------------')
-    for (const o of change.outputs) {
-      const { txid, vout } = sdk.Validation.parseWalletOutpoint(o.outpoint)
-      console.log(`${ar(o.satoshis, 10)} | ${ar(vout, 5)} | ${txid}`)
+      console.log('  satoshis |  vout | txid')
+      console.log('-----------|-------|--------------------------------------------')
+      for (const o of change.outputs) {
+        const { txid, vout } = sdk.Validation.parseWalletOutpoint(o.outpoint)
+        console.log(`${ar(o.satoshis, 10)} | ${ar(vout, 5)} | ${txid}`)
+      }
     }
+  } finally {
+    await setup.wallet.destroy()
   }
 }
 
@@ -69,21 +73,27 @@ export async function releaseOnIdentity(identityKey: string, chain: sdk.Chain): 
     rootKeyHex: env.devKeys[identityKey]
   })
 
-  await setup.wallet.listOutputs({
-    basket: sdk.specOpInvalidChange,
-    tags: ['release']
-  })
-  console.log(`
+  try {
+    await setup.wallet.listOutputs({
+      basket: sdk.specOpInvalidChange,
+      tags: ['release']
+    })
+    console.log(`
 
 Janitor invalid change outputs released for:
 .env ${env.chain} ${identityKey} ${setup.storage.getActiveStoreName()}
 
 `)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 
 /**
  * Releases all invalid change outputs for wallets in the .env file:
  * 'identityKey' and 'identityKey2' values for both 'test' and 'main' chains.
+ * This mutates live wallet state on both networks. Run `janitor` first and prefer
+ * a chain- and identity-specific release function whenever possible.
  *
  * Run this function using the following command:
  *
@@ -113,7 +123,7 @@ export async function release(): Promise<void> {
  */
 export async function releaseMain1(): Promise<void> {
   const env = Setup.getEnv('main')
-  releaseOnIdentity(env.identityKey, env.chain)
+  await releaseOnIdentity(env.identityKey, env.chain)
 }
 
 /**
@@ -128,7 +138,7 @@ export async function releaseMain1(): Promise<void> {
  */
 export async function releaseMain2(): Promise<void> {
   const env = Setup.getEnv('main')
-  releaseOnIdentity(env.identityKey2, env.chain)
+  await releaseOnIdentity(env.identityKey2, env.chain)
 }
 
 /**
@@ -143,7 +153,7 @@ export async function releaseMain2(): Promise<void> {
  */
 export async function releaseTest1(): Promise<void> {
   const env = Setup.getEnv('test')
-  releaseOnIdentity(env.identityKey, env.chain)
+  await releaseOnIdentity(env.identityKey, env.chain)
 }
 
 /**
@@ -158,7 +168,7 @@ export async function releaseTest1(): Promise<void> {
  */
 export async function releaseTest2(): Promise<void> {
   const env = Setup.getEnv('test')
-  releaseOnIdentity(env.identityKey2, env.chain)
+  await releaseOnIdentity(env.identityKey2, env.chain)
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

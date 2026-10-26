@@ -8,6 +8,7 @@ export const CHIRP_PROFILE_1_FANOUT = 256
 export const CHIRP_FANOUT = CHIRP_PROFILE_1_FANOUT
 export const CHIRP_MAX_NODE_BYTES = 65_536
 export const CHIRP_MAX_EXTENSION_BYTES = 16_384
+export const CHIRP_MAX_EXTENSIONS = 1_024
 export const CHIRP_MAX_DEPTH = 16
 export const CHIRP_MEDIA_TYPE_EXTENSION = 1n
 export const CHIRP_UHRP_PREFIX = 'ce00'

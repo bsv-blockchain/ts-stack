@@ -1,6 +1,6 @@
 import { LCH_OBJECT_TYPES } from './constants.js'
 import { encodeDeterministicCbor } from './cbor.js'
-import { lchAssert } from './errors.js'
+import { LCHError, lchAssert } from './errors.js'
 import type { LCHObjectType, LCHValue } from './types.js'
 
 const textEncoder = new TextEncoder()
@@ -38,10 +38,21 @@ export function toBase64Url(bytes: Uint8Array): string {
 }
 
 export function fromBase64Url(value: string): Uint8Array {
-  lchAssert(/^[\w-]*$/u.test(value), 'ERR_LCH_CBOR', 'Invalid unpadded base64url')
+  lchAssert(
+    /^[\w-]*$/u.test(value) && value.length % 4 !== 1,
+    'ERR_LCH_CBOR',
+    'Invalid unpadded base64url'
+  )
   const standard = value.replaceAll('-', '+').replaceAll('_', '/')
-  const binary = atob(standard.padEnd(Math.ceil(standard.length / 4) * 4, '='))
-  return Uint8Array.from(binary, character => character.codePointAt(0) ?? 0)
+  let binary: string
+  try {
+    binary = atob(standard.padEnd(Math.ceil(standard.length / 4) * 4, '='))
+  } catch (error) {
+    throw new LCHError('ERR_LCH_CBOR', 'Invalid unpadded base64url', { cause: error })
+  }
+  const decoded = Uint8Array.from(binary, character => character.codePointAt(0) ?? 0)
+  lchAssert(toBase64Url(decoded) === value, 'ERR_LCH_CBOR', 'Non-canonical base64url')
+  return decoded
 }
 
 export function objectPreimage(type: LCHObjectType, body: LCHValue): Uint8Array {
@@ -58,6 +69,11 @@ export async function objectIri(type: LCHObjectType, body: LCHValue): Promise<st
 }
 
 export function uint64be(value: number | bigint): Uint8Array {
+  lchAssert(
+    typeof value === 'bigint' || Number.isSafeInteger(value),
+    'ERR_LCH_CBOR',
+    'uint64 must be an exact integer'
+  )
   let remaining = typeof value === 'number' ? BigInt(value) : value
   lchAssert(
     remaining >= 0n && remaining <= 0xffffffffffffffffn,

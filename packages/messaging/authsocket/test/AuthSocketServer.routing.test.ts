@@ -26,12 +26,14 @@ describe('AuthSocketServer identity routing', () => {
     const error = new Error('send failed')
     const authenticatedPeer = { toPeer: jest.fn().mockResolvedValue(undefined) }
     const failingPeer = { toPeer: jest.fn().mockRejectedValue(error) }
+    const pendingPeer = { toPeer: jest.fn().mockResolvedValue(undefined) }
     const onError = jest.fn()
     const server = Object.create(AuthSocketServer.prototype) as any
     server.options = { onError }
     server.peers = new Map([
       ['authenticated', { peer: authenticatedPeer, identityKey: 'recipient' }],
-      ['failing', { peer: failingPeer, identityKey: 'recipient' }]
+      ['failing', { peer: failingPeer, identityKey: 'recipient' }],
+      ['pending', { peer: pendingPeer, identityKey: undefined }]
     ])
 
     server.emit('broadcast-event', { value: 1 })
@@ -39,6 +41,7 @@ describe('AuthSocketServer identity routing', () => {
     await new Promise(resolve => setImmediate(resolve))
 
     expect(authenticatedPeer.toPeer).toHaveBeenCalledWith(expect.any(Array), 'recipient')
+    expect(pendingPeer.toPeer).not.toHaveBeenCalled()
     expect(onError).toHaveBeenCalledWith(error, {
       phase: 'send',
       eventName: expect.any(String)

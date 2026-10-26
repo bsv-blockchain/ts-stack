@@ -1,76 +1,19 @@
 #!/usr/bin/env node
-/**
- * check-versions.mjs
- *
- * Reports all workspace cross-references that are out of date.
- * Exit code 1 if any stale refs found (useful in CI).
- *
- * Usage:
- *   node scripts/check-versions.mjs
- */
-
+/** Reports stale workspace references and inconsistent publication/test policies. */
 import { readFileSync } from 'node:fs'
 import { resolve, dirname, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'node:child_process'
+import { acceptsPeerVersion } from './peer-version-range.mjs'
+import { listWorkspacePackages } from './sync-versions.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = resolve(__dirname, '..')
-const projectRegistry = JSON.parse(
-  readFileSync(resolve(ROOT, 'governance/repository-health/projects.json'), 'utf8')
-)
-const projectPolicies = new Map(projectRegistry.projects.map(project => [project.name, project]))
-
-const output = execSync('pnpm -r ls --json --depth 0', { cwd: ROOT }).toString()
-const pkgList = JSON.parse(output)
-
-const workspaceMap = {}
-for (const pkg of pkgList) {
-  if (pkg.name && pkg.version) {
-    workspaceMap[pkg.name] = pkg.version
-  }
-}
-
-function parseVersion(version) {
-  const match = version.match(/^(\d+)\.(\d+)\.(\d+)/)
-  if (!match) return null
-  return {
-    major: Number(match[1]),
-    minor: Number(match[2]),
-    patch: Number(match[3])
-  }
-}
-
-function compareVersion(a, b) {
-  return a.major - b.major || a.minor - b.minor || a.patch - b.patch
-}
-
-function caretUpperBound(version) {
-  if (version.major > 0) {
-    return { major: version.major + 1, minor: 0, patch: 0 }
-  }
-  if (version.minor > 0) {
-    return { major: 0, minor: version.minor + 1, patch: 0 }
-  }
-  return { major: 0, minor: 0, patch: version.patch + 1 }
-}
-
-function acceptsPeerVersion(range, wsVersion) {
-  if (range === `^${wsVersion}`) return true
-  if (!range.startsWith('^')) return false
-
-  const min = parseVersion(range.slice(1))
-  const current = parseVersion(wsVersion)
-  if (!min || !current) return false
-
-  return compareVersion(current, min) >= 0 && compareVersion(current, caretUpperBound(min)) < 0
-}
-
-let stale = 0
-let coverageMismatches = 0
-let runtimeToolLeaks = 0
-
-const developmentOnlyPackages = new Set([
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const DEPENDENCY_FIELDS = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies'
+]
+const DEVELOPMENT_ONLY_PACKAGES = new Set([
   '@jest/globals',
   '@typescript/native',
   'jest',
@@ -81,6 +24,7 @@ const developmentOnlyPackages = new Set([
   'tsconfig-to-dual-package',
   'typescript'
 ])
+export { acceptsPeerVersion } from './peer-version-range.mjs'
 
 function runtimePackageForTypes(dependency) {
   const name = dependency.slice('@types/'.length)
@@ -90,85 +34,91 @@ function runtimePackageForTypes(dependency) {
     : `@${name.slice(0, scopedSeparator)}/${name.slice(scopedSeparator + 2)}`
 }
 
-for (const pkg of pkgList) {
-  if (!pkg.path) continue
-  const jsonPath = resolve(pkg.path, 'package.json')
+function readPackageIfPresent(pkgPath) {
   let raw
   try {
-    raw = readFileSync(jsonPath, 'utf-8')
+    raw = readFileSync(resolve(pkgPath, 'package.json'), 'utf-8')
   } catch {
-    continue
+    return undefined
   }
-  const d = JSON.parse(raw)
-  if (d.private !== true) {
-    const declarationDependencies = new Set(
-      projectPolicies.get(d.name)?.declarationDependencies ?? []
-    )
-    for (const dependency of Object.keys(d.dependencies ?? {})) {
-      if (
-        developmentOnlyPackages.has(dependency) ||
-        (dependency.startsWith('@types/') && !declarationDependencies.has(dependency))
-      ) {
-        console.log(`PUBLISH SURFACE  ${d.name} exposes development-only dependency ${dependency}`)
-        runtimeToolLeaks++
-      }
-    }
-    for (const dependency of declarationDependencies) {
-      const publishedDependencies = {
-        ...d.dependencies,
-        ...d.peerDependencies
-      }
-      if (!Object.hasOwn(publishedDependencies, dependency)) {
-        console.log(
-          `DECLARATION DEPENDENCY  ${d.name} must publish governed dependency ${dependency}`
-        )
-        runtimeToolLeaks++
-      }
-      const runtimePackage = runtimePackageForTypes(dependency)
-      const runtimeSurface = {
-        ...d.dependencies,
-        ...d.optionalDependencies,
-        ...d.peerDependencies
-      }
-      if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
-        console.log(
-          `DECLARATION DEPENDENCY  ${d.name} publishes ${dependency} without ${runtimePackage}`
-        )
-        runtimeToolLeaks++
-      }
-    }
+  return JSON.parse(raw)
+}
+
+function workspaceVersions(pkgList) {
+  const result = {}
+  for (const pkg of pkgList) {
+    if (pkg.name && pkg.version) result[pkg.name] = pkg.version
   }
+  return result
+}
 
-  const testCommand = d.scripts?.test
-  const coverageCommand = d.scripts?.['test:coverage']
-  if (typeof testCommand === 'string' && typeof coverageCommand === 'string') {
-    const missingCoverageBehaviors = ['--passWithNoTests', '--experimental-vm-modules'].filter(
-      option => testCommand.includes(option) && !coverageCommand.includes(option)
-    )
-
+function checkRuntimeTools(pkg, declarationDependencies) {
+  let leaks = 0
+  for (const dependency of Object.keys(pkg.dependencies ?? {})) {
     if (
-      coverageCommand.includes('--coverageReporters') &&
-      !coverageCommand.includes('--coverageReporters=lcov')
+      DEVELOPMENT_ONLY_PACKAGES.has(dependency) ||
+      (dependency.startsWith('@types/') && !declarationDependencies.has(dependency))
     ) {
-      missingCoverageBehaviors.push('--coverageReporters=lcov')
-    }
-
-    if (missingCoverageBehaviors.length > 0) {
-      console.log(
-        `COVERAGE MISMATCH  ${d.name} test:coverage is missing ${missingCoverageBehaviors.join(', ')}`
-      )
-      coverageMismatches++
+      console.log(`PUBLISH SURFACE  ${pkg.name} exposes development-only dependency ${dependency}`)
+      leaks++
     }
   }
+  return leaks
+}
 
-  for (const field of [
-    'dependencies',
-    'devDependencies',
-    'peerDependencies',
-    'optionalDependencies'
-  ]) {
-    if (!d[field]) continue
-    for (const [dep, range] of Object.entries(d[field])) {
+function checkDeclarationDependencies(pkg, declarationDependencies) {
+  let leaks = 0
+  const publishedDependencies = { ...pkg.dependencies, ...pkg.peerDependencies }
+  const runtimeSurface = {
+    ...pkg.dependencies,
+    ...pkg.optionalDependencies,
+    ...pkg.peerDependencies
+  }
+  for (const dependency of declarationDependencies) {
+    if (!Object.hasOwn(publishedDependencies, dependency)) {
+      console.log(
+        `DECLARATION DEPENDENCY  ${pkg.name} must publish governed dependency ${dependency}`
+      )
+      leaks++
+    }
+    const runtimePackage = runtimePackageForTypes(dependency)
+    if (!Object.hasOwn(runtimeSurface, runtimePackage)) {
+      console.log(
+        `DECLARATION DEPENDENCY  ${pkg.name} publishes ${dependency} without ${runtimePackage}`
+      )
+      leaks++
+    }
+  }
+  return leaks
+}
+
+function checkPublishSurface(pkg, projectPolicies) {
+  if (pkg.private === true) return 0
+  const dependencies = new Set(projectPolicies.get(pkg.name)?.declarationDependencies ?? [])
+  return checkRuntimeTools(pkg, dependencies) + checkDeclarationDependencies(pkg, dependencies)
+}
+
+function checkCoverageSemantics(pkg) {
+  const testCommand = pkg.scripts?.test
+  const coverageCommand = pkg.scripts?.['test:coverage']
+  if (typeof testCommand !== 'string' || typeof coverageCommand !== 'string') return 0
+  const missing = ['--passWithNoTests', '--experimental-vm-modules'].filter(
+    option => testCommand.includes(option) && !coverageCommand.includes(option)
+  )
+  if (
+    coverageCommand.includes('--coverageReporters') &&
+    !coverageCommand.includes('--coverageReporters=lcov')
+  )
+    missing.push('--coverageReporters=lcov')
+  if (missing.length === 0) return 0
+  console.log(`COVERAGE MISMATCH  ${pkg.name} test:coverage is missing ${missing.join(', ')}`)
+  return 1
+}
+
+function checkWorkspaceReferences(pkg, workspaceMap) {
+  let stale = 0
+  for (const field of DEPENDENCY_FIELDS) {
+    for (const [dep, range] of Object.entries(pkg[field] ?? {})) {
       const wsVersion = workspaceMap[dep]
       if (!wsVersion) continue
       const valid =
@@ -176,27 +126,15 @@ for (const pkg of pkgList) {
           ? acceptsPeerVersion(range, wsVersion)
           : range === 'workspace:^'
       if (!valid) {
-        console.log(`STALE  ${d.name}  ${dep}  ${range}  (current: ${wsVersion})`)
+        console.log(`STALE  ${pkg.name}  ${dep}  ${range}  (current: ${wsVersion})`)
         stale++
       }
     }
   }
+  return stale
 }
 
-// Nested-package version lockstep.
-//
-// Some workspace packages are alternate entrypoints that live INSIDE another
-// package's directory (e.g. wallet-toolbox/client and wallet-toolbox/mobile
-// share the wallet-toolbox build and are published as @bsv/wallet-toolbox-client
-// / -mobile). They must carry the SAME version as their enclosing package: the
-// release publishes by committed version, so if a subpackage lags its parent it
-// silently fails to publish, and `sync-versions` then rewrites consumers to a
-// range that was never published (ERR_PNPM_NO_MATCHING_VERSION). Enforce here so
-// a version bump that forgets the subpackages fails in CI, not at release time.
-const located = pkgList.filter(p => p.name && p.version && p.path)
-let mismatched = 0
-
-const isPrivate = pkgPath => {
+function isPrivate(pkgPath) {
   try {
     return JSON.parse(readFileSync(resolve(pkgPath, 'package.json'), 'utf-8')).private === true
   } catch {
@@ -204,29 +142,37 @@ const isPrivate = pkgPath => {
   }
 }
 
-for (const child of located) {
-  // Only publishable subpackages need lockstep — private nested packages
-  // (e.g. example apps under a library's docs/) are never published.
-  if (isPrivate(child.path)) continue
-  // Closest enclosing workspace package (longest matching ancestor path).
+function closestEnclosingPackage(child, located) {
   let parent = null
-  for (const cand of located) {
-    if (cand === child) continue
-    if (!child.path.startsWith(cand.path + sep)) continue
-    if (!parent || cand.path.length > parent.path.length) parent = cand
+  for (const candidate of located) {
+    if (candidate === child || !child.path.startsWith(candidate.path + sep)) continue
+    if (!parent || candidate.path.length > parent.path.length) parent = candidate
   }
-  if (!parent) continue
-  if (child.version !== parent.version) {
-    console.log(
-      `VERSION MISMATCH  ${child.name}@${child.version}  must match enclosing  ${parent.name}@${parent.version}`
-    )
-    mismatched++
-  }
+  return parent
 }
 
-if (stale === 0 && mismatched === 0 && coverageMismatches === 0 && runtimeToolLeaks === 0) {
-  console.log('All cross-package version references up to date.')
-} else {
+// Publishable alternate entrypoints must match their closest enclosing package.
+function checkNestedLockstep(pkgList) {
+  const located = pkgList.filter(pkg => pkg.name && pkg.version && pkg.path)
+  let mismatched = 0
+  for (const child of located) {
+    if (isPrivate(child.path)) continue
+    const parent = closestEnclosingPackage(child, located)
+    if (parent && child.version !== parent.version) {
+      console.log(
+        `VERSION MISMATCH  ${child.name}@${child.version}  must match enclosing  ${parent.name}@${parent.version}`
+      )
+      mismatched++
+    }
+  }
+  return mismatched
+}
+
+function reportProblems({ stale, mismatched, coverageMismatches, runtimeToolLeaks }) {
+  if (stale === 0 && mismatched === 0 && coverageMismatches === 0 && runtimeToolLeaks === 0) {
+    console.log('All cross-package version references up to date.')
+    return
+  }
   if (stale > 0)
     console.error(
       `\n${stale} stale references. Run: node scripts/sync-versions.mjs --workspace-only`
@@ -245,3 +191,25 @@ if (stale === 0 && mismatched === 0 && coverageMismatches === 0 && runtimeToolLe
     )
   process.exit(1)
 }
+
+export function checkVersions({ root = ROOT, packageList } = {}) {
+  const registry = JSON.parse(
+    readFileSync(resolve(root, 'governance/repository-health/projects.json'), 'utf8')
+  )
+  const policies = new Map(registry.projects.map(project => [project.name, project]))
+  const packages = packageList ?? listWorkspacePackages(root)
+  const versions = workspaceVersions(packages)
+  const problems = { stale: 0, coverageMismatches: 0, runtimeToolLeaks: 0 }
+  for (const pkg of packages) {
+    if (!pkg.path) continue
+    const manifest = readPackageIfPresent(pkg.path)
+    if (manifest === undefined) continue
+    problems.runtimeToolLeaks += checkPublishSurface(manifest, policies)
+    problems.coverageMismatches += checkCoverageSemantics(manifest)
+    problems.stale += checkWorkspaceReferences(manifest, versions)
+  }
+  reportProblems({ ...problems, mismatched: checkNestedLockstep(packages) })
+}
+
+if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url))
+  checkVersions()

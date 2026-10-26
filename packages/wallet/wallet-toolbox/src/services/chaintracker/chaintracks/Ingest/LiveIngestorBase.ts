@@ -4,6 +4,8 @@ import { LiveIngestorApi } from '../Api/LiveIngestorApi'
 import { ChaintracksStorageApi } from '../Api/ChaintracksStorageApi'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
+
 export interface LiveIngestorBaseOptions {
   /**
    * The target chain: "main" or "test"
@@ -15,7 +17,7 @@ export interface LiveIngestorBaseOptions {
  *
  */
 export abstract class LiveIngestorBase implements LiveIngestorApi {
-  static createLiveIngestorBaseOptions (chain: Chain) {
+  static createLiveIngestorBaseOptions(chain: Chain) {
     const options: LiveIngestorBaseOptions = {
       chain
     }
@@ -25,7 +27,15 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
   chain: Chain
   log: (...args: any[]) => void = () => {}
 
-  constructor (options: LiveIngestorBaseOptions) {
+  constructor(options: LiveIngestorBaseOptions) {
+    if (options == null || typeof options !== 'object' || Array.isArray(options)) {
+      throw new Error('Live ingestor options must be a data object.')
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(options)
+    if (Object.keys(descriptors).length > 64 || Object.values(descriptors).some(d => d.get != null || d.set != null)) {
+      throw new Error('Live ingestor options must contain only bounded data properties.')
+    }
+    if (!SUPPORTED_CHAINS.has(options.chain)) throw new Error('chain must be a supported Chain value.')
     this.chain = options.chain
   }
 
@@ -33,7 +43,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Release resources.
    * Override if required.
    */
-  async shutdown (): Promise<void> {}
+  async shutdown(): Promise<void> {}
 
   private storageEngine?: ChaintracksStorageApi
 
@@ -41,7 +51,9 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Allocate resources.
    * @param storage coordinating storage engine.
    */
-  async setStorage (storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
+  async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
+    if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
+    if (typeof log !== 'function') throw new Error('log must be a function.')
     this.storageEngine = storage
     this.log = log
   }
@@ -50,7 +62,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @returns coordinating storage engine.
    */
-  storage (): ChaintracksStorageApi {
+  storage(): ChaintracksStorageApi {
     if (this.storageEngine == null) throw new Error('storageEngine must be set.')
     return this.storageEngine
   }
@@ -61,7 +73,7 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @param hash block hash of missing header
    */
-  abstract getHeaderByHash (hash: string): Promise<BlockHeader | undefined>
+  abstract getHeaderByHash(hash: string): Promise<BlockHeader | undefined>
 
   /**
    * Begin retrieving new block headers.
@@ -77,10 +89,10 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    *
    * @param liveHeaders
    */
-  abstract startListening (liveHeaders: BlockHeader[]): Promise<void>
+  abstract startListening(liveHeaders: BlockHeader[]): Promise<void>
 
   /**
    * Causes `startListening` to stop listening for new block headers and return.
    */
-  abstract stopListening (): void
+  abstract stopListening(): void
 }

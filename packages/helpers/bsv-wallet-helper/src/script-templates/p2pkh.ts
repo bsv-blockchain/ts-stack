@@ -1,18 +1,17 @@
+import { hash256 } from '@bsv/sdk/primitives/Hash'
+import { fromBase58Check } from '@bsv/sdk/primitives/utils'
 import {
   LockingScript,
   ScriptTemplate,
   Transaction,
   UnlockingScript,
-  Hash,
   OP,
-  Utils,
   WalletInterface,
   TransactionSignature,
   Signature,
   PublicKey,
   WalletProtocol
 } from '@bsv/sdk'
-
 import { calculatePreimage } from '../utils/createPreimage'
 import {
   P2PKHLockParams,
@@ -36,8 +35,16 @@ function validateWalletDerivationParams(params: any, paramName: string = 'parame
   if (!Array.isArray(params.protocolID) || params.protocolID.length !== 2) {
     throw new Error(`Invalid ${paramName}: protocolID must be an array of [number, string]`)
   }
-  if (typeof params.protocolID[0] !== 'number' || typeof params.protocolID[1] !== 'string') {
+  if (
+    !Number.isSafeInteger(params.protocolID[0]) ||
+    params.protocolID[0] < 0 ||
+    params.protocolID[0] > 2 ||
+    typeof params.protocolID[1] !== 'string'
+  ) {
     throw new TypeError(`Invalid ${paramName}: protocolID must be [number, string]`)
+  }
+  if (params.protocolID[1].length < 5 || params.protocolID[1].length > 400) {
+    throw new Error(`Invalid ${paramName}: protocol name must contain 5 to 400 characters`)
   }
   if (params.keyID === undefined || params.keyID === null) {
     throw new Error(`Invalid ${paramName}: keyID is required`)
@@ -45,11 +52,30 @@ function validateWalletDerivationParams(params: any, paramName: string = 'parame
   if (typeof params.keyID !== 'string') {
     throw new TypeError(`Invalid ${paramName}: keyID must be a string`)
   }
+  if (params.keyID.length < 1 || params.keyID.length > 800) {
+    throw new Error(`Invalid ${paramName}: keyID must contain 1 to 800 characters`)
+  }
   // counterparty is optional, defaults to 'self'
   if (params.counterparty !== undefined && typeof params.counterparty !== 'string') {
     throw new Error(
       `Invalid ${paramName}: counterparty must be a string (or omit for default "self")`
     )
+  }
+  if (
+    params.counterparty !== undefined &&
+    params.counterparty !== 'self' &&
+    params.counterparty !== 'anyone'
+  ) {
+    try {
+      const publicKey = PublicKey.fromString(params.counterparty)
+      if (publicKey.encode(true).length !== 33 || params.counterparty.length !== 66) {
+        throw new Error('not a compressed public key')
+      }
+    } catch {
+      throw new Error(
+        `Invalid ${paramName}: counterparty must be "self", "anyone", or a compressed public key`
+      )
+    }
   }
 }
 
@@ -104,10 +130,19 @@ export default class P2PKH implements ScriptTemplate {
     // Process based on which parameter was provided
     if ('pubkeyhash' in params) {
       // Use byte array as hash directly
+      if (!Array.isArray(params.pubkeyhash)) {
+        throw new Error('pubkeyhash must be a dense array of bytes')
+      }
+      for (let index = 0; index < params.pubkeyhash.length; index++) {
+        const byte = params.pubkeyhash[index]
+        if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+          throw new Error('pubkeyhash must be a dense array of bytes')
+        }
+      }
       data = params.pubkeyhash
     } else if ('address' in params) {
       // Extract pubkeyhash from base58check address
-      const pkh = Utils.fromBase58Check(params.address).data as number[]
+      const pkh = fromBase58Check(params.address).data as number[]
       data = pkh
     } else if ('publicKey' in params) {
       // Use public key string directly
@@ -125,7 +160,9 @@ export default class P2PKH implements ScriptTemplate {
         protocolID,
         keyID,
         counterparty,
-        forSelf: counterparty === 'anyone'
+        // P2PKH is spendable by this wallet. A peer counterparty scopes the
+        // derivation, but must not change the key perspective to the peer's key.
+        forSelf: true
       })
       const pubKeyToHash = PublicKey.fromString(publicKey)
       data = pubKeyToHash.toHash() as number[]
@@ -185,15 +222,7 @@ export default class P2PKH implements ScriptTemplate {
     const lockingScript = params?.lockingScript
 
     // Validate parameters
-    if (!Array.isArray(protocolID) || protocolID.length !== 2) {
-      throw new Error('protocolID must be an array of [number, string]')
-    }
-    if (typeof keyID !== 'string') {
-      throw new TypeError('keyID must be a string')
-    }
-    if (counterparty !== undefined && typeof counterparty !== 'string') {
-      throw new Error('counterparty must be a string (or omit for default "self")')
-    }
+    validateWalletDerivationParams({ protocolID, keyID, counterparty }, 'unlock parameters')
     if (!['all', 'none', 'single'].includes(signOutputs)) {
       throw new Error('signOutputs must be "all", "none", or "single"')
     }
@@ -217,7 +246,7 @@ export default class P2PKH implements ScriptTemplate {
 
         // Use the BRC-29 wallet pattern to create a signature over the double-SHA256 hash of the preimage
         const { signature } = await wallet.createSignature({
-          hashToDirectlySign: Hash.hash256(preimage),
+          hashToDirectlySign: hash256(preimage),
           protocolID,
           keyID,
           counterparty

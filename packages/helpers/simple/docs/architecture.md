@@ -22,8 +22,8 @@ Modules (mixed in via Object.assign):
   ├── messagebox    → certifyForMessageBox, sendMessageBoxPayment, ...
   ├── certification → acquireCertificateFrom, listCertificatesFrom, relinquishCert
   ├── overlay       → advertiseSHIP, advertiseSLAP, broadcastAction, withRetry
-  ├── did           → getDID, resolveDID, registerDID
-  └── credentials   → acquireCredential, listCredentials, createPresentation
+  ├── did           → getDID, resolveDID
+  └── credentials   → acquireCredential, listCredentials
 ```
 
 When you call `createWallet()`, the library:
@@ -50,18 +50,18 @@ Subclasses must implement `getClient(): WalletInterface` to provide the underlyi
 
 The `send()` method is the core primitive. It takes an array of output specifications and routes each one based on what fields are present:
 
-| Fields Present | Output Type | Result |
-|---------------|-------------|--------|
-| `to` only | **P2PKH** | Standard payment to an address |
-| `data` only | **OP_RETURN** | Data inscription (0 satoshis) |
-| `to` + `data` | **PushDrop** | Encrypted token locked to a key |
+| Fields Present | Output Type   | Result                                                  |
+| -------------- | ------------- | ------------------------------------------------------- |
+| `to` only      | **P2PKH**     | Standard payment to an address                          |
+| `data` only    | **OP_RETURN** | Data inscription (0 satoshis)                           |
+| `to` + `data`  | **PushDrop**  | Token locked to a key derived with `to` as counterparty |
 
 ```typescript
 await wallet.send({
   outputs: [
-    { to: key, satoshis: 500 },                           // → P2PKH
-    { data: ['Hello!'] },                                   // → OP_RETURN
-    { to: key, data: [{ v: 1 }], satoshis: 1 }            // → PushDrop
+    { to: key, satoshis: 500 }, // → P2PKH
+    { data: ['Hello!'] }, // → OP_RETURN
+    { to: key, data: [{ v: 1 }], satoshis: 1 } // → PushDrop
   ]
 })
 ```
@@ -70,15 +70,15 @@ await wallet.send({
 
 Some classes work independently of any wallet:
 
-| Class | Purpose | Import |
-|-------|---------|--------|
-| `DID` | Generate/parse/validate `did:bsv:` identifiers | `@bsv/simple/browser` |
-| `Certifier` | Issue BSV certificates | `@bsv/simple/browser` |
-| `Overlay` | Create topic broadcasters and lookup resolvers | `@bsv/simple/browser` |
-| `CredentialSchema` | Define and validate credential field schemas | `@bsv/simple/browser` |
-| `CredentialIssuer` | Issue, verify, and revoke W3C Verifiable Credentials | `@bsv/simple/browser` |
-| `MemoryRevocationStore` | In-memory revocation secret storage (browser/tests) | `@bsv/simple/browser` |
-| `FileRevocationStore` | File-based revocation secret storage (server only) | `@bsv/simple/server` |
+| Class                   | Purpose                                                             | Import                |
+| ----------------------- | ------------------------------------------------------------------- | --------------------- |
+| `DID`                   | Encode/resolve identity-key `did:key` identifiers                   | `@bsv/simple/browser` |
+| `Certifier`             | Issue BSV certificates                                              | `@bsv/simple/browser` |
+| `Overlay`               | Create topic broadcasters and lookup resolvers                      | `@bsv/simple/browser` |
+| `CredentialSchema`      | Define and validate credential field schemas                        | `@bsv/simple/browser` |
+| `CredentialIssuer`      | Issue BRC-52 certificates, export/verify proposed BRC-203 envelopes | `@bsv/simple/browser` |
+| `MemoryRevocationStore` | In-memory revocation secret storage (browser/tests)                 | `@bsv/simple/browser` |
+| `FileRevocationStore`   | File-based revocation secret storage (server only)                  | `@bsv/simple/server`  |
 
 ## Basket System
 
@@ -97,9 +97,9 @@ Many methods accept a `basket` parameter to specify where outputs should be stor
 
 ## Dependencies
 
-| Package | Role | Environment |
-|---------|------|-------------|
-| `@bsv/sdk` | Core blockchain primitives, cryptography, WalletClient | Browser + Server |
-| `@bsv/wallet-toolbox` | ToolboxWallet, WalletSigner, StorageClient | Server only |
-| `@bsv/wallet-toolbox-client` | Client-only wallet storage (browser-safe alternative) | Browser |
-| `@bsv/message-box-client` | PeerPayClient for P2P messaging | Browser + Server |
+| Package                      | Role                                                   | Environment      |
+| ---------------------------- | ------------------------------------------------------ | ---------------- |
+| `@bsv/sdk`                   | Core blockchain primitives, cryptography, WalletClient | Browser + Server |
+| `@bsv/wallet-toolbox`        | ToolboxWallet, WalletSigner, StorageClient             | Server only      |
+| `@bsv/wallet-toolbox-client` | Client-only wallet storage (browser-safe alternative)  | Browser          |
+| `@bsv/message-box-client`    | PeerPayClient for P2P messaging                        | Browser + Server |

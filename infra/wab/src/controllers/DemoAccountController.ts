@@ -4,7 +4,7 @@ import {
   DemoAccountService,
   isDemoAuthEnabled
 } from '../services/DemoAccountService'
-import { isRecord } from '../security/requestValidation'
+import { snapshotRequestBody } from '../security/requestValidation'
 import { log } from '../logger'
 
 export class DemoAccountController {
@@ -12,8 +12,9 @@ export class DemoAccountController {
     res.setHeader('Cache-Control', 'no-store')
     try {
       if (!isDemoAuthEnabled()) return res.status(404).json({ message: 'Not found.' })
-      if (!isRecord(req.body)) throw new DemoAccountError('A JSON object is required.')
-      const { action, phoneNumber, label, expiresAtEpochMs, id } = req.body
+      const body = snapshotRequestBody(req.body)
+      if (body == null) throw new DemoAccountError('A JSON object is required.')
+      const { action, phoneNumber, label, expiresAtEpochMs, id } = body
       if (action === 'list') return res.json({ accounts: await DemoAccountService.list() })
       if (action === 'provision' && typeof phoneNumber === 'string' && typeof label === 'string') {
         const result = await DemoAccountService.provision(phoneNumber, label, expiresAtEpochMs)

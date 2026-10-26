@@ -6,10 +6,10 @@ Common mistakes and non-obvious behaviors when working with `@bsv/simple` and th
 
 These two internalization protocols are **mutually exclusive**. You cannot use both on the same output.
 
-| Protocol | Use Case | Output Visible in Basket? | Can Wallet Spend? |
-|----------|----------|--------------------------|-------------------|
-| `basket insertion` | Store output in a named basket for tracking | Yes | Via `customInstructions` |
-| `wallet payment` | Receive a payment with derivation info | No | Yes (derivation-based) |
+| Protocol           | Use Case                                    | Output Visible in Basket? | Can Wallet Spend?        |
+| ------------------ | ------------------------------------------- | ------------------------- | ------------------------ |
+| `basket insertion` | Store output in a named basket for tracking | Yes                       | Via `customInstructions` |
+| `wallet payment`   | Receive a payment with derivation info      | No                        | Yes (derivation-based)   |
 
 ```typescript
 // basket insertion — output appears in listOutputs('my-basket')
@@ -23,20 +23,13 @@ paymentRemittance: { senderIdentityKey, derivationPrefix, derivationSuffix }
 
 If you need both trackability and spendability, use `basket insertion` and store the derivation info in `customInstructions`.
 
-## 2. PeerPayClient.acceptPayment() Silently Fails
+## 2. Payment Acceptance Requires a Pending Inbox Message
 
-The `@bsv/message-box-client` library's `acceptPayment()` returns a string `'Unable to receive payment!'` instead of throwing an error.
-
-```typescript
-// WRONG — silently fails
-await peerPay.acceptPayment(payment)
-
-// CORRECT — check return value
-const result = await peerPay.acceptPayment(payment)
-if (typeof result === 'string') throw new Error(result)
-```
-
-`@bsv/simple` handles this check internally, but be aware if you ever use `@bsv/message-box-client` directly.
+`acceptIncomingPayment()` and `PeerPayClient.acceptPayment()` deliberately do
+not trust a caller-supplied payment object. They use its message ID to reload
+the bounded authenticated inbox and require exactly one match before changing
+the wallet. Keep the message pending until acceptance finishes; copied, stale,
+absent, or ambiguous objects fail closed.
 
 ## 3. result.tx May Be Undefined
 
@@ -77,6 +70,8 @@ await wallet.advertiseSLAP('domain.com', 'payments')
 await wallet.advertiseSLAP('domain.com', 'ls_payments')
 ```
 
+An overlay cannot remove its final topic. Per-call topic overrides preserve the acknowledgement policy configured at creation; they are not a way to relax required host acknowledgements.
+
 ## 5. FileRevocationStore Crashes in Browser
 
 `FileRevocationStore` uses Node.js `fs` and `path` modules. Importing it in browser code causes a crash.
@@ -101,15 +96,23 @@ let serverWallet: any = null
 
 // CORRECT — 3 lines with handler factory
 import { createServerWalletHandler } from '@bsv/simple/server'
-const handler = createServerWalletHandler()
-export const GET = handler.GET, POST = handler.POST
+const handler = createServerWalletHandler({
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
+})
+export const GET = handler.GET,
+  POST = handler.POST
 ```
 
 Available handler factories:
+
 - `createServerWalletHandler()` — Server wallet with key persistence
 - `createIdentityRegistryHandler()` — MessageBox identity registry
-- `createDIDResolverHandler()` — DID resolution proxy (nChain + WoC fallback)
-- `createCredentialIssuerHandler()` — W3C Verifiable Credential issuer
+- `createCredentialIssuerHandler()` — BRC-52 issuer and proposed BRC-203 envelope verifier
+
+Identity-key resolution uses `DID.resolve` offline. Authentication, issuer trust, disclosure authorization, and certificate status must be evaluated independently.
 
 ## 7. No Need to Import @bsv/sdk
 
@@ -136,8 +139,16 @@ Without the `serverExternalPackages` configuration, Next.js Turbopack bundles `@
 ```typescript
 const nextConfig: NextConfig = {
   serverExternalPackages: [
-    "@bsv/wallet-toolbox", "knex", "better-sqlite3", "tedious",
-    "mysql", "mysql2", "pg", "pg-query-stream", "oracledb", "dotenv"
+    '@bsv/wallet-toolbox',
+    'knex',
+    'better-sqlite3',
+    'tedious',
+    'mysql',
+    'mysql2',
+    'pg',
+    'pg-query-stream',
+    'oracledb',
+    'dotenv'
   ]
 }
 ```

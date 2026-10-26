@@ -212,9 +212,13 @@ export interface BsvExchangeRate {
 }
 
 export interface FiatExchangeRates {
+  /** Finite timestamp no more than five minutes in the future. */
   timestamp: Date
+  /** Wallet Toolbox normalizes provider responses to USD. */
   base: FiatCurrencyCode
+  /** Finite, positive currency-per-USD values. USD must equal exactly 1. */
   rates: Record<string, number>
+  /** Optional per-currency freshness timestamps under the same timestamp rules. */
   rateTimestamps?: Record<string, Date>
 }
 
@@ -279,7 +283,8 @@ export interface WalletServicesOptions {
    * API key for use accessing fiat exchange rates API at
    * `https://api.exchangeratesapi.io/v1/latest?access_key=${key}`
    *
-   * Obtain your own api key here:
+   * The key is encoded as one query value and is never included in provider
+   * error text. Obtain your own api key here:
    * https://manage.exchangeratesapi.io/signup/free
    */
   exchangeratesapiKey?: string
@@ -289,8 +294,19 @@ export interface WalletServicesOptions {
    *
    * By default the following endpoint is used:
    * `https://mainnet-chaintracks.babbage.systems/getFiatExchangeRates`
+   *
+   * The default transport requires a credential-free public HTTPS address,
+   * pins approved DNS answers, rejects redirects and private/special address
+   * space, and bounds request time and response bytes.
    */
   chaintracksFiatExchangeRatesUrl?: string
+  /**
+   * Explicitly trusted transport override for fiat providers. The default
+   * requires credential-free public HTTPS with DNS pinning, no redirects, a
+   * deadline, and a bounded response. Intended for tests or controlled local
+   * development only.
+   */
+  fiatExchangeRatesFetch?: typeof fetch
   /**
    * Optional Chaintracks client API instance.
    * Default is a new instance of ChaintracksServiceClient configured to use:

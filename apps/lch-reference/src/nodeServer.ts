@@ -11,6 +11,12 @@ import type { WalletInterface } from '@bsv/sdk'
 import { LCH_SETTLEMENT_PROFILES } from '@bsv/lch'
 import { createFixtureWallet } from './fixtureWallet.js'
 import { ReferenceLCHServer, referenceApiResponse } from './referenceServer.js'
+import {
+  parsePublicationInput,
+  publicationAuthorized,
+  publicationTokenForMode,
+  publicationTokenFromEnvironment
+} from './serverSecurity.js'
 
 interface WalletSet {
   issuerWallet: WalletInterface
@@ -28,6 +34,10 @@ const staticDirectory =
   process.env.LCH_STATIC_DIR ?? fileURLToPath(new URL('../dist', import.meta.url))
 const walletModule = process.env.LCH_WALLET_MODULE
 const walletMode = walletModule === undefined ? 'fixture' : 'connected'
+const publicationToken = publicationTokenForMode(
+  walletMode,
+  publicationTokenFromEnvironment(process.env)
+)
 const wallets = await loadWallets(walletModule)
 const lch = await ReferenceLCHServer.create({
   issuerWallet: wallets.issuerWallet,
@@ -60,6 +70,12 @@ const server = createHttpServer((request, response) => {
   })
 })
 
+server.headersTimeout = 10_000
+server.requestTimeout = 30_000
+server.keepAliveTimeout = 5_000
+server.maxHeadersCount = 100
+server.maxRequestsPerSocket = 100
+
 server.listen(port, '0.0.0.0', () => {
   process.stdout.write(
     `LCH reference server listening on ${publicBaseUrl} (${walletMode} wallets)\n`
@@ -82,6 +98,10 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return
   }
   if (request.method === 'POST' && url.pathname === '/api/assets') {
+    if (!publicationAuthorized(request, publicationToken)) {
+      sendJson(response, 401, { error: 'creator authorization is required' })
+      return
+    }
     await publishAsset(request, response)
     return
   }
@@ -138,25 +158,13 @@ async function loadWallets(moduleSpecifier: string | undefined): Promise<WalletS
 }
 
 async function publishAsset(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  const body = JSON.parse(
-    new TextDecoder().decode(await requestBytes(request, 32 * 1024 * 1024))
-  ) as {
-    name?: unknown
-    mediaType?: unknown
-    bytesBase64?: unknown
-  }
-  if (
-    typeof body.name !== 'string' ||
-    typeof body.mediaType !== 'string' ||
-    typeof body.bytesBase64 !== 'string'
-  ) {
-    sendJson(response, 400, { error: 'name, mediaType, and bytesBase64 are required' })
-    return
-  }
+  const body = parsePublicationInput(
+    JSON.parse(new TextDecoder().decode(await requestBytes(request, 32 * 1024 * 1024)))
+  )
   const published = await lch.publish({
     name: body.name,
     mediaType: body.mediaType,
-    bytes: Uint8Array.from(Buffer.from(body.bytesBase64, 'base64'))
+    bytes: body.bytes
   })
   await sendFetchResponse(response, referenceApiResponse(published))
 }
@@ -182,7 +190,7 @@ function walletModuleSpecifier(value: string): string {
 }
 
 function errorStatus(error: unknown): number {
-  if (error instanceof SyntaxError) return 400
+  if (error instanceof SyntaxError || error instanceof TypeError) return 400
   if (error instanceof RangeError) return 413
   return 500
 }
@@ -192,6 +200,15 @@ function requestBytes(request: IncomingMessage, maximum: number): Promise<Uint8A
     const chunks: Uint8Array[] = []
     let length = 0
     let failed = false
+    const contentLength = request.headers['content-length']
+    if (
+      contentLength !== undefined &&
+      (!/^\d+$/u.test(contentLength) || Number(contentLength) > maximum)
+    ) {
+      reject(new RangeError('request body exceeds its limit'))
+      request.resume()
+      return
+    }
     request.on('data', (chunk: Buffer) => {
       length += chunk.length
       if (length > maximum && !failed) {
@@ -202,6 +219,7 @@ function requestBytes(request: IncomingMessage, maximum: number): Promise<Uint8A
     request.on('end', () => {
       if (!failed) resolve(Uint8Array.from(Buffer.concat(chunks)))
     })
+    request.on('aborted', () => reject(new Error('request body was aborted')))
     request.on('error', reject)
   })
 }

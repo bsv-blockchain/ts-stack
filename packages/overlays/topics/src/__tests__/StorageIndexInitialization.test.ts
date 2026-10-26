@@ -4,7 +4,6 @@ import type { Db } from 'mongodb'
 import { AppsStorageManager } from '../apps/AppsStorageManager.js'
 import { BTMSStorageManager } from '../btms/BTMSStorageManager.js'
 import { DesktopIntegrityStorage } from '../desktopintegrity/DesktopIntegrityStorage.js'
-import { DIDStorageManager } from '../did/DIDStorageManager.js'
 import { FractionalizeStorage } from '../fractionalize/FractionalizeStorage.js'
 import { IdentityStorageManager } from '../identity/IdentityStorageManager.js'
 import { MonsterBattleStorage } from '../monsterbattle/MonsterBattleStorage.js'
@@ -29,7 +28,6 @@ describe('storage index initialization', () => {
       new AppsStorageManager(db),
       new BTMSStorageManager(db),
       new DesktopIntegrityStorage(db),
-      new DIDStorageManager(db),
       new FractionalizeStorage(db),
       new IdentityStorageManager(db),
       new MonsterBattleStorage(db),

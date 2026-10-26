@@ -5,7 +5,12 @@ import { LiveIngestorApi } from './Api/LiveIngestorApi'
 import { validateAgainstDirtyHashes } from './util/dirtyHashes'
 
 import { ChaintracksOptions, ChaintracksManagementApi } from './Api/ChaintracksApi'
-import { blockHash, validateHeaderFormat, validateHeaderProofOfWork } from './util/blockHeaderUtilities'
+import {
+  blockHash,
+  validateBaseBlockHeaderFormat,
+  validateHeaderFormat,
+  validateHeaderProofOfWork
+} from './util/blockHeaderUtilities'
 import { Chain } from '../../../sdk/types'
 import {
   ChaintracksInfoApi,
@@ -19,9 +24,23 @@ import { asString } from '../../../utility/utilityHelpers.noBuffer'
 import { HeightRange, HeightRanges } from './util/HeightRange'
 import { SingleWriterMultiReaderLock } from './util/SingleWriterMultiReaderLock'
 import { ChaintracksFsApi } from './Api/ChaintracksFsApi'
+
+export class ChaintracksQueueCapacityError extends Error {
+  readonly code = 'ERR_CHAINTRACKS_QUEUE_CAPACITY'
+
+  constructor() {
+    super('The submitted block-header queue is at capacity.')
+    this.name = 'ChaintracksQueueCapacityError'
+  }
+}
 import { randomBytesBase64, wait } from '../../../utility/utilityHelpers'
 import { WalletError } from '../../../sdk/WalletError'
+import { WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
+import { safeDiagnostic } from './util/safeDiagnostic'
 export class Chaintracks implements ChaintracksManagementApi {
+  private static readonly maxSubscribersPerKind = 100_000
+  private static readonly maxBulkLiveHeaders = 100_000
+
   static createOptions(chain: Chain): ChaintracksOptions {
     return {
       chain,
@@ -29,7 +48,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       bulkIngestors: [],
       liveIngestors: [],
       addLiveRecursionLimit: 36,
-      logging: (...args) => console.log(new Date().toISOString(), ...args),
+      maxQueuedBaseHeaders: 4096,
       readonly: false
     }
   }
@@ -52,10 +71,13 @@ export class Chaintracks implements ChaintracksManagementApi {
   private readonly liveIngestors: LiveIngestorApi[]
 
   private readonly baseHeaders: BaseBlockHeader[] = []
+  private readonly queuedBaseHeaderHashes = new Set<string>()
   private readonly liveHeaders: BlockHeader[] = []
   private readonly addLiveRecursionLimit: number = 11
+  private readonly maxQueuedBaseHeaders: number
 
   private available = false
+  private cleanupComplete = false
   private startupError: WalletError | null = null
 
   private subscriberCallbacksEnabled = false
@@ -71,12 +93,28 @@ export class Chaintracks implements ChaintracksManagementApi {
   private readonly sourceStatus = new Map<string, ChaintracksSourceStatusApi>()
 
   constructor(public options: ChaintracksOptions) {
+    if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'].includes(options.chain)) {
+      throw new Error('chain must be a supported Chain value.')
+    }
     if (options.storage == null) throw new Error('storage is required.')
-    if (!options.bulkIngestors || options.bulkIngestors.length < 1) {
+    if (!Array.isArray(options.bulkIngestors) || options.bulkIngestors.length < 1) {
       throw new Error('At least one bulk ingestor is required.')
     }
-    if (!options.liveIngestors || options.liveIngestors.length < 1) {
+    if (!Array.isArray(options.liveIngestors) || options.liveIngestors.length < 1) {
       throw new Error('At least one live ingestor is required.')
+    }
+    this.validateIngestors('bulkIngestors', options.bulkIngestors)
+    this.validateIngestors('liveIngestors', options.liveIngestors)
+    if (
+      !Number.isSafeInteger(options.addLiveRecursionLimit) ||
+      options.addLiveRecursionLimit < 0 ||
+      options.addLiveRecursionLimit > 10_000
+    ) {
+      throw new Error('addLiveRecursionLimit must be an integer between 0 and 10000.')
+    }
+    if (typeof options.readonly !== 'boolean') throw new Error('readonly must be a boolean.')
+    if (options.logging != null && typeof options.logging !== 'function') {
+      throw new Error('logging must be a function when supplied.')
     }
     this.chain = options.chain
     this.readonly = options.readonly
@@ -93,11 +131,28 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
 
     this.addLiveRecursionLimit = options.addLiveRecursionLimit
+    this.maxQueuedBaseHeaders = options.maxQueuedBaseHeaders ?? 4096
+    if (
+      !Number.isSafeInteger(this.maxQueuedBaseHeaders) ||
+      this.maxQueuedBaseHeaders < 1 ||
+      this.maxQueuedBaseHeaders > 1_000_000
+    ) {
+      throw new Error('maxQueuedBaseHeaders must be an integer between 1 and 1000000.')
+    }
 
     if (options.logging != null) this.log = options.logging
     this.storage.log = this.log
 
     this.log(`New ChaintracksBase Instance Constructed ${options.chain}Net`)
+  }
+
+  private validateIngestors(name: string, ingestors: unknown[]): void {
+    if (ingestors.length > 1_000) throw new Error(`${name} cannot contain more than 1000 entries.`)
+    for (let i = 0; i < ingestors.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(ingestors, i) || ingestors[i] == null) {
+        throw new Error(`${name} must be a dense array of ingestors.`)
+      }
+    }
   }
 
   async getChain(): Promise<Chain> {
@@ -115,7 +170,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
     if (this.lastPresentHeight >= 0) {
       void this.refreshPresentHeight().catch(error => {
-        this.log(`Background present-height refresh failed: ${WalletError.fromUnknown(error).message}`)
+        this.log(`Background present-height refresh failed: ${this.safeDiagnostic(error)}`)
       })
       return this.lastPresentHeight
     }
@@ -138,16 +193,24 @@ export class Chaintracks implements ChaintracksManagementApi {
       const source = this.sourceName('bulk', index, bulk)
       try {
         const presentHeight = await bulk.getPresentHeight()
-        if (presentHeight != null && Number.isInteger(presentHeight) && presentHeight >= 0) {
+        if (
+          presentHeight != null &&
+          Number.isSafeInteger(presentHeight) &&
+          presentHeight >= 0 &&
+          presentHeight <= 0x7fffffff
+        ) {
           this.markSourceSuccess(source, 'bulk')
           this.lastPresentHeight = presentHeight
           this.lastPresentHeightMsecs = Date.now()
           return presentHeight
         }
+        if (presentHeight != null) {
+          this.markSourceFailure(source, 'bulk', new Error('source returned an invalid present height'))
+        }
       } catch (uerr: unknown) {
         const error = WalletError.fromUnknown(uerr)
         this.markSourceFailure(source, 'bulk', error)
-        this.log(`Present-height source ${source} failed: ${error.message}`)
+        this.log(`Present-height source ${source} failed: ${this.safeDiagnostic(error)}`)
       }
     }
 
@@ -162,7 +225,7 @@ export class Chaintracks implements ChaintracksManagementApi {
         return localHeight
       }
     } catch (error: unknown) {
-      this.log(`Unable to read the locally validated ChainTracks height: ${WalletError.fromUnknown(error).message}`)
+      this.log(`Unable to read the locally validated ChainTracks height: ${this.safeDiagnostic(error)}`)
     }
     throw new Error('No present-height source or locally validated headers are available.')
   }
@@ -175,7 +238,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   getAvailabilitySnapshot(): ChaintracksAvailabilitySnapshotApi {
     return {
       available: this.available,
-      startupError: this.startupError?.message,
+      startupError: this.startupError == null ? undefined : this.safeDiagnostic(this.startupError),
       presentHeight: this.lastPresentHeight >= 0 ? this.lastPresentHeight : undefined,
       presentHeightUpdatedAt:
         this.lastPresentHeightMsecs > 0 ? new Date(this.lastPresentHeightMsecs).toISOString() : undefined,
@@ -188,23 +251,42 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async subscribeHeaders(listener: HeaderListener): Promise<string> {
+    this.validateListener(listener, 'header listener')
+    this.requireSubscriberCapacity(this.callbacks.header, 'header')
     const ID = randomBytesBase64(8)
     this.callbacks.header[ID] = listener
     return ID
   }
 
   async subscribeReorgs(listener: ReorgListener): Promise<string> {
+    this.validateListener(listener, 'reorg listener')
+    this.requireSubscriberCapacity(this.callbacks.reorg, 'reorg')
     const ID = randomBytesBase64(8)
     this.callbacks.reorg[ID] = listener
     return ID
   }
 
   async unsubscribe(subscriptionId: string): Promise<boolean> {
-    let success = true
-    if (this.callbacks.header[subscriptionId]) this.callbacks.header[subscriptionId] = null
-    else if (this.callbacks.reorg[subscriptionId]) this.callbacks.reorg[subscriptionId] = null
-    else success = false
-    return success
+    if (typeof subscriptionId !== 'string' || subscriptionId.length === 0 || subscriptionId.length > 128) return false
+    if (Object.prototype.hasOwnProperty.call(this.callbacks.header, subscriptionId)) {
+      delete this.callbacks.header[subscriptionId]
+      return true
+    }
+    if (Object.prototype.hasOwnProperty.call(this.callbacks.reorg, subscriptionId)) {
+      delete this.callbacks.reorg[subscriptionId]
+      return true
+    }
+    return false
+  }
+
+  private validateListener(listener: unknown, name: string): asserts listener is (...args: unknown[]) => void {
+    if (typeof listener !== 'function') throw new WERR_INVALID_PARAMETER(name, 'a function')
+  }
+
+  private requireSubscriberCapacity<T>(listeners: Record<string, T | null>, kind: string): void {
+    if (Object.keys(listeners).length >= Chaintracks.maxSubscribersPerKind) {
+      throw new WERR_INVALID_PARAMETER(`${kind} subscriptions`, `fewer than ${Chaintracks.maxSubscribersPerKind}`)
+    }
   }
 
   /**
@@ -217,7 +299,22 @@ export class Chaintracks implements ChaintracksManagementApi {
    * @param header
    */
   async addHeader(header: BaseBlockHeader): Promise<void> {
-    this.baseHeaders.push(header)
+    validateBaseBlockHeaderFormat(header)
+    const pendingHeader: BaseBlockHeader = {
+      version: header.version,
+      previousHash: header.previousHash,
+      merkleRoot: header.merkleRoot,
+      time: header.time,
+      bits: header.bits,
+      nonce: header.nonce
+    }
+    const hash = blockHash(pendingHeader)
+    if (this.queuedBaseHeaderHashes.has(hash)) return
+    if (this.baseHeaders.length >= this.maxQueuedBaseHeaders) {
+      throw new ChaintracksQueueCapacityError()
+    }
+    this.queuedBaseHeaderHashes.add(hash)
+    this.baseHeaders.push(pendingHeader)
   }
 
   /**
@@ -234,48 +331,81 @@ export class Chaintracks implements ChaintracksManagementApi {
     await this.lock.withWriteLock(async () => {
       // Only the first call proceeds to initialize...
       if (this.available) return
-      // Make sure database schema exists and is updated...
-      await this.storage.migrateLatest()
-      for (const bulkIn of this.bulkIngestors) await bulkIn.setStorage(this.storage, this.log)
-      for (const liveIn of this.liveIngestors) await liveIn.setStorage(this.storage, this.log)
+      this.cleanupComplete = false
+      this.startupError = null
+      try {
+        // Make sure database schema exists and is updated...
+        await this.storage.migrateLatest()
+        for (const bulkIn of this.bulkIngestors) await bulkIn.setStorage(this.storage, this.log)
+        for (const liveIn of this.liveIngestors) await liveIn.setStorage(this.storage, this.log)
 
-      // Start all live ingestors to push new headers onto liveHeaders... each long running.
-      this.stopMainThread = false
-      for (const [index, liveIngestor] of this.liveIngestors.entries()) {
-        this.promises.push(this.runLiveIngestor(liveIngestor, index))
+        // Start all live ingestors to push new headers onto liveHeaders... each long running.
+        this.stopMainThread = false
+        for (const [index, liveIngestor] of this.liveIngestors.entries()) {
+          this.promises.push(this.runLiveIngestor(liveIngestor, index))
+        }
+
+        // Start main loop to shift out liveHeaders...once sync'd, will set `available` true.
+        this.promises.push(this.mainThreadShiftLiveHeaders())
+
+        // Wait for the main thread to finish initial sync.
+        while (!this.available && this.startupError == null) {
+          await wait(100)
+        }
+
+        if (this.startupError != null) throw this.startupError
+      } catch (error: unknown) {
+        this.startupError = WalletError.fromUnknown(error)
+        await this.stopRuntimeForRetry()
+        throw error
       }
-
-      // Start mai loop to shift out liveHeaders...once sync'd, will set `available` true.
-      this.promises.push(this.mainThreadShiftLiveHeaders())
-
-      // Wait for the main thread to finish initial sync.
-      while (!this.available && this.startupError == null) {
-        await wait(100)
-      }
-
-      if (this.startupError != null) throw this.startupError
     })
   }
 
   async startPromises(): Promise<void> {
-    if (this.promises.length > 0 || !this.stopMainThread) return
+    await this.makeAvailable()
   }
 
   async destroy(): Promise<void> {
-    if (!this.available) return
     await this.lock.withWriteLock(async () => {
-      if (!this.available || this.stopMainThread) return
+      if (this.cleanupComplete) return
+      if (!this.available && this.promises.length === 0 && this.startupError == null) return
       this.log('Shutting Down')
       this.stopMainThread = true
-      for (const liveIn of this.liveIngestors) await liveIn.shutdown()
-      for (const bulkIn of this.bulkIngestors) await bulkIn.shutdown()
-      await Promise.all(this.promises)
-      await this.storage.bulkManager.destroy()
-      await this.storage.destroy()
+      for (const liveIn of this.liveIngestors) this.stopLiveIngestor(liveIn)
+      const cleanup = [
+        ...this.promises,
+        ...this.liveIngestors.map(async liveIn => await liveIn.shutdown()),
+        ...this.bulkIngestors.map(async bulkIn => await bulkIn.shutdown())
+      ]
+      const results = await Promise.allSettled(cleanup)
+      results.push(...(await Promise.allSettled([this.storage.bulkManager.destroy()])))
+      results.push(...(await Promise.allSettled([this.storage.destroy()])))
+      this.promises.length = 0
       this.available = false
-      this.stopMainThread = false
+      this.subscriberCallbacksEnabled = false
+      this.cleanupComplete = true
+      const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+      if (failure != null) throw WalletError.fromUnknown(failure.reason)
       this.log('Shutdown')
     })
+  }
+
+  private async stopRuntimeForRetry(): Promise<void> {
+    this.stopMainThread = true
+    for (const liveIngestor of this.liveIngestors) this.stopLiveIngestor(liveIngestor)
+    await Promise.allSettled(this.promises)
+    this.promises.length = 0
+    this.available = false
+    this.subscriberCallbacksEnabled = false
+  }
+
+  private stopLiveIngestor(liveIngestor: LiveIngestorApi): void {
+    try {
+      liveIngestor.stopListening()
+    } catch {
+      // Cleanup continues so one faulty source cannot prevent the remaining resources from stopping.
+    }
   }
 
   async listening(): Promise<void> {
@@ -295,7 +425,7 @@ export class Chaintracks implements ChaintracksManagementApi {
         restartCount++
         const waitMsecs = this.liveIngestorRestartWaitMsecs(restartCount)
         this.log(`Live ingestor ${name} stopped unexpectedly restart=${restartCount} retryMsecs=${waitMsecs}`)
-        await wait(waitMsecs)
+        await this.waitUnlessStopping(waitMsecs)
       } catch (error_: unknown) {
         if (this.stopMainThread) return
         restartCount++
@@ -303,10 +433,19 @@ export class Chaintracks implements ChaintracksManagementApi {
         this.markSourceFailure(source, 'live', e)
         const waitMsecs = this.liveIngestorRestartWaitMsecs(restartCount)
         this.log(
-          `Live ingestor ${name} failed restart=${restartCount} retryMsecs=${waitMsecs}: ${e.stack ?? e.message}`
+          `Live ingestor ${name} failed restart=${restartCount} retryMsecs=${waitMsecs}: ${this.safeDiagnostic(e)}`
         )
-        await wait(waitMsecs)
+        await this.waitUnlessStopping(waitMsecs)
       }
+    }
+  }
+
+  private async waitUnlessStopping(msecs: number): Promise<void> {
+    let remaining = msecs
+    while (remaining > 0 && !this.stopMainThread) {
+      const chunk = Math.min(250, remaining)
+      await wait(chunk)
+      remaining -= chunk
     }
   }
 
@@ -324,6 +463,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
+    this.validatePublicHeight(height)
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.findHeaderForHeightNoLock(height))
   }
@@ -333,6 +473,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
+    this.validatePublicHash(hash)
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => await this.findHeaderForBlockHashNoLock(hash))
   }
@@ -342,6 +483,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    this.validatePublicHash(root)
     const r = await this.findHeaderForHeight(height)
     if (r == null) return false
     const isValid = root === r.merkleRoot
@@ -370,6 +512,10 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async getHeaders(height: number, count: number): Promise<string> {
+    this.validatePublicHeight(height)
+    if (!Number.isSafeInteger(count) || count < 1 || count > 100000 || height + count - 1 > 0x7fffffff) {
+      throw new WERR_INVALID_PARAMETER('count', 'an integer from 1 through 100000 within the supported height range')
+    }
     await this.makeAvailable()
     return await this.lock.withReadLock(async () => asString(await this.storage.getHeadersUint8Array(height, count)))
   }
@@ -385,6 +531,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | undefined> {
+    this.validatePublicHash(hash)
     await this.makeAvailable()
     const header = await this.lock.withReadLock(async () => await this.storage.findLiveHeaderForBlockHash(hash))
     return header || undefined
@@ -393,6 +540,18 @@ export class Chaintracks implements ChaintracksManagementApi {
   async findChainWorkForBlockHash(hash: string): Promise<string | undefined> {
     const header = await this.findLiveHeaderForBlockHash(hash)
     return header?.chainWork
+  }
+
+  private validatePublicHeight(height: number): void {
+    if (!Number.isSafeInteger(height) || height < 0 || height > 0x7fffffff) {
+      throw new WERR_INVALID_PARAMETER('height', 'an integer from 0 through 2147483647')
+    }
+  }
+
+  private validatePublicHash(hash: string): void {
+    if (typeof hash !== 'string' || !/^[0-9a-fA-F]{64}$/.test(hash)) {
+      throw new WERR_INVALID_PARAMETER('hash', 'exactly 32 hexadecimal bytes')
+    }
   }
 
   /**
@@ -423,7 +582,7 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   async startListening(): Promise<void> {
-    this.makeAvailable()
+    await this.makeAvailable()
   }
 
   private async syncBulkStorage(presentHeight: number, initialRanges: HeightRanges): Promise<void> {
@@ -460,7 +619,13 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
 
     if (this.startupError == null) {
-      this.liveHeaders.unshift(...newLiveHeaders)
+      if (this.liveHeaders.length + newLiveHeaders.length > Chaintracks.maxBulkLiveHeaders) {
+        throw new Error(`Bulk sync cannot queue more than ${Chaintracks.maxBulkLiveHeaders} live headers.`)
+      }
+      for (let end = newLiveHeaders.length; end > 0; end -= 10_000) {
+        const start = Math.max(0, end - 10_000)
+        this.liveHeaders.unshift(...newLiveHeaders.slice(start, end))
+      }
       added = after.bulk.above(initialRanges.bulk)
       this.log(`syncBulkStorage done
   Before sync: bulk ${initialRanges.bulk}, live ${initialRanges.live}
@@ -491,7 +656,8 @@ export class Chaintracks implements ChaintracksManagementApi {
         hadSuccess = true
         this.markSourceSuccess(source, 'bulk')
 
-        newLiveHeaders = r.liveHeaders
+        newLiveHeaders = this.normalizeBulkLiveHeaders(r.liveHeaders)
+        if (typeof r.done !== 'boolean') throw new Error('Bulk ingestor result done must be a boolean.')
         after = await this.storage.getAvailableHeightRanges()
         const added = after.bulk.above(before.bulk)
         const afterLiveRange = HeightRange.from(newLiveHeaders)
@@ -508,7 +674,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       } catch (error_: unknown) {
         const e = (bulkSyncError = WalletError.fromUnknown(error_))
         this.markSourceFailure(source, 'bulk', e)
-        this.log(`bulk sync error: ${e.message}`)
+        this.log(`bulk sync error: ${this.safeDiagnostic(e)}`)
       }
     }
 
@@ -518,6 +684,33 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private sourceName(role: 'bulk' | 'live', index: number, source: object): string {
     return `${role}[${index}]:${source.constructor.name}`
+  }
+
+  private normalizeBulkLiveHeaders(value: unknown): BlockHeader[] {
+    if (!Array.isArray(value) || value.length > Chaintracks.maxBulkLiveHeaders) {
+      throw new Error(
+        `Bulk ingestor liveHeaders must be an array of at most ${Chaintracks.maxBulkLiveHeaders} entries.`
+      )
+    }
+    const headers: BlockHeader[] = []
+    for (let index = 0; index < value.length; index++) {
+      if (!Object.prototype.hasOwnProperty.call(value, index)) {
+        throw new Error('Bulk ingestor liveHeaders must be a dense array.')
+      }
+      const header = value[index] as BlockHeader
+      validateHeaderFormat(header)
+      headers.push({
+        version: header.version,
+        previousHash: header.previousHash,
+        merkleRoot: header.merkleRoot,
+        time: header.time,
+        bits: header.bits,
+        nonce: header.nonce,
+        height: header.height,
+        hash: header.hash
+      })
+    }
+    return headers
   }
 
   private markSourceSuccess(name: string, role: 'bulk' | 'live'): void {
@@ -538,7 +731,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       role,
       state: 'degraded',
       lastFailure: new Date().toISOString(),
-      error: error.message
+      error: this.safeDiagnostic(error)
     })
   }
 
@@ -552,7 +745,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       } catch (error: unknown) {
         const resolved = WalletError.fromUnknown(error)
         this.markSourceFailure(source, 'live', resolved)
-        this.log(`Header lookup source ${source} failed: ${resolved.message}`)
+        this.log(`Header lookup source ${source} failed: ${this.safeDiagnostic(resolved)}`)
       }
     }
     return undefined
@@ -564,7 +757,7 @@ export class Chaintracks implements ChaintracksManagementApi {
 
   private async addLiveHeader(header: BlockHeader): Promise<InsertHeaderResult> {
     validateHeaderFormat(header)
-    validateHeaderProofOfWork(header)
+    validateHeaderProofOfWork(header, this.chain)
     validateAgainstDirtyHashes(header.hash)
 
     const ihr = this.available
@@ -588,7 +781,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       const listener = this.callbacks.header[id]
       if (listener != null) {
         try {
-          listener(header)
+          listener({ ...header })
         } catch {
           /* ignore all errors thrown */
         }
@@ -597,13 +790,16 @@ export class Chaintracks implements ChaintracksManagementApi {
   }
 
   private notifyReorgListeners(ihr: InsertHeaderResult, header: BlockHeader): void {
-    const priorTip: BlockHeader = { ...ihr.priorTip! }
-    const deactivated: BlockHeader[] = ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
     for (const id in this.callbacks.reorg) {
       const listener = this.callbacks.reorg[id]
       if (listener != null) {
         try {
-          listener(ihr.reorgDepth, priorTip, header, deactivated)
+          listener(
+            ihr.reorgDepth,
+            { ...ihr.priorTip! },
+            { ...header },
+            ihr.deactivatedHeaders.map(lbh => ({ ...lbh }))
+          )
         } catch {
           /* ignore all errors thrown */
         }
@@ -641,7 +837,7 @@ export class Chaintracks implements ChaintracksManagementApi {
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
         if (this.available) {
-          this.log(`Error occurred during chaintracks main thread processing: ${e.stack || e.message}`)
+          this.log(`Error occurred during chaintracks main thread processing: ${this.safeDiagnostic(e)}`)
         } else {
           this.startupError = e
           this.stopMainThread = true
@@ -687,6 +883,7 @@ export class Chaintracks implements ChaintracksManagementApi {
     }
     const baseHeader = this.baseHeaders.shift()
     if (baseHeader == null) return null
+    this.queuedBaseHeaderHashes.delete(blockHash(baseHeader))
     if (await this.processOneBaseHeader(baseHeader)) stats.count++
     return false
   }
@@ -790,5 +987,9 @@ export class Chaintracks implements ChaintracksManagementApi {
       this.subscriberCallbacksEnabled = true
       this.log(`listening at height of ${live.maxHeight}`)
     }
+  }
+
+  private safeDiagnostic(error: unknown): string {
+    return safeDiagnostic(error, 1024)
   }
 }

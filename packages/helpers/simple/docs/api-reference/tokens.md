@@ -12,21 +12,22 @@ async createToken(options: TokenOptions): Promise<TokenResult>
 
 Create an encrypted PushDrop token.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `options.data` | `any` | *required* | Token data (object or string, will be JSON-serialized) |
-| `options.to` | `string` | self | Recipient public key |
-| `options.basket` | `string` | `'tokens'` | Basket to store the token |
-| `options.protocolID` | `[number, string]` | `[0, 'token']` | PushDrop protocol ID |
-| `options.keyID` | `string` | `'1'` | PushDrop key ID |
-| `options.satoshis` | `number` | `1` | Satoshis locked in the token |
+| Parameter            | Type               | Default        | Description                                     |
+| -------------------- | ------------------ | -------------- | ----------------------------------------------- |
+| `options.data`       | `any`              | _required_     | Token data (JSON/string, maximum 1 MiB encoded) |
+| `options.to`         | `string`           | self           | Recipient public key                            |
+| `options.basket`     | `string`           | `'tokens'`     | Basket to store the token                       |
+| `options.protocolID` | `[number, string]` | `[0, 'token']` | PushDrop protocol ID                            |
+| `options.keyID`      | `string`           | `'1'`          | PushDrop key ID                                 |
+| `options.satoshis`   | `number`           | `1`            | Satoshis locked in the token                    |
 
 **Returns:** [`TokenResult`](types.md#tokenresult)
 
 **What happens:**
-1. Serializes `data` to JSON string
-2. Encrypts using `client.encrypt()` with the specified protocol/key
-3. Creates a PushDrop locking script with the ciphertext
+
+1. Serializes and bounds `data` before wallet access
+2. Encrypts using `client.encrypt()` with `to` as counterparty (`self` only when omitted/local)
+3. Creates a PushDrop locking script for that same counterparty
 4. Creates the transaction via `createAction()`
 5. Stores `{ protocolID, keyID, counterparty }` in `customInstructions` for later decryption
 
@@ -46,17 +47,17 @@ async listTokenDetails(basket?: string): Promise<TokenDetail[]>
 
 List tokens in a basket with automatic decryption.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `basket` | `string` | `'tokens'` | Basket to query |
+| Parameter | Type     | Default    | Description     |
+| --------- | -------- | ---------- | --------------- |
+| `basket`  | `string` | `'tokens'` | Basket to query |
 
 **Returns:** Array of [`TokenDetail`](types.md#tokendetail)
 
 ```typescript
 interface TokenDetail {
-  outpoint: string     // "txid.vout"
+  outpoint: string // "txid.vout"
   satoshis: number
-  data: any            // Decrypted token data
+  data: any // Decrypted token data
   protocolID: any
   keyID: string
   counterparty: string
@@ -64,7 +65,8 @@ interface TokenDetail {
 ```
 
 **Behavior:**
-- Fetches outputs with locking scripts and custom instructions
+
+- Fetches validated 1,000-output pages to a 10,000-token safety limit
 - Decodes PushDrop fields from each output
 - Reads `protocolID`, `keyID`, `counterparty` from `customInstructions`
 - Decrypts the PushDrop field using `client.decrypt()`
@@ -79,22 +81,24 @@ async sendToken(options: SendTokenOptions): Promise<TransactionResult>
 
 Transfer a token to another key via on-chain transaction.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `options.basket` | `string` | Basket containing the token |
+| Parameter          | Type     | Description                    |
+| ------------------ | -------- | ------------------------------ |
+| `options.basket`   | `string` | Basket containing the token    |
 | `options.outpoint` | `string` | Token outpoint (`"txid.vout"`) |
-| `options.to` | `string` | Recipient's public key |
+| `options.to`       | `string` | Recipient's public key         |
 
 **Returns:** [`TransactionResult`](types.md#transactionresult)
 
 **What happens (two-step signing):**
+
 1. Lists outputs with `include: 'entire transactions'` to get BEEF data
 2. Finds the target token by outpoint
 3. Decodes the PushDrop fields from the source script
-4. Creates a new PushDrop locking script for the recipient with a new `keyID`
-5. Calls `createAction()` with the token as input — returns a `signableTransaction`
-6. Signs the input using `PushDrop.unlock()` template
-7. Calls `signAction()` with the unlocking script to finalize
+4. Creates a new PushDrop locking script for the recipient with a new `keyID`, preserving the source token's satoshi value
+5. Calls the exact-outpoint bound-action flow with the token as input
+6. Locates and signs the token's actual input index using `PushDrop.unlock()`
+7. Requires `signAction()` to preserve the inspected input/output template,
+   exact unlocking script, and transaction ID
 
 ## redeemToken()
 
@@ -104,9 +108,9 @@ async redeemToken(options: RedeemTokenOptions): Promise<TransactionResult>
 
 Spend/destroy a token (reclaims the locked satoshis).
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `options.basket` | `string` | Basket containing the token |
+| Parameter          | Type     | Description                    |
+| ------------------ | -------- | ------------------------------ |
+| `options.basket`   | `string` | Basket containing the token    |
 | `options.outpoint` | `string` | Token outpoint (`"txid.vout"`) |
 
 **Returns:** [`TransactionResult`](types.md#transactionresult)
@@ -121,15 +125,16 @@ async sendTokenViaMessageBox(options: SendTokenOptions): Promise<TransactionResu
 
 Transfer a token to another key via MessageBox P2P messaging.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `options.basket` | `string` | Basket containing the token |
-| `options.outpoint` | `string` | Token outpoint |
-| `options.to` | `string` | Recipient's public key |
+| Parameter          | Type     | Description                 |
+| ------------------ | -------- | --------------------------- |
+| `options.basket`   | `string` | Basket containing the token |
+| `options.outpoint` | `string` | Token outpoint              |
+| `options.to`       | `string` | Recipient's public key      |
 
 **Returns:** [`TransactionResult`](types.md#transactionresult)
 
 **Behavior:**
+
 1. Same two-step signing as `sendToken()`
 2. After signing, sends the transaction via `PeerPayClient.sendMessage()` to the `simple_token_inbox` message box
 3. Message body contains: `{ transaction, protocolID, keyID, sender, outputIndex }`
@@ -141,6 +146,10 @@ async listIncomingTokens(): Promise<any[]>
 ```
 
 List tokens waiting in the MessageBox inbox.
+
+The read is capped at 1,000 messages. Malformed entries are left unacknowledged,
+and the returned sender comes from the authenticated MessageBox envelope rather
+than the message body's claim.
 
 **Returns:** Array of incoming token messages:
 
@@ -164,14 +173,17 @@ async acceptIncomingToken(token: any, basket?: string): Promise<any>
 
 Accept an incoming token from the MessageBox inbox.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `token` | `any` | *required* | Token object from `listIncomingTokens()` |
-| `basket` | `string` | `'tokens'` | Basket to store the accepted token |
+| Parameter | Type     | Default    | Description                              |
+| --------- | -------- | ---------- | ---------------------------------------- |
+| `token`   | `any`    | _required_ | Token object from `listIncomingTokens()` |
+| `basket`  | `string` | `'tokens'` | Basket to store the accepted token       |
 
 **Returns:** `{ accepted: true, basket: string, sender: string }`
 
 **Behavior:**
-1. Internalizes the transaction using `basket insertion` protocol
-2. Stores `{ protocolID, keyID, counterparty }` in `customInstructions`
-3. Acknowledges the message to remove it from the inbox
+
+1. Re-fetches the bounded authenticated inbox and resolves the supplied message ID exactly once
+2. Uses only that fresh envelope's sender, transaction, protocol, key, and output metadata
+3. Internalizes the transaction using `basket insertion` protocol
+4. Stores `{ protocolID, keyID, counterparty }` in `customInstructions`
+5. Acknowledges only after an exact affirmative wallet result; a temporary acknowledgement failure does not turn successful internalization into a false failure

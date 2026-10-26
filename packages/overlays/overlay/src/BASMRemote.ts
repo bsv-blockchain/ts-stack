@@ -20,19 +20,28 @@ import {
   requireBASMLimit
 } from './BASMValidation.js'
 import type { BASMRemoteLimits } from './BASMValidation.js'
+import { assertRawTransactionMatches, assertTopic, securePeerFetch } from './RemoteSecurity.js'
 
 export { BASMProtocolError } from './BASMValidation.js'
 export type { BASMRemoteLimits } from './BASMValidation.js'
 
 export class BASMRemote {
   private readonly limits: Readonly<BASMRemoteLimits>
+  private readonly endpoint: string
+  private readonly topic: string
+  private readonly fetchImpl: typeof fetch
 
   constructor(
-    private readonly endpoint: string,
-    private readonly topic: string,
-    private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
+    endpoint: string,
+    topic: string,
+    fetchImpl?: typeof fetch,
     limits: Partial<BASMRemoteLimits> = {}
   ) {
+    assertTopic(topic)
+    const secured = securePeerFetch(endpoint, fetchImpl)
+    this.endpoint = secured.endpoint
+    this.topic = topic
+    this.fetchImpl = secured.fetchImpl
     this.limits = Object.freeze({ ...DEFAULT_BASM_REMOTE_LIMITS, ...limits })
     for (const [key, value] of Object.entries(this.limits)) {
       if (!Number.isSafeInteger(value) || value <= 0)
@@ -141,9 +150,11 @@ export class BASMRemote {
         'Unexpected or duplicate BASM raw transaction'
       )
       seen.add(txid)
+      const rawTx = basmHex(record.rawTx, 'raw transaction', this.limits.maxRawTransactionBytes)
+      assertRawTransactionMatches(txid, rawTx)
       return {
         txid,
-        rawTx: basmHex(record.rawTx, 'raw transaction', this.limits.maxRawTransactionBytes)
+        rawTx
       }
     })
     const missing = basmTxids(obj.missing, requested.size)
@@ -242,6 +253,16 @@ export class BASMRemote {
     if (signal.aborted) {
       void response.body?.cancel().catch(() => {})
       signal.throwIfAborted()
+    }
+    const contentType = response.headers?.get?.('content-type')
+    if (
+      contentType !== null &&
+      contentType !== undefined &&
+      contentType.includes('/') &&
+      !/^application\/(?:[\w.-]+\+)?json(?:\s*;|$)/i.test(contentType)
+    ) {
+      void response.body?.cancel().catch(() => {})
+      throw new TypeError('Overlay peer response is not JSON')
     }
     const text = await this.readResponse(response, signal)
     let value: unknown

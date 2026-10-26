@@ -8,12 +8,16 @@ import { RequestOptions } from 'node:https'
 // Mock Transaction
 jest.mock('../../../transaction/Transaction', () => {
   class MockTransaction {
-    toHex (): string {
+    toHex(): string {
       return 'mocked_transaction_hex'
     }
 
-    toHexEF (): string {
+    toHexEF(): string {
       return 'mocked_transaction_hexEF'
+    }
+
+    id(): string {
+      return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     }
   }
   return { __esModule: true, default: MockTransaction }
@@ -24,7 +28,7 @@ describe('ARC Broadcaster', () => {
   const successResponse = {
     status: 200,
     data: {
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       txStatus: 'success',
       extraInfo: 'received'
     }
@@ -36,7 +40,7 @@ describe('ARC Broadcaster', () => {
     transaction = new Transaction()
   })
 
-  async function withoutGlobalFetch<T> (callback: () => Promise<T>): Promise<T> {
+  async function withoutGlobalFetch<T>(callback: () => Promise<T>): Promise<T> {
     const originalFetchDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'fetch')
     Object.defineProperty(globalThis, 'fetch', {
       configurable: true,
@@ -67,7 +71,7 @@ describe('ARC Broadcaster', () => {
     expect(mockFetch).toHaveBeenCalled()
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'success received'
     })
   })
@@ -86,7 +90,7 @@ describe('ARC Broadcaster', () => {
 
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'success received'
     })
   })
@@ -102,7 +106,7 @@ describe('ARC Broadcaster', () => {
     expect(mockFetch).toHaveBeenCalled()
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'success received'
     })
   })
@@ -117,7 +121,7 @@ describe('ARC Broadcaster', () => {
 
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'success received'
     })
   })
@@ -132,7 +136,7 @@ describe('ARC Broadcaster', () => {
 
     // Ensure headers exist and cast to the correct type
     const requestOptions = mockFetch.mock.calls[0][1] as HttpClientRequestOptions
-    const headers = (requestOptions?.headers ?? {}) // ✅ Proper typing
+    const headers = requestOptions?.headers ?? {} // ✅ Proper typing
 
     expect(headers['Content-Type']).toEqual('application/json')
     expect(headers['XDeployment-ID']).toBeDefined()
@@ -152,7 +156,7 @@ describe('ARC Broadcaster', () => {
 
     // Extract and properly type headers
     const requestOptions = mockFetch.mock.calls[0][1] as HttpClientRequestOptions
-    const headers = (requestOptions?.headers ?? {}) // ✅ Correct typing
+    const headers = requestOptions?.headers ?? {} // ✅ Correct typing
 
     expect(headers['XDeployment-ID']).toBeDefined()
     expect(headers['XDeployment-ID']).toMatch(/ts-sdk-.*/)
@@ -185,8 +189,7 @@ describe('ARC Broadcaster', () => {
     await broadcaster.broadcast(transaction)
 
     // Ensure headers is always defined
-    const headers =
-    (mockFetch.mock.calls[0]?.[1]?.headers) ?? {}
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers ?? {}
 
     expect(headers['XDeployment-ID']).toEqual(deploymentId)
   })
@@ -204,7 +207,7 @@ describe('ARC Broadcaster', () => {
     expect(response).toEqual({
       status: 'error',
       code: '500',
-      description: 'Network error'
+      description: 'Internal Server Error'
     })
   })
 
@@ -239,7 +242,7 @@ describe('ARC Broadcaster', () => {
       data: {
         status: 460,
         detail: 'Transaction is not in extended format, missing input scripts',
-        txid: 'd21633ba23f70118185227be58a63527675641ad37967e2aa461559f577aec43'
+        txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
       }
     })
 
@@ -262,9 +265,7 @@ describe('ARC Broadcaster', () => {
       expect(response.description).toBe(
         'Transaction is not in extended format, missing input scripts'
       )
-      expect(response.txid).toBe(
-        'd21633ba23f70118185227be58a63527675641ad37967e2aa461559f577aec43'
-      )
+      expect(response.txid).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       expect(response.more).toBeTruthy() // Validate the presence of additional error details
     } else {
       // Fail the test if the response is not an error
@@ -276,7 +277,7 @@ describe('ARC Broadcaster', () => {
     const mockFetch = mockedFetch({
       status: 200,
       data: {
-        txid: '89100426fc13a55260fa65e621e7591f8b01007af62480e818d0da518723bfd3',
+        txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         txStatus: 'DOUBLE_SPEND_ATTEMPTED',
         extraInfo: '',
         competingTxs: ['5e58f06a83343011f77d9109aab08dcc38d89e8cc7bd55da16affa948281d7ed']
@@ -292,7 +293,7 @@ describe('ARC Broadcaster', () => {
     expect(response.status).toBe('error')
     if (response.status === 'error') {
       expect(response.code).toBe('DOUBLE_SPEND_ATTEMPTED')
-      expect(response.txid).toBe('89100426fc13a55260fa65e621e7591f8b01007af62480e818d0da518723bfd3')
+      expect(response.txid).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       expect(response.more).toEqual({
         competingTxs: ['5e58f06a83343011f77d9109aab08dcc38d89e8cc7bd55da16affa948281d7ed']
       })
@@ -303,7 +304,7 @@ describe('ARC Broadcaster', () => {
     const mockFetch = mockedFetch({
       status: 200,
       data: {
-        txid: 'b06cb1059c2bf3debee1e65dc90d0815653325c7cf2584763b90c761c09919db',
+        txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         txStatus: 'success',
         extraInfo: 'SEEN_IN_ORPHAN_MEMPOOL'
       }
@@ -318,7 +319,7 @@ describe('ARC Broadcaster', () => {
     expect(response.status).toBe('error')
     if (response.status === 'error') {
       expect(response.code).toBe('success')
-      expect(response.txid).toBe('b06cb1059c2bf3debee1e65dc90d0815653325c7cf2584763b90c761c09919db')
+      expect(response.txid).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       expect(response.description).toContain('ORPHAN')
     }
   })
@@ -351,7 +352,7 @@ describe('ARC Broadcaster', () => {
     const mockFetch = mockedFetch({
       status: 200,
       data: {
-        txid: 'valid_txid',
+        txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         txStatus: 'SEEN_ON_NETWORK',
         extraInfo: 'Transaction accepted'
       }
@@ -365,12 +366,12 @@ describe('ARC Broadcaster', () => {
     expect(mockFetch).toHaveBeenCalled()
     expect(response.status).toBe('success')
     if (response.status === 'success') {
-      expect(response.txid).toBe('valid_txid')
+      expect(response.txid).toBe('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       expect(response.message).toBe('SEEN_ON_NETWORK Transaction accepted')
     }
   })
 
-  function mockedFetch (response: { status: number, data: any }): jest.Mock {
+  function mockedFetch(response: { status: number; data: any }): jest.Mock {
     return jest.fn().mockResolvedValue({
       ok: response.status === 200,
       status: response.status,
@@ -387,7 +388,7 @@ describe('ARC Broadcaster', () => {
     })
   }
 
-  function mockedHttps (response: { status: number, data: any }): {
+  function mockedHttps(response: { status: number; data: any }): {
     request: (
       url: string,
       options: RequestOptions,
@@ -420,7 +421,7 @@ describe('ARC Broadcaster', () => {
           headers: {
             'content-type': 'application/json; charset=UTF-8'
           },
-          on (event: string, handler: (chunk?: any) => void) {
+          on(event: string, handler: (chunk?: any) => void) {
             if (event === 'data') handler(JSON.stringify(response.data))
             if (event === 'end') handler()
           }

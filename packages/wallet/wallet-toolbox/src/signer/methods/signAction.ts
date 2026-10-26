@@ -1,14 +1,18 @@
 import {
+  type ValidCreateActionArgs,
+  type ValidSignActionArgs,
+  validateSignActionArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import {
   AtomicBEEF,
   Beef,
   SendWithResult,
   SignActionArgs,
   SignActionResult,
   TelemetrySpan,
-  TXIDHexString,
-  Validation
+  TXIDHexString
 } from '@bsv/sdk'
-import { processAction } from './createAction'
+import { processAction, serializeResultBeef } from './createAction'
 import { AuthId, ReviewActionResult } from '../../sdk/WalletStorage.interfaces'
 import { completeSignedTransaction, verifyUnlockScripts } from './completeSignedTransaction'
 import { Wallet } from '../../Wallet'
@@ -76,7 +80,7 @@ async function signActionCore(
   const beef =
     prior.dcr.inputBeef instanceof Uint8Array
       ? Beef.fromBinaryView(prior.dcr.inputBeef)
-      : Beef.fromBinary(prior.dcr.inputBeef)
+      : Beef.fromBinaryStrict(prior.dcr.inputBeef)
   beef.mergeTransaction(prior.tx)
 
   await traceSignActionStep(
@@ -88,7 +92,14 @@ async function signActionCore(
 
   const r: SignActionResultX = {
     txid: prior.tx.id('hex'),
-    tx: vargs.options.returnTXIDOnly ? undefined : beef.toBinaryAtomic(txid),
+    // knownTxids lives on the ORIGINAL createAction args: mergePriorOptions does not carry it
+    // across, and ValidSignActionArgs has no field for it. Without this the declaration is
+    // honoured when createAction returns the transaction and silently dropped when signAction
+    // does -- and signAction is the path a wallet takes whenever the user approves a payment
+    // before it is signed, which is every BRC-105 payment made from an interactive wallet.
+    tx: vargs.options.returnTXIDOnly
+      ? undefined
+      : serializeResultBeef(beef, txid, prior.args.options.knownTxids),
     sendWithResults,
     notDelayedResults
   }
@@ -116,10 +127,7 @@ async function traceSignActionStep<T>(
   )
 }
 
-function mergePriorOptions(
-  caVargs: Validation.ValidCreateActionArgs,
-  saArgs: SignActionArgs
-): Validation.ValidSignActionArgs {
+function mergePriorOptions(caVargs: ValidCreateActionArgs, saArgs: SignActionArgs): ValidSignActionArgs {
   const saOptions = (saArgs.options ||= {})
   saOptions.acceptDelayedBroadcast ??= caVargs.options.acceptDelayedBroadcast
   saOptions.returnTXIDOnly ??= caVargs.options.returnTXIDOnly
@@ -134,5 +142,5 @@ function mergePriorOptions(
     }
     saOptions.noSend = true
   }
-  return Validation.validateSignActionArgs(saArgs)
+  return validateSignActionArgs(saArgs)
 }

@@ -5,21 +5,43 @@ export const CHIRP_OPENAPI_DOCUMENT = {
     version: '1.0.0',
     description: 'Baseline upload-session and complete-host retrieval profile for CHIRP v1.'
   },
+  components: {
+    securitySchemes: {
+      bsvAuth: {
+        type: 'http',
+        scheme: 'bsv-auth',
+        description: 'BRC-103/104 mutually authenticated request transport.'
+      }
+    }
+  },
   paths: {
     '/chirp/v1/uploads': {
       post: {
         summary: 'Create an authenticated CHIRP staging session',
+        security: [{ bsvAuth: [] }],
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
+                additionalProperties: false,
                 required: ['retentionSeconds', 'logicalLength'],
                 properties: {
-                  retentionSeconds: { type: 'string', pattern: '^[1-9][0-9]*$' },
+                  retentionSeconds: {
+                    type: 'string',
+                    pattern: '^[1-9][0-9]{0,19}$',
+                    maxLength: 20
+                  },
                   logicalLength: {
-                    oneOf: [{ type: 'string', pattern: '^(0|[1-9][0-9]*)$' }, { type: 'null' }]
+                    oneOf: [
+                      {
+                        type: 'string',
+                        pattern: '^(0|[1-9][0-9]{0,19})$',
+                        maxLength: 20
+                      },
+                      { type: 'null' }
+                    ]
                   }
                 }
               }
@@ -33,10 +55,20 @@ export const CHIRP_OPENAPI_DOCUMENT = {
               'application/json': {
                 schema: {
                   type: 'object',
+                  additionalProperties: false,
                   required: ['uploadId', 'stagingExpiresAt'],
                   properties: {
-                    uploadId: { type: 'string' },
-                    stagingExpiresAt: { type: 'string', pattern: '^[1-9][0-9]*$' }
+                    uploadId: {
+                      type: 'string',
+                      minLength: 1,
+                      maxLength: 512,
+                      pattern: '^[^\\u0000-\\u001F\\u007F]+$'
+                    },
+                    stagingExpiresAt: {
+                      type: 'string',
+                      pattern: '^[1-9][0-9]{0,19}$',
+                      maxLength: 20
+                    }
                   }
                 }
               }
@@ -48,11 +80,22 @@ export const CHIRP_OPENAPI_DOCUMENT = {
     },
     '/chirp/v1/uploads/{uploadId}/objects/{objectIdentifier}': {
       parameters: [
-        { name: 'uploadId', in: 'path', required: true, schema: { type: 'string' } },
-        { name: 'objectIdentifier', in: 'path', required: true, schema: { type: 'string' } }
+        {
+          name: 'uploadId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', minLength: 1, maxLength: 512 }
+        },
+        {
+          name: 'objectIdentifier',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', pattern: '^[1-9A-HJ-NP-Za-km-z]{52}$' }
+        }
       ],
       head: {
         summary: 'Check whether an authenticated session already references an object',
+        security: [{ bsvAuth: [] }],
         responses: {
           '200': { description: 'Object is staged' },
           '404': { description: 'Not staged' }
@@ -60,6 +103,7 @@ export const CHIRP_OPENAPI_DOCUMENT = {
       },
       put: {
         summary: 'Stream-hash and stage an immutable CHIRP object',
+        security: [{ bsvAuth: [] }],
         requestBody: {
           required: true,
           content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } }
@@ -76,21 +120,52 @@ export const CHIRP_OPENAPI_DOCUMENT = {
       post: {
         summary:
           'Validate a complete closure, establish its lease, and advertise its root through UHRP',
-        parameters: [{ name: 'uploadId', in: 'path', required: true, schema: { type: 'string' } }],
+        security: [{ bsvAuth: [] }],
+        parameters: [
+          {
+            name: 'uploadId',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', minLength: 1, maxLength: 512 }
+          }
+        ],
         requestBody: {
           required: true,
           content: {
             'application/json': {
               schema: {
                 type: 'object',
+                additionalProperties: false,
                 required: ['rootIdentifier'],
-                properties: { rootIdentifier: { type: 'string' } }
+                properties: {
+                  rootIdentifier: {
+                    type: 'string',
+                    pattern: '^[1-9A-HJ-NP-Za-km-z]{52}$'
+                  }
+                }
               }
             }
           }
         },
         responses: {
-          '201': { description: 'Complete host commitment published' },
+          '201': {
+            description: 'Complete host commitment published',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['chirpURL', 'uhrpURL', 'hostedFileLocation', 'expiryTime'],
+                  properties: {
+                    chirpURL: { type: 'string', pattern: '^chirp://[1-9A-HJ-NP-Za-km-z]{52}$' },
+                    uhrpURL: { type: 'string', pattern: '^uhrp://[1-9A-HJ-NP-Za-km-z]{52}$' },
+                    hostedFileLocation: { type: 'string', format: 'uri' },
+                    expiryTime: { type: 'integer', minimum: 1 }
+                  }
+                }
+              }
+            }
+          },
           '400': { description: 'Invalid or incomplete closure' },
           '404': { description: 'Unknown or expired staging session' }
         }
@@ -98,8 +173,18 @@ export const CHIRP_OPENAPI_DOCUMENT = {
     },
     '/chirp/v1/{rootIdentifier}/objects/{objectIdentifier}': {
       parameters: [
-        { name: 'rootIdentifier', in: 'path', required: true, schema: { type: 'string' } },
-        { name: 'objectIdentifier', in: 'path', required: true, schema: { type: 'string' } }
+        {
+          name: 'rootIdentifier',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', pattern: '^[1-9A-HJ-NP-Za-km-z]{52}$' }
+        },
+        {
+          name: 'objectIdentifier',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', pattern: '^[1-9A-HJ-NP-Za-km-z]{52}$' }
+        }
       ],
       get: {
         summary: 'Retrieve an exact object from an unexpired complete-host closure',

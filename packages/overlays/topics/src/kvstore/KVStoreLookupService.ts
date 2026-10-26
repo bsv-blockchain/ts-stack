@@ -1,58 +1,52 @@
 import { KVStoreStorageManager } from './KVStoreStorageManager.js'
-import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
-import { PushDrop, Transaction, Utils } from '@bsv/sdk'
+import {
+  AdmissionMode,
+  LookupFormula,
+  LookupQuestion,
+  LookupService,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
+import { decodeAndVerifyKVStoreToken, Transaction } from '@bsv/sdk'
 import { Db } from 'mongodb'
-import { kvProtocol, KVStoreLookupResult, KVStoreQuery } from './types.js'
+import { KVStoreLookupResult } from './types.js'
+import {
+  readBoolean,
+  readInteger,
+  readSortOrder,
+  readString,
+  readStringArray,
+  readWalletProtocol,
+  requireLookupQuery,
+  requirePublicKey
+} from '../shared/queryValidation.js'
 
-class KVStoreLookupService implements LookupService {
+export class KVStoreLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
   private static readonly TOPIC = 'tm_kvstore'
   private static readonly SERVICE_ID = 'ls_kvstore'
 
-  constructor (public storageManager: KVStoreStorageManager) { }
+  constructor(public storageManager: KVStoreStorageManager) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload mode')
 
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== KVStoreLookupService.TOPIC) return
 
     try {
-      const decoded = PushDrop.decode(lockingScript)
-
-      const expectedFieldCount = Object.keys(kvProtocol).length
-      const hasTagsField = decoded.fields.length === expectedFieldCount
-      const isOldFormat = decoded.fields.length === expectedFieldCount - 1
-
-      if (!isOldFormat && !hasTagsField) {
-        throw new Error(`KVStore token must have ${expectedFieldCount - 1} or ${expectedFieldCount} fields, got ${decoded.fields.length}`)
-      }
-
-      const keyBuffer = decoded.fields[kvProtocol.key]
-      if (!keyBuffer || keyBuffer.length === 0) throw new Error('KVStore tokens must have a non-empty key')
-
-      const valueBuffer = decoded.fields[kvProtocol.value]
-      if (!valueBuffer || valueBuffer.length === 0) throw new Error('KVStore tokens must have a non-empty value')
-
-      let tags: string[] | undefined
-      if (hasTagsField && decoded.fields[kvProtocol.tags]) {
-        try {
-          tags = JSON.parse(Utils.toUTF8(decoded.fields[kvProtocol.tags]))
-        } catch {
-          // Tags field is not valid JSON; treat as absent rather than failing admission
-          tags = undefined
-        }
-      }
+      const decoded = await decodeAndVerifyKVStoreToken(lockingScript)
 
       await this.storageManager.storeRecord(
         txid,
         outputIndex,
-        Utils.toUTF8(keyBuffer),
-        Utils.toUTF8(decoded.fields[kvProtocol.protocolID]),
-        Utils.toHex(decoded.fields[kvProtocol.controller]),
-        tags
+        decoded.key,
+        decoded.protocolIDText,
+        decoded.controller,
+        decoded.tags
       )
     } catch (error) {
       console.error(error)
@@ -60,39 +54,64 @@ class KVStoreLookupService implements LookupService {
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload mode')
     const { topic, txid, outputIndex } = payload
     if (topic !== KVStoreLookupService.TOPIC) return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) {
-      throw new Error('A valid query must be provided')
-    }
-    if (question.service !== KVStoreLookupService.SERVICE_ID) {
-      throw new Error('Lookup service not supported')
-    }
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, KVStoreLookupService.SERVICE_ID, [
+      'key',
+      'controller',
+      'protocolID',
+      'tags',
+      'tagQueryMode',
+      'limit',
+      'skip',
+      'sortOrder',
+      'history'
+    ])
+    const key = readString(query, 'key', { maxBytes: 1000 })
+    const controller = requirePublicKey(
+      readString(query, 'controller', { maxBytes: 66 }),
+      'controller'
+    )
+    const protocolID = readWalletProtocol(query, 'protocolID')
+    const tags = readStringArray(query, 'tags', { maxItems: 32, maxItemBytes: 256 })
+    const tagQueryMode = query.tagQueryMode ?? 'all'
+    if (tagQueryMode !== 'all' && tagQueryMode !== 'any')
+      throw new Error('Invalid lookup query: tagQueryMode must be all or any')
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const sortOrder = readSortOrder(query)
+    const history = readBoolean(query, 'history')
 
-    const query = (question.query as KVStoreQuery)
-    this.validateQuerySelectors(query)
+    if (
+      key === undefined &&
+      controller === undefined &&
+      protocolID === undefined &&
+      tags === undefined
+    ) {
+      throw new Error('Must specify at least one selector: key, controller, protocolID, or tags')
+    }
 
     const results = await this.storageManager.findWithFilters(
       {
-        key: query.key,
-        protocolID: query.protocolID,
-        controller: query.controller,
-        tags: query.tags
+        key,
+        protocolID,
+        controller,
+        tags
       },
-      query.tagQueryMode ?? 'all',
-      query.limit,
-      query.skip,
-      query.sortOrder
+      tagQueryMode,
+      limit,
+      skip,
+      sortOrder
     )
 
     const lookupResults: KVStoreLookupResult[] = []
@@ -101,10 +120,15 @@ class KVStoreLookupService implements LookupService {
       lookupResults.push({
         txid: results[i].txid,
         outputIndex: results[i].outputIndex,
-        history: query.history
+        history: history
           ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
-            return await this.historySelector(beef, outputIndex, results[i].key, results[i].protocolID)
-          }
+              return await this.historySelector(
+                beef,
+                outputIndex,
+                results[i].key,
+                results[i].protocolID
+              )
+            }
           : undefined
       })
     }
@@ -112,31 +136,20 @@ class KVStoreLookupService implements LookupService {
     return lookupResults
   }
 
-  private validateQuerySelectors (query: KVStoreQuery): void {
-    const hasSelector =
-      (typeof query.key === 'string' && query.key.length > 0) ||
-      (typeof query.controller === 'string' && query.controller.length > 0) ||
-      (Array.isArray(query.protocolID) && query.protocolID.length === 2) ||
-      (Array.isArray(query.tags) && query.tags.length > 0)
-
-    if (!hasSelector) {
-      throw new Error('Must specify at least one selector: key, controller, protocolID, or tags')
-    }
-  }
-
-  private async historySelector (beef: number[], outputIndex: number, key?: string, protocolID?: string): Promise<boolean> {
+  private async historySelector(
+    beef: number[],
+    outputIndex: number,
+    key?: string,
+    protocolID?: string
+  ): Promise<boolean> {
     try {
       const tx = Transaction.fromBEEF(beef)
-      const result = PushDrop.decode(tx.outputs[outputIndex].lockingScript)
+      const output = tx.outputs[outputIndex]
+      if (output?.lockingScript == null) return false
+      const result = await decodeAndVerifyKVStoreToken(output.lockingScript)
 
-      if (result.fields.length !== Object.keys(kvProtocol).length) return false
-      if (!result.fields[kvProtocol.key] || !result.fields[kvProtocol.value] || !result.fields[kvProtocol.protocolID]) return false
-
-      const outputKey = Utils.toUTF8(result.fields[kvProtocol.key])
-      const outputProtocolID = Utils.toUTF8(result.fields[kvProtocol.protocolID])
-
-      if (key !== undefined && outputKey !== key) return false
-      if (protocolID !== undefined && outputProtocolID !== protocolID) return false
+      if (key !== undefined && result.key !== key) return false
+      if (protocolID !== undefined && result.protocolIDText !== protocolID) return false
 
       return true
     } catch {
@@ -145,11 +158,11 @@ class KVStoreLookupService implements LookupService {
     }
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return 'KVStore Lookup Service: find KVStore key-value pairs stored on-chain with efficient lookups.'
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -158,10 +171,13 @@ class KVStoreLookupService implements LookupService {
   }> {
     return {
       name: 'KVStore Lookup Service',
-      shortDescription: 'Find KVStore key-value pairs stored on-chain with efficient lookups by protected key.'
+      shortDescription:
+        'Find KVStore key-value pairs stored on-chain with efficient lookups by protected key.'
     }
   }
 }
 
-function create (db: Db): KVStoreLookupService { return new KVStoreLookupService(new KVStoreStorageManager(db)) }
+function create(db: Db): KVStoreLookupService {
+  return new KVStoreLookupService(new KVStoreStorageManager(db))
+}
 export default create

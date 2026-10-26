@@ -72,6 +72,8 @@ function createMockWallet(
     listActionsResult: Partial<ListActionsResult>
     listOutputsResult: Partial<ListOutputsResult>
     identityKey: string
+    internalizeActionResult: { accepted: boolean }
+    relinquishOutputResult: { relinquished: boolean }
   }> = {}
 ): WalletInterface & { calls: Record<string, any[]> } {
   const calls: Record<string, any[]> = {
@@ -145,12 +147,12 @@ function createMockWallet(
 
     async internalizeAction(args: any): Promise<any> {
       calls.internalizeAction.push(args)
-      return { accepted: true }
+      return overrides.internalizeActionResult ?? { accepted: true }
     },
 
     async relinquishOutput(args: any): Promise<any> {
       calls.relinquishOutput.push(args)
-      return { relinquished: true }
+      return overrides.relinquishOutputResult ?? { relinquished: true }
     },
 
     // Stub other required methods
@@ -468,6 +470,18 @@ describe('BTMS', () => {
       expect(result.success).toBe(false)
       expect(result.error).toBeDefined()
     })
+
+    it('fails closed when the wallet does not accept the issued token', async () => {
+      const mockWallet = createMockWallet({
+        internalizeActionResult: { accepted: false }
+      })
+      const btms = new BTMS({ wallet: mockWallet })
+
+      const result = await btms.issue(100, { name: 'REJECTED' })
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('did not accept the issued token')
+    })
   })
 
   describe('listAssets', () => {
@@ -716,6 +730,15 @@ describe('BTMS', () => {
         BTMSToken.decode = originalDecode
       }
     })
+
+    it('rejects balances that cannot be represented exactly', async () => {
+      const btms = new BTMS({ wallet: createMockWallet() })
+      btms.getSpendableTokens = jest.fn().mockResolvedValue({
+        tokens: [{ token: { amount: Number.MAX_SAFE_INTEGER } }, { token: { amount: 1 } }]
+      }) as never
+
+      await expect(btms.getBalance(MOCK_TXID + '.0')).rejects.toThrow('safe integer range')
+    })
   })
 
   describe('getTransactions', () => {
@@ -806,6 +829,23 @@ describe('BTMS', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('positive integer')
+    })
+
+    it('rejects amounts above the exact integer range before consulting the wallet', async () => {
+      const mockWallet = createMockWallet()
+      const btms = new BTMS({ wallet: mockWallet })
+
+      const result = await btms.send(
+        MOCK_TXID + '.0',
+        MOCK_RECIPIENT_KEY,
+        Number.MAX_SAFE_INTEGER + 1
+      )
+
+      expect(result).toMatchObject({
+        success: false,
+        error: expect.stringContaining('safe integer')
+      })
+      expect(mockWallet.calls.listOutputs).toHaveLength(0)
     })
 
     it('should fail if no spendable tokens', async () => {
@@ -992,6 +1032,16 @@ describe('BTMS', () => {
 
       expect(result.selected).toHaveLength(0)
       expect(result.totalInput).toBe(0)
+    })
+
+    it('rejects an inexact selected-input aggregate', () => {
+      const utxos = createMockUTXOs([Number.MAX_SAFE_INTEGER, 1])
+      expect(() => BTMS.selectUTXOs(utxos, Number.MAX_SAFE_INTEGER)).not.toThrow()
+      expect(() =>
+        BTMS.selectUTXOs(utxos, Number.MAX_SAFE_INTEGER - 1, {
+          strategy: 'smallest-first'
+        })
+      ).toThrow('safe integer range')
     })
 
     // Integration test: verify BTMS.send uses selectUTXOs and handles insufficient balance
@@ -1565,6 +1615,72 @@ describe('BTMS', () => {
         mockTopicBroadcasterBroadcast.mockReset()
       }
     })
+
+    it('does not acknowledge a token when the wallet returns accepted false', async () => {
+      const mockWallet = createMockWallet({
+        internalizeActionResult: { accepted: false }
+      })
+      const mockComms = {
+        acknowledgeMessage: jest.fn().mockResolvedValue(undefined)
+      }
+      const btms = new BTMS({ wallet: mockWallet, comms: mockComms as any })
+      const originalLookup = (btms as any).lookupTokenOnOverlay
+      ;(btms as any).lookupTokenOnOverlay = jest.fn().mockResolvedValue({ found: true })
+      const originalDecode = BTMSToken.decode
+      BTMSToken.decode = jest.fn().mockReturnValue({
+        valid: true,
+        assetId: `${MOCK_TXID}.0`,
+        amount: 100,
+        lockingPublicKey: MOCK_IDENTITY_KEY
+      })
+
+      try {
+        const result = await btms.accept({
+          txid: MOCK_TXID as any,
+          outputIndex: 0,
+          lockingScript: '00' as any,
+          amount: 100,
+          assetId: `${MOCK_TXID}.0`,
+          sender: MOCK_RECIPIENT_KEY as any,
+          messageId: 'msg-rejected',
+          satoshis: 1,
+          beef: createMockAtomicBEEF(MOCK_TXID),
+          customInstructions: JSON.stringify({
+            derivationPrefix: 'test',
+            derivationSuffix: 'test'
+          })
+        })
+
+        expect(result.success).toBe(false)
+        expect(result.error).toContain('did not accept the incoming token')
+        expect(mockComms.acknowledgeMessage).not.toHaveBeenCalled()
+      } finally {
+        ;(btms as any).lookupTokenOnOverlay = originalLookup
+        BTMSToken.decode = originalDecode
+      }
+    })
+  })
+
+  describe('relinquishBadOutputs', () => {
+    it('records a false wallet verdict as a failure', async () => {
+      const mockWallet = createMockWallet({
+        relinquishOutputResult: { relinquished: false }
+      })
+      const btms = new BTMS({ wallet: mockWallet })
+      ;(btms as any).findBadOutputs = jest
+        .fn()
+        .mockResolvedValue([{ outpoint: `${MOCK_TXID}.0`, error: 'corrupt metadata' }])
+
+      await expect(btms.relinquishBadOutputs()).resolves.toEqual({
+        relinquished: [],
+        failed: [
+          {
+            outpoint: `${MOCK_TXID}.0`,
+            error: 'Wallet did not relinquish the output'
+          }
+        ]
+      })
+    })
   })
 
   describe('listIncoming', () => {
@@ -2097,6 +2213,20 @@ describe('BTMS', () => {
       expect(outputs.every(output => output.amount >= 5)).toBe(true)
       expect(outputs.reduce((sum, output) => sum + output.amount, 0)).toBe(100)
     })
+
+    it('rejects custom change strategies that lose token value', () => {
+      expect(() =>
+        BTMS.computeChangeOutputs(
+          {
+            assetId: `${MOCK_TXID}.0`,
+            changeAmount: 100,
+            paymentAmount: 50,
+            totalInput: 150
+          },
+          { strategy: { computeChange: () => [{ amount: 99 }] } }
+        )
+      ).toThrow('exactly equal')
+    })
   })
 })
 
@@ -2272,6 +2402,22 @@ describe('Ownership Proof', () => {
   })
 
   describe('verifyOwnership', () => {
+    it('rejects unsafe claimed amounts before wallet or proof processing', async () => {
+      const mockWallet = createMockWallet({ identityKey: MOCK_IDENTITY_KEY })
+      const btms = new BTMS({ wallet: mockWallet })
+
+      const result = await btms.verifyOwnership({
+        prover: MOCK_RECIPIENT_KEY,
+        verifier: MOCK_IDENTITY_KEY,
+        tokens: [],
+        amount: Number.MAX_SAFE_INTEGER + 1,
+        assetId: GOLD_ASSET_ID
+      } as never)
+
+      expect(result).toMatchObject({ valid: false, error: expect.stringContaining('safe integer') })
+      expect(mockWallet.calls.getPublicKey).toHaveLength(0)
+    })
+
     it('should reject proof not intended for this verifier', async () => {
       // Scenario: Alice creates a proof for Bob, but Charlie tries to verify it
 

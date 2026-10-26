@@ -1,7 +1,11 @@
 import { AuthSocket } from '../AuthSocketServer.js'
 
 describe('AuthSocket', () => {
-  function createHarness(onError = jest.fn(), useDefaultObserver = false) {
+  function createHarness(
+    onError = jest.fn(),
+    useDefaultObserver = false,
+    identityDiscovered: jest.Mock = jest.fn()
+  ) {
     let generalMessageListener:
       ((senderPublicKey: string, payload: number[]) => void | Promise<void>) | undefined
     const peer = {
@@ -12,11 +16,14 @@ describe('AuthSocket', () => {
       ),
       toPeer: jest.fn().mockResolvedValue(undefined)
     }
+    const socketListeners = new Map<string, (...arguments_: any[]) => unknown>()
     const socket = {
       id: 'socket-2',
-      disconnect: jest.fn()
+      disconnect: jest.fn(),
+      on: jest.fn((eventName: string, callback: (...arguments_: any[]) => unknown) => {
+        socketListeners.set(eventName, callback)
+      })
     }
-    const identityDiscovered = jest.fn()
     const authSocket = useDefaultObserver
       ? new AuthSocket(socket as never, peer as never, identityDiscovered)
       : new AuthSocket(socket as never, peer as never, identityDiscovered, onError)
@@ -33,27 +40,54 @@ describe('AuthSocket', () => {
       identityDiscovered,
       onError,
       peer,
-      socket
+      socket,
+      socketListeners
     }
   }
 
+  it('gates every concurrent first-session message on one completed activation', async () => {
+    let resolveActivation!: (approved: boolean) => void
+    const activation = new Promise<boolean>(resolve => {
+      resolveActivation = resolve
+    })
+    const identityDiscovered = jest.fn(async () => await activation)
+    const { authSocket, generalMessage } = createHarness(jest.fn(), false, identityDiscovered)
+    const received = jest.fn()
+    authSocket.on('message', received)
+
+    const first = Promise.resolve(generalMessage({ eventName: 'message', data: 1 }))
+    const second = Promise.resolve(generalMessage({ eventName: 'message', data: 2 }))
+    await Promise.resolve()
+
+    expect(identityDiscovered).toHaveBeenCalledTimes(1)
+    expect(received).not.toHaveBeenCalled()
+
+    resolveActivation(false)
+    await Promise.all([first, second])
+
+    expect(received).not.toHaveBeenCalled()
+  })
+
   it('dispatches authenticated messages and reuses the discovered identity', async () => {
-    const { authSocket, generalMessage, identityDiscovered, peer } = createHarness()
+    const { authSocket, generalMessage, identityDiscovered, peer, socket } = createHarness()
     const first = jest.fn()
     const second = jest.fn()
     authSocket.on('message', first)
     authSocket.on('message', second)
 
-    generalMessage({ eventName: 'message', data: { value: 7 } })
-    generalMessage({ eventName: 'message', data: { value: 8 } }, 'ignored-new-key')
+    await generalMessage({ eventName: 'message', data: { value: 7 } })
+    await expect(
+      generalMessage({ eventName: 'message', data: { value: 8 } }, 'ignored-new-key')
+    ).resolves.toBeUndefined()
 
     expect(authSocket.id).toBe('socket-2')
     expect(authSocket.identityKey).toBe('peer-key')
     expect(identityDiscovered).toHaveBeenCalledTimes(1)
     expect(identityDiscovered).toHaveBeenCalledWith('socket-2', 'peer-key')
     expect(first).toHaveBeenNthCalledWith(1, { value: 7 })
-    expect(first).toHaveBeenNthCalledWith(2, { value: 8 })
-    expect(second).toHaveBeenCalledTimes(2)
+    expect(first).toHaveBeenCalledTimes(1)
+    expect(second).toHaveBeenCalledTimes(1)
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
 
     await authSocket.emit('reply', { accepted: true })
 
@@ -71,7 +105,7 @@ describe('AuthSocket', () => {
     const historicalTx = JSON.parse(JSON.stringify(new Uint8Array([4, 5, 6])))
     authSocket.on('payment', received)
 
-    generalMessage({ eventName: 'payment', data: { transaction: historicalTx } })
+    await generalMessage({ eventName: 'payment', data: { transaction: historicalTx } })
     await authSocket.emit('payment', { transaction: new Uint8Array([1, 2, 3]) })
 
     expect(received).toHaveBeenCalledWith({ transaction: historicalTx })
@@ -88,7 +122,7 @@ describe('AuthSocket', () => {
     const applicationData = { 0: 1, 1: 2 }
     authSocket.on('applicationEvent', received)
 
-    generalMessage({ eventName: 'applicationEvent', data: applicationData })
+    await generalMessage({ eventName: 'applicationEvent', data: applicationData })
     await authSocket.emit('applicationEvent', applicationData)
 
     expect(received).toHaveBeenCalledWith(applicationData)
@@ -98,26 +132,28 @@ describe('AuthSocket', () => {
     )
   })
 
-  it('routes malformed payloads to the explicit unknown event', () => {
-    const { authSocket, generalMessage } = createHarness()
+  it('rejects malformed payloads without routing an attacker-controlled sentinel event', async () => {
+    const { authSocket, generalMessage, socket } = createHarness()
     const unknown = jest.fn()
     authSocket.on('_unknown', unknown)
 
-    generalMessage('{not-json')
+    await generalMessage('{not-json')
 
-    expect(unknown).toHaveBeenCalledWith(null)
+    expect(unknown).not.toHaveBeenCalled()
+    expect(socket.disconnect).toHaveBeenCalledWith(true)
   })
 
   it.each([null, [], 7, 'event', {}, { eventName: 7 }])(
     'routes a valid JSON non-envelope (%p) to the explicit unknown event',
-    value => {
-      const { authSocket, generalMessage } = createHarness()
+    async value => {
+      const { authSocket, generalMessage, socket } = createHarness()
       const unknown = jest.fn()
       authSocket.on('_unknown', unknown)
 
-      generalMessage(value)
+      await generalMessage(value)
 
-      expect(unknown).toHaveBeenCalledWith(null)
+      expect(unknown).not.toHaveBeenCalled()
+      expect(socket.disconnect).toHaveBeenCalledWith(true)
     }
   )
 
@@ -154,9 +190,22 @@ describe('AuthSocket', () => {
     expect(socket.disconnect).toHaveBeenCalledWith(true)
   })
 
-  it('ignores valid events without registered callbacks', () => {
+  it('ignores valid events without registered callbacks', async () => {
     const { generalMessage } = createHarness()
 
-    expect(() => generalMessage({ eventName: 'unhandled', data: true })).not.toThrow()
+    await expect(generalMessage({ eventName: 'unhandled', data: true })).resolves.toBeUndefined()
+  })
+
+  it('delivers disconnect only from the real socket lifecycle', async () => {
+    const { authSocket, generalMessage, socketListeners } = createHarness()
+    const disconnected = jest.fn()
+    authSocket.on('disconnect', disconnected)
+
+    await generalMessage({ eventName: 'ready', data: true })
+    await generalMessage({ eventName: 'disconnect', data: 'spoofed' })
+    expect(disconnected).not.toHaveBeenCalled()
+
+    await socketListeners.get('disconnect')?.('transport close')
+    expect(disconnected).toHaveBeenCalledWith('transport close')
   })
 })

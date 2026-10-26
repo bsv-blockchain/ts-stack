@@ -1,4 +1,5 @@
-import { Beef, defaultHttpClient, HexString, HttpClient, Utils } from '@bsv/sdk'
+import { Beef, defaultHttpClient, HexString, HttpClient } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { Chain, ReqHistoryNote } from '../../sdk/types'
 import {
   GetMerklePathResult,
@@ -9,12 +10,22 @@ import {
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { WalletError } from '../../sdk/WalletError'
 import { convertProofToMerklePath } from '../../utility/tscProofToMerklePath'
+import { normalizeTxid, validateMerklePathResult } from '../validateMerklePathResult'
+import {
+  MAX_POST_BEEF_BYTES,
+  MAX_POST_BEEF_TXIDS,
+  normalizePostRawHex,
+  snapshotPostBeefRequest,
+  validatePostBeefResultOrServiceError
+} from '../validatePostBeefResult'
 
 export interface BitailsConfig {
   /** Authentication token for BitTails API */
   apiKey?: string
   /** The HTTP client used to make requests to the API. */
   httpClient?: HttpClient
+  /** Whole-request deadline applied to Bitails calls. Defaults to 30 seconds. */
+  requestTimeoutMsecs?: number
 }
 
 interface BitailsPostNoteContext {
@@ -26,6 +37,47 @@ interface BitailsPostNoteContext {
     txids: string
     url: string
   }
+}
+
+function denseBitailsArray(value: unknown, name: string): unknown[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_POST_BEEF_TXIDS) {
+    throw new Error(`${name} must contain 1 through ${MAX_POST_BEEF_TXIDS} items.`)
+  }
+  const properties = Object.getOwnPropertyDescriptors(value)
+  const expected = new Set(['length', ...Array.from({ length: value.length }, (_, index) => String(index))])
+  if (
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.keys(properties).length !== expected.size ||
+    Object.keys(properties).some(key => !expected.has(key)) ||
+    Object.values(properties).some(property => property.get != null || property.set != null)
+  ) {
+    throw new Error(`${name} must be an accessor-free dense array.`)
+  }
+  return Array.from({ length: value.length }, (_, index) => properties[String(index)].value)
+}
+
+function validateBitailsPostRequest(
+  rawValues: unknown,
+  requestedValues?: unknown
+): { raws: HexString[]; txids?: string[] } {
+  let aggregateBytes = 0
+  const raws = denseBitailsArray(rawValues, 'raws').map((raw, index) => {
+    const normalized = normalizePostRawHex(raw, MAX_POST_BEEF_BYTES, `raws[${index}]`)
+    aggregateBytes += normalized.length / 2
+    if (!Number.isSafeInteger(aggregateBytes) || aggregateBytes > MAX_POST_BEEF_BYTES) {
+      throw new Error(`raws must total no more than ${MAX_POST_BEEF_BYTES} bytes.`)
+    }
+    return normalized
+  })
+  const rawTxids = new Set(raws.map(raw => toHex(doubleSha256BE(toArray(raw, 'hex')))))
+  const txids =
+    requestedValues === undefined
+      ? undefined
+      : denseBitailsArray(requestedValues, 'txids').map((txid, index) => normalizeTxid(txid, `txids[${index}]`))
+  if (txids != null && (new Set(txids).size !== txids.length || txids.some(txid => !rawTxids.has(txid)))) {
+    throw new Error('txids must be unique transaction IDs present in raws.')
+  }
+  return { raws, txids }
 }
 
 function initializeBitailsPostResult(
@@ -40,7 +92,7 @@ function initializeBitailsPostResult(
   }
   const rawTxids: string[] = []
   for (const raw of raws) {
-    const txid = Utils.toHex(doubleSha256BE(Utils.toArray(raw, 'hex')))
+    const txid = toHex(doubleSha256BE(toArray(raw, 'hex')))
     rawTxids.push(txid)
     if (requestedTxids == null || requestedTxids.includes(txid)) {
       result.txidResults.push({ txid, status: 'success', notes: [] })
@@ -134,6 +186,16 @@ function applyRequestedBitailsResults(
   }
 }
 
+function markBitailsServiceFailure(result: PostBeefResult): void {
+  result.status = 'error'
+  for (const txResult of result.txidResults) {
+    txResult.status = 'error'
+    txResult.serviceError = true
+    txResult.doubleSpend = undefined
+    txResult.competingTxs = undefined
+  }
+}
+
 /**
  *
  */
@@ -142,9 +204,13 @@ export class Bitails {
   readonly apiKey: string
   readonly URL: string
   readonly httpClient: HttpClient
+  readonly requestTimeoutMsecs: number
 
   constructor(chain: Chain = 'main', config: BitailsConfig = {}) {
-    const { apiKey, httpClient } = config
+    const { apiKey, httpClient, requestTimeoutMsecs = 30_000 } = config
+    if (!Number.isSafeInteger(requestTimeoutMsecs) || requestTimeoutMsecs < 1 || requestTimeoutMsecs > 3_600_000) {
+      throw new Error('Bitails requestTimeoutMsecs must be an integer from 1 through 3600000.')
+    }
     this.chain = chain
     switch (chain) {
       case 'main':
@@ -158,6 +224,7 @@ export class Bitails {
     }
     this.httpClient = httpClient ?? defaultHttpClient()
     this.apiKey = apiKey ?? ''
+    this.requestTimeoutMsecs = requestTimeoutMsecs
   }
 
   getHttpHeaders(): Record<string, string> {
@@ -182,6 +249,9 @@ export class Bitails {
    * @returns
    */
   async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+    const request = snapshotPostBeefRequest(beef, txids)
+    beef = Beef.fromBinaryStrict(request.beefBytes)
+    txids = request.txids
     const nn = () => ({
       name: 'BitailsPostBeef',
       when: new Date().toISOString()
@@ -192,7 +262,7 @@ export class Bitails {
 
     const raws: string[] = []
     for (const txid of txids) {
-      const rawTx = Utils.toHex(beef.findTxid(txid)!.rawTx!)
+      const rawTx = toHex(beef.findTxid(txid)!.rawTx!)
       raws.push(rawTx)
     }
 
@@ -202,7 +272,7 @@ export class Bitails {
     if (r.status === 'success') r.notes!.push({ ...nn(), what: 'postBeefSuccess' })
     else r.notes!.push({ ...nne(), what: 'postBeefError' })
 
-    return r
+    return validatePostBeefResultOrServiceError(r, txids, 'BitailsPostRaws')
   }
 
   /**
@@ -211,6 +281,7 @@ export class Bitails {
    * @returns
    */
   async postRaws(raws: HexString[], txids?: string[]): Promise<PostBeefResult> {
+    ;({ raws, txids } = validateBitailsPostRequest(raws, txids))
     const { result: r, rawTxids } = initializeBitailsPostResult(raws, txids)
 
     const headers = this.getHttpHeaders()
@@ -221,7 +292,8 @@ export class Bitails {
     const requestOptions = {
       method: 'POST',
       headers,
-      data
+      data,
+      signal: AbortSignal.timeout(this.requestTimeoutMsecs)
     }
 
     const url = `${this.URL}tx/broadcast/multi`
@@ -244,19 +316,25 @@ export class Bitails {
       if (response.ok) {
         if (reconcileBitailsResponseTxids(r, response.data, rawTxids, notes)) {
           applyRequestedBitailsResults(r, response.data, notes)
+        } else {
+          markBitailsServiceFailure(r)
         }
       } else {
-        r.status = 'error'
+        markBitailsServiceFailure(r)
         const n: ReqHistoryNote = { ...notes.nne(), what: 'postRawsError' }
         r.notes!.push(n)
       }
     } catch (error_: unknown) {
-      r.status = 'error'
+      markBitailsServiceFailure(r)
       const e = WalletError.fromUnknown(error_)
       const { code, description } = e
       r.notes!.push({ ...notes.nne(), what: 'postRawsCatch', code, description })
     }
-    return r
+    return validatePostBeefResultOrServiceError(
+      r,
+      r.txidResults.map(result => result.txid),
+      'BitailsPostRaws'
+    )
   }
 
   /**
@@ -273,7 +351,7 @@ export class Bitails {
     const nn = () => ({ name: 'BitailsProofTsc', when: new Date().toISOString(), txid, url })
 
     const headers = this.getHttpHeaders()
-    const requestOptions = { method: 'GET', headers }
+    const requestOptions = { method: 'GET', headers, signal: AbortSignal.timeout(this.requestTimeoutMsecs) }
 
     try {
       const response = await this.httpClient.request<BitailsMerkleProof>(url, requestOptions)
@@ -286,11 +364,19 @@ export class Bitails {
         r.notes!.push({ ...nne(), what: 'getMerklePathBadStatus' })
       } else if (response.data) {
         const p = response.data
-        const header = await services.hashToHeader(p.target)
+        const target = normalizeTxid(p.target, 'TSC proof target')
+        const header = await services.hashToHeader(target)
         if (header) {
+          if (normalizeTxid(header.hash, 'TSC proof header hash') !== target) {
+            throw new Error('Bitails proof header did not match its target block hash.')
+          }
           const proof = { index: p.index, nodes: p.nodes, height: header.height }
-          r.merklePath = convertProofToMerklePath(txid, proof)
-          r.header = header
+          const validated = validateMerklePathResult(txid, {
+            merklePath: convertProofToMerklePath(txid, proof),
+            header
+          })
+          r.merklePath = validated.merklePath
+          r.header = validated.header
           r.notes!.push({ ...nne(), what: 'getMerklePathSuccess' })
         } else {
           r.notes!.push({ ...nne(), what: 'getMerklePathNoHeader', target: p.target })

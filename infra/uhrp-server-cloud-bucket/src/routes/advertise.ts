@@ -1,4 +1,5 @@
-import { Storage } from '@google-cloud/storage';
+import { extendObjectRetention } from '../utils/extendObjectRetention'
+import { createGoogleCloudStorage } from '../utils/googleCloudStorage';
 import createUHRPAdvertisement from '../utils/createUHRPAdvertisement';
 import { Request, Response } from 'express';
 import { StorageUtils } from '@bsv/sdk';
@@ -11,7 +12,7 @@ const {
   GCP_BUCKET_NAME
 } = process.env
 
-const storage = new Storage()
+const storage = createGoogleCloudStorage()
 
 interface AdvertiseRequest extends Request {
   body: {
@@ -48,11 +49,21 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
 
   try {
     const expiryTime = Number(req.body.expiryTime) // in seconds
-    
+    const hostingOrigin = new URL(
+      typeof HOSTING_DOMAIN === 'string' && /^[a-z][a-z0-9+.-]*:\/\//i.test(HOSTING_DOMAIN)
+        ? HOSTING_DOMAIN
+        : `https://${HOSTING_DOMAIN ?? ''}`
+    )
+    if (
+      hostingOrigin.protocol !== 'https:' || hostingOrigin.username !== '' ||
+      hostingOrigin.password !== '' || hostingOrigin.pathname !== '/' ||
+      hostingOrigin.search !== '' || hostingOrigin.hash !== ''
+    ) throw new Error('HOSTING_DOMAIN must be a credential-free HTTPS origin')
+
     await createUHRPAdvertisement({
       hash: StorageUtils.getHashFromURL(req.body.uhrpUrl),
       objectIdentifier: req.body.objectIdentifier,
-      url: `${HOSTING_DOMAIN}/cdn/${req.body.objectIdentifier}`,
+      url: `${hostingOrigin.origin}/cdn/${req.body.objectIdentifier}`,
       uploaderIdentityKey: req.body.uploaderIdentityKey,
       expiryTime,
       contentLength: req.body.fileSize
@@ -62,9 +73,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
     .bucket(GCP_BUCKET_NAME as string)
     .file(`cdn/${req.body.objectIdentifier}`)
     
-    await storageFile.setMetadata({
-      customTime: new Date((expiryTime + 300) * 1000).toISOString()
-    })
+    await extendObjectRetention(storageFile, expiryTime)
 
     res.status(200).json({ status: 'success' })
   } catch (error) {

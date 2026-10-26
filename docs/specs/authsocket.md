@@ -2,11 +2,11 @@
 id: spec-authsocket
 title: AuthSocket WebSocket Protocol
 kind: spec
-version: "1.0.0"
-last_updated: "2026-04-30"
-last_verified: "2026-04-30"
+version: '1.0.0'
+last_updated: '2026-04-30'
+last_verified: '2026-04-30'
 status: stable
-tags: ["spec", "messaging", "websocket"]
+tags: ['spec', 'messaging', 'websocket']
 ---
 
 # AuthSocket WebSocket Protocol
@@ -19,11 +19,11 @@ tags: ["spec", "messaging", "websocket"]
 
 ## At a glance
 
-| Field | Value |
-|---|---|
-| Format | AsyncAPI 3.0 |
-| Version | 1.0.0 |
-| Status | stable |
+| Field           | Value           |
+| --------------- | --------------- |
+| Format          | AsyncAPI 3.0    |
+| Version         | 1.0.0           |
+| Status          | stable          |
 | Implementations | @bsv/authsocket |
 
 ## What problem this solves
@@ -32,7 +32,11 @@ tags: ["spec", "messaging", "websocket"]
 
 **Live message push without polling**. MessageBox's HTTP interface requires polling. AuthSocket enables server-side push: when a new message arrives, the server emits it immediately to the connected client without waiting for the next poll.
 
-**Session-less design**. Each WebSocket connection is independent. The server doesn't maintain session state between connections. Authentication happens once at connect time; all subsequent messages are verified via signature.
+**Stateful replay resistance**. Each raw WebSocket connection has its own
+`Peer`, while a bounded server-wide session manager retains nonce and replay
+state across reconnects. An initial request is unsigned; identity is proven by
+the signed handshake follow-up/general flow, and every application message is
+individually signed and replay-checked.
 
 ## Protocol overview
 
@@ -41,9 +45,8 @@ tags: ["spec", "messaging", "websocket"]
 **Phase 1 — BRC-103 Handshake** (over low-level `authMessage` Socket.IO event)
 
 1. **Client → Server** `socket.emit('authMessage', initialRequest)`
-   - Client's public key
-   - Client's nonce
-   - Client signature over nonce
+   - Client's claimed public key and initial nonce
+   - The v0.1 initial request is unsigned
 
 2. **Server → Client** `socket.emit('authMessage', initialResponse)`
    - Server's public key
@@ -58,14 +61,21 @@ After handshake, client and server exchange high-level events. All messages are 
 - **Client → Server**: `socket.emit('sendMessage', { to, body })`
 - Any JSON-serializable event; signature transparent to application code
 
+On the server, all concurrently received first-session events wait for the same
+authenticated-connection activation callback. No event is dispatched and no
+peer becomes eligible for broadcast/identity routing until it succeeds. On the
+client, Socket.IO's `connect` event reports transport state only; server identity
+is established by the BRC-103 handshake/verified application traffic.
+
 ## Key types / channels
 
-| Channel | Direction | Message Type | Purpose |
-|---------|-----------|--------------|---------|
-| `authMessage` (low-level) | Bidirectional | `initialRequest` / `initialResponse` | BRC-103 handshake |
-| Application events | Bidirectional | JSON objects | After handshake; auto-signed |
+| Channel                   | Direction     | Message Type                         | Purpose                      |
+| ------------------------- | ------------- | ------------------------------------ | ---------------------------- |
+| `authMessage` (low-level) | Bidirectional | `initialRequest` / `initialResponse` | BRC-103 handshake            |
+| Application events        | Bidirectional | JSON objects                         | After handshake; auto-signed |
 
 **Standard application events**:
+
 - `messageReceived(message)` — Server pushes message to client
 - `sendMessage(payload)` — Client sends message to server
 - `joinRoom(roomName)` — Client joins subscription room
@@ -93,13 +103,13 @@ const io = new AuthSocketServer(server, {
 })
 
 // 2. Listen for authenticated connections
-io.on('connection', (socket) => {
+io.on('connection', socket => {
   console.log('Authenticated socket:', socket.id)
-  
+
   // 3. Handle application events (signature verified automatically)
-  socket.on('sendMessage', (msg) => {
+  socket.on('sendMessage', msg => {
     console.log('Received from:', socket.id, msg)
-    
+
     // 4. Emit to other clients (server signs automatically)
     io.emit('messageReceived', {
       from: socket.id,
@@ -125,7 +135,7 @@ const recipient = '025706528f0f6894b2ba505007267ccff1133e004452a1f6b72ac716f2462
 // Automatically handles BRC-103 handshake
 await msgBox.listenForLiveMessages({
   messageBox: 'general_inbox',
-  onMessage: (msg) => {
+  onMessage: msg => {
     console.log('Live message:', msg.body)
     // Message signature already verified server-side
   }
@@ -146,11 +156,11 @@ There is no standalone AuthSocket vector directory in the current conformance co
 
 ## Implementations in ts-stack
 
-| Package | Notes |
-|---------|-------|
-| @bsv/authsocket | Server-side Socket.IO wrapper; provides `AuthSocketServer` class |
-| @bsv/message-box-client | Client-side integration; uses authsocket for live messaging |
-| @bsv/sdk | `Peer` and `Transport` abstractions underlying BRC-103 |
+| Package                 | Notes                                                            |
+| ----------------------- | ---------------------------------------------------------------- |
+| @bsv/authsocket         | Server-side Socket.IO wrapper; provides `AuthSocketServer` class |
+| @bsv/message-box-client | Client-side integration; uses authsocket for live messaging      |
+| @bsv/sdk                | `Peer` and `Transport` abstractions underlying BRC-103           |
 
 ## Related specs
 

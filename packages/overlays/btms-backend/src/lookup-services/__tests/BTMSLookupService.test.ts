@@ -264,6 +264,23 @@ describe('BTMS Lookup Service', () => {
       ).rejects.toThrow('Invalid token amount')
     })
 
+    it.each(['9007199254740992', '01', '1e3'])(
+      'throws on unsafe or non-canonical token amount %s',
+      async amount => {
+        const lockingScript = createPushDropScript(testPubKey, ['ISSUE', amount])
+
+        await expect(
+          service.outputAdmittedByTopic({
+            mode: 'locking-script',
+            txid: 'badamount',
+            outputIndex: 0,
+            topic: 'tm_btms',
+            lockingScript
+          } as OutputAdmittedByTopic)
+        ).rejects.toThrow('Invalid token amount')
+      }
+    )
+
     it('throws on too many fields', async () => {
       const lockingScript = createPushDropScript(testPubKey, [
         'ISSUE',
@@ -390,7 +407,46 @@ describe('BTMS Lookup Service', () => {
           service: 'ls_btms',
           query: null
         } as unknown as LookupQuestion)
-      ).rejects.toThrow('A valid query must be provided')
+      ).rejects.toThrow('query must be an object')
+    })
+
+    it('rejects Mongo selector injection and accessor-bearing queries before storage', async () => {
+      const find = jest.spyOn(mockStorage, 'findWithFilters')
+
+      await expect(
+        service.lookup({
+          service: 'ls_btms',
+          query: { ownerKey: { $ne: null } }
+        } as unknown as LookupQuestion)
+      ).rejects.toThrow('ownerKey must be a string')
+
+      let getterCalls = 0
+      const query = Object.defineProperty({}, 'assetId', {
+        enumerable: true,
+        get: () => {
+          getterCalls += 1
+          return 'asset1.0'
+        }
+      })
+      await expect(service.lookup({ service: 'ls_btms', query } as LookupQuestion)).rejects.toThrow(
+        'must be data'
+      )
+
+      expect(getterCalls).toBe(0)
+      expect(find).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [{ limit: 101 }, 'limit'],
+      [{ skip: -1 }, 'skip'],
+      [{ sortOrder: 'sideways' }, 'sortOrder'],
+      [{ history: 'true' }, 'history'],
+      [{ ownerKey: 'not-a-key' }, 'ownerKey'],
+      [{ unexpected: true }, 'unexpected field']
+    ])('rejects malformed bounded query %j', async (query, message) => {
+      await expect(
+        service.lookup({ service: 'ls_btms', query } as unknown as LookupQuestion)
+      ).rejects.toThrow(message)
     })
 
     it('history selector canonicalizes ISSUE output IDs', async () => {

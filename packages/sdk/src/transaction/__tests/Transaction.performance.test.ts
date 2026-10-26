@@ -146,7 +146,17 @@ describe('transaction pipeline scalability', () => {
     expect(newest.tx).toBeDefined()
     expect(newest._tx).toBeDefined()
     expect(beef.txs.slice(0, -1).every(btx => btx._tx == null)).toBe(true)
-    expect(beef.toUint8Array()).toBe(forwarded)
+    expect(beef.toUint8Array()).not.toBe(forwarded)
+    expect(beef.toUint8Array()).toEqual(forwarded)
+    const canonical = forwarded.slice()
+    forwarded[0] ^= 0xff
+    expect(beef.toUint8Array()).toEqual(canonical)
+
+    const rawTx = newest.rawTxUint8Array
+    if (rawTx == null) throw new Error('Expected raw transaction bytes')
+    const canonicalRawTx = rawTx.slice()
+    rawTx[0] ^= 0xff
+    expect(newest.rawTxUint8Array).toEqual(canonicalRawTx)
   })
 
   it('retains legacy serialization of mutations made after lazy parsing', () => {
@@ -375,6 +385,17 @@ describe('transaction pipeline scalability', () => {
     original[0] ^= 0xff
     expect(copied.toUint8Array()[0]).toBe(copiedFirst)
     expect(viewed.toUint8Array()[0]).toBe(original[0])
+  })
+
+  it('owns raw transaction bytes supplied to the ordinary BeefTx factory', () => {
+    const raw = makeDeepChain(1).toUint8Array()
+    const canonical = raw.slice()
+    const beefTx = BeefTx.fromRawTx(raw)
+
+    raw[0] ^= 0xff
+
+    expect(beefTx.rawTxUint8Array).toEqual(canonical)
+    expect(beefTx.txid).toBe(Transaction.fromBinary(canonical).id('hex'))
   })
 
   it('preserves legacy BEEF prefix parsing while the view API checks framing', () => {

@@ -22,6 +22,14 @@ A fluent transaction builder for creating BSV transactions with a clean, chainab
 - Transaction-level options
 - Preview mode for inspection
 
+The builder treats wallet action responses as untrusted transaction material.
+It verifies that every requested source and output appears at the correct
+semantic boundary, attaches unlockers to the wallet's actual input indexes,
+and checks the final transaction and transaction ID before returning. A wallet
+response that changes an amount, script, outpoint, or requested output fails
+the build; applications should not retry by signing the returned transaction
+directly.
+
 ### Why Use TransactionBuilder?
 
 **Before (Manual Transaction Building with 3-Step Workflow):**

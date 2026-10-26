@@ -26,7 +26,7 @@
     {
       "id": "docs-site-bundled-materials",
       "path": "governance/docs-site-bundled-materials.json",
-      "sha256": "90468e6f7ecd26ec72a3d5622a074e5ec7995395496d612f506c38efb9f6d06f"
+      "sha256": "cad8f098c3aecea5530f956c356e15c03c4eb2438726fb9fb56c64b0a4d30564"
     },
     {
       "id": "license-continuity",
@@ -807,12 +807,6 @@
       "reason": "The deployable browser bundle incorporates @bsv/sdk and must carry its scoped notice archive."
     },
     {
-      "path": "packages/helpers/did-client",
-      "packageName": "@bsv/did-client",
-      "inherits": "packages/sdk",
-      "reason": "UMD bundle incorporates @bsv/sdk"
-    },
-    {
       "path": "packages/messaging/authsocket-client",
       "packageName": "@bsv/authsocket-client",
       "inherits": "packages/sdk",
@@ -969,6 +963,11 @@
     },
     {
       "path": "infra/wallet-infra",
+      "materials": "all",
+      "reason": "container distribution notice bundle"
+    },
+    {
+      "path": "infra/webrtpay-relay",
       "materials": "all",
       "reason": "container distribution notice bundle"
     }

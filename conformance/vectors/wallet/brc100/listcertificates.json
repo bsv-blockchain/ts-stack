@@ -18,7 +18,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ]
         }
       },
@@ -42,7 +42,7 @@
             "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ]
         }
       },
@@ -65,7 +65,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ],
           "limit": 5,
           "offset": 0
@@ -90,7 +90,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ],
           "privileged": true,
           "privilegedReason": "admin view"
@@ -115,7 +115,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ]
         },
         "_schema_note": "result: { totalCertificates: int, certificates: CertificateResult[] }"
@@ -124,7 +124,7 @@
         "totalCertificates": 1,
         "certificates": [
           {
-            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
             "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -173,7 +173,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ],
           "limit": 10000
         }
@@ -197,7 +197,7 @@
             "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"
           ],
           "types": [
-            "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+            "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
           ]
         },
         "originator": "app.example.com"

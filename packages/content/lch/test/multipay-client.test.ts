@@ -1,8 +1,10 @@
-import { describe, expect, it } from '@jest/globals'
+import { describe, expect, it, jest } from '@jest/globals'
 import {
   LockingScript,
+  P2PKH,
   PrivateKey,
   ProtoWallet,
+  PublicKey,
   Transaction,
   type AtomicBEEF,
   type CreateActionArgs,
@@ -12,16 +14,21 @@ import {
   LCHHttpServer,
   LCHHttpAcquisitionClient,
   LCHBuyer,
+  LCHIssuer,
   LCHMultipayBuyer,
   LCHPayee,
   LCHQuoteIssuer,
   LCHSettlementService,
+  LCH_LIMITS,
   LCH_SETTLEMENT_PROFILES,
   LCH_TRANSACTION_EVIDENCE_POLICIES,
+  BRC29_PAYMENT_PROTOCOL,
   WalletAuthorizedOutputPayee,
   WalletBRC77Signer,
   objectId,
+  sha256,
   signObject,
+  toBase64Url,
   toHex,
   validateLicenseRequest,
   type PaymentCompletion,
@@ -56,8 +63,10 @@ describe('recovery-safe multipay buyer', () => {
       }))
     )
     const endpoint = 'https://issuer.test/licenses'
-    const offerId = bytes(1, 32)
     const assetId = bytes(2, 32)
+    const acceptedPolicy = await policyReference('accepted offer policy')
+    const offer = await testOffer(issuerSigner, assetId, endpoint, acceptedPolicy)
+    const offerId = await objectId('offer', offer.body)
     const demands = new Map<string, { demand: SignedObject; payee: (typeof payees)[number] }>()
     let issuedLicense: SignedObject | undefined
     let mutateLicense: ((body: Record<string, LCHValue>) => void) | undefined
@@ -106,7 +115,7 @@ describe('recovery-safe multipay buyer', () => {
             issuer: issuerSigner.identityKey,
             subject: completion.request.body.buyer!,
             issuedAt: 1_100,
-            agreement: {},
+            agreement: await policyReference('buyer agreement'),
             selection: completion.request.body.selection!,
             fulfillments: await Promise.all(
               completion.receipts.map(async receipt => {
@@ -183,19 +192,27 @@ describe('recovery-safe multipay buyer', () => {
     })
     const buyer = new LCHMultipayBuyer(buyerWallet.wallet, await walletSigner(121), {
       now: () => 1_000n,
-      transport: routedHttp
+      transport: routedHttp,
+      agreementEvaluator: ({ agreement }) =>
+        agreement.inline !== undefined &&
+        new TextDecoder().decode(agreement.inline) === 'buyer agreement'
     })
     const request = await buyer.createRequest({
       offerId,
       assetId,
       action: 'play',
       selection: { type: 'all' },
-      acceptedPolicyDigest: bytes(3, 32),
+      acceptedPolicyDigest: acceptedPolicy.digest as Uint8Array,
       createdAt: 1_000
     })
-    const plan = await buyer.quote(endpoint, request, issuerSigner.identityKey, { type: 'none' })
+    const plan = await buyer.quote(offer, request, issuerSigner.identityKey, { type: 'none' })
     expect(plan.totalSatoshis).toBe(12n)
     expect(plan.readiness).toHaveLength(2)
+
+    await expect(
+      buyer.createPayment({ ...plan, totalSatoshis: plan.totalSatoshis - 1n })
+    ).rejects.toThrow(/totals or deadlines do not match/u)
+    expect(buyerWallet.createdActions()).toBe(0)
 
     const payment = await buyer.createPayment(plan)
     expect(buyerWallet.createdActions()).toBe(1)
@@ -207,16 +224,30 @@ describe('recovery-safe multipay buyer', () => {
       payment.deliveries.map(delivery => buyer.deliver(payment, delivery))
     )
     const license = await buyer.complete(payment, receipts)
-    await expect(buyer.recover(endpoint, plan.requestId)).resolves.toEqual(license)
+    await expect(buyer.recover(payment, receipts)).resolves.toEqual(license)
 
     mutateLicense = body => {
       body.assetId = bytes(9, 32)
     }
     await expect(buyer.complete(payment, receipts)).rejects.toThrow(/License Asset ID/u)
+    await expect(buyer.recover(payment, receipts)).rejects.toThrow(/License Asset ID/u)
     mutateLicense = body => {
       body.selection = { type: 'segments', ranges: [[0, 1]] }
     }
     await expect(buyer.complete(payment, receipts)).rejects.toThrow(/License Selection/u)
+    mutateLicense = body => {
+      body.agreement = {
+        mediaType: 'application/ld+json',
+        digest: bytes(99, 32),
+        inline: new TextEncoder().encode('substituted agreement')
+      }
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/digest mismatch/u)
+    const weakenedAgreement = await policyReference('weakened agreement')
+    mutateLicense = body => {
+      body.agreement = weakenedAgreement
+    }
+    await expect(buyer.complete(payment, receipts)).rejects.toThrow(/configured policy evaluator/u)
     mutateLicense = body => {
       body.fulfillments = []
     }
@@ -237,13 +268,50 @@ describe('recovery-safe multipay buyer', () => {
     expect(buyerWallet.createdActions()).toBe(1)
   })
 
+  it('rejects endpoint-only quote calls at compile-time and at the JavaScript boundary', async () => {
+    const signer = await walletSigner(129)
+    const quote = jest.fn(async () => ({ body: {}, signatures: [] }))
+    const buyer = new LCHMultipayBuyer(actionWallet(130).wallet, signer, {
+      transport: {
+        preflightLicense: async () => undefined,
+        quote,
+        preflightDemand: async demand => demand,
+        authorizePayment: async demand => demand,
+        deliver: async delivery => delivery,
+        storeDelivery: async (_endpoint, _authorization, delivery) => delivery,
+        attestTransaction: async (_endpoint, authorization) => authorization,
+        complete: async completion => completion.request,
+        recover: async () => undefined
+      }
+    })
+    const request = await signObject('license-request', { version: 1 }, signer)
+
+    // @ts-expect-error The 0.1 endpoint-only overload was removed in 0.2.
+    const legacyEndpoint: Parameters<LCHMultipayBuyer['quote']>[0] =
+      'https://legacy.example/license'
+    expect(legacyEndpoint).toBe('https://legacy.example/license')
+    const untypedQuote = buyer.quote as unknown as (
+      endpoint: string,
+      request: SignedObject,
+      issuer: Uint8Array,
+      keyGrants: { type: 'none' }
+    ) => Promise<unknown>
+    await expect(
+      untypedQuote('https://legacy.example/license', request, signer.identityKey, { type: 'none' })
+    ).rejects.toThrow('signed Offer is required')
+    expect(quote).not.toHaveBeenCalled()
+  })
+
   it('refuses to fund at the signed Quote expiry boundary', async () => {
     const signer = await walletSigner(131)
     const buyer = new LCHMultipayBuyer(actionWallet(132).wallet, signer, {
-      now: () => 2_000n
+      now: () => 2_000n,
+      agreementEvaluator: () => true
     })
     await expect(
       buyer.createPayment({
+        offer: await signObject('offer', { version: 1 }, signer),
+        seller: signer.identityKey,
         request: await signObject('license-request', { version: 1 }, signer),
         requestId: bytes(1, 32),
         quote: await signObject('quote', { version: 1 }, signer),
@@ -263,10 +331,23 @@ describe('recovery-safe multipay buyer', () => {
   it('rejects independently returned Receipts that do not match the funded plan', async () => {
     const buyerSigner = await walletSigner(141)
     const payeeSigner = await walletSigner(142)
-    const requestId = bytes(1, 32)
+    const assetId = bytes(3, 32)
+    const endpoint = 'https://issuer.test/licenses'
+    const acceptedPolicy = await policyReference('receipt validation policy')
+    const offer = await testOffer(buyerSigner, assetId, endpoint, acceptedPolicy)
+    const offerId = await objectId('offer', offer.body)
+    const request = await new LCHBuyer(buyerSigner).createRequest({
+      offerId,
+      assetId,
+      action: 'play',
+      selection: { type: 'all' },
+      acceptedPolicyDigest: acceptedPolicy.digest as Uint8Array,
+      createdAt: 1_000
+    })
+    const requestId = await objectId('license-request', request.body)
     const demand = await new LCHPayee(payeeSigner).createDemand({
       requestId,
-      offerId: bytes(2, 32),
+      offerId,
       dutyUid: 'urn:lch:duty:distributed',
       buyer: buyerSigner.identityKey,
       endpoint: 'https://drummer.test/payments',
@@ -275,10 +356,22 @@ describe('recovery-safe multipay buyer', () => {
       recoveryPeriodSeconds: 86_400
     })
     const demandId = await objectId('payment-demand', demand.body)
+    const suffix = bytes(3, 32)
+    const fundingWallet = actionWallet(141)
+    const derived = await fundingWallet.wallet.getPublicKey({
+      protocolID: [...BRC29_PAYMENT_PROTOCOL],
+      keyID: `${toBase64Url(demand.body.derivationPrefix as Uint8Array)} ${toBase64Url(suffix)}`,
+      counterparty: toHex(payeeSigner.identityKey)
+    })
     const transaction = new Transaction(
       1,
       [],
-      [{ satoshis: 7, lockingScript: LockingScript.fromHex('51') }]
+      [
+        {
+          satoshis: 7,
+          lockingScript: new P2PKH().lock(PublicKey.fromString(derived.publicKey).toAddress())
+        }
+      ]
     )
     const atomicBeef = Uint8Array.from(transaction.toAtomicBEEF(true))
     const delivery = await new LCHBuyer(buyerSigner).createPaymentDelivery({
@@ -287,12 +380,22 @@ describe('recovery-safe multipay buyer', () => {
       atomicBeef,
       outputIndex: 0,
       derivationPrefix: demand.body.derivationPrefix as Uint8Array,
-      derivationSuffix: bytes(3, 32)
+      derivationSuffix: suffix
     })
     let receiptDemandId = demandId
     let receiptRequestId = requestId
     let receiptOutputIndex = 1
     let receiptSatoshis = 7
+    const deliver = jest.fn(async () =>
+      new LCHPayee(payeeSigner).createReceipt({
+        demandId: receiptDemandId,
+        requestId: receiptRequestId,
+        txid: Uint8Array.from(transaction.id('array')),
+        outputIndex: receiptOutputIndex,
+        satoshis: receiptSatoshis,
+        receivedAt: 1_100
+      })
+    )
     const transport: LCHAcquisitionTransport = {
       preflightLicense: async () => undefined,
       quote: async () => {
@@ -302,15 +405,7 @@ describe('recovery-safe multipay buyer', () => {
       authorizePayment: async () => {
         throw new Error('unused')
       },
-      deliver: async () =>
-        new LCHPayee(payeeSigner).createReceipt({
-          demandId: receiptDemandId,
-          requestId: receiptRequestId,
-          txid: Uint8Array.from(transaction.id('array')),
-          outputIndex: receiptOutputIndex,
-          satoshis: receiptSatoshis,
-          receivedAt: 1_100
-        }),
+      deliver,
       complete: async () => {
         throw new Error('unused')
       },
@@ -320,16 +415,22 @@ describe('recovery-safe multipay buyer', () => {
       attestTransaction: async () => {
         throw new Error('unused')
       },
-      recover: async () => undefined
+      recoverUnverified: async () => undefined
     }
-    const request = await signObject(
-      'license-request',
-      { version: 1, buyer: buyerSigner.identityKey },
-      buyerSigner
-    )
-    const quote = await signObject('quote', { version: 1 }, buyerSigner)
+    const quote = await new LCHQuoteIssuer(buyerSigner).createQuote({
+      requestId,
+      offerId,
+      assetId,
+      buyer: buyerSigner.identityKey,
+      selection: { type: 'all' },
+      demands: [demand],
+      expiresAt: 2_000,
+      recoveryPeriodSeconds: 86_400
+    })
     const funded = {
       plan: {
+        offer,
+        seller: buyerSigner.identityKey,
         request,
         requestId,
         quote,
@@ -337,7 +438,7 @@ describe('recovery-safe multipay buyer', () => {
         readiness: [],
         authorizations: [],
         issuer: buyerSigner.identityKey,
-        endpoint: 'https://issuer.test/licenses',
+        endpoint,
         totalSatoshis: 7n,
         expiresAt: 2_000n,
         recoveryUntil: 88_400n,
@@ -354,7 +455,17 @@ describe('recovery-safe multipay buyer', () => {
         }
       ]
     }
-    const buyer = new LCHMultipayBuyer(actionWallet(143).wallet, buyerSigner, { transport })
+    const buyer = new LCHMultipayBuyer(fundingWallet.wallet, buyerSigner, {
+      transport,
+      agreementEvaluator: () => true
+    })
+    await expect(
+      buyer.deliver(
+        { ...funded, atomicBeef: new Uint8Array(LCH_LIMITS.headerBytes + 1) },
+        funded.deliveries[0]!
+      )
+    ).rejects.toThrow(/byte-string limit exceeded/u)
+    expect(deliver).not.toHaveBeenCalled()
     await expect(buyer.deliver(funded, funded.deliveries[0]!)).rejects.toThrow(
       /output index does not match/u
     )
@@ -366,7 +477,9 @@ describe('recovery-safe multipay buyer', () => {
     receiptSatoshis = 7
     receiptDemandId = bytes(9, 32)
     const unknownDelivery = { ...funded.deliveries[0]!, demandId: receiptDemandId }
-    await expect(buyer.deliver(funded, unknownDelivery)).rejects.toThrow(/unknown Demand/u)
+    await expect(buyer.deliver(funded, unknownDelivery)).rejects.toThrow(
+      /not part of the funded payment/u
+    )
     receiptDemandId = demandId
     receiptRequestId = bytes(8, 32)
     const wrongRequestReceipt = await transport.deliver('', delivery)
@@ -381,14 +494,17 @@ describe('recovery-safe multipay buyer', () => {
     const payeeSigner = await WalletBRC77Signer.create({ wallet: payeeWallet })
     const providerSigner = await walletSigner(153)
     const issuerSigner = await walletSigner(154)
-    const offerId = bytes(1, 32)
     const assetId = bytes(2, 32)
+    const endpoint = 'https://issuer.test/licenses'
+    const acceptedPolicy = await policyReference('authorized output policy')
+    const offer = await testOffer(issuerSigner, assetId, endpoint, acceptedPolicy)
+    const offerId = await objectId('offer', offer.body)
     const request = await new LCHBuyer(buyerSigner).createRequest({
       offerId,
       assetId,
       action: 'play',
       selection: { type: 'all' },
-      acceptedPolicyDigest: bytes(3, 32),
+      acceptedPolicyDigest: acceptedPolicy.digest as Uint8Array,
       createdAt: 1_000
     })
     const requestId = await objectId('license-request', request.body)
@@ -456,11 +572,16 @@ describe('recovery-safe multipay buyer', () => {
       policy: LCH_TRANSACTION_EVIDENCE_POLICIES.signedProcessorAcceptance,
       observedAt: 1_050
     })
-    const quote = await signObject(
-      'quote',
-      { version: 1, requestId, offerId, assetId, selection: request.body.selection! },
-      issuerSigner
-    )
+    const quote = await new LCHQuoteIssuer(issuerSigner).createQuote({
+      requestId,
+      offerId,
+      assetId,
+      buyer: buyerSigner.identityKey,
+      selection: { type: 'all' },
+      demands: [demand],
+      expiresAt: 2_000,
+      recoveryPeriodSeconds: 86_400
+    })
     let payeeOnline = false
     let malformedReceipt = false
     let fallbackCalls = 0
@@ -507,7 +628,7 @@ describe('recovery-safe multipay buyer', () => {
             issuer: issuerSigner.identityKey,
             subject: buyerSigner.identityKey,
             issuedAt: 1_100,
-            agreement: {},
+            agreement: await policyReference('authorized-output agreement'),
             selection: request.body.selection!,
             fulfillments: [
               {
@@ -529,7 +650,7 @@ describe('recovery-safe multipay buyer', () => {
           issuerSigner
         )
       },
-      recover: async () => undefined
+      recoverUnverified: async () => undefined
     }
     const item = {
       demandId,
@@ -539,6 +660,8 @@ describe('recovery-safe multipay buyer', () => {
     }
     const funded = {
       plan: {
+        offer,
+        seller: issuerSigner.identityKey,
         request,
         requestId,
         quote,
@@ -546,7 +669,7 @@ describe('recovery-safe multipay buyer', () => {
         readiness: [],
         authorizations: [authorization],
         issuer: issuerSigner.identityKey,
-        endpoint: 'https://issuer.test/licenses',
+        endpoint,
         totalSatoshis: 7n,
         expiresAt: 2_000n,
         recoveryUntil: 88_400n,
@@ -556,7 +679,10 @@ describe('recovery-safe multipay buyer', () => {
       transactionState: 'finalized' as const,
       deliveries: [item]
     }
-    const buyer = new LCHMultipayBuyer(actionWallet(155).wallet, buyerSigner, { transport })
+    const buyer = new LCHMultipayBuyer(actionWallet(151).wallet, buyerSigner, {
+      transport,
+      agreementEvaluator: () => true
+    })
     const offlineSettlement = await buyer.settleDelivery(funded, item)
     expect(offlineSettlement.type).toBe('authorized-output')
     expect(fallbackCalls).toBe(1)
@@ -576,6 +702,39 @@ describe('recovery-safe multipay buyer', () => {
 
 async function walletSigner(privateKey: number): Promise<WalletBRC77Signer> {
   return WalletBRC77Signer.create({ wallet: new ProtoWallet(new PrivateKey(privateKey)) })
+}
+
+async function policyReference(label: string): Promise<Record<string, LCHValue>> {
+  const inline = new TextEncoder().encode(label)
+  return { mediaType: 'application/ld+json', digest: await sha256(inline), inline }
+}
+
+async function testOffer(
+  signer: WalletBRC77Signer,
+  assetId: Uint8Array,
+  endpoint: string,
+  policy: Record<string, LCHValue>
+): Promise<SignedObject> {
+  return new LCHIssuer(signer).createOffer({
+    assetId,
+    usageProfile: 'https://example.test/lch/profile',
+    seller: signer.identityKey,
+    licenseIssuer: signer.identityKey,
+    requiredInterests: ['licensed-work'],
+    policy,
+    payment: {
+      protocol: 'https://example.test/lch/payment',
+      endpoint,
+      asset: 'BSV',
+      unit: 'satoshi',
+      recoveryPeriodSeconds: 86_400,
+      pricing: { kind: 'quote' }
+    },
+    keyDelivery: { mechanism: 'https://example.test/lch/key-delivery' },
+    enforcement: { class: 'https://example.test/lch/enforcement' },
+    notBefore: 0,
+    nonce: bytes(6, 16)
+  })
 }
 
 function actionWallet(privateKey: number): {

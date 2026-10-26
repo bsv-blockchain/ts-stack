@@ -55,6 +55,13 @@ describe('RPuzzle – additional coverage', () => {
   const privateKey = new PrivateKey(1)
   const r = getRValue(k)
 
+  test('rejects invalid runtime puzzle types and value bytes', () => {
+    expect(() => new RPuzzle('invalid' as any)).toThrow('Unsupported R puzzle type')
+    for (const byte of [-1, 0.5, 256, Number.NaN]) {
+      expect(() => new RPuzzle().lock([byte])).toThrow('R puzzle value must be a dense byte array')
+    }
+  })
+
   describe('signOutputs variations', () => {
     it('signs with signOutputs=none', async () => {
       const puz = new RPuzzle()
@@ -96,6 +103,22 @@ describe('RPuzzle – additional coverage', () => {
       )
       await expect(puz.unlock(k, privateKey).sign(spendTx, 0)).rejects.toThrow(
         'The source transaction is needed'
+      )
+    })
+
+    it('rejects a sourceTXID that conflicts with the embedded source transaction', async () => {
+      const puz = new RPuzzle()
+      const sourceTx = new Transaction(1, [], [{ lockingScript: puz.lock(r), satoshis: 1 }], 0)
+      const spendTx = new Transaction(
+        1,
+        [{ sourceTransaction: sourceTx, sourceOutputIndex: 0, sequence: 0xffffffff }],
+        [],
+        0
+      )
+      spendTx.inputs[0].sourceTXID = '11'.repeat(32)
+
+      await expect(puz.unlock(k, privateKey).sign(spendTx, 0)).rejects.toThrow(
+        'sourceTXID does not match the input sourceTransaction'
       )
     })
   })

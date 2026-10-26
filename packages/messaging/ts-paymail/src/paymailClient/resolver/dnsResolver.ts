@@ -22,7 +22,7 @@ export interface DnsResolver {
 interface DohResponse {
   Status: number
   AD?: boolean
-  Answer?: Array<{ data: string; type?: number }>
+  Answer?: Array<{ name: string; data: string; type: number }>
 }
 
 const DNS_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i
@@ -40,6 +40,12 @@ class DNSResolver extends AbstractResolver {
   constructor(httpClient: HttpClient, options: DNSResolverOptions = {}) {
     super()
     const { dns, dohServerBaseUrl = 'https://dns.google.com/resolve' } = options
+    if (typeof dohServerBaseUrl !== 'string' || dohServerBaseUrl.length === 0) {
+      throw new TypeError('dohServerBaseUrl must be a non-empty string')
+    }
+    if (dns != null && (typeof dns !== 'object' || typeof dns.resolveSrv !== 'function')) {
+      throw new TypeError('dns must provide a resolveSrv function')
+    }
     this.dohServiceBaseUrl = dohServerBaseUrl
     this.httpClient = httpClient
     this.dns = dns
@@ -67,17 +73,67 @@ class DNSResolver extends AbstractResolver {
     const normDomain1 = domain1.replace(/\.$/, '').toLowerCase()
     const normDomain2 = domain2.replace(/\.$/, '').toLowerCase()
 
-    // Domains are equal if they are identical after normalization,
-    // or if one is a subdomain of the other (e.g., 'sub.example.com' and 'example.com').
-    if (
-      normDomain1 === normDomain2 ||
-      normDomain1.endsWith(`.${normDomain2}`) ||
-      normDomain2.endsWith(`.${normDomain1}`)
-    ) {
-      return true
-    }
+    // An SRV target may remain on the requested domain or move deeper beneath
+    // it. A parent domain is not equivalent: treating "com" as equivalent to
+    // "example.com" crosses the caller's authenticated domain boundary.
+    return normDomain1 === normDomain2 || normDomain1.endsWith(`.${normDomain2}`)
+  }
 
-    return false
+  private validateDohResponse(value: unknown, domain: string): DohResponse {
+    if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+      throw new PaymailServerResponseError(
+        `${domain} is not correctly configured: invalid DNS response`
+      )
+    }
+    const candidate = value as Record<string, unknown>
+    if (!Number.isInteger(candidate.Status)) {
+      throw new PaymailServerResponseError(
+        `${domain} is not correctly configured: invalid DNS response`
+      )
+    }
+    if (candidate.AD != null && typeof candidate.AD !== 'boolean') {
+      throw new PaymailServerResponseError(
+        `${domain} is not correctly configured: invalid DNS response`
+      )
+    }
+    if (candidate.Answer != null) {
+      if (!Array.isArray(candidate.Answer) || candidate.Answer.length > 128) {
+        throw new PaymailServerResponseError(
+          `${domain} is not correctly configured: invalid DNS response`
+        )
+      }
+      for (const answer of candidate.Answer) {
+        if (
+          answer == null ||
+          typeof answer !== 'object' ||
+          Array.isArray(answer) ||
+          typeof (answer as Record<string, unknown>).name !== 'string' ||
+          ((answer as Record<string, unknown>).name as string).length > 253 ||
+          typeof (answer as Record<string, unknown>).data !== 'string' ||
+          ((answer as Record<string, unknown>).data as string).length > 2048 ||
+          !Number.isInteger((answer as Record<string, unknown>).type)
+        ) {
+          throw new PaymailServerResponseError(
+            `${domain} is not correctly configured: invalid DNS response`
+          )
+        }
+      }
+    }
+    return candidate as unknown as DohResponse
+  }
+
+  private normalizeDohOwner(value: string, domain: string): string {
+    const normalized = value.replace(/\.$/, '').toLowerCase()
+    if (
+      normalized.length === 0 ||
+      normalized.length > 253 ||
+      normalized.split('.').some(label => label.length === 0 || label.length > 63)
+    ) {
+      throw new PaymailServerResponseError(
+        `${domain} is not correctly configured: invalid DNS answer owner`
+      )
+    }
+    return normalized
   }
 
   private validateDnsName(value: string, domain: string): string {
@@ -173,8 +229,8 @@ class DNSResolver extends AbstractResolver {
     const response = await this.httpClient.request(
       `${this.dohServiceBaseUrl}?name=${encodeURIComponent(aDomain)}&type=SRV&cd=0`
     )
-    const dohResponse = (await response.json()) as DohResponse
     const domain = this.domainWithoutBsvAliasPrefix(aDomain)
+    const dohResponse = this.validateDohResponse(await response.json(), domain)
 
     // Record not found assume port 443 and domain is the same as the input per spec
     if (dohResponse.Status === 3) {
@@ -189,9 +245,11 @@ class DNSResolver extends AbstractResolver {
       )
     }
 
-    const answer =
-      dohResponse.Answer.find(candidate => candidate.type === 33) ??
-      dohResponse.Answer.find(candidate => candidate.type === undefined)
+    const expectedOwner = this.normalizeDohOwner(aDomain, domain)
+    const answer = dohResponse.Answer.find(
+      candidate =>
+        candidate.type === 33 && this.normalizeDohOwner(candidate.name, domain) === expectedOwner
+    )
     if (!answer) {
       throw new PaymailServerResponseError(
         `${domain} is not correctly configured: missing SRV answer`
@@ -218,7 +276,7 @@ class DNSResolver extends AbstractResolver {
     const validatedPort = this.validatePort(port, domain)
     const validatedDomain = this.validateDnsName(responseDomain, domain)
 
-    if (!dohResponse.AD && !this.domainsAreEqual(domain, validatedDomain)) {
+    if (!dohResponse.AD && !this.domainsAreEqual(validatedDomain, domain)) {
       throw new PaymailServerResponseError(`${domain} is not correctly configured: insecure domain`)
     }
 

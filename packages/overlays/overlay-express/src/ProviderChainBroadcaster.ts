@@ -4,6 +4,11 @@ import {
   BroadcastResponse,
   Transaction
 } from '@bsv/sdk'
+import {
+  assertBoundedString,
+  assertHash,
+  isRecord
+} from './OutboundSecurity.js'
 
 export interface NamedBroadcaster {
   name: string
@@ -38,6 +43,27 @@ function isTerminalBroadcastFailure (failure: BroadcastFailure): boolean {
   return false
 }
 
+function validateProviderResponse(
+  value: unknown,
+  expectedTxid: string
+): BroadcastResponse | BroadcastFailure {
+  if (!isRecord(value) || (value.status !== 'success' && value.status !== 'error')) {
+    throw new TypeError('Provider returned an invalid broadcast response')
+  }
+  if (value.status === 'success') {
+    assertHash(value.txid, 'Provider success txid')
+    if (value.txid.toLowerCase() !== expectedTxid.toLowerCase()) {
+      throw new TypeError('Provider success txid does not match the submitted transaction')
+    }
+    assertBoundedString(value.message, 'Provider success message', 4096)
+    return value as unknown as BroadcastResponse
+  }
+  assertBoundedString(value.code, 'Provider failure code', 256, false)
+  assertBoundedString(value.description, 'Provider failure description', 4096)
+  if (value.txid !== undefined) assertHash(value.txid, 'Provider failure txid')
+  return value as unknown as BroadcastFailure
+}
+
 /**
  * Tries transaction propagation providers in priority order.
  *
@@ -50,16 +76,26 @@ export class ProviderChainBroadcaster implements Broadcaster {
     if (providers.length === 0) {
       throw new TypeError('ProviderChainBroadcaster requires at least one provider')
     }
+    const names = new Set<string>()
+    for (const provider of providers) {
+      assertBoundedString(provider.name, 'Provider name', 128, false)
+      if (names.has(provider.name)) throw new TypeError('Provider names must be unique')
+      names.add(provider.name)
+    }
   }
 
   async broadcast (tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> {
     const failures: Array<{ provider: string, failure: BroadcastFailure }> = []
     let lastFailure: { provider: string, failure: BroadcastFailure } | undefined
+    const expectedTxid = tx.id('hex')
 
     for (const provider of this.providers) {
       let response: BroadcastResponse | BroadcastFailure
       try {
-        response = await provider.broadcaster.broadcast(tx)
+        response = validateProviderResponse(
+          await provider.broadcaster.broadcast(tx),
+          expectedTxid
+        )
       } catch (error: unknown) {
         response = {
           status: 'error',

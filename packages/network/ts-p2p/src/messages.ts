@@ -134,6 +134,13 @@ export interface DecodedMessage<T = TeranodeMessage> {
 // ---------------------------------------------------------------------------
 
 const decoder = new TextDecoder('utf-8', { fatal: true })
+const MAX_ENVELOPE_BYTES = 1024 * 1024
+const MAX_INNER_BYTES = 768 * 1024
+const MAX_SENDER_BYTES = 256
+const MAX_JSON_DEPTH = 32
+const MAX_JSON_NODES = 10_000
+const MAX_JSON_KEY_BYTES = 256
+const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype'])
 
 /**
  * Decode a raw GossipSub message (Uint8Array) into a typed object.
@@ -147,6 +154,9 @@ const decoder = new TextDecoder('utf-8', { fatal: true })
  * @throws If the bytes are not valid two-layer JSON
  */
 export function decodeMessage<T = TeranodeMessage>(data: Uint8Array): DecodedMessage<T> {
+  if (!(data instanceof Uint8Array) || data.byteLength > MAX_ENVELOPE_BYTES) {
+    throw new RangeError('Message envelope exceeds its byte limit')
+  }
   const text = decoder.decode(data)
   const envelope: unknown = JSON.parse(text)
   if (
@@ -158,6 +168,15 @@ export function decodeMessage<T = TeranodeMessage>(data: Uint8Array): DecodedMes
   ) {
     throw new TypeError('Invalid message envelope')
   }
+  assertSafeJsonObject(envelope, 'message envelope')
+  const sender = (envelope as MessageEnvelope).name
+  if (
+    sender.length === 0 ||
+    new TextEncoder().encode(sender).byteLength > MAX_SENDER_BYTES ||
+    hasUnsafeTextCharacter(sender)
+  ) {
+    throw new TypeError('Invalid message sender')
+  }
 
   // Decode the base64 inner payload
   const innerBytes = base64ToBytes((envelope as MessageEnvelope).data)
@@ -166,8 +185,9 @@ export function decodeMessage<T = TeranodeMessage>(data: Uint8Array): DecodedMes
   if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new TypeError('Invalid message payload')
   }
+  assertSafeJsonObject(payload, 'message payload')
 
-  return { sender: (envelope as MessageEnvelope).name, payload: payload as T }
+  return { sender, payload: payload as T }
 }
 
 /**
@@ -195,6 +215,7 @@ for (let i = 0; i < alphabet.length; i++) B64[alphabet[i]] = i
 /** Decode a base64 string to Uint8Array without depending on Buffer or atob. */
 function base64ToBytes(b64: string): Uint8Array {
   if (
+    b64.length > Math.ceil(MAX_INNER_BYTES / 3) * 4 ||
     !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(b64) ||
     b64.length === 0
   ) {
@@ -228,4 +249,56 @@ function base64ToBytes(b64: string): Uint8Array {
   }
 
   return out
+}
+
+function assertSafeJsonObject(value: object, label: string): void {
+  const queue: Array<{ value: object; depth: number }> = [{ value, depth: 0 }]
+  let nodes = 0
+  while (queue.length > 0) {
+    const current = queue.pop()!
+    nodes++
+    if (nodes > MAX_JSON_NODES) throw new RangeError(`${label} has too many values`)
+    if (current.depth > MAX_JSON_DEPTH) throw new RangeError(`${label} is too deeply nested`)
+    if (
+      !Array.isArray(current.value) &&
+      Object.getPrototypeOf(current.value) !== Object.prototype
+    ) {
+      throw new TypeError(`${label} must contain only plain JSON objects`)
+    }
+    for (const [key, child] of Object.entries(current.value)) {
+      if (
+        unsafeKeys.has(key) ||
+        new TextEncoder().encode(key).byteLength > MAX_JSON_KEY_BYTES ||
+        hasUnsafeTextCharacter(key)
+      ) {
+        throw new TypeError(`${label} contains an unsafe property`)
+      }
+      if (
+        typeof child === 'number' &&
+        (!Number.isFinite(child) ||
+          Object.is(child, -0) ||
+          (Number.isInteger(child) && !Number.isSafeInteger(child)))
+      ) {
+        throw new TypeError(`${label} contains an ambiguous number`)
+      }
+      if (child !== null && typeof child === 'object') {
+        queue.push({ value: child, depth: current.depth + 1 })
+      }
+    }
+  }
+}
+
+function hasUnsafeTextCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!
+    if (
+      codePoint <= 0x1f ||
+      codePoint === 0x7f ||
+      (codePoint >= 0x202a && codePoint <= 0x202e) ||
+      (codePoint >= 0x2066 && codePoint <= 0x2069)
+    ) {
+      return true
+    }
+  }
+  return false
 }

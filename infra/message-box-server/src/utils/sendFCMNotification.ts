@@ -4,6 +4,9 @@ import { PubKeyHex } from '@bsv/sdk'
 import { runtimeDeps } from '../runtimeDeps.js'
 import { readMessageBoxResourceConfig } from '../config/resources.js'
 import { mapWithConcurrency } from './boundedConcurrency.js'
+import type { Message } from 'firebase-admin/messaging'
+
+const GENERIC_NOTIFICATION_BODY = 'Open the app to view this message.'
 
 /**
  * FCM Payload interface
@@ -22,6 +25,40 @@ export interface SendNotificationResult {
   error?: string
 }
 
+export function buildFCMMessage(token: string, payload: FCMPayload): Message {
+  return {
+    token,
+    notification: {
+      title: payload.title,
+      body: GENERIC_NOTIFICATION_BODY
+    },
+    android: {
+      priority: 'high',
+      data: {
+        messageId: payload.messageId,
+        originator: payload.originator || 'unknown'
+      }
+    },
+    apns: {
+      headers: {
+        'apns-push-type': 'alert',
+        'apns-priority': '10'
+      },
+      payload: {
+        aps: {
+          'mutable-content': 1,
+          alert: {
+            title: payload.title,
+            body: GENERIC_NOTIFICATION_BODY
+          }
+        },
+        messageId: payload.messageId,
+        originator: payload.originator ?? 'unknown'
+      }
+    }
+  }
+}
+
 /**
  * Send FCM push notification to all registered devices for a recipient
  * Looks up FCM tokens from device_registrations table and sends to all active devices
@@ -31,8 +68,7 @@ export async function sendFCMNotification(
   payload: FCMPayload
 ): Promise<SendNotificationResult> {
   try {
-    Logger.log(`[DEBUG] Attempting to send FCM notification to ${recipient}`)
-    Logger.log('[DEBUG] Payload:', payload)
+    Logger.log('[DEBUG] Attempting to send FCM notification.')
 
     // Look up all active FCM tokens for this recipient
     const deviceQuery = runtimeDeps
@@ -41,7 +77,7 @@ export async function sendFCMNotification(
         identity_key: recipient,
         active: true
       })
-      .select('fcm_token', 'platform', 'device_id')
+      .select('fcm_token')
       .orderBy('updated_at', 'desc')
     const resources = readMessageBoxResourceConfig()
     const maxNotificationDevices = resources.maxNotificationDevices
@@ -49,11 +85,11 @@ export async function sendFCMNotification(
     const deviceRegistrations = await deviceQuery
 
     if (deviceRegistrations.length === 0) {
-      Logger.log(`[DEBUG] No active FCM tokens found for recipient ${recipient}`)
+      Logger.log('[DEBUG] No active FCM tokens found for recipient.')
       return { success: false, error: 'No registered devices found for recipient' }
     }
 
-    Logger.log(`[DEBUG] Found ${deviceRegistrations.length} active device(s) for ${recipient}`)
+    Logger.log('[DEBUG] Found active registered devices.')
 
     // Send notification to all registered devices
     const results = await mapWithConcurrency(
@@ -61,9 +97,7 @@ export async function sendFCMNotification(
       resources.fcmSendConcurrency,
       async device => {
         try {
-          Logger.log(
-            `[DEBUG] Sending to ${device.platform ?? 'unknown'} device: ${device.device_id ?? 'unknown'}`
-          )
+          Logger.log('[DEBUG] Sending FCM notification to a registered device.')
 
           const messaging = getFirebaseMessaging()
           if (messaging == null) {
@@ -74,43 +108,7 @@ export async function sendFCMNotification(
             }
           }
 
-          await messaging.send({
-            token: device.fcm_token,
-            notification: {
-              title: payload.title,
-              body: payload.messageId
-            },
-            // Android configuration for headless service
-            android: {
-              priority: 'high',
-              data: {
-                messageId: payload.messageId,
-                originator: payload.originator || 'unknown'
-              }
-            },
-            // iOS configuration for mutable content and Notification Service Extension
-            apns: {
-              headers: {
-                'apns-push-type': 'alert', // required for iOS 13+
-                'apns-priority': '10' // deliver immediately
-                // optional: 'apns-topic': '<your app bundle id>'  // FCM fills this automatically
-              },
-              payload: {
-                aps: {
-                  'mutable-content': 1,
-                  alert: {
-                    // include an alert so NSE can modify it
-                    title: payload.title,
-                    body: payload.messageId
-                  }
-                  // do NOT set 'content-available': 1 unless you also want background fetch
-                },
-                // custom keys your NSE can read:
-                messageId: payload.messageId,
-                originator: payload.originator ?? 'unknown'
-              }
-            }
-          })
+          await messaging.send(buildFCMMessage(device.fcm_token, payload))
 
           // Update last_used timestamp on successful send
           await runtimeDeps
@@ -121,9 +119,9 @@ export async function sendFCMNotification(
               updated_at: new Date()
             })
 
-          return { success: true, token: device.fcm_token }
+          return { success: true }
         } catch (error) {
-          Logger.error(`[FCM ERROR] Failed to send to token ${device.fcm_token.slice(-10)}:`, error)
+          Logger.error('[FCM ERROR] Failed to send to a registered device.')
 
           // Mark token as inactive if it's invalid
           if (
@@ -131,9 +129,7 @@ export async function sendFCMNotification(
             (error.message.includes('registration-token-not-registered') ||
               error.message.includes('invalid-registration-token'))
           ) {
-            Logger.log(
-              `[DEBUG] Marking invalid token as inactive: ...${device.fcm_token.slice(-10)}`
-            )
+            Logger.log('[DEBUG] Marking invalid FCM token as inactive.')
             await runtimeDeps
               .knex('device_registrations')
               .where('fcm_token', device.fcm_token)
@@ -145,18 +141,14 @@ export async function sendFCMNotification(
 
           return {
             success: false,
-            token: device.fcm_token,
-            error: error instanceof Error ? error.message : String(error)
+            error: 'FCM delivery failed'
           }
         }
       }
     )
     const successCount = results.filter(r => r.success).length
-    const failureCount = results.length - successCount
 
-    Logger.log(
-      `[DEBUG] FCM notification results: ${successCount} successful, ${failureCount} failed`
-    )
+    Logger.log('[DEBUG] FCM notification attempts completed.')
 
     // Consider it successful if at least one device received the notification
     if (successCount > 0) {
@@ -164,8 +156,8 @@ export async function sendFCMNotification(
     } else {
       return { success: false, error: `Failed to send to all ${results.length} registered devices` }
     }
-  } catch (error) {
-    Logger.error('[FCM ERROR] Failed to send FCM notification:', error)
-    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  } catch {
+    Logger.error('[FCM ERROR] Failed to send FCM notification.')
+    return { success: false, error: 'FCM notification failed' }
   }
 }

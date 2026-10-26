@@ -149,4 +149,72 @@ describe('getVerifiableCertificates', () => {
       types: []
     }, undefined)
   })
+
+  it('rejects a wallet proof that reveals an unrequested field', async () => {
+    ;(mockWallet.listCertificates as jest.Mock).mockResolvedValue({
+      certificates: [
+        {
+          type: 'certType1',
+          serialNumber: 'serial1',
+          subject: 'subject1',
+          certifier: 'certifier1',
+          revocationOutpoint: 'outpoint1',
+          fields: { field1: 'encryptedData1', secret: 'encryptedSecret' },
+          signature: 'signature1'
+        }
+      ]
+    })
+    ;(mockWallet.proveCertificate as jest.Mock).mockResolvedValue({
+      keyringForVerifier: { field1: 'key1', secret: 'secret-key' }
+    })
+
+    await expect(
+      getVerifiableCertificates(mockWallet, requestedCertificates, verifierIdentityKey)
+    ).rejects.toThrow('reveals unrequested certificate fields')
+  })
+
+  it('owns the requested policy before asynchronous wallet work', async () => {
+    let release!: () => void
+    let listingStarted!: () => void
+    const listingStartedPromise = new Promise<void>(resolve => {
+      listingStarted = resolve
+    })
+    const releasePromise = new Promise<void>(resolve => {
+      release = resolve
+    })
+    ;(mockWallet.listCertificates as jest.Mock).mockImplementation(async () => {
+      listingStarted()
+      await releasePromise
+      return {
+        certificates: [
+          {
+            type: 'certType1',
+            serialNumber: 'serial1',
+            subject: 'subject1',
+            certifier: 'certifier1',
+            revocationOutpoint: 'outpoint1',
+            fields: { field1: 'encryptedData1' },
+            signature: 'signature1'
+          }
+        ]
+      }
+    })
+    ;(mockWallet.proveCertificate as jest.Mock).mockResolvedValue({
+      keyringForVerifier: { field1: 'key1' }
+    })
+
+    const proving = getVerifiableCertificates(
+      mockWallet,
+      requestedCertificates,
+      verifierIdentityKey
+    )
+    await listingStartedPromise
+    requestedCertificates.types.certType1 = ['secret']
+    release()
+    await expect(proving).resolves.toHaveLength(1)
+    expect(mockWallet.proveCertificate).toHaveBeenCalledWith(
+      expect.objectContaining({ fieldsToReveal: ['field1', 'field2'] }),
+      undefined
+    )
+  })
 })

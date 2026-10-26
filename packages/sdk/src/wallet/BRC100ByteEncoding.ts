@@ -163,26 +163,28 @@ function visitBRC100WalletByteField(
  */
 export function normalizeBRC100WalletByteFields<T>(value: T): T {
   const seen = new WeakSet<object>()
+  const pending: unknown[] = [value]
 
-  const visit = (candidate: unknown): void => {
-    if (candidate == null || typeof candidate !== 'object' || isUint8Array(candidate)) return
-    if (seen.has(candidate)) return
+  while (pending.length > 0) {
+    const candidate = pending.pop()
+    if (candidate == null || typeof candidate !== 'object' || isUint8Array(candidate)) continue
+    if (seen.has(candidate)) continue
     seen.add(candidate)
 
     if (Array.isArray(candidate)) {
-      for (const item of candidate) visit(item)
-      return
+      for (const item of candidate) pending.push(item)
+      continue
     }
 
     for (const [key, fieldValue] of Object.entries(candidate)) {
       if (walletByteFieldNames.has(key)) {
-        visitBRC100WalletByteField(candidate as Record<string, unknown>, key, fieldValue, visit)
+        visitBRC100WalletByteField(candidate as Record<string, unknown>, key, fieldValue, child =>
+          pending.push(child)
+        )
       } else {
-        visit(fieldValue)
+        pending.push(fieldValue)
       }
     }
   }
-
-  visit(value)
   return value
 }

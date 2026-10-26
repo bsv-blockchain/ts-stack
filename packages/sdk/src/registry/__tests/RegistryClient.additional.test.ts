@@ -13,8 +13,9 @@
 
 import { RegistryClient, deserializeWalletProtocol } from '../RegistryClient'
 import { WalletInterface } from '../../wallet/index.js'
-import { LookupResolver, TopicBroadcaster } from '../../overlay-tools/index.js'
-import { PushDrop } from '../../script/index.js'
+import LookupResolver from '../../overlay-tools/LookupResolver.js'
+import TopicBroadcaster from '../../overlay-tools/SHIPBroadcaster.js'
+import PushDrop from '../../script/templates/PushDrop.js'
 import {
   DefinitionData,
   ProtocolDefinitionData,
@@ -26,47 +27,108 @@ import {
 
 const mockBroadcast = jest.fn().mockResolvedValue('broadcastSuccess')
 
-jest.mock('../../overlay-tools/index.js', () => ({
-  TopicBroadcaster: jest.fn().mockImplementation(() => ({
+jest.mock('../../wallet/completeBoundAction.js', () => ({
+  completeBoundAction: jest.fn(
+    async (wallet: WalletInterface, args: any, options: any, originator: string) => {
+      const created = await wallet.createAction(args, originator)
+      if (Object.keys(options.inputSigners ?? {}).length === 0) {
+        if (created.tx == null)
+          throw new Error('Wallet signable transaction must be a plain data object')
+        return (jest.requireMock('../../transaction/index.js') as any).Transaction.fromAtomicBEEF(
+          created.tx
+        )
+      }
+      if (created.signableTransaction == null) {
+        throw new Error('Wallet signable transaction must be a plain data object')
+      }
+      const [signer] = Object.values(options.inputSigners) as Array<
+        (transaction: unknown, inputIndex: number) => Promise<{ toHex: () => string }>
+      >
+      const unlockingScript = await signer({}, 0)
+      const signed = await wallet.signAction(
+        {
+          reference: created.signableTransaction.reference,
+          spends: { 0: { unlockingScript: unlockingScript.toHex() } },
+          options: {
+            acceptDelayedBroadcast: args.options?.acceptDelayedBroadcast,
+            returnTXIDOnly: false,
+            noSend: args.options?.noSend,
+            sendWith: args.options?.sendWith
+          }
+        },
+        originator
+      )
+      if (signed.tx == null) throw new Error('Wallet signed transaction must be a byte array')
+      return (jest.requireMock('../../transaction/index.js') as any).Transaction.fromAtomicBEEF(
+        signed.tx
+      )
+    }
+  )
+}))
+
+jest.mock('../registryTokenValidation.js', () => ({
+  decodeAndVerifyRegistryToken: jest.fn(async () => {
+    const pushDropModule = jest.requireMock('../../script/templates/PushDrop.js') as any
+    const MockPushDrop = pushDropModule.default ?? pushDropModule
+    return MockPushDrop.decode()
+      .fields.slice(0, -1)
+      .map((field: number[]) => field.map(value => String.fromCodePoint(value)).join(''))
+  })
+}))
+
+jest.mock('../../overlay-tools/SHIPBroadcaster.js', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
     broadcast: mockBroadcast
-  })),
-  LookupResolver: jest.fn().mockImplementation(() => ({
+  }))
+}))
+
+jest.mock('../../overlay-tools/LookupResolver.js', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
     query: jest.fn()
   }))
 }))
 
-jest.mock('../../script/index.js', () => {
-  const actual = jest.requireActual('../../script/index.js')
-  return {
-    ...actual,
-    PushDrop: Object.assign(
-      jest.fn().mockImplementation(() => ({
-        lock: jest.fn().mockResolvedValue({ toHex: () => 'mockLockHex' }),
-        unlock: jest.fn().mockReturnValue({
-          sign: jest.fn().mockResolvedValue({ toHex: () => 'mockUnlockHex' })
-        })
-      })),
-      { decode: jest.fn() }
-    ),
-    LockingScript: {
-      fromHex: jest.fn().mockImplementation((hex: string) => ({ hex }))
-    }
-  }
-})
+jest.mock('../../script/templates/PushDrop.js', () => ({
+  __esModule: true,
+  default: Object.assign(
+    jest.fn().mockImplementation(() => ({
+      lock: jest.fn().mockResolvedValue({ toHex: () => 'mockLockHex' }),
+      unlock: jest.fn().mockReturnValue({
+        sign: jest.fn().mockResolvedValue({ toHex: () => 'mockUnlockHex' })
+      })
+    })),
+    { decode: jest.fn() }
+  )
+}))
 
-jest.mock('../../transaction/index.js', () => ({
-  Transaction: {
+jest.mock('../../script/LockingScript.js', () => ({
+  __esModule: true,
+  default: {
+    fromHex: jest.fn().mockImplementation((hex: string) => ({ hex }))
+  }
+}))
+
+jest.mock('../../transaction/Transaction.js', () => ({
+  __esModule: true,
+  default: {
     fromAtomicBEEF: jest.fn().mockImplementation(() => ({
       outputs: [{ lockingScript: 'mockLS0' }, { lockingScript: 'mockLS1' }]
     })),
-    fromBEEF: jest.fn().mockImplementation(() => ({
+    fromBEEF: jest.fn().mockImplementation((_beef: number[], txid?: string) => ({
+      id: () => txid ?? '00'.repeat(32),
       outputs: [
-        { lockingScript: { toHex: () => 'mockLSHex0' } },
-        { lockingScript: { toHex: () => 'mockLSHex1' } },
-        { lockingScript: { toHex: () => 'mockLSHex2' } }
+        { lockingScript: { toHex: () => 'mockLSHex0' }, satoshis: 1 },
+        { lockingScript: { toHex: () => 'mockLSHex1' }, satoshis: 1 },
+        { lockingScript: { toHex: () => 'mockLSHex2' }, satoshis: 1 }
       ]
     }))
   }
+}))
+
+jest.mock('../../transaction/index.js', () => ({
+  Transaction: (jest.requireMock('../../transaction/Transaction.js') as any).default
 }))
 
 jest.mock('../../primitives/index.js', () => ({
@@ -101,6 +163,28 @@ function buildWalletMock(): jest.Mocked<Partial<WalletInterface>> {
 
 function buildClient(wallet: Partial<WalletInterface>): RegistryClient {
   const client = new RegistryClient(wallet as WalletInterface, {}, TEST_ORIGINATOR)
+  jest
+    .spyOn(client as any, 'authenticateRegistryRecord')
+    .mockImplementation(async (record: RegistryRecord) => {
+      if (
+        record.txid === undefined ||
+        record.outputIndex === undefined ||
+        record.lockingScript === undefined
+      ) {
+        throw new Error('Invalid registry record. Missing txid, outputIndex, or lockingScript.')
+      }
+      if (record.registryOperator !== MOCK_PUB_KEY) {
+        throw new Error('This registry token does not belong to the current wallet.')
+      }
+      return {
+        definition: record,
+        txid: record.txid,
+        outputIndex: record.outputIndex,
+        lockingScript: { toHex: () => record.lockingScript },
+        satoshis: record.satoshis,
+        beef: record.beef
+      }
+    })
   ;(client as any).resolver = {
     query: jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })
   }
@@ -267,7 +351,7 @@ describe('RegistryClient.updateDefinition', () => {
     const record = { ...baseRegistryRecord }
     const updated: DefinitionData = {
       definitionType: 'protocol',
-      protocolID: [1, 'p'],
+      protocolID: [1, 'proto'],
       name: 'P',
       iconURL: 'u',
       description: 'd',
@@ -294,7 +378,7 @@ describe('RegistryClient.updateDefinition', () => {
     const record = { ...baseRegistryRecord }
     const updated: DefinitionData = { ...baseRegistryRecord }
     await expect(client.updateDefinition(record, updated)).rejects.toThrow(
-      'Failed to create signable transaction.'
+      'Wallet signable transaction must be a plain data object'
     )
   })
 
@@ -303,7 +387,7 @@ describe('RegistryClient.updateDefinition', () => {
     const record = { ...baseRegistryRecord }
     const updated: DefinitionData = { ...baseRegistryRecord }
     await expect(client.updateDefinition(record, updated)).rejects.toThrow(
-      'Failed to finalize the transaction signature.'
+      'Wallet signed transaction must be a byte array'
     )
   })
 
@@ -460,6 +544,14 @@ describe('RegistryClient.updateDefinition', () => {
 
     const record = { ...baseRegistryRecord }
     const updated: DefinitionData = { ...baseRegistryRecord }
+    jest.spyOn(delayedClient as any, 'authenticateRegistryRecord').mockResolvedValue({
+      definition: record,
+      txid: record.txid,
+      outputIndex: record.outputIndex,
+      lockingScript: { toHex: () => record.lockingScript },
+      satoshis: record.satoshis,
+      beef: record.beef
+    })
     await delayedClient.updateDefinition(record, updated)
 
     expect(wallet.createAction).toHaveBeenCalledWith(
@@ -533,8 +625,8 @@ describe('RegistryClient.listOwnRegistryEntries – edge cases', () => {
   it('skips non-spendable outputs', async () => {
     ;(wallet.listOutputs as jest.Mock).mockResolvedValue({
       outputs: [
-        { outpoint: 'tx1.0', satoshis: 1, spendable: false },
-        { outpoint: 'tx2.0', satoshis: 1, spendable: false }
+        { outpoint: `${'11'.repeat(32)}.0`, satoshis: 1, spendable: false },
+        { outpoint: `${'22'.repeat(32)}.0`, satoshis: 1, spendable: false }
       ],
       BEEF: [1, 2, 3]
     })
@@ -545,7 +637,7 @@ describe('RegistryClient.listOwnRegistryEntries – edge cases', () => {
 
   it('skips spendable outputs that fail to parse (catches error silently)', async () => {
     ;(wallet.listOutputs as jest.Mock).mockResolvedValue({
-      outputs: [{ outpoint: 'badtx.0', satoshis: 1, spendable: true }],
+      outputs: [{ outpoint: `${'33'.repeat(32)}.0`, satoshis: 1, spendable: true }],
       BEEF: [1, 2, 3]
     })
     // Make decode throw to simulate parse failure
@@ -559,8 +651,8 @@ describe('RegistryClient.listOwnRegistryEntries – edge cases', () => {
   it('returns records for all valid spendable outputs', async () => {
     ;(wallet.listOutputs as jest.Mock).mockResolvedValue({
       outputs: [
-        { outpoint: 'tx1.0', satoshis: 1, spendable: true },
-        { outpoint: 'tx2.0', satoshis: 2, spendable: true }
+        { outpoint: `${'44'.repeat(32)}.0`, satoshis: 1, spendable: true },
+        { outpoint: `${'55'.repeat(32)}.0`, satoshis: 1, spendable: true }
       ],
       BEEF: [0, 1, 2, 3]
     })
@@ -579,8 +671,8 @@ describe('RegistryClient.listOwnRegistryEntries – edge cases', () => {
 
     const results = await client.listOwnRegistryEntries('basket')
     expect(results).toHaveLength(2)
-    expect(results[0].txid).toBe('tx1')
-    expect(results[1].txid).toBe('tx2')
+    expect(results[0].txid).toBe('44'.repeat(32))
+    expect(results[1].txid).toBe('55'.repeat(32))
   })
 
   it('uses protomap basket for protocol definition type', async () => {
@@ -666,7 +758,7 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     expect(result[0].definitionType).toBe('certificate')
   })
 
-  it('uses empty fields object when certificate fieldsJSON is invalid JSON', async () => {
+  it('rejects a certificate whose fields JSON is invalid', async () => {
     ;(client as any).resolver.query = jest.fn().mockResolvedValue({
       type: 'output-list',
       outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
@@ -687,8 +779,7 @@ describe('RegistryClient.resolve – protocol and certificate parsing', () => {
     })
 
     const result = await client.resolve('certificate', { type: 'type' })
-    expect(result).toHaveLength(1)
-    expect((result[0] as CertificateDefinitionData).fields).toEqual({})
+    expect(result).toEqual([])
   })
 
   it('skips outputs with wrong field count for basket (not 7)', async () => {

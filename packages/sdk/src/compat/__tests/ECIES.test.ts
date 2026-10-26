@@ -151,6 +151,19 @@ describe('#ECIES', () => {
       )
     })
 
+    it.each([0, 15, 31])('rejects an authentication-tag mismatch at byte %i', tagOffset => {
+      const encryptedMessage = ECIES.electrumEncrypt(
+        Utils.toArray('authenticated payload', 'utf8'),
+        bobPrivateKey.toPublicKey(),
+        alicePrivateKey
+      )
+      encryptedMessage[encryptedMessage.length - 32 + tagOffset] ^= 1
+
+      expect(() => ECIES.electrumDecrypt(encryptedMessage, bobPrivateKey)).toThrow(
+        'Invalid checksum'
+      )
+    })
+
     it('should encrypt and decrypt message with counterparty public key', () => {
       const wif = 'L211enC224G1kV8pyyq7bjVd9SxZebnRYEzzM3i7ZHCc1c5E7dQu'
       const senderPrivateKey = PrivateKey.fromWif(wif)

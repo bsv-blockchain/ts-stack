@@ -42,7 +42,10 @@ describe('signed-requests (variant)', () => {
     const hook = client.find(f => f.path === 'useSignedRequest.ts')
     const demo = client.find(f => f.path === 'SignedRequestDemo.tsx')
     expect(hook?.content).toContain('getServerIdentity')
+    expect(hook?.content).toContain('apiFetch')
+    expect(hook?.content).not.toContain('fetch(API_BASE_URL')
     expect(hook?.content).toContain('serverIdentityKey?: string')
+    expect(hook?.content).toContain('requireIdentityKey')
     expect(demo?.content).toContain('useSignedRequest()')
     expect(demo?.content).not.toContain("SERVER_IDENTITY_KEY = ''")
   })
@@ -58,6 +61,8 @@ describe('signed-requests (variant)', () => {
     expect(builder.server.routes.join()).toContain('verifySignedRequest')
     expect(builder.server.routes.join()).toContain('consumeNonce')
     expect(builder.server.routes.join()).not.toContain('async () => true')
+    expect(builder.server.routes.join()).toContain("error: 'invalid proof'")
+    expect(builder.server.routes.join()).not.toContain('.json(r)')
   })
   test('demo page renders a removable step-by-step activity log', () => {
     const page = (signedRequests.files(ctx).client ?? []).find(
@@ -70,5 +75,6 @@ describe('signed-requests (variant)', () => {
     const md = signedRequests.agentsSection(ctx)
     expect(md).toContain('### How it works')
     expect(md).toContain('### Future integrations')
+    expect(md).toContain('independently validated key')
   })
 })

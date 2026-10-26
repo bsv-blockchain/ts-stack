@@ -10,6 +10,16 @@ import { LockingScript, PushDrop, type WalletInterface } from '@bsv/sdk'
 
 describe('BTMSToken', () => {
   describe('decode', () => {
+    afterEach(() => jest.restoreAllMocks())
+
+    function decodeAmount(amount: string) {
+      jest.spyOn(PushDrop, 'decode').mockReturnValueOnce({
+        fields: [Array.from(Buffer.from('ISSUE')), Array.from(Buffer.from(amount))],
+        lockingPublicKey: { toString: () => '03' + 'a'.repeat(64) }
+      } as never)
+      return BTMSToken.decode(LockingScript.fromHex('00'))
+    }
+
     it('should return invalid for non-PushDrop scripts', () => {
       // A simple P2PKH script is not a valid BTMS token
       const p2pkhScript = LockingScript.fromASM(
@@ -29,6 +39,23 @@ describe('BTMSToken', () => {
       const result = BTMSToken.decode('not-valid-hex')
       expect(result.valid).toBe(false)
     })
+
+    it('accepts the largest exactly representable token amount', () => {
+      expect(decodeAmount(String(Number.MAX_SAFE_INTEGER))).toMatchObject({
+        valid: true,
+        amount: Number.MAX_SAFE_INTEGER
+      })
+    })
+
+    it.each(['9007199254740992', '1e3', '01', '+1', '1.0'])(
+      'rejects unsafe or non-canonical token amount %s',
+      amount => {
+        expect(decodeAmount(amount)).toMatchObject({
+          valid: false,
+          error: `Invalid amount: ${amount}`
+        })
+      }
+    )
   })
 
   describe('isValidAssetId', () => {

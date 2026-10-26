@@ -1,4 +1,5 @@
 import type { CHIRPObjectCache } from './types.js'
+import { verifyObjectBytes } from './hash.js'
 
 interface CacheEntry {
   bytes: Uint8Array
@@ -28,7 +29,11 @@ export class MemoryCHIRPCache implements CHIRPObjectCache {
   }
 
   set(objectIdentifier: string, bytes: Uint8Array): void {
+    if (typeof objectIdentifier !== 'string' || !(bytes instanceof Uint8Array)) {
+      throw new TypeError('CHIRP cache entries require an object identifier and Uint8Array bytes.')
+    }
     if (bytes.byteLength > this.maxBytes || this.maxEntries === 0) return
+    verifyObjectBytes(objectIdentifier, bytes)
     const previous = this.entries.get(objectIdentifier)
     if (previous != null) {
       this.entries.delete(objectIdentifier)

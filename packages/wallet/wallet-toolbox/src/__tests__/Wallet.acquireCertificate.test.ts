@@ -110,7 +110,7 @@ describe('Wallet.acquireCertificate compatibility', () => {
     }
   })
 
-  test('normalizes invalid direct-certificate verification as an args error', async () => {
+  test('rejects a malformed direct-certificate signature before verification', async () => {
     const { wallet, storage } = await _tu.createSQLiteTestWallet({
       databaseName: 'acquireCertificateCompatibilityInvalidDirect',
       dropAll: true
@@ -130,7 +130,7 @@ describe('Wallet.acquireCertificate compatibility', () => {
             name: Buffer.alloc(32, 3).toString('base64')
           }
         })
-      ).rejects.toThrow('valid encrypted and signed certificate and keyring from revealer')
+      ).rejects.toThrow('canonical DER-encoded ECDSA signature')
     } finally {
       await storage.destroy()
     }

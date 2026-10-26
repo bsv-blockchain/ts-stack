@@ -1,5 +1,5 @@
+import { MAXIMUM_SEND_WITH_TRANSACTIONS } from '@bsv/sdk/wallet/validationHelpers'
 import { SendWithResult } from '@bsv/sdk'
-
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { attemptToPostReqsToNetwork } from '../../storage/methods/attemptToPostReqsToNetwork'
@@ -8,6 +8,16 @@ import { ProvenTxReqStatus } from '../../sdk/types'
 import { verifyTruthy } from '../../utility/utilityHelpers'
 import { TableProvenTxReq } from '../../storage/schema/tables/TableProvenTxReq'
 import { EntityProvenTxReq } from '../../storage/schema/entities/EntityProvenTxReq'
+import { MAX_MONITOR_INTERVAL_MSECS, MAX_MONITOR_PAGE_SIZE, requireMonitorInteger } from '../monitorValidation'
+import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+
+const MAX_ATOMIC_BROADCAST_TXIDS = MAXIMUM_SEND_WITH_TRANSACTIONS
+
+interface ExpandedWaitingRequests {
+  reqs: TableProvenTxReq[]
+  oversizedBatches: number
+  deferredGroups: number
+}
 
 export class TaskSendWaiting extends WalletMonitorTask {
   static readonly taskName = 'SendWaiting'
@@ -24,7 +34,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
    * @param triggerQuickMsecs Follow-up interval used when a full chunk was consumed and more work may remain.
    * @param chunkLimit Maximum number of waiting requests to fetch and inspect in a single run.
    */
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneSecond * 8,
     public agedMsecs = Monitor.oneSecond * 7,
@@ -33,10 +43,15 @@ export class TaskSendWaiting extends WalletMonitorTask {
     public chunkLimit = 100
   ) {
     super(monitor, TaskSendWaiting.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(agedMsecs, 'agedMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(sendingMsecs, 'sendingMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(triggerQuickMsecs, 'triggerQuickMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(chunkLimit, 'chunkLimit', 1, MAX_MONITOR_PAGE_SIZE)
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     this.includeSending =
       !this.lastSendingRunMsecsSinceEpoch || nowMsecsSinceEpoch > this.lastSendingRunMsecsSinceEpoch + this.sendingMsecs
     if (this.includeSending) this.lastSendingRunMsecsSinceEpoch = nowMsecsSinceEpoch
@@ -45,7 +60,7 @@ export class TaskSendWaiting extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     const nowMsecsSinceEpoch = Date.now()
     const agedLimit = new Date(nowMsecsSinceEpoch - this.agedMsecs)
@@ -59,12 +74,21 @@ export class TaskSendWaiting extends WalletMonitorTask {
     const count = reqs.length
     if (count > 0) {
       log += `${count} reqs with status ${status.join(' or ')}\n`
-      const filteredReqs = await this.expandBatches(reqs, status)
+      const expanded = await this.expandBatches(reqs, status)
+      const filteredReqs = expanded.reqs
+      if (expanded.oversizedBatches > 0) {
+        log += `  Skipped ${expanded.oversizedBatches} oversized atomic broadcast batch(es); operator recovery is required.\n`
+      }
+      if (expanded.deferredGroups > 0) {
+        log += `  Deferred ${expanded.deferredGroups} additional request group(s) to preserve the per-run broadcast bound.\n`
+      }
       const agedReqs = this.filterAgedReqs(filteredReqs, agedLimit)
       log += `  Of those reqs, ${agedReqs.length} where last updated before ${agedLimit.toISOString()}.\n`
       log += await this.processUnsent(agedReqs, 2)
 
-      if (count >= this.chunkLimit) {
+      if (filteredReqs.length === 0 && expanded.oversizedBatches > 0) {
+        this.triggerNextMsecs = this.triggerMsecs
+      } else if (count >= this.chunkLimit || expanded.deferredGroups > 0) {
         this.triggerNextMsecs = this.triggerQuickMsecs
       } else if (agedReqs.length < filteredReqs.length) {
         const ageAllMsecs = Math.max(
@@ -82,37 +106,54 @@ export class TaskSendWaiting extends WalletMonitorTask {
     return log
   }
 
-  private async expandBatches (reqs: TableProvenTxReq[], status: ProvenTxReqStatus[]): Promise<TableProvenTxReq[]> {
+  private async expandBatches(reqs: TableProvenTxReq[], status: ProvenTxReqStatus[]): Promise<ExpandedWaitingRequests> {
     const expanded: TableProvenTxReq[] = []
     const seenReqIds = new Set<number>()
     const seenBatches = new Set<string>()
+    let oversizedBatches = 0
+    let deferredGroups = 0
 
     for (const req of reqs) {
       if (seenReqIds.has(req.provenTxReqId)) continue
 
-      if (!req.batch || seenBatches.has(req.batch)) {
+      if (!req.batch) {
         seenReqIds.add(req.provenTxReqId)
-        expanded.push(req)
+        if (expanded.length < MAX_ATOMIC_BROADCAST_TXIDS) expanded.push(req)
+        else deferredGroups++
+        continue
+      }
+      if (seenBatches.has(req.batch)) {
         continue
       }
 
       seenBatches.add(req.batch)
       const batchReqs = await this.storage.findProvenTxReqs({
         partial: { batch: req.batch },
-        status
+        status,
+        paged: { limit: MAX_ATOMIC_BROADCAST_TXIDS + 1, offset: 0 }
       })
 
-      for (const batchReq of batchReqs) {
-        if (seenReqIds.has(batchReq.provenTxReqId)) continue
-        seenReqIds.add(batchReq.provenTxReqId)
-        expanded.push(batchReq)
+      for (const batchReq of batchReqs) seenReqIds.add(batchReq.provenTxReqId)
+      if (batchReqs.length > MAX_ATOMIC_BROADCAST_TXIDS) {
+        oversizedBatches++
+        continue
       }
+
+      const newBatchReqs = batchReqs.filter(
+        batchReq => !expanded.some(candidate => candidate.provenTxReqId === batchReq.provenTxReqId)
+      )
+      if (expanded.length + newBatchReqs.length > MAX_ATOMIC_BROADCAST_TXIDS) {
+        deferredGroups++
+        continue
+      }
+
+      expanded.push(...newBatchReqs)
     }
 
-    return expanded
+    return { reqs: expanded, oversizedBatches, deferredGroups }
   }
 
-  private filterAgedReqs (reqs: TableProvenTxReq[], agedLimit: Date): TableProvenTxReq[] {
+  private filterAgedReqs(reqs: TableProvenTxReq[], agedLimit: Date): TableProvenTxReq[] {
     const agedReqs: TableProvenTxReq[] = []
     const seenBatches = new Set<string>()
 
@@ -152,7 +193,10 @@ export class TaskSendWaiting extends WalletMonitorTask {
    *
    * @param reqApis
    */
-  async processUnsent (reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
+  async processUnsent(reqApis: TableProvenTxReq[], indent = 0): Promise<string> {
+    if (!Array.isArray(reqApis) || reqApis.length > MAX_ATOMIC_BROADCAST_TXIDS) {
+      throw new WERR_INVALID_PARAMETER('reqApis', `an array of at most ${MAX_ATOMIC_BROADCAST_TXIDS} requests`)
+    }
     const txids = reqApis.map(r => r.txid)
     const logs = this.initializeRequestLogs(reqApis)
     const reqApiIds = new Set(reqApis.map(r => r.provenTxReqId))
@@ -225,8 +269,15 @@ export class TaskSendWaiting extends WalletMonitorTask {
     // Process the entire batch together for efficient BEEF generation.
     const batchReqApis = await this.storage.findProvenTxReqs({
       partial: { batch: req.batch },
-      status: this.includeSending ? ['unsent', 'sending'] : ['unsent']
+      status: this.includeSending ? ['unsent', 'sending'] : ['unsent'],
+      paged: { limit: MAX_ATOMIC_BROADCAST_TXIDS + 1, offset: 0 }
     })
+    if (batchReqApis.length > MAX_ATOMIC_BROADCAST_TXIDS) {
+      throw new WERR_INVALID_PARAMETER(
+        'batch',
+        `at most ${MAX_ATOMIC_BROADCAST_TXIDS} requests in one atomic broadcast batch`
+      )
+    }
     const reqs: EntityProvenTxReq[] = []
     for (const batchReq of batchReqApis) {
       if (reqApiIds.has(batchReq.provenTxReqId)) groupedReqIds.add(batchReq.provenTxReqId)

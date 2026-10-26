@@ -21,7 +21,7 @@
     {
       "id": "scorecard-release-lockfile-refresh",
       "category": "toolchain",
-      "target": "OpenSSF Scorecard PinnedDependenciesID #200 and re-fingerprinted duplicate #221 for npm install --package-lock-only",
+      "target": "OpenSSF Scorecard PinnedDependenciesID #200 and re-fingerprinted duplicates #221/#225 for npm install --package-lock-only",
       "owner": "ts-stack-maintainers",
       "reason": "The command installs no named or ad hoc package: it deterministically refreshes each committed infrastructure package-lock from that directory's committed package.json after first-party version synchronization, with lifecycle scripts disabled. Scorecard interprets the lockfile operation as an unpinned package invocation even though dependency resolution is committed and subsequently audited.",
       "evidence": [
@@ -29,6 +29,7 @@
         "infra/*/package-lock.json",
         "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/200",
         "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/221",
+        "https://github.com/bsv-blockchain/ts-stack/security/code-scanning/225",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
@@ -72,9 +73,9 @@
     {
       "id": "brace-expansion-jest-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml and four standalone Jest service manifests overriding brace-expansion <=5.0.7",
+      "target": "pnpm-workspace.yaml brace-expansion@<5.0.11 and four standalone Jest service manifests pinning brace-expansion 5.0.12",
       "owner": "ts-stack-maintainers",
-      "reason": "Jest 30.4.2 still constrains reporting and coverage paths to minimatch releases that require older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, and the follow-up GHSA-rgw5-rvv9-x895 requires 5.0.9, so the governed substitution selects the current patched release.",
+      "reason": "Jest 30.4.2 and Stryker still constrain reporting and coverage paths to minimatch releases that admit older brace-expansion ranges. GHSA-mh99-v99m-4gvg required 5.0.8, GHSA-rgw5-rvv9-x895 required 5.0.9, GHSA-6j4f-fj2g-mc7p requires 5.0.10, and GHSA-qhr7-859c-m2p7 requires 5.0.11. GHSA-q2hr-2g5m-vwhr affects every release below 5.0.12, so the four standalone Jest service manifests pin 5.0.12. The workspace substitution remains 5.0.11.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "pnpm-lock.yaml#overrides",
@@ -85,11 +86,30 @@
         "infra/wab/package.json#overrides",
         "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
         "https://github.com/advisories/GHSA-rgw5-rvv9-x895",
+        "https://github.com/advisories/GHSA-6j4f-fj2g-mc7p",
+        "https://github.com/advisories/GHSA-qhr7-859c-m2p7",
+        "https://github.com/advisories/GHSA-q2hr-2g5m-vwhr",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-25",
-      "reviewBy": "2026-09-25",
-      "removeWhen": "Remove after the supported Jest dependency graph natively resolves brace-expansion 5.0.9 or newer across every coverage and reporting path."
+      "reviewBy": "2026-10-31",
+      "removeWhen": "Remove after the supported Jest and Stryker dependency graphs natively resolve brace-expansion 5.0.12 or newer across every coverage and reporting path, and the standalone service locks no longer need their own pin."
+    },
+    {
+      "id": "engine-io-socket-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override for engine.io releases below 6.6.10",
+      "owner": "ts-stack-maintainers",
+      "reason": "socket.io in @bsv/authsocket still admits engine.io releases below 6.6.10. Those releases are affected by GHSA-2gc4-cqfq-p2gv, a protocol-revision mismatch that can crash the Node process during a transport upgrade. Selecting 6.6.10 is the first patched release and keeps the public Engine.IO API that authsocket consumes.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "pnpm-lock.yaml#overrides",
+        "governance/dependency-release-policy.json#overrideRegistry",
+        "https://github.com/advisories/GHSA-2gc4-cqfq-p2gv"
+      ],
+      "created": "2026-10-01",
+      "reviewBy": "2026-10-31",
+      "removeWhen": "Remove when the supported socket.io release natively resolves engine.io 6.6.10 or newer and the authsocket tests plus the frozen high-severity audit remain green without the substitution."
     },
     {
       "id": "standalone-gaxios-advisory-override",
@@ -128,20 +148,22 @@
       "removeWhen": "Remove from each remaining service when its supported cloud client closure natively resolves uuid 11.1.1 or newer and frozen audit, build, test, and Linux image checks remain green without the substitution."
     },
     {
-      "id": "typed-rest-client-qs-override",
+      "id": "qs-advisory-override",
       "category": "override",
-      "target": "pnpm-workspace.yaml override typed-rest-client@2.3.1>qs",
+      "target": "pnpm-workspace.yaml override for qs releases below 6.16.0",
       "owner": "ts-stack-maintainers",
-      "reason": "The workspace uses Stryker 9.6.1, and the current Stryker 10.0.0 release still depends on typed-rest-client ~2.3.0. typed-rest-client 2.3.1 pins vulnerable qs 6.15.1 exactly. GHSA-q8mj-m7cp-5q26 is fixed in qs 6.15.2 and later, so a parent-scoped substitution to 6.15.3 remains the narrowest durable remediation. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
+      "reason": "The frozen graph selected qs 6.15.3 through Express/body-parser and Superagent and would select the exactly pinned 6.15.1 through Stryker's typed-rest-client. qs 6.16.0 is the first release that fixes GHSA-q8mj-m7cp-5q26 together with GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g. A version-bounded substitution fixes every runtime and development path while retaining the supported qs 6 API. The previous lock-only selection was lost when an unrelated dependency change regenerated the graph.",
       "evidence": [
         "pnpm-workspace.yaml#overrides",
         "https://github.com/advisories/GHSA-q8mj-m7cp-5q26",
+        "https://github.com/advisories/GHSA-x5fp-wj9c-mxmx",
+        "https://github.com/advisories/GHSA-4mjr-xmp4-gh2g",
         "https://www.npmjs.com/package/typed-rest-client/v/2.3.1?activeTab=dependencies",
         "https://github.com/bsv-blockchain/ts-stack/issues/324"
       ],
       "created": "2026-07-27",
-      "reviewBy": "2026-09-30",
-      "removeWhen": "Remove when Stryker no longer depends on typed-rest-client 2.3.1 or a supported typed-rest-client release natively depends on qs 6.15.2 or newer, then regenerate the lock and rerun the complete mutation campaign."
+      "reviewBy": "2026-10-16",
+      "removeWhen": "Remove when every supported Express/body-parser, Superagent, and Stryker/typed-rest-client path natively resolves qs 6.16.0 or newer, then regenerate the lock and rerun HTTP boundary tests plus the complete mutation campaign."
     },
     {
       "id": "js-yaml-jest-istanbul-advisory-override",
@@ -159,6 +181,35 @@
       "removeWhen": "Remove when Jest's istanbul reporting chain and the WAB server's transitive graph naturally resolve js-yaml 3.15.2 or newer and the frozen audit remains green."
     },
     {
+      "id": "libp2p-yamux-utils-interface-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override of @libp2p/utils inside @chainsafe/libp2p-yamux",
+      "owner": "ts-stack-maintainers",
+      "reason": "@chainsafe/libp2p-yamux 8.0.1 is the current release and declares @libp2p/utils ^7.0.0. The frozen lock selected 7.3.0. libp2p 3.3.11 requires @libp2p/interface 3.3.0, whose Stream type includes readableEnded, and @libp2p/utils 7.4.1 is the release that implements that field on AbstractStream. YamuxStream extends AbstractStream, so 7.4.1 makes the muxer assignable to libp2p's StreamMuxerFactory. The selector is scoped to yamux and stays inside yamux's declared range.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "packages/network/ts-p2p/src/index.ts",
+        "https://github.com/libp2p/js-libp2p/blob/main/packages/utils/src/abstract-message-stream.ts"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove when @chainsafe/libp2p-yamux resolves @libp2p/utils 7.4.1 or newer without a workspace selector and the teranode listener typecheck remains green."
+    },
+    {
+      "id": "lodash-es-chevrotain-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override lodash-es releases below 4.18.0",
+      "owner": "ts-stack-maintainers",
+      "reason": "Mermaid 12 resolves @mermaid-js/parser and chevrotain 11.1.2, whose packages pin lodash-es 4.17.23 exactly, affected by GHSA-r5fr-rjxr-66jc (code injection through _.template imports key names). The first patched release is 4.18.0; selecting 4.18.1, already resolved elsewhere in the workspace graph, is the narrowest compatible remediation and leaves the lodash-es API unchanged for the docs diagram toolchain.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-r5fr-rjxr-66jc"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove when chevrotain and the Mermaid parser chain naturally resolve lodash-es 4.18.0 or newer and dependency review remains green."
+    },
+    {
       "id": "nanoid-postcss-advisory-override",
       "category": "override",
       "target": "pnpm-workspace.yaml override nanoid releases below 3.3.18",
@@ -171,40 +222,6 @@
       "created": "2026-08-09",
       "reviewBy": "2026-10-15",
       "removeWhen": "Remove when the supported Vite and PostCSS dependency graph naturally resolves nanoid 3.3.18 or newer and the frozen audit remains green."
-    },
-    {
-      "id": "toml-frontmatter-advisory-override",
-      "category": "override",
-      "target": "pnpm-workspace.yaml override for TOML releases below 4.2.0",
-      "owner": "ts-stack-maintainers",
-      "reason": "remark-mdx-frontmatter 5.2.0 still constrains its TOML parser dependency to vulnerable 3.x even though it imports only the compatible parse API. GHSA-v5mp-jgw5-2x6j is fixed in 4.1.2, and GHSA-82x6-q7mm-w9cf requires 4.2.0. The workspace already requires Node 24, webpack-cli accepts TOML 4, and the docs validation, tests, and complete production build verify the substitution.",
-      "evidence": [
-        "pnpm-workspace.yaml#overrides",
-        "pnpm-lock.yaml#overrides",
-        "governance/dependency-release-policy.json#overrideRegistry",
-        "docs-site/package.json#scripts",
-        "https://github.com/advisories/GHSA-v5mp-jgw5-2x6j",
-        "https://github.com/advisories/GHSA-82x6-q7mm-w9cf"
-      ],
-      "created": "2026-09-04",
-      "reviewBy": "2026-10-04",
-      "removeWhen": "Remove when remark-mdx-frontmatter or its supported successor natively resolves TOML 4.2.0 or newer and docs validation, tests, production build, and the frozen high-severity audit remain green."
-    },
-    {
-      "id": "image-size-unpublished-advisory-patch",
-      "category": "advisory",
-      "target": "image-size 1.2.1 pnpm patch and exact audit exclusions for malformed ICNS, HEIF, and JPEG XL records",
-      "owner": "ts-stack-maintainers",
-      "reason": "GHSA-w3rx-r6r6-pgpr and GHSA-5p2g-fcmc-qvqq affect every published image-size release and have no patched version. The committed patch rejects zero or undersized records before parser loops can receive a non-progressing offset; a child-process regression test enforces termination. The audit exclusions cover only those independently remediated advisory IDs.",
-      "evidence": [
-        "patches/image-size@1.2.1.patch",
-        "scripts/dependency-release-governance.test.mjs",
-        "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
-        "https://github.com/advisories/GHSA-5p2g-fcmc-qvqq"
-      ],
-      "created": "2026-08-09",
-      "reviewBy": "2026-09-23",
-      "removeWhen": "Replace the patch and exact audit exclusions when Metro supports an image-size release that fixes both advisories, then rerun the frozen audit and mobile platform contract."
     },
     {
       "id": "openapi-typescript-redocly-overrides",
@@ -343,6 +360,89 @@
       "created": "2026-07-28",
       "reviewBy": "2026-10-26",
       "removeWhen": "Remove when the analyzer exempts exhaustive protocol dispatch or a separately reviewed generated opcode table improves auditability and passes every script vector, differential, mutation, fuzz, transaction, browser, and packed-consumer check."
+    },
+    {
+      "id": "codeql-reviewed-validation-and-test-fixtures-20260923",
+      "category": "quality-rule",
+      "target": "Existing CodeQL alerts #242, #250-258 and #261-278, individually reviewed on main 476b1351baf366cee39f39f610975f7fb1a83e4a",
+      "owner": "ts-stack-maintainers",
+      "reason": "The exact reported paths are existing primitive validation/authentication guards, contained metadata writes, exclusive file creation, exact array membership, or isolated test assertions. No security bypass is established. Rewriting safe behavior or removing meaningful tests solely to alter heuristic matches would weaken compatibility or assurance; no production control is waived. Detailed per-alert evidence and trust assumptions are retained for review.",
+      "evidence": [
+        "docs/reference/codeql-review-2026-09-23.md",
+        "https://github.com/bsv-blockchain/ts-stack/actions/runs/35813974981"
+      ],
+      "created": "2026-09-23",
+      "reviewBy": "2026-10-23",
+      "removeWhen": "Remove when improved CodeQL modeling no longer reports these paths. Reopen affected alerts immediately if their documented guards, callers, filesystem trust assumptions or test-only roles change; any genuine unsafe path requires remediation before release."
+    },
+    {
+      "id": "vitest-5-stryker-mutation-hold",
+      "category": "dependency-hold",
+      "target": "vitest and @vitest/coverage-v8 held at 4.1.11 in packages/helpers/fund-wallet and packages/middleware/402-pay (the only Vitest mutation targets: fund-wallet-cli, payment-402)",
+      "owner": "ts-stack-maintainers",
+      "reason": "Vitest 5 matches testNamePattern against the suite chain joined with \" > \", while @stryker-mutator/vitest-runner 9.6.1 and 10.0.0 build the per-mutant filter joined with a single space. Every covered mutant therefore runs zero tests and is reported Survived, collapsing fund-wallet-cli to 0.00% and payment-402 to 0.39% and blocking release qualification. coverageAnalysis all/off and vitest.related false do not restore execution. Vitest 4.1.11 restores 90.10% and 87.57%.",
+      "evidence": [
+        "https://github.com/stryker-mutator/stryker-js/issues/6210",
+        "https://github.com/stryker-mutator/stryker-js/pull/6214",
+        "https://github.com/bsv-blockchain/ts-stack/actions/runs/37063547376",
+        "governance/mutation-testing/targets.mjs",
+        "scripts/mutation-testing.mjs"
+      ],
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-02",
+      "removeWhen": "Remove when a released @stryker-mutator/vitest-runner supports Vitest 5 test-name chains, the governed Stryker pin is moved to it, and fund-wallet-cli and payment-402 meet their policy floors on Vitest 5 with zero survived mutants reporting testsCompleted 0."
+    },
+    {
+      "id": "metro-file-map-picomatch-advisory-repair",
+      "category": "override",
+      "target": "Exact metro-file-map@0.87.1 micromatch removal, paired watcher patch and Picomatch 2.3.2 extension",
+      "owner": "ts-stack-maintainers",
+      "reason": "The reviewed high braces advisory has no patched release. Metro-file-map 0.87.1 consumes only micromatch.some(), which already uses Picomatch 2.3.2. The paired source/distribution patch retains that matcher loop and declares the same exact dependency so the unused vulnerable micromatch/braces closure can be removed. Preserve all unrelated versions, importers and installation controls. This temporary dependency repair does not suppress the audit.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        "https://github.com/micromatch/braces/pull/72",
+        "patches/metro-file-map@0.87.1.patch",
+        "scripts/lib/metro-watcher-contract.mjs",
+        "scripts/lib/fixtures/metro-watcher-contract.json",
+        "scripts/check-wallet-toolbox-platform.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/discussions/780#discussioncomment-18737450"
+      ],
+      "created": "2026-10-03",
+      "reviewBy": "2026-11-02",
+      "removeWhen": "Remove the patch, exact-version package extension and parent-scoped removal together when an official compatible Metro/file-map release removes the affected dependency path. Require the complete independent watcher oracle, frozen graph, full unexcluded audit and packed Metro/Hermes platform checks before retirement."
+    },
+    {
+      "id": "verifast-cdp-only-browser-tooling",
+      "category": "override",
+      "target": "Exact puppeteer-core@25.11.0 chromium-bidi dependency removal in the private CDP browser test harness",
+      "owner": "ts-stack-maintainers",
+      "reason": "VeriFast browser qualification launches Chrome over CDP and does not use WebDriver BiDi. Puppeteer loads the BiDi implementation dynamically only for that protocol. Its unused chromium-bidi 17.0.2 path retains vulnerable Zod 3; available Puppeteer 25.13-25.16 upgrades select a chromium-bidi release without the provenance required by the existing no-downgrade policy. Remove only that unused exact-parent dependency and retain the unchanged harness and Chrome's existing CDP default. No public package contract, browser test assertion, audit threshold or provenance control changes.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+        "https://github.com/puppeteer/puppeteer/releases/tag/puppeteer-core-v25.13.0",
+        "https://github.com/bsv-blockchain/ts-stack/pull/1367",
+        "packages/verifast/browser/test.mjs",
+        "docs/reference/dependency-policy.md#temporary-cdp-browser-tooling-repair"
+      ],
+      "created": "2026-10-23",
+      "reviewBy": "2026-11-06",
+      "removeWhen": "Retire the exact-parent removal when a compatible official Puppeteer/Chromium-BiDi release has verified provenance and an advisory-clean frozen closure, or the private browser harness no longer depends on Puppeteer. Require the unchanged complete VeriFast browser/CSP/worker/fallback suite, typecheck, package consumers and full unexcluded audit to pass. Requalify and restore an explicit supported dependency before introducing any BiDi test."
+    },
+    {
+      "id": "zod4-mutation-protocol-security-floor",
+      "category": "override",
+      "target": "Zod 4 below 4.6.6 in the private Stryker mutation-server-protocol closure",
+      "owner": "ts-stack-maintainers",
+      "reason": "mutation-server-protocol 0.4.1 accepts Zod ^4.1.12 and retains vulnerable 4.6.5. Enforce the compatible patched 4.6.7 security floor until the upstream minimum excludes the advisory range. A broad root refresh also moves unrelated Babel, Inquirer, Node types and mutation tooling; the narrow security substitution preserves that reviewed graph. This does not substitute Zod 4 for Zod 3, change a public runtime contract, or suppress the unexcluded audit.",
+      "evidence": [
+        "https://github.com/advisories/GHSA-mrhx-c7xc-m3w5",
+        "https://github.com/colinhacks/zod/pull/6652",
+        "https://github.com/bsv-blockchain/ts-stack/pull/1367",
+        "docs/reference/dependency-policy.md#temporary-cdp-browser-tooling-repair"
+      ],
+      "created": "2026-10-23",
+      "reviewBy": "2026-11-06",
+      "removeWhen": "Remove when upstream mutation-server-protocol declares a minimum Zod version at least 4.6.6, a frozen regeneration without this selector contains no vulnerable Zod, and protocol schema, Stryker smoke/mutation, full audit and normal qualification pass."
     }
   ]
 }

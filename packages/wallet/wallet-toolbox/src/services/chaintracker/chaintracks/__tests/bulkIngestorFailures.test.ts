@@ -1,6 +1,7 @@
 import { Chaintracks } from '../Chaintracks'
 import { HeightRange } from '../util/HeightRange'
 import { wait } from '../../../../utility/utilityHelpers'
+import { genesisHeader } from '../util/blockHeaderUtilities'
 
 describe('Chaintracks bulk ingestor failure handling', () => {
   const liveIngestor = {
@@ -78,6 +79,30 @@ describe('Chaintracks bulk ingestor failure handling', () => {
       expect.arrayContaining([
         expect.objectContaining({ role: 'bulk', state: 'degraded', error: 'CDN unavailable' }),
         expect.objectContaining({ role: 'bulk', state: 'healthy' })
+      ])
+    )
+  })
+
+  test('rejects unsafe provider heights and continues with the next source', async () => {
+    const invalid = { getPresentHeight: jest.fn(async () => Number.MAX_VALUE) }
+    const healthy = { getPresentHeight: jest.fn(async () => 654321) }
+    const chaintracks = new Chaintracks({
+      chain: 'main',
+      storage: {
+        log: () => {},
+        getAvailableHeightRanges: async () => ({ bulk: HeightRange.empty, live: HeightRange.empty })
+      } as any,
+      bulkIngestors: [invalid as any, healthy as any],
+      liveIngestors: [liveIngestor as any],
+      addLiveRecursionLimit: 36,
+      readonly: false,
+      logging: () => {}
+    })
+
+    await expect(chaintracks.getPresentHeight()).resolves.toBe(654321)
+    expect(Array.from((chaintracks as any).sourceStatus.values())).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ role: 'bulk', state: 'degraded', error: 'source returned an invalid present height' })
       ])
     )
   })
@@ -357,16 +382,7 @@ describe('Chaintracks bulk ingestor failure handling', () => {
       live: new HeightRange(101, 110)
     }
 
-    const repeatedLiveHeader = {
-      version: 1,
-      previousHash: '0'.repeat(64),
-      merkleRoot: '1'.repeat(64),
-      time: 1,
-      bits: 1,
-      nonce: 1,
-      height: 111,
-      hash: '2'.repeat(64)
-    }
+    const repeatedLiveHeader = { ...genesisHeader('main'), height: 111 }
 
     let synchronizeCalls = 0
     const bulkIngestor = {

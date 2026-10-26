@@ -1,5 +1,5 @@
 import type { AuthSocket } from '@bsv/authsocket'
-import { WebSocketConnectionRegistry } from './webSocketConnections.js'
+import { WebSocketConnectionRegistry, WebSocketMinuteRateLimiter } from './webSocketConnections.js'
 
 interface FakeSocket {
   socket: AuthSocket
@@ -103,5 +103,44 @@ describe('Message Box WebSocket connection registry', () => {
     expect([...registry.sockets()]).toEqual([])
     expect(registry.identityKey(bob.socket.id)).toBeUndefined()
     expect(registry.recipientSockets('bob', 'bob-document', 25)).toEqual([])
+  })
+
+  it('bounds process connections, connections per identity, and rooms per socket', () => {
+    const registry = new WebSocketConnectionRegistry()
+    const first = fakeSocket('first')
+    const second = fakeSocket('second')
+    const third = fakeSocket('third')
+
+    expect(registry.register(first.socket, undefined, 2)).toBe(true)
+    expect(registry.register(second.socket, undefined, 2)).toBe(true)
+    expect(registry.register(third.socket, undefined, 2)).toBe(false)
+    expect(registry.connectionCount()).toBe(2)
+
+    expect(registry.authenticate(first.socket.id, 'alice', 1)).toBe(true)
+    expect(registry.authenticate(second.socket.id, 'alice', 1)).toBe(false)
+    expect(registry.authenticate(second.socket.id, 'bob', 1)).toBe(true)
+    expect(registry.authenticate(second.socket.id, 'mallory', 1)).toBe(false)
+
+    expect(registry.join(first.socket.id, 'alice-one', 2)).toBe(true)
+    expect(registry.join(first.socket.id, 'alice-two', 2)).toBe(true)
+    expect(registry.join(first.socket.id, 'alice-two', 2)).toBe(true)
+    expect(registry.join(first.socket.id, 'alice-three', 2)).toBe(false)
+    expect(registry.roomCount(first.socket.id)).toBe(2)
+  })
+})
+
+describe('Message Box WebSocket event limiter', () => {
+  it('bounds every event and resets only after the complete window', () => {
+    const limiter = new WebSocketMinuteRateLimiter(2, 1_000)
+
+    expect(limiter.consume(1_000)).toBe(true)
+    expect(limiter.consume(60_999)).toBe(true)
+    expect(limiter.consume(60_999)).toBe(false)
+    expect(limiter.consume(61_000)).toBe(true)
+  })
+
+  it('supports the explicit unlimited resource profile', () => {
+    const limiter = new WebSocketMinuteRateLimiter(-1, 1_000)
+    for (let index = 0; index < 10_000; index++) expect(limiter.consume(1_000)).toBe(true)
   })
 })

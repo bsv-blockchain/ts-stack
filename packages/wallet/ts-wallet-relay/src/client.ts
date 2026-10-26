@@ -27,7 +27,12 @@ export { bytesToBase64url, base64urlToBytes } from './shared/encoding.js'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export { PROTOCOL_ID, WALLET_METHOD_NAMES } from './types.js'
+export {
+  PROTOCOL_ID,
+  WALLET_METHOD_NAMES,
+  DESKTOP_WS_PROTOCOL,
+  DESKTOP_TOKEN_PROTOCOL_PREFIX
+} from './types.js'
 export type {
   WalletLike,
   WireEnvelope,
@@ -43,3 +48,4 @@ export type {
   RequestLogEntry
 } from './types.js'
 export type { CryptoParams } from './shared/crypto.js'
+export type { LocalNetworkHttpOptions } from './shared/validation.js'

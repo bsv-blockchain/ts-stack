@@ -43,12 +43,137 @@ function clientConfig(ctx: CapabilityContext): string {
   return `// Centralized client configuration. Vite loads VITE_-prefixed vars from client/.env.
 // Base URL of the server API. Defaults to the dev server; set VITE_API_URL in production
 // (or whenever the client is served from a different origin than the API).
-export const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000'
+const configuredApiUrl = import.meta.env.VITE_API_URL
+if (import.meta.env.PROD && configuredApiUrl == null) {
+  throw new Error('VITE_API_URL is required in production')
+}
+const parsedApiUrl = new URL(configuredApiUrl ?? 'http://localhost:3000')
+const localDevelopment = parsedApiUrl.protocol === 'http:' &&
+  (parsedApiUrl.hostname === 'localhost' || parsedApiUrl.hostname === '127.0.0.1' || parsedApiUrl.hostname === '[::1]')
+if ((parsedApiUrl.protocol !== 'https:' && !localDevelopment) || parsedApiUrl.username !== '' ||
+    parsedApiUrl.password !== '' || parsedApiUrl.search !== '' || parsedApiUrl.hash !== '') {
+  throw new Error('VITE_API_URL must be credential-free HTTPS (or exact HTTP localhost development)')
+}
+export const API_BASE_URL = parsedApiUrl.href.replace(/\\/$/, '')
+export const API_ORIGIN = parsedApiUrl.origin
 
 // The scaffolded network default is concrete and can be overridden per deployment.
-export const BSV_NETWORK = import.meta.env.VITE_BSV_NETWORK ?? '${ctx.network}'
+const configuredNetwork = import.meta.env.VITE_BSV_NETWORK ?? '${ctx.network}'
+if (configuredNetwork !== 'main' && configuredNetwork !== 'test' && configuredNetwork !== 'ttn') {
+  throw new Error('VITE_BSV_NETWORK must be main, test, or ttn')
+}
+export const BSV_NETWORK = configuredNetwork
 `
 }
+
+const API_CLIENT = `// One bounded client for every generated API request. It refuses redirects so
+// proofs, identities, and future credentials never move to another network authority.
+import { API_BASE_URL, API_ORIGIN } from './config.js'
+
+const API_TIMEOUT_MS = 10_000
+const MAX_API_REQUEST_BYTES = 1024 * 1024
+const MAX_API_RESPONSE_BYTES = 1024 * 1024
+
+function endpointUrl (path: string): string {
+  if (!/^\\/[A-Za-z0-9/_-]*$/.test(path) || path.includes('..')) {
+    throw new TypeError('API endpoint must be a safe absolute path')
+  }
+  return API_BASE_URL + path
+}
+
+function contentLength (response: Response): number | undefined {
+  // Fetch exposes decoded response bytes while some implementations retain the
+  // encoded Content-Length. The streaming ceiling below remains authoritative.
+  if (response.headers.get('content-encoding') !== null) return undefined
+  const value = response.headers.get('content-length')
+  if (value === null) return undefined
+  if (!/^(?:0|[1-9]\\d*)$/.test(value)) throw new Error('API response has an invalid Content-Length')
+  const length = Number(value)
+  if (!Number.isSafeInteger(length)) throw new Error('API response has an invalid Content-Length')
+  return length
+}
+
+async function readBoundedBody (response: Response): Promise<Uint8Array> {
+  const declared = contentLength(response)
+  if (declared !== undefined && declared > MAX_API_RESPONSE_BYTES) {
+    throw new Error('API response exceeds the byte limit')
+  }
+  if (response.body === null) return new Uint8Array()
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > MAX_API_RESPONSE_BYTES) {
+        await reader.cancel()
+        throw new Error('API response exceeds the byte limit')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  if (declared !== undefined && declared !== total) {
+    throw new Error('API response length does not match Content-Length')
+  }
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) { body.set(chunk, offset); offset += chunk.byteLength }
+  return body
+}
+
+export async function apiFetch (path: string, init: RequestInit = {}): Promise<Response> {
+  if (init.body != null && typeof init.body !== 'string') {
+    throw new TypeError('API request body must be a string')
+  }
+  if (typeof init.body === 'string' && new TextEncoder().encode(init.body).byteLength > MAX_API_REQUEST_BYTES) {
+    throw new Error('API request exceeds the byte limit')
+  }
+  const controller = new AbortController()
+  const timer = setTimeout(() => { controller.abort() }, API_TIMEOUT_MS)
+  try {
+    const response = await fetch(endpointUrl(path), {
+      ...init,
+      credentials: 'omit',
+      redirect: 'error',
+      referrerPolicy: 'no-referrer',
+      signal: controller.signal
+    })
+    if (response.redirected || (response.url !== '' && new URL(response.url).origin !== API_ORIGIN)) {
+      throw new Error('API response changed network authority')
+    }
+    const body = await readBoundedBody(response)
+    const headers = new Headers(response.headers)
+    headers.delete('content-encoding')
+    headers.delete('content-length')
+    return new Response(body.length === 0 ? null : body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export async function readApiJson (response: Response): Promise<unknown> {
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  let text: string
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    throw new Error('API response is not valid UTF-8')
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error('API response is not valid JSON')
+  }
+}
+`
 
 const NONCE_STORE = `// Bounded in-memory replay protection for the generated development server.
 // Replace this with an atomic Redis/DB implementation before horizontally scaling.
@@ -70,20 +195,56 @@ export function consumeNonce (nonce: string, expiresAt: Date): boolean {
 }
 `
 
-const SERVER_IDENTITY = `// Fetch the server's identity public key (its wallet's identityKey) once, and cache it.
-// Used as the proof \`counterparty\` for login / signed requests — the server exposes it
-// at GET /api/identity (baseline route), so no key needs to be hard-coded client-side.
-import { API_BASE_URL } from './config.js'
+const SERVER_IDENTITY = `// Fetch the configured API's identity public key once and cache it.
+// This is endpoint/TLS trust, not independent key authentication. Pass a pinned key to
+// the login/signed-request hooks when the application requires identity continuity.
+import { PublicKey } from '@bsv/sdk'
+import { apiFetch, readApiJson } from './apiClient.js'
 
 let cached: string | null = null
+let pending: Promise<string> | null = null
+
+export function requireIdentityKey (value: unknown): string {
+  if (typeof value !== 'string' || !/^(?:02|03)[0-9a-f]{64}$/.test(value)) {
+    throw new Error('server returned an invalid identity key')
+  }
+  try {
+    if (PublicKey.fromString(value).toString() !== value) throw new Error()
+  } catch {
+    throw new Error('server returned an invalid identity key')
+  }
+  return value
+}
+
+export async function readIdentityKeyResponse (response: Response): Promise<string> {
+  const parsed = await readApiJson(response)
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed) ||
+      (Object.getPrototypeOf(parsed) !== Object.prototype && Object.getPrototypeOf(parsed) !== null) ||
+      Object.getOwnPropertySymbols(parsed).length !== 0) {
+    throw new Error('server returned an invalid identity response')
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(parsed)
+  if (Object.keys(descriptors).length !== 1 || !Object.prototype.hasOwnProperty.call(descriptors, 'identityKey') ||
+      Object.values(descriptors).some(property => property.get != null || property.set != null)) {
+    throw new Error('server returned an invalid identity response')
+  }
+  return requireIdentityKey(descriptors.identityKey?.value)
+}
 
 export async function getServerIdentity (endpoint = '/api/identity'): Promise<string> {
   if (cached !== null) return cached
-  const res = await fetch(API_BASE_URL + endpoint)
-  if (!res.ok) throw new Error('failed to fetch server identity: ' + String(res.status))
-  const { identityKey } = await res.json() as { identityKey: string }
-  cached = identityKey
-  return identityKey
+  pending ??= (async () => {
+    const res = await apiFetch(endpoint)
+    if (!res.ok) throw new Error('failed to fetch server identity: ' + String(res.status))
+    const identityKey = await readIdentityKeyResponse(res)
+    cached = identityKey
+    return identityKey
+  })()
+  try {
+    return await pending
+  } finally {
+    pending = null
+  }
 }
 `
 
@@ -289,11 +450,13 @@ Connect any BRC-100 wallet — desktop (\`@bsv/sdk\` \`WalletClient('auto')\`) o
 - Connecting is a small state machine: it tries the desktop/extension wallet first; if none is found it opens a modal to pair a mobile wallet over a relay (QR) or install a desktop one. The connected wallet lives in React context, reachable anywhere via \`useWallet()\`.
 - The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session\` (+ \`/:id\`, \`POST /api/request/:id\`) and a \`/ws\` WebSocket upgrade on the raw HTTP server. The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates a session, shows its QR, and pairs over \`/ws\`. Frontend-only projects (no server) get desktop connect only.
 - The proof primitive (\`auth.ts\`) uses the wallet to sign a message bound to \`{ counterparty, action, body? }\` and verifies it server-side (BRC-103). That's identity (and request auth) without passwords or shared secrets.
-- The server publishes its own identity key at \`GET /api/identity\`; the client fetches it (\`getServerIdentity()\`) to use as the proof \`counterparty\`, so no key is hard-coded anywhere.
+- The server publishes its own identity key at \`GET /api/identity\`; \`getServerIdentity()\` accepts that key under the configured API origin's HTTPS/local-development authority. This is convenient endpoint trust, not an independent identity proof. Pin the expected key through the login/signed-request hooks when continuity must survive DNS, certificate, proxy, or deployment changes.
+- Every generated API call uses \`apiClient.ts\`: safe fixed-origin paths, no redirects or credentials, a 10-second whole-response deadline, 1 MiB request/response ceilings, validated unencoded lengths, and strict UTF-8 JSON. Production requires an explicit HTTPS \`VITE_API_URL\`.
 
 ### How it's used
 - \`auth.ts\` (shared) — \`createAuthProof(wallet, { counterparty, action, body? })\` and \`verifyAuthProof(serverWallet, proof, { action, body? }, consumeNonce)\`.
 - \`config.ts\` (client) — \`API_BASE_URL\` (from \`VITE_API_URL\`, default \`http://localhost:3000\`); the server base every fetch helper targets.
+- \`apiClient.ts\` (client) — the shared bounded, redirect-free client used by generated identity, login, and signed-request calls.
 - \`serverIdentity.ts\` (client) — \`getServerIdentity()\` fetches + caches the server's identity key from \`GET /api/identity\`.
 - \`walletAcquisition.ts\` (client) — \`connectDesktopWallet()\`.
 - \`WalletConnectionContext.tsx\` / \`WalletContext.tsx\` / \`WalletProviders.tsx\` (client) — relay session + wallet state; consume via \`useWallet()\`.
@@ -318,6 +481,7 @@ export const walletConnect: Capability = {
     shared: [{ path: 'auth.ts', content: AUTH_UTIL }],
     client: [
       { path: 'walletAcquisition.ts', content: ACQUISITION },
+      { path: 'apiClient.ts', content: API_CLIENT },
       { path: 'serverIdentity.ts', content: SERVER_IDENTITY },
       { path: 'WalletConnectionContext.tsx', content: RELAY_CONTEXT },
       { path: 'WalletContext.tsx', content: WALLET_CONTEXT },

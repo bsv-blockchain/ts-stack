@@ -6,6 +6,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
+| [AsyncCryptoBackend](#interface-asynccryptobackend) |
+| [DigestVerification](#interface-digestverification) |
 | [JacobianPointBI](#interface-jacobianpointbi) |
 | [SignatureHashCache](#interface-signaturehashcache) |
 
@@ -13,6 +15,47 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 
+### Interface: AsyncCryptoBackend
+
+Optional high-performance implementation of generic secp256k1 primitives.
+
+Implementations must treat a returned result as authoritative. The SDK only
+falls back before selecting a backend: when it is absent, cold, or does not
+advertise the requested operation.
+
+```ts
+export interface AsyncCryptoBackend {
+    preload: () => Promise<void>;
+    isReady: () => boolean;
+    supportsCrypto: (operation: AsyncCryptoOperation) => boolean;
+    signDigest: (privateKey: Uint8Array, digest: Uint8Array) => Promise<Uint8Array>;
+    verifyDigest: (publicKey: Uint8Array, digest: Uint8Array, signature: Uint8Array) => Promise<boolean>;
+    verifyDigestBatch: (items: readonly DigestVerification[]) => Promise<boolean[]>;
+    publicKeyFromPrivate: (privateKey: Uint8Array) => Promise<Uint8Array>;
+    multiplyPublicKey: (publicKey: Uint8Array, scalar: Uint8Array) => Promise<Uint8Array>;
+    tweakPublicKeyAdd: (publicKey: Uint8Array, tweak: Uint8Array) => Promise<Uint8Array>;
+    tweakPrivateKeyAdd: (privateKey: Uint8Array, tweak: Uint8Array) => Promise<Uint8Array>;
+}
+```
+
+See also: [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation), [DigestVerification](./primitives.md#interface-digestverification)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: DigestVerification
+
+```ts
+export interface DigestVerification {
+    publicKey: Uint8Array;
+    digest: Uint8Array;
+    signature: Uint8Array;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Interface: JacobianPointBI
 
 ```ts
@@ -27,6 +70,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 ### Interface: SignatureHashCache
+
+Reusable BIP143 hash components for one immutable transaction context.
+
+Callers sharing a cache across inputs must not mutate transaction prevouts,
+sequences, outputs, or other signed fields until that signing or verification
+pass is complete. Create a fresh cache for a changed transaction context.
 
 ```ts
 export interface SignatureHashCache {
@@ -80,7 +129,7 @@ export default abstract class BasePoint {
         };
         beta?: BasePoint | null;
     } | null;
-    constructor(type: "affine" | "jacobian") 
+    constructor(type: "affine" | "jacobian")
 }
 ```
 
@@ -97,171 +146,195 @@ numbers.
 
 ```ts
 export default class BigNumber {
-    public static readonly zeros: string[] 
-    static readonly groupSizes: number[] 
-    static readonly groupBases: number[] 
+    public static readonly zeros: string[]
+    static readonly groupSizes: number[]
+    static readonly groupBases: number[]
     static readonly wordSize: number = 26;
-    public red: ReductionContext | null;
-    public get negative(): number 
-    public set negative(val: number) 
-    public get words(): number[] 
-    public set words(newWords: number[]) 
-    public get length(): number 
-    static isBN(num: any): boolean 
-    static max(left: BigNumber, right: BigNumber): BigNumber 
-    static min(left: BigNumber, right: BigNumber): BigNumber 
-    constructor(number: number | string | number[] | bigint | undefined = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be") 
-    copy(dest: BigNumber): void 
-    static move(dest: BigNumber, src: BigNumber): void 
-    clone(): BigNumber 
-    expand(size: number): this 
-    strip(): this 
-    normSign(): this { if (this._magnitude === 0n)
-        this._sign = 0; return this; }
-    inspect(): string 
-    toString(base: number | "hex" = 10, padding: number = 1): string 
-    toNumber(): number 
-    toBigInt(): bigint 
-    toJSON(): string 
-    toArray(endian: "le" | "be" = "be", length?: number): number[] 
-    bitLength(): number { if (this._magnitude === 0n)
-        return 0; return this._magnitude.toString(2).length; }
-    static toBitArray(num: BigNumber): Array<0 | 1> 
-    toBitArray(): Array<0 | 1> 
-    zeroBits(): number 
-    byteLength(): number { if (this._magnitude === 0n)
-        return 0; return Math.ceil(this.bitLength() / 8); }
-    toTwos(width: number): BigNumber 
-    fromTwos(width: number): BigNumber 
-    isNeg(): boolean 
-    neg(): BigNumber 
-    ineg(): this { if (this._magnitude !== 0n)
-        this._sign = this._sign === 1 ? 0 : 1; return this; }
-    iuor(num: BigNumber): this 
-    iuand(num: BigNumber): this 
-    iuxor(num: BigNumber): this 
-    ior(num: BigNumber): this 
-    iand(num: BigNumber): this 
-    ixor(num: BigNumber): this 
-    or(num: BigNumber): BigNumber 
-    uor(num: BigNumber): BigNumber 
-    and(num: BigNumber): BigNumber 
-    uand(num: BigNumber): BigNumber 
-    xor(num: BigNumber): BigNumber 
-    uxor(num: BigNumber): BigNumber 
-    inotn(width: number): this 
-    notn(width: number): BigNumber 
-    setn(bit: number, val: any): this { this.assert(typeof bit === "number" && bit >= 0); const Bb = BigInt(bit); if (val === 1 || val === true)
-        this._magnitude |= (1n << Bb);
-    else
-        this._magnitude &= ~(1n << Bb); const wnb = Math.floor(bit / BigNumber.wordSize) + 1; this._nominalWordLength = Math.max(this._nominalWordLength, wnb); this._finishInitialization(); return this.strip(); }
-    iadd(num: BigNumber): this 
-    add(num: BigNumber): BigNumber 
-    isub(num: BigNumber): this 
-    sub(num: BigNumber): BigNumber 
-    mul(num: BigNumber): BigNumber 
-    imul(num: BigNumber): this 
-    imuln(num: number): this 
-    muln(num: number): BigNumber 
-    sqr(): BigNumber 
-    isqr(): this 
-    pow(num: BigNumber): BigNumber 
-    iushln(bits: number | bigint): this 
-    ishln(bits: number | bigint): this 
-    iushrn(bits: number | bigint, hint?: number, extended?: BigNumber): this 
-    ishrn(bits: number | bigint, hint?: number, extended?: BigNumber): this 
-    shln(bits: number | bigint): BigNumber 
-    ushln(bits: number | bigint): BigNumber 
-    shrn(bits: number | bigint): BigNumber 
-    ushrn(bits: number | bigint): BigNumber 
-    testn(bit: number): boolean 
-    imaskn(bits: number): this 
-    maskn(bits: number): BigNumber 
-    iaddn(num: number): this 
-    _iaddn(num: number): this 
-    isubn(num: number): this 
-    addn(num: number): BigNumber 
-    subn(num: number): BigNumber 
-    iabs(): this 
-    abs(): BigNumber 
-    divmod(num: BigNumber, mode?: "div" | "mod", positive?: boolean): any 
-    div(num: BigNumber): BigNumber 
-    mod(num: BigNumber): BigNumber 
-    umod(num: BigNumber): BigNumber 
-    divRound(num: BigNumber): BigNumber 
-    modrn(numArg: number): number 
-    idivn(num: number): this 
-    divn(num: number): BigNumber 
+    static readonly #WORD_SIZE_BIGINT: bigint = 26n;
+    static readonly #WORD_MASK: bigint = (1n << 26n) - 1n;
+    static readonly #MAX_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MAX_SAFE_INTEGER);
+    static readonly #MIN_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MIN_SAFE_INTEGER);
+    static readonly #MAX_IMULN_ARG: number = 67108864 - 1;
+    static readonly #MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT: bigint = (1n << 53n) - 1n;
+    static readonly #MAX_NOMINAL_WORD_LENGTH: number = 1048576;
+    #_magnitude: bigint = 0n;
+    #_sign: 0 | 1 = 0;
+    #_nominalWordLength: number = 1;
+    public red: ReductionContext | null = null;
+    public get negative(): number
+    public set negative(val: number)
+    get #_computedWordsArray(): number[]
+    public get words(): number[]
+    public set words(newWords: number[])
+    public get length(): number
+    static isBN(num: any): boolean
+    static max(left: BigNumber, right: BigNumber): BigNumber
+    static min(left: BigNumber, right: BigNumber): BigNumber
+    constructor(number: number | string | number[] | bigint | undefined = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be")
+    #_initFromString(number: string, effectiveBase: number | "hex", effectiveEndian: "be" | "le"): void
+    #_initFromHexString(numStr: string, sign: number, effectiveEndian: "be" | "le"): void
+    #_initFromNonHexString(numStr: string, base: number, sign: number, effectiveEndian: "be" | "le"): void
+    #_bigIntToStringInBase(num: bigint, base: number): string
+    #_parseBaseString(numberStr: string, base: number): void
+    #_parseBaseWord(str: string, base: number): number
+    #_initializeState(magnitude: bigint, sign: 0 | 1): void
+    #_finishInitialization(): void
+    #assert(val: unknown, msg: string = "Assertion failed"): void
+    #initNumber(number: number, endian: "be" | "le" = "be"): this
+    #initArray(bytes: number[], endian: "be" | "le"): this
+    copy(dest: BigNumber): void
+    static move(dest: BigNumber, src: BigNumber): void
+    clone(): BigNumber
+    expand(size: number): this
+    strip(): this
+    normSign(): this
+    inspect(): string
+    #_getMinimalHex(): string
+    #_toHexString(padding: number): string
+    toString(base: number | "hex" = 10, padding: number = 1): string
+    #toBaseString(base: number, padding: number): string
+    static #_paddedZero(padding: number): string
+    #_zeroPaddedChunk(chunkStr: string, groupSize: number): string
+    toNumber(): number
+    toBigInt(): bigint
+    toJSON(): string
+    #toArrayLikeGeneric(res: number[], isLE: boolean): void
+    toArray(endian: "le" | "be" = "be", length?: number): number[]
+    bitLength(): number
+    static toBitArray(num: BigNumber): Array<0 | 1>
+    toBitArray(): Array<0 | 1>
+    zeroBits(): number
+    byteLength(): number
+    #_getSignedValue(): bigint
+    #_setValueFromSigned(sVal: bigint): void
+    toTwos(width: number): BigNumber
+    fromTwos(width: number): BigNumber
+    isNeg(): boolean
+    neg(): BigNumber
+    ineg(): this
+    #_iuop(num: BigNumber, op: (a: bigint, b: bigint) => bigint, isXor: boolean = false): this
+    iuor(num: BigNumber): this
+    iuand(num: BigNumber): this
+    iuxor(num: BigNumber): this
+    #_iop(num: BigNumber, op: (a: bigint, b: bigint) => bigint, isXor: boolean = false): this
+    ior(num: BigNumber): this
+    iand(num: BigNumber): this
+    ixor(num: BigNumber): this
+    #_uop_new(num: BigNumber, opName: "iuor" | "iuand" | "iuxor"): BigNumber
+    or(num: BigNumber): BigNumber
+    uor(num: BigNumber): BigNumber
+    and(num: BigNumber): BigNumber
+    uand(num: BigNumber): BigNumber
+    xor(num: BigNumber): BigNumber
+    uxor(num: BigNumber): BigNumber
+    inotn(width: number): this
+    notn(width: number): BigNumber
+    setn(bit: number, val: any): this
+    iadd(num: BigNumber): this
+    add(num: BigNumber): BigNumber
+    isub(num: BigNumber): this
+    sub(num: BigNumber): BigNumber
+    mul(num: BigNumber): BigNumber
+    imul(num: BigNumber): this
+    imuln(num: number): this
+    muln(num: number): BigNumber
+    sqr(): BigNumber
+    isqr(): this
+    pow(num: BigNumber): BigNumber
+    static #normalizeNonNegativeBigInt(value: number | bigint, label: string): bigint
+    iushln(bits: number | bigint): this
+    ishln(bits: number | bigint): this
+    iushrn(bits: number | bigint, hint?: number, extended?: BigNumber): this
+    ishrn(bits: number | bigint, hint?: number, extended?: BigNumber): this
+    shln(bits: number | bigint): BigNumber
+    ushln(bits: number | bigint): BigNumber
+    shrn(bits: number | bigint): BigNumber
+    ushrn(bits: number | bigint): BigNumber
+    testn(bit: number): boolean
+    imaskn(bits: number): this
+    maskn(bits: number): BigNumber
+    iaddn(num: number): this
+    _iaddn(num: number): this
+    isubn(num: number): this
+    addn(num: number): BigNumber
+    subn(num: number): BigNumber
+    iabs(): this
+    abs(): BigNumber
+    divmod(num: BigNumber, mode?: "div" | "mod", positive?: boolean): any
+    #_computeMod(tV: bigint, nV: bigint, mode?: "div" | "mod", positive?: boolean): bigint | null
+    #_bigNumberFromSigned(v: bigint | null): BigNumber | null
+    div(num: BigNumber): BigNumber
+    mod(num: BigNumber): BigNumber
+    umod(num: BigNumber): BigNumber
+    divRound(num: BigNumber): BigNumber
+    modrn(numArg: number): number
+    idivn(num: number): this
+    divn(num: number): BigNumber
     egcd(p: BigNumber): {
         a: BigNumber;
         b: BigNumber;
         gcd: BigNumber;
-    } 
-    gcd(num: BigNumber): BigNumber 
-    invm(num: BigNumber): BigNumber 
-    isEven(): boolean 
-    isOdd(): boolean 
-    andln(num: number): number 
-    bincn(bit: number): this 
-    isZero(): boolean 
-    cmpn(num: number): 1 | 0 | -1 { this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, "Number is too big"); const tV = this._getSignedValue(); const nV = BigInt(num); if (tV < nV)
-        return -1; if (tV > nV)
-        return 1; return 0; }
-    cmp(num: BigNumber): 1 | 0 | -1 { const tV = this._getSignedValue(); const nV = num._getSignedValue(); if (tV < nV)
-        return -1; if (tV > nV)
-        return 1; return 0; }
-    ucmp(num: BigNumber): 1 | 0 | -1 { if (this._magnitude < num._magnitude)
-        return -1; if (this._magnitude > num._magnitude)
-        return 1; return 0; }
-    gtn(num: number): boolean 
-    gt(num: BigNumber): boolean 
-    gten(num: number): boolean 
-    gte(num: BigNumber): boolean 
-    ltn(num: number): boolean 
-    lt(num: BigNumber): boolean 
-    lten(num: number): boolean 
-    lte(num: BigNumber): boolean 
-    eqn(num: number): boolean 
-    eq(num: BigNumber): boolean 
-    toRed(ctx: ReductionContext): BigNumber 
-    fromRed(): BigNumber 
-    forceRed(ctx: ReductionContext): this 
-    redAdd(num: BigNumber): BigNumber 
-    redIAdd(num: BigNumber): BigNumber 
-    redSub(num: BigNumber): BigNumber 
-    redISub(num: BigNumber): BigNumber 
-    redShl(num: number): BigNumber 
-    redMul(num: BigNumber): BigNumber 
-    redIMul(num: BigNumber): BigNumber 
-    redSqr(): BigNumber 
-    redISqr(): BigNumber 
-    redSqrt(): BigNumber 
-    redInvm(): BigNumber 
-    redNeg(): BigNumber 
-    redPow(num: BigNumber): BigNumber 
-    static fromHex(hex: string, endian?: "le" | "be" | "little" | "big"): BigNumber 
-    toHex(byteLength: number = 0): string 
-    static fromJSON(str: string): BigNumber 
-    static fromNumber(n: number): BigNumber 
-    static fromString(str: string, base?: number | "hex"): BigNumber 
-    static fromSm(bytes: number[], endian: "big" | "little" = "big"): BigNumber 
-    toSm(endian: "big" | "little" = "big"): number[] 
-    static fromBits(bits: number, strict: boolean = false): BigNumber 
-    toBits(): number 
-    static fromScriptNum(num: number[], requireMinimal: boolean = false, maxNumSize?: number): BigNumber 
-    toScriptNum(): number[] 
-    _invmp(p: BigNumber): BigNumber 
-    mulTo(num: BigNumber, out: BigNumber): BigNumber 
+    }
+    gcd(num: BigNumber): BigNumber
+    invm(num: BigNumber): BigNumber
+    isEven(): boolean
+    isOdd(): boolean
+    andln(num: number): number
+    bincn(bit: number): this
+    isZero(): boolean
+    cmpn(num: number): CompareResult
+    cmp(num: BigNumber): CompareResult
+    ucmp(num: BigNumber): CompareResult
+    gtn(num: number): boolean
+    gt(num: BigNumber): boolean
+    gten(num: number): boolean
+    gte(num: BigNumber): boolean
+    ltn(num: number): boolean
+    lt(num: BigNumber): boolean
+    lten(num: number): boolean
+    lte(num: BigNumber): boolean
+    eqn(num: number): boolean
+    eq(num: BigNumber): boolean
+    toRed(ctx: ReductionContext): BigNumber
+    fromRed(): BigNumber
+    forceRed(ctx: ReductionContext): this
+    redAdd(num: BigNumber): BigNumber
+    redIAdd(num: BigNumber): BigNumber
+    redSub(num: BigNumber): BigNumber
+    redISub(num: BigNumber): BigNumber
+    redShl(num: number): BigNumber
+    redMul(num: BigNumber): BigNumber
+    redIMul(num: BigNumber): BigNumber
+    redSqr(): BigNumber
+    redISqr(): BigNumber
+    redSqrt(): BigNumber
+    redInvm(): BigNumber
+    redNeg(): BigNumber
+    redPow(num: BigNumber): BigNumber
+    static fromHex(hex: string, endian?: "le" | "be" | "little" | "big"): BigNumber
+    toHex(byteLength: number = 0): string
+    static fromJSON(str: string): BigNumber
+    static fromNumber(n: number): BigNumber
+    static fromString(str: string, base?: number | "hex"): BigNumber
+    static fromSm(bytes: number[], endian: "big" | "little" = "big"): BigNumber
+    toSm(endian: "big" | "little" = "big"): number[]
+    static fromBits(bits: number, strict: boolean = false): BigNumber
+    toBits(): number
+    static fromScriptNum(num: number[], requireMinimal: boolean = false, maxNumSize?: number): BigNumber
+    toScriptNum(): number[]
+    _invmp(p: BigNumber): BigNumber
+    mulTo(num: BigNumber, out: BigNumber): BigNumber
 }
 ```
 
-See also: [ReductionContext](./primitives.md#class-reductioncontext), [red](./primitives.md#function-red), [toArray](./primitives.md#variable-toarray), [toHex](./primitives.md#variable-tohex)
+See also: [ReductionContext](./primitives.md#class-reductioncontext), [red](./primitives.md#function-red), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string), [toArray](./primitives.md#variable-toarray), [toHex](./primitives.md#variable-tohex)
 
 #### Constructor
 
 ```ts
-constructor(number: number | string | number[] | bigint | undefined = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be") 
+constructor(number: number | string | number[] | bigint | undefined = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be")
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -277,7 +350,7 @@ Argument Details
 Reduction context of the big number.
 
 ```ts
-public red: ReductionContext | null
+public red: ReductionContext | null = null
 ```
 See also: [ReductionContext](./primitives.md#class-reductioncontext)
 
@@ -295,6 +368,15 @@ Example
 console.log(BigNumber.wordSize);  // output: 26
 ```
 
+#### Method
+
+Returns a chunk string zero-padded to groupSize (used by toBaseString for interior chunks).
+
+```ts
+#_zeroPaddedChunk(chunkStr: string, groupSize: number): string
+```
+See also: [string](./remittance.md#function-string)
+
 #### Method _invmp
 
 Compute the multiplicative inverse of the current BigNumber in the modulus field specified by `p`.
@@ -308,7 +390,7 @@ for browser and single-tenant environments but is not hardened against
 high-resolution timing attacks in shared CPU contexts.
 
 ```ts
-_invmp(p: BigNumber): BigNumber 
+_invmp(p: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -326,8 +408,7 @@ Argument Details
 Calculates the number of bits required to represent the BigNumber.
 
 ```ts
-bitLength(): number { if (this._magnitude === 0n)
-    return 0; return this._magnitude.toString(2).length; }
+bitLength(): number
 ```
 
 Returns
@@ -339,8 +420,7 @@ The bit length of the BigNumber.
 Calculates the number of bytes required to represent the BigNumber.
 
 ```ts
-byteLength(): number { if (this._magnitude === 0n)
-    return 0; return Math.ceil(this.bitLength() / 8); }
+byteLength(): number
 ```
 
 Returns
@@ -352,7 +432,7 @@ The byte length of the BigNumber.
 Creates a BigNumber from a number representing the "bits" value in a block header.
 
 ```ts
-static fromBits(bits: number, strict: boolean = false): BigNumber 
+static fromBits(bits: number, strict: boolean = false): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -376,9 +456,9 @@ Will throw an error if `strict` is `true` and the number has negative bit set.
 Creates a BigNumber from a hexadecimal string.
 
 ```ts
-static fromHex(hex: string, endian?: "le" | "be" | "little" | "big"): BigNumber 
+static fromHex(hex: string, endian?: "le" | "be" | "little" | "big"): BigNumber
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string)
 
 Returns
 
@@ -403,9 +483,9 @@ const bigNumber = BigNumber.fromHex(exampleHex);
 Creates a BigNumber from a JSON-serialized string.
 
 ```ts
-static fromJSON(str: string): BigNumber 
+static fromJSON(str: string): BigNumber
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string)
 
 Returns
 
@@ -421,7 +501,7 @@ Argument Details
 Creates a BigNumber from a number.
 
 ```ts
-static fromNumber(n: number): BigNumber 
+static fromNumber(n: number): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -439,7 +519,7 @@ Argument Details
 Creates a BigNumber from the format used in Bitcoin scripts.
 
 ```ts
-static fromScriptNum(num: number[], requireMinimal: boolean = false, maxNumSize?: number): BigNumber 
+static fromScriptNum(num: number[], requireMinimal: boolean = false, maxNumSize?: number): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -461,7 +541,7 @@ Argument Details
 Creates a BigNumber from a signed magnitude number.
 
 ```ts
-static fromSm(bytes: number[], endian: "big" | "little" = "big"): BigNumber 
+static fromSm(bytes: number[], endian: "big" | "little" = "big"): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -481,9 +561,9 @@ Argument Details
 Creates a BigNumber from a string, considering an optional base.
 
 ```ts
-static fromString(str: string, base?: number | "hex"): BigNumber 
+static fromString(str: string, base?: number | "hex"): BigNumber
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string)
 
 Returns
 
@@ -501,7 +581,7 @@ Argument Details
 Checks whether a value is an instance of BigNumber. Regular JS numbers fail this check.
 
 ```ts
-static isBN(num: any): boolean 
+static isBN(num: any): boolean
 ```
 
 Returns
@@ -518,7 +598,7 @@ Argument Details
 Returns the bigger value between two BigNumbers
 
 ```ts
-static max(left: BigNumber, right: BigNumber): BigNumber 
+static max(left: BigNumber, right: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -538,7 +618,7 @@ Argument Details
 Returns the smaller value between two BigNumbers
 
 ```ts
-static min(left: BigNumber, right: BigNumber): BigNumber 
+static min(left: BigNumber, right: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -559,7 +639,7 @@ Performs multiplication between the BigNumber instance and a given BigNumber.
 It chooses the multiplication method based on the lengths of the numbers to optimize execution time.
 
 ```ts
-mulTo(num: BigNumber, out: BigNumber): BigNumber 
+mulTo(num: BigNumber, out: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -579,7 +659,7 @@ Argument Details
 Converts the BigNumber instance to an array of bytes.
 
 ```ts
-toArray(endian: "le" | "be" = "be", length?: number): number[] 
+toArray(endian: "le" | "be" = "be", length?: number): number[]
 ```
 
 Returns
@@ -598,7 +678,7 @@ Argument Details
 Returns the signed BigInt representation of this BigNumber without any safety checks.
 
 ```ts
-toBigInt(): bigint 
+toBigInt(): bigint
 ```
 
 Returns
@@ -610,7 +690,7 @@ bigint value for this BigNumber.
 Converts a BigNumber to an array of bits.
 
 ```ts
-static toBitArray(num: BigNumber): Array<0 | 1> 
+static toBitArray(num: BigNumber): Array<0 | 1>
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -628,7 +708,7 @@ Argument Details
 Converts this BigNumber to a number representing the "bits" value in a block header.
 
 ```ts
-toBits(): number 
+toBits(): number
 ```
 
 Returns
@@ -640,8 +720,9 @@ Returns a number equivalent to the "bits" value in a block header.
 Converts this BigNumber to a hexadecimal string.
 
 ```ts
-toHex(byteLength: number = 0): string 
+toHex(byteLength: number = 0): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -664,8 +745,9 @@ const hex = bigNumber.toHex()
 Converts the BigNumber instance to a JSON-formatted string.
 
 ```ts
-toJSON(): string 
+toJSON(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -677,7 +759,7 @@ Converts the BigNumber instance to a JavaScript number.
 Please note that JavaScript numbers are only precise up to 53 bits.
 
 ```ts
-toNumber(): number 
+toNumber(): number
 ```
 
 Returns
@@ -693,7 +775,7 @@ If the BigNumber instance cannot be safely stored in a JavaScript number
 Converts this BigNumber to a number in the format used in Bitcoin scripts.
 
 ```ts
-toScriptNum(): number[] 
+toScriptNum(): number[]
 ```
 
 Returns
@@ -705,7 +787,7 @@ Returns the equivalent to this BigNumber as a Bitcoin script number.
 Converts this BigNumber to a signed magnitude number.
 
 ```ts
-toSm(endian: "big" | "little" = "big"): number[] 
+toSm(endian: "big" | "little" = "big"): number[]
 ```
 
 Returns
@@ -724,8 +806,9 @@ function toString() { [native code] }
 Converts the BigNumber instance to a string representation.
 
 ```ts
-toString(base: number | "hex" = 10, padding: number = 1): string 
+toString(base: number | "hex" = 10, padding: number = 1): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -743,7 +826,7 @@ Argument Details
 Returns the number of trailing zero bits in the big number.
 
 ```ts
-zeroBits(): number 
+zeroBits(): number
 ```
 
 Returns
@@ -765,19 +848,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export default class Curve {
-    p: BigNumber;
-    red: ReductionContext;
-    redN: BigNumber | null;
-    zero: BigNumber;
-    one: BigNumber;
-    two: BigNumber;
-    g: Point;
-    n: BigNumber;
-    a: BigNumber;
-    b: BigNumber;
-    tinv: BigNumber;
-    zeroA: boolean;
-    threeA: boolean;
+    p!: BigNumber;
+    red!: ReductionContext;
+    redN!: BigNumber | null;
+    zero!: BigNumber;
+    one!: BigNumber;
+    two!: BigNumber;
+    g!: Point;
+    n!: BigNumber;
+    a!: BigNumber;
+    b!: BigNumber;
+    tinv!: BigNumber;
+    zeroA!: boolean;
+    threeA!: boolean;
     endo: {
         beta: BigNumber;
         lambda: BigNumber;
@@ -786,32 +869,36 @@ export default class Curve {
             b: BigNumber;
         }>;
     } | undefined;
-    _endoWnafT1: BigNumber[];
-    _endoWnafT2: BigNumber[];
-    _wnafT1: BigNumber[];
-    _wnafT2: BigNumber[];
-    _wnafT3: BigNumber[];
-    _wnafT4: BigNumber[];
-    _bitLength: number;
-    static assert(expression: unknown, message: string = "Elliptic curve assertion failed"): void 
-    getNAF(num: BigNumber, w: number, bits: number): number[] 
-    getJSF(k1: BigNumber, k2: BigNumber): number[][] 
-    static cachedProperty(obj, name: string, computer): void 
-    static parseBytes(bytes: string | number[]): number[] 
-    static intFromLE(bytes: number[]): BigNumber 
-    constructor() 
-    _getEndomorphism(conf): {
+    _endoWnafT1!: BigNumber[];
+    _endoWnafT2!: BigNumber[];
+    _wnafT1!: BigNumber[];
+    _wnafT2!: BigNumber[];
+    _wnafT3!: BigNumber[];
+    _wnafT4!: BigNumber[];
+    _bitLength!: number;
+    static assert(expression: unknown, message: string = "Elliptic curve assertion failed"): void
+    getNAF(num: BigNumber, w: number, bits: number): number[]
+    getJSF(k1: BigNumber, k2: BigNumber): number[][]
+    static cachedProperty(obj: any, name: string, computer: (this: any) => unknown): void
+    static parseBytes(bytes: string | number[]): number[]
+    static intFromLE(bytes: number[]): BigNumber
+    constructor()
+    _getEndomorphism(conf: EndomorphismConfig): {
         beta: BigNumber;
         lambda: BigNumber;
         basis: Array<{
             a: BigNumber;
             b: BigNumber;
         }>;
-    } | undefined 
+    } | undefined
+    #_resolveEndomorphismBasis(conf: EndomorphismConfig, lambda: BigNumber): Array<{
+        a: BigNumber;
+        b: BigNumber;
+    }>
     _getEndoRoots(num: BigNumber): [
         BigNumber,
         BigNumber
-    ] 
+    ]
     _getEndoBasis(lambda: BigNumber): [
         {
             a: BigNumber;
@@ -821,16 +908,16 @@ export default class Curve {
             a: BigNumber;
             b: BigNumber;
         }
-    ] 
+    ]
     _endoSplit(k: BigNumber): {
         k1: BigNumber;
         k2: BigNumber;
-    } 
-    validate(point: Point): boolean 
+    }
+    validate(point: Point): boolean
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [ReductionContext](./primitives.md#class-reductioncontext), [red](./primitives.md#function-red)
+See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [ReductionContext](./primitives.md#class-reductioncontext), [red](./primitives.md#function-red), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -859,14 +946,14 @@ const drbg = new DRBG('af12de...', '123ef...');
 export default class DRBG {
     K: number[];
     V: number[];
-    constructor(entropy: number[] | string, nonce: number[] | string) 
-    hmac(): SHA256HMAC 
-    update(seed?: number[]): void 
-    generate(len: number): string 
+    constructor(entropy: number[] | string, nonce: number[] | string)
+    hmac(): SHA256HMAC
+    update(seed?: number[]): void
+    generate(len: number): string
 }
 ```
 
-See also: [SHA256HMAC](./primitives.md#class-sha256hmac)
+See also: [SHA256HMAC](./primitives.md#class-sha256hmac), [string](./remittance.md#function-string)
 
 #### Method generate
 
@@ -874,8 +961,9 @@ Generates deterministic random hexadecimal string of given length.
 In every generation process, it also updates the internal state `K` and `V`.
 
 ```ts
-generate(len: number): string 
+generate(len: number): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -897,7 +985,7 @@ const randomHex = drbg.generate(256);
 Generates HMAC using the K value of the instance. This method is used internally for operations.
 
 ```ts
-hmac(): SHA256HMAC 
+hmac(): SHA256HMAC
 ```
 See also: [SHA256HMAC](./primitives.md#class-sha256hmac)
 
@@ -917,7 +1005,7 @@ Updates the `K` and `V` values of the instance based on the seed.
 The seed if not provided uses `V` as seed.
 
 ```ts
-update(seed?: number[]): void 
+update(seed?: number[]): void
 ```
 
 Returns
@@ -957,30 +1045,29 @@ export default class JacobianPoint extends BasePoint {
     y: BigNumber;
     z: BigNumber;
     zOne: boolean;
-    constructor(x: string | BigNumber | null, y: string | BigNumber | null, z: string | BigNumber | null) 
-    toP(): Point 
-    neg(): JacobianPoint 
-    add(p: JacobianPoint): JacobianPoint 
-    mixedAdd(p: Point): JacobianPoint 
-    dblp(pow: number): JacobianPoint 
-    dbl(): JacobianPoint 
-    eq(p: Point | JacobianPoint): boolean 
-    eqXToP(x: BigNumber): boolean 
-    inspect(): string 
-    isInfinity(): boolean 
+    constructor(x: JacobianCoord, y: JacobianCoord, z: JacobianCoord)
+    toP(): Point
+    neg(): JacobianPoint
+    add(p: JacobianPoint): JacobianPoint
+    mixedAdd(p: Point): JacobianPoint
+    dblp(pow: number): JacobianPoint
+    dbl(): JacobianPoint
+    eq(p: Point | JacobianPoint): boolean
+    eqXToP(x: BigNumber): boolean
+    inspect(): string
+    isInfinity(): boolean
 }
 ```
 
-See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs a new `JacobianPoint` instance.
 
 ```ts
-constructor(x: string | BigNumber | null, y: string | BigNumber | null, z: string | BigNumber | null) 
+constructor(x: JacobianCoord, y: JacobianCoord, z: JacobianCoord)
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
 
 Argument Details
 
@@ -1043,7 +1130,7 @@ and returns a new Jacobian point as a result of the addition. In the special cas
 when either one of the points is the point at infinity, it will return the other point.
 
 ```ts
-add(p: JacobianPoint): JacobianPoint 
+add(p: JacobianPoint): JacobianPoint
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint)
 
@@ -1069,7 +1156,7 @@ const result = p1.add(p2)
 Point doubling operation in the Jacobian coordinates. A special case is when the point is the point at infinity, in this case, this function will return the point itself.
 
 ```ts
-dbl(): JacobianPoint 
+dbl(): JacobianPoint
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint)
 
@@ -1089,7 +1176,7 @@ const result = jp.dbl()
 Multiple doubling operation. It doubles the Jacobian point as many times as the pow parameter specifies. If pow is 0 or the point is the point at infinity, it will return the point itself.
 
 ```ts
-dblp(pow: number): JacobianPoint 
+dblp(pow: number): JacobianPoint
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint)
 
@@ -1114,7 +1201,7 @@ const result = jp.dblp(3)
 Equality check operation. It checks whether the affine or Jacobian point is equal to this Jacobian point.
 
 ```ts
-eq(p: Point | JacobianPoint): boolean 
+eq(p: Point | JacobianPoint): boolean
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint), [Point](./primitives.md#class-point)
 
@@ -1142,7 +1229,7 @@ It checks whether the x coordinate of the Jacobian point is equal to the provide
 of a point in projective coordinates.
 
 ```ts
-eqXToP(x: BigNumber): boolean 
+eqXToP(x: BigNumber): boolean
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1167,8 +1254,9 @@ const isXEqual = jp.eqXToP(x2)
 Returns the string representation of the JacobianPoint instance.
 
 ```ts
-inspect(): string 
+inspect(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1186,7 +1274,7 @@ console.log(point.inspect()); // Output: '<EC JPoint x: 5 y: 6 z: 1>'
 Checks whether the JacobianPoint instance represents a point at infinity.
 
 ```ts
-isInfinity(): boolean 
+isInfinity(): boolean
 ```
 
 Returns
@@ -1207,7 +1295,7 @@ the transformation from the affine to Jacobian coordinates. It first converts
 the affine point to Jacobian, and then preforms the addition.
 
 ```ts
-mixedAdd(p: Point): JacobianPoint 
+mixedAdd(p: Point): JacobianPoint
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint), [Point](./primitives.md#class-point)
 
@@ -1233,7 +1321,7 @@ const result = jp.mixedAdd(ap)
 Negation operation. It returns the additive inverse of the Jacobian point.
 
 ```ts
-neg(): JacobianPoint 
+neg(): JacobianPoint
 ```
 See also: [JacobianPoint](./primitives.md#class-jacobianpoint)
 
@@ -1253,7 +1341,7 @@ const result = jp.neg()
 Converts the `JacobianPoint` object instance to standard affine `Point` format and returns `Point` type.
 
 ```ts
-toP(): Point 
+toP(): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -1287,9 +1375,9 @@ const k256 = new K256();
 
 ```ts
 export default class K256 extends Mersenne {
-    constructor() 
-    split(input: BigNumber, output: BigNumber): void 
-    imulK(num: BigNumber): BigNumber 
+    constructor()
+    override split(input: BigNumber, output: BigNumber): void
+    override imulK(num: BigNumber): BigNumber
 }
 ```
 
@@ -1301,7 +1389,7 @@ Constructor for the K256 class.
 Creates an instance of K256 using the super constructor from Mersenne.
 
 ```ts
-constructor() 
+constructor()
 ```
 
 Example
@@ -1316,7 +1404,7 @@ Multiplies a BigNumber ('num') with the constant 'K' in-place and returns the re
 'K' is equal to 0x1000003d1 or in decimal representation: [ 64, 977 ].
 
 ```ts
-imulK(num: BigNumber): BigNumber 
+override imulK(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1342,7 +1430,7 @@ Splits a BigNumber into a new BigNumber based on specific computation
 rules. This method modifies the input and output big numbers.
 
 ```ts
-split(input: BigNumber, output: BigNumber): void 
+override split(input: BigNumber, output: BigNumber): void
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1377,13 +1465,23 @@ export class KeyShares {
     points: PointInFiniteField[];
     threshold: number;
     integrity: string;
-    constructor(points: PointInFiniteField[], threshold: number, integrity: string) 
-    static fromBackupFormat(shares: string[]): KeyShares 
-    toBackupFormat(): string[] 
+    constructor(points: PointInFiniteField[], threshold: number, integrity: string)
+    static fromBackupFormat(shares: string[]): KeyShares
+    toBackupFormat(): string[]
 }
 ```
 
-See also: [PointInFiniteField](./primitives.md#class-pointinfinitefield)
+See also: [PointInFiniteField](./primitives.md#class-pointinfinitefield), [string](./remittance.md#function-string)
+
+#### Method fromBackupFormat
+
+Parse one or more canonical bounded backup shares. Each share uses
+`x.y.threshold.integrity`, where the threshold is from 2 through 255.
+
+```ts
+static fromBackupFormat(shares: string[]): KeyShares
+```
+See also: [KeyShares](./primitives.md#class-keyshares), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1399,20 +1497,21 @@ export default class Mersenne {
     p: BigNumber;
     k: BigNumber;
     n: number;
-    constructor(name: string, p: string) 
-    ireduce(num: BigNumber): BigNumber 
-    split(input: BigNumber, out: BigNumber): void 
-    imulK(num: BigNumber): BigNumber 
+    constructor(name: string, p: string)
+    ireduce(num: BigNumber): BigNumber
+    split(input: BigNumber, out: BigNumber): void
+    imulK(num: BigNumber): BigNumber
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string)
 
 #### Constructor
 
 ```ts
-constructor(name: string, p: string) 
+constructor(name: string, p: string)
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1451,6 +1550,7 @@ The identifier for the Mersenne instance.
 ```ts
 name: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property p
 
@@ -1466,7 +1566,7 @@ See also: [BigNumber](./primitives.md#class-bignumber)
 Performs an in-place multiplication of the parameter by constant k.
 
 ```ts
-imulK(num: BigNumber): BigNumber 
+imulK(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1491,7 +1591,7 @@ Reduces an input BigNumber in place, under the assumption that
 it is less than the square of the pseudo-Mersenne prime.
 
 ```ts
-ireduce(num: BigNumber): BigNumber 
+ireduce(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1516,7 +1616,7 @@ Shifts bits of the input BigNumber to the right, in place,
 to meet the magnitude of the pseudo-Mersenne prime.
 
 ```ts
-split(input: BigNumber, out: BigNumber): void 
+split(input: BigNumber, out: BigNumber): void
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1554,12 +1654,12 @@ export default class MontgomoryMethod extends ReductionContext {
     r2: BigNumber;
     rinv: BigNumber;
     minv: BigNumber;
-    constructor(m: BigNumber | "k256") 
-    convertTo(num: BigNumber): BigNumber 
-    convertFrom(num: BigNumber): BigNumber 
-    imul(a: BigNumber, b: BigNumber): BigNumber 
-    mul(a: BigNumber, b: BigNumber): BigNumber 
-    invm(a: BigNumber): BigNumber 
+    constructor(m: BigNumber | "k256")
+    override convertTo(num: BigNumber): BigNumber
+    override convertFrom(num: BigNumber): BigNumber
+    override imul(a: BigNumber, b: BigNumber): BigNumber
+    override mul(a: BigNumber, b: BigNumber): BigNumber
+    override invm(a: BigNumber): BigNumber
 }
 ```
 
@@ -1568,7 +1668,7 @@ See also: [BigNumber](./primitives.md#class-bignumber), [ReductionContext](./pri
 #### Constructor
 
 ```ts
-constructor(m: BigNumber | "k256") 
+constructor(m: BigNumber | "k256")
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1626,7 +1726,7 @@ shift: number
 Converts a number from the Montgomery domain back to the original domain.
 
 ```ts
-convertFrom(num: BigNumber): BigNumber 
+override convertFrom(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1651,7 +1751,7 @@ const convertedNum = montMethod.convertFrom(num);
 Converts a number into the Montgomery domain.
 
 ```ts
-convertTo(num: BigNumber): BigNumber 
+override convertTo(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1676,7 +1776,7 @@ const convertedNum = montMethod.convertTo(num);
 Performs an in-place multiplication of two numbers in the Montgomery domain.
 
 ```ts
-imul(a: BigNumber, b: BigNumber): BigNumber 
+override imul(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1703,7 +1803,7 @@ const product = montMethod.imul(a, b);
 Calculates the modular multiplicative inverse of a number in the Montgomery domain.
 
 ```ts
-invm(a: BigNumber): BigNumber 
+override invm(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1728,7 +1828,7 @@ const inverse = montMethod.invm(a);
 Performs the multiplication of two numbers in the Montgomery domain.
 
 ```ts
-mul(a: BigNumber, b: BigNumber): BigNumber 
+override mul(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -1764,15 +1864,15 @@ export default class Point extends BasePoint {
     x: BigNumber | null;
     y: BigNumber | null;
     inf: boolean;
-    static _assertOnCurve(p: Point): Point 
-    static fromDER(bytes: number[]): Point 
-    static fromString(str: string): Point 
-    static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point 
-    static fromJSON(obj: string | any[], isRed: boolean): Point 
-    constructor(x: BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null, isRed: boolean = true) 
-    validate(): boolean 
-    encode(compact: boolean = true, enc?: "hex"): number[] | string 
-    toString(): string 
+    static _assertOnCurve(p: Point): Point
+    static fromDER(bytes: number[]): Point
+    static fromString(str: string): Point
+    static fromX(x: PointInput, odd: boolean): Point
+    static fromJSON(obj: string | any[], isRed: boolean): Point
+    constructor(x: PointInput | null, y: PointInput | null, isRed: boolean = true)
+    validate(): boolean
+    encode(compact: boolean = true, enc?: "hex"): number[] | string
+    override toString(): string
     toJSON(): [
         BigNumber | null,
         BigNumber | null,
@@ -1786,32 +1886,41 @@ export default class Point extends BasePoint {
                 points: any[];
             } | undefined;
         }?
-    ] 
-    inspect(): string 
-    isInfinity(): boolean 
-    add(p: Point): Point 
-    dbl(): Point 
-    getX(): BigNumber 
-    getY(): BigNumber 
-    mul(k: BigNumber | number | number[] | string): Point 
-    mulCT(k: BigNumber | number | number[] | string): Point 
-    mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point 
-    jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint 
-    eq(p: Point): boolean 
-    neg(_precompute?: boolean): Point 
-    dblp(k: number): Point 
-    toJ(): JPoint 
+    ]
+    inspect(): string
+    isInfinity(): boolean
+    add(p: Point): Point
+    dbl(): Point
+    getX(): BigNumber
+    getY(): BigNumber
+    mul(k: PointInput): Point
+    mulCT(k: PointInput): Point
+    mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point
+    jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint
+    eq(p: Point): boolean
+    neg(_precompute?: boolean): Point
+    dblp(k: number): Point
+    toJ(): JPoint
+    #_getBeta(): undefined | Point
+    #_prepareWnafWindows(defW: number, points: Point[], len: number, wndWidth: number[], wnd: Point[][]): void
+    #_prepareWnafRepresentations(points: Point[], coeffs: BigNumber[], len: number, wndWidth: number[], wnd: Point[][], naf: number[][]): number
+    #_addWnafStep(accumulator: JPoint, len: number, tmp: BigNumber[], wnd: Point[][]): JPoint
+    #_wnafMulAdd(defW: number, points: Point[], coeffs: BigNumber[], len: number, jacobianResult?: boolean): BasePoint
+    #_endoWnafMulAdd(points: Point[], coeffs: BigNumber[], jacobianResult?: boolean): BasePoint
+    #_getNAFPoints(wnd: number): {
+        wnd: number;
+        points: any[];
+    }
 }
 ```
 
-See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives.md#class-bignumber), [encode](./primitives.md#variable-encode)
+See also: [BasePoint](./primitives.md#class-basepoint), [BigNumber](./primitives.md#class-bignumber), [encode](./primitives.md#variable-encode), [string](./remittance.md#function-string)
 
 #### Constructor
 
 ```ts
-constructor(x: BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null, isRed: boolean = true) 
+constructor(x: PointInput | null, y: PointInput | null, isRed: boolean = true)
 ```
-See also: [BigNumber](./primitives.md#class-bignumber)
 
 Argument Details
 
@@ -1860,7 +1969,7 @@ See also: [BigNumber](./primitives.md#class-bignumber)
 Adds another Point to this Point, returning a new Point.
 
 ```ts
-add(p: Point): Point 
+add(p: Point): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -1886,7 +1995,7 @@ const result = p1.add(p2);
 Doubles the current point.
 
 ```ts
-dbl(): Point 
+dbl(): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -1905,7 +2014,7 @@ If the point is at infinity, it simply returns the point because doubling
 a point at infinity is still infinity.
 
 ```ts
-dblp(k: number): Point 
+dblp(k: number): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -1931,8 +2040,9 @@ Encodes the coordinates of a point into an array or a hexadecimal string.
 The details of encoding are determined by the optional compact and enc parameters.
 
 ```ts
-encode(compact: boolean = true, enc?: "hex"): number[] | string 
+encode(compact: boolean = true, enc?: "hex"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1962,7 +2072,7 @@ const encodedPointHex = aPoint.encode(true, 'hex');
 Checks if the Point instance is equal to another given Point.
 
 ```ts
-eq(p: Point): boolean 
+eq(p: Point): boolean
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -1990,7 +2100,7 @@ in multiple established formats.
 The function verifies the integrity of the provided data and throws errors if inconsistencies are found.
 
 ```ts
-static fromDER(bytes: number[]): Point 
+static fromDER(bytes: number[]): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -2023,9 +2133,9 @@ including precomputed values for optimization of EC operations, and calls anothe
 JSON points into proper Point objects.
 
 ```ts
-static fromJSON(obj: string | any[], isRed: boolean): Point 
+static fromJSON(obj: string | any[], isRed: boolean): Point
 ```
-See also: [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2052,9 +2162,9 @@ in multiple established formats.
 The function verifies the integrity of the provided data and throws errors if inconsistencies are found.
 
 ```ts
-static fromString(str: string): Point 
+static fromString(str: string): Point
 ```
-See also: [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2084,9 +2194,9 @@ Generates a point from an x coordinate and a boolean indicating whether the corr
 y coordinate is odd.
 
 ```ts
-static fromX(x: BigNumber | number | number[] | string, odd: boolean): Point 
+static fromX(x: PointInput, odd: boolean): Point
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point)
 
 Returns
 
@@ -2115,7 +2225,7 @@ const point = Point.fromX(xCoordinate, true);
 Returns X coordinate of point
 
 ```ts
-getX(): BigNumber 
+getX(): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -2131,7 +2241,7 @@ const x = P.getX();
 Returns X coordinate of point
 
 ```ts
-getY(): BigNumber 
+getY(): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -2147,8 +2257,9 @@ const x = P.getX();
 Provides the point coordinates in a human-readable string format for debugging purposes.
 
 ```ts
-inspect(): string 
+inspect(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2166,7 +2277,7 @@ console.log(aPoint.inspect());
 Checks if the point is at infinity.
 
 ```ts
-isInfinity(): boolean 
+isInfinity(): boolean
 ```
 
 Returns
@@ -2186,7 +2297,7 @@ Performs the Jacobian multiplication and addition operation in a single
 step. Instead of returning a regular Point, the result is a JacobianPoint.
 
 ```ts
-jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint 
+jmulAdd(k1: BigNumber, p2: Point, k2: BigNumber): JPoint
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
 
@@ -2216,9 +2327,9 @@ const result = p1.jmulAdd(2, p2, 3);
 Multiplies this Point by a scalar value, returning a new Point.
 
 ```ts
-mul(k: BigNumber | number | number[] | string): Point 
+mul(k: PointInput): Point
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [Point](./primitives.md#class-point)
 
 Returns
 
@@ -2242,7 +2353,7 @@ Performs a multiplication and addition operation in a single step.
 Multiplies this Point by k1, adds the resulting Point to the result of p2 multiplied by k2.
 
 ```ts
-mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point 
+mulAdd(k1: BigNumber, p2: Point, k2: BigNumber): Point
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
 
@@ -2272,7 +2383,7 @@ const result = p1.mulAdd(2, p2, 3);
 Negate a point. The negation of a point P is the mirror of P about x-axis.
 
 ```ts
-neg(_precompute?: boolean): Point 
+neg(_precompute?: boolean): Point
 ```
 See also: [Point](./primitives.md#class-point)
 
@@ -2289,7 +2400,7 @@ Converts the point to a Jacobian point. If the point is at infinity, the corresp
 will also be at infinity.
 
 ```ts
-toJ(): JPoint 
+toJ(): JPoint
 ```
 
 Returns
@@ -2321,7 +2432,7 @@ toJSON(): [
             points: any[];
         } | undefined;
     }?
-] 
+]
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -2344,8 +2455,9 @@ Converts the point coordinates to a hexadecimal string. A wrapper method
 for encode. Byte 0x02 or 0x03 is used as prefix based on the 'y' coordinate being even or odd respectively.
 
 ```ts
-toString(): string 
+override toString(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2364,7 +2476,7 @@ Validates if a point belongs to the curve. Follows the short Weierstrass
 equation for elliptic curves: y^2 = x^3 + ax + b.
 
 ```ts
-validate(): boolean 
+validate(): boolean
 ```
 
 Returns
@@ -2387,21 +2499,22 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class PointInFiniteField {
     x: BigNumber;
     y: BigNumber;
-    constructor(x: BigNumber, y: BigNumber) 
-    toString(): string 
-    static fromString(str: string): PointInFiniteField 
+    constructor(x: BigNumber, y: BigNumber)
+    toString(): string
+    static fromString(str: string): PointInFiniteField
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string)
 
 #### Method toString
 
 function toString() { [native code] }
 
 ```ts
-toString(): string 
+toString(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2425,9 +2538,9 @@ const polynomial = new Polynomial(key, threshold)
 export default class Polynomial {
     readonly points: PointInFiniteField[];
     readonly threshold: number;
-    constructor(points: PointInFiniteField[], threshold?: number) 
-    static fromPrivateKey(key: PrivateKey, threshold: number): Polynomial 
-    valueAt(x: BigNumber): BigNumber 
+    constructor(points: PointInFiniteField[], threshold?: number)
+    static fromPrivateKey(key: PrivateKey, threshold: number): Polynomial
+    valueAt(x: BigNumber): BigNumber
 }
 ```
 
@@ -2445,40 +2558,40 @@ create a corresponding public key and derive a shared secret from a public key.
 
 ```ts
 export default class PrivateKey extends BigNumber {
-    static fromRandom(): PrivateKey 
-    static fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
-    static fromHex(str: string): PrivateKey 
-    static fromWif(wif: string, prefixLength: number = 1): PrivateKey 
-    constructor(number: BigNumber | number | string | number[] = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be", modN: "apply" | "nocheck" | "error" = "apply") 
+    static fromRandom(): PrivateKey
+    static override fromString(str: string, base: number | "hex" = "hex"): PrivateKey
+    static override fromHex(str: string): PrivateKey
+    static fromWif(wif: string, prefixLength: number = 1): PrivateKey
+    constructor(number: BigNumber | number | string | number[] = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be", modN: "apply" | "nocheck" | "error" = "apply")
     checkInField(): {
         inField: boolean;
         modN: BigNumber;
-    } 
-    isValid(): boolean 
-    sign(msg: number[] | string, enc?: "hex" | "utf8", forceLowS: boolean = true, customK?: ((iter: number) => BigNumber) | BigNumber): Signature 
-    verify(msg: number[] | string, sig: Signature, enc?: "hex"): boolean 
-    toPublicKey(): PublicKey 
-    toWif(prefix: number[] = [128]): string 
-    toAddress(prefix: number[] | string = [0]): string 
-    toHex(): string 
-    toString(base: number | "hex" = "hex", padding: number = 64): string 
-    deriveSharedSecret(key: PublicKey): Point 
-    deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PrivateKey 
-    toKeyShares(threshold: number, totalShares: number): KeyShares 
-    toBackupShares(threshold: number, totalShares: number): string[] 
-    static fromBackupShares(shares: string[]): PrivateKey 
-    static fromKeyShares(keyShares: KeyShares): PrivateKey 
+    }
+    isValid(): boolean
+    sign(msg: number[] | string, enc?: "hex" | "utf8", forceLowS: boolean = true, customK?: ((iter: number) => BigNumber) | BigNumber): Signature
+    verify(msg: number[] | string, sig: Signature, enc?: "hex"): boolean
+    toPublicKey(): PublicKey
+    toWif(prefix: number[] = [128]): string
+    toAddress(prefix: number[] | string = [0]): string
+    override toHex(): string
+    override toString(base: number | "hex" = "hex", padding: number = 64): string
+    deriveSharedSecret(key: PublicKey): Point
+    deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PrivateKey
+    toKeyShares(threshold: number, totalShares: number): KeyShares
+    toBackupShares(threshold: number, totalShares: number): string[]
+    static fromBackupShares(shares: string[]): PrivateKey
+    static fromKeyShares(keyShares: KeyShares): PrivateKey
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [KeyShares](./primitives.md#class-keyshares), [Point](./primitives.md#class-point), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature), [modN](./primitives.md#variable-modn), [sign](./compat.md#variable-sign), [toHex](./primitives.md#variable-tohex), [verify](./compat.md#variable-verify)
+See also: [BigNumber](./primitives.md#class-bignumber), [KeyShares](./primitives.md#class-keyshares), [Point](./primitives.md#class-point), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature), [modN](./primitives.md#variable-modn), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [verify](./compat.md#variable-verify)
 
 #### Constructor
 
 ```ts
-constructor(number: BigNumber | number | string | number[] = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be", modN: "apply" | "nocheck" | "error" = "apply") 
+constructor(number: BigNumber | number | string | number[] = 0, base: number | "be" | "le" | "hex" = 10, endian: "be" | "le" = "be", modN: "apply" | "nocheck" | "error" = "apply")
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [modN](./primitives.md#variable-modn)
+See also: [BigNumber](./primitives.md#class-bignumber), [modN](./primitives.md#variable-modn), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -2507,7 +2620,7 @@ A utility function to check that the value of this PrivateKey lies in the field 
 checkInField(): {
     inField: boolean;
     modN: BigNumber;
-} 
+}
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [modN](./primitives.md#variable-modn)
 
@@ -2546,9 +2659,9 @@ peer authentication will require a versioned, breaking change.
 Derives a child key with BRC-42.
 
 ```ts
-deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PrivateKey 
+deriveChild(publicKey: PublicKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PrivateKey
 ```
-See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
+See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2570,7 +2683,7 @@ Argument Details
 Derives a shared secret from the public key.
 
 ```ts
-deriveSharedSecret(key: PublicKey): Point 
+deriveSharedSecret(key: PublicKey): Point
 ```
 See also: [Point](./primitives.md#class-point), [PublicKey](./primitives.md#class-publickey)
 
@@ -2598,9 +2711,9 @@ const sharedSecret = privateKey.deriveSharedSecret(publicKey);
 #### Method fromBackupShares
 
 ```ts
-static fromBackupShares(shares: string[]): PrivateKey 
+static fromBackupShares(shares: string[]): PrivateKey
 ```
-See also: [PrivateKey](./primitives.md#class-privatekey)
+See also: [PrivateKey](./primitives.md#class-privatekey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2620,9 +2733,9 @@ const recoveredKey = PrivateKey.fromBackupShares([share1, share2])
 Generates a private key from a hexadecimal string.
 
 ```ts
-static fromHex(str: string): PrivateKey 
+static override fromHex(str: string): PrivateKey
 ```
-See also: [PrivateKey](./primitives.md#class-privatekey)
+See also: [PrivateKey](./primitives.md#class-privatekey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2642,7 +2755,7 @@ If the string is not a valid hexadecimal or represents an invalid private key.
 Combines shares to reconstruct the private key.
 
 ```ts
-static fromKeyShares(keyShares: KeyShares): PrivateKey 
+static fromKeyShares(keyShares: KeyShares): PrivateKey
 ```
 See also: [KeyShares](./primitives.md#class-keyshares), [PrivateKey](./primitives.md#class-privatekey)
 
@@ -2662,7 +2775,7 @@ Argument Details
 Generates a private key randomly.
 
 ```ts
-static fromRandom(): PrivateKey 
+static fromRandom(): PrivateKey
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
@@ -2681,9 +2794,9 @@ const privateKey = PrivateKey.fromRandom();
 Generates a private key from a string.
 
 ```ts
-static fromString(str: string, base: number | "hex" = "hex"): PrivateKey 
+static override fromString(str: string, base: number | "hex" = "hex"): PrivateKey
 ```
-See also: [PrivateKey](./primitives.md#class-privatekey)
+See also: [PrivateKey](./primitives.md#class-privatekey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2705,9 +2818,9 @@ Will throw an error if the string is not valid.
 Generates a private key from a WIF (Wallet Import Format) string.
 
 ```ts
-static fromWif(wif: string, prefixLength: number = 1): PrivateKey 
+static fromWif(wif: string, prefixLength: number = 1): PrivateKey
 ```
-See also: [PrivateKey](./primitives.md#class-privatekey)
+See also: [PrivateKey](./primitives.md#class-privatekey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2727,7 +2840,7 @@ Will throw an error if the string is not a valid WIF.
 #### Method isValid
 
 ```ts
-isValid(): boolean 
+isValid(): boolean
 ```
 
 Returns
@@ -2739,9 +2852,9 @@ true if the PrivateKey's current BigNumber value lies in the field limited by cu
 Signs a message using the private key.
 
 ```ts
-sign(msg: number[] | string, enc?: "hex" | "utf8", forceLowS: boolean = true, customK?: ((iter: number) => BigNumber) | BigNumber): Signature 
+sign(msg: number[] | string, enc?: "hex" | "utf8", forceLowS: boolean = true, customK?: ((iter: number) => BigNumber) | BigNumber): Signature
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Signature](./primitives.md#class-signature)
+See also: [BigNumber](./primitives.md#class-bignumber), [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2771,8 +2884,9 @@ Base58Check encodes the hash of the public key associated with this private key 
 Defaults to P2PKH for mainnet, otherwise known as a "Bitcoin Address".
 
 ```ts
-toAddress(prefix: number[] | string = [0]): string 
+toAddress(prefix: number[] | string = [0]): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2795,8 +2909,9 @@ const testnetAddress = privkey.toAddress('testnet')
 #### Method toBackupShares
 
 ```ts
-toBackupShares(threshold: number, totalShares: number): string[] 
+toBackupShares(threshold: number, totalShares: number): string[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -2804,14 +2919,16 @@ Argument Details
   + The number of shares which will be required to reconstruct the private key.
 + **totalShares**
   + The number of shares to generate for distribution.
+Both values must be safe integers from 2 through 255.
 
 #### Method toHex
 
 Converts this PrivateKey to a hexadecimal string.
 
 ```ts
-toHex(): string 
+override toHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2834,7 +2951,7 @@ const hex = bigNumber.toHex();
 Splits the private key into shares using Shamir's Secret Sharing Scheme.
 
 ```ts
-toKeyShares(threshold: number, totalShares: number): KeyShares 
+toKeyShares(threshold: number, totalShares: number): KeyShares
 ```
 See also: [KeyShares](./primitives.md#class-keyshares)
 
@@ -2848,6 +2965,7 @@ Argument Details
   + The minimum number of shares required to reconstruct the private key.
 + **totalShares**
   + The total number of shares to generate.
+Both values must be safe integers from 2 through 255.
 + **prime**
   + The prime number to be used in Shamir's Secret Sharing Scheme.
 
@@ -2865,7 +2983,7 @@ Converts the private key to its corresponding public key.
 The public key is generated by multiplying the base point G of the curve and the private key.
 
 ```ts
-toPublicKey(): PublicKey 
+toPublicKey(): PublicKey
 ```
 See also: [PublicKey](./primitives.md#class-publickey)
 
@@ -2887,8 +3005,9 @@ function toString() { [native code] }
 Converts this PrivateKey to a string representation.
 
 ```ts
-toString(base: number | "hex" = "hex", padding: number = 64): string 
+override toString(base: number | "hex" = "hex", padding: number = 64): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2909,8 +3028,9 @@ Base58Check encoding is used for encoding the private key.
 The prefix
 
 ```ts
-toWif(prefix: number[] = [128]): string 
+toWif(prefix: number[] = [128]): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2938,9 +3058,9 @@ const testnetWif = privateKey.toWif([0xef]);
 Verifies a message's signature using the public key associated with this private key.
 
 ```ts
-verify(msg: number[] | string, sig: Signature, enc?: "hex"): boolean 
+verify(msg: number[] | string, sig: Signature, enc?: "hex"): boolean
 ```
-See also: [Signature](./primitives.md#class-signature)
+See also: [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2973,28 +3093,28 @@ The class comes with static methods to generate PublicKey instances from private
 
 ```ts
 export default class PublicKey extends Point {
-    static fromPrivateKey(key: PrivateKey): PublicKey 
-    static fromString(str: string): PublicKey 
-    static fromDER(bytes: number[]): PublicKey 
-    constructor(x: Point | BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null = null, isRed: boolean = true) 
-    deriveSharedSecret(priv: PrivateKey): Point 
-    verify(msg: number[] | string, sig: Signature, enc?: "hex" | "utf8"): boolean 
-    toDER(enc?: "hex" | undefined): number[] | string 
-    toHash(enc?: "hex"): number[] | string 
-    toAddress(prefix: number[] | string = [0]): string 
-    deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PublicKey 
-    static fromMsgHashAndCompactSignature(msgHash: BigNumber, signature: number[] | string, enc?: "hex" | "base64"): PublicKey 
+    static fromPrivateKey(key: PrivateKey): PublicKey
+    static override fromString(str: string): PublicKey
+    static override fromDER(bytes: number[]): PublicKey
+    constructor(x: Point | BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null = null, isRed: boolean = true)
+    deriveSharedSecret(priv: PrivateKey): Point
+    verify(msg: number[] | string, sig: Signature, enc?: "hex" | "utf8"): boolean
+    toDER(enc?: "hex" | undefined): number[] | string
+    toHash(enc?: "hex"): number[] | string
+    toAddress(prefix: number[] | string = [0]): string
+    deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PublicKey
+    static fromMsgHashAndCompactSignature(msgHash: BigNumber, signature: number[] | string, enc?: "hex" | "base64"): PublicKey
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature), [verify](./compat.md#variable-verify)
+See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string), [verify](./compat.md#variable-verify)
 
 #### Constructor
 
 ```ts
-constructor(x: Point | BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null = null, isRed: boolean = true) 
+constructor(x: Point | BigNumber | number | number[] | string | null, y: BigNumber | number | number[] | string | null = null, isRed: boolean = true)
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
+See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -3017,9 +3137,9 @@ new PublicKey('abc123', 'def456');
 Derives a child key with BRC-42.
 
 ```ts
-deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: ((priv: PrivateKey, pub: Point, point: Point) => void), retrieveCachedSharedSecret?: ((priv: PrivateKey, pub: Point) => (Point | undefined))): PublicKey 
+deriveChild(privateKey: PrivateKey, invoiceNumber: string, cacheSharedSecret?: (priv: PrivateKey, pub: Point, point: Point) => void, retrieveCachedSharedSecret?: (priv: PrivateKey, pub: Point) => Point | undefined): PublicKey
 ```
-See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
+See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -3042,7 +3162,7 @@ Derive a shared secret from a public key and a private key for use in symmetric 
 This method multiplies the public key (an instance of Point) with a private key.
 
 ```ts
-deriveSharedSecret(priv: PrivateKey): Point 
+deriveSharedSecret(priv: PrivateKey): Point
 ```
 See also: [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey)
 
@@ -3071,7 +3191,7 @@ const sharedSecret = myPubKey.deriveSharedSecret(myPrivKey)
 Static factory method to create a PublicKey instance from a number array.
 
 ```ts
-static fromDER(bytes: number[]): PublicKey 
+static override fromDER(bytes: number[]): PublicKey
 ```
 See also: [PublicKey](./primitives.md#class-publickey)
 
@@ -3100,9 +3220,9 @@ compactByte value 27-30 means uncompressed public key.
 The range represents the recovery param which can be 0,1,2,3.
 
 ```ts
-static fromMsgHashAndCompactSignature(msgHash: BigNumber, signature: number[] | string, enc?: "hex" | "base64"): PublicKey 
+static fromMsgHashAndCompactSignature(msgHash: BigNumber, signature: number[] | string, enc?: "hex" | "base64"): PublicKey
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey)
+See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -3129,7 +3249,7 @@ Static factory method to derive a public key from a private key.
 It multiplies the generator point 'g' on the elliptic curve by the private key.
 
 ```ts
-static fromPrivateKey(key: PrivateKey): PublicKey 
+static fromPrivateKey(key: PrivateKey): PublicKey
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -3154,9 +3274,9 @@ const myPubKey = PublicKey.fromPrivateKey(myPrivKey)
 Static factory method to create a PublicKey instance from a string.
 
 ```ts
-static fromString(str: string): PublicKey 
+static override fromString(str: string): PublicKey
 ```
-See also: [PublicKey](./primitives.md#class-publickey)
+See also: [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -3179,8 +3299,9 @@ Base58Check encodes the hash of the public key with a prefix to indicate locking
 Defaults to P2PKH for mainnet, otherwise known as a "Bitcoin Address".
 
 ```ts
-toAddress(prefix: number[] | string = [0]): string 
+toAddress(prefix: number[] | string = [0]): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -3205,8 +3326,9 @@ const testnetAddress = pubkey.toAddress('testnet')
 Encode the public key to DER (Distinguished Encoding Rules) format.
 
 ```ts
-toDER(enc?: "hex" | undefined): number[] | string 
+toDER(enc?: "hex" | undefined): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -3228,8 +3350,9 @@ const derPublicKey = myPubKey.toDER()
 Hash sha256 and ripemd160 of the public key.
 
 ```ts
-toHash(enc?: "hex"): number[] | string 
+toHash(enc?: "hex"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -3246,9 +3369,9 @@ const publicKeyHash = pubkey.toHash()
 Verify a signature of a message using this public key.
 
 ```ts
-verify(msg: number[] | string, sig: Signature, enc?: "hex" | "utf8"): boolean 
+verify(msg: number[] | string, sig: Signature, enc?: "hex" | "utf8"): boolean
 ```
-See also: [Signature](./primitives.md#class-signature)
+See also: [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Returns
 
@@ -3290,12 +3413,14 @@ const ripemd160 = new RIPEMD160();
 ```ts
 export class RIPEMD160 extends BaseHash {
     h: number[];
-    constructor() 
-    _update(msg: number[], start: number): void 
-    _digest(): number[] 
-    _digestHex(): string 
+    constructor()
+    _update(msg: number[], start: number): void
+    _digest(): number[]
+    _digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 #### Property h
 
@@ -3314,30 +3439,41 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export class Reader {
     public bin: number[];
     public pos: number;
-    constructor(bin: number[] = [], pos: number = 0) 
-    public eof(): boolean 
-    public read(len = this.length): number[] 
-    public readReverse(len = this.length): number[] 
-    public readUInt8(): number 
-    public readInt8(): number 
-    public readUInt16BE(): number 
-    public readInt16BE(): number 
-    public readUInt16LE(): number 
-    public readInt16LE(): number 
-    public readUInt32BE(): number 
-    public readInt32BE(): number 
-    public readUInt32LE(): number 
-    public readInt32LE(): number 
-    public readUInt64BEBn(): BigNumber 
-    public readUInt64LEBn(): BigNumber 
-    public readInt64LEBn(): BigNumber 
-    public readVarIntNum(signed: boolean = true): number 
-    public readVarInt(): number[] 
-    public readVarIntBn(): BigNumber 
+    constructor(bin: number[] = [], pos: number = 0)
+    public eof(): boolean
+    public read(len = this.length - this.pos): number[]
+    public readReverse(len = this.length - this.pos): number[]
+    public readUInt8(): number
+    public readInt8(): number
+    public readUInt16BE(): number
+    public readInt16BE(): number
+    public readUInt16LE(): number
+    public readInt16LE(): number
+    public readUInt32BE(): number
+    public readInt32BE(): number
+    public readUInt32LE(): number
+    public readInt32LE(): number
+    public readUInt64BEBn(): BigNumber
+    public readUInt64LEBn(): BigNumber
+    public readInt64LEBn(): BigNumber
+    public readVarIntNum(signed: boolean = true): number
+    public readVarIntNumStrict(signed: boolean = true): number
+    public readVarInt(): number[]
+    public readVarIntBn(): BigNumber
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber)
+See also: [BigNumber](./primitives.md#class-bignumber), [readVarIntNumStrict](./primitives.md#function-readvarintnumstrict)
+
+#### Method readVarIntNumStrict
+
+Reads a canonical CompactSize value that can be represented exactly by
+JavaScript. The legacy `-1` sentinel is accepted when `signed` is true;
+pass `false` for untrusted lengths, counts, and indexes.
+
+```ts
+public readVarIntNumStrict(signed: boolean = true): number
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3350,31 +3486,55 @@ Reader for serialized Uint8Array binary data.
 export class ReaderUint8Array {
     public bin: Uint8Array;
     public pos: number;
-    static makeReader(bin: Uint8Array | number[], pos: number = 0): Reader | ReaderUint8Array 
-    constructor(bin: Uint8Array | number[] = new Uint8Array(0), pos: number = 0) 
-    public eof(): boolean 
-    public read(len = this.length): Uint8Array 
-    public readReverse(len = this.length): Uint8Array 
-    public readUInt8(): number 
-    public readInt8(): number 
-    public readUInt16BE(): number 
-    public readInt16BE(): number 
-    public readUInt16LE(): number 
-    public readInt16LE(): number 
-    public readUInt32BE(): number 
-    public readInt32BE(): number 
-    public readUInt32LE(): number 
-    public readInt32LE(): number 
-    public readUInt64BEBn(): BigNumber 
-    public readUInt64LEBn(): BigNumber 
-    public readInt64LEBn(): BigNumber 
-    public readVarIntNum(signed: boolean = true): number 
-    public readVarInt(): Uint8Array 
-    public readVarIntBn(): BigNumber 
+    readonly #length: number;
+    static makeReader(bin: Uint8Array | number[], pos: number = 0): Reader | ReaderUint8Array
+    constructor(bin: Uint8Array | number[] = new Uint8Array(0), pos: number = 0)
+    #ensureAvailable(len: number): void
+    public eof(): boolean
+    public read(len = this.#length - this.pos): Uint8Array
+    public readView(len = this.#length - this.pos): Uint8Array
+    public skip(len: number): void
+    public remaining(): number
+    public readReverse(len = this.#length - this.pos): Uint8Array
+    public readUInt8(): number
+    public readInt8(): number
+    public readUInt16BE(): number
+    public readInt16BE(): number
+    public readUInt16LE(): number
+    public readInt16LE(): number
+    public readUInt32BE(): number
+    public readInt32BE(): number
+    public readUInt32LE(): number
+    public readInt32LE(): number
+    public readUInt64BEBn(): BigNumber
+    public readUInt64LEBn(): BigNumber
+    public readInt64LEBn(): BigNumber
+    public readVarIntNum(signed: boolean = true): number
+    public readVarIntNumStrict(signed: boolean = true): number
+    public readVarInt(): Uint8Array
+    public readVarIntBn(): BigNumber
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [Reader](./primitives.md#class-reader)
+See also: [BigNumber](./primitives.md#class-bignumber), [Reader](./primitives.md#class-reader), [readVarIntNumStrict](./primitives.md#function-readvarintnumstrict)
+
+#### Method readVarIntNumStrict
+
+Reads a canonical CompactSize value that can be represented exactly by
+JavaScript. The legacy `-1` sentinel is accepted when `signed` is true;
+pass `false` for untrusted lengths, counts, and indexes.
+
+```ts
+public readVarIntNumStrict(signed: boolean = true): number
+```
+
+#### Method skip
+
+Advances without allocating.
+
+```ts
+public skip(len: number): void
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3397,25 +3557,25 @@ calculations required in cryptography algorithms and encoding schemas.
 export default class ReductionContext {
     prime: Mersenne | null;
     m: BigNumber;
-    constructor(m: BigNumber | "k256") 
-    verify1(a: BigNumber): void 
-    verify2(a: BigNumber, b: BigNumber): void 
-    imod(a: BigNumber): BigNumber 
-    neg(a: BigNumber): BigNumber 
-    add(a: BigNumber, b: BigNumber): BigNumber 
-    iadd(a: BigNumber, b: BigNumber): BigNumber 
-    sub(a: BigNumber, b: BigNumber): BigNumber 
-    isub(a: BigNumber, b: BigNumber): BigNumber 
-    shl(a: BigNumber, num: number): BigNumber 
-    imul(a: BigNumber, b: BigNumber): BigNumber 
-    mul(a: BigNumber, b: BigNumber): BigNumber 
-    isqr(a: BigNumber): BigNumber 
-    sqr(a: BigNumber): BigNumber 
-    sqrt(a: BigNumber): BigNumber 
-    invm(a: BigNumber): BigNumber 
-    pow(a: BigNumber, num: BigNumber): BigNumber 
-    convertTo(num: BigNumber): BigNumber 
-    convertFrom(num: BigNumber): BigNumber 
+    constructor(m: BigNumber | "k256")
+    verify1(a: BigNumber): void
+    verify2(a: BigNumber, b: BigNumber): void
+    imod(a: BigNumber): BigNumber
+    neg(a: BigNumber): BigNumber
+    add(a: BigNumber, b: BigNumber): BigNumber
+    iadd(a: BigNumber, b: BigNumber): BigNumber
+    sub(a: BigNumber, b: BigNumber): BigNumber
+    isub(a: BigNumber, b: BigNumber): BigNumber
+    shl(a: BigNumber, num: number): BigNumber
+    imul(a: BigNumber, b: BigNumber): BigNumber
+    mul(a: BigNumber, b: BigNumber): BigNumber
+    isqr(a: BigNumber): BigNumber
+    sqr(a: BigNumber): BigNumber
+    sqrt(a: BigNumber): BigNumber
+    invm(a: BigNumber): BigNumber
+    pow(a: BigNumber, num: BigNumber): BigNumber
+    convertTo(num: BigNumber): BigNumber
+    convertFrom(num: BigNumber): BigNumber
 }
 ```
 
@@ -3426,7 +3586,7 @@ See also: [BigNumber](./primitives.md#class-bignumber), [Mersenne](./primitives.
 Constructs a new ReductionContext.
 
 ```ts
-constructor(m: BigNumber | "k256") 
+constructor(m: BigNumber | "k256")
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3465,7 +3625,7 @@ See also: [Mersenne](./primitives.md#class-mersenne)
 Performs the addition operation on two BigNumbers in the reduction context.
 
 ```ts
-add(a: BigNumber, b: BigNumber): BigNumber 
+add(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3492,7 +3652,7 @@ context.add(new BigNumber(2), new BigNumber(4)); // Returns 1
 Converts a BigNumber from reduction context to its regular form.
 
 ```ts
-convertFrom(num: BigNumber): BigNumber 
+convertFrom(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3518,7 +3678,7 @@ context.convertFrom(a); // Returns 1
 Converts a BigNumber to its equivalent in the reduction context.
 
 ```ts
-convertTo(num: BigNumber): BigNumber 
+convertTo(num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3544,7 +3704,7 @@ Performs an in-place addition operation on two BigNumbers in the reduction conte
 in order to avoid creating a new BigNumber, it modifies the first one with the result.
 
 ```ts
-iadd(a: BigNumber, b: BigNumber): BigNumber 
+iadd(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3572,7 +3732,7 @@ context.iadd(a, new BigNumber(4)); // Modifies 'a' to be 1
 Performs an in-place reduction of the given BigNumber by the modulus of the reduction context, 'm'.
 
 ```ts
-imod(a: BigNumber): BigNumber 
+imod(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3598,7 +3758,7 @@ Performs in-place multiplication of two BigNumbers in the reduction context,
 modifying the first BigNumber with the result.
 
 ```ts
-imul(a: BigNumber, b: BigNumber): BigNumber 
+imul(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3626,7 +3786,7 @@ context.imul(a, new BigNumber(2)); // Modifies 'a' to be 6
 Calculates the multiplicative inverse of a BigNumber in the reduction context.
 
 ```ts
-invm(a: BigNumber): BigNumber 
+invm(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3652,7 +3812,7 @@ Calculates the square of a BigNumber in the reduction context,
 modifying the original BigNumber with the result.
 
 ```ts
-isqr(a: BigNumber): BigNumber 
+isqr(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3679,7 +3839,7 @@ Performs in-place subtraction of one BigNumber from another in the reduction con
 it modifies the first BigNumber with the result.
 
 ```ts
-isub(a: BigNumber, b: BigNumber): BigNumber 
+isub(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3707,7 +3867,7 @@ context.isub(a, new BigNumber(2)); // Modifies 'a' to be 2
 Multiplies two BigNumbers in the reduction context.
 
 ```ts
-mul(a: BigNumber, b: BigNumber): BigNumber 
+mul(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3734,7 +3894,7 @@ context.mul(new BigNumber(3), new BigNumber(2)); // Returns 6
 Negates a BigNumber in the context of the modulus.
 
 ```ts
-neg(a: BigNumber): BigNumber 
+neg(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3759,7 +3919,7 @@ context.neg(new BigNumber(3)); // Returns 4
 Raises a BigNumber to a power in the reduction context.
 
 ```ts
-pow(a: BigNumber, num: BigNumber): BigNumber 
+pow(a: BigNumber, num: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3786,7 +3946,7 @@ context.pow(new BigNumber(3), new BigNumber(2)); // Returns 2 (3^2 % 7)
 Performs bitwise shift left operation on a BigNumber in the reduction context.
 
 ```ts
-shl(a: BigNumber, num: number): BigNumber 
+shl(a: BigNumber, num: number): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3813,7 +3973,7 @@ context.shl(new BigNumber(4), 2); // Returns 16
 Calculates the square of a BigNumber in the reduction context.
 
 ```ts
-sqr(a: BigNumber): BigNumber 
+sqr(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3838,7 +3998,7 @@ context.sqr(new BigNumber(3)); // Returns 2 (9 % 7 = 2)
 Calculates the square root of a BigNumber in the reduction context.
 
 ```ts
-sqrt(a: BigNumber): BigNumber 
+sqrt(a: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3863,7 +4023,7 @@ context.sqrt(new BigNumber(4)); // Returns 2
 Subtracts one BigNumber from another BigNumber in the reduction context.
 
 ```ts
-sub(a: BigNumber, b: BigNumber): BigNumber 
+sub(a: BigNumber, b: BigNumber): BigNumber
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3891,7 +4051,7 @@ Verifies that a BigNumber is positive and red. Throws an error if these
 conditions are not met.
 
 ```ts
-verify1(a: BigNumber): void 
+verify1(a: BigNumber): void
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3915,7 +4075,7 @@ that they have the same reduction context. Throws an error if these
 conditions are not met.
 
 ```ts
-verify2(a: BigNumber, b: BigNumber): void 
+verify2(a: BigNumber, b: BigNumber): void
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -3955,12 +4115,14 @@ export class SHA1 extends BaseHash {
     h: number[];
     W: number[];
     k: number[];
-    constructor() 
-    _update(msg: number[], start?: number): void 
-    _digest(): number[] 
-    _digestHex(): string 
+    constructor()
+    _update(msg: number[], start?: number): void
+    _digest(): number[]
+    _digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 #### Property W
 
@@ -3996,14 +4158,14 @@ export class SHA1HMAC {
     inner: SHA1;
     outer: SHA1;
     blockSize = 64;
-    constructor(key: number[] | string) 
-    update(msg: number[] | string, enc?: "hex"): SHA1HMAC 
-    digest(): number[] 
-    digestHex(): string 
+    constructor(key: number[] | string)
+    update(msg: number[] | string, enc?: "hex"): this
+    digest(): number[]
+    digestHex(): string
 }
 ```
 
-See also: [SHA1](./primitives.md#class-sha1)
+See also: [SHA1](./primitives.md#class-sha1), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4023,12 +4185,16 @@ const sha256 = new SHA256();
 
 ```ts
 export class SHA256 {
-    constructor() 
-    update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): this 
-    digest(): number[] 
-    digestHex(): string 
+    readonly #h?: FastSHA256;
+    readonly #native?: any;
+    constructor()
+    update(msg: HashInput, enc?: "hex" | "utf8"): this
+    digest(): number[]
+    digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4043,14 +4209,18 @@ This class also uses the SHA-256 cryptographic hash algorithm that produces a 25
 
 ```ts
 export class SHA256HMAC {
+    readonly #h?: HMAC<FastSHA256>;
+    readonly #native?: any;
     blockSize = 64;
     outSize = 32;
-    constructor(key: Uint8Array | number[] | string) 
-    update(msg: Uint8Array | number[] | string, enc?: "hex"): SHA256HMAC 
-    digest(): number[] 
-    digestHex(): string 
+    constructor(key: HashInput)
+    update(msg: HashInput, enc?: "hex"): this
+    digest(): number[]
+    digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 #### Constructor
 
@@ -4061,7 +4231,7 @@ If the key size is larger than the blockSize, it is digested using SHA-256.
 If the key size is less than the blockSize, it is padded with zeroes.
 
 ```ts
-constructor(key: Uint8Array | number[] | string) 
+constructor(key: HashInput)
 ```
 
 Argument Details
@@ -4096,7 +4266,7 @@ outSize = 32
 Finalizes the HMAC computation and returns the resultant hash.
 
 ```ts
-digest(): number[] 
+digest(): number[]
 ```
 
 Returns
@@ -4114,8 +4284,9 @@ let hashedMessage = myHMAC.digest();
 Finalizes the HMAC computation and returns the resultant hash as a hex string.
 
 ```ts
-digestHex(): string 
+digestHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4132,9 +4303,8 @@ let hashedMessage = myHMAC.digestHex();
 Updates the `SHA256HMAC` object with part of the message to be hashed.
 
 ```ts
-update(msg: Uint8Array | number[] | string, enc?: "hex"): SHA256HMAC 
+update(msg: HashInput, enc?: "hex"): this
 ```
-See also: [SHA256HMAC](./primitives.md#class-sha256hmac)
 
 Returns
 
@@ -4171,12 +4341,16 @@ const sha512 = new SHA512();
 
 ```ts
 export class SHA512 {
-    constructor() 
-    update(msg: number[] | string, enc?: "hex" | "utf8"): this 
-    digest(): number[] 
-    digestHex(): string 
+    readonly #h?: FastSHA512;
+    readonly #native?: any;
+    constructor()
+    update(msg: HashInput, enc?: "hex" | "utf8"): this
+    digest(): number[]
+    digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4191,14 +4365,18 @@ This class also uses the SHA-512 cryptographic hash algorithm that produces a 51
 
 ```ts
 export class SHA512HMAC {
+    readonly #h?: HMAC<FastSHA512>;
+    readonly #native?: any;
     blockSize = 128;
     outSize = 32;
-    constructor(key: Uint8Array | number[] | string) 
-    update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): SHA512HMAC 
-    digest(): number[] 
-    digestHex(): string 
+    constructor(key: HashInput)
+    update(msg: HashInput, enc?: "hex" | "utf8"): this
+    digest(): number[]
+    digestHex(): string
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 #### Constructor
 
@@ -4209,7 +4387,7 @@ If the key size is larger than the blockSize, it is digested using SHA-512.
 If the key size is less than the blockSize, it is padded with zeroes.
 
 ```ts
-constructor(key: Uint8Array | number[] | string) 
+constructor(key: HashInput)
 ```
 
 Argument Details
@@ -4244,7 +4422,7 @@ outSize = 32
 Finalizes the HMAC computation and returns the resultant hash.
 
 ```ts
-digest(): number[] 
+digest(): number[]
 ```
 
 Returns
@@ -4262,8 +4440,9 @@ let hashedMessage = myHMAC.digest();
 Finalizes the HMAC computation and returns the resultant hash as a hex string.
 
 ```ts
-digestHex(): string 
+digestHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4280,9 +4459,8 @@ let hashedMessage = myHMAC.digestHex();
 Updates the `SHA512HMAC` object with part of the message to be hashed.
 
 ```ts
-update(msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): SHA512HMAC 
+update(msg: HashInput, enc?: "hex" | "utf8"): this
 ```
-See also: [SHA512HMAC](./primitives.md#class-sha512hmac)
 
 Returns
 
@@ -4337,17 +4515,17 @@ console.log(`Proof is valid: ${isValid}`);
 ```
 ```ts
 export default class Schnorr {
-    constructor() 
+    constructor()
     generateProof(aArg: PrivateKey, AArg: PublicKey, BArg: PublicKey, S: Point): {
         R: Point;
         SPrime: Point;
         z: BigNumber;
-    } 
+    }
     verifyProof(A: Point, B: Point, S: Point, proof: {
         R: Point;
         SPrime: Point;
         z: BigNumber;
-    }): boolean 
+    }): boolean
 }
 ```
 
@@ -4362,7 +4540,7 @@ generateProof(aArg: PrivateKey, AArg: PublicKey, BArg: PublicKey, S: Point): {
     R: Point;
     SPrime: Point;
     z: BigNumber;
-} 
+}
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point), [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -4390,7 +4568,7 @@ verifyProof(A: Point, B: Point, S: Point, proof: {
     R: Point;
     SPrime: Point;
     z: BigNumber;
-}): boolean 
+}): boolean
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [Point](./primitives.md#class-point)
 
@@ -4426,39 +4604,63 @@ export default class Secp256r1 {
     readonly a = A;
     readonly b = B;
     readonly g = G;
-    pointFromAffine(x: bigint, y: bigint): P256Point 
-    pointFromHex(hex: string): P256Point 
-    pointToHex(p: P256Point, compressed = false): string 
-    add(p1: P256Point, p2: P256Point): P256Point 
-    multiply(point: P256Point, scalar: bigint): P256Point 
-    multiplyBase(scalar: bigint): P256Point 
-    isOnCurve(p: P256Point): boolean 
-    generatePrivateKeyHex(): string 
-    publicKeyFromPrivate(privateKey: string | bigint): P256Point 
+    #mod(x: bigint, m: bigint = this.p): bigint
+    #modInv(x: bigint, m: bigint): bigint
+    #modPow(base: bigint, exponent: bigint, modulus: bigint): bigint
+    #isInfinity(p: P256Point): p is null
+    #assertOnCurve(p: P256Point): void
+    pointFromAffine(x: bigint, y: bigint): P256Point
+    pointFromHex(hex: string): P256Point
+    pointToHex(p: P256Point, compressed = false): string
+    #addPoints(p1: P256Point, p2: P256Point): P256Point
+    #doublePoint(p: P256Point): P256Point
+    add(p1: P256Point, p2: P256Point): P256Point
+    multiply(point: P256Point, scalar: bigint): P256Point
+    multiplyBase(scalar: bigint): P256Point
+    isOnCurve(p: P256Point): boolean
+    generatePrivateKeyHex(): string
+    #randomScalar(): bigint
+    #normalizePrivateKey(d: bigint): bigint
+    #toScalar(input: string | bigint): bigint
+    publicKeyFromPrivate(privateKey: string | bigint): P256Point
     sign(message: ByteSource, privateKey: string | bigint, opts: {
         prehashed?: boolean;
         nonce?: bigint;
     } = {}): {
         r: string;
         s: string;
-    } 
+    }
     verify(message: ByteSource, signature: {
         r: string | bigint;
         s: string | bigint;
     }, publicKey: P256Point | string, opts: {
         prehashed?: boolean;
-    } = {}): boolean 
+    } = {}): boolean
+    #normalizeMessage(message: ByteSource, prehashed: boolean): Uint8Array
+    #bytesToScalar(bytes: Uint8Array): bigint
+    #deterministicNonce(priv: bigint, msgDigest: Uint8Array): bigint
+    #toBytes(data: ByteSource): Uint8Array
+    #to32BytesHex(num: bigint): string
 }
 ```
 
-See also: [P256Point](./primitives.md#type-p256point), [multiply](./primitives.md#variable-multiply), [sign](./compat.md#variable-sign), [verify](./compat.md#variable-verify)
+See also: [P256Point](./primitives.md#type-p256point), [multiply](./primitives.md#variable-multiply), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string), [verify](./compat.md#variable-verify)
+
+#### Method
+
+Add two affine points (handles infinity).
+
+```ts
+#addPoints(p1: P256Point, p2: P256Point): P256Point
+```
+See also: [P256Point](./primitives.md#type-p256point)
 
 #### Method add
 
 Add two points (handles infinity).
 
 ```ts
-add(p1: P256Point, p2: P256Point): P256Point 
+add(p1: P256Point, p2: P256Point): P256Point
 ```
 See also: [P256Point](./primitives.md#type-p256point)
 
@@ -4467,15 +4669,16 @@ See also: [P256Point](./primitives.md#type-p256point)
 Generate a new random private key as 32-byte hex.
 
 ```ts
-generatePrivateKeyHex(): string 
+generatePrivateKeyHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method isOnCurve
 
 Check if a point lies on the curve (including infinity).
 
 ```ts
-isOnCurve(p: P256Point): boolean 
+isOnCurve(p: P256Point): boolean
 ```
 See also: [P256Point](./primitives.md#type-p256point)
 
@@ -4484,7 +4687,7 @@ See also: [P256Point](./primitives.md#type-p256point)
 Scalar multiply an arbitrary point using double-and-add.
 
 ```ts
-multiply(point: P256Point, scalar: bigint): P256Point 
+multiply(point: P256Point, scalar: bigint): P256Point
 ```
 See also: [P256Point](./primitives.md#type-p256point)
 
@@ -4493,7 +4696,7 @@ See also: [P256Point](./primitives.md#type-p256point)
 Scalar multiply the base point.
 
 ```ts
-multiplyBase(scalar: bigint): P256Point 
+multiplyBase(scalar: bigint): P256Point
 ```
 See also: [P256Point](./primitives.md#type-p256point)
 
@@ -4502,18 +4705,18 @@ See also: [P256Point](./primitives.md#type-p256point)
 Decode a point from compressed or uncompressed hex.
 
 ```ts
-pointFromHex(hex: string): P256Point 
+pointFromHex(hex: string): P256Point
 ```
-See also: [P256Point](./primitives.md#type-p256point)
+See also: [P256Point](./primitives.md#type-p256point), [string](./remittance.md#function-string)
 
 #### Method pointToHex
 
 Encode a point to compressed or uncompressed hex. Infinity is encoded as `00`.
 
 ```ts
-pointToHex(p: P256Point, compressed = false): string 
+pointToHex(p: P256Point, compressed = false): string
 ```
-See also: [P256Point](./primitives.md#type-p256point)
+See also: [P256Point](./primitives.md#type-p256point), [string](./remittance.md#function-string)
 
 #### Method sign
 
@@ -4527,8 +4730,9 @@ sign(message: ByteSource, privateKey: string | bigint, opts: {
 } = {}): {
     r: string;
     s: string;
-} 
+}
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method verify
 
@@ -4540,9 +4744,9 @@ verify(message: ByteSource, signature: {
     s: string | bigint;
 }, publicKey: P256Point | string, opts: {
     prehashed?: boolean;
-} = {}): boolean 
+} = {}): boolean
 ```
-See also: [P256Point](./primitives.md#type-p256point)
+See also: [P256Point](./primitives.md#type-p256point), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -4560,26 +4764,26 @@ Signatures are often serialized into a format known as '[DER encoding](https://e
 export default class Signature {
     r: BigNumber;
     s: BigNumber;
-    static fromDER(data: number[] | string, enc?: "hex" | "base64"): Signature 
-    static fromCompact(data: number[] | string, enc?: "hex" | "base64"): Signature 
-    constructor(r: BigNumber, s: BigNumber) 
-    verify(msg: number[] | string, key: PublicKey, enc?: "hex"): boolean 
-    toString(enc?: "hex" | "base64"): number[] | string 
-    toDER(enc?: "hex" | "base64"): number[] | string 
-    toCompact(recovery: number, compressed: boolean, enc?: "hex" | "base64"): number[] | string 
-    RecoverPublicKey(recovery: number, e: BigNumber): PublicKey 
-    CalculateRecoveryFactor(pubkey: PublicKey, msgHash: BigNumber): number 
+    static fromDER(data: number[] | string, enc?: "hex" | "base64"): Signature
+    static fromCompact(data: number[] | string, enc?: "hex" | "base64"): Signature
+    constructor(r: BigNumber, s: BigNumber)
+    verify(msg: number[] | string, key: PublicKey, enc?: "hex"): boolean
+    toString(enc?: "hex" | "base64"): number[] | string
+    toDER(enc?: "hex" | "base64"): number[] | string
+    toCompact(recovery: number, compressed: boolean, enc?: "hex" | "base64"): number[] | string
+    RecoverPublicKey(recovery: number, e: BigNumber): PublicKey
+    CalculateRecoveryFactor(pubkey: PublicKey, msgHash: BigNumber): number
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [verify](./compat.md#variable-verify)
+See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string), [verify](./compat.md#variable-verify)
 
 #### Constructor
 
 Creates an instance of the Signature class.
 
 ```ts
-constructor(r: BigNumber, s: BigNumber) 
+constructor(r: BigNumber, s: BigNumber)
 ```
 See also: [BigNumber](./primitives.md#class-bignumber)
 
@@ -4606,7 +4810,7 @@ If it does not find a valid recovery factor, it will throw an error.
 The recovery factor is a number between 0 and 3.
 
 ```ts
-CalculateRecoveryFactor(pubkey: PublicKey, msgHash: BigNumber): number 
+CalculateRecoveryFactor(pubkey: PublicKey, msgHash: BigNumber): number
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey)
 
@@ -4634,7 +4838,7 @@ If it does not find a valid public key, it will throw an error.
 The recovery factor is a number between 0 and 3.
 
 ```ts
-RecoverPublicKey(recovery: number, e: BigNumber): PublicKey 
+RecoverPublicKey(recovery: number, e: BigNumber): PublicKey
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey)
 
@@ -4666,9 +4870,9 @@ The range represents the recovery param which can be 0,1,2,3.
 We could support recovery functions in future if there's demand.
 
 ```ts
-static fromCompact(data: number[] | string, enc?: "hex" | "base64"): Signature 
+static fromCompact(data: number[] | string, enc?: "hex" | "base64"): Signature
 ```
-See also: [Signature](./primitives.md#class-signature)
+See also: [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Returns
 
@@ -4694,9 +4898,9 @@ This method will throw an error if the DER encoding is invalid.
 If a string is provided, it is assumed to represent a hexadecimal sequence.
 
 ```ts
-static fromDER(data: number[] | string, enc?: "hex" | "base64"): Signature 
+static fromDER(data: number[] | string, enc?: "hex" | "base64"): Signature
 ```
-See also: [Signature](./primitives.md#class-signature)
+See also: [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Returns
 
@@ -4724,8 +4928,9 @@ If 'base64', it will return a base64 string.
 Otherwise, it will return an array of numbers.
 
 ```ts
-toCompact(recovery: number, compressed: boolean, enc?: "hex" | "base64"): number[] | string 
+toCompact(recovery: number, compressed: boolean, enc?: "hex" | "base64"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4751,8 +4956,9 @@ If 'base64', it will return a base64 string.
 Otherwise, it will return an array of numbers.
 
 ```ts
-toDER(enc?: "hex" | "base64"): number[] | string 
+toDER(enc?: "hex" | "base64"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4781,8 +4987,9 @@ If 'base64', it will return a base64 string.
 Otherwise, it will return an array of numbers.
 
 ```ts
-toString(enc?: "hex" | "base64"): number[] | string 
+toString(enc?: "hex" | "base64"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4807,9 +5014,9 @@ This method will return true if the signature, key, and message hash match.
 If the data or key do not match the signature, the function returns false.
 
 ```ts
-verify(msg: number[] | string, key: PublicKey, enc?: "hex"): boolean 
+verify(msg: number[] | string, key: PublicKey, enc?: "hex"): boolean
 ```
-See also: [PublicKey](./primitives.md#class-publickey)
+See also: [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 Returns
 
@@ -4843,13 +5050,13 @@ It leverages the Advanced Encryption Standard Galois/Counter Mode (AES-GCM) for 
 
 ```ts
 export default class SymmetricKey extends BigNumber {
-    static fromRandom(): SymmetricKey 
-    encrypt(msg: number[] | string, enc?: "hex"): string | number[] 
-    decrypt(msg: number[] | string, enc?: "hex" | "utf8"): string | number[] 
+    static fromRandom(): SymmetricKey
+    encrypt(msg: number[] | string, enc?: "hex"): string | number[]
+    decrypt(msg: number[] | string, enc?: "hex" | "utf8"): string | number[]
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt)
+See also: [BigNumber](./primitives.md#class-bignumber), [decrypt](./messages.md#variable-decrypt), [encrypt](./messages.md#variable-encrypt), [string](./remittance.md#function-string)
 
 #### Method decrypt
 
@@ -4858,8 +5065,9 @@ The method extracts the IV and the authentication tag from the encrypted message
 If the decryption fails (e.g., due to message tampering), an error is thrown.
 
 ```ts
-decrypt(msg: number[] | string, enc?: "hex" | "utf8"): string | number[] 
+decrypt(msg: number[] | string, enc?: "hex" | "utf8"): string | number[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4890,8 +5098,9 @@ The generated Initialization Vector (IV) is attached to the encrypted message fo
 The OpenSSL format of |IV|encryptedContent|authTag| is used.
 
 ```ts
-encrypt(msg: number[] | string, enc?: "hex"): string | number[] 
+encrypt(msg: number[] | string, enc?: "hex"): string | number[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -4916,7 +5125,7 @@ const encryptedMessage = key.encrypt('plainText', 'utf8');
 Generates a symmetric key randomly.
 
 ```ts
-static fromRandom(): SymmetricKey 
+static fromRandom(): SymmetricKey
 ```
 See also: [SymmetricKey](./primitives.md#class-symmetrickey)
 
@@ -4944,14 +5153,15 @@ export default class TransactionSignature extends Signature {
     public static readonly SIGHASH_FORKID = 64;
     public static readonly SIGHASH_ANYONECANPAY = 128;
     scope: number;
-    static formatOTDA(params: TransactionSignatureFormatParams): Uint8Array 
-    static formatBip143(params: TransactionSignatureFormatParams): Uint8Array 
-    static format(params: TransactionSignatureFormatParams): number[] 
-    static formatBytes(params: TransactionSignatureFormatParams): Uint8Array 
-    static fromChecksigFormat(buf: number[]): TransactionSignature 
-    constructor(r: BigNumber, s: BigNumber, scope: number) 
-    public hasLowS(): boolean 
-    toChecksigFormat(): number[] 
+    static formatOTDA(params: TransactionSignatureFormatParams): Uint8Array
+    static formatBip143(params: TransactionSignatureFormatParams): Uint8Array
+    static format(params: TransactionSignatureFormatParams): number[]
+    static formatBytes(params: TransactionSignatureFormatParams): Uint8Array
+    static usesOtdaSingleBug(params: TransactionSignatureFormatParams): boolean
+    static fromChecksigFormat(buf: number[]): TransactionSignature
+    constructor(r: BigNumber, s: BigNumber, scope: number)
+    public hasLowS(): boolean
+    toChecksigFormat(): number[]
 }
 ```
 
@@ -4962,7 +5172,7 @@ See also: [BigNumber](./primitives.md#class-bignumber), [Signature](./primitives
 Formats the SIGHASH preimage for the targeted input, optionally using a cache to skip recomputing shared hash prefixes.
 
 ```ts
-static format(params: TransactionSignatureFormatParams): number[] 
+static format(params: TransactionSignatureFormatParams): number[]
 ```
 
 Argument Details
@@ -4977,7 +5187,7 @@ Argument Details
 Formats the same SIGHASH preimage bytes as `format`, supporting the optional cache for hash reuse.
 
 ```ts
-static formatBip143(params: TransactionSignatureFormatParams): Uint8Array 
+static formatBip143(params: TransactionSignatureFormatParams): Uint8Array
 ```
 
 Returns
@@ -4996,7 +5206,7 @@ Argument Details
 Implements the original bitcoin transaction signature digest preimage algorithm (OTDA).
 
 ```ts
-static formatOTDA(params: TransactionSignatureFormatParams): Uint8Array 
+static formatOTDA(params: TransactionSignatureFormatParams): Uint8Array
 ```
 
 Returns
@@ -5010,7 +5220,7 @@ See also Ecdsa signature algorithm which enforces this.
 See also Bip 62, "low S values in signatures"
 
 ```ts
-public hasLowS(): boolean 
+public hasLowS(): boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5021,34 +5231,34 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class Writer {
     public bufs: WriterChunk[];
-    constructor(bufs?: WriterChunk[]) 
-    getLength(): number 
-    toUint8Array(): Uint8Array 
-    toArray(): number[] 
-    toHex(): string 
-    write(buf: WriterChunk): this 
-    writeReverse(buf: number[]): this 
-    writeUInt8(n: number): this 
-    writeInt8(n: number): this 
-    writeUInt16BE(n: number): this 
-    writeInt16BE(n: number): this 
-    writeUInt16LE(n: number): this 
-    writeInt16LE(n: number): this 
-    writeUInt32BE(n: number): this 
-    writeInt32BE(n: number): this 
-    writeUInt32LE(n: number): this 
-    writeInt32LE(n: number): this 
-    writeUInt64BEBn(bn: BigNumber): this 
-    writeUInt64LEBn(bn: BigNumber): this 
-    writeUInt64LE(n: number): this 
-    writeVarIntNum(n: number): this 
-    writeVarIntBn(bn: BigNumber): this 
-    static varIntNum(n: number): number[] 
-    static varIntBn(bn: BigNumber): number[] 
+    constructor(bufs?: WriterChunk[])
+    getLength(): number
+    toUint8Array(): Uint8Array
+    toArray(): number[]
+    toHex(): string
+    write(buf: WriterChunk): this
+    writeReverse(buf: number[]): this
+    writeUInt8(n: number): this
+    writeInt8(n: number): this
+    writeUInt16BE(n: number): this
+    writeInt16BE(n: number): this
+    writeUInt16LE(n: number): this
+    writeInt16LE(n: number): this
+    writeUInt32BE(n: number): this
+    writeInt32BE(n: number): this
+    writeUInt32LE(n: number): this
+    writeInt32LE(n: number): this
+    writeUInt64BEBn(bn: BigNumber): this
+    writeUInt64LEBn(bn: BigNumber): this
+    writeUInt64LE(n: number): this
+    writeVarIntNum(n: number): this
+    writeVarIntBn(bn: BigNumber): this
+    static varIntNum(n: number): number[]
+    static varIntBn(bn: BigNumber): number[]
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [toArray](./primitives.md#variable-toarray), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array)
+See also: [BigNumber](./primitives.md#class-bignumber), [string](./remittance.md#function-string), [toArray](./primitives.md#variable-toarray), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5062,29 +5272,34 @@ Uint8Array usage.
 
 ```ts
 export class WriterUint8Array {
-    constructor(bufs?: WriterChunk[], initialCapacity: number = 256) 
-    getLength(): number 
-    toUint8Array(): Uint8Array 
-    toArray(): number[] 
-    toUint8ArrayZeroCopy(): Uint8Array 
-    write(bytes: WriterChunk): this 
-    writeReverse(buf: WriterChunk): this 
-    writeUInt8(value: number): this 
-    writeInt8(value: number): this 
-    writeUInt16LE(value: number): this 
-    writeUInt16BE(value: number): this 
-    writeInt16LE(value: number): this 
-    writeInt16BE(value: number): this 
-    writeUInt32LE(value: number): this 
-    writeUInt32BE(value: number): this 
-    writeInt32LE(value: number): this 
-    writeInt32BE(value: number): this 
-    writeUInt64BEBn(bn: BigNumber): this 
-    writeUInt64LEBn(bn: BigNumber): this 
-    writeUInt64LE(n: number): this 
-    writeVarIntNum(n: number): this 
-    writeVarIntBn(bn: BigNumber): this 
-    reset(): void 
+    #buffer: Uint8Array;
+    #pos: number;
+    #capacity: number;
+    constructor(bufs?: WriterChunk[], initialCapacity: number = 256)
+    getLength(): number
+    toUint8Array(): Uint8Array
+    toArray(): number[]
+    toUint8ArrayZeroCopy(): Uint8Array
+    reserve(additionalBytes: number): void
+    #ensureCapacity(needed: number): void
+    write(bytes: WriterChunk): this
+    writeReverse(buf: WriterChunk): this
+    writeUInt8(value: number): this
+    writeInt8(value: number): this
+    writeUInt16LE(value: number): this
+    writeUInt16BE(value: number): this
+    writeInt16LE(value: number): this
+    writeInt16BE(value: number): this
+    writeUInt32LE(value: number): this
+    writeUInt32BE(value: number): this
+    writeInt32LE(value: number): this
+    writeInt32BE(value: number): this
+    writeUInt64BEBn(bn: BigNumber): this
+    writeUInt64LEBn(bn: BigNumber): this
+    writeUInt64LE(n: number): this
+    writeVarIntNum(n: number): this
+    writeVarIntBn(bn: BigNumber): this
+    reset(): void
 }
 ```
 
@@ -5095,7 +5310,15 @@ See also: [BigNumber](./primitives.md#class-bignumber), [toArray](./primitives.m
 Returns the current length of written data
 
 ```ts
-getLength(): number 
+getLength(): number
+```
+
+#### Method reserve
+
+Ensures room for `additionalBytes` without changing the written length.
+
+```ts
+reserve(additionalBytes: number): void
 ```
 
 #### Method reset
@@ -5103,7 +5326,7 @@ getLength(): number
 Resets the writer to empty state (reuses the buffer)
 
 ```ts
-reset(): void 
+reset(): void
 ```
 
 #### Method toArray
@@ -5111,13 +5334,13 @@ reset(): void
 Legacy compatibility method – returns number[] (Byte[])
 
 ```ts
-toArray(): number[] 
+toArray(): number[]
 ```
 
 #### Method toUint8Array
 
 ```ts
-toUint8Array(): Uint8Array 
+toUint8Array(): Uint8Array
 ```
 
 Returns
@@ -5127,7 +5350,7 @@ the written data as Uint8Array copy of the internal buffer
 #### Method toUint8ArrayZeroCopy
 
 ```ts
-toUint8ArrayZeroCopy(): Uint8Array 
+toUint8ArrayZeroCopy(): Uint8Array
 ```
 
 Returns
@@ -5139,16 +5362,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Functions
 
-| | |
-| --- | --- |
-| [AES](#function-aes) | [normalizeHex](#function-normalizehex) |
-| [AESGCM](#function-aesgcm) | [pbkdf2](#function-pbkdf2) |
-| [AESGCMDecrypt](#function-aesgcmdecrypt) | [realHtonl](#function-realhtonl) |
-| [assertValidHex](#function-assertvalidhex) | [red](#function-red) |
-| [base64ToArray](#function-base64toarray) | [swapBytes32](#function-swapbytes32) |
-| [constantTimeEquals](#function-constanttimeequals) | [toArray](#function-toarray) |
-| [ghash](#function-ghash) | [toBase64](#function-tobase64) |
-| [htonl](#function-htonl) | [verifyNotNull](#function-verifynotnull) |
+| | | |
+| --- | --- | --- |
+| [AES](#function-aes) | [isAsyncCryptoDigest](#function-isasynccryptodigest) | [registerAsyncCryptoBackend](#function-registerasynccryptobackend) |
+| [AESGCM](#function-aesgcm) | [isPlainRecord](#function-isplainrecord) | [swapBytes32](#function-swapbytes32) |
+| [AESGCMDecrypt](#function-aesgcmdecrypt) | [isUnsafeRecordKey](#function-isunsaferecordkey) | [toArray](#function-toarray) |
+| [assertValidHex](#function-assertvalidhex) | [normalizeHex](#function-normalizehex) | [toBase64](#function-tobase64) |
+| [base64ToArray](#function-base64toarray) | [pbkdf2](#function-pbkdf2) | [unregisterAsyncCryptoBackend](#function-unregisterasynccryptobackend) |
+| [constantTimeEquals](#function-constanttimeequals) | [readVarIntNumStrict](#function-readvarintnumstrict) | [utf8ByteLength](#function-utf8bytelength) |
+| [ghash](#function-ghash) | [readyAsyncCryptoBackend](#function-readyasynccryptobackend) | [utf8Bytes](#function-utf8bytes) |
+| [hasControlCharacter](#function-hascontrolcharacter) | [realHtonl](#function-realhtonl) | [validateAsyncCryptoBytes](#function-validateasynccryptobytes) |
+| [htonl](#function-htonl) | [red](#function-red) | [verifyNotNull](#function-verifynotnull) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5157,7 +5381,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: AES
 
 ```ts
-export function AES(input: number[], key: number[]): number[] 
+export function AES(input: number[], key: number[]): number[]
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5165,57 +5389,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ### Function: AESGCM
 
-SECURITY NOTE – NON-STANDARD AES-GCM PADDING
+AES-GCM without additional authenticated data.
 
-This implementation intentionally deviates from NIST SP 800-38D’s AES-GCM
-specification in how the GHASH input is formed when the additional
-authenticated data (AAD) or ciphertext length is zero.
-
-In the standard, AAD and ciphertext are each padded with the minimum number
-of zero bytes required to reach a multiple of 16 bytes; when the length is
-already a multiple of 16 (including the case length = 0), no padding block
-is added. In this implementation, when AAD.length === 0 or ciphertext.length
-=== 0, an extra 16-byte block of zeros is appended before the length fields
-are processed. The same formatting logic is used symmetrically in both
-AESGCM (encryption) and AESGCMDecrypt (decryption).
-
-As a result:
-  - Authentication tags produced here are NOT compatible with tags produced
-    by standards-compliant AES-GCM implementations in the cases where AAD
-    or ciphertext are empty.
-  - Ciphertexts generated by this code must be decrypted by this exact
-    implementation (or one that reproduces the same GHASH formatting), and
-    must not be mixed with ciphertexts produced by a strictly standard
-    AES-GCM library.
-
-Cryptographic impact: this change alters only the encoding of the message
-that is input to GHASH; it does not change the block cipher, key derivation,
-IV handling, or the basic “encrypt-then-MAC over (AAD, ciphertext, lengths)”
-structure of AES-GCM. Under the usual assumptions that AES is a secure block
-cipher and GHASH with a secret subkey is a secure polynomial MAC, this
-variant continues to provide confidentiality and integrity for data encrypted
-and decrypted consistently with this implementation. We are not aware of any
-attack that exploits the presence of this extra zero block when AAD or
-ciphertext are empty.
-
-However, this padding behavior is non-compliant with NIST SP 800-38D and has
-not been analyzed as extensively as standard AES-GCM. Code that requires
-strict standards compliance or interoperability with external AES-GCM
-implementations SHOULD NOT use this module as-is. Any future migration to a
-fully compliant AES-GCM encoding will require a compatibility strategy, as
-existing ciphertexts produced by this implementation will otherwise become
-undecryptable.
-
-This non-standard padding behavior is retained intentionally for backward
-compatibility: existing ciphertexts in production were generated with this
-encoding, and changing it would render previously encrypted data
-undecryptable by newer versions of the library.
+Keep the historical GHASH input formatting in buildAuthInput unchanged.
+Its leading zero block (and extra zero block for empty ciphertext) does not
+change the tag: GHASH starts at zero, and processing a zero block leaves it
+at zero. Native interoperability tests cover empty and block-boundary inputs.
+Empty ciphertext is valid but still requires the complete, matching tag.
 
 ```ts
 export function AESGCM(plainText: Bytes, initializationVector: Bytes, key: Bytes): {
     result: Bytes;
     authenticationTag: Bytes;
-} 
+}
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5224,7 +5410,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: AESGCMDecrypt
 
 ```ts
-export function AESGCMDecrypt(cipherText: Bytes, initializationVector: Bytes, authenticationTag: Bytes, key: Bytes): Bytes | null 
+export function AESGCMDecrypt(cipherText: Bytes, initializationVector: Bytes, authenticationTag: Bytes, key: Bytes): Bytes | null
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5233,8 +5419,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: assertValidHex
 
 ```ts
-export function assertValidHex(msg: string): void 
+export function assertValidHex(msg: string): void
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5242,8 +5430,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: base64ToArray
 
 ```ts
-export function base64ToArray(msg: string): number[] 
+export function base64ToArray(msg: string): number[]
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5251,7 +5441,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: constantTimeEquals
 
 ```ts
-export function constantTimeEquals(a: Uint8Array | number[], b: Uint8Array | number[]): boolean 
+export function constantTimeEquals(a: Uint8Array | number[], b: Uint8Array | number[]): boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5260,8 +5450,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: ghash
 
 ```ts
-export function ghash(input: Bytes, hashSubKey: Bytes): Bytes 
+export function ghash(input: Bytes, hashSubKey: Bytes): Bytes
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: hasControlCharacter
+
+```ts
+export function hasControlCharacter(value: string): boolean
+```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5269,7 +5470,40 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: htonl
 
 ```ts
-export function htonl(w: number): number 
+export function htonl(w: number): number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: isAsyncCryptoDigest
+
+True when a caller supplied the canonical 32-byte digest representation.
+
+```ts
+export function isAsyncCryptoDigest(digest: readonly number[]): boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: isPlainRecord
+
+```ts
+export function isPlainRecord(value: unknown): value is Record<string, unknown>
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: isUnsafeRecordKey
+
+True for property names that can alter or impersonate ordinary object structure.
+
+```ts
+export function isUnsafeRecordKey(key: unknown): boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5278,8 +5512,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: normalizeHex
 
 ```ts
-export function normalizeHex(msg: string): string 
+export function normalizeHex(msg: string): string
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5289,7 +5525,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Limited SHA-512-only PBKDF2 function for use in deprecated BIP39 code.
 
 ```ts
-export function pbkdf2(password: number[], salt: number[], iterations: number, keylen: number, digest = "sha512"): number[] 
+export function pbkdf2(password: number[], salt: number[], iterations: number, keylen: number, digest = "sha512"): number[]
 ```
 
 Returns
@@ -5308,6 +5544,31 @@ Argument Details
   + The length of the key
 + **digest**
   + The digest (must be sha512 for this implementation)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: readVarIntNumStrict
+
+Shared canonical CompactSize decoding for both binary reader implementations.
+
+```ts
+export default function readVarIntNumStrict(reader: CompactSizeReader, signed: boolean = true): number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: readyAsyncCryptoBackend
+
+Returns a warm backend supporting `operation`. A cold backend is prepared in
+the background while the current call retains the existing JavaScript path.
+
+```ts
+export function readyAsyncCryptoBackend(operation: AsyncCryptoOperation): AsyncCryptoBackend | undefined
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend), [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5333,7 +5594,7 @@ realHtonl(0x11223344) // → 0x44332211 on little-endian systems
 ```
 
 ```ts
-export function realHtonl(w: number): number 
+export function realHtonl(w: number): number
 ```
 
 Returns
@@ -5351,8 +5612,21 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: red
 
 ```ts
-export function red(x: bigint): bigint 
+export function red(x: bigint): bigint
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: registerAsyncCryptoBackend
+
+Installs an optional process/page-wide backend for opportunistic SDK use.
+
+```ts
+export function registerAsyncCryptoBackend(backend: AsyncCryptoBackend): void
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5377,7 +5651,7 @@ swapBytes32(0x11223344) // → 0x44332211
 ```
 
 ```ts
-export function swapBytes32(w: number): number 
+export function swapBytes32(w: number): number
 ```
 
 Returns
@@ -5395,8 +5669,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: toArray
 
 ```ts
-export function toArray(msg: number[] | string, enc?: "hex" | "utf8"): number[] 
+export function toArray(msg: number[] | string, enc?: "hex" | "utf8"): number[]
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -5422,8 +5698,10 @@ console.log(toBase64(bytes)); // Outputs: SGVsbG8=
 ```
 
 ```ts
-export function toBase64(byteArray: number[]): string 
+export function toBase64(byteArray: number[] | Uint8Array): string
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -5433,6 +5711,55 @@ Argument Details
 
 + **byteArray**
   + An array of numbers where each number is a byte (0-255).
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: unregisterAsyncCryptoBackend
+
+Removes `backend` if it is still the active optional implementation.
+
+```ts
+export function unregisterAsyncCryptoBackend(backend: AsyncCryptoBackend): void
+```
+
+See also: [AsyncCryptoBackend](./primitives.md#interface-asynccryptobackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: utf8ByteLength
+
+```ts
+export function utf8ByteLength(value: string): number
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: utf8Bytes
+
+```ts
+export function utf8Bytes(value: string): Uint8Array
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: validateAsyncCryptoBytes
+
+Reject malformed output from an optional cryptography backend before it can
+be interpreted as key or signature material.
+
+```ts
+export function validateAsyncCryptoBytes(operation: AsyncCryptoOperation, value: Uint8Array, expectedLength?: number): Uint8Array
+```
+
+See also: [AsyncCryptoOperation](./primitives.md#type-asynccryptooperation)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5448,8 +5775,10 @@ const myValue = verifyNotNull(someValue, 'someValue must be defined')
 ```
 
 ```ts
-export function verifyNotNull<T>(value: T | undefined | null, errorMessage: string = "Expected a valid value, but got undefined or null."): T 
+export function verifyNotNull<T>(value: T | undefined | null, errorMessage: string = "Expected a valid value, but got undefined or null."): T
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -5471,6 +5800,27 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Types
 
+| |
+| --- |
+| [AsyncCryptoOperation](#type-asynccryptooperation) |
+| [P256Point](#type-p256point) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Type: AsyncCryptoOperation
+
+Generic operations that an optional asynchronous cryptography backend can
+accelerate without changing the SDK's synchronous primitive APIs.
+
+```ts
+export type AsyncCryptoOperation = "signDigest" | "verifyDigest" | "verifyDigestBatch" | "publicKeyFromPrivate" | "multiplyPublicKey" | "tweakPublicKeyAdd" | "tweakPrivateKeyAdd"
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Type: P256Point
 
 ```ts
@@ -5498,15 +5848,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [GX_BIGINT](#variable-gx_bigint) | [getBytes](#variable-getbytes) | [sha512](#variable-sha512) |
 | [GY_BIGINT](#variable-gy_bigint) | [getBytes64](#variable-getbytes64) | [sha512hmac](#variable-sha512hmac) |
 | [MASK_256](#variable-mask_256) | [hash160](#variable-hash160) | [sign](#variable-sign) |
-| [N_BIGINT](#variable-n_bigint) | [hash256](#variable-hash256) | [toArray](#variable-toarray) |
-| [P_BIGINT](#variable-p_bigint) | [incrementLeastSignificantThirtyTwoBits](#variable-incrementleastsignificantthirtytwobits) | [toBase58](#variable-tobase58) |
-| [P_PLUS1_DIV4](#variable-p_plus1_div4) | [jpAdd](#variable-jpadd) | [toBase58Check](#variable-tobase58check) |
-| [biMod](#variable-bimod) | [jpDouble](#variable-jpdouble) | [toHex](#variable-tohex) |
+| [MAX_SHAMIR_SHARES](#variable-max_shamir_shares) | [hash256](#variable-hash256) | [toArray](#variable-toarray) |
+| [N_BIGINT](#variable-n_bigint) | [hexToUint8Array](#variable-hextouint8array) | [toBase58](#variable-tobase58) |
+| [P_BIGINT](#variable-p_bigint) | [incrementLeastSignificantThirtyTwoBits](#variable-incrementleastsignificantthirtytwobits) | [toBase58Check](#variable-tobase58check) |
+| [P_PLUS1_DIV4](#variable-p_plus1_div4) | [jpAdd](#variable-jpadd) | [toHex](#variable-tohex) |
+| [biMod](#variable-bimod) | [jpDouble](#variable-jpdouble) | [toSafeString](#variable-tosafestring) |
 | [biModAdd](#variable-bimodadd) | [jpNeg](#variable-jpneg) | [toUTF8](#variable-toutf8) |
-| [biModInv](#variable-bimodinv) | [minimallyEncode](#variable-minimallyencode) | [toUint8Array](#variable-touint8array) |
-| [biModMul](#variable-bimodmul) | [modInvN](#variable-modinvn) | [verify](#variable-verify) |
-| [biModPow](#variable-bimodpow) | [modMulN](#variable-modmuln) | [zero2](#variable-zero2) |
-| [biModSqr](#variable-bimodsqr) | [modN](#variable-modn) |  |
+| [biModInv](#variable-bimodinv) | [minimallyEncode](#variable-minimallyencode) | [toUTF8Strict](#variable-toutf8strict) |
+| [biModMul](#variable-bimodmul) | [modInvN](#variable-modinvn) | [toUint8Array](#variable-touint8array) |
+| [biModPow](#variable-bimodpow) | [modMulN](#variable-modmuln) | [verify](#variable-verify) |
+| [biModSqr](#variable-bimodsqr) | [modN](#variable-modn) | [zero2](#variable-zero2) |
 | [biModSqrt](#variable-bimodsqrt) | [multiply](#variable-multiply) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -5594,6 +5945,15 @@ MASK_256 = (1n << 256n) - 1n
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Variable: MAX_SHAMIR_SHARES
+
+```ts
+MAX_SHAMIR_SHARES = 255
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Variable: N_BIGINT
 
 ```ts
@@ -5626,7 +5986,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: biMod
 
 ```ts
-biMod = (a: bigint): bigint => red((a % P_BIGINT + P_BIGINT) % P_BIGINT)
+biMod = (a: bigint): bigint => red(((a % P_BIGINT) + P_BIGINT) % P_BIGINT)
 ```
 
 See also: [P_BIGINT](./primitives.md#variable-p_bigint), [red](./primitives.md#function-red)
@@ -5743,7 +6103,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 checkBit = function (byteArray: number[], byteIndex: number, bitIndex: number): 1 | 0 {
-    return (byteArray[byteIndex] & (1 << bitIndex)) !== 0 ? 1 : 0;
+    return (byteArray[byteIndex] & (1 << bitIndex)) === 0 ? 0 : 1;
 }
 ```
 
@@ -5765,7 +6125,7 @@ encode = (arr: number[], enc?: "hex" | "utf8"): string | number[] => {
 }
 ```
 
-See also: [toHex](./primitives.md#variable-tohex), [toUTF8](./primitives.md#variable-toutf8)
+See also: [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [toUTF8](./primitives.md#variable-toutf8)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5793,19 +6153,19 @@ fromBase58 = (str: string): number[] => {
     if (str === "" || typeof str !== "string") {
         throw new Error(`Expected base58 string but got “${str}”`);
     }
-    const match: string[] | null = str.match(/[IOl0]/gmu);
+    const match: string[] | null = str.match(/[^1-9A-HJ-NP-Za-km-z]/gmu);
     if (match !== null) {
         throw new Error(`Invalid base58 character “${match.join("")}”`);
     }
     const lz = str.match(/^1+/gmu);
-    const psz: number = (lz !== null) ? lz[0].length : 0;
+    const psz: number = lz === null ? 0 : lz[0].length;
     const size = ((str.length - psz) * (Math.log(58) / Math.log(256)) + 1) >>> 0;
     const uint8 = new Uint8Array([
         ...new Uint8Array(psz),
-        ...(str.match(/./gmu) ?? [])
-            .map((i) => base58chars.indexOf(i))
+        ...Array.from(str)
+            .map(i => base58chars.indexOf(i))
             .reduce((acc, i) => {
-            acc = acc.map((j) => {
+            acc = acc.map(j => {
                 const x = j * 58 + i;
                 i = x >> 8;
                 return x;
@@ -5813,11 +6173,13 @@ fromBase58 = (str: string): number[] => {
             return acc;
         }, new Uint8Array(size))
             .reverse()
-            .filter(((lastValue) => (value) => (lastValue = lastValue || value))(false))
+            .filter((lastValue => value => (lastValue = lastValue || value))(false))
     ]);
     return [...uint8];
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5847,7 +6209,7 @@ fromBase58Check = (str: string, enc?: "hex", prefixLength: number = 1): {
 }
 ```
 
-See also: [fromBase58](./primitives.md#variable-frombase58), [hash256](./primitives.md#variable-hash256), [toHex](./primitives.md#variable-tohex)
+See also: [fromBase58](./primitives.md#variable-frombase58), [hash256](./primitives.md#variable-hash256), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5896,13 +6258,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: hash160
 
 ```ts
-hash160 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    const first = new SHA256().update(msg, enc).digest();
+hash160 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    const first = sha256Bytes(msg, enc);
+    const native = ripemd160Bytes(first);
+    if (native != null)
+        return Array.from(native);
     return new RIPEMD160().update(first).digest();
 }
 ```
 
-See also: [RIPEMD160](./primitives.md#class-ripemd160), [SHA256](./primitives.md#class-sha256)
+See also: [RIPEMD160](./primitives.md#class-ripemd160)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -5910,13 +6275,36 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: hash256
 
 ```ts
-hash256 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    const first = new SHA256().update(msg, enc).digest();
-    return new SHA256().update(first).digest();
+hash256 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha256Bytes(sha256Bytes(msg, enc)));
 }
 ```
 
-See also: [SHA256](./primitives.md#class-sha256)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: hexToUint8Array
+
+```ts
+hexToUint8Array = (msg: string): Uint8Array => {
+    assertValidHex(msg);
+    const normalized = msg.length % 2 === 0 ? msg : "0" + msg;
+    if (CAN_USE_BUFFER) {
+        const decoded = BufferCtor.from(normalized, "hex");
+        return new Uint8Array(decoded.buffer, decoded.byteOffset, decoded.byteLength);
+    }
+    const out = new Uint8Array(normalized.length / 2);
+    let o = 0;
+    for (let i = 0; i < normalized.length; i += 2) {
+        const hi = HEX_CHAR_TO_VALUE[normalized.codePointAt(i) as number];
+        const lo = HEX_CHAR_TO_VALUE[normalized.codePointAt(i + 1) as number];
+        out[o++] = (hi << 4) | lo;
+    }
+    return out;
+}
+```
+
+See also: [assertValidHex](./primitives.md#function-assertvalidhex), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6019,25 +6407,25 @@ minimallyEncode = (buf: number[]): number[] => {
     if (buf.length === 0) {
         return buf;
     }
-    const last = buf[buf.length - 1];
+    const last = buf.at(-1)!;
     if ((last & 127) !== 0) {
         return buf;
     }
     if (buf.length === 1) {
         return [];
     }
-    if ((buf[buf.length - 2] & 128) !== 0) {
+    if ((buf.at(-2)! & 128) !== 0) {
         return buf;
     }
     for (let i = buf.length - 1; i > 0; i--) {
         if (buf[i - 1] !== 0) {
-            if ((buf[i - 1] & 128) !== 0) {
-                buf[i] = last;
-                return buf.slice(0, i + 1);
+            if ((buf[i - 1] & 128) === 0) {
+                buf[i - 1]! |= last;
+                return buf.slice(0, i);
             }
             else {
-                buf[i - 1] |= last;
-                return buf.slice(0, i);
+                buf[i] = last;
+                return buf.slice(0, i + 1);
             }
         }
     }
@@ -6153,11 +6541,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 ripemd160 = (msg: number[] | string, enc?: "hex" | "utf8"): number[] => {
+    const native = ripemd160Bytes(msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new RIPEMD160().update(msg, enc).digest();
 }
 ```
 
-See also: [RIPEMD160](./primitives.md#class-ripemd160)
+See also: [RIPEMD160](./primitives.md#class-ripemd160), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6169,48 +6560,15 @@ scalarMultiplyWNAF = (k: bigint, P0: {
     x: bigint;
     y: bigint;
 }, window: number = 5): JacobianPointBI => {
-    const key = `${window}:${P0.x.toString(16)}:${P0.y.toString(16)}`;
-    let tbl = WNAF_TABLE_CACHE.get(key);
-    let P: JacobianPointBI;
-    if (tbl === undefined) {
-        const tblSize = 1 << (window - 1);
-        tbl = new Array(tblSize);
-        P = { X: P0.x, Y: P0.y, Z: BI_ONE };
-        tbl[0] = P;
-        const twoP = jpDouble(P);
-        for (let i = 1; i < tblSize; i++) {
-            tbl[i] = jpAdd(tbl[i - 1], twoP);
-        }
-        WNAF_TABLE_CACHE.set(key, tbl);
-    }
-    else {
-        P = tbl[0];
-    }
-    const wnaf: number[] = [];
-    const wBig = 1n << BigInt(window);
-    const wHalf = wBig >> 1n;
-    let kTmp = k;
-    while (kTmp > 0n) {
-        if ((kTmp & BI_ONE) === BI_ZERO) {
-            wnaf.push(0);
-            kTmp >>= BI_ONE;
-        }
-        else {
-            let z = kTmp & (wBig - 1n);
-            if (z > wHalf)
-                z -= wBig;
-            wnaf.push(Number(z));
-            kTmp -= z;
-            kTmp >>= BI_ONE;
-        }
-    }
+    const table = wnafTable(window, P0);
+    const wnaf = wnafDigits(k, window);
     let Q: JacobianPointBI = { X: BI_ZERO, Y: BI_ONE, Z: BI_ZERO };
     for (let i = wnaf.length - 1; i >= 0; i--) {
         Q = jpDouble(Q);
         const di = wnaf[i];
         if (di !== 0) {
             const idx = Math.abs(di) >> 1;
-            const addend = di > 0 ? tbl[idx] : jpNeg(tbl[idx]);
+            const addend = di > 0 ? table[idx] : jpNeg(table[idx]);
             Q = jpAdd(Q, addend);
         }
     }
@@ -6231,7 +6589,7 @@ sha1 = (msg: number[] | string, enc?: "hex" | "utf8"): number[] => {
 }
 ```
 
-See also: [SHA1](./primitives.md#class-sha1)
+See also: [SHA1](./primitives.md#class-sha1), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6239,12 +6597,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha256
 
 ```ts
-sha256 = (msg: Uint8Array | number[] | string, enc?: "hex" | "utf8"): number[] => {
-    return new SHA256().update(msg, enc).digest();
+sha256 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha256Bytes(msg, enc));
 }
 ```
-
-See also: [SHA256](./primitives.md#class-sha256)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6252,7 +6608,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha256hmac
 
 ```ts
-sha256hmac = (key: Uint8Array | number[] | string, msg: Uint8Array | number[] | string, enc?: "hex"): number[] => {
+sha256hmac = (key: HashInput, msg: HashInput, enc?: "hex"): number[] => {
+    const native = digestWithNodeHmac("sha256", key, msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new SHA256HMAC(key).update(msg, enc).digest();
 }
 ```
@@ -6265,12 +6624,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha512
 
 ```ts
-sha512 = (msg: number[] | string, enc?: "hex" | "utf8"): number[] => {
-    return new SHA512().update(msg, enc).digest();
+sha512 = (msg: HashInput, enc?: "hex" | "utf8"): number[] => {
+    return Array.from(sha512Bytes(msg, enc));
 }
 ```
-
-See also: [SHA512](./primitives.md#class-sha512)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6278,7 +6635,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: sha512hmac
 
 ```ts
-sha512hmac = (key: Uint8Array | number[] | string, msg: Uint8Array | number[] | string, enc?: "hex"): number[] => {
+sha512hmac = (key: HashInput, msg: HashInput, enc?: "hex"): number[] => {
+    const native = digestWithNodeHmac("sha512", key, msg, enc);
+    if (native != null)
+        return Array.from(native);
     return new SHA512HMAC(key).update(msg, enc).digest();
 }
 ```
@@ -6302,59 +6662,16 @@ sign = (msg: BigNumber, key: BigNumber, forceLowS: boolean = false, customK?: Bi
     const bkey = key.toArray("be", bytes);
     const nonce = msg.toArray("be", bytes);
     const drbg = new DRBG(bkey, nonce);
+    const fixedK = BigNumber.isBN(customK);
     for (let iter = 0;; iter++) {
-        let kBN = typeof customK === "function"
-            ? customK(iter)
-            : BigNumber.isBN(customK)
-                ? customK
-                : new BigNumber(drbg.generate(bytes), 16);
-        if (kBN == null) {
-            throw new Error("k is undefined");
-        }
-        kBN = truncateToN(kBN, true);
-        if (kBN.cmpn(1) < 0 || kBN.cmp(ns1) > 0) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (must be >1 and <N-1)");
-            }
-            continue;
-        }
-        const R = curve.g.mulCT(kBN);
-        if (R.isInfinity()) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (k\u00B7G at infinity)");
-            }
-            continue;
-        }
-        const xAff = BigInt("0x" + R.getX().toString(16));
-        const rBig = modN(xAff);
-        if (rBig === 0n) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (r == 0)");
-            }
-            continue;
-        }
-        const kBig = BigInt("0x" + kBN.toString(16));
-        const kInv = modInvN(kBig);
-        const rTimesKey = modMulN(rBig, keyBig);
-        const sum = modN(msgBig + rTimesKey);
-        let sBig = modMulN(kInv, sum);
-        if (sBig === 0n) {
-            if (BigNumber.isBN(customK)) {
-                throw new Error("Invalid fixed custom K value (s == 0)");
-            }
-            continue;
-        }
-        if (forceLowS && sBig > halfN) {
-            sBig = N_BIGINT - sBig;
-        }
-        const r = new BigNumber(rBig.toString(16), 16);
-        const s = new BigNumber(sBig.toString(16), 16);
-        return new Signature(r, s);
+        const signature = signatureFromK(selectK(customK, iter, drbg), msgBig, keyBig, forceLowS, fixedK);
+        if (signature != null)
+            return signature;
     }
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [DRBG](./primitives.md#class-drbg), [N_BIGINT](./primitives.md#variable-n_bigint), [Signature](./primitives.md#class-signature), [modInvN](./primitives.md#variable-modinvn), [modMulN](./primitives.md#variable-modmuln), [modN](./primitives.md#variable-modn), [toArray](./primitives.md#variable-toarray)
+See also: [BigNumber](./primitives.md#class-bignumber), [DRBG](./primitives.md#class-drbg), [Signature](./primitives.md#class-signature), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6368,7 +6685,7 @@ toArray = (msg: any, enc?: "hex" | "utf8" | "base64"): any[] => {
     if (msg === undefined)
         return [];
     if (typeof msg !== "string") {
-        return Array.from(msg, (item: any) => item | 0);
+        return Array.from(msg, (item: any) => Math.trunc(item));
     }
     switch (enc) {
         case "hex":
@@ -6390,33 +6707,39 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 toBase58 = (bin: number[]): string => {
-    const base58Map = Array(256).fill(-1);
+    const base58Map = Array.from({ length: 256 }, () => -1);
     for (let i = 0; i < base58chars.length; ++i) {
-        base58Map[base58chars.charCodeAt(i)] = i;
+        base58Map[base58chars.codePointAt(i) as number] = i;
     }
     const result: number[] = [];
     for (const byte of bin) {
         let carry = byte;
         for (let j = 0; j < result.length; ++j) {
             const x = (base58Map[result[j]] << 8) + carry;
-            result[j] = base58chars.charCodeAt(x % 58);
-            carry = (x / 58) | 0;
+            const quotient = Math.trunc(x / 58);
+            const remainder = x - quotient * 58;
+            result[j] = base58chars.codePointAt(remainder) as number;
+            carry = quotient;
         }
         while (carry !== 0) {
-            result.push(base58chars.charCodeAt(carry % 58));
-            carry = (carry / 58) | 0;
+            const quotient = Math.trunc(carry / 58);
+            const remainder = carry - quotient * 58;
+            result.push(base58chars.codePointAt(remainder) as number);
+            carry = quotient;
         }
     }
     for (const byte of bin) {
-        if (byte !== 0)
-            break;
+        if (byte === 0)
+            result.push("1".codePointAt(0) as number);
         else
-            result.push("1".charCodeAt(0));
+            break;
     }
     result.reverse();
-    return String.fromCharCode(...result);
+    return String.fromCodePoint(...result);
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6431,7 +6754,7 @@ toBase58Check = (bin: number[], prefix: number[] = [0]): string => {
 }
 ```
 
-See also: [hash256](./primitives.md#variable-hash256), [toBase58](./primitives.md#variable-tobase58)
+See also: [hash256](./primitives.md#variable-hash256), [string](./remittance.md#function-string), [toBase58](./primitives.md#variable-tobase58)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6445,13 +6768,48 @@ toHex = (msg: number[] | Uint8Array): string => {
     }
     if (msg.length === 0)
         return "";
-    const out = new Array(msg.length);
-    for (let i = 0; i < msg.length; i++) {
-        out[i] = HEX_BYTE_STRINGS[msg[i] & 255];
-    }
-    return out.join("");
+    return Array.from(msg, byte => HEX_BYTE_STRINGS[byte & 255]).join("");
 }
 ```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: toSafeString
+
+```ts
+toSafeString = (value: unknown, fallback = "Unknown value"): string => {
+    if (value === null)
+        return "null";
+    if (value === undefined)
+        return "undefined";
+    if (typeof value === "string")
+        return value;
+    if (typeof value === "number" || typeof value === "bigint")
+        return value.toString();
+    if (typeof value === "boolean")
+        return value ? "true" : "false";
+    if (typeof value === "symbol")
+        return value.description ?? value.toString();
+    if (value instanceof Error && value.message.length > 0)
+        return value.message;
+    const message = (value as {
+        message?: unknown;
+    }).message;
+    if (typeof message === "string" && message.length > 0)
+        return message;
+    try {
+        return JSON.stringify(value) ?? fallback;
+    }
+    catch {
+        return fallback;
+    }
+}
+```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6459,10 +6817,25 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Variable: toUTF8
 
 ```ts
-toUTF8 = (arr: number[]): string => {
-    return new TextDecoder().decode(new Uint8Array(arr));
+toUTF8 = (arr: number[] | Uint8Array): string => {
+    return new TextDecoder().decode(arr instanceof Uint8Array ? arr : new Uint8Array(arr));
 }
 ```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: toUTF8Strict
+
+```ts
+toUTF8Strict = (arr: number[] | Uint8Array): string => {
+    return new TextDecoder("utf-8", { fatal: true }).decode(arr instanceof Uint8Array ? arr : new Uint8Array(arr));
+}
+```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6473,11 +6846,13 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 toUint8Array = (msg: any, enc?: "hex" | "utf8" | "base64"): Uint8Array => {
     if (msg instanceof Uint8Array)
         return msg;
+    if (typeof msg === "string" && enc === "hex")
+        return hexToUint8Array(msg);
     return new Uint8Array(toArray(msg, enc));
 }
 ```
 
-See also: [toArray](./primitives.md#variable-toarray)
+See also: [hexToUint8Array](./primitives.md#variable-hextouint8array), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -6491,7 +6866,7 @@ verify = (msg: BigNumber, sig: Signature, key: Point): boolean => {
         return false;
     }
     const hash = bnToBigInt(msg);
-    if ((key.x == null) || (key.y == null)) {
+    if (key.x == null || key.y == null) {
         throw new Error("Invalid public key: missing coordinates.");
     }
     const publicKey = {
@@ -6542,6 +6917,8 @@ zero2 = (word: string): string => {
     }
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

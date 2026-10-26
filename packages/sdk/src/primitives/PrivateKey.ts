@@ -6,8 +6,25 @@ import Curve from './Curve.js'
 import { sign, verify } from './ECDSA.js'
 import { sha256, sha256hmac, sha512hmac } from './Hash.js'
 import Random from './Random.js'
-import { fromBase58Check, toArray, toBase58Check } from './utils.js'
-import Polynomial, { PointInFiniteField } from './Polynomial.js'
+import { fromBase58Check, toArray, toBase58Check, toHex } from './utils.js'
+import Polynomial, { MAX_SHAMIR_SHARES, PointInFiniteField } from './Polynomial.js'
+
+const MAX_BACKUP_SHARE_LENGTH = 256
+const BACKUP_SHARE_FIELD = /^[1-9A-HJ-NP-Za-km-z]{1,64}$/
+const BACKUP_SHARE_THRESHOLD = /^(?:[2-9]|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])$/
+const BACKUP_SHARE_INTEGRITY = /^[0-9a-f]{8}$/
+
+function assertKeyShareCollection(points: PointInFiniteField[], threshold: number, integrity: string): void {
+  if (!Array.isArray(points) || points.length === 0 || points.length > MAX_SHAMIR_SHARES) {
+    throw new TypeError(`shares must contain from 1 to ${MAX_SHAMIR_SHARES} entries`)
+  }
+  if (!Number.isSafeInteger(threshold) || threshold < 2 || threshold > MAX_SHAMIR_SHARES) {
+    throw new TypeError(`threshold must be a safe integer from 2 to ${MAX_SHAMIR_SHARES}`)
+  }
+  if (typeof integrity !== 'string' || !BACKUP_SHARE_INTEGRITY.test(integrity)) {
+    throw new TypeError('integrity must be an 8-character lowercase hexadecimal string')
+  }
+}
 
 /**
  * @class KeyShares
@@ -35,23 +52,41 @@ export class KeyShares {
     this.integrity = integrity
   }
 
+  /**
+   * Parse one or more canonical bounded backup shares. Each share uses
+   * `x.y.threshold.integrity`, where the threshold is from 2 through 255.
+   */
   static fromBackupFormat(shares: string[]): KeyShares {
+    if (!Array.isArray(shares) || shares.length === 0 || shares.length > MAX_SHAMIR_SHARES) {
+      throw new TypeError(`shares must contain from 1 to ${MAX_SHAMIR_SHARES} entries`)
+    }
     let threshold = 0
     let integrity = ''
-    const points = shares.map((share, idx) => {
+    const points: PointInFiniteField[] = []
+    for (let idx = 0; idx < shares.length; idx++) {
+      if (!Object.prototype.hasOwnProperty.call(shares, idx)) throw new TypeError('shares must be a dense array')
+      const share = shares[idx]
+      if (typeof share !== 'string' || share.length > MAX_BACKUP_SHARE_LENGTH) {
+        throw new TypeError(`Invalid share format in share ${idx.toString()}`)
+      }
       const shareParts = share.split('.')
       if (shareParts.length !== 4) {
-        throw new Error(
-          'Invalid share format in share ' +
-            idx.toString() +
-            '. Expected format: "x.y.t.i" - received ' +
-            share
-        )
+        throw new Error(`Invalid share format in share ${idx.toString()}. Expected format: "x.y.t.i"`)
       }
       const [x, y, t, i] = shareParts
-      if (t === undefined) throw new Error('Threshold not found in share ' + idx.toString())
-      if (i === undefined) throw new Error('Integrity not found in share ' + idx.toString())
-      const tInt = Number.parseInt(t, 10)
+      if (
+        x === undefined ||
+        y === undefined ||
+        t === undefined ||
+        i === undefined ||
+        !BACKUP_SHARE_FIELD.test(x) ||
+        !BACKUP_SHARE_FIELD.test(y) ||
+        !BACKUP_SHARE_THRESHOLD.test(t) ||
+        !BACKUP_SHARE_INTEGRITY.test(i)
+      ) {
+        throw new TypeError(`Invalid canonical share data in share ${idx.toString()}`)
+      }
+      const tInt = Number(t)
       if (idx !== 0 && threshold !== tInt) {
         throw new Error('Threshold mismatch in share ' + idx.toString())
       }
@@ -60,15 +95,26 @@ export class KeyShares {
       }
       threshold = tInt
       integrity = i
-      return PointInFiniteField.fromString([x, y].join('.'))
-    })
+      points.push(PointInFiniteField.fromString(`${x}.${y}`))
+    }
+    assertKeyShareCollection(points, threshold, integrity)
     return new KeyShares(points, threshold, integrity)
   }
 
   toBackupFormat(): string[] {
-    return this.points.map(
-      share => share.toString() + '.' + this.threshold.toString() + '.' + this.integrity
-    )
+    assertKeyShareCollection(this.points, this.threshold, this.integrity)
+    const result: string[] = []
+    for (let index = 0; index < this.points.length; index++) {
+      if (!Object.prototype.hasOwnProperty.call(this.points, index)) throw new TypeError('shares must be a dense array')
+      const point = this.points[index]
+      if (!(point instanceof PointInFiniteField)) throw new TypeError('shares must contain finite-field points')
+      const serialized = point.toString()
+      if (PointInFiniteField.fromString(serialized).toString() !== serialized) {
+        throw new TypeError('shares must contain canonical finite-field points')
+      }
+      result.push(`${serialized}.${this.threshold.toString()}.${this.integrity}`)
+    }
+    return result
   }
 }
 
@@ -81,6 +127,24 @@ export class KeyShares {
  * @extends {BigNumber}
  * @see {@link BigNumber} for more information on BigNumber.
  */
+// Public key per PrivateKey instance, with a SHA-256 fingerprint of the scalar
+// it was derived from, so the cache never holds a copy of the secret. A
+// WeakMap keeps it off the BigNumber instance and frees it with the key.
+// x and y are null when mulCT returned the point at infinity for this scalar.
+const PUBLIC_KEY_CACHE = new WeakMap<
+  PrivateKey,
+  { fingerprint: string, x: BigNumber | null, y: BigNumber | null }
+>()
+
+// Every bit of the value: its magnitude at full width (never fewer than 32
+// bytes, so normal keys hash a fixed-length input) and its sign, which
+// toArray drops but mulCT honours.
+const scalarFingerprint = (key: PrivateKey): string => {
+  const bytes = key.toArray('be', Math.max(32, key.byteLength()))
+  bytes.push(key.isNeg() ? 1 : 0)
+  return toHex(sha256(bytes))
+}
+
 export default class PrivateKey extends BigNumber {
   /**
    * Generates a private key randomly.
@@ -259,9 +323,14 @@ export default class PrivateKey extends BigNumber {
    * const publicKey = privateKey.toPublicKey();
    */
   toPublicKey(): PublicKey {
-    const c = new Curve()
-    const p = c.g.mulCT(this)
-    return new PublicKey(p.x, p.y)
+    const fingerprint = scalarFingerprint(this)
+    let cached = PUBLIC_KEY_CACHE.get(this)
+    if (cached?.fingerprint !== fingerprint) {
+      const p = new Curve().g.mulCT(this)
+      cached = { fingerprint, x: p.x, y: p.y }
+      PUBLIC_KEY_CACHE.set(this, cached)
+    }
+    return new PublicKey(cached.x?.clone() ?? null, cached.y?.clone() ?? null)
   }
 
   /**
@@ -421,6 +490,7 @@ export default class PrivateKey extends BigNumber {
    *
    * @param threshold The minimum number of shares required to reconstruct the private key.
    * @param totalShares The total number of shares to generate.
+   * Both values must be safe integers from 2 through 255.
    * @param prime The prime number to be used in Shamir's Secret Sharing Scheme.
    * @returns An array of shares.
    *
@@ -432,10 +502,16 @@ export default class PrivateKey extends BigNumber {
     if (typeof threshold !== 'number' || typeof totalShares !== 'number') {
       throw new TypeError('threshold and totalShares must be numbers')
     }
+    if (!Number.isSafeInteger(threshold) || !Number.isSafeInteger(totalShares)) {
+      throw new TypeError('threshold and totalShares must be safe integers')
+    }
     if (threshold < 2) throw new Error('threshold must be at least 2')
     if (totalShares < 2) throw new Error('totalShares must be at least 2')
     if (threshold > totalShares) {
       throw new Error('threshold should be less than or equal to totalShares')
+    }
+    if (threshold > MAX_SHAMIR_SHARES || totalShares > MAX_SHAMIR_SHARES) {
+      throw new RangeError(`threshold and totalShares cannot exceed ${MAX_SHAMIR_SHARES}`)
     }
 
     const poly = Polynomial.fromPrivateKey(this, threshold)
@@ -492,6 +568,7 @@ export default class PrivateKey extends BigNumber {
    *
    * @param threshold The number of shares which will be required to reconstruct the private key.
    * @param totalShares The number of shares to generate for distribution.
+   * Both values must be safe integers from 2 through 255.
    * @returns
    */
   toBackupShares(threshold: number, totalShares: number): string[] {
@@ -528,20 +605,37 @@ export default class PrivateKey extends BigNumber {
    *
    **/
   static fromKeyShares(keyShares: KeyShares): PrivateKey {
-    const { points, threshold, integrity } = keyShares
-    if (threshold < 2) throw new Error('threshold must be at least 2')
+    if (keyShares === null || typeof keyShares !== 'object') throw new TypeError('keyShares must be an object')
+    const points = keyShares.points
+    const threshold = keyShares.threshold
+    const integrity = keyShares.integrity
+    assertKeyShareCollection(points, threshold, integrity)
     if (points.length < threshold) {
       throw new Error(`At least ${threshold} shares are required to reconstruct the private key`)
+    }
+
+    const ownedPoints: PointInFiniteField[] = []
+    const P = new Curve().p
+    for (let index = 0; index < threshold; index++) {
+      if (!Object.prototype.hasOwnProperty.call(points, index)) throw new TypeError('shares must be a dense array')
+      const point = points[index]
+      if (!(point instanceof PointInFiniteField) || !(point.x instanceof BigNumber) || !(point.y instanceof BigNumber)) {
+        throw new TypeError('shares must contain finite-field points')
+      }
+      if (point.x.isNeg() || point.y.isNeg() || point.x.gte(P) || point.y.gte(P)) {
+        throw new TypeError('share coordinates must be canonical field elements')
+      }
+      ownedPoints.push(new PointInFiniteField(new BigNumber(point.x.toArray()), new BigNumber(point.y.toArray())))
     }
     // check to see if two points have the same x value
     for (let i = 0; i < threshold; i++) {
       for (let j = i + 1; j < threshold; j++) {
-        if (points[i].x.eq(points[j].x)) {
+        if (ownedPoints[i].x.eq(ownedPoints[j].x)) {
           throw new Error('Duplicate share detected, each must be unique.')
         }
       }
     }
-    const poly = new Polynomial(points, threshold)
+    const poly = new Polynomial(ownedPoints, threshold)
     const privateKey = new PrivateKey(poly.valueAt(new BigNumber(0)).toArray())
     const integrityHash = privateKey.toPublicKey().toHash('hex').slice(0, 8)
     if (integrityHash !== integrity) {

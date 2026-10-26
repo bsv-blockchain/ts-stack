@@ -20,7 +20,12 @@ pnpm --filter @bsv/conformance-runner-ts test
 
 The structural runner's `build` command verifies its JavaScript syntax.
 The TypeScript runner is linted and checked in strict mode before executing its
-tests. `test` executes the required vector suite. `validate` checks vector and
+tests. Its workspace dependencies include wallet-toolbox because the wallet
+dispatchers typecheck against its built declarations. For a clean targeted
+build, run `pnpm --filter '@bsv/conformance-runner-ts...' --if-present build`
+before the TypeScript runner's typecheck; the declared dependency graph builds
+those prerequisites even when the changed package is air-gap or CHIRP.
+`test` executes the required vector suite. `validate` checks vector and
 implementation metadata without executing the cases. Generated vectors live
 under `conformance/generated`; edit their source specifications and run the
 owned generator rather than editing generated output.

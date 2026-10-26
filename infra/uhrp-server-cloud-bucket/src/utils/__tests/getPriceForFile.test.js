@@ -29,6 +29,16 @@ describe('getPriceForFile', () => {
   it('Returns the correct number', async () => {
     const returnValue = await getPriceForFile(valid)
     expect(returnValue).toEqual(846799)
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://api.whatsonchain.com/v1/bsv/main/exchangerate',
+      expect.objectContaining({
+        timeout: 10000,
+        maxRedirects: 0,
+        maxContentLength: 64 * 1024,
+        maxBodyLength: 64 * 1024,
+        signal: expect.any(AbortSignal)
+      })
+    )
   })
   it('Logs an error and uses 30 if the rate request fails', async () => {
     axios.get.mockReturnValue({ data: null })
@@ -48,9 +58,11 @@ describe('getPriceForFile', () => {
     [{ rate: '200' }, 'string'],
     [{ rate: Number.NaN }, 'NaN'],
     [{ rate: Number.POSITIVE_INFINITY }, 'infinite'],
+    [{ rate: 1_000_001 }, 'implausibly high'],
+    [{ rate: 0.001 }, 'implausibly low'],
     [{ rate: 0 }, 'zero'],
     [{ rate: -1 }, 'negative']
-  ])('rejects a %s exchange rate and uses the safe fallback (%s)', async (data) => {
+  ])('rejects a %s exchange rate and uses the safe fallback (%s)', async data => {
     axios.get.mockReturnValue({ data })
 
     await expect(getPriceForFile(valid)).resolves.toEqual(5645333)
@@ -81,4 +93,17 @@ describe('getPriceForFile', () => {
     returnValue = await getPriceForFile(valid)
     expect(returnValue).toEqual(211)
   })
+
+  it.each(['1usd', '1e3', '-1', '0', 'Infinity', '1000001'])(
+    'rejects ambiguous or out-of-range PRICE_PER_GB_MO %s',
+    async configuredPrice => {
+      const previous = process.env.PRICE_PER_GB_MO
+      process.env.PRICE_PER_GB_MO = configuredPrice
+      try {
+        await expect(getPriceForFile(valid)).rejects.toThrow('PRICE_PER_GB_MO')
+      } finally {
+        process.env.PRICE_PER_GB_MO = previous
+      }
+    }
+  )
 })

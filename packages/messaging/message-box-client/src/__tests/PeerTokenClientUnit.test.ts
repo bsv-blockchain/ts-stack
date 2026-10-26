@@ -9,7 +9,9 @@ const createMockWalletClient = (): jest.Mocked<WalletInterface> =>
     getPublicKey: jest.fn(),
     createAction: jest.fn(),
     internalizeAction: jest.fn(),
-    createHmac: jest.fn<() => Promise<{ hmac: number[] }>>().mockResolvedValue({ hmac: [1, 2, 3] }),
+    createHmac: jest
+      .fn<() => Promise<{ hmac: number[] }>>()
+      .mockResolvedValue({ hmac: Array<number>(32).fill(1) }),
     verifyHmac: jest
       .fn<() => Promise<{ valid: true }>>()
       .mockResolvedValue({ valid: true as const })
@@ -58,6 +60,11 @@ describe('PeerTokenClient Unit Tests', () => {
     client = new PeerTokenClient({ walletClient: wallet, adapters: [adapter] })
   })
 
+  const bindIncomingToken = <T>(incoming: T): T => {
+    jest.spyOn(client, 'listIncomingTokens').mockResolvedValue([incoming] as any)
+    return incoming
+  }
+
   describe('createTokenToken', () => {
     it('delegates to the adapter and returns the artifact fields', async () => {
       const token = await client.createTokenToken({
@@ -78,7 +85,12 @@ describe('PeerTokenClient Unit Tests', () => {
 
     it('throws when no adapter is registered for the protocol', async () => {
       await expect(
-        client.createTokenToken({ recipient, protocol: 'dstas', source: SOURCE, amount: '1' })
+        client.createTokenToken({
+          recipient,
+          protocol: 'dstas',
+          source: { ...SOURCE, protocol: 'dstas' },
+          amount: '1'
+        })
       ).rejects.toThrow(/No token settlement adapter/)
     })
 
@@ -132,6 +144,28 @@ describe('PeerTokenClient Unit Tests', () => {
 
       expect(token.transaction).toEqual([4, 5, 6])
     })
+
+    it('requires an exact settlement action from the adapter', async () => {
+      ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
+        action: 'success',
+        artifact: ARTIFACT
+      })
+
+      await expect(
+        client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      ).rejects.toThrow('did not produce a settlement')
+    })
+
+    it('rejects an adapter artifact that changes requested token authority', async () => {
+      ;(adapter.buildTokenSettlement as jest.Mock).mockResolvedValue({
+        action: 'settle',
+        artifact: { ...ARTIFACT, assetId: 'SUBSTITUTED' }
+      })
+
+      await expect(
+        client.createTokenToken({ recipient, protocol: 'stas', source: SOURCE, amount: '1000' })
+      ).rejects.toThrow('changed the requested token authority')
+    })
   })
 
   describe('sendToken', () => {
@@ -163,7 +197,7 @@ describe('PeerTokenClient Unit Tests', () => {
     it('throws on a missing recipient', async () => {
       await expect(
         client.sendToken({ recipient: '  ', protocol: 'stas', source: SOURCE, amount: '1000' })
-      ).rejects.toThrow(/recipient is required/)
+      ).rejects.toThrow(/identity key is invalid/)
     })
   })
 
@@ -172,11 +206,11 @@ describe('PeerTokenClient Unit Tests', () => {
       const ackSpy = jest
         .spyOn(client, 'acknowledgeMessage' as any)
         .mockResolvedValue(undefined as never)
-      const incoming = {
+      const incoming = bindIncomingToken({
         messageId: 'msg-1',
         sender: PrivateKey.fromRandom().toPublicKey().toString(),
         token: { ...ARTIFACT }
-      }
+      })
       const result = await client.acceptToken(incoming)
       expect(adapter.acceptTokenSettlement).toHaveBeenCalledTimes(1)
       expect(ackSpy).toHaveBeenCalledWith(expect.objectContaining({ messageIds: ['msg-1'] }))
@@ -189,11 +223,13 @@ describe('PeerTokenClient Unit Tests', () => {
         .mockResolvedValue(undefined as never)
       const transaction = JSON.parse(JSON.stringify(new Uint8Array([7, 8, 9])))
 
-      await client.acceptToken({
-        messageId: 'msg-json-bytes',
-        sender: recipient,
-        token: { ...ARTIFACT, transaction }
-      })
+      await client.acceptToken(
+        bindIncomingToken({
+          messageId: 'msg-json-bytes',
+          sender: recipient,
+          token: { ...ARTIFACT, transaction }
+        })
+      )
 
       expect(adapter.acceptTokenSettlement).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -208,15 +244,67 @@ describe('PeerTokenClient Unit Tests', () => {
       const ackSpy = jest.spyOn(client, 'acknowledgeMessage' as any)
 
       await expect(
-        client.acceptToken({
-          messageId: 'msg-bad-bytes',
-          sender: recipient,
-          token: { ...ARTIFACT, transaction: { 1: 2 } as never }
-        })
-      ).resolves.toBe('Unable to receive token!')
+        client.acceptToken(
+          bindIncomingToken({
+            messageId: 'msg-bad-bytes',
+            sender: recipient,
+            token: { ...ARTIFACT, transaction: { 1: 2 } as never }
+          })
+        )
+      ).rejects.toThrow('Token settlement transaction is invalid')
 
       expect(adapter.acceptTokenSettlement).not.toHaveBeenCalled()
       expect(ackSpy).not.toHaveBeenCalled()
+    })
+
+    it('rebinds to fresh inbox metadata and contains post-custody acknowledgement failure', async () => {
+      const fresh = bindIncomingToken({
+        messageId: 'fresh-token',
+        sender: recipient,
+        token: { ...ARTIFACT }
+      })
+      jest.spyOn(client, 'acknowledgeMessage' as any).mockRejectedValue(new Error('offline'))
+
+      await expect(
+        client.acceptToken({
+          ...fresh,
+          sender: PrivateKey.fromRandom().toPublicKey().toString(),
+          token: { ...fresh.token, assetId: 'SUBSTITUTED', amount: '9999' }
+        })
+      ).resolves.toEqual(expect.objectContaining({ incoming: fresh }))
+      expect(adapter.acceptTokenSettlement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sender: recipient,
+          settlement: expect.objectContaining({ assetId: 'TEST', amount: '1000' })
+        }),
+        expect.any(Object)
+      )
+    })
+
+    it('requires an exact adapter acceptance verdict before acknowledging', async () => {
+      const incoming = bindIncomingToken({
+        messageId: 'invalid-verdict',
+        sender: recipient,
+        token: { ...ARTIFACT }
+      })
+      ;(adapter.acceptTokenSettlement as jest.Mock).mockResolvedValue({ action: 'accepted' })
+      const ackSpy = jest.spyOn(client, 'acknowledgeMessage' as any)
+
+      await expect(client.acceptToken(incoming)).rejects.toThrow('did not accept')
+      expect(ackSpy).not.toHaveBeenCalled()
+    })
+
+    it('refuses absent and duplicate inbox matches before adapter mutation', async () => {
+      const incoming = {
+        messageId: 'ambiguous-token',
+        sender: recipient,
+        token: { ...ARTIFACT }
+      }
+      const list = jest.spyOn(client, 'listIncomingTokens').mockResolvedValue([])
+      await expect(client.acceptToken(incoming)).rejects.toThrow('not present exactly once')
+      list.mockResolvedValue([incoming, incoming])
+      await expect(client.acceptToken(incoming)).rejects.toThrow('not present exactly once')
+      expect(adapter.acceptTokenSettlement).not.toHaveBeenCalled()
     })
   })
 
@@ -227,7 +315,10 @@ describe('PeerTokenClient Unit Tests', () => {
       expect(liteSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           messageBox: STANDARD_TOKEN_MESSAGEBOX,
-          host: 'https://message-box-us-1.bsvb.tech'
+          host: 'https://message-box-us-1.bsvb.tech',
+          limit: 1000,
+          pageSize: 100,
+          maxPages: 10
         })
       )
     })
@@ -259,14 +350,27 @@ describe('PeerTokenClient Unit Tests', () => {
         client.verifyTokenRequestProof({
           requestId: 'request-1',
           sender: recipient,
-          requestProof: '0102ff'
+          requestProof: '01'.repeat(32)
         })
       ).resolves.toBe(true)
 
       expect(wallet.verifyHmac).toHaveBeenCalledWith(
-        expect.objectContaining({ hmac: [1, 2, 255], counterparty: recipient }),
+        expect.objectContaining({ hmac: Array<number>(32).fill(1), counterparty: recipient }),
         undefined
       )
+    })
+
+    it('rejects a wallet false verdict that does not throw', async () => {
+      wallet.getPublicKey.mockResolvedValue({ publicKey: recipient })
+      wallet.verifyHmac.mockResolvedValueOnce({ valid: false } as never)
+
+      await expect(
+        client.verifyTokenRequestProof({
+          requestId: 'request-1',
+          sender: recipient,
+          requestProof: '0102ff'
+        })
+      ).resolves.toBe(false)
     })
   })
 
@@ -334,16 +438,31 @@ describe('PeerTokenClient Unit Tests', () => {
   })
 
   describe('token request lifecycle', () => {
-    const request = {
-      messageId: 'request-message',
-      sender: 'requester-key',
-      requestId: 'request-1',
-      protocol: 'stas',
-      assetId: 'TEST',
-      amount: '1000',
-      description: 'Send token',
-      expiresAt: Date.now() + 60_000
+    let request: {
+      messageId: string
+      sender: string
+      requestId: string
+      protocol: string
+      assetId: string
+      amount: string
+      description: string
+      expiresAt: number
+      requestProof: string
     }
+
+    beforeEach(() => {
+      request = {
+        messageId: 'request-message',
+        sender: recipient,
+        requestId: 'request-1',
+        protocol: 'stas',
+        assetId: 'TEST',
+        amount: '1000',
+        description: 'Send token',
+        expiresAt: Date.now() + 60_000,
+        requestProof: '01'.repeat(32)
+      }
+    })
 
     it('parses valid incoming tokens and filters malformed tokens', async () => {
       jest.spyOn(client, 'listMessagesLite').mockResolvedValue([
@@ -368,8 +487,25 @@ describe('PeerTokenClient Unit Tests', () => {
       ])
     })
 
+    it('drops a token whose body sender conflicts with the authenticated envelope', async () => {
+      jest.spyOn(client, 'listMessagesLite').mockResolvedValue([
+        {
+          messageId: 'spoofed',
+          sender: recipient,
+          body: {
+            ...ARTIFACT,
+            sender: PrivateKey.fromRandom().toPublicKey().toString()
+          },
+          created_at: '',
+          updated_at: ''
+        }
+      ])
+
+      await expect(client.listIncomingTokens()).resolves.toEqual([])
+    })
+
     it('creates and sends an authenticated token request', async () => {
-      jest.spyOn(client, 'getIdentityKey').mockResolvedValue('sender-key')
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
       const send = jest.spyOn(client, 'sendMessage').mockResolvedValue({
         status: 'success',
         messageId: 'request-message'
@@ -387,19 +523,19 @@ describe('PeerTokenClient Unit Tests', () => {
         'https://override.example'
       )
 
-      expect(result.requestProof).toBe('010203')
+      expect(result.requestProof).toBe('01'.repeat(32))
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           recipient,
           messageBox: 'token_requests',
-          body: expect.stringContaining('"requestProof":"010203"')
+          body: expect.stringContaining(`"requestProof":"${'01'.repeat(32)}"`)
         }),
         'https://override.example'
       )
     })
 
     it('uses the configured token host when a request has no override', async () => {
-      jest.spyOn(client, 'getIdentityKey').mockResolvedValue('sender-key')
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
       const send = jest.spyOn(client, 'sendMessage').mockResolvedValue({
         status: 'success',
         messageId: 'request-message'
@@ -420,6 +556,7 @@ describe('PeerTokenClient Unit Tests', () => {
     it('converts valid live requests while ignoring cancelled and malformed payloads', async () => {
       const listen = jest.spyOn(client, 'listenForLiveMessages').mockResolvedValue()
       const onRequest = jest.fn()
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
       await client.listenForLiveTokenRequests({ onRequest })
 
       const { onMessage } = listen.mock.calls[0][0]
@@ -428,16 +565,58 @@ describe('PeerTokenClient Unit Tests', () => {
         created_at: '',
         updated_at: ''
       }
-      onMessage({ ...baseMessage, messageId: 'bad', body: '{' })
-      onMessage({
+      await onMessage({ ...baseMessage, messageId: 'bad', body: '{' })
+      await onMessage({
         ...baseMessage,
         messageId: 'cancelled',
         body: JSON.stringify({ requestId: request.requestId, cancelled: true })
       })
-      onMessage({ ...baseMessage, messageId: request.messageId, body: JSON.stringify(request) })
+      await onMessage({
+        ...baseMessage,
+        messageId: request.messageId,
+        body: JSON.stringify({ ...request, senderIdentityKey: request.sender })
+      })
 
       expect(onRequest).toHaveBeenCalledTimes(1)
       expect(onRequest).toHaveBeenCalledWith(expect.objectContaining(request))
+    })
+
+    it('requires a valid request proof before exposing a live request', async () => {
+      const listen = jest.spyOn(client, 'listenForLiveMessages').mockResolvedValue()
+      const onRequest = jest.fn()
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
+      wallet.verifyHmac.mockResolvedValue({ valid: false } as never)
+      await client.listenForLiveTokenRequests({ onRequest })
+
+      await listen.mock.calls[0][0].onMessage({
+        messageId: request.messageId,
+        sender: request.sender,
+        body: { ...request, senderIdentityKey: request.sender },
+        created_at: '',
+        updated_at: ''
+      })
+
+      expect(onRequest).not.toHaveBeenCalled()
+    })
+
+    it('lists only bounded, authenticated, unexpired token requests', async () => {
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
+      const list = jest.spyOn(client, 'listMessagesLite').mockResolvedValue([
+        {
+          messageId: request.messageId,
+          sender: request.sender,
+          body: { ...request, senderIdentityKey: request.sender },
+          created_at: '',
+          updated_at: ''
+        }
+      ])
+
+      await expect(client.listIncomingTokenRequests()).resolves.toEqual([
+        expect.objectContaining(request)
+      ])
+      expect(list).toHaveBeenCalledWith(
+        expect.objectContaining({ limit: 1000, pageSize: 100, maxPages: 10 })
+      )
     })
 
     it('fulfills a request, responds, and acknowledges the request message', async () => {
@@ -447,6 +626,7 @@ describe('PeerTokenClient Unit Tests', () => {
         messageId: 'response-message'
       })
       const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
 
       await client.fulfillTokenRequest(
         { request, source: SOURCE, note: 'settled' },
@@ -480,6 +660,7 @@ describe('PeerTokenClient Unit Tests', () => {
         messageId: 'response-message'
       })
       const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
 
       await client.fulfillTokenRequest({ request, source: SOURCE })
 
@@ -497,12 +678,88 @@ describe('PeerTokenClient Unit Tests', () => {
       })
     })
 
+    it('uses fresh authenticated request fields instead of caller substitutions', async () => {
+      const sendToken = jest.spyOn(client, 'sendToken').mockResolvedValue(ARTIFACT)
+      jest.spyOn(client, 'sendMessage').mockResolvedValue({
+        status: 'success',
+        messageId: 'response-message'
+      })
+      jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
+
+      await client.fulfillTokenRequest({
+        request: {
+          ...request,
+          sender: PrivateKey.fromRandom().toPublicKey().toString(),
+          amount: '9999',
+          assetId: 'SUBSTITUTED'
+        },
+        source: SOURCE
+      })
+
+      expect(sendToken).toHaveBeenCalledWith(
+        expect.objectContaining({ recipient: request.sender, amount: '1000' }),
+        'https://message-box-us-1.bsvb.tech'
+      )
+    })
+
+    it('rejects concurrent processing of the same token request by one client', async () => {
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
+      let releaseToken!: () => void
+      const tokenPending = new Promise<typeof ARTIFACT>(resolve => {
+        releaseToken = () => resolve(ARTIFACT)
+      })
+      const sendToken = jest
+        .spyOn(client, 'sendToken')
+        .mockImplementation(async () => await tokenPending)
+      jest.spyOn(client, 'sendMessage').mockResolvedValue({
+        status: 'success',
+        messageId: 'response-message'
+      })
+      jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+
+      const first = client.fulfillTokenRequest({ request, source: SOURCE })
+      while (sendToken.mock.calls.length === 0) await Promise.resolve()
+      await expect(client.fulfillTokenRequest({ request, source: SOURCE })).rejects.toThrow(
+        'already being processed'
+      )
+      releaseToken()
+      await first
+      expect(sendToken).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not misreport completed token fulfillment when acknowledgement fails', async () => {
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
+      jest.spyOn(client, 'sendToken').mockResolvedValue(ARTIFACT)
+      jest.spyOn(client, 'sendMessage').mockResolvedValue({
+        status: 'success',
+        messageId: 'response-message'
+      })
+      jest.spyOn(client, 'acknowledgeMessage').mockRejectedValue(new Error('offline'))
+
+      await expect(client.fulfillTokenRequest({ request, source: SOURCE })).resolves.toBe(undefined)
+    })
+
+    it('refuses a source for a different asset than the authenticated request', async () => {
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
+      const sendToken = jest.spyOn(client, 'sendToken')
+
+      await expect(
+        client.fulfillTokenRequest({
+          request,
+          source: { ...SOURCE, assetId: 'DIFFERENT' }
+        })
+      ).rejects.toThrow('does not satisfy the authenticated request')
+      expect(sendToken).not.toHaveBeenCalled()
+    })
+
     it('declines and acknowledges a request', async () => {
       const send = jest.spyOn(client, 'sendMessage').mockResolvedValue({
         status: 'success',
         messageId: 'response-message'
       })
       const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+      jest.spyOn(client, 'listIncomingTokenRequests').mockResolvedValue([request])
 
       await client.declineTokenRequest({ request, note: 'not available' })
 
@@ -518,7 +775,7 @@ describe('PeerTokenClient Unit Tests', () => {
     })
 
     it('sends a cancellation bound to the current identity key', async () => {
-      jest.spyOn(client, 'getIdentityKey').mockResolvedValue('sender-key')
+      jest.spyOn(client, 'getIdentityKey').mockResolvedValue(recipient)
       const send = jest.spyOn(client, 'sendMessage').mockResolvedValue({
         status: 'success',
         messageId: 'cancel-message'
@@ -527,13 +784,13 @@ describe('PeerTokenClient Unit Tests', () => {
       await client.cancelTokenRequest({
         recipient,
         requestId: request.requestId,
-        requestProof: '010203'
+        requestProof: '01'.repeat(32)
       })
 
       expect(JSON.parse(String(send.mock.calls[0][0].body))).toEqual({
         requestId: request.requestId,
-        senderIdentityKey: 'sender-key',
-        requestProof: '010203',
+        senderIdentityKey: recipient,
+        requestProof: '01'.repeat(32),
         cancelled: true
       })
     })

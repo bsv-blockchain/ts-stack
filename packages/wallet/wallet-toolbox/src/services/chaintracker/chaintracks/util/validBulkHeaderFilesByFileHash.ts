@@ -24,7 +24,7 @@ import { BulkHeaderFileInfo } from './BulkHeaderFile'
  *
  * @publicbody
  */
-export function isKnownValidBulkHeaderFile (vbf: BulkHeaderFileInfo): boolean {
+export function isKnownValidBulkHeaderFile(vbf: BulkHeaderFileInfo): boolean {
   if (!vbf?.fileHash) return false
   const bf = validBulkHeaderFilesByFileHash()[vbf.fileHash]
   if (
@@ -47,7 +47,7 @@ let _validBulkHeaderFilesByFileHash: Record<string, BulkHeaderFileInfo> | undefi
  * Hash map of known valid bulk header files by their `fileHash`.
  * @returns object where keys are file hashes of known bulk header files.
  */
-export function validBulkHeaderFilesByFileHash (): Record<string, BulkHeaderFileInfo> {
+export function validBulkHeaderFilesByFileHash(): Record<string, BulkHeaderFileInfo> {
   if (_validBulkHeaderFilesByFileHash == null) {
     _validBulkHeaderFilesByFileHash = {}
     for (const vbf of validBulkHeaderFiles) {

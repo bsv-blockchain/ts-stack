@@ -55,6 +55,7 @@ Publication example:
 
 ```sh
 curl -H 'content-type: application/json' \
+  -H "authorization: Bearer $LCH_PUBLICATION_TOKEN" \
   --data '{"name":"clip.wav","mediaType":"audio/wav","bytesBase64":"..."}' \
   https://lch.example/api/assets
 ```
@@ -130,14 +131,16 @@ The reference client records the wallet result as **finalized** only. The initia
 
 ## Runtime configuration
 
-| Variable                   | Default                    | Production meaning                                         |
-| -------------------------- | -------------------------- | ---------------------------------------------------------- |
-| `PORT`                     | `4173`                     | Container listener port                                    |
-| `LCH_PUBLIC_BASE_URL`      | `http://127.0.0.1:${PORT}` | Exact public HTTPS origin used in every generated endpoint |
-| `LCH_STATIC_DIR`           | Built `dist/` directory    | Workbench and notice files served by the Node adapter      |
-| `LCH_WALLET_MODULE`        | Unset, fixture mode        | Secret-mounted ESM wallet factory described above          |
-| `LCH_RECORDING_SATOSHIS`   | `7`                        | Demonstration recording-controller amount                  |
-| `LCH_COMPOSITION_SATOSHIS` | `5`                        | Demonstration composition-controller amount                |
+| Variable                     | Default                    | Production meaning                                                              |
+| ---------------------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| `PORT`                       | `4173`                     | Container listener port                                                         |
+| `LCH_PUBLIC_BASE_URL`        | `http://127.0.0.1:${PORT}` | Exact public HTTPS origin used in every generated endpoint                      |
+| `LCH_STATIC_DIR`             | Built `dist/` directory    | Workbench and notice files served by the Node adapter                           |
+| `LCH_WALLET_MODULE`          | Unset, fixture mode        | Secret-mounted ESM wallet factory described above                               |
+| `LCH_PUBLICATION_TOKEN`      | Unset in fixture mode      | Required 32+ byte creator Bearer token when a real wallet module is connected   |
+| `LCH_PUBLICATION_TOKEN_FILE` | Unset                      | Absolute secret-file alternative to `LCH_PUBLICATION_TOKEN`; configure only one |
+| `LCH_RECORDING_SATOSHIS`     | `7`                        | Demonstration recording-controller amount                                       |
+| `LCH_COMPOSITION_SATOSHIS`   | `5`                        | Demonstration composition-controller amount                                     |
 
 The two amount variables configure the fixed demonstration policy, not a
 catalogue pricing system. Production applications should derive signed duties
@@ -159,11 +162,13 @@ docker build -f apps/lch-reference/Dockerfile -t lch-reference .
 docker run --read-only --tmpfs /tmp -p 4173:4173 \
   -e LCH_PUBLIC_BASE_URL=https://lch.example \
   -e LCH_WALLET_MODULE=/run/lch-wallets/operator-wallets.mjs \
+  -e LCH_PUBLICATION_TOKEN_FILE=/run/secrets/lch-publication-token \
   -v /operator/lch-wallets:/run/lch-wallets:ro \
+  -v /operator/lch-secrets:/run/secrets:ro \
   lch-reference
 ```
 
-Terminate TLS at the ingress, set `LCH_PUBLIC_BASE_URL` to the public HTTPS origin, and restrict publication to authenticated creator/admin traffic before exposing `/api/assets`. The reference route deliberately contains no account system because creator authentication is an application policy, not an LCH wire object.
+Terminate TLS at the ingress, set `LCH_PUBLIC_BASE_URL` to the public HTTPS origin, and set `LCH_PUBLICATION_TOKEN` from a secret manager before connecting real wallets. The Node adapter refuses connected-wallet startup without it and checks the exact Bearer token before reading a publication body. A production application may add its own account/role policy at the ingress; creator authentication is not an LCH wire object.
 
 The image does not include a durable database or CHIRP server. Mounting a real
 wallet module changes `walletMode` but does not replace the memory stores. An

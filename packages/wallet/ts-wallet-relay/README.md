@@ -64,14 +64,23 @@ ORIGIN=http://localhost:5173
 > **Desktop API transport:** an absolute `WalletRelayClient.apiUrl` must use
 > HTTPS in production because its requests carry the desktop session token and
 > wallet RPC payloads. Root-relative same-origin paths and HTTP loopback hosts
-> remain available; credential-bearing URLs, query strings, and fragments are
-> rejected.
+> remain available, as does HTTP on a private-network IP address with the
+> development-only `allowLocalNetworkHttp` option; credential-bearing URLs,
+> query strings, and fragments are rejected. Relay discovery does not follow
+> redirects, has a 10-second deadline, and rejects responses larger than
+> 256 KiB or containing invalid UTF-8.
 
 > **Multi-app deployments:** one relay can serve N webapps. Pass an `allowedOrigins` allowlist (`string[]`, `RegExp`, or predicate) to `WalletRelayService` and the built-in `GET /api/session` route forwards each browser's `Origin` header into `createSession({ origin })` — every QR points back at the calling webapp instead of the relay's own URL. See [API.md](./API.md#walletrelayservice) for the full option.
 
 > **Public-service default:** when neither `allowedOrigins` nor a constructor `origin` is supplied, the relay accepts browser origins from previously unknown domains. `ORIGIN` remains the fallback URL placed in a QR; setting it as an environment variable does not silently create a WebSocket allowlist. The scaffold mirrors this with public reflected CORS by default and an optional comma-separated `ALLOWED_ORIGINS` whitelist. Origin checks and CORS are deployment controls, not authentication: desktop tokens, topic validation, QR signatures, and encrypted pairing remain enforced in either mode.
 
-> **Local dev with split frontend/backend:** a physical mobile device must use an HTTPS origin with a valid certificate (for example, a trusted development tunnel) to reach `GET /api/session/:id`. Plain HTTP pairing origins are accepted only on `localhost`, `127.0.0.1`, or `[::1]`; an `http://<lan-ip>` QR is rejected. `ORIGIN` stays as the Vite URL for browser CORS. This variable is not needed in production.
+> **Local dev with split frontend/backend:** loopback (`localhost`, `*.localhost`, `127.0.0.0/8`, `[::1]`) may always use plain HTTP/WS, which covers same-machine development and emulators. A physical phone needs either an HTTPS origin with a valid certificate (for example, a trusted development tunnel) or the development-only `allowLocalNetworkHttp` opt-in, which accepts plain HTTP/WS on private-network IP addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, IPv6 `fc00::/7`). It is off by default on all three sides and each must enable it:
+>
+> - **Backend:** `new WalletRelayService({ ..., allowLocalNetworkHttp: true })`, with `ORIGIN=http://192.168.1.20:3000` and `RELAY_URL=ws://192.168.1.20:3000` (the machine's LAN IP; the origin must serve `GET /api/session/:id`). There is no environment variable for the flag; wire it to your own development switch.
+> - **Desktop:** `new WalletRelayClient({ allowLocalNetworkHttp: true })` or `useWalletRelayClient({ allowLocalNetworkHttp: true })`. Status polls return the `ws://` relay URL, and an absolute `http://<lan-ip>` `apiUrl` needs it too. Without it, polling stops and `onError` (the hook's `error`) reports a message naming the option.
+> - **Phone:** the wallet passes `{ allowLocalNetworkHttp: true }` to `parsePairingUri` and `WalletPairingSession`, typically behind a developer setting. A wallet without it rejects the QR because the origin is not HTTPS; that message reaches wallet users, so it does not name the option.
+>
+> Use the IP address itself: hostnames such as `*.local` still require HTTPS/WSS. The QR carries `ORIGIN` unless `GET /api/session` arrives with a browser `Origin` header, which browsers send when the page calls the backend cross-origin (an absolute `apiUrl`), not on a same-origin GET through a dev-server proxy. In the cross-origin case the page's own origin goes into the QR, so open the page through its LAN address (not `localhost`), make its dev server listen on the LAN and serve or proxy `/api`, and include that origin in `allowedOrigins` if you set one. HTTP origins cannot be authenticated: an on-path attacker on the LAN can rewrite the plaintext session lookup and relay URL and read the desktop token and wallet RPC payloads. Never enable `allowLocalNetworkHttp` in production.
 
 ### 3. App setup
 
@@ -182,7 +191,15 @@ new WalletRelayService({
 
 The built-in `GET /api/session` route forwards the request's `Origin` header into `createSession({ origin })`, so the QR points back at the calling webapp rather than the relay's own URL. Origins not in `allowedOrigins` get a `403`.
 
-> **`desktopToken`** is returned by `GET /api/session` and must be sent as an `X-Desktop-Token` header on every `POST /api/request/:id` call. It ensures that only the frontend that created the session can send wallet requests — even if another client somehow learns the `sessionId`. `useWalletRelayClient` / `WalletRelayClient` handle this automatically. If you are calling `relay.sendRequest()` directly from your own route handlers (Next.js, etc.) you must forward the header yourself — see [Next.js setup](#nextjs-setup) below.
+Session creation and status responses are emitted with `Cache-Control: no-store` because the creation response contains a wallet-equivalent bearer token. Preserve that policy at reverse proxies and CDNs. The scaffold also caps JSON request bodies at 64 KiB; apply an equivalent bound when supplying your own parser or framework routes.
+
+The service limits new sessions to 120 per minute and 1,000 live sessions by default. Tune `maxSessionCreationsPerMinute` / `maxSessions` for measured demand and add a source-aware rate limit at the public edge; the in-process global limit is a final resource boundary, not a substitute for distributed abuse controls.
+
+> **`desktopToken`** is returned by `GET /api/session` and must be sent as an `X-Desktop-Token` header on every `POST /api/request/:id` call. It grants the ability to ask the connected wallet to perform operations, so treat it as a wallet-equivalent bearer secret: do not log it, place it in URLs, copy it into the QR, or share it with the mobile. `WalletRelayClient` stores it in `sessionStorage` by default solely to support same-tab refresh; use `persistSession: false` for higher-assurance pages and clear it with `disconnect()`. `useWalletRelayClient` / `WalletRelayClient` handle the header automatically. If you call `relay.sendRequest()` directly from your own route handlers, forward the header yourself — see [Next.js setup](#nextjs-setup) below.
+
+For a direct desktop-role browser WebSocket, authenticate without putting the token in the routinely logged URL: `new WebSocket(url, ['bsv-wallet-relay', 'bsv-wallet-relay-token.' + desktopToken])`. The server selects and echoes only `bsv-wallet-relay`. The legacy `?token=` form remains accepted for wire compatibility but should not be used by new clients.
+
+`WalletRelayClient` retains at most 100 request-log entries by default; set `maxLogEntries: 0` to disable retention or choose a bounded value up to 10,000. Wallet results may contain certificates, decrypted plaintext, linkage proofs, and other sensitive values, so render or export the debug log only in an appropriately trusted UI.
 
 > **CORS and CSP:** if your frontend and backend run on different origins, include `X-Desktop-Token` in CORS `allowedHeaders`; otherwise the browser's preflight blocks `POST /api/request/:id`. Public CORS should reflect the requesting origin without enabling cookie credentials. To opt into a whitelist, apply the same exact origins to CORS and `allowedOrigins`. CSP is owned by the embedding app, not injected by the relay; its `connect-src` must include the configured HTTP(S) origin and WS(S) relay. Do not use CORS or CSP as a substitute for relay authentication.
 
@@ -305,6 +322,7 @@ export async function GET() {
 import { relay } from '@/lib/relay'
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  // Return the object unchanged: the phone checks its backendIdentityKey against the QR.
   const info = relay.getSession(params.id)
   if (!info) return Response.json({ error: 'Session not found' }, { status: 404 })
   return Response.json(info)
@@ -440,7 +458,16 @@ await session.resolveRelay()
 await session.connect()
 ```
 
-The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` verifies the required QR signature, then calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere. Plain HTTP origins and unsigned QR codes are rejected except that loopback HTTP remains available for same-device development.
+The relay URL is no longer embedded in the QR code. Instead `resolveRelay()` verifies the required QR signature, then calls `GET {origin}/api/session/{topic}` over HTTPS and reads the `relay` field from the response. The origin's TLS certificate is the trust anchor — the relay itself can be hosted anywhere. The response also reports the origin's `backendIdentityKey`; `resolveRelay()` rejects the pairing when it differs from the key in the QR, so the key the phone encrypts to is the one the displayed origin vouches for. Over a plain-HTTP origin (loopback or `allowLocalNetworkHttp`) this gives no assurance, because the lookup is unauthenticated. Servers older than 0.6.0 do not report the key and are accepted for compatibility; pass `requireOriginBoundKey: true` to reject them. A future minor release will make that the default. Plain HTTP origins, cleartext WebSockets, redirects, unsigned QR codes, malformed session responses, and unbounded responses are rejected. HTTP/WS stays available on loopback for same-device development; a development wallet build can also accept it on private-network IP addresses by passing `allowLocalNetworkHttp: true` to `parsePairingUri` and `WalletPairingSession`. Nothing authenticates an HTTP origin, so production wallets must leave that option off.
+
+The short-lived QR is also a bearer pairing invitation. Its signature authenticates the backend to the phone; it does not identify which phone is expected. Anyone who can copy or scan an unexpired QR can pair their own wallet first, after which the relay pins that mobile identity key. Scanning normally requires physical proximity to the displayed code, but a copied image, screen share, support transcript, log, or exposed raw pairing URI removes that proximity barrier. Keep those values confidential and require explicit per-operation approval on the phone. The current security model intentionally relies on possession of the short-lived invitation plus the phone's later approvals; deployments that need a pre-identified phone must add that assurance at the application level.
+
+The QR signature covers `topic`, backend identity key, origin, and expiry, but
+not the `protocolID` field or deep-link scheme. Those unsigned values are
+routing inputs, not authenticated authority. With the built-in service,
+tampering with either causes key-derivation or application-routing failure
+rather than granting wallet authority, but it can prevent pairing. Applications
+must not make authorization decisions from either unsigned value.
 
 Methods outside `autoApproveMethods` fail closed when `onApprovalRequired` is
 omitted. Configure an approval UI for signing, spending, decryption, HMAC, and
@@ -506,15 +533,29 @@ import {
 } from '@bsv/wallet-relay'
 
 const sessions = new QRSessionManager()
-const relay = new WebSocketRelay(server)
+const relay = new WebSocketRelay(server, { holdDesktopTrafficUntilAccepted: true })
 const handler = new WalletRequestHandler()
 
 relay.onValidateTopic(topic => sessions.getSession(topic) !== null)
-relay.onIncoming((topic, envelope, role) => {
-  /* custom logic */
+relay.onIncoming((topic, envelope, role, connectionId) => {
+  if (role !== 'mobile' || !envelope.mobileIdentityKey) return
+  // verifyPairing is yours: decrypt pairing_approved and check its mobileIdentityKey.
+  void verifyPairing(topic, envelope)
+    .then(ok => {
+      if (!relay.isCurrentMobile(topic, connectionId)) return // socket left meanwhile
+      if (ok) relay.acceptMobile(topic, connectionId)
+      else relay.disconnectMobile(topic)
+    })
+    .catch(() => {
+      if (relay.isCurrentMobile(topic, connectionId)) relay.disconnectMobile(topic)
+    })
 })
 sessions.onSessionExpired(id => relay.removeTopic(id))
 ```
+
+A standalone `WebSocketRelay` forwards desktop and mobile messages as soon as both sides are connected. Pass `holdDesktopTrafficUntilAccepted: true` to deliver `role=desktop` messages to a mobile socket only after you call `relay.acceptMobile(topic, connectionId)` for it (the `connectionId` is the fourth `onIncoming` argument); `WalletRelayService` does this once the phone's `pairing_approved` decrypts. Accept only after your own pairing check passes, and use `relay.isCurrentMobile(topic, connectionId)` after any asynchronous step so a result for a socket that has since left never acts on its replacement.
+
+A custom `GET /api/session/:id` route must also return `backendIdentityKey`, the key embedded in the session's QR: record it with `sessions.setBackendIdentityKey(id, key)` when you build the pairing URI. The phone rejects a reported key that differs from the QR's.
 
 `WebSocketRelay` accepts the same `path` and `noServer` options as the facade (see [Sharing the server with other WebSocket services](#sharing-the-server-with-other-websocket-services)); in `noServer` mode, dispatch upgrades to `relay.handleUpgrade(req, socket, head)`.
 
@@ -529,6 +570,9 @@ All messages use BSV wallet-native ECDH via `@bsv/sdk`. No custom crypto.
 - Each side calls `wallet.encrypt({ protocolID, keyID: sessionId, counterparty })` where `counterparty` is the other party's identity public key
 - The relay routes ciphertext blobs — it never decrypts anything
 - The pairing bootstrap sends `mobileIdentityKey` unencrypted in the outer envelope once (on `pairing_approved`) so the backend can verify the inner payload. All subsequent messages use only the stored key.
+- RPC IDs, sequences, topics, and response shapes are checked exactly. Known BRC-100 wallet results are validated before either side trusts them; false verification, internalization, relinquishment, or authentication verdicts are rejected rather than returned as successful results.
+- Wire messages are limited to 64 KiB, the default in-memory session/topic cap is 1000, and a second mobile cannot replace the active mobile for a session.
+- Every fresh or reconnecting mobile socket must prove possession of its identity key within 15 seconds; merely knowing a session topic cannot reserve the mobile slot.
 
 `WalletLike` throughout is `Pick<WalletInterface, 'getPublicKey' | 'encrypt' | 'decrypt' | 'createSignature'>` — satisfied by both `ProtoWallet` and `WalletClient` from `@bsv/sdk`.
 

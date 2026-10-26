@@ -237,7 +237,7 @@ export function stringifyJsonRpc(value: unknown, binary: boolean): string {
   return JSON.stringify(value, JSON_RPC_REPLACERS.get(binary))
 }
 
-type Frame = { value: object, holder: object, key: string, visited: boolean }
+type Frame = { value: object; holder: object; key: string; visited: boolean }
 
 function pushJsonChildren(frame: Frame, stack: Frame[]): void {
   const push = (key: string, child: unknown): void => {
@@ -276,4 +276,48 @@ export function parseJsonRpc(text: string, binary: boolean = false): any {
     pushJsonChildren(frame, stack)
   }
   return root.value
+}
+
+export type ValidatedJsonRpcResponse =
+  { jsonrpc: '2.0'; id: number; result: unknown } | { jsonrpc: '2.0'; id: number; error: unknown }
+
+/** Require one exact response for the request that produced it. */
+export function validateJsonRpcResponse(value: unknown, expectedId: number): ValidatedJsonRpcResponse {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Wallet storage returned an invalid JSON-RPC response')
+  }
+  const prototype = Object.getPrototypeOf(value)
+  const properties = Object.getOwnPropertyDescriptors(value)
+  const keys = Object.keys(properties)
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.values(properties).some(property => property.get != null || property.set != null) ||
+    keys.some(key => key !== 'jsonrpc' && key !== 'id' && key !== 'result' && key !== 'error') ||
+    keys.length !== 3 ||
+    properties.jsonrpc?.value !== '2.0' ||
+    properties.id?.value !== expectedId ||
+    !Number.isSafeInteger(expectedId) ||
+    expectedId < 1 ||
+    Object.prototype.hasOwnProperty.call(properties, 'result') ===
+      Object.prototype.hasOwnProperty.call(properties, 'error')
+  ) {
+    throw new Error('Wallet storage returned an invalid JSON-RPC response')
+  }
+  if (Object.prototype.hasOwnProperty.call(properties, 'error')) {
+    const error = properties.error.value
+    if (error == null || typeof error !== 'object' || Array.isArray(error)) {
+      throw new Error('Wallet storage returned an invalid JSON-RPC response')
+    }
+    const errorPrototype = Object.getPrototypeOf(error)
+    const errorProperties = Object.getOwnPropertyDescriptors(error)
+    if (
+      (errorPrototype !== Object.prototype && errorPrototype !== null) ||
+      Object.getOwnPropertySymbols(error).length !== 0 ||
+      Object.values(errorProperties).some(property => property.get != null || property.set != null)
+    ) {
+      throw new Error('Wallet storage returned an invalid JSON-RPC response')
+    }
+  }
+  return value as ValidatedJsonRpcResponse
 }

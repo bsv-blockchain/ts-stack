@@ -2,7 +2,7 @@
  * Permission and fee management types for MessageBox system
  */
 
-import { PubKeyHex } from '@bsv/sdk'
+import type { PositiveIntegerOrZero, PubKeyHex } from '@bsv/sdk/wallet/Wallet.interfaces'
 
 /**
  * Parameters for setting message box permissions
@@ -84,6 +84,8 @@ export interface SendListParams {
   messageBox: string
   body: string | object
   skipEncryption?: boolean
+  /** Optional caller-enforced ceiling for the aggregate transaction payment. */
+  maximumPayment?: PositiveIntegerOrZero
 }
 
 export interface SendListResult {

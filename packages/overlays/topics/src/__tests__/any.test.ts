@@ -110,9 +110,10 @@ describe('AnyLookupService (MongoDB)', () => {
   })
 
   it('stores a record via outputAdmittedByTopic and retrieves it via lookup', async () => {
+    const txid = 'aa'.repeat(32)
     const payload: OutputAdmittedByTopic = {
       mode: 'locking-script',
-      txid: 'aabbcc0011',
+      txid,
       outputIndex: 0,
       topic: 'tm_anytx',
       satoshis: 1000,
@@ -123,7 +124,7 @@ describe('AnyLookupService (MongoDB)', () => {
 
     const result = await service.lookup({
       service: 'ls_anytx',
-      query: { txid: 'aabbcc0011' }
+      query: { txid }
     } as LookupQuestion)
 
     // findByTxid returns a single record (not an array) wrapped in array by lookup
@@ -133,7 +134,7 @@ describe('AnyLookupService (MongoDB)', () => {
     const record = records[0]
     expect(record).toBeDefined()
     expect(record).not.toBeNull()
-    expect(record.txid).toBe('aabbcc0011')
+    expect(record.txid).toBe(txid)
   })
 
   it('ignores outputAdmittedByTopic for a different topic', async () => {

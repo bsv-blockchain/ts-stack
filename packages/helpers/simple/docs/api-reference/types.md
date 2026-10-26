@@ -26,21 +26,27 @@ interface WalletDefaults {
   tokenKeyID: string
   messageBoxHost: string
   registryUrl?: string
+  registryFetch?: typeof fetch
 }
 ```
 
 **Default values:**
 
-| Field | Default |
-|-------|---------|
-| `network` | `'main'` |
-| `description` | `'BSV-Simplify transaction'` |
-| `outputDescription` | `'BSV-Simplify output'` |
-| `tokenBasket` | `'tokens'` |
-| `tokenProtocolID` | `[0, 'token']` |
-| `tokenKeyID` | `'1'` |
-| `messageBoxHost` | `'https://messagebox.babbage.systems'` |
-| `registryUrl` | `undefined` |
+| Field               | Default                                |
+| ------------------- | -------------------------------------- |
+| `network`           | `'main'`                               |
+| `description`       | `'BSV-Simplify transaction'`           |
+| `outputDescription` | `'BSV-Simplify output'`                |
+| `tokenBasket`       | `'tokens'`                             |
+| `tokenProtocolID`   | `[0, 'token']`                         |
+| `tokenKeyID`        | `'1'`                                  |
+| `messageBoxHost`    | `'https://messagebox.babbage.systems'` |
+| `registryUrl`       | `undefined`                            |
+| `registryFetch`     | `undefined`                            |
+
+Without `registryFetch`, registry requests require public HTTPS and enforce
+DNS-address validation and connection pinning. Set this callback only for an
+explicitly trusted local/private transport.
 
 ## Wallet Status
 
@@ -69,10 +75,10 @@ interface WalletInfo {
 
 ```typescript
 interface BalanceResult {
-  totalSatoshis: number      // sum of all output satoshis
-  totalOutputs: number       // count of outputs
-  spendableSatoshis: number  // sum of spendable output satoshis
-  spendableOutputs: number   // count of spendable outputs
+  totalSatoshis: number // sum of all output satoshis
+  totalOutputs: number // count of outputs
+  spendableSatoshis: number // sum of spendable output satoshis
+  spendableOutputs: number // count of spendable outputs
 }
 ```
 
@@ -83,7 +89,7 @@ interface BalanceResult {
 ```typescript
 interface TransactionResult {
   txid: string
-  tx: any                              // AtomicBEEF bytes (number[])
+  tx: any // AtomicBEEF bytes (number[])
   outputs?: OutputInfo[]
 }
 ```
@@ -124,10 +130,10 @@ interface SendOutputDetail {
 
 ```typescript
 interface PaymentOptions {
-  to: string                    // Recipient identity key
-  satoshis: number              // Amount
-  memo?: string                 // Optional memo
-  description?: string          // Transaction description
+  to: string // Recipient identity key
+  satoshis: number // Amount
+  memo?: string // Optional memo
+  description?: string // Transaction description
 }
 ```
 
@@ -144,23 +150,23 @@ interface SendOptions {
 
 ```typescript
 interface SendOutputSpec {
-  to?: string                                  // Recipient public key
-  satoshis?: number                            // Amount
-  data?: (string | object | number[])[]        // Data fields
-  description?: string                         // Output description
-  basket?: string                              // Track in basket
-  protocolID?: [number, string]                // PushDrop protocol ID
-  keyID?: string                               // PushDrop key ID
+  to?: string // Recipient public key
+  satoshis?: number // Amount
+  data?: (string | object | number[])[] // Data fields
+  description?: string // Output description
+  basket?: string // Track in basket
+  protocolID?: [number, string] // PushDrop protocol ID
+  keyID?: string // PushDrop key ID
 }
 ```
 
 **Output routing rules:**
 
-| `to` | `data` | Result |
-|------|--------|--------|
-| Yes | No | P2PKH |
-| No | Yes | OP_RETURN |
-| Yes | Yes | PushDrop |
+| `to` | `data` | Result    |
+| ---- | ------ | --------- |
+| Yes  | No     | P2PKH     |
+| No   | Yes    | OP_RETURN |
+| Yes  | Yes    | PushDrop  |
 
 ## Derivation Types
 
@@ -191,12 +197,12 @@ interface PaymentDerivation {
 
 ```typescript
 interface TokenOptions {
-  to?: string                        // Recipient (default: self)
-  data: any                          // Token data (serialized to JSON)
-  basket?: string                    // Basket (default: 'tokens')
-  protocolID?: [number, string]      // PushDrop protocol
-  keyID?: string                     // PushDrop key ID
-  satoshis?: number                  // Locked sats (default: 1)
+  to?: string // Recipient (default: self)
+  data: any // Token data (serialized to JSON)
+  basket?: string // Basket (default: 'tokens')
+  protocolID?: [number, string] // PushDrop protocol
+  keyID?: string // PushDrop key ID
+  satoshis?: number // Locked sats (default: 1)
 }
 ```
 
@@ -213,9 +219,9 @@ interface TokenResult extends TransactionResult {
 
 ```typescript
 interface TokenDetail {
-  outpoint: string      // "txid.vout"
+  outpoint: string // "txid.vout"
   satoshis: number
-  data: any             // Decrypted token data
+  data: any // Decrypted token data
   protocolID: any
   keyID: string
   counterparty: string
@@ -226,9 +232,9 @@ interface TokenDetail {
 
 ```typescript
 interface SendTokenOptions {
-  basket: string       // Source basket
-  outpoint: string     // Token outpoint
-  to: string           // Recipient public key
+  basket: string // Source basket
+  outpoint: string // Token outpoint
+  to: string // Recipient public key
 }
 ```
 
@@ -236,8 +242,8 @@ interface SendTokenOptions {
 
 ```typescript
 interface RedeemTokenOptions {
-  basket: string       // Source basket
-  outpoint: string     // Token outpoint
+  basket: string // Source basket
+  outpoint: string // Token outpoint
 }
 ```
 
@@ -288,6 +294,7 @@ interface MessageBoxConfig {
 ```typescript
 interface CertifierConfig {
   privateKey?: string
+  // Short historical values are hashed for new issuance and retained only as migration aliases.
   certificateType?: string
   defaultFields?: Record<string, string>
   includeTimestamp?: boolean
@@ -378,11 +385,14 @@ interface OverlayInfo {
 interface OverlayBroadcastResult {
   success: boolean
   txid?: string
-  steak?: Record<string, {
-    outputsToAdmit: number[]
-    coinsToRetain: number[]
-    coinsRemoved?: number[]
-  }>
+  steak?: Record<
+    string,
+    {
+      outputsToAdmit: number[]
+      coinsToRetain: number[]
+      coinsRemoved?: number[]
+    }
+  >
   code?: string
   description?: string
 }
@@ -400,47 +410,14 @@ interface OverlayOutput {
 
 ## DID Types
 
-### DIDDocument
-
-```typescript
-interface DIDDocument {
-  '@context': string[]
-  id: string
-  controller: string
-  verificationMethod: DIDVerificationMethod[]
-  authentication: string[]
-  assertionMethod: string[]
-}
-```
-
-### DIDVerificationMethod
-
-```typescript
-interface DIDVerificationMethod {
-  id: string
-  type: string                // 'EcdsaSecp256k1VerificationKey2019'
-  controller: string
-  publicKeyHex: string
-}
-```
-
-### DIDParseResult
-
-```typescript
-interface DIDParseResult {
-  method: string              // 'bsv'
-  identityKey: string
-}
-```
+`DidDocument` and `DidResolutionResult` are re-exported from `@bsv/did`. Documents use a Multikey and the BRC-202 verification relationships; successful metadata is empty. See the [DID API](did.md).
 
 ## Credential Types
 
 ### CredentialFieldType
 
 ```typescript
-type CredentialFieldType =
-  | 'text' | 'email' | 'date' | 'number'
-  | 'textarea' | 'checkbox' | 'select'
+type CredentialFieldType = 'text' | 'email' | 'date' | 'number' | 'textarea' | 'checkbox' | 'select'
 ```
 
 ### CredentialFieldSchema
@@ -467,6 +444,7 @@ interface CredentialSchemaConfig {
   name: string
   description?: string
   certificateTypeBase64?: string
+  legacyCertificateTypesBase64?: string[]
   fields: CredentialFieldSchema[]
   fieldGroups?: { key: string; label: string }[]
   validate?: (values: Record<string, string>) => string | null
@@ -482,80 +460,34 @@ interface CredentialIssuerConfig {
   schemas?: CredentialSchemaConfig[]
   revocation?: {
     enabled: boolean
-    wallet?: any                  // WalletInterface
+    wallet?: any // WalletInterface
     store?: RevocationStore
   }
 }
 ```
 
-### VerifiableCredential
+### BRC52Envelope and BRC52VerificationResult
+
+Re-exported from `@bsv/did`. An envelope has `profile`, `certificateBinary`, and `credential`, with optional `disclosure` under the explicit recipient-keyring protocol. Verification returns `verified`, `verifiedDocument`, `mediaType`, and `errors`. It supplies no issuer trust, holder authentication, disclosure authorization, or automatic chain status.
+
+### IssuedCredential
 
 ```typescript
-interface VerifiableCredential {
-  '@context': string[]
-  type: string[]
-  id?: string
-  issuer: string                              // 'did:bsv:...'
-  issuanceDate: string
-  expirationDate?: string
-  credentialSubject: {
-    id: string                                // 'did:bsv:...'
-    [key: string]: any
-  }
-  credentialStatus?: {
-    id: string                                // 'bsv:txid.vout'
-    type: string                              // 'BSVHashLockRevocation2024'
-  }
-  proof: {
-    type: string                              // 'BSVMasterCertificateProof2024'
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-    signatureValue: string
-  }
-  _bsv: {
-    certificate: CertificateData
-  }
+interface IssuedCredential {
+  credential: BRC52Envelope
+  keyringForSubject: Record<string, string>
 }
 ```
 
-### VerifiablePresentation
-
-```typescript
-interface VerifiablePresentation {
-  '@context': string[]
-  type: string[]
-  holder: string                              // 'did:bsv:...'
-  verifiableCredential: VerifiableCredential[]
-  proof: {
-    type: string
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-  }
-}
-```
-
-### VerificationResult
-
-```typescript
-interface VerificationResult {
-  valid: boolean
-  revoked: boolean
-  errors: string[]
-  issuer?: string
-  subject?: string
-  type?: string
-}
-```
+Keep subject keyrings outside the authenticated credential graph and deliver only to the authorized subject.
 
 ### RevocationRecord
 
 ```typescript
 interface RevocationRecord {
-  secret: string       // Hex-encoded secret
-  outpoint: string     // "txid.vout"
-  beef: number[]       // BEEF bytes of the revocation UTXO tx
+  secret: string // Hex-encoded secret
+  outpoint: string // "txid.vout"
+  beef: number[] // BEEF bytes of the revocation UTXO tx
 }
 ```
 

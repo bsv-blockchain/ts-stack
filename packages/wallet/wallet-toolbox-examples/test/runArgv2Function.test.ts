@@ -2,9 +2,11 @@ import { runArgv2Function } from '../src/runArgv2Function'
 
 describe('runArgv2Function', () => {
   const originalArgv = [...process.argv]
+  const originalExitCode = process.exitCode
 
   afterEach(() => {
     process.argv = [...originalArgv]
+    process.exitCode = originalExitCode
     jest.restoreAllMocks()
   })
 
@@ -65,5 +67,6 @@ describe('runArgv2Function', () => {
 
     expect(error).toHaveBeenNthCalledWith(1, syncFailure)
     expect(error).toHaveBeenNthCalledWith(2, asyncFailure)
+    expect(process.exitCode).toBe(1)
   })
 })

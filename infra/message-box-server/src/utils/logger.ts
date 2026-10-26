@@ -11,8 +11,9 @@ const pinoLogger = pino({
     service: process.env.OTEL_SERVICE_NAME ?? pkg.name,
     env: process.env.DEPLOY_ENV ?? process.env.NODE_ENV ?? 'development'
   },
-  // Scrub PII / credentials before records leave the process. on-chain data
-  // (identity_key, txid) is public and intentionally NOT redacted.
+  // Scrub common PII / credential fields before records leave the process.
+  // Call sites must still use explicit allowlisted metadata because field-name
+  // redaction cannot recognize every secret or correlatable identifier.
   redact: {
     paths: [
       'phone',
@@ -42,28 +43,28 @@ const pinoLogger = pino({
   }
 })
 
-// Export the raw pino logger for call sites that want structured fields:
-//   log.info({ operation: 'send', room_id }, 'message delivered')
+// Export the raw pino logger for call sites that want non-sensitive structured
+// fields, for example: log.info({ operation: 'send', outcome: 'ok' }, 'message delivered').
 export const log = pinoLogger
 
-// Split variadic args into a message string + structured detail object so legacy
-// Logger.log('text', value) calls still produce useful structured records.
+// The legacy facade deliberately discards arbitrary objects at every level:
+// dependency/database values can contain SQL, credentials, payloads, tokens,
+// and stack paths that a field-name redaction list cannot reliably recognize.
 function emit(level: 'info' | 'warn' | 'error', args: unknown[]): void {
   const strings: string[] = []
-  const details: unknown[] = []
   for (const a of args) {
     if (typeof a === 'string' || typeof a === 'number' || typeof a === 'boolean') {
       strings.push(String(a))
-    } else {
-      details.push(a)
     }
   }
   const msg = strings.join(' ')
-  if (details.length > 0) {
-    pinoLogger[level]({ detail: details.length === 1 ? details[0] : details }, msg)
-  } else {
-    pinoLogger[level](msg)
-  }
+  pinoLogger[level](msg)
+}
+
+export function safeLegacyLogArguments(args: readonly unknown[]): unknown[] {
+  return args.filter(
+    value => typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  )
 }
 
 /**
@@ -97,6 +98,6 @@ export class Logger {
   }
 
   static error(...args: unknown[]): void {
-    emit('error', args)
+    emit('error', safeLegacyLogArguments(args))
   }
 }

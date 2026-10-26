@@ -1,3 +1,4 @@
+import { createMandalaEngineOutputs } from './mandalaEngineOutputs.js'
 import { createMandalaStateStore } from './mandalaStateStore.js'
 import { WalletAdvertiser } from '@bsv/overlay-discovery-services'
 import OverlayExpress from '@bsv/overlay-express'
@@ -32,8 +33,6 @@ import {
   createAnyLookupService,
   AppsTopicManager,
   createAppsLookupService,
-  DIDTopicManager,
-  createDIDLookupService,
   WalletConfigTopicManager,
   createWalletConfigLookupService,
   TokenDemoTopicManager,
@@ -41,7 +40,8 @@ import {
   MandalaTopicManager,
   MandalaStorageManager,
   createMandalaLookupService,
-  InMemoryScreeningProvider
+  InMemoryScreeningProvider,
+  type EngineOutputReader
 } from '@bsv/overlay-topics'
 import * as overlayTopics from '@bsv/overlay-topics'
 import { PrivateKey, ProtoWallet, WalletInterface } from '@bsv/sdk'
@@ -51,6 +51,8 @@ import { trace, SpanStatusCode } from '@opentelemetry/api'
 import packageJson from '../package.json' with { type: 'json' }
 import { log } from './logger.js'
 import { createOverlayLifecycle, type OverlayLifecycle } from './lifecycle.js'
+import { readBooleanEnv, readMandalaRuntimeConfiguration } from './securityConfig.js'
+import { readDiscoveryRuntimeConfiguration } from './discoveryConfig.js'
 config()
 
 const tracer = trace.getTracer(packageJson.name, packageJson.version)
@@ -78,9 +80,7 @@ const optionalSecretEnv = (name: string, minimumLength: number): string | undefi
 }
 
 const boolEnv = (name: string, defaultValue: boolean): boolean => {
-  const value = optionalEnv(name)
-  if (value === undefined) return defaultValue
-  return value === 'true' || value === '1' || value === 'yes'
+  return readBooleanEnv(process.env, name, defaultValue)
 }
 
 const numberEnv = (name: string): number | undefined => {
@@ -213,7 +213,7 @@ const main = async () => {
   const HOSTING_URL = requireEnv('HOSTING_URL')
   const WALLET_STORAGE_URL = requireEnv('WALLET_STORAGE_URL')
   const ARC_API_KEY = optionalEnv('ARC_API_KEY')
-  const ARC_CALLBACK_TOKEN = optionalEnv('ARC_CALLBACK_TOKEN')
+  const ARC_CALLBACK_TOKEN = optionalSecretEnv('ARC_CALLBACK_TOKEN', 32)
   const configuredArcadeUrl = optionalEnv('ARCADE_URL')
   const ARCADE_API_KEY = optionalEnv('ARCADE_API_KEY')
   const ARCADE_DEPLOYMENT_ID = optionalEnv('ARCADE_DEPLOYMENT_ID')
@@ -222,6 +222,7 @@ const main = async () => {
   const KNEX_URL = requireEnv('KNEX_URL')
   const MONGO_URL = requireEnv('MONGO_URL')
   const ADMIN_TOKEN = optionalSecretEnv('ADMIN_TOKEN', 32) // random token generated if unset
+  const mandalaConfig = readMandalaRuntimeConfiguration(process.env, SERVER_PRIVATE_KEY)
 
   const NETWORK = networkEnv()
   const ARCADE_URL =
@@ -247,17 +248,20 @@ const main = async () => {
   const providerServer = server as OverlayProviderConfigMethods
   server.configureLogger(overlayLogger as unknown as typeof console)
 
+  const discovery = readDiscoveryRuntimeConfiguration(process.env, NETWORK, HOSTING_URL)
   const wa = new WalletAdvertiser(
-    NETWORK as 'main' | 'test',
+    NETWORK,
     SERVER_PRIVATE_KEY,
     WALLET_STORAGE_URL,
-    HOSTING_URL
+    HOSTING_URL,
+    discovery.lookupResolverConfig
   )
 
   await wa.init()
 
   server.configureEngineParams({
     advertiser: wa,
+    suppressDefaultSyncAdvertisements: discovery.suppressDefaultSyncAdvertisements,
     throwOnBroadcastFailure: boolEnv('THROW_ON_BROADCAST_FAIL', true)
   })
 
@@ -416,10 +420,6 @@ const main = async () => {
   server.configureTopicManager('tm_apps', new AppsTopicManager())
   server.configureLookupServiceWithMongo('ls_apps', createAppsLookupService)
 
-  // DID
-  server.configureTopicManager('tm_did', new DIDTopicManager())
-  server.configureLookupServiceWithMongo('ls_did', createDIDLookupService)
-
   // WalletConfig
   server.configureTopicManager('tm_walletconfig', new WalletConfigTopicManager())
   server.configureLookupServiceWithMongo('ls_walletconfig', createWalletConfigLookupService)
@@ -428,37 +428,48 @@ const main = async () => {
   server.configureTopicManager('tm_tokendemo', new TokenDemoTopicManager())
   server.configureLookupServiceWithMongo('ls_tokendemo', createTokenDemoLookupService)
 
-  // Mandala (BRC-92 regulated token) — verifier/admin wallet derived from the node identity key.
-  // NOTE: production must use an HSM/KMS-custodied verifier key (see spec follow-ups); this local
-  // wiring reuses SERVER_PRIVATE_KEY and an empty in-memory sanctions list.
-  const mandalaWallet = new ProtoWallet(
-    PrivateKey.fromHex(SERVER_PRIVATE_KEY)
-  ) as unknown as WalletInterface
-  let mandalaStorage: MandalaStorageManager | undefined
-  const requireMandalaStorage = (): MandalaStorageManager => {
-    if (mandalaStorage === undefined) {
-      throw new Error('Mandala storage is not initialized')
+  // Mandala is a regulated-token boundary, not a demo topic. It is disabled
+  // unless the operator explicitly supplies independent verifier/admin roots
+  // and a screening snapshot. Production applications should inject a live,
+  // authoritative ScreeningProvider rather than this static reference adapter.
+  if (mandalaConfig.enabled) {
+    const mandalaVerifierWallet = new ProtoWallet(
+      PrivateKey.fromHex(mandalaConfig.verifierPrivateKey)
+    ) as unknown as WalletInterface
+    const trustedIssuer = PrivateKey.fromHex(mandalaConfig.adminPrivateKey).toPublicKey().toString()
+    let mandalaStorage: MandalaStorageManager | undefined
+    const requireMandalaStorage = (): MandalaStorageManager => {
+      if (mandalaStorage === undefined) {
+        throw new Error('Mandala storage is not initialized')
+      }
+      return mandalaStorage
     }
-    return mandalaStorage
-  }
-  const mandalaStateStore = createMandalaStateStore(requireMandalaStorage)
-  server.configureTopicManager(
-    'tm_mandala',
-    new MandalaTopicManager({
-      verifierWallet: mandalaWallet,
-      screeningProvider: new InMemoryScreeningProvider([]),
-      adminWallet: mandalaWallet,
-      adminProtocolID: [2, 'mandala admin'] as [2, string],
-      stateStore: mandalaStateStore
+    const mandalaStateStore = createMandalaStateStore(requireMandalaStorage)
+    const mandalaEngineOutputs: EngineOutputReader = createMandalaEngineOutputs(() => {
+      const engine = server.engine
+      if (engine === undefined) {
+        throw new Error('Mandala owner repair requires the overlay engine')
+      }
+      return engine.storage
     })
-  )
-  server.configureLookupServiceWithMongo('ls_mandala', db => {
-    mandalaStorage = new MandalaStorageManager(db)
-    return createMandalaLookupService(mandalaWallet, mandalaStorage)(db)
-  })
+    server.configureTopicManager(
+      'tm_mandala',
+      new MandalaTopicManager({
+        verifierWallet: mandalaVerifierWallet,
+        trustedIssuers: [trustedIssuer],
+        screeningProvider: new InMemoryScreeningProvider(mandalaConfig.sanctionedIdentityKeys),
+        stateStore: mandalaStateStore,
+        engineOutputs: mandalaEngineOutputs
+      })
+    )
+    server.configureLookupServiceWithMongo('ls_mandala', db => {
+      mandalaStorage = new MandalaStorageManager(db)
+      return createMandalaLookupService(mandalaVerifierWallet, mandalaStorage)(db)
+    })
+  }
 
   // For simple local deployments, sync can be disabled.
-  server.configureEnableGASPSync(process.env?.GASP_ENABLED === 'true')
+  server.configureEnableGASPSync(boolEnv('GASP_ENABLED', false))
 
   // Lastly, configure the engine and start the server!
   await server.configureEngine()

@@ -12,6 +12,22 @@ The service is distributed as a container; it is not a public npm package.
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for all runtime ceilings, BRC-105 pricing, capacity evidence, and HPA prerequisites.
 
+## Privacy Notice
+
+Message Box encrypts message content end to end between sender and recipient,
+so the host operator cannot read what you send. Private keys never leave your
+wallet, and the server returns messages only after it authenticates the
+recipient's identity key.
+
+To deliver messages, the operator can still see some metadata: when messages
+are sent and received, message size, and which identity keys (pseudonyms)
+exchange messages with each other, and the IP addresses that connect. Identity
+keys are not names, but repeated use can link activity over time.
+
+This balance keeps delivery simple and reliable while keeping content private.
+If unlinkability matters to you, use separate identity keys for each context
+or run your own Message Box server.
+
 ## Runtime model
 
 - Node.js 24
@@ -27,6 +43,26 @@ Clients normally use
 Message bodies are encrypted by the client unless plaintext is explicitly
 requested. The server authenticates identities and routes the stored payload;
 it does not hold recipient decryption keys.
+
+Recipient permission fees are durable security policy. A write is reported as
+successful only after the database confirms it. Stored recipient fees must be
+safe integers from `-1` (blocked) through `2,147,483,647`, while legacy server
+delivery fees must be safe integers from `0` through the same maximum. A
+malformed persisted value fails quote and send operations closed instead of
+being interpreted as free delivery.
+For a batch, the server fee applies per recipient and is verified as one
+aggregate remittance before any message is stored.
+Batch recipients are canonicalized and must be unique, so equivalent key
+encodings cannot create ambiguous permission, payment, or message-ID rows.
+Message-box names and message IDs are exact, control-free, UTF-8-byte-bounded
+identifiers on every HTTP and WebSocket path; the server never trims an
+ambiguous identifier into a different routing or authorization key.
+
+HTTP authentication uses durable `auth_sessions` and `auth_message_nonces` tables
+shared by all replicas. The September 24 service migration adds the replay table
+required by `KnexSessionManager`; older databases missing it fail initial HTTP
+authentication even when health and WebSocket checks pass. See
+[deployment and recovery guidance](./DEPLOYING.md#database-migrations).
 
 ## Routes
 
@@ -76,6 +112,12 @@ HTTP and WebSocket payloads, concurrency, request rates, timeouts, proxy trust,
 and security headers are bounded and environment-configurable. Invalid or
 unbounded numeric settings fail startup.
 
+Application logs carry fixed operation/outcome and bounded aggregate metadata.
+They intentionally omit message bodies and IDs, permission subjects, FCM
+tokens and device identifiers, payment/authentication material, raw database
+queries, provider errors, and caught exception objects. Use request IDs and
+trace correlation for investigation rather than enabling payload logging.
+
 ## Required configuration
 
 | Variable             | Purpose                             |
@@ -85,28 +127,32 @@ unbounded numeric settings fail startup.
 
 Important optional configuration:
 
-| Variable                                          | Default / purpose                       |
-| ------------------------------------------------- | --------------------------------------- |
-| `NODE_ENV`                                        | `development`                           |
-| `PORT` / `HTTP_PORT`                              | `8080`; `PORT` takes precedence         |
-| `ROUTING_PREFIX`                                  | Empty                                   |
-| `ENABLE_WEBSOCKETS`                               | `true`                                  |
-| `WALLET_STORAGE_URL`                              | Wallet storage service URL              |
-| `BSV_NETWORK`                                     | `mainnet`; use `testnet` for testnet or `ttn`/`teratestnet` for TerraTestNet |
-| `ENABLE_FIREBASE`                                 | Firebase disabled unless `true`         |
-| `LOGGING_ENABLED`                                 | Verbose logs when `true`                |
-| `TRUST_PROXY_HOPS`                                | Exact trusted proxy hops, 0–10          |
-| `MESSAGE_BOX_CORS_MODE`                           | `public`                                |
-| `MESSAGE_BOX_CORS_ALLOWED_ORIGINS`                | Exact origins for allowlist mode        |
-| `MESSAGE_BOX_MAX_BODY_BYTES`                      | 4 MiB                                   |
-| `MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES`            | 1 MiB                                   |
-| `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS`      | 4                                       |
-| `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT`           | 300 authenticated sends/minute/socket   |
-| `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS` | 25 notification targets/message         |
-| `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`  | 4 recipient notification workers        |
-| `MESSAGE_BOX_FCM_SEND_CONCURRENCY`                | 10 device-send workers/recipient        |
-| `MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX`             | 300 per minute per IP                   |
-| `MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX`        | 1,000 per minute per identity           |
+| Variable                                             | Default / purpose                                                            |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `NODE_ENV`                                           | `development`                                                                |
+| `PORT` / `HTTP_PORT`                                 | `8080`; `PORT` takes precedence                                              |
+| `ROUTING_PREFIX`                                     | Empty                                                                        |
+| `ENABLE_WEBSOCKETS`                                  | `true`                                                                       |
+| `WALLET_STORAGE_URL`                                 | Wallet storage service URL                                                   |
+| `BSV_NETWORK`                                        | `mainnet`; use `testnet` for testnet or `ttn`/`teratestnet` for TerraTestNet |
+| `ENABLE_FIREBASE`                                    | Firebase disabled unless `true`                                              |
+| `LOGGING_ENABLED`                                    | Verbose logs when `true`                                                     |
+| `TRUST_PROXY_HOPS`                                   | Exact trusted proxy hops, 0–10                                               |
+| `MESSAGE_BOX_CORS_MODE`                              | `public`                                                                     |
+| `MESSAGE_BOX_CORS_ALLOWED_ORIGINS`                   | Exact origins for allowlist mode                                             |
+| `MESSAGE_BOX_MAX_BODY_BYTES`                         | 4 MiB                                                                        |
+| `MESSAGE_BOX_WEBSOCKET_MAX_BODY_BYTES`               | 1 MiB                                                                        |
+| `MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS`              | 1,000 active connections/process                                             |
+| `MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS_PER_IDENTITY` | 25 active connections/identity                                               |
+| `MESSAGE_BOX_WEBSOCKET_MAX_ROOMS_PER_CONNECTION`     | 128 canonical rooms/connection                                               |
+| `MESSAGE_BOX_WEBSOCKET_CONTROL_RATE_LIMIT`           | 600 join/leave events/minute/socket                                          |
+| `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS`         | 4                                                                            |
+| `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT`              | 300 authenticated sends/minute/socket                                        |
+| `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS`    | 25 notification targets/message                                              |
+| `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`     | 4 recipient notification workers                                             |
+| `MESSAGE_BOX_FCM_SEND_CONCURRENCY`                   | 10 device-send workers/recipient                                             |
+| `MESSAGE_BOX_PRE_AUTH_RATE_LIMIT_MAX`                | 300 per minute per IP                                                        |
+| `MESSAGE_BOX_AUTHENTICATED_RATE_LIMIT_MAX`           | 1,000 per minute per identity                                                |
 
 See
 [`docs/infrastructure/service-edge-security.md`](../../docs/infrastructure/service-edge-security.md)
@@ -158,6 +204,48 @@ delay range with `MESSAGE_BOX_DB_DEADLOCK_RETRIES`,
 `MESSAGE_BOX_DB_DEADLOCK_RETRY_BASE_MS`, and
 `MESSAGE_BOX_DB_DEADLOCK_RETRY_MAX_MS`; setting retries to `0` disables retry.
 
+Body-payment replay claims and message inserts commit in the same database
+transaction. Embedders that supply a custom replay store must now implement
+the exported `TransactionalPaymentReplayStore`: retain the ordinary `claim`
+method used by HTTP payment middleware and add `claimInTransaction`, using the
+exact Knex transaction supplied by Message Box. An implementation that commits
+the claim independently, delegates it to another database, or ignores the
+transaction can consume a payment without storing its message and is not
+supported. The built-in `KnexPaymentReplayStore` already implements this
+contract; standalone container deployments require no configuration change.
+Transactional body-payment claims are non-expiring because a recipient-only
+payment has no server-wallet freshness verdict. The
+`MESSAGE_BOX_PAYMENT_REPLAY_TTL_DAYS` setting applies only to ordinary
+route-level BRC-105 claims; pruning must never remove body-payment claims.
+
+Each new body-payment request with a server delivery output must receive a
+newly accepted wallet verdict for that output. Message Box rejects
+`isMerge: true`, including after a replay row expires or is pruned. A
+prepared payment intent binds the transaction ID to a SHA-256 digest of the
+canonical sender, destination messages, Atomic BEEF, and payment metadata
+before wallet mutation. If a non-retryable replay-store or message-transaction
+failure occurs after wallet acceptance, the accepted state is committed after
+the failed transaction releases its connection. An exact retry resumes message
+storage without internalizing again; the same transaction with any different
+request is rejected. Completed requests retain normal duplicate-message and
+replay semantics. A wallet call that returns `isMerge: true` without an
+existing accepted intent still fails closed, so an old wallet transaction
+cannot become a new message payment. A hard process termination in the narrow
+window after wallet acceptance but before `wallet_accepted` is persisted still
+leaves an ambiguous `prepared` intent; the service cannot safely infer whether
+a later wallet merge belongs to that attempt or an older replay. Operators must
+reconcile the wallet transaction and intent row before asking the payer to retry
+or spend again. This recovery protocol therefore handles observed
+non-retryable/commit failures, but does not claim crash-atomicity across the
+wallet and message database.
+
+Only the request attempt that created a `prepared` intent may advance or remove
+it. Concurrent exact requests receive `ERR_PAYMENT_IN_PROGRESS` without calling
+the wallet; exact retries resume only after the intent reaches
+`wallet_accepted` or `completed`. Treat a stale `prepared` row as the ambiguous
+hard-crash case above: do not delete or reassign it until wallet reconciliation
+establishes whether that transaction was accepted.
+
 After a production build, migrations can also be run explicitly:
 
 ```bash
@@ -176,6 +264,14 @@ connection ceiling is reached, the newest matching connections are selected so
 old tabs cannot exclude the currently joining client.
 WebSocket sends reuse the HTTP handler's validation, fee, permission,
 deduplication, and persistence behavior.
+Process-wide, per-identity, per-connection-room, send, control-event, and
+recipient-fan-out limits are enforced before expensive or authorization-
+dependent event handling. Rejected unauthenticated events consume the same
+per-connection rate budget as accepted events.
+
+Push routing keeps the message ID in the platform data payload for application
+and notification-extension retrieval, but visible fallback alerts contain only
+generic text. Caller-selected routing identifiers are never lock-screen text.
 
 Each WebSocket connection owns the BRC-103 session negotiated by its AuthSocket
 peer. The database-backed HTTP session manager is deliberately not shared with
@@ -185,6 +281,33 @@ for acknowledgements or live delivery.
 
 The in-memory connection map is process-local. Horizontally scaled deployments
 need sticky routing or an authenticated shared broker.
+
+A `joinRoom` is answered: `joinedRoom` with the room on success, `joinFailed`
+with a `reason` and a `code` on refusal. The refusal names the room it refused
+whenever the server could read one, because a client may have several joins in
+flight and this event is the only reply any of them gets.
+
+### Live delivery of a stored message
+
+A message stored over HTTP is announced on `sendMessage-<roomId>`, the same
+event a socket send broadcasts on. The room is the recipient's subscription,
+so how the sender transmitted is not something the recipient subscribed to.
+
+The announcement is best effort and never replaces `listMessages`:
+
+- It reaches only this process's sockets. A recipient joined on another
+  process of a scaled-out deployment is not reached, which is the same
+  constraint as the connection map above.
+- **A send carrying a payment is never announced.** The announcement carries
+  the request body, which holds no payment, while the stored row holds
+  `{ message, payment }`. A recipient that acknowledged on the announcement
+  would delete the row before its wallet internalized the output, and only
+  `listMessages` internalizes. Paid messages are therefore polled.
+- A send the route refused is never announced.
+
+The fan-out is bounded by `MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY`, the
+same limit the send route applies to push notifications over the same
+recipient list.
 
 ## Container
 

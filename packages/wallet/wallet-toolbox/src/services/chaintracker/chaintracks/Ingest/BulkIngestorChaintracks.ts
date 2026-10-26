@@ -28,8 +28,12 @@ export class BulkIngestorChaintracks extends BulkIngestorBase {
     super(options)
     this.chaintracks = options.chaintracks
     this.maxHeadersPerRequest = options.maxHeadersPerRequest ?? 1000
-    if (!Number.isInteger(this.maxHeadersPerRequest) || this.maxHeadersPerRequest < 1) {
-      throw new Error('maxHeadersPerRequest must be a positive integer.')
+    if (
+      !Number.isSafeInteger(this.maxHeadersPerRequest) ||
+      this.maxHeadersPerRequest < 1 ||
+      this.maxHeadersPerRequest > 100_000
+    ) {
+      throw new Error('maxHeadersPerRequest must be a positive integer no greater than 100000.')
     }
   }
 

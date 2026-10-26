@@ -1,4 +1,5 @@
 import { WABTransport } from '../WABTransport'
+import { validateWABCompleteAuthResponse, validateWABStartAuthResponse } from '../WABResponseValidation'
 
 export interface AuthPayload {
   [key: string]: unknown
@@ -44,16 +45,16 @@ export abstract class AuthMethodInteractor {
   /**
    * Shared POST helper for auth endpoints.
    */
-  private async postAuth<T extends { success: boolean; message?: string }>(
+  private async postAuth(
     serverUrl: string,
     endpoint: string,
     presentationKey: string,
     payload: AuthPayload,
     transport?: WABTransport,
     correlationId?: string
-  ): Promise<T> {
+  ): Promise<unknown> {
     const client = transport ?? new WABTransport(serverUrl)
-    return await client.request<T>(`/auth/${endpoint}`, {
+    return await client.request<unknown>(`/auth/${endpoint}`, {
       operation: `auth-${endpoint}`,
       correlationId,
       body: {
@@ -74,13 +75,8 @@ export abstract class AuthMethodInteractor {
     transport?: WABTransport,
     correlationId?: string
   ): Promise<StartAuthResponse> {
-    return await this.postAuth<StartAuthResponse>(
-      serverUrl,
-      'start',
-      presentationKey,
-      payload,
-      transport,
-      correlationId
+    return validateWABStartAuthResponse(
+      await this.postAuth(serverUrl, 'start', presentationKey, payload, transport, correlationId)
     )
   }
 
@@ -94,13 +90,9 @@ export abstract class AuthMethodInteractor {
     transport?: WABTransport,
     correlationId?: string
   ): Promise<CompleteAuthResponse> {
-    return await this.postAuth<CompleteAuthResponse>(
-      serverUrl,
-      'complete',
-      presentationKey,
-      payload,
-      transport,
-      correlationId
+    return validateWABCompleteAuthResponse(
+      await this.postAuth(serverUrl, 'complete', presentationKey, payload, transport, correlationId),
+      presentationKey
     )
   }
 }

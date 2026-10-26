@@ -3,8 +3,9 @@ import { PublicKey } from '@bsv/sdk'
 import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { setMessagePermission } from '../../utils/messagePermissions.js'
+import { isCanonicalMessageBox, MAX_MESSAGE_BOX_BYTES } from '../../security/messageFields.js'
 
-export const MAX_PERMISSION_MESSAGE_BOX_BYTES = 128
+export const MAX_PERMISSION_MESSAGE_BOX_BYTES = MAX_MESSAGE_BOX_BYTES
 export const MAX_RECIPIENT_FEE = 2_147_483_647
 
 export interface SetPermissionRequestType extends AuthRequest {
@@ -17,11 +18,6 @@ export interface SetPermissionRequestType extends AuthRequest {
 
 const validRecipientFee = (recipientFee: number): boolean =>
   Number.isSafeInteger(recipientFee) && recipientFee >= -1 && recipientFee <= MAX_RECIPIENT_FEE
-
-const validMessageBox = (messageBox: unknown): messageBox is string =>
-  typeof messageBox === 'string' &&
-  messageBox.trim() !== '' &&
-  Buffer.byteLength(messageBox.trim(), 'utf8') <= MAX_PERMISSION_MESSAGE_BOX_BYTES
 
 function permissionDescription(
   sender: string | undefined,
@@ -64,10 +60,13 @@ function permissionDescription(
  *                 description: identityKey of the sender (optional - if omitted, sets box-wide default for all senders)
  *               messageBox:
  *                 type: string
- *                 description: messageBox type (e.g., 'notifications', 'inbox')
+ *                 maxLength: 128
+ *                 description: Exact control-free messageBox type (e.g., 'notifications', 'inbox')
  *               recipientFee:
  *                 type: integer
- *                 description: Fee level (-1=blocked, 0=always allow, >0=satoshi amount required)
+ *                 minimum: -1
+ *                 maximum: 2147483647
+ *                 description: Fee level (-1=blocked, 0=always allow, >0=satoshi amount required). Success is returned only after persistence.
  *     responses:
  *       200:
  *         description: Permission successfully set/updated
@@ -97,6 +96,7 @@ export default {
       }
 
       const { sender, messageBox, recipientFee } = req.body
+      let normalizedSender: string | undefined
 
       // Validate request body (sender is optional)
       if (messageBox == null || typeof recipientFee !== 'number') {
@@ -112,7 +112,7 @@ export default {
       // Validate sender public key format only if provided
       if (sender != null) {
         try {
-          PublicKey.fromString(sender)
+          normalizedSender = PublicKey.fromString(sender).toString()
         } catch {
           Logger.log('[DEBUG] Invalid sender public key format')
           return res.status(400).json({
@@ -134,24 +134,24 @@ export default {
       }
 
       // Validate messageBox value
-      if (!validMessageBox(messageBox)) {
+      if (!isCanonicalMessageBox(messageBox)) {
         Logger.log('[DEBUG] Invalid messageBox value')
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_BOX',
-          description: `messageBox must be a non-empty string of at most ${MAX_PERMISSION_MESSAGE_BOX_BYTES} bytes.`
+          description: `messageBox must be an exact, control-free string of at most ${MAX_PERMISSION_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
       // Set the message permission (convert undefined sender to null for box-wide)
       const success = await setMessagePermission(
         recipient,
-        sender ?? null,
-        messageBox.trim(),
+        normalizedSender ?? null,
+        messageBox,
         recipientFee
       )
 
-      if (success == null) {
+      if (success !== true) {
         return res.status(500).json({
           status: 'error',
           code: 'ERR_DATABASE_ERROR',
@@ -159,16 +159,14 @@ export default {
         })
       }
 
-      Logger.log(
-        `[DEBUG] Successfully updated message permission: ${sender ?? 'BOX-WIDE'} -> ${recipient} (${messageBox}), fee: ${recipientFee}`
-      )
+      Logger.log('[DEBUG] Successfully updated message permission.')
 
       return res.status(200).json({
         status: 'success',
-        description: permissionDescription(sender, messageBox, recipientFee)
+        description: permissionDescription(normalizedSender, messageBox, recipientFee)
       })
-    } catch (error) {
-      Logger.error('[ERROR] Internal Server Error in set permission:', error)
+    } catch {
+      Logger.error('[ERROR] Internal Server Error in set permission.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',

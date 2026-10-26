@@ -1,12 +1,9 @@
-import {
-  OP,
-  Script,
-  ScriptTemplate,
-  LockingScript,
-  UnlockingScript,
-  Transaction,
-  Utils
-} from '@bsv/sdk'
+import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP } from '@bsv/sdk/script'
+import type Script from '@bsv/sdk/script/Script'
+import type ScriptTemplate from '@bsv/sdk/script/ScriptTemplate'
+import type UnlockingScript from '@bsv/sdk/script/UnlockingScript'
+import type Transaction from '@bsv/sdk/transaction/Transaction'
 
 /**
  * OpReturn class implementing ScriptTemplate.
@@ -35,7 +32,7 @@ export class OpReturn implements ScriptTemplate {
       script.push({ op: data.length, data: data as number[] })
     } else {
       for (const entry of data.filter(Boolean)) {
-        const arr = Utils.toArray(entry, enc)
+        const arr = toArray(entry, enc)
         script.push({ op: arr.length, data: arr })
       }
     }
@@ -60,6 +57,6 @@ export class OpReturn implements ScriptTemplate {
    */
   static decode(script: Script): string[] {
     const tokens = script.toASM().split(' ').slice(2)
-    return tokens.map(token => Utils.toUTF8(Utils.toArray(token, 'hex')))
+    return tokens.map(token => toUTF8(toArray(token, 'hex')))
   }
 }

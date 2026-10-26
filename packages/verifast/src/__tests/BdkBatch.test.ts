@@ -10,6 +10,15 @@ describe('BDK batch helpers', () => {
     expect(() => flagsForInputCount(2, undefined, [1])).toThrow(
       'Custom flag count must be zero or match the input count'
     )
+    for (const inputCount of [-1, 1.5, Number.NaN, 0x100000000]) {
+      expect(() => flagsForInputCount(inputCount)).toThrow('uint32 integer')
+    }
+    for (const flag of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x100000000]) {
+      expect(() => flagsForInputCount(1, undefined, [flag])).toThrow('must be a uint32 integer')
+    }
+    expect(() =>
+      flagsForInputCount(1, undefined, new Uint8Array([1]) as unknown as Uint32Array)
+    ).toThrow('must be an array or Uint32Array')
   })
 
   it('packs typed arrays and records every boundary', () => {

@@ -171,7 +171,7 @@ describe('reorg stream parser properties', () => {
     ).toBeNull()
   })
 
-  test('retains only exact 32-byte hexadecimal orphan hashes', () => {
+  test('rejects the complete event when any orphan hash is malformed', () => {
     const valid = 'ab'.repeat(32)
     expect(
       parseReorgEvent(
@@ -188,11 +188,7 @@ describe('reorg stream parser properties', () => {
           newTip: { height: 10 }
         })
       )
-    ).toEqual({
-      orphanedBlockHashes: [valid],
-      rebuildFromHeight: 10,
-      newTipHeight: 10
-    })
+    ).toBeNull()
   })
 
   test('extracts arbitrary complete SSE data frames and preserves the exact partial suffix', () => {
@@ -292,7 +288,7 @@ describe('reorg stream parser properties', () => {
     )
   })
 
-  test('reconnects after HTTP and clean-stream failures while isolating malformed and failed handlers', async () => {
+  test('reconnects and catches up after HTTP, malformed-frame, and handler failures', async () => {
     const warn = jestApi.fn()
     const error = jestApi.fn()
     const fetchImpl = jestApi
@@ -301,7 +297,9 @@ describe('reorg stream parser properties', () => {
       .mockResolvedValueOnce(streamResponse([]))
       .mockResolvedValueOnce(
         streamResponse([`data: not-json\n\n${encodedReorgFrame(10)}${encodedReorgFrame(11)}`])
-      ) as unknown as typeof fetch
+      )
+      .mockResolvedValueOnce(streamResponse([encodedReorgFrame(10)]))
+      .mockResolvedValueOnce(streamResponse([encodedReorgFrame(11)])) as unknown as typeof fetch
     let handlerCalls = 0
     let resolveComplete: () => void
     const complete = new Promise<void>(resolve => {
@@ -323,26 +321,30 @@ describe('reorg stream parser properties', () => {
     adapter.start()
     await complete
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(5)
     expect(warn.mock.calls.flat().join(' ')).toContain('reorg stream responded 503')
-    expect(warn.mock.calls.flat().join(' ')).toContain('skipping malformed reorg frame')
-    expect(error.mock.calls.flat().join(' ')).toContain('expected handler failure')
+    expect(warn.mock.calls.flat().join(' ')).toContain('malformed reorg frame')
+    expect(warn.mock.calls.flat().join(' ')).toContain('expected handler failure')
+    expect(error).not.toHaveBeenCalled()
   })
 
-  test('continues event delivery when reconnect catch-up fails', async () => {
+  test('does not consume stream events until reconnect catch-up succeeds', async () => {
     const warn = jestApi.fn()
+    let catchUpCalls = 0
     let resolveComplete: () => void
     const complete = new Promise<void>(resolve => {
       resolveComplete = resolve
     })
     const adapter = new ReorgSseAdapter({
       url: 'https://arcade.example/reorg',
+      reconnectDelayMs: 0,
       fetchImpl: jestApi.fn(async () =>
         streamResponse([encodedReorgFrame(20)])
       ) as unknown as typeof fetch,
       logger: { log: jestApi.fn(), warn, error: jestApi.fn() },
       onConnect: async () => {
-        throw new Error('expected catch-up failure')
+        catchUpCalls += 1
+        if (catchUpCalls === 1) throw new Error('expected catch-up failure')
       },
       onReorg: async () => {
         adapter.stop()
@@ -354,5 +356,64 @@ describe('reorg stream parser properties', () => {
     await complete
 
     expect(warn.mock.calls.flat().join(' ')).toContain('expected catch-up failure')
+    expect(catchUpCalls).toBe(2)
+  })
+
+  test('rejects type-confused private-host and accessor-backed options', () => {
+    expect(
+      () =>
+        new ReorgSseAdapter({
+          url: 'http://127.0.0.1/reorg',
+          allowPrivateHosts: 'false' as unknown as boolean,
+          onReorg: async () => undefined
+        })
+    ).toThrow('boolean')
+
+    const getter = jestApi.fn(() => true)
+    const options: Record<string, unknown> = {
+      url: 'https://arcade.example/reorg',
+      onReorg: async () => undefined
+    }
+    Object.defineProperty(options, 'allowPrivateHosts', { get: getter, enumerable: true })
+    expect(() => new ReorgSseAdapter(options as any)).toThrow('own data property')
+    expect(getter).not.toHaveBeenCalled()
+  })
+
+  test('cancels an idle stream, reconnects, and bounds the logged error', async () => {
+    const cancel = jestApi.fn()
+    const warn = jestApi.fn()
+    const fetchMock = jestApi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        cancel() {
+          cancel()
+        }
+      })
+      return new Response(body, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      })
+    })
+    const fetchImpl = fetchMock as unknown as typeof fetch
+    const adapter = new ReorgSseAdapter({
+      url: 'https://arcade.example/reorg',
+      fetchImpl,
+      reconnectDelayMs: 0,
+      idleTimeoutMs: 10,
+      logger: { log: jestApi.fn(), warn, error: jestApi.fn() },
+      onConnect: async () => undefined,
+      onReorg: async () => undefined
+    })
+
+    adapter.start()
+    const deadline = Date.now() + 2000
+    while (fetchMock.mock.calls.length < 2 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 5))
+    }
+    adapter.stop()
+
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(cancel).toHaveBeenCalled()
+    expect(warn.mock.calls.flat().join(' ')).toContain('idle timeout')
+    expect(warn.mock.calls.flat().join(' ').length).toBeLessThan(1200)
   })
 })

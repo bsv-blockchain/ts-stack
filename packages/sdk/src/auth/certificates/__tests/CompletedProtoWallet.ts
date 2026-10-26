@@ -1,7 +1,9 @@
 //@ts-nocheck
 import PrivateKey from '../../../primitives/PrivateKey.js'
-import {
-  ProtoWallet,
+import ProtoWallet from '../../../wallet/ProtoWallet.js'
+import { KeyDeriver, type KeyDeriverApi } from '../../../wallet/KeyDeriver.js'
+import CachedKeyDeriver from '../../../wallet/CachedKeyDeriver.js'
+import type {
   WalletInterface,
   CreateActionResult,
   SignActionResult,
@@ -17,21 +19,16 @@ import {
   DiscoverCertificatesResult,
   GetHeightResult,
   GetHeaderResult,
-  KeyDeriverApi,
-  KeyDeriver,
   GetPublicKeyArgs,
   PubKeyHex,
   AuthenticatedResult,
   GetNetworkResult,
-  GetVersionResult,
-  CachedKeyDeriver
-} from '../../../wallet/index.js'
+  GetVersionResult
+} from '../../../wallet/Wallet.interfaces.js'
 
 // Test Mock wallet which extends ProtoWallet but still implements Wallet interface
 // Unsupported methods throw
-export class CompletedProtoWallet
-  extends ProtoWallet
-  implements WalletInterface {
+export class CompletedProtoWallet extends ProtoWallet implements WalletInterface {
   keyDeriver: KeyDeriver
   constructor(rootKeyOrKeyDeriver: PrivateKey | 'anyone' | KeyDeriverApi) {
     super(rootKeyOrKeyDeriver)
@@ -48,32 +45,23 @@ export class CompletedProtoWallet
     }
   }
 
-  async isAuthenticated(
-  ): Promise<AuthenticatedResult> {
+  async isAuthenticated(): Promise<AuthenticatedResult> {
     throw new Error('not implemented')
   }
 
-  async waitForAuthentication(
-
-  ): Promise<AuthenticatedResult> {
+  async waitForAuthentication(): Promise<AuthenticatedResult> {
     throw new Error('not implemented')
   }
 
-  async getNetwork(
-
-  ): Promise<GetNetworkResult> {
+  async getNetwork(): Promise<GetNetworkResult> {
     throw new Error('not implemented')
   }
 
-  async getVersion(
-
-  ): Promise<GetVersionResult> {
+  async getVersion(): Promise<GetVersionResult> {
     throw new Error('not implemented')
   }
 
-  async getPublicKey(
-    args: GetPublicKeyArgs
-  ): Promise<{ publicKey: PubKeyHex }> {
+  async getPublicKey(args: GetPublicKeyArgs): Promise<{ publicKey: PubKeyHex }> {
     if (args.privileged === true) {
       throw new Error('no privilege support')
     }
@@ -86,9 +74,7 @@ export class CompletedProtoWallet
       return { publicKey: this.keyDeriver.rootKey.toPublicKey().toString() }
     } else {
       if (args.protocolID == null || typeof args.keyID !== 'string' || args.keyID.trim() === '') {
-        throw new Error(
-          'protocolID and keyID are required if identityKey is false or undefined.'
-        )
+        throw new Error('protocolID and keyID are required if identityKey is false or undefined.')
       }
 
       if (this.keyDeriver === null || this.keyDeriver === undefined) {
@@ -110,93 +96,63 @@ export class CompletedProtoWallet
     }
   }
 
-  async createAction(
-
-  ): Promise<CreateActionResult> {
+  async createAction(): Promise<CreateActionResult> {
     throw new Error('not implemented')
   }
 
-  async signAction(
-
-  ): Promise<SignActionResult> {
+  async signAction(): Promise<SignActionResult> {
     throw new Error('not implemented')
   }
 
-  async abortAction(
-
-  ): Promise<AbortActionResult> {
+  async abortAction(): Promise<AbortActionResult> {
     throw new Error('not implemented')
   }
 
-  async listActions(
-
-  ): Promise<ListActionsResult> {
+  async listActions(): Promise<ListActionsResult> {
     throw new Error('not implemented')
   }
 
-  async internalizeAction(
-
-  ): Promise<InternalizeActionResult> {
+  async internalizeAction(): Promise<InternalizeActionResult> {
     throw new Error('not implemented')
   }
 
-  async listOutputs(
-
-  ): Promise<ListOutputsResult> {
+  async listOutputs(): Promise<ListOutputsResult> {
     throw new Error('not implemented')
   }
 
-  async relinquishOutput(
-
-  ): Promise<RelinquishOutputResult> {
+  async relinquishOutput(): Promise<RelinquishOutputResult> {
     throw new Error('not implemented')
   }
 
-  async acquireCertificate(
-
-  ): Promise<AcquireCertificateResult> {
+  async acquireCertificate(): Promise<AcquireCertificateResult> {
     throw new Error('not implemented')
   }
 
-  async listCertificates(
-
-  ): Promise<ListCertificatesResult> {
+  async listCertificates(): Promise<ListCertificatesResult> {
     throw new Error('not implemented')
   }
 
-  async proveCertificate(
-
-  ): Promise<ProveCertificateResult> {
+  async proveCertificate(): Promise<ProveCertificateResult> {
     throw new Error('not implemented')
   }
 
-  async relinquishCertificate(
-
-  ): Promise<RelinquishCertificateResult> {
+  async relinquishCertificate(): Promise<RelinquishCertificateResult> {
     throw new Error('not implemented')
   }
 
-  async discoverByIdentityKey(
-
-  ): Promise<DiscoverCertificatesResult> {
+  async discoverByIdentityKey(): Promise<DiscoverCertificatesResult> {
     throw new Error('not implemented')
   }
 
-  async discoverByAttributes(
-
-  ): Promise<DiscoverCertificatesResult> {
+  async discoverByAttributes(): Promise<DiscoverCertificatesResult> {
     throw new Error('not implemented')
   }
 
-  async getHeight(
-
-  ): Promise<GetHeightResult> {
+  async getHeight(): Promise<GetHeightResult> {
     throw new Error('not implemented')
   }
 
-  async getHeaderForHeight(
-
-  ): Promise<GetHeaderResult> {
+  async getHeaderForHeight(): Promise<GetHeaderResult> {
     throw new Error('not implemented')
   }
 }

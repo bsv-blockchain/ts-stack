@@ -7,6 +7,7 @@ import {
   registerMessageBoxPreAuthRoutes,
   registerMessageBoxPostAuthRoutes
 } from '../compose.js'
+import { bindMessageBoxRuntime } from '../runtimeDeps.js'
 
 describe('compose API', () => {
   it('createMessageBoxContext requires wallet and knex', () => {
@@ -70,5 +71,43 @@ describe('compose API', () => {
       description: 'Too many requests. Please retry later.'
     })
     await knex.destroy()
+  })
+
+  it('keeps embedded application runtime dependencies request-scoped', async () => {
+    const appA = createMessageBoxApp()
+    const appB = createMessageBoxApp()
+    const rawA = jest.fn(async () => undefined)
+    const rawB = jest.fn(async () => undefined)
+
+    registerMessageBoxPreAuthRoutes(appA, '', { knex: { raw: rawA } as never })
+    registerMessageBoxPreAuthRoutes(appB, '', { knex: { raw: rawB } as never })
+
+    const [readyA, readyB] = await Promise.all([
+      request(appA).get('/ready'),
+      request(appB).get('/ready')
+    ])
+
+    expect(readyA.status).toBe(200)
+    expect(readyB.status).toBe(200)
+    expect(rawA).toHaveBeenCalledTimes(1)
+    expect(rawB).toHaveBeenCalledTimes(1)
+  })
+
+  it('snapshots the legacy optional runtime for each composed router', async () => {
+    const appA = createMessageBoxApp()
+    const appB = createMessageBoxApp()
+    const rawA = jest.fn(async () => undefined)
+    const rawB = jest.fn(async () => undefined)
+
+    bindMessageBoxRuntime({ knex: { raw: rawA } as never })
+    registerMessageBoxPreAuthRoutes(appA)
+    bindMessageBoxRuntime({ knex: { raw: rawB } as never })
+    registerMessageBoxPreAuthRoutes(appB)
+
+    await request(appA).get('/ready')
+    await request(appB).get('/ready')
+
+    expect(rawA).toHaveBeenCalledTimes(1)
+    expect(rawB).toHaveBeenCalledTimes(1)
   })
 })

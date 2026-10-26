@@ -26,6 +26,13 @@ honest about what ran. CI rejects:
   started. Gaps must be declared in vector metadata instead of passing
   vacuously.
 
+Elapsed `reviewBy` dates are maintenance reminders, never PR failures. This
+applies to manual inventories and policies, property suites and exclusions,
+mutation policy, required skips, and conformance skip groups across every
+package. The CLI prints `MAINTENANCE` warnings and exits successfully when only
+dates have elapsed. Unknown owners, malformed dates, missing inventory, and
+other structural findings still fail; runtime expiration checks are unchanged.
+
 Run the contract locally:
 
 ```sh
@@ -87,9 +94,9 @@ Required CI uses `fast-check` to generate and shrink unexpected inputs across
   framing, payment replay admission, fund-wallet CLI keys/endpoints/amounts,
   currency conversion/formatting, and project-scaffolder path/configuration
   validation; and
-- untrusted application data: Mandala linkage payloads, BTMS metadata and
-  derivation instructions, canonical token amounts and asset IDs, and
-  forge-resistant overlay log fields.
+- untrusted application data: Mandala BRC-162 envelope and issuer
+  authorization, BTMS metadata and derivation instructions, canonical token
+  amounts and asset IDs, and forge-resistant overlay log fields.
 
 These are not round-trip-only tests. Depending on the boundary, the registered
 invariants also require an independently encoded oracle, canonicalization,

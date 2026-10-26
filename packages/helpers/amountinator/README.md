@@ -25,7 +25,7 @@ await converter.initialize()
 const preferred = converter.preferredCurrency
 
 // Convert 50,000 satoshis to the user's preferred currency.
-const amount = await converter.convertSatoshisToCurrency(50_000, preferred)
+const amount = converter.convertCurrency(50_000, 'SATS', preferred)
 
 const { formattedAmount } = formatAmountWithCurrency(amount, preferred)
 console.log(formattedAmount) // e.g. "$0.04"
@@ -39,10 +39,7 @@ console.log(formattedAmount) // e.g. "$0.04"
 const converter = new CurrencyConverter()
 await converter.initialize()
 
-const value = await converter.convertSatoshisToCurrency(
-  txOutput.satoshis,
-  converter.preferredCurrency
-)
+const value = converter.convertCurrency(txOutput.satoshis, 'SATS', converter.preferredCurrency)
 const { formattedAmount, hoverText } = formatAmountWithCurrency(value, converter.preferredCurrency)
 // `hoverText` is set for very small amounts (e.g. "< $0.01" / "$0.001").
 ```
@@ -50,7 +47,7 @@ const { formattedAmount, hoverText } = formatAmountWithCurrency(value, converter
 ### Accept fiat input, send satoshis
 
 ```ts
-const sats = await converter.convertCurrencyToSatoshis(9.99, 'USD')
+const sats = converter.convertCurrency(9.99, 'USD', 'SATS')
 // pass `sats` to a wallet action / payment output
 ```
 

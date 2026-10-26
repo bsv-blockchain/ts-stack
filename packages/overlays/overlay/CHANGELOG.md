@@ -20,6 +20,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- SHIP/SLAP advertisement validation accepts topic and service names with
+  digits, up to 256 bytes, matching the `@bsv/sdk` overlay name grammar and the
+  BRC-207 per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`).
+  Names accepted before are still accepted; no migration is required.
+
+- Normalize unconfirmed SQL NULL output heights to absent metadata; retain strict validation of every non-null height.
+
 - Adds optional atomic admission/receipt and recovery contracts with portable identity, exact integer and fencing fixtures. Existing Engine/Knex paths are unchanged; no migration is required.
 - Adds `storageHasAdmission` for the optional `Storage.admission` field.
 - Adds an opt-in MongoDB schema, payload-publication, reference-guard, and
@@ -84,7 +91,9 @@ All notable changes to this project will be documented in this file. The format 
   edges written during admission.
 
 ### Security
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- Authenticate canonical SHIP advertisements, bind their one-satoshi output,
+  transaction ID, and requested topic, and reject forged tracker results before
+  selecting a GASP synchronization endpoint.
 
 ---
 

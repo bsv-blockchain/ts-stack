@@ -1,24 +1,32 @@
-import { Transaction, type AtomicBEEF, type WalletInterface } from '@bsv/sdk'
+import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import P2PKH from '@bsv/sdk/script/templates/P2PKH'
+import Transaction from '@bsv/sdk/transaction/Transaction'
+import type { AtomicBEEF, WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 import {
   LCHBuyer,
   validateLicenseRequest,
+  validatePaymentDelivery,
   validatePaymentDemand,
   validatePaymentReceipt,
   validatePaymentReadiness,
   validateQuote,
+  type AcquisitionValidationOptions,
   type LicenseRequestOptions,
   type PaymentCompletion
 } from './acquisition.js'
 import { LCHHttpAcquisitionClient, type LCHHttpClientOptions } from './http.js'
 import { validateEncryptionDescriptor, validateKeyGrantsForSelection } from './encryption.js'
-import { fromHex, objectId, toHex } from './hash.js'
-import { LCH_SETTLEMENT_PROFILES } from './constants.js'
+import { fromHex, objectId, toBase64Url, toHex } from './hash.js'
+import { LCH_LIMITS, LCH_SETTLEMENT_PROFILES } from './constants.js'
 import { encodeDeterministicCbor } from './cbor.js'
 import { lchAssert } from './errors.js'
+import { validatePolicyReference, type PolicyReference } from './policy.js'
 import { normalizeSelection, validateNormalizedSelection } from './selection.js'
-import { createMultipayTransaction } from './walletPayment.js'
+import { BRC29_PAYMENT_PROTOCOL, createMultipayTransaction } from './walletPayment.js'
 import { PublicBRC77Verifier, WalletBRC77Signer } from './signatures.js'
 import { verifySignedObject } from './objects.js'
+import { validateOffer } from './core.js'
+import { validateTimeWindow } from './time.js'
 import {
   validateAuthorizedOutputEvidence,
   validateDeliveryAcknowledgement,
@@ -33,8 +41,18 @@ import type {
   LCHValue,
   SegmentedEncryptionDescriptor,
   Selection,
-  SignedObject
+  SignedObject,
+  UnverifiedLicenseResponse
 } from './types.js'
+import {
+  ownDataValue,
+  requiredOwnDataValue,
+  snapshotBytes,
+  snapshotLCHRecord,
+  snapshotSignedObject,
+  snapshotStringArray,
+  snapshotStringSet
+} from './boundary.js'
 
 export type LCHLicenseKeyGrantExpectation =
   | { type: 'none' }
@@ -45,6 +63,8 @@ export type LCHLicenseKeyGrantExpectation =
     }
 
 export interface LCHMultipayPlan {
+  offer: SignedObject
+  seller: Uint8Array
   request: SignedObject
   requestId: Uint8Array
   quote: SignedObject
@@ -77,9 +97,32 @@ export interface LCHFundedMultipay {
   transactionState: Extract<LCHTransactionState, 'finalized'>
 }
 
+export interface LCHAgreementEvaluationContext {
+  offer: Readonly<SignedObject>
+  request: Readonly<SignedObject>
+  quote: Readonly<SignedObject>
+  license: Readonly<SignedObject>
+  offerPolicy: Readonly<PolicyReference>
+  agreement: Readonly<PolicyReference>
+}
+
+/**
+ * Application-supplied, profile-aware ODRL decision.
+ *
+ * Return true only when the signed License Agreement preserves every accepted
+ * Offer term for the requested action and selection, including prohibitions,
+ * constraints, and duties under the application's supported ODRL profile.
+ */
+export type LCHAgreementEvaluator = (
+  context: LCHAgreementEvaluationContext
+) => boolean | Promise<boolean>
+
 export interface LCHMultipayBuyerOptions extends LCHHttpClientOptions {
+  /** Required before a recovered or completed License can be accepted. */
+  agreementEvaluator?: LCHAgreementEvaluator
   now?: () => bigint
   transport?: LCHAcquisitionTransport
+  supportedCriticalIdentifiers?: ReadonlySet<string>
 }
 
 /**
@@ -107,25 +150,73 @@ export interface LCHAcquisitionTransport {
     atomicBeef: Uint8Array
   ): Promise<SignedObject>
   complete(endpoint: string, completion: PaymentCompletion): Promise<SignedObject>
-  recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined>
+  recoverUnverified?(
+    endpoint: string,
+    requestId: Uint8Array
+  ): Promise<UnverifiedLicenseResponse | undefined>
+  /** @deprecated Implement recoverUnverified. Legacy results are wrapped as unverified. */
+  recover?(
+    endpoint: string,
+    requestId: Uint8Array
+  ): Promise<SignedObject | UnverifiedLicenseResponse | undefined>
 }
 
 /** A complete non-custodial BRC-170 multipay buyer workflow. */
 export class LCHMultipayBuyer {
+  private readonly wallet: Pick<WalletInterface, 'getPublicKey' | 'createAction'>
+  private readonly signer: LCHSigner
   private readonly buyer: LCHBuyer
   private readonly transport: LCHAcquisitionTransport
   private readonly now: () => bigint
-  private readonly allowInsecureLocalOrigins: readonly string[]
+  private readonly validationOptions: AcquisitionValidationOptions
+  private readonly agreementEvaluator?: LCHAgreementEvaluator
 
   constructor(
-    private readonly wallet: Pick<WalletInterface, 'getPublicKey' | 'createAction'>,
-    private readonly signer: LCHSigner,
+    wallet: Pick<WalletInterface, 'getPublicKey' | 'createAction'>,
+    signer: LCHSigner,
     options: LCHMultipayBuyerOptions = {}
   ) {
+    lchAssert(options !== null && typeof options === 'object', 'ERR_LCH_POLICY', 'Invalid options')
+    const agreementEvaluator = ownDataValue(options, 'agreementEvaluator', 'Multipay Buyer options')
+    const transport = ownDataValue(options, 'transport', 'Multipay Buyer options')
+    const now = ownDataValue(options, 'now', 'Multipay Buyer options')
+    lchAssert(
+      agreementEvaluator === undefined || typeof agreementEvaluator === 'function',
+      'ERR_LCH_POLICY',
+      'The License Agreement evaluator must be a function'
+    )
+    lchAssert(
+      transport === undefined || (transport !== null && typeof transport === 'object'),
+      'ERR_LCH_DELIVERY',
+      'The acquisition transport is invalid'
+    )
+    lchAssert(
+      now === undefined || typeof now === 'function',
+      'ERR_LCH_PAYMENT',
+      'Buyer clock is invalid'
+    )
+    this.wallet = wallet
+    this.signer = signer
     this.buyer = new LCHBuyer(signer)
-    this.transport = options.transport ?? new LCHHttpAcquisitionClient(options)
-    this.now = options.now ?? (() => BigInt(Math.floor(Date.now() / 1000)))
-    this.allowInsecureLocalOrigins = options.endpointPolicy?.allowLocalOrigins ?? []
+    this.transport =
+      (transport as LCHAcquisitionTransport | undefined) ?? new LCHHttpAcquisitionClient(options)
+    this.now = (now as (() => bigint) | undefined) ?? (() => BigInt(Math.floor(Date.now() / 1000)))
+    this.agreementEvaluator = agreementEvaluator as LCHAgreementEvaluator | undefined
+    const endpointPolicy = ownDataValue(options, 'endpointPolicy', 'Multipay Buyer options')
+    const allowLocalOrigins =
+      endpointPolicy === undefined
+        ? undefined
+        : snapshotStringArray(
+            ownDataValue(endpointPolicy, 'allowLocalOrigins', 'Endpoint policy'),
+            'Endpoint policy allowLocalOrigins'
+          )
+    this.validationOptions = {
+      allowInsecureLocalOrigins: allowLocalOrigins ?? [],
+      supportedCriticalIdentifiers: snapshotStringSet(
+        ownDataValue(options, 'supportedCriticalIdentifiers', 'Multipay Buyer options'),
+        'Multipay Buyer supportedCriticalIdentifiers'
+      )
+    }
   }
 
   static async create(
@@ -140,32 +231,62 @@ export class LCHMultipayBuyer {
   }
 
   async quote(
-    endpoint: string,
+    offer: SignedObject,
     request: SignedObject,
-    issuer: Uint8Array,
+    seller: Uint8Array,
     keyGrants: LCHLicenseKeyGrantExpectation
   ): Promise<LCHMultipayPlan> {
+    lchAssert(
+      offer !== null && typeof offer === 'object' && !Array.isArray(offer),
+      'ERR_LCH_POLICY',
+      'A signed Offer is required; endpoint-only quote calls are not supported in 0.2'
+    )
+    offer = snapshotSignedObject(offer, 'Offer')
+    request = snapshotSignedObject(request, 'License Request')
+    seller = snapshotBytes(seller, 'Offer seller')
+    keyGrants = snapshotLCHRecord(
+      keyGrants,
+      'License key-grant expectation'
+    ) as unknown as LCHLicenseKeyGrantExpectation
     validateKeyGrantExpectation(keyGrants)
-    const requestId = await validateLicenseRequest(request)
-    await this.transport.preflightLicense(endpoint, request)
-    const quote = await this.transport.quote(endpoint, request)
-    await validateQuote(quote, request, issuer, undefined, {
-      allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
-    })
+    await validateOffer(offer, new PublicBRC77Verifier(), seller, this.validationOptions)
+    const offerId = await objectId('offer', offer.body)
+    equal(request.body.offerId, offerId, 'License Request Offer ID')
+    equal(request.body.assetId, memberBytes(offer.body, 'assetId', 32), 'License Request Asset ID')
+    const offerPolicy = await validatePolicyReference(mapValue(offer.body.policy, 'Offer Policy'))
+    equal(
+      request.body.acceptedPolicyDigest,
+      offerPolicy.digest,
+      'License Request accepted Policy digest'
+    )
+    const payment = mapValue(offer.body.payment, 'Offer Payment')
+    const endpoint = memberString(payment, 'endpoint')
+    const issuer = memberBytes(offer.body, 'licenseIssuer', 33)
+    const requestId = await validateLicenseRequest(request, undefined, this.validationOptions)
+    equal(request.body.buyer, this.signer.identityKey, 'License Request buyer')
+    await this.transport.preflightLicense(
+      endpoint,
+      snapshotSignedObject(request, 'License Request')
+    )
+    const quote = snapshotSignedObject(
+      await this.transport.quote(endpoint, snapshotSignedObject(request, 'License Request')),
+      'Quote'
+    )
+    await validateQuote(quote, request, issuer, undefined, this.validationOptions)
     const demands = signedArray(quote.body.demands)
     const readiness = await this.obtainReadiness(demands)
     const authorizations = await this.obtainAuthorizations(demands)
     let totalSatoshis = 0n
     for (const demand of demands) {
-      await validatePaymentDemand(demand, undefined, {
-        allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
-      })
+      await validatePaymentDemand(demand, undefined, this.validationOptions)
       equal(demand.body.requestId, requestId, 'Demand Request ID')
       totalSatoshis += uint(demand.body.satoshis, 'Demand amount')
     }
     if (totalSatoshis !== uint(quote.body.totalSatoshis, 'Quote total'))
       throw new Error('Quote total does not equal its Payment Demands')
     return {
+      offer,
+      seller,
       request,
       requestId,
       quote,
@@ -182,9 +303,11 @@ export class LCHMultipayBuyer {
   }
 
   async createPayment(plan: LCHMultipayPlan): Promise<LCHFundedMultipay> {
+    plan = snapshotLCHRecord(plan, 'Multipay plan') as unknown as LCHMultipayPlan
     const now = this.now()
     if (now >= plan.expiresAt)
       throw new Error('The signed Quote expired before transaction creation')
+    await this.validatePlanIntegrity(plan)
     await this.validatePlanReadiness(plan.demands, plan.readiness, now)
     const authorizationByDemand = await this.validatePlanAuthorizations(
       plan.demands,
@@ -246,13 +369,24 @@ export class LCHMultipayBuyer {
   }
 
   async refreshReadiness(plan: LCHMultipayPlan): Promise<LCHMultipayPlan> {
+    plan = snapshotLCHRecord(plan, 'Multipay plan') as unknown as LCHMultipayPlan
+    await this.validatePlanIntegrity(plan)
     if (this.now() >= plan.expiresAt)
       throw new Error('The signed Quote expired before readiness refresh')
     return { ...plan, readiness: await this.obtainReadiness(plan.demands) }
   }
 
   async deliver(payment: LCHFundedMultipay, item: LCHMultipayDelivery): Promise<SignedObject> {
-    const receipt = await this.transport.deliver(item.endpoint, item.delivery)
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    item = snapshotLCHRecord(item, 'Multipay Delivery') as unknown as LCHMultipayDelivery
+    await this.validateFundedPayment(payment, item)
+    const receipt = snapshotSignedObject(
+      await this.transport.deliver(
+        item.endpoint,
+        snapshotSignedObject(item.delivery, 'Payment Delivery')
+      ),
+      'Payment Receipt'
+    )
     await this.validateReceipt(payment, item, receipt)
     return receipt
   }
@@ -262,7 +396,8 @@ export class LCHMultipayBuyer {
     item: LCHMultipayDelivery,
     receipt: SignedObject
   ): Promise<void> {
-    await validatePaymentReceipt(receipt)
+    receipt = snapshotSignedObject(receipt, 'Payment Receipt')
+    await validatePaymentReceipt(receipt, undefined, this.validationOptions)
     equal(receipt.body.demandId, item.demandId, 'Receipt Demand ID')
     equal(receipt.body.requestId, payment.plan.requestId, 'Receipt Request ID')
     equal(receipt.body.payee, item.payee, 'Receipt Payee')
@@ -280,11 +415,22 @@ export class LCHMultipayBuyer {
       throw new Error('Receipt amount does not match the Payment Demand')
   }
 
-  async complete(
+  private async settlementContext(
     payment: LCHFundedMultipay,
     receipts: readonly SignedObject[],
-    authorizedOutputs: readonly AuthorizedOutputEvidence[] = []
-  ): Promise<SignedObject> {
+    authorizedOutputs: readonly AuthorizedOutputEvidence[]
+  ): Promise<{
+    completion: PaymentCompletion
+    expectedFulfillments: Array<Record<string, LCHValue>>
+  }> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    receipts = receipts.map((receipt, index) =>
+      snapshotSignedObject(receipt, `Payment Receipt ${index}`)
+    )
+    authorizedOutputs = authorizedOutputs.map((evidence, index) =>
+      snapshotAuthorizedOutputEvidence(evidence, index)
+    )
+    await this.validateFundedPayment(payment)
     if (receipts.length + authorizedOutputs.length !== payment.deliveries.length)
       throw new Error(
         authorizedOutputs.length === 0
@@ -325,7 +471,7 @@ export class LCHMultipayBuyer {
         demand,
         payment.atomicBeef,
         new PublicBRC77Verifier(),
-        { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+        this.validationOptions
       )
       expectedFulfillments.push({
         dutyUid: memberString(demand.body, 'dutyUid'),
@@ -342,18 +488,65 @@ export class LCHMultipayBuyer {
       })
       seen.add(demandIdHex)
     }
-    const completion: PaymentCompletion = {
-      request: payment.plan.request,
-      quote: payment.plan.quote,
-      atomicBeef: payment.atomicBeef,
-      receipts: [...receipts],
-      authorizedOutputs: [...authorizedOutputs]
+    return {
+      completion: {
+        request: payment.plan.request,
+        quote: payment.plan.quote,
+        atomicBeef: payment.atomicBeef,
+        receipts: [...receipts],
+        authorizedOutputs: [...authorizedOutputs]
+      },
+      expectedFulfillments
     }
+  }
+
+  async complete(
+    payment: LCHFundedMultipay,
+    receipts: readonly SignedObject[],
+    authorizedOutputs: readonly AuthorizedOutputEvidence[] = []
+  ): Promise<SignedObject> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    const { completion, expectedFulfillments } = await this.settlementContext(
+      payment,
+      receipts,
+      authorizedOutputs
+    )
     const license = await this.transport.complete(payment.plan.endpoint, completion)
-    await verifySignedObject('license', license, new PublicBRC77Verifier(), payment.plan.issuer)
+    const ownedLicense = snapshotSignedObject(license, 'License')
+    await this.validateLicense(payment, ownedLicense, expectedFulfillments)
+    return ownedLicense
+  }
+
+  private async validateLicense(
+    payment: LCHFundedMultipay,
+    license: SignedObject,
+    expectedFulfillments: readonly Record<string, LCHValue>[]
+  ): Promise<void> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    expectedFulfillments = expectedFulfillments.map(fulfillment =>
+      snapshotLCHRecord(fulfillment, 'Expected License fulfillment')
+    )
+    license = snapshotSignedObject(license, 'License')
+    await verifySignedObject(
+      'license',
+      license,
+      new PublicBRC77Verifier(),
+      payment.plan.issuer,
+      this.validationOptions
+    )
     lchAssert(license.body.version === 1, 'ERR_LCH_LICENSE', 'License version is unsupported')
     uint(license.body.issuedAt, 'License issuance time')
-    mapValue(license.body.agreement, 'License Agreement')
+    validateTimeWindow({
+      ...(license.body.notBefore === undefined
+        ? {}
+        : { notBefore: uint(license.body.notBefore, 'License notBefore') }),
+      ...(license.body.notAfter === undefined
+        ? {}
+        : { notAfter: uint(license.body.notAfter, 'License notAfter') })
+    })
+    const agreement = await validatePolicyReference(
+      mapValue(license.body.agreement, 'License Agreement')
+    )
     equal(
       license.body.assetId,
       memberBytes(payment.plan.request.body, 'assetId', 32),
@@ -403,17 +596,87 @@ export class LCHMultipayBuyer {
       license.body.segmentSelection ?? license.body.selection,
       payment.plan.keyGrants
     )
+    const offerPolicy = await validatePolicyReference(
+      mapValue(payment.plan.offer.body.policy, 'Offer Policy')
+    )
+    lchAssert(
+      typeof this.agreementEvaluator === 'function',
+      'ERR_LCH_POLICY',
+      'A profile-aware License Agreement evaluator is required before accepting a License'
+    )
+    const accepted = await this.agreementEvaluator({
+      offer: snapshotSignedObject(payment.plan.offer, 'Offer'),
+      request: snapshotSignedObject(payment.plan.request, 'License Request'),
+      quote: snapshotSignedObject(payment.plan.quote, 'Quote'),
+      license: snapshotSignedObject(license, 'License'),
+      offerPolicy: snapshotLCHRecord(offerPolicy, 'Offer Policy') as unknown as PolicyReference,
+      agreement: snapshotLCHRecord(agreement, 'License Agreement') as unknown as PolicyReference
+    })
+    lchAssert(
+      accepted === true,
+      'ERR_LCH_POLICY',
+      'License Agreement was not accepted by the configured policy evaluator'
+    )
+  }
+
+  /**
+   * Recovers and validates a License against the complete funded acquisition.
+   */
+  async recover(
+    payment: LCHFundedMultipay,
+    receipts: readonly SignedObject[],
+    authorizedOutputs: readonly AuthorizedOutputEvidence[] = []
+  ): Promise<SignedObject | undefined> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    const { expectedFulfillments } = await this.settlementContext(
+      payment,
+      receipts,
+      authorizedOutputs
+    )
+    const response = await this.recoverUnverified(payment.plan.endpoint, payment.plan.requestId)
+    if (response === undefined) return undefined
+    const license = snapshotSignedObject(response.unverifiedLicense, 'Recovered License')
+    await this.validateLicense(payment, license, expectedFulfillments)
     return license
   }
 
-  recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined> {
-    return this.transport.recover(endpoint, requestId)
+  private async recoverUnverified(
+    endpoint: string,
+    requestId: Uint8Array
+  ): Promise<UnverifiedLicenseResponse | undefined> {
+    if (typeof this.transport.recoverUnverified === 'function') {
+      const response = await this.transport.recoverUnverified(endpoint, requestId.slice())
+      if (response === undefined) return undefined
+      return {
+        unverifiedLicense: snapshotSignedObject(
+          requiredOwnDataValue(response, 'unverifiedLicense', 'License recovery result'),
+          'Recovered License'
+        )
+      }
+    }
+    lchAssert(
+      typeof this.transport.recover === 'function',
+      'ERR_LCH_LICENSE',
+      'The acquisition transport does not support License recovery'
+    )
+    const legacy = await this.transport.recover(endpoint, requestId.slice())
+    if (legacy === undefined) return undefined
+    const wrapped = ownDataValue(legacy, 'unverifiedLicense', 'License recovery result')
+    return {
+      unverifiedLicense: snapshotSignedObject(
+        wrapped === undefined ? legacy : wrapped,
+        'Recovered License'
+      )
+    }
   }
 
   async collectAuthorizedOutputEvidence(
     payment: LCHFundedMultipay,
     item: LCHMultipayDelivery
   ): Promise<AuthorizedOutputEvidence> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    item = snapshotLCHRecord(item, 'Multipay Delivery') as unknown as LCHMultipayDelivery
+    await this.validateFundedPayment(payment, item)
     const demand = await demandById(payment.plan.demands, item.demandId)
     const authorization = payment.plan.authorizations.find(
       candidate => toHex(memberBytes(candidate.body, 'demandId', 32)) === toHex(item.demandId)
@@ -425,12 +688,15 @@ export class LCHMultipayBuyer {
       demand,
       undefined,
       new PublicBRC77Verifier(),
-      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+      this.validationOptions
     )
-    const deliveryAcknowledgement = await this.transport.storeDelivery(
-      memberString(authorization.body, 'deliveryEndpoint'),
-      authorization,
-      item.delivery
+    const deliveryAcknowledgement = snapshotSignedObject(
+      await this.transport.storeDelivery(
+        memberString(authorization.body, 'deliveryEndpoint'),
+        snapshotSignedObject(authorization, 'Payment Authorization'),
+        snapshotSignedObject(item.delivery, 'Payment Delivery')
+      ),
+      'Payment Delivery Acknowledgement'
     )
     await validateDeliveryAcknowledgement(
       deliveryAcknowledgement,
@@ -439,19 +705,23 @@ export class LCHMultipayBuyer {
       await objectId('payment-authorization', authorization.body),
       await objectId('payment-delivery', item.delivery.body),
       new PublicBRC77Verifier(),
-      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+      this.validationOptions
     )
-    const transactionEvidence = await this.transport.attestTransaction(
-      memberString(authorization.body, 'evidenceEndpoint'),
-      authorization,
-      payment.atomicBeef
+    const transactionEvidence = snapshotSignedObject(
+      await this.transport.attestTransaction(
+        memberString(authorization.body, 'evidenceEndpoint'),
+        snapshotSignedObject(authorization, 'Payment Authorization'),
+        payment.atomicBeef.slice()
+      ),
+      'Transaction Evidence'
     )
     await validateTransactionEvidence(
       transactionEvidence,
       authorization,
       await objectId('payment-authorization', authorization.body),
       Transaction.fromAtomicBEEF(payment.atomicBeef as AtomicBEEF),
-      new PublicBRC77Verifier()
+      new PublicBRC77Verifier(),
+      this.validationOptions
     )
     const bundle = {
       authorization,
@@ -464,7 +734,7 @@ export class LCHMultipayBuyer {
       demand,
       payment.atomicBeef,
       new PublicBRC77Verifier(),
-      { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+      this.validationOptions
     )
     return bundle
   }
@@ -473,9 +743,18 @@ export class LCHMultipayBuyer {
     payment: LCHFundedMultipay,
     item: LCHMultipayDelivery
   ): Promise<LCHMultipaySettlement> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    item = snapshotLCHRecord(item, 'Multipay Delivery') as unknown as LCHMultipayDelivery
+    await this.validateFundedPayment(payment, item)
     let receipt: SignedObject
     try {
-      receipt = await this.transport.deliver(item.endpoint, item.delivery)
+      receipt = snapshotSignedObject(
+        await this.transport.deliver(
+          item.endpoint,
+          snapshotSignedObject(item.delivery, 'Payment Delivery')
+        ),
+        'Payment Receipt'
+      )
     } catch (error) {
       const demand = await demandById(payment.plan.demands, item.demandId)
       if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput) throw error
@@ -491,13 +770,20 @@ export class LCHMultipayBuyer {
   private async obtainReadiness(demands: readonly SignedObject[]): Promise<SignedObject[]> {
     const readiness: SignedObject[] = []
     for (const demand of demands) {
-      const ready = await this.transport.preflightDemand(
-        memberString(demand.body, 'endpoint'),
-        demand
+      const ready = snapshotSignedObject(
+        await this.transport.preflightDemand(
+          memberString(demand.body, 'endpoint'),
+          snapshotSignedObject(demand, 'Payment Demand')
+        ),
+        'Payment Readiness'
       )
-      await validatePaymentReadiness(ready, demand, this.now(), new PublicBRC77Verifier(), {
-        allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
-      })
+      await validatePaymentReadiness(
+        ready,
+        demand,
+        this.now(),
+        new PublicBRC77Verifier(),
+        this.validationOptions
+      )
       readiness.push(ready)
     }
     return readiness
@@ -507,16 +793,19 @@ export class LCHMultipayBuyer {
     const authorizations: SignedObject[] = []
     for (const demand of demands) {
       if (demand.body.settlementProfile !== LCH_SETTLEMENT_PROFILES.authorizedOutput) continue
-      const authorization = await this.transport.authorizePayment(
-        memberString(demand.body, 'endpoint'),
-        demand
+      const authorization = snapshotSignedObject(
+        await this.transport.authorizePayment(
+          memberString(demand.body, 'endpoint'),
+          snapshotSignedObject(demand, 'Payment Demand')
+        ),
+        'Payment Authorization'
       )
       await validatePaymentAuthorization(
         authorization,
         demand,
         this.now(),
         new PublicBRC77Verifier(),
-        { allowInsecureLocalOrigins: this.allowInsecureLocalOrigins }
+        this.validationOptions
       )
       authorizations.push(authorization)
     }
@@ -540,9 +829,13 @@ export class LCHMultipayBuyer {
       if (demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput) {
         if (authorization === undefined)
           throw new Error('Payment plan is missing a required Payment Authorization')
-        await validatePaymentAuthorization(authorization, demand, now, new PublicBRC77Verifier(), {
-          allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
-        })
+        await validatePaymentAuthorization(
+          authorization,
+          demand,
+          now,
+          new PublicBRC77Verifier(),
+          this.validationOptions
+        )
       } else if (authorization !== undefined) {
         throw new Error('Payment plan has an Authorization for a receipt-only Demand')
       }
@@ -566,9 +859,181 @@ export class LCHMultipayBuyer {
       const demandId = await objectId('payment-demand', demand.body)
       const ready = available.get(toHex(demandId))
       if (ready === undefined) throw new Error('Payment plan is missing a Demand Readiness')
-      await validatePaymentReadiness(ready, demand, now, new PublicBRC77Verifier(), {
-        allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
-      })
+      await validatePaymentReadiness(
+        ready,
+        demand,
+        now,
+        new PublicBRC77Verifier(),
+        this.validationOptions
+      )
+    }
+  }
+
+  private async validatePlanIntegrity(plan: LCHMultipayPlan): Promise<void> {
+    plan = snapshotLCHRecord(plan, 'Multipay plan') as unknown as LCHMultipayPlan
+    lchAssert(
+      plan !== null && typeof plan === 'object',
+      'ERR_LCH_PAYMENT',
+      'Payment plan is invalid'
+    )
+    validateKeyGrantExpectation(plan.keyGrants)
+    const seller = memberBytesValue(plan.seller, 33, 'Payment plan seller')
+    await validateOffer(plan.offer, new PublicBRC77Verifier(), seller, this.validationOptions)
+    const offerId = await objectId('offer', plan.offer.body)
+    const offerAssetId = memberBytes(plan.offer.body, 'assetId', 32)
+    const offerPolicy = await validatePolicyReference(
+      mapValue(plan.offer.body.policy, 'Offer Policy')
+    )
+    equal(plan.request.body.offerId, offerId, 'Payment plan Offer ID')
+    equal(plan.request.body.assetId, offerAssetId, 'Payment plan Asset ID')
+    equal(
+      plan.request.body.acceptedPolicyDigest,
+      offerPolicy.digest,
+      'Payment plan accepted Policy digest'
+    )
+    const offerPayment = mapValue(plan.offer.body.payment, 'Offer Payment')
+    lchAssert(
+      plan.endpoint === memberString(offerPayment, 'endpoint'),
+      'ERR_LCH_ENDPOINT',
+      'Payment plan endpoint does not match the signed Offer'
+    )
+    equal(plan.offer.body.licenseIssuer, plan.issuer, 'Payment plan License issuer')
+    const keyDelivery = mapValue(plan.offer.body.keyDelivery, 'Offer key delivery')
+    if (plan.keyGrants.type === 'segmented') {
+      lchAssert(
+        plan.keyGrants.delivery === memberString(keyDelivery, 'mechanism'),
+        'ERR_LCH_KEY',
+        'Payment plan key delivery does not match the signed Offer'
+      )
+    }
+    const requestId = await validateLicenseRequest(plan.request, undefined, this.validationOptions)
+    equal(requestId, plan.requestId, 'Payment plan Request ID')
+    equal(plan.request.body.buyer, this.signer.identityKey, 'Payment plan buyer')
+    await validateQuote(
+      plan.quote,
+      plan.request,
+      memberBytesValue(plan.issuer, 33, 'Payment plan issuer'),
+      undefined,
+      this.validationOptions
+    )
+    const quotedDemands = signedArray(plan.quote.body.demands, 1)
+    lchAssert(
+      Array.isArray(plan.demands) &&
+        toHex(encodeDeterministicCbor(quotedDemands as unknown as LCHValue)) ===
+          toHex(encodeDeterministicCbor(plan.demands as unknown as LCHValue)),
+      'ERR_LCH_PAYMENT',
+      'Payment plan Demands do not match the signed Quote'
+    )
+    lchAssert(
+      uint(plan.totalSatoshis as unknown as LCHValue, 'Payment plan total') ===
+        uint(plan.quote.body.totalSatoshis, 'Quote total') &&
+        uint(plan.expiresAt as unknown as LCHValue, 'Payment plan expiry') ===
+          uint(plan.quote.body.expiresAt, 'Quote expiry') &&
+        uint(plan.recoveryUntil as unknown as LCHValue, 'Payment plan recovery deadline') ===
+          uint(plan.quote.body.recoveryUntil, 'Quote recovery deadline'),
+      'ERR_LCH_PAYMENT',
+      'Payment plan totals or deadlines do not match the signed Quote'
+    )
+  }
+
+  private async validateFundedPayment(
+    payment: LCHFundedMultipay,
+    selectedDelivery?: LCHMultipayDelivery
+  ): Promise<void> {
+    payment = snapshotLCHRecord(payment, 'Funded multipay') as unknown as LCHFundedMultipay
+    if (selectedDelivery !== undefined)
+      selectedDelivery = snapshotLCHRecord(
+        selectedDelivery,
+        'Multipay Delivery'
+      ) as unknown as LCHMultipayDelivery
+    lchAssert(
+      payment !== null &&
+        typeof payment === 'object' &&
+        payment.transactionState === 'finalized' &&
+        payment.atomicBeef instanceof Uint8Array &&
+        payment.atomicBeef.length > 0 &&
+        payment.atomicBeef.length <= LCH_LIMITS.headerBytes &&
+        Array.isArray(payment.deliveries),
+      'ERR_LCH_PAYMENT',
+      'Funded payment is invalid'
+    )
+    await this.validatePlanIntegrity(payment.plan)
+    lchAssert(
+      payment.deliveries.length === payment.plan.demands.length,
+      'ERR_LCH_PAYMENT',
+      'Funded payment does not contain one Delivery per Demand'
+    )
+    const transaction = Transaction.fromAtomicBEEF(payment.atomicBeef as AtomicBEEF)
+    const seenDemands = new Set<string>()
+    const seenOutputs = new Set<number>()
+    for (const item of payment.deliveries) {
+      const demand = await demandById(payment.plan.demands, item.demandId)
+      const demandId = await objectId('payment-demand', demand.body)
+      const demandIdHex = toHex(demandId)
+      lchAssert(!seenDemands.has(demandIdHex), 'ERR_LCH_PAYMENT', 'Funded payment repeats a Demand')
+      seenDemands.add(demandIdHex)
+      equal(item.demandId, demandId, 'Funded Delivery Demand ID')
+      equal(item.payee, memberBytes(demand.body, 'payee', 33), 'Funded Delivery Payee')
+      lchAssert(
+        item.endpoint === memberString(demand.body, 'endpoint'),
+        'ERR_LCH_ENDPOINT',
+        'Funded Delivery endpoint does not match its signed Demand'
+      )
+      await validatePaymentDelivery(item.delivery, undefined, this.validationOptions)
+      equal(item.delivery.body.demandId, demandId, 'Payment Delivery Demand ID')
+      equal(item.delivery.body.requestId, payment.plan.requestId, 'Payment Delivery Request ID')
+      equal(item.delivery.body.buyer, this.signer.identityKey, 'Payment Delivery buyer')
+      equal(
+        memberBytesAny(item.delivery.body, 'atomicBeef'),
+        payment.atomicBeef,
+        'Payment Delivery Atomic BEEF'
+      )
+      const prefix = memberBytes(item.delivery.body, 'derivationPrefix', 32)
+      equal(prefix, memberBytes(demand.body, 'derivationPrefix', 32), 'Derivation prefix')
+      const suffix = memberBytes(item.delivery.body, 'derivationSuffix', 32)
+      const outputIndex = Number(uint(item.delivery.body.outputIndex, 'Payment output index'))
+      lchAssert(
+        Number.isSafeInteger(outputIndex) &&
+          !seenOutputs.has(outputIndex) &&
+          transaction.outputs[outputIndex]?.satoshis !== undefined,
+        'ERR_LCH_PAYMENT',
+        'Payment Delivery output is absent or repeated'
+      )
+      seenOutputs.add(outputIndex)
+      const output = transaction.outputs[outputIndex]
+      lchAssert(
+        BigInt(output.satoshis!) === uint(demand.body.satoshis, 'Demand amount'),
+        'ERR_LCH_PAYMENT',
+        'Payment Delivery output amount does not match its Demand'
+      )
+      const publicKey = requiredOwnDataValue(
+        await this.wallet.getPublicKey({
+          protocolID: [...BRC29_PAYMENT_PROTOCOL],
+          keyID: `${toBase64Url(prefix)} ${toBase64Url(suffix)}`,
+          counterparty: toHex(item.payee)
+        }),
+        'publicKey',
+        'Wallet getPublicKey result'
+      )
+      lchAssert(typeof publicKey === 'string', 'ERR_LCH_PAYMENT', 'Wallet public key is invalid')
+      const expectedScript = new P2PKH().lock(PublicKey.fromString(publicKey).toAddress())
+      equal(
+        output.lockingScript.toUint8Array(),
+        expectedScript.toUint8Array(),
+        'Payment Delivery output locking script'
+      )
+    }
+    if (selectedDelivery !== undefined) {
+      const expected = payment.deliveries.find(
+        item => toHex(item.demandId) === toHex(selectedDelivery.demandId)
+      )
+      lchAssert(
+        expected !== undefined &&
+          toHex(encodeDeterministicCbor(expected as unknown as LCHValue)) ===
+            toHex(encodeDeterministicCbor(selectedDelivery as unknown as LCHValue)),
+        'ERR_LCH_PAYMENT',
+        'Selected Delivery is not part of the funded payment'
+      )
     }
   }
 }
@@ -583,34 +1048,48 @@ async function demandById(
   throw new Error('Payment Delivery refers to an unknown Demand')
 }
 
-function signedArray(value: LCHValue | undefined): SignedObject[] {
-  if (!Array.isArray(value) || value.length < 2)
-    throw new Error('Multilateral Quote requires at least two Payment Demands')
-  return value.map(item => {
-    if (
-      item === null ||
-      typeof item !== 'object' ||
-      Array.isArray(item) ||
-      item instanceof Uint8Array ||
-      item.body === null ||
-      typeof item.body !== 'object' ||
-      Array.isArray(item.body) ||
-      item.body instanceof Uint8Array ||
-      !Array.isArray(item.signatures) ||
-      !item.signatures.every(signature => signature instanceof Uint8Array)
+function signedArray(value: LCHValue | undefined, minimum = 2): SignedObject[] {
+  if (!Array.isArray(value) || value.length < minimum)
+    throw new Error(
+      minimum > 1
+        ? 'Multilateral Quote requires at least two Payment Demands'
+        : 'Quote requires at least one Payment Demand'
     )
-      throw new Error('Quote Payment Demand is invalid')
-    return {
-      body: item.body as Record<string, LCHValue>,
-      signatures: item.signatures as Uint8Array[]
-    }
-  })
+  return value.map((item, index) => snapshotSignedObject(item, `Quote Payment Demand ${index}`))
+}
+
+function snapshotAuthorizedOutputEvidence(value: unknown, index: number): AuthorizedOutputEvidence {
+  const name = `Authorized Output Evidence ${index}`
+  return {
+    authorization: snapshotSignedObject(
+      requiredOwnDataValue(value, 'authorization', name),
+      'Payment Authorization'
+    ),
+    delivery: snapshotSignedObject(
+      requiredOwnDataValue(value, 'delivery', name),
+      'Payment Delivery'
+    ),
+    transactionEvidence: snapshotSignedObject(
+      requiredOwnDataValue(value, 'transactionEvidence', name),
+      'Transaction Evidence'
+    ),
+    deliveryAcknowledgement: snapshotSignedObject(
+      requiredOwnDataValue(value, 'deliveryAcknowledgement', name),
+      'Payment Delivery Acknowledgement'
+    )
+  }
 }
 
 function memberBytes(body: Record<string, LCHValue>, key: string, length: number): Uint8Array {
   const value = body[key]
   if (!(value instanceof Uint8Array) || value.length !== length)
     throw new Error(`${key} is invalid`)
+  return value
+}
+
+function memberBytesValue(value: unknown, length: number, name: string): Uint8Array {
+  if (!(value instanceof Uint8Array) || value.length !== length)
+    throw new Error(`${name} is invalid`)
   return value
 }
 

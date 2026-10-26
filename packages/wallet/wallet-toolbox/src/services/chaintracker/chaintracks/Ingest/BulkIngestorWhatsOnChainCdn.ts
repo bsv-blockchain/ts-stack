@@ -8,6 +8,7 @@ import { ChaintracksFetch } from '../util/ChaintracksFetch'
 import { HeightRange, HeightRanges } from '../util/HeightRange'
 import { StopListenerToken } from './WhatsOnChainIngestorWs'
 import { WhatsOnChainServices, WhatsOnChainServicesOptions } from './WhatsOnChainServices'
+import { safeDiagnostic } from '../util/safeDiagnostic'
 
 export interface BulkIngestorWhatsOnChainOptions extends BulkIngestorBaseOptions, WhatsOnChainServicesOptions {
   /**
@@ -45,6 +46,8 @@ export interface BulkIngestorWhatsOnChainOptions extends BulkIngestorBaseOptions
    *
    */
   fetch?: ChaintracksFetchApi
+  /** Maximum headers retained from one legacy WebSocket history request. */
+  maxHeadersPerRequest?: number
 }
 
 export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
@@ -70,9 +73,21 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
 
   constructor(options: BulkIngestorWhatsOnChainOptions) {
     super(options)
-    this.idleWait = options.idleWait || 5000
+    this.idleWait = options.idleWait ?? 5000
+    if (!Number.isSafeInteger(this.idleWait) || this.idleWait < 1 || this.idleWait > 60 * 60 * 1000) {
+      throw new Error('idleWait must be a positive safe integer no greater than 3600000.')
+    }
     this.woc = new WhatsOnChainServices(options)
-    this.fetch = options.fetch || new ChaintracksFetch()
+    this.fetch = options.fetch ?? new ChaintracksFetch()
+    if (
+      this.fetch == null ||
+      typeof this.fetch !== 'object' ||
+      typeof this.fetch.download !== 'function' ||
+      typeof this.fetch.fetchJson !== 'function' ||
+      typeof this.fetch.pathJoin !== 'function'
+    ) {
+      throw new Error('fetch must implement the ChaintracksFetchApi methods.')
+    }
   }
 
   override async getPresentHeight(): Promise<number | undefined> {
@@ -97,7 +112,8 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
           if (fetchRange.contains(height)) {
             range.data ??= await this.fetch.download(
               this.fetch.pathJoin(range.sourceUrl, range.fileName),
-              range.range.length * 80
+              range.range.length * 80,
+              { publicNetworkOnly: range.publicNetworkOnly }
             )
             const h = deserializeBlockHeader(range.data, height, (height - range.range.minHeight) * 80)
             oldHeaders.push(h)
@@ -105,7 +121,9 @@ export class BulkIngestorWhatsOnChainCdn extends BulkIngestorBase {
         }
       }
     } catch (e) {
-      this.log(`Errors during WhatsOnChain ingestion:\n${e}`)
+      const message = safeDiagnostic(e)
+      this.log(`Errors during WhatsOnChain ingestion: ${message}`)
+      throw e
     }
 
     const liveHeaders = await this.storage().addBulkHeaders(oldHeaders, bulkRange, priorLiveHeaders)

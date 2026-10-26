@@ -566,7 +566,7 @@ function dispatchBEEF(input: Record<string, unknown>, expected: Record<string, u
   let beef: Beef | undefined
   let parseSucceeds = false
   try {
-    beef = Beef.fromBinary(beefBytes)
+    beef = Beef.fromBinaryStrict(beefBytes)
     parseSucceeds = true
   } catch {
     parseSucceeds = false

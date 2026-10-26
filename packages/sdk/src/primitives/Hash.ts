@@ -2,6 +2,7 @@
 // Modified code incorporates hash.js, @noble/hashes, and Closure lineages; see ../../THIRD_PARTY_NOTICES.md.
 /* eslint-disable @typescript-eslint/naming-convention */
 import { assertValidHex, normalizeHex } from './hex.js'
+import { utf8Bytes } from './UTF8.js'
 
 const assert = (expression: unknown, message: string = 'Hash assertion failed'): void => {
   if (!(expression as boolean)) {
@@ -699,27 +700,27 @@ export class RIPEMD160 extends BaseHash {
  * @property k - The round constants used for each round of SHA-256
  */
 export class SHA256 {
-  private readonly h?: FastSHA256
-  private readonly native?: any
+  readonly #h?: FastSHA256
+  readonly #native?: any
 
   constructor() {
-    this.native = createNodeHash('sha256')
-    if (this.native == null) {
-      this.h = new FastSHA256()
+    this.#native = createNodeHash('sha256')
+    if (this.#native == null) {
+      this.#h = new FastSHA256()
     }
   }
 
   update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
-    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
+    updateNativeOrFallback(this.#native, this.#h, toHashBytes(msg, enc))
     return this
   }
 
   digest(): number[] {
-    return digestNativeOrFallback(this.native, this.h)
+    return digestNativeOrFallback(this.#native, this.#h)
   }
 
   digestHex(): string {
-    return digestHexNativeOrFallback(this.native, this.h)
+    return digestHexNativeOrFallback(this.#native, this.#h)
   }
 }
 
@@ -821,27 +822,27 @@ export class SHA1 extends BaseHash {
  * @property k - The round constants used for each round of SHA-512.
  */
 export class SHA512 {
-  private readonly h?: FastSHA512
-  private readonly native?: any
+  readonly #h?: FastSHA512
+  readonly #native?: any
 
   constructor() {
-    this.native = createNodeHash('sha512')
-    if (this.native == null) {
-      this.h = new FastSHA512()
+    this.#native = createNodeHash('sha512')
+    if (this.#native == null) {
+      this.#h = new FastSHA512()
     }
   }
 
   update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
-    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
+    updateNativeOrFallback(this.#native, this.#h, toHashBytes(msg, enc))
     return this
   }
 
   digest(): number[] {
-    return digestNativeOrFallback(this.native, this.h)
+    return digestNativeOrFallback(this.#native, this.#h)
   }
 
   digestHex(): string {
-    return digestHexNativeOrFallback(this.native, this.h)
+    return digestHexNativeOrFallback(this.#native, this.#h)
   }
 }
 
@@ -858,8 +859,8 @@ export class SHA512 {
  * @property outSize - The output size of the SHA-256 hash function, in bytes. It's set to 32 bytes.
  */
 export class SHA256HMAC {
-  private readonly h?: HMAC<FastSHA256>
-  private readonly native?: any
+  readonly #h?: HMAC<FastSHA256>
+  readonly #native?: any
   blockSize = 64
   outSize = 32
 
@@ -878,9 +879,9 @@ export class SHA256HMAC {
    */
   constructor(key: HashInput) {
     const k = toHashKeyBytes(key)
-    this.native = createNodeHmac('sha256', k)
-    if (this.native == null) {
-      this.h = new HMAC(sha256Fast, k)
+    this.#native = createNodeHmac('sha256', k)
+    if (this.#native == null) {
+      this.#h = new HMAC(sha256Fast, k)
     }
   }
 
@@ -896,7 +897,7 @@ export class SHA256HMAC {
    * myHMAC.update('deadbeef', 'hex');
    */
   update(msg: HashInput, enc?: 'hex'): this {
-    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
+    updateNativeOrFallback(this.#native, this.#h, toHashBytes(msg, enc))
     return this
   }
 
@@ -910,7 +911,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest(): number[] {
-    return digestNativeOrFallback(this.native, this.h)
+    return digestNativeOrFallback(this.#native, this.#h)
   }
 
   /**
@@ -923,7 +924,7 @@ export class SHA256HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex(): string {
-    return digestHexNativeOrFallback(this.native, this.h)
+    return digestHexNativeOrFallback(this.#native, this.#h)
   }
 }
 
@@ -986,8 +987,8 @@ export class SHA1HMAC {
  * @property outSize - The output size of the SHA-512 hash function, in bytes. It's set to 64 bytes.
  */
 export class SHA512HMAC {
-  private readonly h?: HMAC<FastSHA512>
-  private readonly native?: any
+  readonly #h?: HMAC<FastSHA512>
+  readonly #native?: any
   blockSize = 128
   outSize = 32
 
@@ -1006,9 +1007,9 @@ export class SHA512HMAC {
    */
   constructor(key: HashInput) {
     const k = toHashKeyBytes(key)
-    this.native = createNodeHmac('sha512', k)
-    if (this.native == null) {
-      this.h = new HMAC(sha512Fast, k)
+    this.#native = createNodeHmac('sha512', k)
+    if (this.#native == null) {
+      this.#h = new HMAC(sha512Fast, k)
     }
   }
 
@@ -1024,7 +1025,7 @@ export class SHA512HMAC {
    * myHMAC.update('deadbeef', 'hex');
    */
   update(msg: HashInput, enc?: 'hex' | 'utf8'): this {
-    updateNativeOrFallback(this.native, this.h, toHashBytes(msg, enc))
+    updateNativeOrFallback(this.#native, this.#h, toHashBytes(msg, enc))
     return this
   }
 
@@ -1038,7 +1039,7 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digest();
    */
   digest(): number[] {
-    return digestNativeOrFallback(this.native, this.h)
+    return digestNativeOrFallback(this.#native, this.#h)
   }
 
   /**
@@ -1051,7 +1052,7 @@ export class SHA512HMAC {
    * let hashedMessage = myHMAC.digestHex();
    */
   digestHex(): string {
-    return digestHexNativeOrFallback(this.native, this.h)
+    return digestHexNativeOrFallback(this.#native, this.#h)
   }
 }
 
@@ -1258,7 +1259,7 @@ function toBytes(data: Input): Uint8Array {
 }
 function utf8ToBytes(str: string): Uint8Array {
   if (typeof str !== 'string') throw new Error('string expected')
-  return new Uint8Array(new TextEncoder().encode(str))
+  return utf8Bytes(str)
 }
 type Input = string | Uint8Array
 const kdfInputToBytes = toBytes

@@ -6,8 +6,8 @@ import {
   isAuthPayload,
   isHexIdentifier,
   isPositiveSafeInteger,
-  isRecord,
-  isUMPOutpoint
+  isUMPOutpoint,
+  snapshotRequestBody
 } from '../security/requestValidation'
 import { PhoneChangeError, PhoneChangeService } from '../services/PhoneChangeService'
 import {
@@ -19,9 +19,10 @@ import { UserService } from '../services/UserService'
 export class AdminController {
   static async reopenRegistration(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body))
+      const body = snapshotRequestBody(req.body)
+      if (body == null)
         return res.status(400).json({ message: 'Request body must be a JSON object.' })
-      const { presentationKey, methodType, payload } = req.body
+      const { presentationKey, methodType, payload } = body
       let user
       if (isHexIdentifier(presentationKey)) {
         user = await UserService.getUserByPresentationKey(presentationKey)
@@ -55,9 +56,10 @@ export class AdminController {
 
   static async setUMPTokenPin(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body))
+      const body = snapshotRequestBody(req.body)
+      if (body == null)
         return res.status(400).json({ message: 'Request body must be a JSON object.' })
-      const { presentationKey, methodType, payload, outpoint } = req.body
+      const { presentationKey, methodType, payload, outpoint } = body
       if (outpoint !== null && !isUMPOutpoint(outpoint)) {
         return res.status(400).json({ message: 'outpoint must be a valid UMP outpoint or null.' })
       }
@@ -89,12 +91,13 @@ export class AdminController {
 
   static async restorePhoneChange(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body) || !isPositiveSafeInteger(req.body.changeId)) {
+      const body = snapshotRequestBody(req.body)
+      if (body == null || !isPositiveSafeInteger(body.changeId)) {
         return res.status(400).json({ message: 'A positive changeId is required.' })
       }
-      await PhoneChangeService.restore(req.body.changeId)
+      await PhoneChangeService.restore(body.changeId)
       log.warn(
-        { operation: 'admin.phone_change.restore', changeId: req.body.changeId },
+        { operation: 'admin.phone_change.restore', changeId: body.changeId },
         'Phone association restored by support'
       )
       return res.json({ success: true })

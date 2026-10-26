@@ -1,6 +1,9 @@
-import { Setup } from '@bsv/wallet-toolbox'
+import { sdk, Setup } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
 import { specOpWalletBalance } from '@bsv/wallet-toolbox/out/src/sdk'
+import { assertSatoshis } from './transactionSafety'
+
+const MAX_BALANCE_OUTPUTS = 100_000
 
 /**
  * The `balance` function demonstrates creating a `ServerClient` based wallet and
@@ -30,27 +33,41 @@ export async function balances(): Promise<void> {
       rootKeyHex: env.devKeys[identityKey]
     })
 
-    let balance = 0
-    let offset = 0
-    for (;;) {
-      // Retrieve all the spendable outputs tracked by the 'default' basket
-      // which holds the automatically managed "change" for the wallet.
-      const change = await setup.wallet.listOutputs({
-        basket: 'default',
-        // The default is 10 outputs returned, could increase, but looping
-        // is scalable.
-        limit: 10,
-        offset
-      })
+    try {
+      let balance = 0
+      let offset = 0
+      const seen = new Set<string>()
+      for (;;) {
+        const change = await setup.wallet.listOutputs({ basket: 'default', limit: 10, offset })
+        const totalOutputs = change.totalOutputs
+        if (
+          typeof totalOutputs !== 'number' ||
+          !Number.isSafeInteger(totalOutputs) ||
+          totalOutputs < 0 ||
+          totalOutputs > MAX_BALANCE_OUTPUTS
+        ) {
+          throw new Error('Wallet reported an invalid or excessive output count')
+        }
+        for (const output of change.outputs) {
+          assertSatoshis(output.satoshis)
+          const { txid, vout } = sdk.Validation.parseWalletOutpoint(output.outpoint)
+          const canonicalOutpoint = `${txid.toLowerCase()}.${vout}`
+          if (seen.has(canonicalOutpoint)) {
+            throw new Error('Wallet repeated an output across pages')
+          }
+          seen.add(canonicalOutpoint)
+          const nextBalance = balance + output.satoshis
+          assertSatoshis(nextBalance)
+          balance = nextBalance
+        }
+        offset += change.outputs.length
+        if (change.outputs.length === 0 || offset >= totalOutputs) break
+      }
 
-      // Sum the "satoshis" held by each output to compute the available balance.
-      balance += change.outputs.reduce((b, o) => b + o.satoshis, 0)
-
-      offset += change.outputs.length
-      if (change.outputs.length === 0 || offset >= change.totalOutputs) break
+      console.log(`balance for ${identityKey} = ${balance}`)
+    } finally {
+      await setup.wallet.destroy()
     }
-
-    console.log(`balance for ${identityKey} = ${balance}`)
   }
 }
 
@@ -82,10 +99,14 @@ export async function balanceSpecOp(): Promise<void> {
     rootKeyHex: env.devKeys[env.identityKey]
   })
 
-  const r = await setup.wallet.listOutputs({ basket: specOpWalletBalance })
-  const balance = r.totalOutputs
-
-  console.log(`balance for ${env.identityKey} = ${balance}`)
+  try {
+    const r = await setup.wallet.listOutputs({ basket: specOpWalletBalance })
+    const balance = r.totalOutputs
+    assertSatoshis(balance)
+    console.log(`balance for ${env.identityKey} = ${balance}`)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 
 /**
@@ -105,9 +126,13 @@ export async function walletBalance(): Promise<void> {
     rootKeyHex: env.devKeys[env.identityKey]
   })
 
-  const balance = await setup.wallet.balance()
-
-  console.log(`balance for ${env.identityKey} = ${balance}`)
+  try {
+    const balance = await setup.wallet.balance()
+    assertSatoshis(balance)
+    console.log(`balance for ${env.identityKey} = ${balance}`)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

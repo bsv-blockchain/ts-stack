@@ -63,18 +63,28 @@ Before editing:
 4. inspect open issues and pull requests for overlapping work; and
 5. determine the project tier and required consumer profiles from governance.
 
+Maintainer-authorized agents for `sirdeggen`, `ty-everett`, and `BraydenLangley` must also follow
+the [BotBoard and per-turn Lockfile protocol](./AGENTS.md#maintainer-botboard-and-lockfile-protocol).
+Other contributors do not need a BotBoard handle.
+
 ## Design and compatibility rules
 
-The default expectation is no consumer breakage.
+Backward compatibility is a project-wide invariant: no change may break an
+established compatibility contract or any BRC-100 application-wallet boundary,
+even in a new major version. Read the [compatibility contract](./docs/about/compatibility.md).
 
 - Preserve public exports, declaration shapes, import conditions, supported
   runtime targets, documented inputs, defaults, errors, wire formats,
   serialization, persistence, browser/mobile behavior, and operational
   contracts.
-- Prefer additive changes and deprecation over removal. A breaking change
-  requires explicit maintainer approval, the appropriate SemVer release,
-  before/after migration instructions, cross-package coordination, and a
-  rollback or forward-fix plan.
+- Use additive changes and retain established contracts. Major versions,
+  deprecation notices, maintainer approval, and migration plans do not authorize
+  breaking those contracts. Independently deployed applications and wallets
+  cannot be required to upgrade together.
+- For application-wallet changes, prove old client/new wallet and new client/old
+  wallet interoperability using published clients and representative transports.
+  Retain regression tests for legacy encodings and validation. Record exact
+  versions, commands, results, and limitations before merge or publication.
 - Treat specifications and conformance vectors as implementation-independent
   contracts. A TypeScript-only convenience must not accidentally make the
   reference behavior incompatible with another conforming implementation.
@@ -116,8 +126,36 @@ registries and removal conditions.
 
 ## Local validation
 
-Run checks locally before opening or updating a pull request whenever feasible.
-Start with the invariant repository controls:
+Use a short edit loop, then qualify a coherent batch before pushing. While
+editing, run the regression/negative test for the changed behavior and lint and
+format the changed files. Use your package runner's focused test selector; do
+not restart every workspace suite after each small edit.
+
+Preview a dependency-aware local plan without starting expensive campaigns:
+
+```sh
+node scripts/ci-local-feedback.mjs --base origin/main
+# Machine-readable planning for an agent or editor:
+node scripts/ci-local-feedback.mjs --base origin/main --json
+```
+
+Choose the actual intended PR baseline. The plan includes the full committed
+branch diff plus staged, unstaged and authored untracked changes, excludes
+ignored build/sandbox output, and preserves both paths of moves.
+The commands validate working-tree bytes; align the index and working tree before
+treating their results as evidence for the next push. Directly
+changed packages run coverage; affected dependents run regressions and their
+declared consumer/platform checks; prerequisites build without duplicate tests.
+Critical boundaries retain property/mutation and compatibility requirements.
+The printed commands are advisory: review the changed contract and applicable
+service/platform profile, especially for new or unknown boundaries. The plan
+does not grant a remote scope skip or qualification.
+
+Reuse a frozen install and exact-input build outputs during the edit loop. On a
+cold checkout, install with `pnpm install --frozen-lockfile --ignore-scripts`,
+rebuild only audited tools as documented by CI, and build the package graph
+before typechecking consumers that require workspace declarations. Invariant
+checks run once for the completed batch before opening/updating the PR:
 
 ```sh
 pnpm health:check
@@ -152,12 +190,25 @@ pnpm test:mutation --target <target>
 
 Use the package’s declared `test:browser`, `test:mobile`, `test:consumers`, or
 other profile command when applicable. Root toolchain, SDK, CI, or governance
-changes may select the full workspace and mutation registry. Infrastructure or
+changes may select the full workspace test scope. Mutation testing does not run
+on pull requests; the full registry runs on a manual `CI` dispatch, the
+scheduled `Mutation quality` workflow, and release qualification. Infrastructure or
 container changes require their root CI matrix and runtime-contract evidence;
 do not substitute a macOS image build for hosted Linux/amd64 validation.
 
 Local checks are necessary evidence, not authority to bypass remote checks.
 Record the exact commands and results in the pull request.
+
+Batch related fixes after local feedback and self-review before the next push.
+Run affected deep checks locally where the platform supports them, with source,
+configuration and property seed fixed. Measure comparable wall time and worker
+contention rather than assuming every developer machine is faster. Avoid
+nested worker pools or concurrent heavy campaigns that starve another agent.
+Hosted CI verifies the resulting exact head and platform-specific requirements;
+retain its complete required gate and investigate failures without automatic
+rerun loops. Full workspace/campaign checks belong at shared-control changes,
+affected critical boundaries and the existing scheduled/release qualification,
+rather than every edit. Do not use stale local reports as current-head evidence.
 
 ## Dependencies and automation
 
@@ -182,8 +233,9 @@ Do not introduce a broad override or suppression. If no compatible upstream
 fix exists, register the narrowest temporary exception with an owner, evidence,
 review date, objective removal condition, and tests. Rehearse removal after
 relevant upstream releases. Elapsed documentation and exception review dates
-are maintenance warnings in source CI, enforced by the separate weekly
-Maintenance review deadlines workflow. Passing time alone must not block a PR;
+are advisory maintenance warnings in all source and maintenance checks.
+Dependency release age never blocks resolution or merging; vulnerability audits,
+provenance checks, and lifecycle-script restrictions remain required. Passing time alone must not block a PR;
 structural errors, generated drift, security audits, and code checks still do.
 
 ## Versions, changelogs, and migrations

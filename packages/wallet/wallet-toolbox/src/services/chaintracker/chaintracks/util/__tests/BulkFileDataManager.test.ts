@@ -2,6 +2,7 @@ import { Knex, knex as makeKnex } from 'knex'
 import { ChaintracksStorageKnex } from '../../Storage/ChaintracksStorageKnex'
 import { deserializeBlockHeaders } from '../blockHeaderUtilities'
 import { BulkFileDataManager } from '../BulkFileDataManager'
+import { ChaintracksFetch } from '../ChaintracksFetch'
 import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../BulkHeaderFile'
 import { ChaintracksFs } from '../ChaintracksFs'
 import { LocalCdnServer } from '../../__tests/LocalCdnServer'
@@ -286,6 +287,11 @@ describe('BulkFileDataManager tests', () => {
       lastHash: headers0_99.at(-1)!.hash,
       validated: true
     })
+    if (file.data == null) throw new Error('Expected retained bulk header data')
+    const firstByte = file.data[0]
+    file.data[0] ^= 0xff
+    const [unchanged] = await computedWorkManager.getBulkFiles(true)
+    expect(unchanged.data?.[0]).toBe(firstByte)
     expect(await computedWorkManager.findHeaderForHeightOrUndefined(0)).toEqual(headers0_99[0])
 
     const suppliedWorkManager = createEmptyManager()
@@ -404,6 +410,68 @@ describe('BulkFileDataManager tests', () => {
     expect(dropUpdate.fileId).toBe(7)
   })
 
+  test('10 restores memory when durable bulk-file mutations fail', async () => {
+    const result = { inserted: [], updated: [], unchanged: [], dropped: [] }
+
+    const addManager = createEmptyManager()
+    addManager['storage'] = {
+      insertBulkFile: jest.fn().mockRejectedValue(new Error('insert failed'))
+    } as any
+    await expect(addManager['add'](makeBulkFile(0, 10, 'incremental') as any)).rejects.toThrow('insert failed')
+    expect(addManager['bfds']).toHaveLength(0)
+
+    const updateManager = createEmptyManager()
+    const original = makeBulkFile(0, 10, 'incremental')
+    original.fileId = 7
+    updateManager['bfds'] = [original] as any
+    updateManager['fileHashToIndex'] = { [original.fileHash]: 0 }
+    updateManager['storage'] = {
+      updateBulkFile: jest.fn().mockRejectedValue(new Error('update failed'))
+    } as any
+    const extension = makeBulkFile(0, 11, 'incremental')
+    await expect(updateManager['update'](extension as any, original as any, result)).rejects.toThrow('update failed')
+    expect(updateManager['bfds']).toHaveLength(1)
+    expect(updateManager['bfds'][0]).toMatchObject({ fileHash: original.fileHash, count: 10, fileId: 7 })
+    expect(updateManager['fileHashToIndex'][original.fileHash]).toBe(0)
+
+    const appendManager = createEmptyManager()
+    const appendOriginal = makeBulkFile(0, 10, 'incremental')
+    appendOriginal.fileId = 8
+    appendManager['bfds'] = [appendOriginal] as any
+    appendManager['fileHashToIndex'] = { [appendOriginal.fileHash]: 0 }
+    appendManager['storage'] = {
+      updateBulkFile: jest.fn().mockRejectedValue(new Error('append failed'))
+    } as any
+    await expect(
+      appendManager['mergeIncremental'](appendOriginal as any, makeBulkFile(10, 1, 'incremental') as any, result)
+    ).rejects.toThrow('append failed')
+    expect(appendManager['bfds'][0]).toMatchObject({ fileHash: appendOriginal.fileHash, count: 10, fileId: 8 })
+  })
+
+  test('11 requires atomic storage for multi-file replacements and rolls back rejected commits', async () => {
+    for (const replaceBulkFiles of [undefined, jest.fn().mockRejectedValue(new Error('atomic replace failed'))]) {
+      const manager = createEmptyManager()
+      const original = makeBulkFile(0, 10, 'incremental')
+      original.fileId = 7
+      const originalFileHash = original.fileHash
+      manager['bfds'] = [original] as any
+      manager['fileHashToIndex'] = { [original.fileHash]: 0 }
+      manager['storage'] = {
+        updateBulkFile: jest.fn(),
+        replaceBulkFiles
+      } as any
+      const partialCdn = makeBulkFile(0, 5, 'mainNet_0.headers', 'https://cdn.example')
+      const result = { inserted: [], updated: [], unchanged: [], dropped: [] }
+
+      await expect(manager['update'](partialCdn as any, original as any, result)).rejects.toThrow(
+        replaceBulkFiles == null ? 'atomic replaceBulkFiles' : 'atomic replace failed'
+      )
+      expect(manager['bfds']).toHaveLength(1)
+      expect(manager['bfds'][0]).toMatchObject({ fileHash: originalFileHash, count: 10, fileId: 7 })
+      expect(manager['fileHashToIndex'][originalFileHash]).toBe(0)
+    }
+  })
+
   async function setupStorageKnex(
     manager: BulkFileDataManager,
     filename: string,
@@ -432,6 +500,9 @@ describe('BulkFileDataManager tests', () => {
   async function setupManagerOnLocalServer(server: LocalCdnServer) {
     const options = BulkFileDataManager.createDefaultOptions(chain)
     options.fromKnownSourceUrl = undefined
+    // The production default DNS-pins public HTTPS destinations. This local
+    // fixture explicitly supplies the loopback-capable fetch implementation.
+    options.fetch = new ChaintracksFetch({ publicNetworkFetch: fetch })
     const manager = new BulkFileDataManager(options)
     await updateFromLocalServer(manager, server)
     return manager

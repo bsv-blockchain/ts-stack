@@ -1,3 +1,4 @@
+import { toUTF8 } from '@bsv/sdk/primitives/utils'
 import {
   LookupService,
   LookupQuestion,
@@ -7,9 +8,16 @@ import {
   OutputAdmittedByTopic,
   OutputSpent
 } from '@bsv/overlay'
-import { Utils } from '@bsv/sdk'
 import { SupplyChainStorage } from './SupplyChainStorage.js'
 import { Db } from 'mongodb'
+import {
+  readDate,
+  readInteger,
+  readSortOrder,
+  readString,
+  requireLookupQuery,
+  requireTxid
+} from '../shared/queryValidation.js'
 
 export interface SupplyChainQuery {
   txid?: string
@@ -25,15 +33,15 @@ export class SupplyChainLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'txid'
 
-  constructor (public storage: SupplyChainStorage) { }
+  constructor(public storage: SupplyChainStorage) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
     const { topic, txid, outputIndex, offChainValues } = payload
     if (topic !== 'tm_supplychain') return
     if (!offChainValues) throw new Error('Missing off-chain values')
 
-    const offChainValuesString = Utils.toUTF8(offChainValues)
+    const offChainValuesString = toUTF8(offChainValues)
     const offChainValuesObject = JSON.parse(offChainValuesString)
     if (!offChainValuesObject.chainId) throw new Error('Missing chainId')
 
@@ -44,41 +52,48 @@ export class SupplyChainLookupService implements LookupService {
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'txid') throw new Error('Invalid mode')
     const { topic, txid, outputIndex, spendingTxid } = payload
     if (topic !== 'tm_supplychain') return
     await this.storage.spendRecord(txid, outputIndex, spendingTxid)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (!question) throw new Error('A valid query must be provided!')
-    if (question.service !== 'ls_supplychain') throw new Error('Lookup service not supported!')
-
-    const { txid, chainId, limit = 50, skip = 0, startDate, endDate, sortOrder } = question.query as SupplyChainQuery
-
-    if (limit < 0) throw new Error('Limit must be a non-negative number')
-    if (skip < 0) throw new Error('Skip must be a non-negative number')
-
-    const from = startDate ? new Date(startDate) : undefined
-    const to = endDate ? new Date(endDate) : undefined
-    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, 'ls_supplychain', [
+      'txid',
+      'chainId',
+      'limit',
+      'skip',
+      'startDate',
+      'endDate',
+      'sortOrder'
+    ])
+    const txid = requireTxid(readString(query, 'txid', { maxBytes: 64 }))
+    const chainId = readString(query, 'chainId', { maxBytes: 256 })
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const from = readDate(query, 'startDate')
+    const to = readDate(query, 'endDate')
+    const sortOrder = readSortOrder(query)
+    if (from !== undefined && to !== undefined && from > to) {
+      throw new Error('Invalid lookup query: startDate must not be after endDate')
+    }
 
     if (txid) return await this.storage.findByTxid(txid, limit, skip, sortOrder)
     if (chainId) return await this.storage.findByChainId(chainId, limit, skip)
     return await this.storage.findAll(limit, skip, from, to, sortOrder)
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return 'SupplyChain Lookup Service: find files on-chain.'
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -92,5 +107,7 @@ export class SupplyChainLookupService implements LookupService {
   }
 }
 
-function create (db: Db): SupplyChainLookupService { return new SupplyChainLookupService(new SupplyChainStorage(db)) }
+function create(db: Db): SupplyChainLookupService {
+  return new SupplyChainLookupService(new SupplyChainStorage(db))
+}
 export default create

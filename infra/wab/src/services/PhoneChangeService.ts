@@ -1,11 +1,13 @@
 import { createHash, randomBytes } from 'node:crypto'
 import type { Knex } from 'knex'
 import { db } from '../db/knex'
+import { insertedIdFromResult } from '../db/resultValidation'
 import type { AuthMethodEntity } from '../types'
 import {
   hydrateUserRow,
   storedPendingPresentationKeyColumns,
   storedPresentationKeyColumns,
+  userHasFaucetClaim,
   type UserStorageRow
 } from './UserService'
 import {
@@ -65,14 +67,6 @@ export class PhoneChangeError extends Error {
 
 function tokenHash(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex')
-}
-
-function insertedId(result: unknown): number | undefined {
-  const candidate = Array.isArray(result) ? result[0] : result
-  if (typeof candidate === 'number') return candidate
-  if (candidate == null || typeof candidate !== 'object' || !('id' in candidate)) return undefined
-  const id = (candidate as { id?: unknown }).id
-  return typeof id === 'number' ? id : undefined
 }
 
 function historyKeys(history: PhoneChangeHistoryEntity): { previous: string; next: string } {
@@ -140,7 +134,8 @@ async function findOrCreatePhoneMethod(
   trx: Knex.Transaction,
   userId: number,
   methodType: string,
-  config: string
+  config: string,
+  receivedFaucet: boolean
 ): Promise<{ claimedMethod: AuthMethodEntity; previousPhoneOwnerUserId: number | null }> {
   const existingMethod = await trx<AuthMethodEntity>('auth_methods')
     .where({ methodType, config })
@@ -153,11 +148,10 @@ async function findOrCreatePhoneMethod(
     }
   }
 
-  const result = await trx('auth_methods').insert(
-    { userId, methodType, config, receivedFaucet: false },
-    ['id']
-  )
-  const id = insertedId(result)
+  const result = await trx('auth_methods').insert({ userId, methodType, config, receivedFaucet }, [
+    'id'
+  ])
+  const id = insertedIdFromResult(result)
   if (id == null) throw new Error('Failed to create the phone authentication record.')
   const claimedMethod = await trx<AuthMethodEntity>('auth_methods').where({ id }).first()
   if (claimedMethod == null) throw new Error('Failed to load the phone authentication record.')
@@ -238,9 +232,21 @@ export class PhoneChangeService {
         throw new PhoneChangeError('Phone change authorization is invalid or expired.', 401)
       }
 
-      const user = hydrateUserRow(
-        await trx<UserStorageRow>('users').where({ id: session.userId }).forUpdate().first()
-      )
+      // Discover the current owner before taking user locks, then lock every
+      // involved account in stable order. The identity is re-read under its
+      // row lock below and any ownership change fails closed.
+      const prospectiveMethod = await trx<AuthMethodEntity>('auth_methods')
+        .select('id', 'userId')
+        .where({ methodType: session.methodType, config: session.config })
+        .first()
+      const lockUserIds = [session.userId, prospectiveMethod?.userId]
+        .filter((userId): userId is number => userId != null)
+        .sort((left, right) => left - right)
+      const lockedUsers = await trx<UserStorageRow>('users')
+        .whereIn('id', [...new Set(lockUserIds)])
+        .orderBy('id')
+        .forUpdate()
+      const user = hydrateUserRow(lockedUsers.find(candidate => candidate.id === session.userId))
       if (user?.presentationKey !== currentPresentationKey) {
         throw new PhoneChangeError('The current wallet account could not be verified.', 401)
       }
@@ -255,20 +261,50 @@ export class PhoneChangeService {
         .where({ userId: user.id, methodType: session.methodType })
         .forUpdate()
         .first()
+      const inheritsFaucetClaim = await userHasFaucetClaim(trx, user.id)
       const { claimedMethod, previousPhoneOwnerUserId } = await findOrCreatePhoneMethod(
         trx,
         user.id,
         session.methodType,
-        session.config
+        session.config,
+        inheritsFaucetClaim
       )
+      const lockedUserIds = new Set(lockedUsers.map(candidate => candidate.id))
+      if (
+        previousPhoneOwnerUserId != null &&
+        previousPhoneOwnerUserId !== user.id &&
+        !lockedUserIds.has(previousPhoneOwnerUserId)
+      ) {
+        throw new PhoneChangeError('Phone ownership changed unexpectedly; please retry.')
+      }
+      const previousOwnerFaucetClaim =
+        previousPhoneOwnerUserId == null || previousPhoneOwnerUserId === user.id
+          ? false
+          : await userHasFaucetClaim(trx, previousPhoneOwnerUserId)
 
       if (currentMethod != null && currentMethod.id !== claimedMethod.id) {
-        await trx('auth_methods')
+        const unlinked = await trx('auth_methods')
           .where({ id: currentMethod.id, userId: user.id })
-          .update({ userId: null })
+          .update({
+            userId: null,
+            receivedFaucet: Boolean(currentMethod.receivedFaucet) || inheritsFaucetClaim
+          })
+        if (unlinked !== 1) {
+          throw new PhoneChangeError('The prior phone authentication record changed unexpectedly.')
+        }
       }
-      if (claimedMethod.userId !== user.id) {
-        await trx('auth_methods').where({ id: claimedMethod.id }).update({ userId: user.id })
+      const receivedFaucet =
+        Boolean(claimedMethod.receivedFaucet) || inheritsFaucetClaim || previousOwnerFaucetClaim
+      if (
+        claimedMethod.userId !== user.id ||
+        Boolean(claimedMethod.receivedFaucet) !== receivedFaucet
+      ) {
+        const updated = await trx('auth_methods')
+          .where({ id: claimedMethod.id })
+          .update({ userId: user.id, receivedFaucet })
+        if (updated !== 1) {
+          throw new PhoneChangeError('The phone authentication record changed unexpectedly.')
+        }
       }
 
       await trx('users')
@@ -294,7 +330,7 @@ export class PhoneChangeService {
         },
         ['id']
       )
-      const changeId = insertedId(historyResult)
+      const changeId = insertedIdFromResult(historyResult)
       if (changeId == null) throw new Error('Failed to record the phone change.')
 
       await trx('phone_change_sessions').where({ id: session.id, consumedAtEpochMs: null }).update({
@@ -369,11 +405,32 @@ export class PhoneChangeService {
         throw new PhoneChangeError('Phone change record can no longer be restored automatically.')
       }
 
-      if (history.finalizedAtEpochMs == null) {
-        const user = hydrateUserRow(
-          await trx<UserStorageRow>('users').where({ id: history.targetUserId }).forUpdate().first()
+      const lockUserIds = [history.targetUserId, history.previousPhoneOwnerUserId]
+        .filter((userId): userId is number => userId != null)
+        .sort((left, right) => left - right)
+      const lockedUsers = await trx<UserStorageRow>('users')
+        .whereIn('id', [...new Set(lockUserIds)])
+        .orderBy('id')
+        .forUpdate()
+      const targetRow = lockedUsers.find(user => user.id === history.targetUserId)
+      const targetUser = hydrateUserRow(targetRow)
+      if (targetUser == null) {
+        throw new PhoneChangeError(
+          'Phone change target no longer exists; manual review is required.'
         )
-        if (user?.pendingPresentationKey === historyKeys(history).next) {
+      }
+      const targetReceivedFaucet = await userHasFaucetClaim(trx, targetUser.id)
+      const previousOwnerExists = lockedUsers.some(
+        user => user.id === history.previousPhoneOwnerUserId
+      )
+      const previousPhoneOwnerUserId = previousOwnerExists ? history.previousPhoneOwnerUserId : null
+      const previousOwnerReceivedFaucet =
+        previousPhoneOwnerUserId == null
+          ? false
+          : await userHasFaucetClaim(trx, previousPhoneOwnerUserId)
+
+      if (history.finalizedAtEpochMs == null) {
+        if (targetUser.pendingPresentationKey === historyKeys(history).next) {
           await trx('users').where({ id: history.targetUserId }).update({
             pendingPresentationKey: null,
             pendingPresentationKeyLookup: null,
@@ -390,9 +447,22 @@ export class PhoneChangeService {
         throw new PhoneChangeError('Phone ownership changed again; manual review is required.')
       }
 
-      await trx('auth_methods')
-        .where({ id: history.phoneAuthMethodId, userId: history.targetUserId })
-        .update({ userId: history.previousPhoneOwnerUserId })
+      const restoredPhoneReceivedFaucet =
+        Boolean(phoneMethod.receivedFaucet) || previousOwnerReceivedFaucet
+      if (
+        phoneMethod.userId !== previousPhoneOwnerUserId ||
+        Boolean(phoneMethod.receivedFaucet) !== restoredPhoneReceivedFaucet
+      ) {
+        const restoredPhone = await trx('auth_methods')
+          .where({ id: history.phoneAuthMethodId, userId: history.targetUserId })
+          .update({
+            userId: previousPhoneOwnerUserId,
+            receivedFaucet: restoredPhoneReceivedFaucet
+          })
+        if (restoredPhone !== 1) {
+          throw new PhoneChangeError('Phone ownership changed again; manual review is required.')
+        }
+      }
 
       if (
         history.replacedAuthMethodId != null &&
@@ -402,15 +472,23 @@ export class PhoneChangeService {
           .where({ id: history.replacedAuthMethodId })
           .forUpdate()
           .first()
-        if (replaced?.userId != null) {
+        if (replaced == null || replaced.userId != null) {
           throw new PhoneChangeError(
             'The prior phone record is already linked; manual review is required.'
           )
         }
-        await trx('auth_methods')
+        const restoredPriorMethod = await trx('auth_methods')
           .where({ id: history.replacedAuthMethodId })
           .whereNull('userId')
-          .update({ userId: history.targetUserId })
+          .update({
+            userId: history.targetUserId,
+            receivedFaucet: Boolean(replaced.receivedFaucet) || targetReceivedFaucet
+          })
+        if (restoredPriorMethod !== 1) {
+          throw new PhoneChangeError(
+            'The prior phone record is already linked; manual review is required.'
+          )
+        }
       }
 
       await trx('phone_change_history')

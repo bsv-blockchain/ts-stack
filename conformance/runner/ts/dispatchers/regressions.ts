@@ -165,14 +165,14 @@ function dispatchBeefIsValidHydration(
   if (op === 'NewBeefFromBytes_IsValid') {
     // Parse the BEEF and call isValid(true) — must return true for a
     // fully self-contained BEEF (all source txs present, no chain tracker needed).
-    const beef = Beef.fromBinary(beefBytes)
+    const beef = Beef.fromBinaryStrict(beefBytes)
     expect(beef.isValid(true)).toBe(getBool(expected, 'is_valid'))
     return
   }
 
   if (op === 'NewTransactionFromBEEFHex_TxID') {
     // Parse the BEEF and verify the newest tx has a non-null TxID.
-    const beef = Beef.fromBinary(beefBytes)
+    const beef = Beef.fromBinaryStrict(beefBytes)
     const hasTx = beef.txs.length > 0
     expect(hasTx).toBe(getBool(expected, 'txid_non_null'))
   }

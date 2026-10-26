@@ -1,10 +1,5 @@
-import {
-  Beef,
-  ChainTracker,
-  Random,
-  Transaction as BsvTransaction,
-  Utils
-} from '@bsv/sdk'
+import { Beef, ChainTracker, Random, Transaction as BsvTransaction } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { Knex } from 'knex'
 import { Chain } from '../sdk/types'
 import {
@@ -73,13 +68,13 @@ export class MockServices implements WalletServices {
   tracker: MockChainTracker
   miner: MockMiner
 
-  constructor (public knex: Knex) {
+  constructor(public knex: Knex) {
     this.storage = new MockChainStorage(knex)
     this.tracker = new MockChainTracker('mock', this.storage)
     this.miner = new MockMiner()
   }
 
-  async initialize (): Promise<void> {
+  async initialize(): Promise<void> {
     await this.storage.migrate()
     // Mine genesis block if chain is empty
     const tip = await this.storage.getChainTip()
@@ -88,11 +83,11 @@ export class MockServices implements WalletServices {
     }
   }
 
-  async mineBlock (): Promise<BlockHeader> {
+  async mineBlock(): Promise<BlockHeader> {
     return await this.miner.mineBlock(this.storage)
   }
 
-  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult[]> {
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult[]> {
     const results: PostBeefResult[] = []
     for (const txid of txids) {
       try {
@@ -106,7 +101,7 @@ export class MockServices implements WalletServices {
     return results
   }
 
-  private async postOneTx (beef: Beef, txid: string): Promise<void> {
+  private async postOneTx(beef: Beef, txid: string): Promise<void> {
     const beefTx = beef.findTxid(txid)
     if (beefTx == null) throw new WERR_INVALID_PARAMETER('txid', `present in provided BEEF. txid: ${txid}`)
     const rawTx = beefTx.rawTx
@@ -179,13 +174,13 @@ export class MockServices implements WalletServices {
     }
   }
 
-  private async loadSourceTransaction (sourceTxid: string): Promise<BsvTransaction | undefined> {
+  private async loadSourceTransaction(sourceTxid: string): Promise<BsvTransaction | undefined> {
     const sourceTxRow = await this.storage.getTransaction(sourceTxid)
     if (sourceTxRow == null) return undefined
     return BsvTransaction.fromBinary(rawTransactionBytes(sourceTxRow.rawTx))
   }
 
-  private async populateMerklePaths (tx: BsvTransaction): Promise<void> {
+  private async populateMerklePaths(tx: BsvTransaction): Promise<void> {
     for (const input of tx.inputs) {
       const sourceTransaction = input.sourceTransaction
       if (sourceTransaction == null) continue
@@ -201,7 +196,7 @@ export class MockServices implements WalletServices {
     }
   }
 
-  private async storeOutputs (tx: BsvTransaction, txid: string): Promise<void> {
+  private async storeOutputs(tx: BsvTransaction, txid: string): Promise<void> {
     for (let vout = 0; vout < tx.outputs.length; vout++) {
       const output = tx.outputs[vout]
       const scriptBinary = output.lockingScript.toBinary()
@@ -210,17 +205,18 @@ export class MockServices implements WalletServices {
     }
   }
 
-  private async spendInputs (tx: BsvTransaction, txid: string): Promise<void> {
+  private async spendInputs(tx: BsvTransaction, txid: string): Promise<void> {
     for (const input of tx.inputs) {
       const sourceTxid = inputSourceTxid(input) ?? ''
       await this.storage.markUtxoSpent(sourceTxid, input.sourceOutputIndex, txid)
     }
   }
 
-  async reorg (startingHeight: number, numBlocks: number, txidMap?: Record<string, number>): Promise<ReorgResult> {
+  async reorg(startingHeight: number, numBlocks: number, txidMap?: Record<string, number>): Promise<ReorgResult> {
     const oldTip = await this.storage.getChainTip()
     if (oldTip == null) throw new WERR_INTERNAL('Cannot reorg empty chain')
-    if (startingHeight > oldTip.height) throw new WERR_INVALID_PARAMETER('startingHeight', `<= current tip height ${oldTip.height}`)
+    if (startingHeight > oldTip.height)
+      throw new WERR_INVALID_PARAMETER('startingHeight', `<= current tip height ${oldTip.height}`)
 
     const deactivatedHeaders: BlockHeader[] = []
     for (let h = startingHeight; h <= oldTip.height; h++) {
@@ -239,7 +235,7 @@ export class MockServices implements WalletServices {
     return { oldTip, newTip, deactivatedHeaders }
   }
 
-  private async tearDownOldBlocks (trxStorage: MockChainStorage, fromHeight: number, toHeight: number): Promise<void> {
+  private async tearDownOldBlocks(trxStorage: MockChainStorage, fromHeight: number, toHeight: number): Promise<void> {
     for (let h = fromHeight; h >= toHeight; h--) {
       const txsInBlock = await trxStorage.getTransactionsInBlock(h)
       const headerRow = await trxStorage.knex('mockchain_block_headers').where({ height: h }).first()
@@ -258,7 +254,7 @@ export class MockServices implements WalletServices {
     }
   }
 
-  private async mineReorgBlocks (
+  private async mineReorgBlocks(
     trxStorage: MockChainStorage,
     startingHeight: number,
     numBlocks: number,
@@ -269,11 +265,14 @@ export class MockServices implements WalletServices {
 
     for (let i = 0; i < numBlocks; i++) {
       const newHeight = startingHeight + i
-      const mappedTxids = txidMap != null ? Object.entries(txidMap).filter(([, o]) => o === i).map(([tid]) => tid) : []
+      const mappedTxids =
+        txidMap != null
+          ? Object.entries(txidMap)
+              .filter(([, o]) => o === i)
+              .map(([tid]) => tid)
+          : []
 
-      const prevHash = newHeight === 0
-        ? '00'.repeat(32)
-        : await this.getPrevHashForHeight(trxStorage, newHeight)
+      const prevHash = newHeight === 0 ? '00'.repeat(32) : await this.getPrevHashForHeight(trxStorage, newHeight)
 
       const coinbaseTx = createCoinbaseTransaction(newHeight)
       const coinbaseTxid = coinbaseTx.id('hex')
@@ -284,34 +283,57 @@ export class MockServices implements WalletServices {
       const bits = 0x207fffff
       const nonceBytes = Random(4)
       const nonce = ((nonceBytes[0] << 24) | (nonceBytes[1] << 16) | (nonceBytes[2] << 8) | nonceBytes[3]) >>> 0
-      const hash = asString(doubleSha256BE(toBinaryBaseBlockHeader({ version: 1, previousHash: prevHash, merkleRoot, time, bits, nonce })))
+      const hash = asString(
+        doubleSha256BE(toBinaryBaseBlockHeader({ version: 1, previousHash: prevHash, merkleRoot, time, bits, nonce }))
+      )
 
-      await trxStorage.knex('mockchain_transactions').insert({ txid: coinbaseTxid, rawTx: Buffer.from(coinbaseRawTx), blockHeight: newHeight, blockIndex: 0 })
+      await trxStorage
+        .knex('mockchain_transactions')
+        .insert({ txid: coinbaseTxid, rawTx: Buffer.from(coinbaseRawTx), blockHeight: newHeight, blockIndex: 0 })
       const coinbaseOutputScript = [0x51]
-      await trxStorage.knex('mockchain_utxos').insert({ txid: coinbaseTxid, vout: 0, lockingScript: Buffer.from(coinbaseOutputScript), satoshis: 5_000_000_000, scriptHash: asString(sha256Hash(coinbaseOutputScript)), spentByTxid: null, isCoinbase: true, blockHeight: newHeight })
+      await trxStorage.knex('mockchain_utxos').insert({
+        txid: coinbaseTxid,
+        vout: 0,
+        lockingScript: Buffer.from(coinbaseOutputScript),
+        satoshis: 5_000_000_000,
+        scriptHash: asString(sha256Hash(coinbaseOutputScript)),
+        spentByTxid: null,
+        isCoinbase: true,
+        blockHeight: newHeight
+      })
 
       for (let j = 0; j < mappedTxids.length; j++) {
         await trxStorage.setTransactionBlock(mappedTxids[j], newHeight, j + 1)
         await trxStorage.setUtxoBlockHeight(mappedTxids[j], newHeight)
       }
-      await trxStorage.knex('mockchain_block_headers').insert({ height: newHeight, hash, previousHash: prevHash, merkleRoot, version: 1, time, bits, nonce, coinbaseTxid })
+      await trxStorage.knex('mockchain_block_headers').insert({
+        height: newHeight,
+        hash,
+        previousHash: prevHash,
+        merkleRoot,
+        version: 1,
+        time,
+        bits,
+        nonce,
+        coinbaseTxid
+      })
     }
   }
 
-  private async getPrevHashForHeight (trxStorage: MockChainStorage, height: number): Promise<string> {
+  private async getPrevHashForHeight(trxStorage: MockChainStorage, height: number): Promise<string> {
     const prevHeader = await trxStorage.getBlockHeaderByHeight(height - 1)
     if (prevHeader == null) throw new WERR_INTERNAL(`Missing block header at height ${height - 1}`)
     return prevHeader.hash
   }
 
-  async getRawTx (txid: string): Promise<GetRawTxResult> {
+  async getRawTx(txid: string): Promise<GetRawTxResult> {
     const tx = await this.storage.getTransaction(txid)
     if (tx == null) return { txid }
     const rawTx = rawTransactionBytes(tx.rawTx)
     return { txid, rawTx, name: 'MockServices' }
   }
 
-  async getMerklePath (txid: string): Promise<GetMerklePathResult> {
+  async getMerklePath(txid: string): Promise<GetMerklePathResult> {
     const tx = await this.storage.getTransaction(txid)
     if (tx?.blockHeight == null) return {}
 
@@ -326,7 +348,7 @@ export class MockServices implements WalletServices {
     return { merklePath, header: header ?? undefined, name: 'MockServices' }
   }
 
-  async getUtxoStatus (
+  async getUtxoStatus(
     output: string,
     outputFormat?: GetUtxoStatusOutputFormat,
     outpoint?: string
@@ -362,7 +384,7 @@ export class MockServices implements WalletServices {
     }
   }
 
-  async getStatusForTxids (txids: string[]): Promise<GetStatusForTxidsResult> {
+  async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> {
     const currentHeight = await this.tracker.currentHeight()
     const results = await Promise.all(
       txids.map(async txid => {
@@ -378,7 +400,7 @@ export class MockServices implements WalletServices {
     return { name: 'MockServices', status: 'success', results }
   }
 
-  async getScriptHashHistory (hash: string): Promise<GetScriptHashHistoryResult> {
+  async getScriptHashHistory(hash: string): Promise<GetScriptHashHistoryResult> {
     const utxos = await this.storage.getUtxosByScriptHash(hash)
     const history = utxos.map(u => ({
       txid: u.txid,
@@ -387,44 +409,44 @@ export class MockServices implements WalletServices {
     return { name: 'MockServices', status: 'success', history }
   }
 
-  async getChainTracker (): Promise<ChainTracker> {
+  async getChainTracker(): Promise<ChainTracker> {
     return this.tracker
   }
 
-  async getHeaderForHeight (height: number): Promise<number[]> {
+  async getHeaderForHeight(height: number): Promise<number[]> {
     const header = await this.storage.getBlockHeaderByHeight(height)
     if (header == null) throw new WERR_INVALID_PARAMETER('height', `valid height '${height}' on mock chain`)
     return toBinaryBaseBlockHeader(header)
   }
 
-  async getHeight (): Promise<number> {
+  async getHeight(): Promise<number> {
     return await this.tracker.currentHeight()
   }
 
-  async hashToHeader (hash: string): Promise<BlockHeader> {
+  async hashToHeader(hash: string): Promise<BlockHeader> {
     const header = await this.storage.getBlockHeaderByHash(hash)
     if (header == null) throw new WERR_INVALID_PARAMETER('hash', `valid blockhash '${hash}' on mock chain`)
     return header
   }
 
-  hashOutputScript (script: string): string {
-    const hash = Utils.toHex(sha256Hash(Utils.toArray(script, 'hex')))
+  hashOutputScript(script: string): string {
+    const hash = toHex(sha256Hash(toArray(script, 'hex')))
     return hash
   }
 
-  async isUtxo (output: TableOutput): Promise<boolean> {
+  async isUtxo(output: TableOutput): Promise<boolean> {
     return requireConclusiveUtxo(await classifyOutputUtxo(this, output))
   }
 
-  async getBsvExchangeRate (): Promise<number> {
+  async getBsvExchangeRate(): Promise<number> {
     return 50
   }
 
-  async getFiatExchangeRate (currency: FiatCurrencyCode, base: FiatCurrencyCode = 'USD'): Promise<number> {
+  async getFiatExchangeRate(currency: FiatCurrencyCode, base: FiatCurrencyCode = 'USD'): Promise<number> {
     return mockFiatRatesByUsd[currency] / mockFiatRatesByUsd[base]
   }
 
-  async getFiatExchangeRates (targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
+  async getFiatExchangeRates(targetCurrencies: FiatCurrencyCode[]): Promise<FiatExchangeRates> {
     const rates: Record<string, number> = {}
     for (const c of targetCurrencies) rates[c] = mockFiatRatesByUsd[c]
     return {
@@ -434,7 +456,7 @@ export class MockServices implements WalletServices {
     }
   }
 
-  async nLockTimeIsFinal (tx: string | number[] | BsvTransaction | number): Promise<boolean> {
+  async nLockTimeIsFinal(tx: string | number[] | BsvTransaction | number): Promise<boolean> {
     const MAXINT = 0xffffffff
     const BLOCK_LIMIT = 500000000
 
@@ -494,7 +516,7 @@ export class MockServices implements WalletServices {
     return beef
   }
 
-  getServicesCallHistory (): ServicesCallHistory {
+  getServicesCallHistory(): ServicesCallHistory {
     return {
       version: 2,
       getMerklePath: { serviceName: 'getMerklePath', historyByProvider: {} },

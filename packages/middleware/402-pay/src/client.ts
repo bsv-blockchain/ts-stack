@@ -1,12 +1,17 @@
-import { PublicKey, Utils, Random } from '@bsv/sdk'
-import type { WalletInterface } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import Random from '@bsv/sdk/primitives/Random'
+import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
+import type { WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 import { BRC29_PROTOCOL_ID, HEADERS } from './constants.js'
 
 export interface Payment402Options {
   /** The client's wallet instance */
   wallet: WalletInterface
-  /** Cache timeout in milliseconds for paid content (default: 30 minutes) */
+  /** Opt-in cache timeout in milliseconds for non-user-specific paid GET content (default: 0). */
   cacheTimeoutMs?: number
+  /** Maximum response bytes retained by the opt-in paid-content cache (default: 8 MiB). */
+  maxCachedResponseBytes?: number
 }
 
 /** The five headers the client must attach to a paid request. */
@@ -19,9 +24,99 @@ export interface PaymentHeaders {
 }
 
 interface CacheEntry {
-  response: Response
-  body: string
+  status: number
+  statusText: string
+  headers: Headers
+  body: ArrayBuffer
   timestamp: number
+}
+
+const DEFAULT_MAX_CACHED_RESPONSE_BYTES = 8 * 1024 * 1024
+const MAX_PAYMENT_TRANSACTION_BYTES = 1024 * 1024
+const PAYMENT_DESCRIPTION = 'BRC-121 web payment'
+
+function isCompressedPublicKey(value: string): boolean {
+  if (!/^(02|03)[0-9a-f]{64}$/u.test(value)) return false
+  try {
+    return PublicKey.fromString(value).toString() === value
+  } catch {
+    return false
+  }
+}
+
+function validatedPaymentUrl(url: string): URL {
+  const parsed = new URL(url)
+  const local =
+    parsed.hostname === 'localhost' ||
+    parsed.hostname === '127.0.0.1' ||
+    parsed.hostname === '[::1]'
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && local)) {
+    throw new TypeError('Payment requests require HTTPS except on the local loopback interface')
+  }
+  if (parsed.username !== '' || parsed.password !== '') {
+    throw new TypeError('Payment request URLs must not contain credentials')
+  }
+  return parsed
+}
+
+function exactWalletBytes(value: unknown, name: string, maxBytes: number): number[] {
+  const bytes = value instanceof Uint8Array ? Array.from(value) : value
+  if (
+    !Array.isArray(bytes) ||
+    bytes.length === 0 ||
+    bytes.length > maxBytes ||
+    !bytes.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+  ) {
+    throw new TypeError(`${name} must be an exact bounded byte array`)
+  }
+  return bytes
+}
+
+function cacheKeyFor(url: string, init: RequestInit, method: string): string {
+  const headers = [...new Headers(init.headers).entries()].sort(([a], [b]) => a.localeCompare(b))
+  const context = JSON.stringify([method, url, init.credentials ?? 'same-origin', headers])
+  return toHex(sha256(toArray(context, 'utf8')))
+}
+
+async function readResponseWithinLimit(
+  response: Response,
+  maxBytes: number
+): Promise<Uint8Array | undefined> {
+  const declaredLength = response.headers.get('content-length')
+  if (
+    declaredLength != null &&
+    /^\d+$/u.test(declaredLength) &&
+    Number(declaredLength) > maxBytes
+  ) {
+    return undefined
+  }
+  if (response.body == null) return new Uint8Array()
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > maxBytes) {
+        // A cloned Response tees the stream; awaiting cancellation can wait on
+        // the caller-owned branch and deadlock before that branch is returned.
+        void reader.cancel()
+        return undefined
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const body = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    body.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return body
 }
 
 /**
@@ -47,10 +142,14 @@ export async function constructPaymentHeaders(
   if (!Number.isSafeInteger(satoshis) || satoshis <= 0) {
     throw new RangeError('Payment price must be a positive safe integer')
   }
-  const originator = new URL(url).origin
-  const nonce = Utils.toBase64(Random(8))
+  const parsedUrl = validatedPaymentUrl(url)
+  if (!isCompressedPublicKey(serverIdentityKey)) {
+    throw new TypeError('Server identity must be a canonical compressed public key')
+  }
+  const originator = parsedUrl.origin
+  const nonce = toBase64(Random(8))
   const time = String(Date.now())
-  const timeSuffixB64 = Utils.toBase64(Utils.toArray(time, 'utf8'))
+  const timeSuffixB64 = toBase64(toArray(time, 'utf8'))
 
   // Derive recipient public key via BRC-42
   const { publicKey: derivedPubKey } = await wallet.getPublicKey(
@@ -69,11 +168,14 @@ export async function constructPaymentHeaders(
     { identityKey: true },
     originator
   )
+  if (!isCompressedPublicKey(senderIdentityKey)) {
+    throw new TypeError('Wallet returned an invalid sender identity key')
+  }
 
   // Create payment transaction
   const actionResult = await wallet.createAction(
     {
-      description: `Paid Content: ${new URL(url).pathname}`,
+      description: PAYMENT_DESCRIPTION,
       outputs: [
         {
           satoshis,
@@ -93,7 +195,9 @@ export async function constructPaymentHeaders(
     originator
   )
 
-  const txBase64 = Utils.toBase64(actionResult.tx as number[])
+  const txBase64 = toBase64(
+    exactWalletBytes(actionResult.tx, 'Wallet payment transaction', MAX_PAYMENT_TRANSACTION_BYTES)
+  )
 
   return {
     [HEADERS.BEEF]: txBase64,
@@ -119,7 +223,17 @@ export async function constructPaymentHeaders(
  * ```
  */
 export function create402Fetch(options: Payment402Options) {
-  const { wallet, cacheTimeoutMs = 30 * 60 * 1000 } = options
+  const {
+    wallet,
+    cacheTimeoutMs = 0,
+    maxCachedResponseBytes = DEFAULT_MAX_CACHED_RESPONSE_BYTES
+  } = options
+  if (!Number.isSafeInteger(cacheTimeoutMs) || cacheTimeoutMs < 0) {
+    throw new RangeError('cacheTimeoutMs must be a non-negative safe integer')
+  }
+  if (!Number.isSafeInteger(maxCachedResponseBytes) || maxCachedResponseBytes < 1) {
+    throw new RangeError('maxCachedResponseBytes must be a positive safe integer')
+  }
   const cache = new Map<string, CacheEntry>()
 
   /**
@@ -131,21 +245,23 @@ export function create402Fetch(options: Payment402Options) {
   }
 
   async function fetch402(url: string, init: RequestInit = {}): Promise<Response> {
+    const initialUrl = validatedPaymentUrl(url)
     const method = (init.method ?? 'GET').toUpperCase()
-    const cacheKey = `${method} ${url}`
-    const canCache = method === 'GET'
+    const cacheKey = cacheKeyFor(initialUrl.href, init, method)
+    const canCache = method === 'GET' && cacheTimeoutMs > 0
 
     // Check cache
     const cached = canCache ? cache.get(cacheKey) : undefined
     if (cached && Date.now() - cached.timestamp < cacheTimeoutMs) {
-      return new Response(cached.body, {
-        status: cached.response.status,
-        headers: cached.response.headers
+      return new Response(cached.body.slice(0), {
+        status: cached.status,
+        statusText: cached.statusText,
+        headers: cached.headers
       })
     }
 
     // Initial request
-    const res = await fetch(url, init)
+    const res = await fetch(initialUrl.href, init)
     if (res.status !== 402) {
       return res
     }
@@ -159,31 +275,45 @@ export function create402Fetch(options: Payment402Options) {
     const satoshis = Number(satsHeader)
     if (!Number.isSafeInteger(satoshis)) return res
 
+    const paymentUrl = validatedPaymentUrl(res.url || initialUrl.href)
+    if (paymentUrl.origin !== initialUrl.origin || !isCompressedPublicKey(serverHeader)) return res
+
     // Construct payment headers
-    const paymentHeaders = await constructPaymentHeaders(wallet, url, satoshis, serverHeader)
+    const paymentHeaders = await constructPaymentHeaders(
+      wallet,
+      paymentUrl.href,
+      satoshis,
+      serverHeader
+    )
 
     // Retransmit with payment headers
     const paidHeaders = new Headers(init.headers)
     for (const [name, value] of Object.entries(paymentHeaders)) {
       paidHeaders.set(name, value)
     }
-    const paidRes = await fetch(url, {
+    const paidRes = await fetch(paymentUrl.href, {
       ...init,
-      headers: paidHeaders
+      headers: paidHeaders,
+      // Payment headers are bearer-like financial material. Never let fetch
+      // forward them automatically to a redirect target.
+      redirect: 'manual'
     })
 
     // Cache successful responses
     if (paidRes.ok && canCache) {
-      const body = await paidRes.text()
-      cache.set(cacheKey, {
-        response: paidRes,
-        body,
-        timestamp: Date.now()
-      })
-      return new Response(body, {
-        status: paidRes.status,
-        headers: paidRes.headers
-      })
+      const body = await readResponseWithinLimit(paidRes.clone(), maxCachedResponseBytes)
+      if (body !== undefined) {
+        cache.set(cacheKey, {
+          status: paidRes.status,
+          statusText: paidRes.statusText,
+          headers: new Headers(paidRes.headers),
+          body: body.buffer.slice(
+            body.byteOffset,
+            body.byteOffset + body.byteLength
+          ) as ArrayBuffer,
+          timestamp: Date.now()
+        })
+      }
     }
 
     return paidRes

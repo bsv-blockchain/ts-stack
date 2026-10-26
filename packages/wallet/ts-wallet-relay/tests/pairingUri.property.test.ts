@@ -2,6 +2,7 @@ import { PrivateKey } from '@bsv/sdk'
 import fc from 'fast-check'
 
 import { buildPairingUri, parsePairingUri } from '../src/shared/pairingUri.js'
+import { bytesToBase64url } from '../src/shared/encoding.js'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -19,13 +20,30 @@ fc.configureGlobal({
 const BACKEND_KEY = new PrivateKey(1).toPublicKey().toString()
 const FUTURE_EXPIRY = Math.floor(Date.now() / 1000) + 86_400
 const token = fc.stringMatching(/^[A-Za-z0-9._~-]{1,80}$/)
-const hostLabel = fc.stringMatching(/^[a-z][a-z0-9-]{0,20}[a-z0-9]$|^[a-z]$/)
+const base64url = fc
+  .uint8Array({ minLength: 1, maxLength: 60 })
+  .map(bytes => bytesToBase64url(bytes))
+const hostLabel = fc
+  .stringMatching(/^[a-z][a-z0-9-]{0,20}[a-z0-9]$|^[a-z]$/)
+  .filter(label => !label.startsWith('xn--'))
 const origin = fc
   .array(hostLabel, { minLength: 1, maxLength: 4 })
   .map(labels => `https://${labels.join('.')}.org`)
+const octet = fc.integer({ min: 0, max: 255 })
+const ipv4 = fc.tuple(
+  fc.oneof(fc.constantFrom(9, 10, 11, 126, 127, 128, 172, 191, 192, 193), octet),
+  fc.oneof(fc.constantFrom(15, 16, 31, 32, 167, 168, 169), octet),
+  octet,
+  octet
+)
+
+/** Reference classifier for the plain-HTTP IPv4 development ranges. */
+function isPrivateOrLoopbackIpv4([a, b]: number[]): boolean {
+  return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
 const protocol = fc.tuple(
   fc.integer({ min: 0, max: 2 }),
-  fc.string({ minLength: 1, maxLength: 80 })
+  fc.stringMatching(/^[a-z][a-z0-9]{4,79}$/)
 )
 
 describe('wallet pairing URI properties', () => {
@@ -35,7 +53,7 @@ describe('wallet pairing URI properties', () => {
         token,
         protocol,
         origin,
-        fc.option(token, { nil: undefined }),
+        fc.option(base64url, { nil: undefined }),
         (sessionId, protocolID, appOrigin, sig) => {
           const encodedProtocol = JSON.stringify(protocolID)
           const uri = buildPairingUri({
@@ -97,13 +115,16 @@ describe('wallet pairing URI properties', () => {
       expect(parsePairingUri(uri).params).toBeNull()
     }
 
-    const invalidKeyUri = buildPairingUri({
+    const valid = buildPairingUri({
       sessionId: 'session',
-      backendIdentityKey: `02${'00'.repeat(32)}`,
+      backendIdentityKey: BACKEND_KEY,
       protocolID: '[0,"pairing"]',
       origin: 'https://wallet.example.org',
       expiry: FUTURE_EXPIRY
     })
+    const invalidKeyUrl = new URL(valid)
+    invalidKeyUrl.searchParams.set('backendIdentityKey', `02${'00'.repeat(32)}`)
+    const invalidKeyUri = invalidKeyUrl.toString()
     expect(parsePairingUri(invalidKeyUri).params).toBeNull()
 
     for (const invalidOrigin of [
@@ -113,26 +134,40 @@ describe('wallet pairing URI properties', () => {
       'https://wallet.example.org#fragment',
       'https://user:password@wallet.example.org'
     ]) {
-      const uri = buildPairingUri({
-        sessionId: 'session',
-        backendIdentityKey: BACKEND_KEY,
-        protocolID: '[0,"pairing"]',
-        origin: invalidOrigin,
-        expiry: FUTURE_EXPIRY
-      })
-      expect(parsePairingUri(uri).params).toBeNull()
+      const url = new URL(valid)
+      url.searchParams.set('origin', invalidOrigin)
+      expect(parsePairingUri(url.toString()).params).toBeNull()
     }
 
     for (const invalidProtocol of ['not JSON', '{}']) {
-      const uri = buildPairingUri({
-        sessionId: 'session',
-        backendIdentityKey: BACKEND_KEY,
-        protocolID: invalidProtocol,
-        origin: 'https://wallet.example.org',
-        expiry: FUTURE_EXPIRY
-      })
-      expect(parsePairingUri(uri).params).toBeNull()
+      const url = new URL(valid)
+      url.searchParams.set('protocolID', invalidProtocol)
+      expect(parsePairingUri(url.toString()).params).toBeNull()
     }
+  })
+
+  test('accepts plain-HTTP IPv4 origins exactly for loopback, plus private ranges when opted in', () => {
+    const valid = buildPairingUri({
+      sessionId: 'session',
+      backendIdentityKey: BACKEND_KEY,
+      protocolID: '[0,"pairing"]',
+      origin: 'https://wallet.example.org',
+      expiry: FUTURE_EXPIRY
+    })
+    fc.assert(
+      fc.property(ipv4, fc.boolean(), fc.boolean(), (address, asInteger, allowLocalNetworkHttp) => {
+        const host = asInteger
+          ? String(address.reduce((value, part) => value * 256 + part, 0))
+          : address.join('.')
+        const url = new URL(valid)
+        url.searchParams.set('origin', `http://${host}:3000`)
+        const accepted =
+          parsePairingUri(url.toString(), undefined, { allowLocalNetworkHttp }).params !== null
+        expect(accepted).toBe(
+          address[0] === 127 || (allowLocalNetworkHttp && isPrivateOrLoopbackIpv4(address))
+        )
+      })
+    )
   })
 
   test('rejects each missing field, ambiguous credentials, and malformed protocol tuples', () => {

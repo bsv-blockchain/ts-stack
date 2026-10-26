@@ -26,12 +26,22 @@ describe('getAddress', () => {
       await expect(getAddress(null as any)).rejects.toThrow('Wallet is required')
     })
 
-    test('should throw error when amount is less than 1', async () => {
+    test('should reject invalid or excessive batch sizes', async () => {
       const privateKey = new PrivateKey(1)
       const wallet = await makeMockWallet(privateKey)
 
-      await expect(getAddress(wallet, 0)).rejects.toThrow('Amount must be greater than 0')
-      await expect(getAddress(wallet, -1)).rejects.toThrow('Amount must be greater than 0')
+      for (const amount of [0, -1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 1001]) {
+        await expect(getAddress(wallet, amount)).rejects.toThrow(
+          'Amount must be a safe integer between 1 and 1000'
+        )
+      }
+    })
+
+    test('should reject malformed counterparties before wallet calls', async () => {
+      const wallet = await makeMockWallet(new PrivateKey(10))
+      await expect(getAddress(wallet, 1, 'not-a-key')).rejects.toThrow(
+        'counterparty must be "self", "anyone", or a compressed public key'
+      )
     })
   })
 
@@ -72,6 +82,18 @@ describe('getAddress', () => {
       expect(parts).toHaveLength(2) // prefix + suffix
       expect(results[0].walletParams.counterparty).toBe('self')
       expect(Array.isArray(results[0].walletParams.protocolID)).toBe(true)
+    })
+
+    test('always derives the caller-owned address side for a peer counterparty', async () => {
+      const publicKey = new PrivateKey(4).toPublicKey().toString()
+      const getPublicKey = jest.fn(async () => ({ publicKey }))
+      const peer = new PrivateKey(5).toPublicKey().toString()
+
+      await getAddress({ getPublicKey } as any, 1, peer)
+
+      expect(getPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({ counterparty: peer, forSelf: true })
+      )
     })
   })
 

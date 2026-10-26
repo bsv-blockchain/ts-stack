@@ -49,9 +49,13 @@ export function syntheticFetch(httpStatus: number, responseBody: unknown): typeo
 /**
  * Build a minimal synthetic Transaction-like object for driving ARC.broadcast().
  */
-export function buildSyntheticTx(rawTxHex: string): {
+export function buildSyntheticTx(
+  rawTxHex: string,
+  txid?: string
+): {
   toHexEF: () => string
   toHex: () => string
+  id: (encoding: 'hex') => string
 } {
   return {
     toHexEF(): string {
@@ -59,6 +63,11 @@ export function buildSyntheticTx(rawTxHex: string): {
     },
     toHex(): string {
       return rawTxHex
+    },
+    id(encoding: 'hex'): string {
+      expect(encoding).toBe('hex')
+      if (txid === undefined) throw new Error('Synthetic transaction ID was not configured')
+      return txid
     }
   }
 }
@@ -110,7 +119,7 @@ async function assertArcHttp200AsFailure(
   const arc = new ARC('https://arc.example.com', {
     httpClient: new FetchHttpClient(mockFetch as unknown as typeof fetch)
   })
-  const tx = buildSyntheticTx(rawTx)
+  const tx = buildSyntheticTx(rawTx, txid)
   const result = await arc.broadcast(tx as any)
 
   expect(result.status).toBe('error')
@@ -133,7 +142,7 @@ async function assertArcHttp200AsSuccess(
   const arc = new ARC('https://arc.example.com', {
     httpClient: new FetchHttpClient(mockFetch as unknown as typeof fetch)
   })
-  const tx = buildSyntheticTx(rawTx)
+  const tx = buildSyntheticTx(rawTx, txid)
   const result = await arc.broadcast(tx as any)
 
   expect(result.status).toBe('success')
@@ -151,7 +160,7 @@ export async function assertArcNon200(
   const arc = new ARC('https://arc.example.com', {
     httpClient: new FetchHttpClient(mockFetch as unknown as typeof fetch)
   })
-  const tx = buildSyntheticTx(rawTx)
+  const tx = buildSyntheticTx(rawTx, '0'.repeat(64))
   const result = await arc.broadcast(tx as any)
 
   expect(result.status).toBe('error')

@@ -11,6 +11,12 @@ class SharedAsyncSessionManager implements AsyncSessionManager {
   async hasSession(_identifier: string): Promise<boolean> {
     return false
   }
+  async claimMessageNonce(_sessionNonce: string, _messageNonce: string): Promise<boolean> {
+    return true
+  }
+  async claimInitialRequestNonce(_identityKey: string, _initialNonce: string): Promise<boolean> {
+    return true
+  }
 }
 
 describe('AuthSocketServerOptions', () => {

@@ -52,6 +52,17 @@ export interface paths {
          * @description Inserts a message into each recipient's named message box. If the box
          *     does not exist it is created automatically.
          *
+         *     **Live announcement** A stored message is announced to the recipient's
+         *     joined sockets on `sendMessage-<roomId>`, the same event a WebSocket
+         *     send broadcasts on. The announcement is best effort: it reaches only
+         *     the sockets held by the process that served this request, and a
+         *     request carrying `payment` is never announced, because the
+         *     announcement carries this request body rather than the stored row and
+         *     a recipient that acknowledged on it would discard the row before its
+         *     wallet internalized the output. Recipients must still poll
+         *     `/listMessages`, which is the only path that internalizes a recipient
+         *     payment. See `specs/messaging/authsocket-asyncapi.yaml`.
+         *
          *     **Payment logic**
          *     - If `deliveryFee > 0` (set by server policy) a payment is required
          *       with output[0] assigned to the server.
@@ -59,6 +70,10 @@ export interface paths {
          *       per-recipient outputs must be included.
          *     - If a recipient has `recipientFee === -1` (blocked) the entire request
          *       fails with 403 before any DB writes.
+         *
+         *     Recipients must be unique after public-key canonicalization. Duplicate
+         *     compressed/uncompressed representations are rejected before fee or
+         *     message-ID allocation.
          *
          *     **Deduplication**  Messages with a duplicate `messageId` are silently
          *     ignored (ON CONFLICT IGNORE). If the database raises a hard duplicate-key
@@ -260,6 +275,10 @@ export interface paths {
          *     `blockedRecipients` fields. Blocked recipients are still returned in
          *     the list; the caller decides whether to abort or proceed with the
          *     non-blocked subset.
+         *
+         *     Persisted recipient fees are safe integers from -1 through 2147483647;
+         *     server delivery fees are safe integers from 0 through 2147483647.
+         *     Invalid persisted values fail the quote closed.
          */
         get: operations["getQuote"];
         put?: never;
@@ -345,7 +364,7 @@ export interface components {
              *     back-compat but must not be used simultaneously.
              */
             recipient?: components["schemas"]["PubKeyHex"] | components["schemas"]["PubKeyHex"][];
-            /** @description Preferred plural form. Takes precedence over `recipient` when both are present. */
+            /** @description Preferred plural form. Takes precedence over `recipient` when both are present. Compressed and uncompressed encodings of the same key count as one recipient and must not be repeated. */
             recipients?: components["schemas"]["PubKeyHex"][];
             /**
              * @description Named message box (e.g. `payment_inbox`, `notifications`).
@@ -399,8 +418,9 @@ export interface components {
         Payment: {
             tx: components["schemas"]["AtomicBEEF"];
             /**
-             * @description Output list. When a server delivery fee applies, output[0] must be the
-             *     server's delivery fee output. Subsequent outputs are recipient-side.
+             * @description Output list. When a server delivery fee applies, output[0] must pay
+             *     the per-recipient delivery fee multiplied by the number of recipients.
+             *     Subsequent outputs are recipient-side.
              */
             outputs: components["schemas"]["PaymentOutput"][];
             /** @description Human-readable description for wallet internalization. */

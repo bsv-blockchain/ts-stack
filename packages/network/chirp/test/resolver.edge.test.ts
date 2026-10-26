@@ -85,6 +85,8 @@ describe('resolver host and response validation', () => {
       { retriesPerObject: 0 },
       { maxObjects: 0 },
       { maxDownloadBytes: 0 },
+      { maxLogicalLength: -1n },
+      { maxLogicalLength: 1 as unknown as bigint },
       { requestTimeoutMs: 0 },
       { resolutionTimeoutMs: 600_001 }
     ]
@@ -105,6 +107,18 @@ describe('resolver host and response validation', () => {
     })
     await expect(downloader.inspect(built.chirpURL)).rejects.toMatchObject({
       code: 'ERR_CHIRP_NO_HOSTS'
+    })
+  })
+
+  test('rejects an excessive advertised host list before issuing requests', async () => {
+    const built = await build(Uint8Array.of(1))
+    const location = rootLocation(built.rootIdentifier)
+    const downloader = new CHIRPDownloader({
+      resolve: async () => Array.from({ length: 257 }, () => location),
+      fetch: objectFetcher(built.objects)
+    })
+    await expect(downloader.inspect(built.chirpURL)).rejects.toMatchObject({
+      code: 'ERR_CHIRP_HOSTS'
     })
   })
 
@@ -289,6 +303,144 @@ describe('resolver host and response validation', () => {
         })
     })
     await expect(request.inspect(built.chirpURL)).rejects.toMatchObject({ code: 'ERR_CHIRP_FETCH' })
+  })
+
+  test('enforces timeouts against non-cooperative policies, fetchers, and response bodies', async () => {
+    const built = await build(Uint8Array.of(1))
+    const location = rootLocation(built.rootIdentifier)
+    const policy = new CHIRPDownloader({
+      resolve: async () => [location],
+      requestTimeoutMs: 5,
+      retriesPerObject: 1,
+      urlPolicy: async () => await new Promise<void>(() => {})
+    })
+    await expect(policy.inspect(built.chirpURL)).rejects.toMatchObject({ code: 'ERR_CHIRP_FETCH' })
+
+    const fetcher = new CHIRPDownloader({
+      resolve: async () => [location],
+      requestTimeoutMs: 5,
+      retriesPerObject: 1,
+      fetch: async () => await new Promise<Response>(() => {})
+    })
+    await expect(fetcher.inspect(built.chirpURL)).rejects.toMatchObject({ code: 'ERR_CHIRP_FETCH' })
+
+    let releaseResponse: ((response: Response) => void) | undefined
+    let lateBodyCancelled = false
+    const late = new CHIRPDownloader({
+      resolve: async () => [location],
+      requestTimeoutMs: 5,
+      retriesPerObject: 1,
+      fetch: async () =>
+        await new Promise<Response>(resolve => {
+          releaseResponse = resolve
+        })
+    })
+    await expect(late.inspect(built.chirpURL)).rejects.toMatchObject({ code: 'ERR_CHIRP_FETCH' })
+    releaseResponse?.(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          cancel() {
+            lateBodyCancelled = true
+          }
+        }),
+        { status: 200 }
+      )
+    )
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(lateBodyCancelled).toBe(true)
+
+    const body = new CHIRPDownloader({
+      resolve: async () => [location],
+      requestTimeoutMs: 5,
+      retriesPerObject: 1,
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull: async () => await new Promise<void>(() => {}),
+            cancel: async () => await new Promise<void>(() => {})
+          }),
+          {
+            status: 200,
+            headers: {
+              'Content-Length': String(
+                (built.objects.get(built.rootIdentifier) as Uint8Array).byteLength
+              )
+            }
+          }
+        )
+    })
+    await expect(body.inspect(built.chirpURL)).rejects.toMatchObject({ code: 'ERR_CHIRP_FETCH' })
+  })
+
+  test('copies verified bytes before cache callbacks and cancels rejected response bodies', async () => {
+    const built = await build(Uint8Array.of(1))
+    const mutatingCache: CHIRPObjectCache = {
+      get: () => undefined,
+      set: (_identifier, bytes) => bytes.fill(0)
+    }
+    const cached = new CHIRPDownloader({
+      resolve: async () => [rootLocation(built.rootIdentifier)],
+      fetch: objectFetcher(built.objects),
+      cache: mutatingCache
+    })
+    await expect(cached.inspect(built.chirpURL)).resolves.toMatchObject({
+      rootIdentifier: built.rootIdentifier
+    })
+
+    let cancelled = false
+    const rejected = new CHIRPDownloader({
+      resolve: async () => [rootLocation(built.rootIdentifier)],
+      retriesPerObject: 1,
+      fetch: async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancelled = true
+            }
+          }),
+          { status: 404 }
+        )
+    })
+    await expect(rejected.inspect(built.chirpURL)).rejects.toMatchObject({
+      code: 'ERR_CHIRP_FETCH'
+    })
+    await Promise.resolve()
+    expect(cancelled).toBe(true)
+  })
+
+  test('rejects accessor-backed configuration and snapshots range options at call time', async () => {
+    let accesses = 0
+    const config = Object.defineProperty({}, 'resolve', {
+      enumerable: true,
+      get() {
+        accesses += 1
+        return async () => []
+      }
+    })
+    expect(() => new CHIRPDownloader(config as never)).toThrow('accessors')
+    expect(accesses).toBe(0)
+
+    const built = await build(Uint8Array.of(1, 2))
+    const downloader = new CHIRPDownloader({
+      resolve: async () => [rootLocation(built.rootIdentifier)],
+      fetch: objectFetcher(built.objects)
+    })
+    const range = { start: 0n, endExclusive: 1n }
+    const iterator = downloader.stream(built.chirpURL, { range })
+    range.endExclusive = 2n
+    const received: number[] = []
+    for await (const chunk of iterator) received.push(...chunk.data)
+    expect(received).toEqual([1])
+
+    const options = Object.defineProperty({}, 'range', {
+      enumerable: true,
+      get() {
+        accesses += 1
+        return range
+      }
+    })
+    expect(() => downloader.stream(built.chirpURL, options as never)).toThrow('accessors')
+    expect(accesses).toBe(0)
   })
 })
 

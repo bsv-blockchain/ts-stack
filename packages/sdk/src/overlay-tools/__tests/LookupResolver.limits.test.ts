@@ -138,12 +138,18 @@ describe('LookupResolver query resource bounds', () => {
     expect(progress.outputs).toHaveLength(2)
   })
 
-  it('bounds the candidate scan and skips malformed and over-budget host entries', async () => {
+  it('rejects malformed configuration and bounds the candidate scan for over-budget hosts', async () => {
+    expect(
+      () =>
+        new LookupResolver({
+          hostOverrides: { [service]: ['not a url'] }
+        })
+    ).toThrow('valid absolute URL')
+
     const queried: string[] = []
     const resolver = new LookupResolver({
       hostOverrides: {
         [service]: [
-          'not a url',
           'https://h1.example',
           'https://h2.example',
           'https://h3.example',
@@ -165,8 +171,8 @@ describe('LookupResolver query resource bounds', () => {
     expect(queried).toEqual(['https://h1.example'])
     expect(answer.outputs).toHaveLength(1)
     expect(progress.discoveredHosts).toBe(1)
-    // 2 beyond the maxHosts * 4 scan window, 1 unparseable, 2 past maxHosts.
-    expect(progress.skippedHosts).toBe(5)
+    // 1 beyond the maxHosts * 4 scan window and 3 past maxHosts.
+    expect(progress.skippedHosts).toBe(4)
     expect(progress.limitsHit).toContain('maxHosts')
   })
 

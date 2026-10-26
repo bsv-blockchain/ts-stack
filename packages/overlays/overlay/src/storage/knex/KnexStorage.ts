@@ -3,7 +3,8 @@ import {
   type AppliedTransaction,
   type AppliedTransactionProofUpdate,
   type StoredTransactionRecord,
-  type UnprovenAppliedTransactionCandidate
+  type UnprovenAppliedTransactionCandidate,
+  type UnprovenQueryLimits
 } from '../Storage.js'
 import { Knex } from 'knex'
 import type { Output } from '../../Output.js'
@@ -33,26 +34,24 @@ const OUTPUT_SELECT_FIELDS = [
 export class KnexStorage implements Storage {
   knex: Knex
 
-  constructor (knex: Knex) {
+  constructor(knex: Knex) {
     this.knex = knex
   }
 
   private parseOutputRelations(
-    value: string | Array<{ txid: string, outputIndex: number }>
-  ): Array<{ txid: string, outputIndex: number }> {
+    value: string | Array<{ txid: string; outputIndex: number }>
+  ): Array<{ txid: string; outputIndex: number }> {
     if (Array.isArray(value)) {
       return value
     }
     return JSON.parse(value)
   }
 
-  private parseOutputRecord(
-    row: any,
-    includeBEEF: boolean,
-    beefOverride?: number[]
-  ): Output {
+  private parseOutputRecord(row: any, includeBEEF: boolean, beefOverride?: number[]): Output {
     return {
       ...row,
+      // SQL NULL denotes an unconfirmed output, not a block at height zero.
+      blockHeight: row.blockHeight === null ? undefined : row.blockHeight,
       outputScript: Array.from(row.outputScript),
       beef: (() => {
         if (!includeBEEF) return undefined
@@ -99,9 +98,7 @@ export class KnexStorage implements Storage {
       return new Map<string, number[]>()
     }
 
-    const rows = await this.knex('transactions')
-      .whereIn('txid', txids)
-      .select(['txid', 'beef'])
+    const rows = await this.knex('transactions').whereIn('txid', txids).select(['txid', 'beef'])
 
     const beefByTxid = new Map<string, number[]>()
     for (const row of rows) {
@@ -112,7 +109,13 @@ export class KnexStorage implements Storage {
     return beefByTxid
   }
 
-  async findOutput (txid: string, outputIndex: number, topic?: string, spent?: boolean, includeBEEF: boolean = false): Promise<Output | null> {
+  async findOutput(
+    txid: string,
+    outputIndex: number,
+    topic?: string,
+    spent?: boolean,
+    includeBEEF: boolean = false
+  ): Promise<Output | null> {
     const search: {
       'outputs.txid': string
       'outputs.outputIndex': number
@@ -143,15 +146,15 @@ export class KnexStorage implements Storage {
     return this.parseOutputRecord(output, includeBEEF)
   }
 
-  async findOutputsByOutpoints (
-    outpoints: Array<{ txid: string, outputIndex: number }>,
+  async findOutputsByOutpoints(
+    outpoints: Array<{ txid: string; outputIndex: number }>,
     includeBEEF: boolean = false
   ): Promise<Output[]> {
     if (outpoints.length === 0) {
       return []
     }
 
-    const deduped = new Map<string, { txid: string, outputIndex: number }>()
+    const deduped = new Map<string, { txid: string; outputIndex: number }>()
     for (const outpoint of outpoints) {
       deduped.set(`${outpoint.txid}:${outpoint.outputIndex}`, outpoint)
     }
@@ -176,10 +179,16 @@ export class KnexStorage implements Storage {
     return rows.map(row => this.parseOutputRecord(row, true, beefByTxid.get(row.txid)))
   }
 
-  async findOutputsForTransaction (txid: string, includeBEEF: boolean = false): Promise<Output[]> {
-    const outputs = await this.knex('outputs')
+  async findOutputsForTransaction(
+    txid: string,
+    includeBEEF: boolean = false,
+    limit?: number
+  ): Promise<Output[]> {
+    let query = this.knex('outputs')
       .where({ 'outputs.txid': txid })
       .select([...OUTPUT_SELECT_FIELDS])
+    if (limit !== undefined) query = query.limit(limit)
+    const outputs = await query
 
     if (outputs === undefined || outputs.length === 0) {
       return []
@@ -193,7 +202,12 @@ export class KnexStorage implements Storage {
     return outputs.map(output => this.parseOutputRecord(output, true, beefByTxid.get(output.txid)))
   }
 
-  async findUTXOsForTopic (topic: string, since?: number, limit?: number, includeBEEF: boolean = false): Promise<Output[]> {
+  async findUTXOsForTopic(
+    topic: string,
+    since?: number,
+    limit?: number,
+    includeBEEF: boolean = false
+  ): Promise<Output[]> {
     // Base query to get outputs
     const query = this.knex('outputs').where({ 'outputs.topic': topic, 'outputs.spent': false })
 
@@ -228,7 +242,7 @@ export class KnexStorage implements Storage {
     return outputs.map(output => this.parseOutputRecord(output, true, beefByTxid.get(output.txid)))
   }
 
-  async deleteOutput (txid: string, outputIndex: number, topic: string): Promise<void> {
+  async deleteOutput(txid: string, outputIndex: number, topic: string): Promise<void> {
     await this.knex.transaction(async trx => {
       // Delete the specific output
       await trx('outputs').where({ txid, outputIndex, topic }).del()
@@ -243,16 +257,10 @@ export class KnexStorage implements Storage {
     })
   }
 
-  async insertOutput (output: Output): Promise<void> {
+  async insertOutput(output: Output): Promise<void> {
     await this.knex.transaction(async trx => {
-      const existing = await trx('outputs').where({
-        txid: output.txid,
-        outputIndex: Number(output.outputIndex),
-        topic: output.topic
-      }).first()
-
-      if (existing === undefined || existing === null) {
-        await trx('outputs').insert({
+      await trx('outputs')
+        .insert({
           txid: output.txid,
           outputIndex: Number(output.outputIndex),
           outputScript: Buffer.from(output.outputScript),
@@ -264,7 +272,8 @@ export class KnexStorage implements Storage {
           score: output.score,
           blockHeight: output.blockHeight
         })
-      }
+        .onConflict(['txid', 'outputIndex', 'topic'])
+        .ignore()
 
       if (output.beef !== undefined) {
         const record = this.transactionRecordFromBEEF(output.txid, output.beef)
@@ -274,7 +283,8 @@ export class KnexStorage implements Storage {
         }
         if (record.beef !== undefined) transactionRecord.beef = Buffer.from(record.beef)
         if (record.rawTx !== undefined) transactionRecord.rawTx = Buffer.from(record.rawTx)
-        if (record.merklePath !== undefined) transactionRecord.merklePath = Buffer.from(record.merklePath)
+        if (record.merklePath !== undefined)
+          transactionRecord.merklePath = Buffer.from(record.merklePath)
         if (record.blockHeight !== undefined) transactionRecord.blockHeight = record.blockHeight
         if (record.blockIndex !== undefined) transactionRecord.blockIndex = record.blockIndex
         if (record.merkleRoot !== undefined) transactionRecord.merkleRoot = record.merkleRoot
@@ -286,32 +296,61 @@ export class KnexStorage implements Storage {
     })
   }
 
-  async markUTXOAsSpent (txid: string, outputIndex: number, topic?: string): Promise<void> {
-    await this.knex('outputs').where({
-      txid,
-      outputIndex,
-      topic
-    }).update('spent', true)
+  async markUTXOAsSpent(
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    spendingTxid?: string
+  ): Promise<void> {
+    const updated = await this.knex('outputs')
+      .where({
+        txid,
+        outputIndex,
+        topic,
+        spent: false
+      })
+      .update({ spent: true, spentBy: spendingTxid ?? null })
+    if (updated === 1) return
+    const existing = await this.knex('outputs')
+      .where({ txid, outputIndex, topic })
+      .first('spent', 'spentBy')
+    const alreadySpent = existing?.spent === true || existing?.spent === 1
+    if (spendingTxid !== undefined && alreadySpent && existing.spentBy === spendingTxid) return
+    throw new Error('Unable to atomically mark an unspent topical output as spent')
   }
 
-  async updateConsumedBy (txid: string, outputIndex: number, topic: string, consumedBy: Array<{ txid: string, outputIndex: number }>): Promise<void> {
-    await this.knex('outputs').where({
-      txid,
-      outputIndex,
-      topic
-    }).update('consumedBy', JSON.stringify(consumedBy))
+  async updateConsumedBy(
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    consumedBy: Array<{ txid: string; outputIndex: number }>
+  ): Promise<void> {
+    await this.knex('outputs')
+      .where({
+        txid,
+        outputIndex,
+        topic
+      })
+      .update('consumedBy', JSON.stringify(consumedBy))
   }
 
-  async updateTransactionBEEF (txid: string, beef: number[]): Promise<void> {
+  async updateTransactionBEEF(txid: string, beef: number[]): Promise<void> {
     await this.upsertTransactionRecord(this.transactionRecordFromBEEF(txid, beef))
   }
 
-  async updateOutputBlockHeight (txid: string, outputIndex: number, topic: string, blockHeight: number): Promise<void> {
-    await this.knex('outputs').where({
-      txid,
-      outputIndex,
-      topic
-    }).update('blockHeight', blockHeight)
+  async updateOutputBlockHeight(
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    blockHeight: number
+  ): Promise<void> {
+    await this.knex('outputs')
+      .where({
+        txid,
+        outputIndex,
+        topic
+      })
+      .update('blockHeight', blockHeight)
   }
 
   async upsertTransactionRecord(record: StoredTransactionRecord): Promise<void> {
@@ -330,10 +369,7 @@ export class KnexStorage implements Storage {
     const merge = { ...insert }
     delete merge.txid
 
-    await this.knex('transactions')
-      .insert(insert)
-      .onConflict('txid')
-      .merge(merge)
+    await this.knex('transactions').insert(insert).onConflict('txid').merge(merge)
   }
 
   async updateAppliedTransactionProof(record: AppliedTransactionProofUpdate): Promise<void> {
@@ -354,20 +390,23 @@ export class KnexStorage implements Storage {
     }
   }
 
-  async insertAppliedTransaction (tx: AppliedTransaction): Promise<void> {
-    await this.knex('applied_transactions').insert({
-      txid: tx.txid,
-      topic: tx.topic,
-      blockHeight: tx.blockHeight,
-      blockHash: tx.blockHash,
-      blockIndex: tx.blockIndex,
-      merkleRoot: tx.merkleRoot,
-      firstSeenHeight: tx.firstSeenHeight,
-      proven: tx.proven ?? false
-    })
+  async insertAppliedTransaction(tx: AppliedTransaction): Promise<void> {
+    await this.knex('applied_transactions')
+      .insert({
+        txid: tx.txid,
+        topic: tx.topic,
+        blockHeight: tx.blockHeight,
+        blockHash: tx.blockHash,
+        blockIndex: tx.blockIndex,
+        merkleRoot: tx.merkleRoot,
+        firstSeenHeight: tx.firstSeenHeight,
+        proven: tx.proven ?? false
+      })
+      .onConflict(['txid', 'topic'])
+      .ignore()
   }
 
-  async doesAppliedTransactionExist (tx: { txid: string, topic: string }): Promise<boolean> {
+  async doesAppliedTransactionExist(tx: { txid: string; topic: string }): Promise<boolean> {
     const result = await this.knex('applied_transactions')
       .where({ txid: tx.txid, topic: tx.topic })
       .select(this.knex.raw('1'))
@@ -376,23 +415,25 @@ export class KnexStorage implements Storage {
     return !!result
   }
 
-  async updateLastInteraction (host: string, topic: string, since: number): Promise<void> {
+  async updateLastInteraction(host: string, topic: string, since: number): Promise<void> {
     await this.knex('host_sync_state')
       .insert({ host, topic, since })
       .onConflict(['host', 'topic'])
       .merge({ since })
   }
 
-  async getLastInteraction (host: string, topic: string): Promise<number> {
-    const result = await this.knex('host_sync_state')
-      .where({ host, topic })
-      .select('since')
-      .first()
+  async getLastInteraction(host: string, topic: string): Promise<number> {
+    const result = await this.knex('host_sync_state').where({ host, topic }).select('since').first()
 
     return result ? result.since : 0
   }
 
-  async findAdmittedTransactionsForBlock(topic: string, blockHeight: number, blockHash?: string): Promise<AdmittedTxRef[]> {
+  async findAdmittedTransactionsForBlock(
+    topic: string,
+    blockHeight: number,
+    blockHash?: string,
+    limit?: number
+  ): Promise<AdmittedTxRef[]> {
     let query = this.knex('applied_transactions')
       .where({ topic, blockHeight, proven: true })
       .whereNotNull('blockIndex')
@@ -400,10 +441,9 @@ export class KnexStorage implements Storage {
     if (blockHash !== undefined) {
       query = query.andWhere({ blockHash })
     }
+    if (limit !== undefined) query = query.limit(limit)
 
-    const rows = await query
-      .select(['txid', 'blockIndex'])
-      .orderBy('blockIndex', 'asc')
+    const rows = await query.select(['txid', 'blockIndex']).orderBy('blockIndex', 'asc')
 
     return rows.map(row => ({
       txid: row.txid,
@@ -432,7 +472,11 @@ export class KnexStorage implements Storage {
       })
   }
 
-  async findTopicBlockAnchor(topic: string, blockHeight: number, blockHash?: string): Promise<TopicBlockAnchor | undefined> {
+  async findTopicBlockAnchor(
+    topic: string,
+    blockHeight: number,
+    blockHash?: string
+  ): Promise<TopicBlockAnchor | undefined> {
     let query = this.knex('topic_block_anchors').where({ topic, blockHeight })
     if (blockHash !== undefined) {
       query = query.andWhere({ blockHash })
@@ -451,13 +495,20 @@ export class KnexStorage implements Storage {
     }
   }
 
-  async findTopicBlockAnchors(topic: string, fromHeight: number, toHeight: number): Promise<TopicBlockAnchor[]> {
-    const rows = await this.knex('topic_block_anchors')
+  async findTopicBlockAnchors(
+    topic: string,
+    fromHeight: number,
+    toHeight: number,
+    limit?: number
+  ): Promise<TopicBlockAnchor[]> {
+    let query = this.knex('topic_block_anchors')
       .where({ topic })
       .andWhere('blockHeight', '>=', fromHeight)
       .andWhere('blockHeight', '<=', toHeight)
       .select(['topic', 'blockHeight', 'blockHash', 'basmRoot', 'admittedCount', 'tac'])
       .orderBy('blockHeight', 'asc')
+    if (limit !== undefined) query = query.limit(limit)
+    const rows = await query
 
     return rows.map(row => ({
       topic: row.topic,
@@ -515,18 +566,28 @@ export class KnexStorage implements Storage {
     return records
   }
 
-  async findTransactionMerklePaths(txids: string[]): Promise<Array<{
-    txid: string
-    merklePath: string
-    blockHeight?: number
-    blockHash?: string
-    blockIndex?: number
-    merkleRoot?: string
-  }>> {
+  async findTransactionMerklePaths(txids: string[]): Promise<
+    Array<{
+      txid: string
+      merklePath: string
+      blockHeight?: number
+      blockHash?: string
+      blockIndex?: number
+      merkleRoot?: string
+    }>
+  > {
     if (txids.length === 0) return []
     const rows = await this.knex('transactions')
       .whereIn('txid', txids)
-      .select(['txid', 'merklePath', 'blockHeight', 'blockHash', 'blockIndex', 'merkleRoot', 'beef'])
+      .select([
+        'txid',
+        'merklePath',
+        'blockHeight',
+        'blockHash',
+        'blockIndex',
+        'merkleRoot',
+        'beef'
+      ])
 
     const records: Array<{
       txid: string
@@ -549,9 +610,15 @@ export class KnexStorage implements Storage {
         records.push({
           txid: row.txid,
           merklePath,
-          blockHeight: row.blockHeight === undefined || row.blockHeight === null ? undefined : Number(row.blockHeight),
+          blockHeight:
+            row.blockHeight === undefined || row.blockHeight === null
+              ? undefined
+              : Number(row.blockHeight),
           blockHash: row.blockHash,
-          blockIndex: row.blockIndex === undefined || row.blockIndex === null ? undefined : Number(row.blockIndex),
+          blockIndex:
+            row.blockIndex === undefined || row.blockIndex === null
+              ? undefined
+              : Number(row.blockIndex),
           merkleRoot: row.merkleRoot
         })
       }
@@ -560,7 +627,11 @@ export class KnexStorage implements Storage {
     return records
   }
 
-  async findUnprovenAppliedTransactions(cutoffHeight: number, topic?: string): Promise<UnprovenAppliedTransactionCandidate[]> {
+  async findUnprovenAppliedTransactions(
+    cutoffHeight: number,
+    topic?: string,
+    limits?: UnprovenQueryLimits
+  ): Promise<UnprovenAppliedTransactionCandidate[]> {
     let query = this.knex('applied_transactions')
       .where(builder => {
         builder.where({ proven: false }).orWhereNull('proven')
@@ -573,18 +644,28 @@ export class KnexStorage implements Storage {
       query = query.andWhere({ topic })
     }
 
+    if (limits !== undefined) query = query.limit(limits.maxCandidates + 1)
     const rows = await query
     const candidates: UnprovenAppliedTransactionCandidate[] = []
+    let remainingOutputs = limits?.maxOutputs
 
     for (const row of rows) {
-      const outputs = await this.knex('outputs')
+      let outputQuery = this.knex('outputs')
         .where({ txid: row.txid, topic: row.topic })
         .select(['txid', 'outputIndex'])
+      if (remainingOutputs !== undefined) outputQuery = outputQuery.limit(remainingOutputs + 1)
+      const outputs = await outputQuery
+      if (remainingOutputs !== undefined) {
+        remainingOutputs = Math.max(-1, remainingOutputs - outputs.length)
+      }
 
       candidates.push({
         txid: row.txid,
         topic: row.topic,
-        firstSeenHeight: row.firstSeenHeight === undefined || row.firstSeenHeight === null ? undefined : Number(row.firstSeenHeight),
+        firstSeenHeight:
+          row.firstSeenHeight === undefined || row.firstSeenHeight === null
+            ? undefined
+            : Number(row.firstSeenHeight),
         outputs: outputs.map(output => ({
           txid: output.txid,
           outputIndex: Number(output.outputIndex)
@@ -599,11 +680,16 @@ export class KnexStorage implements Storage {
     await this.knex('applied_transactions').where({ txid, topic }).del()
   }
 
-  async findProvenAppliedTransactionsByBlockHash(blockHash: string): Promise<Array<{ txid: string, topic: string, blockHeight: number }>> {
-    const rows = await this.knex('applied_transactions')
+  async findProvenAppliedTransactionsByBlockHash(
+    blockHash: string,
+    limit?: number
+  ): Promise<Array<{ txid: string; topic: string; blockHeight: number }>> {
+    let query = this.knex('applied_transactions')
       .where({ blockHash, proven: true })
       .whereNotNull('blockHeight')
       .select(['txid', 'topic', 'blockHeight'])
+    if (limit !== undefined) query = query.limit(limit)
+    const rows = await query
 
     return rows.map(row => ({
       txid: row.txid,
@@ -612,7 +698,20 @@ export class KnexStorage implements Storage {
     }))
   }
 
-  async findProvenAppliedTransactionsInRange(fromHeight: number, toHeight: number, topic?: string): Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>> {
+  async findProvenAppliedTransactionsInRange(
+    fromHeight: number,
+    toHeight: number,
+    topic?: string,
+    limit?: number
+  ): Promise<
+    Array<{
+      txid: string
+      topic: string
+      blockHeight: number
+      blockHash?: string
+      merkleRoot?: string
+    }>
+  > {
     let query = this.knex('applied_transactions')
       .where({ proven: true })
       .andWhere('blockHeight', '>=', fromHeight)
@@ -621,6 +720,7 @@ export class KnexStorage implements Storage {
     if (topic !== undefined) {
       query = query.andWhere({ topic })
     }
+    if (limit !== undefined) query = query.limit(limit)
 
     const rows = await query.select(['txid', 'topic', 'blockHeight', 'blockHash', 'merkleRoot'])
 
@@ -634,18 +734,14 @@ export class KnexStorage implements Storage {
   }
 
   async demoteAppliedTransactionToUnproven(txid: string, topic: string): Promise<void> {
-    await this.knex('applied_transactions')
-      .where({ txid, topic })
-      .update({
-        blockHeight: null,
-        blockHash: null,
-        blockIndex: null,
-        merkleRoot: null,
-        proven: false
-      })
+    await this.knex('applied_transactions').where({ txid, topic }).update({
+      blockHeight: null,
+      blockHash: null,
+      blockIndex: null,
+      merkleRoot: null,
+      proven: false
+    })
 
-    await this.knex('outputs')
-      .where({ txid, topic })
-      .update({ blockHeight: null })
+    await this.knex('outputs').where({ txid, topic }).update({ blockHeight: null })
   }
 }

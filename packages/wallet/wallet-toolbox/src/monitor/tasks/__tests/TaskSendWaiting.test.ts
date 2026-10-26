@@ -1,6 +1,7 @@
 import { TaskSendWaiting } from '../TaskSendWaiting'
+import { Validation } from '@bsv/sdk'
 
-function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, batch?: string) {
+function makeReq(provenTxReqId: number, txid: string, updatedAt: Date, batch?: string) {
   const now = new Date()
   return {
     provenTxReqId,
@@ -16,7 +17,7 @@ function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, batch?: 
   }
 }
 
-function makeMonitor (reqs: any[]) {
+function makeMonitor(reqs: any[]) {
   const findProvenTxReqs = jest.fn(async ({ paged, partial, status }: any) => {
     let filtered = reqs
     if (partial?.batch) filtered = filtered.filter(req => req.batch === partial.batch)
@@ -102,7 +103,8 @@ describe('TaskSendWaiting', () => {
 
     expect(m.findProvenTxReqs).toHaveBeenCalledWith({
       partial: { batch: 'batch-1' },
-      status: ['unsent', 'sending']
+      status: ['unsent', 'sending'],
+      paged: { limit: Validation.MAXIMUM_SEND_WITH_TRANSACTIONS + 1, offset: 0 }
     })
     const processedReqs = (task.processUnsent as jest.Mock).mock.calls[0][0]
     expect(processedReqs.map((r: any) => r.txid)).toEqual(['tx3'])
@@ -160,8 +162,33 @@ describe('TaskSendWaiting', () => {
     const m = makeMonitor([req])
     const task = new TaskSendWaiting(m.monitor as any)
 
-    await expect(task.processUnsent([req] as any)).resolves.toContain(
-      'txid=tx1: status now unmined'
+    await expect(task.processUnsent([req] as any)).resolves.toContain('txid=tx1: status now unmined')
+  })
+
+  test('3 skips an oversized legacy batch atomically and avoids a hot retry loop', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = Array.from({ length: Validation.MAXIMUM_SEND_WITH_TRANSACTIONS + 1 }, (_, index) =>
+      makeReq(index + 1, index.toString(16).padStart(64, '0'), new Date(0), 'oversized')
     )
+    const m = makeMonitor(reqs)
+    const task = new TaskSendWaiting(m.monitor as any, 80, 7_000, 300_000, 10, 1)
+    const processSpy = jest.spyOn(task, 'processUnsent').mockResolvedValue('')
+
+    const log = await task.runTask()
+
+    expect(processSpy).toHaveBeenCalledWith([], 2)
+    expect(log).toContain('Skipped 1 oversized atomic broadcast batch')
+    expect(task.triggerNextMsecs).toBe(80)
+  })
+
+  test('4 rejects direct processing above the atomic broadcast bound', async () => {
+    const m = makeMonitor([])
+    const task = new TaskSendWaiting(m.monitor as any)
+    const reqs = Array.from({ length: Validation.MAXIMUM_SEND_WITH_TRANSACTIONS + 1 }, (_, index) =>
+      makeReq(index + 1, index.toString(16).padStart(64, '0'), new Date(0))
+    )
+
+    await expect(task.processUnsent(reqs as any)).rejects.toThrow('at most')
   })
 })

@@ -9,6 +9,10 @@ export interface DurableFileBulkFileDownloadBudgetOptions {
   stateFile: string
   windowMsecs?: number
   now?: () => number
+  /** Maximum wait for the cross-process state lock. Default: 30 seconds. */
+  lockTimeoutMsecs?: number
+  /** Delay between cross-process lock attempts. Default: 25 milliseconds. */
+  lockRetryMsecs?: number
 }
 
 interface BudgetState {
@@ -32,6 +36,9 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
   private readonly maxBytes: number
   private readonly windowMsecs: number
   private readonly stateFile: string
+  private readonly lockFolder: string
+  private readonly lockTimeoutMsecs: number
+  private readonly lockRetryMsecs: number
   private readonly now: () => number
   private tail: Promise<void> = Promise.resolve()
   private snapshotState: BudgetState
@@ -39,8 +46,19 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
   constructor(options: DurableFileBulkFileDownloadBudgetOptions) {
     this.maxBytes = positiveInteger(options.maxBytes, 'maxBytes')
     this.windowMsecs = positiveInteger(options.windowMsecs ?? 60 * 60 * 1000, 'windowMsecs')
-    if (options.stateFile.trim() === '') throw new WERR_INVALID_PARAMETER('stateFile', 'a non-empty path')
+    this.lockTimeoutMsecs = positiveInteger(options.lockTimeoutMsecs ?? 30_000, 'lockTimeoutMsecs')
+    this.lockRetryMsecs = positiveInteger(options.lockRetryMsecs ?? 25, 'lockRetryMsecs')
+    if (this.lockRetryMsecs > this.lockTimeoutMsecs) {
+      throw new WERR_INVALID_PARAMETER('lockRetryMsecs', 'no greater than lockTimeoutMsecs')
+    }
+    if (typeof options.stateFile !== 'string' || options.stateFile.trim() === '') {
+      throw new WERR_INVALID_PARAMETER('stateFile', 'a non-empty path')
+    }
     this.stateFile = path.resolve(options.stateFile)
+    this.lockFolder = `${this.stateFile}.lock`
+    if (options.now !== undefined && typeof options.now !== 'function') {
+      throw new WERR_INVALID_PARAMETER('now', 'a function when defined')
+    }
     this.now = options.now ?? Date.now
     this.snapshotState = this.newState(this.now())
   }
@@ -53,7 +71,9 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
    */
   async initialize(): Promise<void> {
     const operation = this.tail.then(async () => {
-      await this.readState()
+      await this.withStateLock(async () => {
+        await this.readState()
+      })
     })
     this.tail = operation.then(
       () => undefined,
@@ -83,21 +103,27 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
   }
 
   private async consumeSerialized(byteCount: number): Promise<void> {
-    const now = this.now()
-    let state = await this.readState()
-    if (now - state.windowStartedAt >= this.windowMsecs) state = this.newState(now)
-    if (state.consumedBytes + byteCount > this.maxBytes) {
-      throw new Error(
-        `Bulk-header download budget exceeded: requested ${byteCount} bytes with ` +
-          `${this.maxBytes - state.consumedBytes} bytes remaining in the current window.`
-      )
-    }
-    state.consumedBytes += byteCount
-    await this.writeState(state)
-    this.snapshotState = state
+    await this.withStateLock(async () => {
+      const now = this.validNow()
+      let state = await this.readState()
+      if (now - state.windowStartedAt >= this.windowMsecs) state = this.newState(now)
+      const remaining = this.maxBytes - state.consumedBytes
+      if (byteCount > remaining) {
+        throw new Error(
+          `Bulk-header download budget exceeded: requested ${byteCount} bytes with ` +
+            `${remaining} bytes remaining in the current window.`
+        )
+      }
+      state.consumedBytes += byteCount
+      await this.writeState(state)
+      this.snapshotState = state
+    })
   }
 
   private newState(windowStartedAt: number): BudgetState {
+    if (!Number.isSafeInteger(windowStartedAt) || windowStartedAt < 0) {
+      throw new WERR_INVALID_PARAMETER('now()', 'a non-negative safe integer')
+    }
     return {
       version: 1,
       maxBytes: this.maxBytes,
@@ -112,7 +138,7 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
     try {
       parsed = JSON.parse(await fs.readFile(this.stateFile, 'utf8'))
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return this.newState(this.now())
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return this.newState(this.validNow())
       throw new Error(`Unable to read durable bulk-header download budget: ${String(error)}`)
     }
     if (!isBudgetState(parsed)) throw new Error('Durable bulk-header download budget state is invalid.')
@@ -148,6 +174,66 @@ export class DurableFileBulkFileDownloadBudget implements BulkFileDownloadBudget
         if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       })
     }
+  }
+
+  private validNow(): number {
+    const value = this.now()
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new WERR_INVALID_PARAMETER('now()', 'a non-negative safe integer')
+    }
+    return value
+  }
+
+  private async withStateLock<T>(work: () => Promise<T>): Promise<T> {
+    const token = randomUUID()
+    const ownerFile = path.join(this.lockFolder, 'owner')
+    const startedAt = Date.now()
+    await fs.mkdir(path.dirname(this.stateFile), { recursive: true })
+    for (;;) {
+      try {
+        await fs.mkdir(this.lockFolder, { mode: 0o700 })
+        try {
+          await fs.writeFile(ownerFile, token, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+        } catch (error) {
+          await fs.rmdir(this.lockFolder).catch(() => undefined)
+          throw error
+        }
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        if (Date.now() - startedAt >= this.lockTimeoutMsecs) {
+          throw new Error(
+            `Timed out acquiring durable bulk-header download budget lock ${this.lockFolder}. ` +
+              'The lock is never reclaimed automatically after a crash; verify that no writer is active before removing it.'
+          )
+        }
+        await new Promise(resolve => setTimeout(resolve, this.lockRetryMsecs))
+      }
+    }
+    let outcome: { ok: true; value: T } | { ok: false; error: unknown }
+    try {
+      outcome = { ok: true, value: await work() }
+    } catch (error) {
+      outcome = { ok: false, error }
+    }
+    let releaseError: unknown
+    try {
+      let owner: string | undefined
+      try {
+        owner = await fs.readFile(ownerFile, 'utf8')
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      if (owner === token) {
+        await fs.unlink(ownerFile)
+        await fs.rmdir(this.lockFolder)
+      }
+    } catch (error) {
+      releaseError = error
+    }
+    if (!outcome.ok) throw outcome.error
+    if (releaseError != null) throw releaseError
+    return outcome.value
   }
 }
 

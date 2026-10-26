@@ -4,9 +4,9 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.13.0'
-last_updated: '2026-09-10'
-last_verified: '2026-09-10'
+version: '2.15.1'
+last_updated: '2026-10-13'
+last_verified: '2026-10-13'
 review_cadence_days: 30
 status: stable
 tags: ['wallet', 'brc100']
@@ -18,6 +18,76 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wall
 `@bsv/wallet-toolbox` is the reference toolkit for building BRC-100 wallets. It connects `@bsv/sdk` primitives to wallet storage, key derivation, signing, services, monitoring, permissions, and authentication flows.
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
+
+BEEF requests and schema-declared storage response bytes use the existing
+negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
+and identical transaction/proof bytes. Authentication and payload ceilings
+remain unchanged; upgrade both clients and active storage for the savings.
+
+IndexedDB treats empty certificate certifier/type, transaction status and
+output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
+arrays, partial predicates and user ownership remain enforced. No API, wire
+or database migration is required.
+
+Internalizing an unproven transaction new to a user attempts broadcast before
+storing recipient outputs, including a sender's no-send transaction already
+known to shared storage. Rejected broadcasts return a review-actions error
+and store no recipient outputs. Transactions backed by a mining proof are
+not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
+
+Confirmed internalization resolves and checks the block header before the
+storage writer opens. IndexedDB commits a transaction when the event loop
+turns during an asynchronous header lookup, so the proven transaction,
+transaction, and requested outputs are stored together only after that lookup
+finishes. A missing or malformed header, or an invalid proof, still rejects
+and leaves none of those records. Upgrade the active storage implementation,
+including the browser client.
+
+Broadcast result completion in the 2.14.9 source candidate preserves an already
+`unmined` or `completed` request while returning the actual provider outcome.
+A successful first receipt without a mining proof therefore no longer fails
+with an internal unknown-status error on shared storage or after concurrent
+storage-worker progress. Negative provider outcomes still reject that receipt;
+repeat successful receipt remains idempotent. Upgrade the implementation
+performing broadcast/internalization after protected publication. No public
+API or wire migration is required. SQL storage adds a durable user/TXID receipt
+claim table while preserving historical transaction and output rows. Back up
+and preflight the database, then coordinate the rollout across every serving storage instance;
+older instances do not honor the claim. Local IndexedDB does not use the SQL
+claim. This candidate does not deploy hosted storage or repair older partial
+receipts automatically.
+
+## Optional registry descriptions
+
+ProtoMap, BasketMap and CertMap supply descriptive metadata, not permission grants.
+Wallets adopting the proposed registry framework must keep a usable normal
+authorization flow when metadata is absent, disputed or unavailable, and must not
+use listing status as a protocol gate. Existing permission, spending, validation
+and supported-module checks remain separate. See [registry metadata](../../guides/registry-metadata.md)
+for builder submissions, source selection and a wallet adoption checklist. Shared
+`trustedCertifiers` settings in some consumers need care: trusting descriptions
+and trusting certificate issuers are different decisions. This guide does not
+claim a new registry-only settings API or universal UI conformance.
+
+## Backup and recovery
+
+**Recoverable root key material and wallet records are both required.** A seed
+alone cannot reconstruct every BRC-100 output's derivation metadata. BRC-38/39
+exports preserve wallet data, not root keys or unrelated product state.
+
+Start with [Wallet backup and recovery](../../guides/wallet-backup-recovery.md),
+then use [BRC-38/39 integration](../../guides/wallet-data-portability.md), the
+[recovery drill](../../guides/wallet-recovery-drill.md) and the
+[agent implementation brief](../../guides/wallet-recovery-agent-brief.md).
+The integration guide documents concrete-provider requirements, explicit
+restore/merge modes and the limits of the current in-memory export helpers.
+
+BRC-177 anchors cover both the delivery and an economic reclaim. When the
+reclaim floor is larger, the protected action pays the bounded surplus as
+miner fee while retaining no wallet change. Upgrade the active storage
+implementation to receive this funding fix; no wire or database migration is required.
+
+## Current capabilities
 
 Wallet Toolbox 2.11 adds the built-in BRC-177 `p nosend expiry` module. It
 pre-funds expiring `noSend` actions, stores a signed reclaim durably across
@@ -41,18 +111,47 @@ normal verified lineage resolution remains ambiguous and the outpoint is one
 of the wallet's verified candidates. Applications must persist
 `saveSnapshot()` immediately after `completePhoneNumberChange()` succeeds.
 
-Snapshots intentionally carry everything needed to restore sensitive wallet
-state; possession of a snapshot is possession of the wallet. Store each
+Wallet-manager snapshots can carry root and privileged key material; they do
+not include the Wallet Toolbox storage database. Possession of such a snapshot
+is possession of the wallet's key material. Store each
 complete snapshot only in an OS Keychain, hardware-backed keystore, or
 comparably trusted secret store. Remote storage and credential-bearing Arcade
 SSE require HTTPS except for explicit loopback development, and transport
-debugging cannot log callback tokens or API credentials.
+debugging cannot log callback tokens or API credentials. Arcade status events
+are validated, copied, and committed one at a time under per-event and aggregate
+queue budgets; no later cursor can advance past a malformed or failed event.
+The stream is silent by default and reports credential-bearing transport errors
+only as a generic signal. Monitor and daemon startup await retryable ChainTracks
+subscriptions, teardown closes SSE/subscriptions before storage, persisted
+diagnostics are bounded, and monitor operational logging requires the additive
+`MonitorOptions.logging` callback.
+
+An Arcade endpoint that requires an API key takes it as the `arcadeApiKey`
+argument of `createDefaultWalletServicesOptions` (or `arcadeConfig.apiKey`); it
+is sent as `Authorization: Bearer <key>` on broadcast, lookup and SSE requests.
+A refused key (HTTP 401 or 403) is a service error, like a 429 or 5xx: the
+wallet fails over to the next broadcaster or retries, and never marks the
+transaction invalid because of it.
 
 Spending approvals apply to one operation per prompt and are never cached or
 coalesced. Spending-token accounting reads every action page before authorizing
-a spend. Certificate handling also fails closed: direct and issuer-mediated
-acquisition require a valid certifier signature before storage, and identity
-discovery verifies overlay certificates before decrypting or trust-scoring them.
+a spend. `WalletPermissionsManager` resolves a sendMax (`maxPossibleSatoshis`)
+output's funded amount from the signable transaction by locking script before
+billing it, so a `createAction` call funding the wallet's full balance through
+the permissions manager is authorized and verified for its real amount instead
+of the unfunded sentinel. Certificate handling also fails closed: direct and
+issuer-mediated acquisition require a valid certifier signature before
+storage, and identity discovery verifies overlay certificates before
+decrypting or trust-scoring them.
+
+`relinquishOutput` and `internalizeAction` confirm basket membership before
+mutating it. `relinquishOutput` rejects a basket argument that does not match
+the output's actual current basket, or names a basket that does not exist, so
+an application cannot free an outpoint it does not actually hold by basket
+membership. `internalizeAction`'s basket-insertion merge path rejects
+reclassifying an output that already belongs to a different real basket,
+while re-internalizing into the same basket and inserting a currently
+unbasketed (non-managed-change) output both keep working.
 
 Action-batch workspaces now admit only explicitly connected transaction-graph
 members. Unrelated actions stay on their ordinary storage path, while related
@@ -100,12 +199,96 @@ order; and synchronized trackers keep serving last-good local data.
 WhatsOnChain is an optional, rate-limited mainnet/testnet fallback; no key is
 required.
 
+The configured remote ChainTracks service is authoritative for chain view, but
+its response representation is still adversarially validated. HTTP reads have
+whole-body deadlines and byte ceilings, redirects are prohibited, SSE streams
+have event and idle bounds, and network/header/reorganization results must be
+canonical, proof-of-work-valid, and exactly request-bound. Local submitted and
+remote live-header queues are copy-isolated and bounded to prevent a faulty or
+hostile source from retaining unbounded process memory.
+Remote live metadata must be complete and use positive local identities.
+Reorganization deactivation lists must start at the old tip, contain no
+duplicates, form a descending linked chain, and fit their declared depth before
+wallet monitor callbacks receive them. Remote diagnostics are bounded and
+single-line. The monitor independently authenticates and copies custom-adapter
+events, verifies that every configured chain source matches the wallet network,
+and retains at most 4,096 unique deactivated headers by default. Applications
+can lower this with `MonitorOptions.maxQueuedDeactivatedHeaders`. Prepared-proof
+invalidation is coalesced and drained during teardown, while partial event
+subscriptions and rejected host callbacks are contained as bounded monitor
+events. Optional Chaintracks header/reorg push subscriptions no longer gate
+the scheduler: an event source that declares `supportsReorgEvents: false`
+(such as the built-in HTTP-polling `ChaintracksServiceClient`) is never called,
+and a source that fails to subscribe is retried opportunistically on the next
+tick while every other scheduled task keeps running. A genuine configured-chain
+mismatch still fails closed — subscriptions are never registered against a
+`chaintracksWithEvents` source that reports the wrong chain — and is recorded
+as a `chaintracksEventsError` monitor event.
+
+The legacy `BHServiceClient` also validates current canonical headers for every
+Merkle-root verdict. Its compatibility `cache` is diagnostic state only and is
+never trusted, so a rejected root, caller mutation, or reorganization cannot
+turn an old root into authority. Redirects, endpoints, response bodies, ranges,
+hashes, linkage, and proof of work are bounded and checked before use.
+ChainTracks constructors reject malformed networks, recursion limits, and
+ingestor collections; logging is silent unless the host explicitly provides
+the optional logger. Startup awaits and reports initialization failure, failed
+attempts can retry cleanly, and destruction drains sources and storage even
+before readiness. Event subscriptions are bounded, removed on unsubscribe, and
+copy-isolated between listeners.
+
+Local ChainTracks adapters also enforce stored-state integrity. In-memory
+instances do not share live headers, IndexedDB and Knex require unique active
+headers and consecutive parent linkage, and bounded reorganization walks fail
+closed on missing or cyclic state. Knex uses a transaction-held state row to
+serialize competing tip mutations. Apply all ChainTracks Knex migrations before
+startup. MySQL operators should expect the derived live-header cache to be
+cleared once while legacy truncating `VARBINARY(32)` fields are widened to
+`VARCHAR(64)`; authenticated bulk data is retained and repopulates live state.
+Before downgrading to code that predates this repair, stop all ChainTracks
+writes and verify a database plus authenticated-bulk-data backup. Use the
+current `ChaintracksKnexMigrations` source to roll down only the
+`2026-09-17-001 repair MySQL live-header encodings and bulk blob` ledger entry;
+its schema down is intentionally a no-op. Retain the repaired `VARCHAR(64)` and
+`LONGBLOB` columns, the `chaintracks_state` lock row, and authenticated bulk
+files, and validate that state against the older code in a non-production copy
+before starting it. Never roll down the initial migration, recreate the tables,
+or restore truncating `VARBINARY(32)` identifier columns.
+Bulk-file additions and extensions persist before memory changes. Multi-file
+replacements and initial reconciliation commit atomically in the built-in Knex
+and IndexedDB adapters, and failed commits restore the manager's prior state.
+Custom `ChaintracksStorageBulkFileApi` adapters must implement the additive
+`replaceBulkFiles` method before multi-file changes are enabled; older custom
+adapters fail closed instead of risking a durable gap or stale overlap.
+
+WhatsOnChain is authoritative only when explicitly enabled as a fallback chain
+source. Its service-discovered CDN links are untrusted locators, not operator
+configuration: they must be credential-free public HTTPS, with public-address
+DNS pinning in Node. Manifests, binary objects, recent-header JSON, and legacy
+WebSocket frames have byte, count, ordering, handshake, and idle bounds. Every
+candidate is canonical and proof-of-work-valid before its declared target can
+participate in chain-work selection.
+
 Local ChainTracks height reads now use stale-while-revalidate singleflight,
 while immutable bulk objects coalesce misses and back off failed loads. Node
 services can move complete length, digest, linkage, chain-work, genesis, and
 proof-of-work validation into `NodeBulkFileDataValidator`; filesystem
 deployments can pair content-addressed quarantine storage with a crash-safe,
-per-attempt `DurableFileBulkFileDownloadBudget`.
+per-attempt `DurableFileBulkFileDownloadBudget`. The shared ledger serializes
+reservations across processes; a crash-abandoned `<stateFile>.lock` fails
+closed and must be removed only after an operator proves no writer remains.
+Filesystem cache reads allocate no more than the advertised object size plus
+one rejection byte, and writes must match their advertised length and SHA-256.
+Replacement, promotion, and quarantine serialize across processes through a
+per-digest `<digest>.headers.lock`. Like the budget lock, it is never reclaimed
+automatically after a crash; prove no cache writer remains before removing that
+narrow directory. Cache metadata and byte inputs are snapshotted before any
+lock wait.
+
+Legacy filesystem manifests accept only path-free filenames and are never
+replaced merely because a read, permission, size, parse, or integrity check
+failed. Imported/exported files are bounded and must authenticate as one
+contiguous genesis-anchored header chain with matching digests and chain work.
 
 ## Install
 
@@ -266,3 +449,24 @@ See `packages/wallet/wallet-toolbox-examples/src/p2pkh.ts`, `brc29.ts`, `pushdro
 - [Wallet toolbox examples](./wallet-toolbox-examples.md)
 - [Conformance vectors](../../conformance/vectors.md#wallet-brc-100)
 - [Managed-change liquidity policy](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox/docs/managed-change-liquidity.md)
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

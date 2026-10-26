@@ -14,14 +14,14 @@ tags: ['domain', 'network']
 # Network
 
 Publish and resolve large verified UHRP content with CHIRP, or connect to
-Teranode via private DHT and subscribe to real-time blockchain events.
+Teranode's P2P network and subscribe to real-time blockchain events.
 
 ## Packages in this Domain
 
-| Package                                          | Purpose                                                                                  |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| [@bsv/chirp](./chirp.md)                         | Progressively publish and resiliently resolve BRC-167 chunked Merkle content over UHRP   |
-| [@bsv/teranode-listener](./teranode-listener.md) | Subscribe to Teranode P2P topics via libp2p private DHT with gossipsub pub/sub messaging |
+| Package                                          | Purpose                                                                                |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| [@bsv/chirp](./chirp.md)                         | Progressively publish and resiliently resolve BRC-167 chunked Merkle content over UHRP |
+| [@bsv/teranode-listener](./teranode-listener.md) | Subscribe to Teranode P2P topics via libp2p DHT with gossipsub pub/sub messaging       |
 
 ## What You Can Do
 
@@ -31,11 +31,11 @@ Teranode via private DHT and subscribe to real-time blockchain events.
 - **Monitor peer connections** — Handshake messages from connecting peers
 - **Detect rejected transactions** — Receive txid of transactions rejected by network
 - **Custom topic subscription** — Dynamic add/remove of topic callbacks at runtime
-- **Private DHT participation** — Join closed, authenticated peer network with pre-shared key
+- **PNET-compatible DHT participation** — Join mainnet with its public compatibility value or configure a private network PSK
 
 ## Key Concepts
 
-- **Private DHT** — Uses pre-shared key (PSK) for secure, closed peer-to-peer network
+- **PNET DHT** — Uses a 32-byte PNET value for network compatibility; the published mainnet value is not authentication
 - **Gossipsub** — Efficient pub/sub messaging layer for blockchain event distribution
 - **Topic-based subscriptions** — Subscribe to specific events (bitcoin/mainnet-block, bitcoin/mainnet-subtree, etc.)
 - **Bootstrap peers** — Known entry points for discovering other peers in the network
@@ -43,6 +43,7 @@ Teranode via private DHT and subscribe to real-time blockchain events.
 - **Peer discovery** — libp2p Kademlia DHT discovers peers dynamically
 - **Callbacks** — Each topic has own async message handler for processing events
 - **Message format** — Events arrive as raw Uint8Array; caller deserializes (typically BSV transactions/blocks)
+- **Trust boundary** — Topic messages, sender names, and propagation peers are untrusted until application claims are independently verified
 
 ## When to Use
 
@@ -63,7 +64,7 @@ Use network packages when you need to:
 
 ## Architecture Overview
 
-![Network flow: your application subscribes to TeranodeListener which routes through libp2p (private DHT + gossipsub with noise encryption, Kademlia discovery, bootstrap and static peers) over TCP/Noise to Teranode peers in the P2P network](../../assets/diagrams/network-flow.svg)
+![Network flow: your application subscribes to TeranodeListener which routes through libp2p (PNET-compatible DHT plus gossipsub with Noise encryption, Kademlia discovery, bootstrap and static peers) over TCP/Noise to Teranode peers in the P2P network; received claims remain untrusted until independently verified](../../assets/diagrams/network-flow.svg)
 
 ## Topics Available
 

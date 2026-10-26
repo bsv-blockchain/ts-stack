@@ -1,6 +1,21 @@
 import { AuthFetch } from '../auth/clients/AuthFetch.js'
 import { WalletInterface } from '../wallet/Wallet.interfaces.js'
-import * as StorageUtils from './StorageUtils.js'
+import { getURLForFile } from './StorageUtils.js'
+import { toArray, toUTF8Strict } from '../primitives/utils.js'
+import { createPublicHTTPSFetch, isPublicNetworkAddress } from './PublicHTTPSFetch.js'
+
+const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024
+const MAX_SATOSHIS = 21e14
+const UNSAFE_HEADER_NAMES = new Set([
+  'connection',
+  'host',
+  'proxy-authorization',
+  'proxy-connection',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade'
+])
 
 /** Default UHRP storage providers used when the caller passes no host list. */
 export const DEFAULT_UHRP_SERVERS: string[] = [
@@ -16,6 +31,8 @@ export interface UploaderConfig {
   /** Minimum replicas to store the file on. Defaults to 1. */
   resilienceLevel?: number
   wallet: WalletInterface
+  /** Explicit transport injection for controlled/test environments. */
+  fetchClient?: typeof fetch
 }
 
 export interface UploadableFile {
@@ -116,16 +133,155 @@ interface ListUploadsFailure {
 
 type ListUploadsOutcome = ListUploadsSuccess | ListUploadsFailure
 
+function normalizeStorageHost(value: string): string {
+  if (typeof value !== 'string' || value !== value.trim()) {
+    throw new Error('Storage provider must be an exact HTTPS origin.')
+  }
+  let host: URL
+  try {
+    host = new URL(value)
+  } catch {
+    throw new Error('Storage provider must be an absolute HTTPS origin.')
+  }
+  if (
+    host.protocol !== 'https:' ||
+    host.username !== '' ||
+    host.password !== '' ||
+    host.search !== '' ||
+    host.hash !== '' ||
+    (host.pathname !== '' && host.pathname !== '/')
+  ) {
+    throw new Error('Storage provider must be a credential-free HTTPS origin.')
+  }
+  const literal = /^[\d.]+$/.test(host.hostname) || host.hostname.includes(':')
+  if (literal && !isPublicNetworkAddress(host.hostname)) {
+    throw new Error('Storage provider must not target a private or special address.')
+  }
+  return host.origin
+}
+
+function providerRecord(value: unknown): Record<string, any> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Storage provider returned a malformed JSON object.')
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== null && prototype !== Object.prototype) {
+    throw new Error('Storage provider returned an unsafe JSON object.')
+  }
+  return value as Record<string, any>
+}
+
+async function readProviderJSON(response: Response): Promise<Record<string, any>> {
+  const declared = response.headers.get('Content-Length')
+  let declaredBytes: number | undefined
+  if (declared !== null) {
+    if (!/^\d+$/.test(declared) || Number(declared) > MAX_PROVIDER_RESPONSE_BYTES) {
+      throw new Error('Storage provider response exceeds the configured size limit.')
+    }
+    declaredBytes = Number(declared)
+  }
+  if (response.body == null) throw new Error('Storage provider returned an empty response.')
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.length
+    if (
+      !Number.isSafeInteger(total) ||
+      total > MAX_PROVIDER_RESPONSE_BYTES ||
+      (declaredBytes !== undefined && total > declaredBytes)
+    ) {
+      await reader.cancel('Storage provider response exceeds the configured size limit')
+      throw new Error('Storage provider response exceeds the configured size limit.')
+    }
+    chunks.push(value)
+  }
+  if (declaredBytes !== undefined && total !== declaredBytes) {
+    throw new Error('Storage provider response differs from its declared length.')
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.length
+  }
+  try {
+    return providerRecord(JSON.parse(toUTF8Strict(bytes)))
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith('Storage provider returned')) {
+      throw error
+    }
+    throw new Error('Storage provider returned malformed JSON.', { cause: error })
+  }
+}
+
+function validateUploadHeaders(
+  value: unknown,
+  expectedContentLength: number
+): Record<string, string> {
+  const record = providerRecord(value)
+  const headers: Record<string, string> = Object.create(null)
+  let encodedBytes = 0
+  for (const key of Reflect.ownKeys(record)) {
+    if (
+      typeof key !== 'string' ||
+      key === '__proto__' ||
+      key === 'constructor' ||
+      key === 'prototype'
+    ) {
+      throw new Error('Upload route returned an unsafe required header name.')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(record, key)
+    if (descriptor == null || !('value' in descriptor)) {
+      throw new Error('Upload route returned an invalid required header.')
+    }
+    const name = key.toLowerCase()
+    if (!/^[!#$%&'*+.^_`|~0-9a-z-]+$/.test(name) || UNSAFE_HEADER_NAMES.has(name)) {
+      throw new Error('Upload route returned an unsafe required header name.')
+    }
+    const headerValue = descriptor.value
+    if (name === 'content-length') {
+      const canonical =
+        typeof headerValue === 'number' && Number.isSafeInteger(headerValue)
+          ? String(headerValue)
+          : headerValue
+      if (
+        typeof canonical !== 'string' ||
+        !/^(0|[1-9]\d*)$/.test(canonical) ||
+        Number(canonical) !== expectedContentLength
+      ) {
+        throw new Error('Upload route returned a mismatched Content-Length header.')
+      }
+      encodedBytes += name.length + canonical.length
+      headers[name] = canonical
+      continue
+    }
+    if (typeof headerValue !== 'string') {
+      throw new Error('Upload route returned an invalid required header.')
+    }
+    if (/[\r\n]/.test(headerValue)) {
+      throw new Error('Upload route returned an unsafe required header value.')
+    }
+    encodedBytes += toArray(name, 'utf8').length + toArray(headerValue, 'utf8').length
+    if (encodedBytes > 64 * 1024) {
+      throw new Error('Upload route returned too many required header bytes.')
+    }
+    headers[name] = headerValue
+  }
+  return headers
+}
+
 /**
  * Client for publishing, finding, listing, and renewing UHRP-hosted files
  * across one or more storage providers.
  */
 export class StorageUploader {
   private readonly authFetch: AuthFetch
+  private readonly fetchClient: typeof fetch
   private readonly hosts: string[]
   private readonly resilienceLevel: number
-  /** Primary host used for non-upload operations. */
-  private readonly baseURL: string
 
   constructor(config: UploaderConfig) {
     const legacySingleHost =
@@ -148,28 +304,48 @@ export class StorageUploader {
       throw new Error('resilienceLevel must be a positive integer.')
     }
 
+    hosts = Array.from(new Set(hosts.map(normalizeStorageHost)))
+
     // Legacy `storageURL` callers must not start demanding extra replicas.
     this.resilienceLevel = legacySingleHost ? 1 : requestedLevel
+    if (this.resilienceLevel > hosts.length) {
+      throw new Error('resilienceLevel cannot exceed the number of unique storage providers.')
+    }
     this.hosts = hosts
-    this.baseURL = hosts[0]
-    this.authFetch = new AuthFetch(config.wallet)
+    this.fetchClient = config.fetchClient ?? createPublicHTTPSFetch()
+    this.authFetch = new AuthFetch(
+      config.wallet,
+      undefined,
+      undefined,
+      undefined,
+      {},
+      this.fetchClient
+    )
   }
 
   /** Returns `null` when the provider is unreachable or errors out. */
-  private async getQuote(
+  async #getQuote(
     host: string,
     fileSize: number,
     retentionPeriod: number
   ): Promise<ProviderQuote | null> {
     try {
-      const response = await fetch(`${host}/quote`, {
+      const response = await this.fetchClient(`${host}/quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileSize, retentionPeriod })
+        body: JSON.stringify({ fileSize, retentionPeriod }),
+        redirect: 'error'
       })
       if (!response.ok) return null
-      const data = (await response.json()) as { quote?: number; status?: string }
-      if (data.status === 'error' || typeof data.quote !== 'number') return null
+      const data = await readProviderJSON(response)
+      if (
+        data.status === 'error' ||
+        !Number.isSafeInteger(data.quote) ||
+        data.quote < 0 ||
+        data.quote > MAX_SATOSHIS
+      ) {
+        return null
+      }
       return { host, amount: data.quote }
     } catch {
       return null
@@ -177,7 +353,7 @@ export class StorageUploader {
   }
 
   /** Drives the authenticated `/upload` route; `AuthFetch` handles the 402 payment flow. */
-  private async getUploadURL(
+  async #getUploadURL(
     host: string,
     fileSize: number,
     retentionPeriod: number
@@ -194,35 +370,39 @@ export class StorageUploader {
     if (!response.ok) {
       throw new Error(`Upload info request failed: HTTP ${response.status}`)
     }
-    const data = (await response.json()) as {
-      status: string
-      uploadURL: string
-      amount?: number
-      requiredHeaders: Record<string, string>
-    }
-    if (data.status === 'error') {
+    const data = await readProviderJSON(response)
+    if (data.status !== 'success') {
       throw new Error('Upload route returned an error.')
+    }
+    if (typeof data.uploadURL !== 'string') throw new Error('Upload route omitted uploadURL.')
+    const requiredHeaders = validateUploadHeaders(data.requiredHeaders, fileSize)
+    if (
+      data.amount !== undefined &&
+      (!Number.isSafeInteger(data.amount) || data.amount < 0 || data.amount > MAX_SATOSHIS)
+    ) {
+      throw new Error('Upload route returned an invalid amount.')
     }
     return {
       uploadURL: data.uploadURL,
-      requiredHeaders: data.requiredHeaders,
+      requiredHeaders,
       amount: data.amount
     }
   }
 
-  private async putFile(
+  async #putFile(
     uploadURL: string,
     data: Uint8Array,
     contentType: string,
     requiredHeaders: Record<string, string>
   ): Promise<void> {
-    const response = await fetch(uploadURL, {
+    const response = await this.fetchClient(uploadURL, {
       method: 'PUT',
       body: data as BodyInit,
       headers: {
         'Content-Type': contentType,
         ...requiredHeaders
-      }
+      },
+      redirect: 'error'
     })
     if (!response.ok) {
       throw new Error(`File upload failed: HTTP ${response.status}`)
@@ -234,7 +414,7 @@ export class StorageUploader {
    * remaining quotes still needed so we never over-query once the quote
    * budget is satisfied.
    */
-  private async collectQuotes(
+  async #collectQuotes(
     fileSize: number,
     retentionPeriod: number,
     maxNeeded: number
@@ -246,7 +426,7 @@ export class StorageUploader {
       const batch = this.hosts.slice(index, index + remaining)
       index += batch.length
       const results = await Promise.all(
-        batch.map(async host => await this.getQuote(host, fileSize, retentionPeriod))
+        batch.map(async host => await this.#getQuote(host, fileSize, retentionPeriod))
       )
       for (const quote of results) {
         if (quote !== null && quotes.length < maxNeeded) {
@@ -267,7 +447,13 @@ export class StorageUploader {
     retentionPeriod: number
   }): Promise<EstimateCostResult> {
     const { fileSize, retentionPeriod } = params
-    const quotes = await this.collectQuotes(fileSize, retentionPeriod, this.resilienceLevel * 2)
+    if (!Number.isSafeInteger(fileSize) || fileSize < 0) {
+      throw new RangeError('fileSize must be a non-negative safe integer.')
+    }
+    if (!Number.isSafeInteger(retentionPeriod) || retentionPeriod < 1) {
+      throw new RangeError('retentionPeriod must be a positive safe integer.')
+    }
+    const quotes = await this.#collectQuotes(fileSize, retentionPeriod, this.resilienceLevel * 2)
     quotes.sort((a, b) => a.amount - b.amount)
 
     const meetsResilienceThreshold = quotes.length >= this.resilienceLevel
@@ -292,6 +478,30 @@ export class StorageUploader {
     retentionPeriod: number
   }): Promise<UploadFileResult> {
     const { file, retentionPeriod } = params
+    if (file == null || typeof file !== 'object') throw new TypeError('file must be an object.')
+    if (
+      typeof file.type !== 'string' ||
+      file.type.length < 1 ||
+      file.type.length > 255 ||
+      /[\r\n]/.test(file.type)
+    ) {
+      throw new TypeError('file.type must be a valid MIME type string.')
+    }
+    if (!(file.data instanceof Uint8Array) && !Array.isArray(file.data)) {
+      throw new TypeError('file.data must be a byte array.')
+    }
+    if (Array.isArray(file.data)) {
+      for (let i = 0; i < file.data.length; i++) {
+        if (
+          !Object.prototype.hasOwnProperty.call(file.data, i) ||
+          !Number.isInteger(file.data[i]) ||
+          file.data[i] < 0 ||
+          file.data[i] > 255
+        ) {
+          throw new TypeError('file.data must contain only bytes.')
+        }
+      }
+    }
     const data = file.data instanceof Uint8Array ? file.data : Uint8Array.from(file.data)
     const fileSize = data.byteLength
 
@@ -304,19 +514,19 @@ export class StorageUploader {
       )
     }
 
-    const uhrpURL = StorageUtils.getURLForFile(data)
+    const uhrpURL = getURLForFile(data)
     const hostedBy: string[] = []
     const failures: Array<{ host: string; error: string }> = []
 
     for (const quote of estimate.quotes) {
       if (hostedBy.length >= this.resilienceLevel) break
       try {
-        const { uploadURL, requiredHeaders } = await this.getUploadURL(
+        const { uploadURL, requiredHeaders } = await this.#getUploadURL(
           quote.host,
           fileSize,
           retentionPeriod
         )
-        await this.putFile(uploadURL, data, file.type, requiredHeaders)
+        await this.#putFile(uploadURL, data, file.type, requiredHeaders)
         hostedBy.push(quote.host)
       } catch (e) {
         failures.push({ host: quote.host, error: (e as Error).message })
@@ -338,7 +548,7 @@ export class StorageUploader {
     }
   }
 
-  private async findFileAtHost(host: string, uhrpUrl: string): Promise<FindFileData> {
+  async #findFileAtHost(host: string, uhrpUrl: string): Promise<FindFileData> {
     const url = new URL(`${host}/find`)
     url.searchParams.set('uhrpUrl', uhrpUrl)
 
@@ -349,22 +559,28 @@ export class StorageUploader {
       throw new Error(`findFile request failed: HTTP ${response.status}`)
     }
 
-    const data = (await response.json()) as {
-      status: string
-      data: { name: string; size: string; mimeType: string; expiryTime: number }
-      code?: string
-      description?: string
-    }
+    const data = await readProviderJSON(response)
 
     if (data.status === 'error') {
       const errCode = data.code ?? 'unknown-code'
       const errDesc = data.description ?? 'no-description'
       throw new Error(`findFile returned an error: ${errCode} - ${errDesc}`)
     }
-    return data.data
+    if (data.status !== 'success') throw new Error('findFile returned an invalid status.')
+    const file = providerRecord(data.data)
+    if (
+      typeof file.name !== 'string' ||
+      typeof file.size !== 'string' ||
+      typeof file.mimeType !== 'string' ||
+      !Number.isSafeInteger(file.expiryTime) ||
+      file.expiryTime < 0
+    ) {
+      throw new Error('findFile returned malformed file metadata.')
+    }
+    return file as FindFileData
   }
 
-  private async renewFileAtHost(
+  async #renewFileAtHost(
     host: string,
     uhrpUrl: string,
     additionalMinutes: number
@@ -378,14 +594,7 @@ export class StorageUploader {
       throw new Error(`renewFile request failed: HTTP ${response.status}`)
     }
 
-    const data = (await response.json()) as {
-      status: string
-      prevExpiryTime?: number
-      newExpiryTime?: number
-      amount?: number
-      code?: string
-      description?: string
-    }
+    const data = await readProviderJSON(response)
 
     if (data.status === 'error') {
       const errCode = data.code ?? 'unknown-code'
@@ -393,6 +602,15 @@ export class StorageUploader {
       throw new Error(`renewFile returned an error: ${errCode} - ${errDesc}`)
     }
 
+    if (data.status !== 'success') throw new Error('renewFile returned an invalid status.')
+    for (const field of ['prevExpiryTime', 'newExpiryTime', 'amount']) {
+      if (
+        data[field] !== undefined &&
+        (!Number.isSafeInteger(data[field]) || data[field] < 0 || data[field] > MAX_SATOSHIS)
+      ) {
+        throw new Error(`renewFile returned an invalid ${field}.`)
+      }
+    }
     return {
       status: data.status,
       prevExpiryTime: data.prevExpiryTime,
@@ -402,10 +620,10 @@ export class StorageUploader {
   }
 
   /** Intersects `hostedBy` with the configured host set; throws when empty. */
-  private resolveTargets(hostedBy?: string[]): string[] {
+  #resolveTargets(hostedBy?: string[]): string[] {
     if (hostedBy === undefined) return this.hosts
     const configured = new Set(this.hosts)
-    const intersection = hostedBy.filter(h => configured.has(h))
+    const intersection = Array.from(new Set(hostedBy.filter(h => configured.has(h))))
     if (intersection.length === 0) {
       throw new Error(
         'hostedBy did not intersect any configured provider. ' +
@@ -422,12 +640,12 @@ export class StorageUploader {
    * legacy error-message contract verbatim.
    */
   public async findFile(uhrpUrl: string, options: HostScopeOptions = {}): Promise<FindFileData> {
-    const targets = this.resolveTargets(options.hostedBy)
+    const targets = this.#resolveTargets(options.hostedBy)
 
     const outcomes = await Promise.all(
       targets.map(async host => {
         try {
-          return { ok: true, host, data: await this.findFileAtHost(host, uhrpUrl) } as const
+          return { ok: true, host, data: await this.#findFileAtHost(host, uhrpUrl) } as const
         } catch (e) {
           return { ok: false, host, error: e as Error } as const
         }
@@ -454,11 +672,11 @@ export class StorageUploader {
     }
   }
 
-  private async listUploadsAtTargets(targets: string[]): Promise<ListUploadsOutcome[]> {
+  async #listUploadsAtTargets(targets: string[]): Promise<ListUploadsOutcome[]> {
     return await Promise.all(
       targets.map(async host => {
         try {
-          return { ok: true, host, data: await this.listUploadsAtHost(host) } as const
+          return { ok: true, host, data: await this.#listUploadsAtHost(host) } as const
         } catch (error) {
           return { ok: false, host, error: error as Error } as const
         }
@@ -466,7 +684,7 @@ export class StorageUploader {
     )
   }
 
-  private requireListUploadSuccesses(
+  #requireListUploadSuccesses(
     outcomes: ListUploadsOutcome[],
     targetCount: number
   ): ListUploadsSuccess[] {
@@ -479,26 +697,31 @@ export class StorageUploader {
     throw new Error(`listUploads: no configured host returned a listing — ${detail}`)
   }
 
-  private mergeUploadListings(
+  #mergeUploadListings(
     successes: ListUploadsSuccess[]
   ): Array<{ uhrpUrl: string; expiryTime: number; hostedBy: string[] }> {
     const merged = new Map<string, { uhrpUrl: string; expiryTime: number; hostedBy: string[] }>()
     for (const { host, data } of successes) {
       if (!Array.isArray(data)) continue
-      for (const entry of data) this.mergeUploadEntry(merged, host, entry)
+      for (const entry of data) this.#mergeUploadEntry(merged, host, entry)
     }
     return Array.from(merged.values())
   }
 
-  private mergeUploadEntry(
+  #mergeUploadEntry(
     merged: Map<string, { uhrpUrl: string; expiryTime: number; hostedBy: string[] }>,
     host: string,
     entry: any
   ): void {
     const key = entry?.uhrpUrl
-    if (typeof key !== 'string') return
-    const rawExpiry = Number(entry.expiryTime)
-    const expiry = Number.isFinite(rawExpiry) ? rawExpiry : 0
+    if (
+      typeof key !== 'string' ||
+      !Number.isSafeInteger(entry.expiryTime) ||
+      entry.expiryTime < 0
+    ) {
+      return
+    }
+    const expiry = entry.expiryTime
     const existing = merged.get(key)
     if (existing === undefined) {
       merged.set(key, { uhrpUrl: key, expiryTime: expiry, hostedBy: [host] })
@@ -514,23 +737,26 @@ export class StorageUploader {
    * the rest. Single-host configurations preserve the legacy error contract.
    */
   public async listUploads(options: HostScopeOptions = {}): Promise<any> {
-    const targets = this.resolveTargets(options.hostedBy)
-    const outcomes = await this.listUploadsAtTargets(targets)
-    const successes = this.requireListUploadSuccesses(outcomes, targets.length)
-    return targets.length === 1 ? successes[0].data : this.mergeUploadListings(successes)
+    const targets = this.#resolveTargets(options.hostedBy)
+    const outcomes = await this.#listUploadsAtTargets(targets)
+    const successes = this.#requireListUploadSuccesses(outcomes, targets.length)
+    return targets.length === 1 ? successes[0].data : this.#mergeUploadListings(successes)
   }
 
-  private async listUploadsAtHost(host: string): Promise<any> {
+  async #listUploadsAtHost(host: string): Promise<any> {
     const response = await this.authFetch.fetch(`${host}/list`, { method: 'GET' })
     if (!response.ok) {
       throw new Error(`listUploads request failed: HTTP ${response.status}`)
     }
 
-    const data = await response.json()
+    const data = await readProviderJSON(response)
     if (data.status === 'error') {
       const errCode = (data.code as string) ?? 'unknown-code'
       const errDesc = (data.description as string) ?? 'no-description'
       throw new Error(`listUploads returned an error: ${errCode} - ${errDesc}`)
+    }
+    if (data.status !== 'success' || !Array.isArray(data.uploads)) {
+      throw new Error('listUploads returned malformed upload data.')
     }
     return data.uploads
   }
@@ -547,11 +773,14 @@ export class StorageUploader {
     additionalMinutes: number,
     options: HostScopeOptions = {}
   ): Promise<RenewFileResult> {
-    const targets = this.resolveTargets(options.hostedBy)
+    if (!Number.isSafeInteger(additionalMinutes) || additionalMinutes < 1) {
+      throw new RangeError('additionalMinutes must be a positive safe integer.')
+    }
+    const targets = this.#resolveTargets(options.hostedBy)
 
     // Single-host: pass the server's error through unchanged for legacy callers.
     if (targets.length === 1) {
-      const data = await this.renewFileAtHost(targets[0], uhrpUrl, additionalMinutes)
+      const data = await this.#renewFileAtHost(targets[0], uhrpUrl, additionalMinutes)
       return {
         status: data.status,
         prevExpiryTime: data.prevExpiryTime,
@@ -563,7 +792,7 @@ export class StorageUploader {
     const perHost: Array<{ result: RenewPerHostResult; raw?: Error }> = await Promise.all(
       targets.map(async host => {
         try {
-          const data = await this.renewFileAtHost(host, uhrpUrl, additionalMinutes)
+          const data = await this.#renewFileAtHost(host, uhrpUrl, additionalMinutes)
           return {
             result: {
               host,

@@ -40,7 +40,7 @@ function request() {
 
 function store() {
   return {
-    withCommitLock: jest.fn(async (_uploadId, operation) => await operation()),
+    withCommitLock: jest.fn(async (_uploadId, _rootIdentifier, operation) => await operation()),
     getSession: jest.fn(async () => ({ retentionSeconds: '3600', logicalLength: null })),
     getCommit: jest.fn(async () => null),
     readStagedObject: jest.fn(),

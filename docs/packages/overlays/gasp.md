@@ -3,7 +3,7 @@ id: pkg-gasp
 title: '@bsv/gasp'
 kind: package
 domain: overlays
-version: '1.3.6'
+version: '1.3.9'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
@@ -15,6 +15,10 @@ tags: [overlay, sync, gasp, graph]
 ---
 
 # @bsv/gasp
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Graph Aware Sync Protocol — synchronize transaction graphs between overlay nodes with incremental building, SPV validation, and bandwidth efficiency.
 
@@ -232,6 +236,11 @@ await gaspSequential.sync('https://peer.example.com')
 6. **Graph validation must throw** — If invalid, `validateGraphAnchor()` must throw; returning gracefully doesn't stop sync
 7. **Unidirectional limitation** — Don't call `submitNode()` in unidirectional mode; remote won't process
 8. **Sequential overhead** — Sequential mode slower; use only if parallel causes DB locking
+
+In bidirectional mode, `submitNode()` does not carry the `spentBy` parent
+outpoint. The receiver must already have the parent needed to validate a pushed
+child, request it in a subsequent synchronization round, or reject the graph.
+Never infer or accept an unknown parent edge from the pushed child alone.
 
 ## Related packages
 

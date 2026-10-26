@@ -6,6 +6,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
+| [CanonicalPushDropLimits](#interface-canonicalpushdroplimits) |
 | [FormatPreimageParams](#interface-formatpreimageparams) |
 | [ScriptChunk](#interface-scriptchunk) |
 | [ScriptTemplate](#interface-scripttemplate) |
@@ -17,6 +18,19 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 
+### Interface: CanonicalPushDropLimits
+
+```ts
+export interface CanonicalPushDropLimits {
+    fieldCount: number | readonly number[];
+    maximumFieldBytes: number;
+    maximumPayloadBytes: number;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Interface: FormatPreimageParams
 
 Parameters for formatting the transaction preimage
@@ -29,12 +43,13 @@ export interface FormatPreimageParams {
     sourceTXID: string;
     sourceSatoshis: number;
     lockingScript: Script;
-    otherInputs: Transaction["inputs"];
+    otherInputs?: Transaction["inputs"];
+    allInputs?: Transaction["inputs"];
     inputSequence?: number;
 }
 ```
 
-See also: [Script](./script.md#class-script), [Transaction](./transaction.md#class-transaction)
+See also: [Script](./script.md#class-script), [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -47,6 +62,7 @@ A representation of a chunk of a script, which includes an opcode. For push oper
 export default interface ScriptChunk {
     op: number;
     data?: number[];
+    invalidLength?: boolean;
 }
 ```
 
@@ -105,8 +121,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ### Interface: SpendVerificationContext
 
-Explicit chain context for script verification. Transaction version is script
-data and is not a policy/consensus selector.
+Explicit chain context for script verification.
+
+Transaction version is script data, not a reliable signal for whether a
+caller is asking for consensus or policy validation. Backends should use
+this context when it is supplied and retain their compatibility behavior
+only when it is omitted.
 
 ```ts
 export default interface SpendVerificationContext {
@@ -117,23 +137,76 @@ export default interface SpendVerificationContext {
 }
 ```
 
+See also: [string](./remittance.md#function-string)
+
+#### Property blockHeight
+
+Height of the block against which the spend is evaluated.
+
+```ts
+blockHeight?: number
+```
+
+#### Property consensus
+
+`true` selects consensus rules; `false` permits policy validation.
+
+```ts
+consensus: boolean
+```
+
+#### Property utxoHeight
+
+Height at which the source output was mined.
+
+```ts
+utxoHeight?: number
+```
+
+#### Property verifyFlags
+
+Optional backend-specific script verification flags.
+
+```ts
+verifyFlags?: string | string[]
+```
+See also: [string](./remittance.md#function-string)
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 ### Interface: SpendVerifierInterface
-
-An asynchronous backend capable of validating a single Spend-shaped input.
-The explicit context is authoritative when supplied.
 
 ```ts
 export default interface SpendVerifierInterface {
     isReady?: () => boolean;
     shouldVerifySpend?: (spend: Spend, context?: SpendVerificationContext) => boolean;
     verifySpend: (spend: Spend, context?: SpendVerificationContext) => Promise<boolean>;
+    verifySpendsBatch?: (items: ReadonlyArray<Partial<SpendVerificationContext> & {
+        spend: Spend;
+    }>) => Promise<boolean[]>;
     verifySpendSync?: (spend: Spend, context?: SpendVerificationContext) => boolean;
 }
 ```
 
+See also: [Spend](./script.md#class-spend), [SpendVerificationContext](./script.md#interface-spendverificationcontext)
+
+#### Property isReady
+
+Optional synchronous readiness signal for compatibility APIs.
+
+```ts
+isReady?: () => boolean
+```
+
+#### Property shouldVerifySpend
+
+Optionally decide whether this backend should handle the Spend now.
+Returning false preserves the existing synchronous JavaScript validator.
+
+```ts
+shouldVerifySpend?: (spend: Spend, context?: SpendVerificationContext) => boolean
+```
 See also: [Spend](./script.md#class-spend), [SpendVerificationContext](./script.md#interface-spendverificationcontext)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -166,8 +239,8 @@ Inherits all properties and methods from the Script class.
 
 ```ts
 export default class LockingScript extends Script {
-    isLockingScript(): boolean 
-    isUnlockingScript(): boolean 
+    override isLockingScript(): boolean
+    override isUnlockingScript(): boolean
 }
 ```
 
@@ -176,7 +249,7 @@ See also: [Script](./script.md#class-script)
 #### Method isLockingScript
 
 ```ts
-isLockingScript(): boolean 
+override isLockingScript(): boolean
 ```
 
 Returns
@@ -186,7 +259,7 @@ Always returns true for a LockingScript instance.
 #### Method isUnlockingScript
 
 ```ts
-isUnlockingScript(): boolean 
+override isUnlockingScript(): boolean
 ```
 
 Returns
@@ -204,24 +277,24 @@ This class provides methods to create Pay To Public Key Hash locking and unlocki
 
 ```ts
 export default class P2PKH implements ScriptTemplate {
-    lock(pubkeyhash: string | number[]): LockingScript 
+    lock(pubkeyhash: string | number[]): LockingScript
     unlock(privateKey: PrivateKey, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay: boolean = false, sourceSatoshis?: number, lockingScript?: Script): {
         sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
         estimateLength: () => Promise<108>;
-    } 
+    }
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript), [PrivateKey](./primitives.md#class-privatekey), [Script](./script.md#class-script), [ScriptTemplate](./script.md#interface-scripttemplate), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
+See also: [LockingScript](./script.md#class-lockingscript), [PrivateKey](./primitives.md#class-privatekey), [Script](./script.md#class-script), [ScriptTemplate](./script.md#interface-scripttemplate), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string)
 
 #### Method lock
 
 Creates a P2PKH locking script for a given public key hash or address string
 
 ```ts
-lock(pubkeyhash: string | number[]): LockingScript 
+lock(pubkeyhash: string | number[]): LockingScript
 ```
-See also: [LockingScript](./script.md#class-lockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [string](./remittance.md#function-string)
 
 Returns
 
@@ -245,7 +318,7 @@ The returned object contains:
 unlock(privateKey: PrivateKey, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay: boolean = false, sourceSatoshis?: number, lockingScript?: Script): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
     estimateLength: () => Promise<108>;
-} 
+}
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [Script](./script.md#class-script), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
 
@@ -278,26 +351,26 @@ export default class PushDrop implements ScriptTemplate {
     static decode(script: LockingScript, lockPosition: "before" | "after" = "before"): {
         lockingPublicKey: PublicKey;
         fields: number[][];
-    } 
-    constructor(wallet: WalletInterface, originator?: string) 
-    async lock(fields: number[][], protocolID: WalletProtocol, keyID: string, counterparty: string, forSelf = false, includeSignature = true, lockPosition: "before" | "after" = "before"): Promise<LockingScript> 
+    }
+    constructor(wallet: WalletInterface, originator?: string)
+    async lock(fields: number[][], protocolID: WalletProtocol, keyID: string, counterparty: string, forSelf = false, includeSignature = true, lockPosition: "before" | "after" = "before"): Promise<LockingScript>
     unlock(protocolID: WalletProtocol, keyID: string, counterparty: string, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay = false, sourceSatoshis?: number, lockingScript?: LockingScript): {
         sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
         estimateLength: () => Promise<73>;
-    } 
+    }
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript), [PublicKey](./primitives.md#class-publickey), [ScriptTemplate](./script.md#interface-scripttemplate), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [WalletInterface](./wallet.md#interface-walletinterface), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign)
+See also: [LockingScript](./script.md#class-lockingscript), [PublicKey](./primitives.md#class-publickey), [ScriptTemplate](./script.md#interface-scripttemplate), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [WalletInterface](./wallet.md#interface-walletinterface), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs a new instance of the PushDrop class.
 
 ```ts
-constructor(wallet: WalletInterface, originator?: string) 
+constructor(wallet: WalletInterface, originator?: string)
 ```
-See also: [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [WalletInterface](./wallet.md#interface-walletinterface), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -314,7 +387,7 @@ Decodes a PushDrop script back into its token fields and the locking public key.
 static decode(script: LockingScript, lockPosition: "before" | "after" = "before"): {
     lockingPublicKey: PublicKey;
     fields: number[][];
-} 
+}
 ```
 See also: [LockingScript](./script.md#class-lockingscript), [PublicKey](./primitives.md#class-publickey)
 
@@ -334,9 +407,9 @@ Argument Details
 Creates a PushDrop locking script with arbitrary data fields and a public key lock.
 
 ```ts
-async lock(fields: number[][], protocolID: WalletProtocol, keyID: string, counterparty: string, forSelf = false, includeSignature = true, lockPosition: "before" | "after" = "before"): Promise<LockingScript> 
+async lock(fields: number[][], protocolID: WalletProtocol, keyID: string, counterparty: string, forSelf = false, includeSignature = true, lockPosition: "before" | "after" = "before"): Promise<LockingScript>
 ```
-See also: [LockingScript](./script.md#class-lockingscript), [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [LockingScript](./script.md#class-lockingscript), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
 
@@ -365,9 +438,9 @@ Creates an unlocking script for spending a PushDrop token output.
 unlock(protocolID: WalletProtocol, keyID: string, counterparty: string, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay = false, sourceSatoshis?: number, lockingScript?: LockingScript): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
     estimateLength: () => Promise<73>;
-} 
+}
 ```
-See also: [LockingScript](./script.md#class-lockingscript), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign)
+See also: [LockingScript](./script.md#class-lockingscript), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string)
 
 Returns
 
@@ -404,12 +477,12 @@ This class provides methods to create R Puzzle and R Puzzle Hash locking and unl
 ```ts
 export default class RPuzzle implements ScriptTemplate {
     type: "raw" | "SHA1" | "SHA256" | "HASH256" | "RIPEMD160" | "HASH160" = "raw";
-    constructor(type: "raw" | "SHA1" | "SHA256" | "HASH256" | "RIPEMD160" | "HASH160" = "raw") 
-    lock(value: number[]): LockingScript 
+    constructor(type: "raw" | "SHA1" | "SHA256" | "HASH256" | "RIPEMD160" | "HASH160" = "raw")
+    lock(value: number[]): LockingScript
     unlock(k: BigNumber, privateKey: PrivateKey, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay: boolean = false): {
         sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
         estimateLength: () => Promise<108>;
-    } 
+    }
 }
 ```
 
@@ -418,7 +491,7 @@ See also: [BigNumber](./primitives.md#class-bignumber), [LockingScript](./script
 #### Constructor
 
 ```ts
-constructor(type: "raw" | "SHA1" | "SHA256" | "HASH256" | "RIPEMD160" | "HASH160" = "raw") 
+constructor(type: "raw" | "SHA1" | "SHA256" | "HASH256" | "RIPEMD160" | "HASH160" = "raw")
 ```
 
 Argument Details
@@ -431,7 +504,7 @@ Argument Details
 Creates an R puzzle locking script for a given R value or R value hash.
 
 ```ts
-lock(value: number[]): LockingScript 
+lock(value: number[]): LockingScript
 ```
 See also: [LockingScript](./script.md#class-lockingscript)
 
@@ -457,7 +530,7 @@ The returned object contains:
 unlock(k: BigNumber, privateKey: PrivateKey, signOutputs: "all" | "none" | "single" = "all", anyoneCanPay: boolean = false): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
     estimateLength: () => Promise<108>;
-} 
+}
 ```
 See also: [BigNumber](./primitives.md#class-bignumber), [PrivateKey](./primitives.md#class-privatekey), [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
 
@@ -483,38 +556,71 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export default class Script {
-    static fromASM(asm: string): Script 
-    static fromHex(hex: string): Script 
-    static fromBinary(bin: number[]): Script 
-    constructor(chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true) 
-    get chunks(): ScriptChunk[] 
-    set chunks(value: ScriptChunk[]) 
-    toASM(): string 
-    toHex(): string 
-    toBinary(): number[] 
-    toUint8Array(): Uint8Array 
-    writeScript(script: Script): Script 
-    writeOpCode(op: number): Script 
-    setChunkOpCode(i: number, op: number): Script 
-    writeBn(bn: BigNumber): Script 
-    writeBin(bin: number[]): Script 
-    writeNumber(num: number): Script 
-    removeCodeseparators(): Script 
-    findAndDelete(script: Script): Script 
-    isPushOnly(): boolean 
-    isLockingScript(): boolean 
-    isUnlockingScript(): boolean 
+    #_chunks: ScriptChunk[];
+    #parsed: boolean;
+    #rawBytesCache?: Uint8Array;
+    #hexCache?: string;
+    #chunkCacheState?: Array<{
+        ref: ScriptChunk;
+        op: number;
+        dataRef?: number[];
+        data?: number[];
+    }>;
+    static fromASM(asm: string): Script
+    static #pushdataOpCodeNum(len: number): number
+    static #parseASMToken(tokens: string[], i: number): {
+        chunk: ScriptChunk;
+        advance: number;
+    }
+    static fromHex(hex: string): Script
+    static fromBinary(bin: number[] | Uint8Array): Script
+    static fromBinaryView(bin: Uint8Array): Script
+    constructor(chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true)
+    get chunks(): ScriptChunk[]
+    set chunks(value: ScriptChunk[])
+    #ensureParsed(): void
+    toASM(): string
+    toHex(): string
+    toBinary(): number[]
+    toUint8Array(): Uint8Array
+    [serializedBytes](): Uint8Array
+    writeScript(script: Script): this
+    writeOpCode(op: number): this
+    setChunkOpCode(i: number, op: number): this
+    writeBn(bn: BigNumber): this
+    writeBin(bin: number[]): this
+    writeNumber(num: number): this
+    removeCodeseparators(): this
+    findAndDelete(script: Script): this
+    isPushOnly(): boolean
+    isLockingScript(): boolean
+    isUnlockingScript(): boolean
+    #serializeChunksToBytes(): Uint8Array
+    #invalidateSerializationCaches(): void
+    #captureChunkCacheState(): void
+    #chunkCacheMatchesState(): boolean
+    #getSerializedBytes(): Uint8Array
+    static #writeChunkData(target: Uint8Array, offset: number, op: number, data: number[]): number
+    static #readPushdataLength(op: number, bytes: ArrayLike<number>, pos: number, length: number): {
+        len: number;
+        newPos: number;
+        hasLength: boolean;
+    }
+    static #parseChunks(bytes: ArrayLike<number>): ScriptChunk[]
+    static #removeOpcodeBytes(bytes: ArrayLike<number>, opcode: number): number[]
+    static #copyRange(bytes: ArrayLike<number>, start: number, end: number): number[]
+    #_chunkToString(chunk: ScriptChunk): string
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [ScriptChunk](./script.md#interface-scriptchunk), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array)
+See also: [BigNumber](./primitives.md#class-bignumber), [ScriptChunk](./script.md#interface-scriptchunk), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array)
 
 #### Constructor
 
 ```ts
-constructor(chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true) 
+constructor(chunks: ScriptChunk[] = [], rawBytesCache?: Uint8Array, hexCache?: string, parsed: boolean = true)
 ```
-See also: [ScriptChunk](./script.md#interface-scriptchunk)
+See also: [ScriptChunk](./script.md#interface-scriptchunk), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -527,12 +633,25 @@ Argument Details
 + **parsed**
   + When false the script defers parsing `rawBytesCache` until `chunks` is accessed; defaults to true.
 
+#### Method
+
+Reads pushdata length bytes from `bytes` at `pos` and returns the resulting
+`{ len, newPos, hasLength }` for a given opcode. Does not read the actual data.
+
+```ts
+static #readPushdataLength(op: number, bytes: ArrayLike<number>, pos: number, length: number): {
+    len: number;
+    newPos: number;
+    hasLength: boolean;
+}
+```
+
 #### Method findAndDelete
 
 Deletes the given item wherever it appears in the current script.
 
 ```ts
-findAndDelete(script: Script): Script 
+findAndDelete(script: Script): this
 ```
 See also: [Script](./script.md#class-script)
 
@@ -548,9 +667,9 @@ Argument Details
 #### Method fromASM
 
 ```ts
-static fromASM(asm: string): Script 
+static fromASM(asm: string): Script
 ```
-See also: [Script](./script.md#class-script)
+See also: [Script](./script.md#class-script), [string](./remittance.md#function-string)
 
 Returns
 
@@ -570,7 +689,7 @@ const script = Script.fromASM("OP_DUP OP_HASH160 abcd... OP_EQUALVERIFY OP_CHECK
 #### Method fromBinary
 
 ```ts
-static fromBinary(bin: number[]): Script 
+static fromBinary(bin: number[] | Uint8Array): Script
 ```
 See also: [Script](./script.md#class-script)
 
@@ -589,12 +708,22 @@ Example
 const script = Script.fromBinary([0x76, 0xa9, ...])
 ```
 
+#### Method fromBinaryView
+
+Constructs a lazily parsed script over an existing byte view without a copy.
+The caller must not mutate `bin` while the script is in use.
+
+```ts
+static fromBinaryView(bin: Uint8Array): Script
+```
+See also: [Script](./script.md#class-script)
+
 #### Method fromHex
 
 ```ts
-static fromHex(hex: string): Script 
+static fromHex(hex: string): Script
 ```
-See also: [Script](./script.md#class-script)
+See also: [Script](./script.md#class-script), [string](./remittance.md#function-string)
 
 Returns
 
@@ -614,7 +743,7 @@ const script = Script.fromHex("76a9...");
 #### Method isLockingScript
 
 ```ts
-isLockingScript(): boolean 
+isLockingScript(): boolean
 ```
 
 Returns
@@ -624,7 +753,7 @@ True if the script is a locking script, otherwise false.
 #### Method isPushOnly
 
 ```ts
-isPushOnly(): boolean 
+isPushOnly(): boolean
 ```
 
 Returns
@@ -634,7 +763,7 @@ True if the script is push-only, otherwise false.
 #### Method isUnlockingScript
 
 ```ts
-isUnlockingScript(): boolean 
+isUnlockingScript(): boolean
 ```
 
 Returns
@@ -644,9 +773,8 @@ True if the script is an unlocking script, otherwise false.
 #### Method removeCodeseparators
 
 ```ts
-removeCodeseparators(): Script 
+removeCodeseparators(): this
 ```
-See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -655,9 +783,8 @@ This script instance for chaining.
 #### Method setChunkOpCode
 
 ```ts
-setChunkOpCode(i: number, op: number): Script 
+setChunkOpCode(i: number, op: number): this
 ```
-See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -673,8 +800,9 @@ Argument Details
 #### Method toASM
 
 ```ts
-toASM(): string 
+toASM(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -683,7 +811,7 @@ The script in ASM string format.
 #### Method toBinary
 
 ```ts
-toBinary(): number[] 
+toBinary(): number[]
 ```
 
 Returns
@@ -693,8 +821,9 @@ The script in binary array format.
 #### Method toHex
 
 ```ts
-toHex(): string 
+toHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -703,9 +832,8 @@ The script in hexadecimal format.
 #### Method writeBin
 
 ```ts
-writeBin(bin: number[]): Script 
+writeBin(bin: number[]): this
 ```
-See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -723,9 +851,9 @@ Throws an error if the data is too large to be pushed.
 #### Method writeBn
 
 ```ts
-writeBn(bn: BigNumber): Script 
+writeBn(bn: BigNumber): this
 ```
-See also: [BigNumber](./primitives.md#class-bignumber), [Script](./script.md#class-script)
+See also: [BigNumber](./primitives.md#class-bignumber)
 
 Returns
 
@@ -739,9 +867,8 @@ Argument Details
 #### Method writeNumber
 
 ```ts
-writeNumber(num: number): Script 
+writeNumber(num: number): this
 ```
-See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -755,9 +882,8 @@ Argument Details
 #### Method writeOpCode
 
 ```ts
-writeOpCode(op: number): Script 
+writeOpCode(op: number): this
 ```
-See also: [Script](./script.md#class-script)
 
 Returns
 
@@ -771,7 +897,7 @@ Argument Details
 #### Method writeScript
 
 ```ts
-writeScript(script: Script): Script 
+writeScript(script: Script): this
 ```
 See also: [Script](./script.md#class-script)
 
@@ -811,27 +937,29 @@ export default class ScriptEvaluationError extends Error {
         ifStackState: boolean[];
         stackMem: number;
         altStackMem: number;
-    }) 
+    })
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 ### Class: ScriptResourceLimitError
 
-Raised when a caller-supplied local interpreter budget or a host representation
-limit is exhausted. This is deliberately distinct from
-`ScriptEvaluationError`: resource exhaustion does not prove script invalidity.
+Raised when an explicitly configured local interpreter budget is exhausted.
+
+This is deliberately distinct from ScriptEvaluationError: exhausting a
+caller-supplied resource budget does not prove that a script is invalid.
 
 ```ts
 export default class ScriptResourceLimitError extends Error {
-    readonly resource: ScriptResource;
-    readonly limit: number | bigint;
-    readonly attempted: number | bigint;
-    constructor(resource: ScriptResource, limit: number | bigint, attempted: number | bigint)
+    constructor(public readonly resource: ScriptResource, public readonly limit: number | bigint, public readonly attempted: number | bigint)
 }
 ```
+
+See also: [ScriptResource](./script.md#type-scriptresource)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -850,22 +978,29 @@ export default class Spend {
     lockingScript: LockingScript;
     transactionVersion: number;
     otherInputs: TransactionInput[];
+    allInputs?: TransactionInput[];
     outputs: TransactionOutput[];
     inputIndex: number;
     unlockingScript: UnlockingScript;
     inputSequence: number;
     lockTime: number;
-    context: "UnlockingScript" | "LockingScript";
-    programCounter: number;
-    lastCodeSeparator: number | null;
+    context!: "UnlockingScript" | "LockingScript";
+    programCounter!: number;
+    lastCodeSeparator!: number | null;
     stack: number[][];
     altStack: number[][];
     ifStack: boolean[];
+    elseStack: boolean[];
     memoryLimit: number;
     readonly hasExplicitMemoryLimit: boolean;
     stackMem: number;
     altStackMem: number;
     isRelaxedOverride: boolean;
+    verifyFlags?: Set<string>;
+    executedOpCount: number;
+    returningFromConditional: boolean;
+    readonly #sigHashCache: SignatureHashCache;
+    readonly #ownsSigHashCache: boolean;
     constructor(params: {
         sourceTXID: string;
         sourceOutputIndex: number;
@@ -873,6 +1008,7 @@ export default class Spend {
         lockingScript: LockingScript;
         transactionVersion: number;
         otherInputs: TransactionInput[];
+        allInputs?: TransactionInput[];
         outputs: TransactionOutput[];
         unlockingScript: UnlockingScript;
         inputSequence: number;
@@ -880,16 +1016,75 @@ export default class Spend {
         lockTime: number;
         memoryLimit?: number;
         isRelaxed?: boolean;
-    }) 
-    reset(): void 
-    step(): boolean 
+        verifyFlags?: string | string[];
+        sigHashCache?: SignatureHashCache;
+    })
+    #isRelaxed(): boolean
+    #hasExplicitFlags(): boolean
+    #hasFlag(flag: string): boolean
+    #isAfterGenesis(): boolean
+    #isAfterChronicle(): boolean
+    #shouldEnforceMinimalData(): boolean
+    #shouldEnforceLowS(): boolean
+    #shouldEnforceNullDummy(): boolean
+    #shouldEnforceSigPushOnly(): boolean
+    #shouldEnforceCleanStack(): boolean
+    #shouldEnforceDerSignatures(): boolean
+    #shouldEnforceStrictEncoding(): boolean
+    #scriptNumMaxSize(): number | undefined
+    #maxPushSize(): number
+    reset(): void
+    #ensureStackMem(additional: number): void
+    #ensureAltStackMem(additional: number): void
+    #pushStack(item: number[]): void
+    #pushStackCopy(item: Readonly<number[]>): void
+    #popStack(): number[]
+    #stackTop(index: number = -1): number[]
+    #requireStackItems(minimum: number, message: string): void
+    #requireAltStackItems(minimum: number, message: string): void
+    #setStack(items: number[][]): void
+    #clearAltStack(): void
+    #pushAltStack(item: number[]): void
+    #popAltStack(): number[]
+    #readScriptNumber(buf: number[]): BigNumber
+    #isDefinedHashType(scope: number): boolean
+    #enforceSignatureHashType(sig: TransactionSignature): void
+    #enforceSignatureForkId(sig: TransactionSignature): void
+    #checkSignatureEncoding(buf: Readonly<number[]>): boolean
+    #parseChecksigSignature(buf: number[]): TransactionSignature
+    #readLaxDERLength(buf: number[], position: {
+        value: number;
+    }): number
+    #parseLaxDERInteger(buf: number[], position: {
+        value: number;
+    }, sequenceEnd: number): BigNumber
+    #parseLaxChecksigSignature(buf: number[]): TransactionSignature
+    #checkPublicKeyEncoding(buf: Readonly<number[]>): boolean
+    #verifySignature(sig: TransactionSignature, pubkey: PublicKey, subscript: Script): boolean
+    #enforceStepResourceLimits(): void
+    #currentScriptForStep(): Script
+    #opcodeForOperation(operation: ScriptChunk): number
+    #enforceChronicleOnlyOpcode(currentOpcode: number): void
+    #executeDataPush(operation: ScriptChunk): void
+    #countExecutedOpcode(currentOpcode: number, isScriptExecuting: boolean): void
+    #skipUnavailablePreChronicleOpcode(currentOpcode: number, isScriptExecuting: boolean): boolean
+    #enforceDiscouragedNop(currentOpcode: number, isScriptExecuting: boolean): void
+    #advanceAfterStep(currentScript: Script): void
+    step(): boolean
     validate(context?: SpendVerificationContext): boolean
-    validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
+    validateJavaScript(): boolean
+    #snapshotForVerifier(): Spend
+    async validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
     toTransactionUint8Array(): Uint8Array
+    #runScript(context: "UnlockingScript" | "LockingScript"): void
+    #isP2SHLockingScript(script: LockingScript): boolean
+    #requireTruthyTopStack(): void
+    #castToBool(val: Readonly<number[]>): boolean
+    #scriptEvaluationError(str: string): void
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript), [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
+See also: [BigNumber](./primitives.md#class-bignumber), [LockingScript](./script.md#class-lockingscript), [PublicKey](./primitives.md#class-publickey), [Script](./script.md#class-script), [ScriptChunk](./script.md#interface-scriptchunk), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [TransactionSignature](./primitives.md#class-transactionsignature), [UnlockingScript](./script.md#class-unlockingscript), [string](./remittance.md#function-string)
 
 #### Constructor
 
@@ -901,6 +1096,7 @@ constructor(params: {
     lockingScript: LockingScript;
     transactionVersion: number;
     otherInputs: TransactionInput[];
+    allInputs?: TransactionInput[];
     outputs: TransactionOutput[];
     unlockingScript: UnlockingScript;
     inputSequence: number;
@@ -908,9 +1104,11 @@ constructor(params: {
     lockTime: number;
     memoryLimit?: number;
     isRelaxed?: boolean;
-}) 
+    verifyFlags?: string | string[];
+    sigHashCache?: SignatureHashCache;
+})
 ```
-See also: [LockingScript](./script.md#class-lockingscript), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [UnlockingScript](./script.md#class-unlockingscript), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -939,8 +1137,9 @@ The outputs of the current transaction.
 + **params.lockTime**
   + The lock time of the transaction.
 + **params.memoryLimit**
-  + Optional caller-supplied local interpreter budget. If omitted,
-post-Genesis validation has no arbitrary SDK memory cap.
+  + Optional caller-supplied local
+interpreter budget. Resource exhaustion is reported separately from
+script invalidity.
 + **params.isRelaxed**
   + Optional. If true, disables all the unlocking script maleability restrictions consitent with Chronicle release. Maleability restrictions are neve appliced to locking scripts.
 
@@ -962,48 +1161,70 @@ const spend = new Spend({
 });
 ```
 
+#### Method toTransactionUint8Array
+
+Serializes the ordinary transaction represented by this Spend. The source
+output is intentionally excluded and is supplied separately to a Spend
+verifier, avoiding an EF construction and parse for one-input validation.
+
+```ts
+toTransactionUint8Array(): Uint8Array
+```
+
 #### Method validate
 
 ```ts
 validate(context?: SpendVerificationContext): boolean
 ```
-
 See also: [SpendVerificationContext](./script.md#interface-spendverificationcontext)
 
 Returns
 
-Returns true if the scripts are valid and the spend is legitimate, otherwise false.
+Returns true when the spend is valid.
+
+Argument Details
+
++ **context**
+  + Optional explicit consensus or
+policy context passed to a registered script backend.
+
+Throws
+
+If script validation fails.
+
+If a local interpreter resource is
+exhausted before validity can be determined.
 
 Example
 
 ```ts
-if (spend.validate()) {
-  console.log("Spend is valid!");
-} else {
-  console.log("Invalid spend!");
-}
+spend.validate()
+console.log("Spend is valid!")
+```
+
+#### Method validateJavaScript
+
+Runs the original TypeScript interpreter explicitly, bypassing any
+registered optional backend.
+
+```ts
+validateJavaScript(): boolean
 ```
 
 #### Method validateWith
 
-Validates this spend with an asynchronous pluggable backend. Backend errors are
-propagated without silently falling back to the JavaScript interpreter.
-
 ```ts
-validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
+async validateWith(verifier: SpendVerifierInterface, context?: SpendVerificationContext): Promise<boolean>
 ```
-
 See also: [SpendVerificationContext](./script.md#interface-spendverificationcontext), [SpendVerifierInterface](./script.md#interface-spendverifierinterface)
 
-#### Method toTransactionUint8Array
+Argument Details
 
-Serializes the ordinary transaction represented by this Spend. The source
-output is supplied separately to a Spend verifier, avoiding EF construction
-for one-input validation.
-
-```ts
-toTransactionUint8Array(): Uint8Array
-```
++ **verifier**
+  + The backend used when it accepts this Spend.
++ **context**
+  + Optional explicit consensus or policy context. Transaction
+version is never used as a substitute for this context.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1017,8 +1238,8 @@ Inherits all properties and methods from the Script class.
 
 ```ts
 export default class UnlockingScript extends Script {
-    isLockingScript(): boolean 
-    isUnlockingScript(): boolean 
+    override isLockingScript(): boolean
+    override isUnlockingScript(): boolean
 }
 ```
 
@@ -1027,7 +1248,7 @@ See also: [Script](./script.md#class-script)
 #### Method isLockingScript
 
 ```ts
-isLockingScript(): boolean 
+override isLockingScript(): boolean
 ```
 
 Returns
@@ -1037,7 +1258,7 @@ Always returns false for an UnlockingScript instance.
 #### Method isUnlockingScript
 
 ```ts
-isUnlockingScript(): boolean 
+override isUnlockingScript(): boolean
 ```
 
 Returns
@@ -1052,8 +1273,10 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | |
 | --- |
 | [computeSignatureScope](#function-computesignaturescope) |
+| [decodeCanonicalPushDrop](#function-decodecanonicalpushdrop) |
 | [formatPreimage](#function-formatpreimage) |
 | [resolveSourceDetails](#function-resolvesourcedetails) |
+| [scriptSerializationIdentity](#function-scriptserializationidentity) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1064,8 +1287,24 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Computes the signature scope flags from the given signing parameters.
 
 ```ts
-export function computeSignatureScope(signOutputs: "all" | "none" | "single", anyoneCanPay: boolean): number 
+export function computeSignatureScope(signOutputs: "all" | "none" | "single", anyoneCanPay: boolean): number
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: decodeCanonicalPushDrop
+
+Decode a PushDrop token only when its entire script is canonical and bounded.
+
+```ts
+export function decodeCanonicalPushDrop(lockingScript: LockingScript, limits: CanonicalPushDropLimits): {
+    lockingPublicKey: PublicKey;
+    fields: number[][];
+}
+```
+
+See also: [CanonicalPushDropLimits](./script.md#interface-canonicalpushdroplimits), [LockingScript](./script.md#class-lockingscript), [PublicKey](./primitives.md#class-publickey)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1075,7 +1314,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Formats the transaction preimage for signing.
 
 ```ts
-export function formatPreimage(params: FormatPreimageParams): number[] 
+export function formatPreimage(params: FormatPreimageParams): number[]
 ```
 
 See also: [FormatPreimageParams](./script.md#interface-formatpreimageparams)
@@ -1094,10 +1333,22 @@ export function resolveSourceDetails(tx: Transaction, inputIndex: number, provid
     sourceSatoshis: number;
     lockingScript: Script;
     otherInputs: typeof tx.inputs;
-} 
+    allInputs: typeof tx.inputs;
+}
 ```
 
-See also: [Script](./script.md#class-script), [Transaction](./transaction.md#class-transaction)
+See also: [Script](./script.md#class-script), [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: scriptSerializationIdentity
+
+```ts
+export function scriptSerializationIdentity(script: Script): Uint8Array
+```
+
+See also: [Script](./script.md#class-script)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1110,6 +1361,9 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export type ScriptResource = "stack" | "alt-stack" | "element-size"
 ```
 
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ## Enums
 
 ## Variables

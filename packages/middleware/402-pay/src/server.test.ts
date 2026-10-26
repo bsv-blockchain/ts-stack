@@ -2,9 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Beef, Transaction, P2PKH, PrivateKey, Script } from '@bsv/sdk'
 import type { WalletInterface } from '@bsv/sdk'
 import {
+  InMemoryPaymentReplayStore,
   send402,
   validatePayment,
   createPaymentMiddleware,
+  type PaymentLogger,
+  type PaymentReplayStore,
   type PaymentResponse,
   type PaymentResult,
   type PaymentError
@@ -204,6 +207,46 @@ describe('send402', () => {
   })
 })
 
+describe('InMemoryPaymentReplayStore', () => {
+  const txidA = 'a'.repeat(64)
+  const txidB = 'b'.repeat(64)
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('atomically rejects a duplicate claim while it remains fresh', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = new InMemoryPaymentReplayStore()
+
+    expect(store.claim(txidA, 2_000)).toBe(true)
+    expect(store.claim(txidA, 2_000)).toBe(false)
+  })
+
+  it('releases expired claims and expired capacity entries', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = new InMemoryPaymentReplayStore(1)
+    expect(store.claim(txidA, 1_001)).toBe(true)
+
+    now.mockReturnValue(1_002)
+    expect(store.claim(txidB, 2_000)).toBe(true)
+    expect(() => store.claim(txidA, 2_000)).toThrow('capacity')
+  })
+
+  it('fails closed at capacity while all claims remain live', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const store = new InMemoryPaymentReplayStore(1)
+    expect(store.claim(txidA, 2_000)).toBe(true)
+    expect(() => store.claim(txidB, 2_000)).toThrow('capacity')
+  })
+
+  it('rejects malformed claim keys and expirations', () => {
+    const store = new InMemoryPaymentReplayStore()
+    expect(() => store.claim('not-a-txid', 2_000)).toThrow(TypeError)
+    expect(() => store.claim(txidA, Number.MAX_SAFE_INTEGER + 1)).toThrow(RangeError)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // validatePayment
 // ---------------------------------------------------------------------------
@@ -262,7 +305,7 @@ describe('validatePayment', () => {
 
   // --- Array-valued headers ---
 
-  it('accepts array-valued headers by using the first element', async () => {
+  it('rejects array-valued duplicate headers instead of selecting one value', async () => {
     const wallet = makeWallet()
     const headers: Record<string, string | string[]> = {
       [HEADERS.SENDER]: [IDENTITY_KEY, 'ignored'],
@@ -272,8 +315,25 @@ describe('validatePayment', () => {
       [HEADERS.VOUT]: ['0', 'ignored']
     }
     const result = await validatePayment({ path: '/test', headers }, wallet, 100)
-    expect(result).not.toBeNull()
-    expect((result as PaymentResult).accepted).toBe(true)
+    expect(result).toBeNull()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized BEEF header before decoding or wallet work', async () => {
+    const wallet = makeWallet()
+    const headers = validHeaders('A'.repeat(1_500_000), now)
+
+    expect(await validatePayment({ path: '/test', headers }, wallet, 100)).toBeNull()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+  })
+
+  it('rejects decoded BEEF bytes above the exact limit when base64 length rounds down', async () => {
+    const wallet = makeWallet()
+    const roundedBoundary = Buffer.alloc(1024 * 1024 + 1).toString('base64')
+    const headers = validHeaders(roundedBoundary, now)
+
+    expect(await validatePayment({ path: '/test', headers }, wallet, 100)).toBeNull()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
   })
 
   // --- Timestamp freshness ---
@@ -559,6 +619,95 @@ describe('validatePayment', () => {
     vi.restoreAllMocks()
   })
 
+  it('rejects a malformed truthy wallet merge verdict', async () => {
+    const wallet = makeWallet()
+    vi.mocked(wallet.internalizeAction).mockResolvedValueOnce({
+      accepted: true,
+      isMerge: 'false'
+    } as never)
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    const result = await validatePayment(
+      { path: '/test', headers: validHeaders(beefBase64, now) },
+      wallet,
+      100
+    )
+
+    expect(result).toMatchObject({ accepted: false })
+    vi.restoreAllMocks()
+  })
+
+  it('requires wallet verdicts to use own data properties without invoking accessors', async () => {
+    const wallet = makeWallet()
+    const inherited = Object.create({ accepted: true, isMerge: false })
+    const getter = vi.fn(() => true)
+    const accessorBacked = Object.defineProperty({ accepted: true }, 'isMerge', { get: getter })
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    for (const result of [inherited, accessorBacked]) {
+      vi.mocked(wallet.internalizeAction).mockResolvedValueOnce(result)
+      const verdict = await validatePayment(
+        { path: '/test', headers: validHeaders(beefBase64, now) },
+        wallet,
+        100,
+        30_000,
+        { claim: vi.fn().mockReturnValue(true) }
+      )
+      expect(verdict).toMatchObject({ accepted: false })
+    }
+    expect(getter).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('rejects replay independently when a conforming wallet omits isMerge', async () => {
+    const wallet = makeWallet()
+    vi.mocked(wallet.internalizeAction).mockResolvedValue({ accepted: true })
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const request = { path: '/test', headers: validHeaders(beefBase64, now) }
+
+    expect(await validatePayment(request, wallet, 100)).toMatchObject({ accepted: true })
+    const replay = await validatePayment(request, wallet, 100)
+
+    expect(replay).toMatchObject({ accepted: false })
+    expect((replay as PaymentError).reason).toContain('Replayed')
+    vi.restoreAllMocks()
+  })
+
+  it('allows exactly one concurrent claim when the wallet repeats a fresh verdict', async () => {
+    const wallet = makeWallet()
+    vi.mocked(wallet.internalizeAction).mockResolvedValue({ accepted: true })
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const request = { path: '/test', headers: validHeaders(beefBase64, now) }
+
+    const results = await Promise.all([
+      validatePayment(request, wallet, 100),
+      validatePayment(request, wallet, 100)
+    ])
+
+    expect(results.filter(result => result?.accepted === true)).toHaveLength(1)
+    expect(results.filter(result => result?.accepted === false)).toHaveLength(1)
+    vi.restoreAllMocks()
+  })
+
+  it('requires an exact affirmative verdict from a custom replay store', async () => {
+    const wallet = makeWallet()
+    const replayStore: PaymentReplayStore = {
+      claim: vi.fn().mockResolvedValue('true' as never)
+    }
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+
+    await expect(
+      validatePayment(
+        { path: '/test', headers: validHeaders(beefBase64, now) },
+        wallet,
+        100,
+        30_000,
+        replayStore
+      )
+    ).rejects.toThrow('invalid claim verdict')
+    vi.restoreAllMocks()
+  })
+
   // --- Happy path ---
 
   it('returns PaymentResult with accepted: true on success', async () => {
@@ -643,7 +792,7 @@ describe('validatePayment', () => {
     vi.restoreAllMocks()
   })
 
-  it('passes the request path into the internalizeAction description', async () => {
+  it('uses a fixed bounded wallet description instead of attacker-controlled request paths', async () => {
     const wallet = makeWallet()
     vi.spyOn(Date, 'now').mockReturnValue(now)
     await validatePayment(
@@ -652,7 +801,7 @@ describe('validatePayment', () => {
       100
     )
     expect(wallet.internalizeAction).toHaveBeenCalledWith(
-      expect.objectContaining({ description: 'Payment for /articles/foo' })
+      expect.objectContaining({ description: 'BRC-121 payment' })
     )
     vi.restoreAllMocks()
   })
@@ -764,17 +913,20 @@ describe('createPaymentMiddleware', () => {
 
   // --- Replay attack ---
 
-  it('sends 402 and logs error when validatePayment returns PaymentError (isMerge)', async () => {
+  it('sends 402 and uses an opt-in logger when a replay is rejected', async () => {
     const replayWallet = makeWallet({ isMerge: true })
-    const middleware = createPaymentMiddleware({ wallet: replayWallet, calculatePrice: () => 100 })
+    const logger: PaymentLogger = { warn: vi.fn() }
+    const middleware = createPaymentMiddleware({
+      wallet: replayWallet,
+      calculatePrice: () => 100,
+      logger
+    })
     const res = makeExpressRes()
     const next = vi.fn()
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     await middleware(makeReq(validHeaders(beefBase64, now)), res, next)
     expect(res._status).toBe(402)
     expect(next).not.toHaveBeenCalled()
-    expect(errorSpy).toHaveBeenCalledOnce()
-    expect(errorSpy.mock.calls[0][0]).toContain('/test')
+    expect(logger.warn).toHaveBeenCalledWith('Payment rejected.')
   })
 
   // --- Happy path ---
@@ -795,11 +947,12 @@ describe('createPaymentMiddleware', () => {
     expect(req.payment.accepted).toBe(true)
   })
 
-  it('sets satoshisPaid from calculatePrice (not from the tx output)', async () => {
+  it('preserves the actual overpayment amount in req.payment', async () => {
+    const { beefBase64: overpayment } = makeBEEF(500)
     const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100 })
-    const req = makeReq(validHeaders(beefBase64, now))
+    const req = makeReq(validHeaders(overpayment, now))
     await middleware(req, makeExpressRes(), vi.fn())
-    expect(req.payment.satoshisPaid).toBe(100)
+    expect(req.payment.satoshisPaid).toBe(500)
   })
 
   it('sets the txid on req.payment', async () => {
@@ -809,13 +962,28 @@ describe('createPaymentMiddleware', () => {
     expect(req.payment.txid).toBe(txid)
   })
 
-  it('logs accepted payment to console', async () => {
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100 })
+  it('emits structured accepted-payment diagnostics only through an opt-in logger', async () => {
+    const logger: PaymentLogger = { info: vi.fn() }
+    const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100, logger })
     await middleware(makeReq(validHeaders(beefBase64, now)), makeExpressRes(), vi.fn())
-    expect(logSpy).toHaveBeenCalledOnce()
-    expect(logSpy.mock.calls[0][0]).toContain('100')
-    expect(logSpy.mock.calls[0][0]).toContain(txid)
+    expect(logger.info).toHaveBeenCalledWith('Payment accepted.', {
+      satoshisPaid: 100,
+      txid
+    })
+  })
+
+  it('contains logger failures after acceptance and still releases the paid request', async () => {
+    const logger: PaymentLogger = {
+      info: vi.fn(() => {
+        throw new Error('logger failed')
+      })
+    }
+    const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100, logger })
+    const next = vi.fn()
+
+    await middleware(makeReq(validHeaders(beefBase64, now)), makeExpressRes(), next)
+
+    expect(next).toHaveBeenCalledOnce()
   })
 
   // --- Identity key lazy init ---
@@ -852,7 +1020,7 @@ describe('createPaymentMiddleware', () => {
     expect(res._status).toBe(500)
   })
 
-  it('responds with 402 when payment validation throws after identity initialization', async () => {
+  it('responds with 503 without a fresh challenge after ambiguous payment failure', async () => {
     // First request succeeds to prime the identity key
     const middleware = createPaymentMiddleware({ wallet, calculatePrice: () => 100 })
     await middleware(makeReq(validHeaders(beefBase64, now)), makeExpressRes(), vi.fn())
@@ -863,7 +1031,26 @@ describe('createPaymentMiddleware', () => {
     )
     const res = makeExpressRes()
     await middleware(makeReq(validHeaders(beefBase64, now)), res, vi.fn())
-    expect(res._status).toBe(402)
+    expect(res._status).toBe(503)
+    expect(res._headers[HEADERS.SATS]).toBeUndefined()
+    expect(res._headers[HEADERS.SERVER]).toBeUndefined()
+  })
+
+  it('responds with 503 when a replay store returns a malformed verdict', async () => {
+    const replayStore: PaymentReplayStore = {
+      claim: vi.fn().mockResolvedValue('true' as never)
+    }
+    const middleware = createPaymentMiddleware({
+      wallet,
+      calculatePrice: () => 100,
+      replayStore
+    })
+    const res = makeExpressRes()
+
+    await middleware(makeReq(validHeaders(beefBase64, now)), res, vi.fn())
+
+    expect(res._status).toBe(503)
+    expect(res._headers[HEADERS.SATS]).toBeUndefined()
   })
 
   it('responds with 500 when the wallet returns an invalid identity key', async () => {

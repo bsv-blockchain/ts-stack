@@ -4,11 +4,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ## Interfaces
 
-|                                                           |
-| --------------------------------------------------------- |
+| |
+| --- |
 | [AuthMiddlewareOptions](#interface-authmiddlewareoptions) |
-| [AuthRequest](#interface-authrequest)                     |
-| [AuthTransportLimits](#interface-authtransportlimits)     |
+| [AuthRequest](#interface-authrequest) |
+| [AuthTransportLimits](#interface-authtransportlimits) |
+| [CertificateApprovalStore](#interface-certificateapprovalstore) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
@@ -18,29 +19,35 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface AuthMiddlewareOptions {
-  wallet: WalletInterface
-  sessionManager?: SessionManager | AsyncSessionManager
-  allowUnauthenticated?: boolean
-  certificatesToRequest?: RequestedCertificateSet
-  onCertificatesReceived?: (
-    senderPublicKey: string,
-    certs: VerifiableCertificate[],
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-  ) => void | Promise<void>
-  logger?: typeof console
-  logLevel?: LogLevel
-  transportLimits?: Partial<AuthTransportLimits>
-  telemetry?: TelemetryConfig
+    wallet: WalletInterface;
+    sessionManager?: SessionManager | AsyncSessionManager;
+    allowUnauthenticated?: boolean;
+    certificatesToRequest?: RequestedCertificateSet;
+    onCertificatesReceived?: (senderPublicKey: string, certs: VerifiableCertificate[], req: AuthRequest, res: Response, next: NextFunction) => void | Promise<void>;
+    certificateApprovalStore?: CertificateApprovalStore;
+    logger?: typeof console;
+    logLevel?: LogLevel;
+    transportLimits?: Partial<AuthTransportLimits>;
+    telemetry?: TelemetryConfig;
 }
 ```
 
-See also: [AuthRequest](#interface-authrequest), [AuthTransportLimits](#interface-authtransportlimits), [LogLevel](#type-loglevel)
+See also: [AuthRequest](#interface-authrequest), [AuthTransportLimits](#interface-authtransportlimits), [CertificateApprovalStore](#interface-certificateapprovalstore), [LogLevel](#type-loglevel)
 
 <details>
 
 <summary>Interface AuthMiddlewareOptions Details</summary>
+
+#### Property certificateApprovalStore
+
+Application certificate approvals are session-bound. Required for
+horizontally scaled services when `onCertificatesReceived` is configured;
+the default store is bounded and process-local.
+
+```ts
+certificateApprovalStore?: CertificateApprovalStore
+```
+See also: [CertificateApprovalStore](#interface-certificateapprovalstore)
 
 #### Property logLevel
 
@@ -55,7 +62,6 @@ Optional logging level. Defaults to no logging if not provided.
 ```ts
 logLevel?: LogLevel
 ```
-
 See also: [LogLevel](#type-loglevel)
 
 #### Property logger
@@ -83,7 +89,6 @@ Bounds unauthenticated work and pending protocol state. Defaults to a
 ```ts
 transportLimits?: Partial<AuthTransportLimits>
 ```
-
 See also: [AuthTransportLimits](#interface-authtransportlimits)
 
 </details>
@@ -91,34 +96,41 @@ See also: [AuthTransportLimits](#interface-authtransportlimits)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Interface: AuthRequest
 
 ```ts
 export interface AuthRequest extends Request {
-  auth?: {
-    identityKey: PubKeyHex
-  }
+    auth?: {
+        identityKey: PubKeyHex;
+    };
 }
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Interface: AuthTransportLimits
 
 ```ts
 export interface AuthTransportLimits {
-  requestTimeoutMs: number
-  maxPendingRequests: number
-  maxResponseBytes: number
+    requestTimeoutMs: number;
+    maxPendingRequests: number;
+    maxRequestBytes: number;
+    maxResponseBytes: number;
 }
 ```
 
 <details>
 
 <summary>Interface AuthTransportLimits Details</summary>
+
+#### Property maxRequestBytes
+
+Maximum handshake/plain-data and encoded request-body bytes; excludes HTTP headers.
+
+```ts
+maxRequestBytes: number
+```
 
 #### Property maxResponseBytes
 
@@ -135,8 +147,50 @@ maxResponseBytes: number
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
+### Interface: CertificateApprovalStore
 
+```ts
+export interface CertificateApprovalStore {
+    approve: (sessionNonce: string, identityKey: PubKeyHex) => void | Promise<void>;
+    isApproved: (sessionNonce: string, identityKey: PubKeyHex) => boolean | Promise<boolean>;
+}
+```
+
+<details>
+
+<summary>Interface CertificateApprovalStore Details</summary>
+
+#### Property approve
+
+Persist application approval for one exact authenticated session.
+
+```ts
+approve: (sessionNonce: string, identityKey: PubKeyHex) => void | Promise<void>
+```
+
+#### Property isApproved
+
+Return exact boolean true only when that session/identity pair was approved.
+
+```ts
+isApproved: (sessionNonce: string, identityKey: PubKeyHex) => boolean | Promise<boolean>
+```
+
+</details>
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+
+---
 ## Classes
+
+| |
+| --- |
+| [ExpressTransport](#class-expresstransport) |
+| [InMemoryCertificateApprovalStore](#class-inmemorycertificateapprovalstore) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+
+---
 
 ### Class: ExpressTransport
 
@@ -144,45 +198,26 @@ Transport implementation for Express.
 
 ```ts
 export class ExpressTransport implements Transport {
-  peer?: Peer
-  allowUnauthenticated: boolean
-  openNonGeneralHandles = new Map<string, PendingHandle[]>()
-  openGeneralHandles = new Map<
-    string,
-    {
-      next: Function
-      res: Response
-    }
-  >()
-  openNextHandlers = new Map<string, NextFunction>()
-  openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
-  constructor(
-    allowUnauthenticated: boolean = false,
-    logger?: typeof console,
-    logLevel?: LogLevel,
-    limits: Partial<AuthTransportLimits> = {}
-  )
-  get allowAuthenticated(): boolean
-  set allowAuthenticated(value: boolean)
-  setPeer(peer: Peer): void
-  async send(message: AuthMessage): Promise<void>
-  async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void>
-  public async handleIncomingRequest(
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction,
-    onCertificatesReceived?: (
-      senderPublicKey: string,
-      certs: VerifiableCertificate[],
-      req: AuthRequest,
-      res: Response,
-      next: NextFunction
-    ) => void | Promise<void>
-  ): Promise<void>
+    peer?: Peer;
+    allowUnauthenticated: boolean;
+    openNonGeneralHandles = new Map<string, PendingHandle[]>();
+    openGeneralHandles = new Map<string, {
+        next: Function;
+        res: Response;
+    }>();
+    openNextHandlers = new Map<string, NextFunction>();
+    openNextHandlerTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+    constructor(allowUnauthenticated: boolean = false, logger?: typeof console, logLevel?: LogLevel, limits: Partial<AuthTransportLimits> = {}, certificateApprovalStore: CertificateApprovalStore = new InMemoryCertificateApprovalStore())
+    get allowAuthenticated(): boolean
+    set allowAuthenticated(value: boolean)
+    setPeer(peer: Peer): void
+    async send(message: AuthMessage): Promise<void>
+    async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void>
+    public async handleIncomingRequest(req: AuthRequest, res: Response, next: NextFunction, onCertificatesReceived?: (senderPublicKey: string, certs: VerifiableCertificate[], req: AuthRequest, res: Response, next: NextFunction) => void | Promise<void>): Promise<void>
 }
 ```
 
-See also: [AuthRequest](#interface-authrequest), [AuthTransportLimits](#interface-authtransportlimits), [LogLevel](#type-loglevel)
+See also: [AuthRequest](#interface-authrequest), [AuthTransportLimits](#interface-authtransportlimits), [CertificateApprovalStore](#interface-certificateapprovalstore), [InMemoryCertificateApprovalStore](#class-inmemorycertificateapprovalstore), [LogLevel](#type-loglevel)
 
 <details>
 
@@ -193,21 +228,20 @@ See also: [AuthRequest](#interface-authrequest), [AuthTransportLimits](#interfac
 Constructs a new ExpressTransport instance.
 
 ```ts
-constructor(allowUnauthenticated: boolean = false, logger?: typeof console, logLevel?: LogLevel, limits: Partial<AuthTransportLimits> = {})
+constructor(allowUnauthenticated: boolean = false, logger?: typeof console, logLevel?: LogLevel, limits: Partial<AuthTransportLimits> = {}, certificateApprovalStore: CertificateApprovalStore = new InMemoryCertificateApprovalStore())
 ```
-
-See also: [AuthTransportLimits](#interface-authtransportlimits), [LogLevel](#type-loglevel)
+See also: [AuthTransportLimits](#interface-authtransportlimits), [CertificateApprovalStore](#interface-certificateapprovalstore), [InMemoryCertificateApprovalStore](#class-inmemorycertificateapprovalstore), [LogLevel](#type-loglevel)
 
 Argument Details
 
-- **allowUnauthenticated**
-  - Whether to allow unauthenticated requests passed the auth middleware.
-    If `true`, requests without authentication will be permitted, and `req.auth.identityKey`
-    will be set to `"unknown"`. If `false`, unauthenticated requests will result in a `401 Unauthorized` response.
-- **logger**
-  - Logger to use (e.g., console). If omitted, logging is disabled.
-- **logLevel**
-  - Log level. If omitted, no logs are output.
++ **allowUnauthenticated**
+  + Whether to allow unauthenticated requests passed the auth middleware.
+If `true`, requests without authentication will be permitted, and `req.auth.identityKey`
+will be set to `"unknown"`. If `false`, unauthenticated requests will result in a `401 Unauthorized` response.
++ **logger**
+  + Logger to use (e.g., console). If omitted, logging is disabled.
++ **logLevel**
+  + Log level. If omitted, no logs are output.
 
 #### Method handleIncomingRequest
 
@@ -218,7 +252,6 @@ manages peer-to-peer certificate handling, and modifies the response object
 to enable custom behaviors like certificate requests and tailored responses.
 
 ### Behavior:
-
 - For `/.well-known/auth`:
   - Handles non-general messages and listens for certificates.
   - Calls the `onCertificatesReceived` callback (if provided) when certificates are received.
@@ -232,19 +265,18 @@ to enable custom behaviors like certificate requests and tailored responses.
 ```ts
 public async handleIncomingRequest(req: AuthRequest, res: Response, next: NextFunction, onCertificatesReceived?: (senderPublicKey: string, certs: VerifiableCertificate[], req: AuthRequest, res: Response, next: NextFunction) => void | Promise<void>): Promise<void>
 ```
-
 See also: [AuthRequest](#interface-authrequest)
 
 Argument Details
 
-- **req**
-  - The incoming HTTP request.
-- **res**
-  - The HTTP response.
-- **next**
-  - The Express `next` middleware function.
-- **onCertificatesReceived**
-  - Optional callback invoked when certificates are received.
++ **req**
+  + The incoming HTTP request.
++ **res**
+  + The HTTP response.
++ **next**
+  + The Express `next` middleware function.
++ **onCertificatesReceived**
+  + Optional callback invoked when certificates are received.
 
 #### Method onData
 
@@ -271,8 +303,8 @@ A promise that resolves once the message has been sent successfully.
 
 Argument Details
 
-- **message**
-  - The authenticated message to send.
++ **message**
+  + The authenticated message to send.
 
 ### Returns:
 
@@ -281,20 +313,37 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
+### Class: InMemoryCertificateApprovalStore
 
+Bounded process-local certificate approval state. Multi-instance services
+using `onCertificatesReceived` must inject a shared store instead.
+
+```ts
+export class InMemoryCertificateApprovalStore implements CertificateApprovalStore {
+    constructor(private readonly maxApprovals: number = 10000)
+    approve(sessionNonce: string, identityKey: PubKeyHex): void
+    isApproved(sessionNonce: string, identityKey: PubKeyHex): boolean
+}
+```
+
+See also: [CertificateApprovalStore](#interface-certificateapprovalstore)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+
+---
 ## Functions
 
-|                                                                      |
-| -------------------------------------------------------------------- |
-| [convertValueToArray](#function-convertvaluetoarray)                 |
-| [createAuthMiddleware](#function-createauthmiddleware)               |
-| [getLogMethod](#function-getlogmethod)                               |
-| [isLogLevelEnabled](#function-isloglevelenabled)                     |
-| [makeDebugLogger](#function-makedebuglogger)                         |
-| [writeBodyToWriter](#function-writebodytowriter)                     |
-| [writeHeaderPair](#function-writeheaderpair)                         |
+| |
+| --- |
+| [convertValueToArray](#function-convertvaluetoarray) |
+| [createAuthMiddleware](#function-createauthmiddleware) |
+| [getLogMethod](#function-getlogmethod) |
+| [isLogLevelEnabled](#function-isloglevelenabled) |
+| [makeDebugLogger](#function-makedebuglogger) |
+| [writeBodyToWriter](#function-writebodytowriter) |
+| [writeHeaderPair](#function-writeheaderpair) |
 | [writeRequestHeadersToWriter](#function-writerequestheaderstowriter) |
-| [writeUrlToWriter](#function-writeurltowriter)                       |
+| [writeUrlToWriter](#function-writeurltowriter) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
@@ -311,7 +360,6 @@ export function convertValueToArray(val: unknown, responseHeaders: Record<string
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: createAuthMiddleware
 
 Creates an Express middleware that handles authentication via BSV-SDK.
@@ -335,7 +383,6 @@ Express middleware
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: getLogMethod
 
 Retrieves the appropriate logging method from the logger,
@@ -353,7 +400,6 @@ See also: [LogLevel](#type-loglevel)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: isLogLevelEnabled
 
 Helper to determine if a given message-level log should be output
@@ -368,16 +414,12 @@ See also: [LogLevel](#type-loglevel)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: makeDebugLogger
 
 Returns a no-op or a bound debug logger depending on config.
 
 ```ts
-export function makeDebugLogger(
-  logger?: typeof console,
-  logLevel?: LogLevel
-): (msg: string, data: any) => void
+export function makeDebugLogger(logger?: typeof console, logLevel?: LogLevel): (msg: string, data: any) => void
 ```
 
 See also: [LogLevel](#type-loglevel)
@@ -385,18 +427,12 @@ See also: [LogLevel](#type-loglevel)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: writeBodyToWriter
 
 Helper: Write body to writer
 
 ```ts
-export function writeBodyToWriter(
-  req: Request,
-  writer: Utils.Writer,
-  logger?: typeof console,
-  logLevel?: LogLevel
-): void
+export function writeBodyToWriter(req: Request, writer: Writer, logger?: typeof console, logLevel?: LogLevel): void
 ```
 
 See also: [LogLevel](#type-loglevel)
@@ -404,49 +440,45 @@ See also: [LogLevel](#type-loglevel)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: writeHeaderPair
 
 Write a header pair (key + value) to the binary writer.
 
 ```ts
-export function writeHeaderPair(writer: Utils.Writer, key: string, value: string): void
+export function writeHeaderPair(writer: Writer, key: string, value: string): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: writeRequestHeadersToWriter
 
 Collect and write signed request headers to the binary writer.
 
 ```ts
-export function writeRequestHeadersToWriter(req: Request, writer: Utils.Writer): void
+export function writeRequestHeadersToWriter(req: Request, writer: Writer): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ### Function: writeUrlToWriter
 
 Write the URL pathname and search components to the binary writer.
 
 ```ts
-export function writeUrlToWriter(parsedUrl: URL, writer: Utils.Writer): void
+export function writeUrlToWriter(parsedUrl: URL, writer: Writer): void
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
 
 ---
-
 ## Types
 
 ### Type: LogLevel
 
 ```ts
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+export type LogLevel = "debug" | "info" | "warn" | "error"
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)

@@ -75,6 +75,18 @@ describe('LookupResolver – additional coverage', () => {
   // -----------------------------------------------------------------------
 
   describe('networkPreset', () => {
+    it('rejects an unknown preset and keeps exported tracker defaults immutable', () => {
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            networkPreset: 'unknown' as any
+          })
+      ).toThrow('Lookup network preset is invalid')
+      expect(Object.isFrozen(DEFAULT_SLAP_TRACKERS)).toBe(true)
+      expect(() => DEFAULT_SLAP_TRACKERS.push('https://attacker.example')).toThrow()
+    })
+
     it('uses DEFAULT_SLAP_TRACKERS for mainnet preset (default)', () => {
       const r = new LookupResolver({ facilitator: mockFacilitator })
       // Access private via cast
@@ -156,7 +168,7 @@ describe('LookupResolver – additional coverage', () => {
             facilitator: mockFacilitator,
             hostOverrides: { badServiceName: ['https://host.com'] }
           })
-      ).toThrow('Host override service names must start with "ls_": badServiceName')
+      ).toThrow('Host overrides service names must be bounded ls_ identifiers: badServiceName')
     })
 
     it('does not throw for valid ls_ prefixed hostOverride keys', () => {
@@ -167,6 +179,53 @@ describe('LookupResolver – additional coverage', () => {
             hostOverrides: { ls_valid: ['https://host.com'] }
           })
       ).not.toThrow()
+    })
+
+    it('rejects sparse, insecure, duplicate, and malformed configured hosts', () => {
+      const sparse: string[] = []
+      sparse.length = 1
+      expect(
+        () => new LookupResolver({ facilitator: mockFacilitator, slapTrackers: sparse })
+      ).toThrow('contains an invalid host')
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            slapTrackers: ['http://tracker.example']
+          })
+      ).toThrow('HTTPS facilitator can only use URLs')
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            slapTrackers: ['https://tracker.example', 'https://tracker.example/']
+          })
+      ).toThrow('contains a duplicate host')
+      expect(
+        () =>
+          new LookupResolver({
+            facilitator: mockFacilitator,
+            additionalHosts: { bad: ['https://host.example'] }
+          })
+      ).toThrow('Additional hosts service names must be bounded ls_ identifiers')
+    })
+
+    it('owns configured host arrays independently of the caller', () => {
+      const trackers = ['https://tracker.example']
+      const overrides = ['https://override.example']
+      const additional = ['https://additional.example']
+      const resolver = new LookupResolver({
+        facilitator: mockFacilitator,
+        slapTrackers: trackers,
+        hostOverrides: { ls_test: overrides },
+        additionalHosts: { ls_test: additional }
+      })
+      trackers[0] = 'https://attacker.example'
+      overrides[0] = 'https://attacker.example'
+      additional[0] = 'https://attacker.example'
+      expect((resolver as any).slapTrackers).toEqual(['https://tracker.example'])
+      expect((resolver as any).hostOverrides.ls_test).toEqual(['https://override.example'])
+      expect((resolver as any).additionalHosts.ls_test).toEqual(['https://additional.example'])
     })
   })
 
@@ -298,14 +357,14 @@ describe('LookupResolver – additional coverage', () => {
       })
 
       // Trigger cache refresh via refreshHosts indirectly
-      const slapTx = await makeSlapTx(42, 'https://h3.com', 'ls_service3')
+      const slapTx = await makeSlapTx(42, 'https://h3.com', 'ls_service_three')
       mockFacilitator.lookup.mockResolvedValue({
         type: 'output-list',
         outputs: [{ outputIndex: 0, beef: slapTx.toBEEF() }]
       })
 
       try {
-        await r.query({ service: 'ls_service3', query: {} })
+        await r.query({ service: 'ls_service_three', query: {} })
       } catch {
         // might fail if no competent hosts for the actual lookup
       }
@@ -351,11 +410,11 @@ describe('LookupResolver – additional coverage', () => {
   })
 
   // -----------------------------------------------------------------------
-  // txMemo eviction at 4096 entries
+  // Bounded tx memoization
   // -----------------------------------------------------------------------
 
-  describe('txMemo eviction', () => {
-    it('evicts the oldest txMemo entry when size exceeds 4096', async () => {
+  describe('txMemo', () => {
+    it('memoizes only owned BEEF copies without retaining caller-owned arrays', async () => {
       mockFacilitator.lookup.mockResolvedValue({
         type: 'output-list',
         outputs: [{ beef: sampleBeef1, outputIndex: 0 }]
@@ -366,21 +425,50 @@ describe('LookupResolver – additional coverage', () => {
         hostOverrides: { ls_memo: ['https://memo.host'] }
       })
 
-      const txMemo: Map<string, any> = (r as any).txMemo
+      const txMemo: WeakMap<number[], any> = (r as any).txMemo
+      expect(txMemo.get(sampleBeef1)).toBeUndefined()
+      const result = await r.query({ service: 'ls_memo', query: {} })
+      expect(result.type).toBe('output-list')
+      if (result.type !== 'output-list') throw new Error('Expected an output-list answer')
+      expect(result.outputs[0].beef).not.toBe(sampleBeef1)
+      expect(txMemo.get(sampleBeef1)).toBeUndefined()
+      expect(txMemo.get(result.outputs[0].beef)?.txId).toBe(
+        Transaction.fromBEEF(sampleBeef1).id('hex')
+      )
+    })
 
-      // Pre-fill to just over 4096 entries
-      for (let i = 0; i < 4097; i++) {
-        txMemo.set(`key${i}`, { txId: `tx${i}`, expiresAt: Date.now() + 60000 })
-      }
+    it('reparses a caller-owned BEEF array when a facilitator mutates and reuses it', async () => {
+      const sharedBeef = sampleBeef1.slice()
+      mockFacilitator.lookup.mockImplementation(async () => ({
+        type: 'output-list' as const,
+        outputs: [{ beef: sharedBeef, outputIndex: 0 }]
+      }))
+      const r = new LookupResolver({
+        facilitator: mockFacilitator,
+        hostOverrides: { ls_memo: ['https://memo.host'] }
+      })
 
-      expect(txMemo.size).toBe(4097)
+      const first = await r.queryDetailed({ service: 'ls_memo', query: {} })
+      expect(first.progress.txIds).toEqual([Transaction.fromBEEF(sampleBeef1).id('hex')])
 
-      // Query to trigger the eviction path
-      await r.query({ service: 'ls_memo', query: {} })
+      sharedBeef.splice(0, sharedBeef.length, ...sampleBeef2)
+      const second = await r.queryDetailed({ service: 'ls_memo', query: {} })
+      expect(second.progress.txIds).toEqual([Transaction.fromBEEF(sampleBeef2).id('hex')])
+    })
 
-      // After query the eviction should have fired, size should be <= 4097 + 1 - 1 = 4097
-      // (evict oldest then set new)
-      expect(txMemo.size).toBeLessThanOrEqual(4098)
+    it('discards a txid hint that is not bound to its BEEF', async () => {
+      mockFacilitator.lookup.mockResolvedValue({
+        type: 'output-list',
+        outputs: [{ beef: sampleBeef1, outputIndex: 0, txid: '11'.repeat(32) }]
+      })
+      const r = new LookupResolver({
+        facilitator: mockFacilitator,
+        hostOverrides: { ls_memo: ['https://memo.host'] }
+      })
+      await expect(r.query({ service: 'ls_memo', query: {} })).resolves.toEqual({
+        type: 'output-list',
+        outputs: []
+      })
     })
   })
 

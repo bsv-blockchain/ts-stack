@@ -185,6 +185,25 @@ describe('KVStoreTopicManager', () => {
     expect(result.outputsToAdmit).toContain(0)
   })
 
+  it('rejects a correctly signed payload whose locking key is not linked to its controller', async () => {
+    const controllerPrivKey = PrivateKey.fromRandom()
+    const { lockingScript } = await buildValidKVStoreScript(
+      controllerPrivKey,
+      [1, 'kvstore forged lock'],
+      'forgedkey',
+      'forgedvalue'
+    )
+    const chunks = lockingScript.chunks.map(chunk => ({
+      op: chunk.op,
+      data: chunk.data == null ? undefined : [...chunk.data]
+    }))
+    chunks[0].data = Utils.toArray(PrivateKey.fromRandom().toPublicKey().toString(), 'hex')
+    const transaction = buildTxWithInput([new LockingScript(chunks)])
+
+    const result = await manager.identifyAdmissibleOutputs(transaction.toBEEF(), [])
+    expect(result.outputsToAdmit).not.toContain(0)
+  })
+
   it('rejects a 3-field PushDrop (missing controller and signature)', async () => {
     const key = PrivateKey.fromRandom()
     const protocolIDBytes = Utils.toArray(JSON.stringify([1, 'myproto']), 'utf8')
@@ -455,7 +474,7 @@ describe('KVStoreLookupService (MongoDB)', () => {
         service: 'ls_kvstore',
         query: null
       } as any)
-    ).rejects.toThrow('A valid query must be provided')
+    ).rejects.toThrow('query must be an object')
   })
 
   it('throws for unsupported service', async () => {

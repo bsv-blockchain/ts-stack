@@ -141,7 +141,9 @@ describe('LCH HTTP binding', () => {
       receipts: [receipt]
     }
     await expect(client.complete(endpoint, completion)).resolves.toEqual(license)
-    await expect(client.recover(endpoint, bytes(2, 32))).resolves.toEqual(license)
+    await expect(client.recoverUnverified(endpoint, bytes(2, 32))).resolves.toEqual({
+      unverifiedLicense: license
+    })
     expect(preflightLicense).toHaveBeenCalledWith(request)
     expect(quoteHandler).toHaveBeenCalledWith(request)
     expect(preflightDemand).toHaveBeenCalledWith(demand)
@@ -162,7 +164,7 @@ describe('LCH HTTP binding', () => {
         connect: async (url, init) => server.handle(new Request(url, init))
       }
     })
-    await expect(client.recover(endpoint, bytes(3, 32))).resolves.toBeUndefined()
+    await expect(client.recoverUnverified(endpoint, bytes(3, 32))).resolves.toBeUndefined()
     const response = await server.handle(
       new Request(endpoint, {
         method: 'POST',
@@ -189,7 +191,7 @@ describe('LCH HTTP binding', () => {
       }
     })
     await expect(
-      client.recover('https://lch.test/acquisition', bytes(7, 32))
+      client.recoverUnverified('https://lch.test/acquisition', bytes(7, 32))
     ).rejects.toMatchObject({ code: 'ERR_LCH_AUTHORITY' })
   })
 

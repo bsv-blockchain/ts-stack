@@ -4,18 +4,21 @@ import { StorageClient as FullStorageClient } from '../StorageClient'
 import { StorageClientBase } from '../StorageClientBase'
 import { StorageClient as MobileStorageClient } from '../StorageMobile'
 
+const SERVER_IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const AUTHENTICATED_HEADERS = { 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }
+
 class RetryingStorageClient extends StorageClientBase {
   calls: RequestSyncChunkArgs[] = []
   failuresRemaining: number
   readonly failure: Error
 
-  constructor (failures: number, failure = new Error('WalletStorageClient rpcCall: network error 413 413')) {
+  constructor(failures: number, failure = new Error('WalletStorageClient rpcCall: network error 413 413')) {
     super({} as WalletInterface, 'https://storage.example.test')
     this.failuresRemaining = failures
     this.failure = failure
   }
 
-  protected async rpcCall<T> (method: string, params: unknown[]): Promise<T> {
+  protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
     expect(method).toBe('getSyncChunk')
     const args = params[0] as RequestSyncChunkArgs
     this.calls.push({ ...args })
@@ -28,7 +31,7 @@ class RetryingStorageClient extends StorageClientBase {
   }
 }
 
-function makeArgs (): RequestSyncChunkArgs {
+function makeArgs(): RequestSyncChunkArgs {
   return {
     identityKey: `02${'11'.repeat(32)}`,
     fromStorageIdentityKey: `02${'22'.repeat(32)}`,
@@ -66,12 +69,7 @@ describe('StorageClientBase sync response retry', () => {
 
     await expect(client.getSyncChunk(makeArgs())).rejects.toThrow('network error 413')
     expect(client.calls.map(call => call.maxRoughSize)).toEqual([
-      10_000_000,
-      5_000_000,
-      2_500_000,
-      1_250_000,
-      625_000,
-      65_536
+      10_000_000, 5_000_000, 2_500_000, 1_250_000, 625_000, 65_536
     ])
     expect(client.calls.at(-1)?.maxItems).toBe(1)
   })
@@ -91,7 +89,11 @@ describe('StorageClientBase sync response retry', () => {
       budgets.push(request.params[0].maxRoughSize)
       requests.push(request.params[0])
       if (budgets.length === 1) {
-        return new Response('', { status: 413, statusText: 'Payload Too Large' })
+        return new Response('', {
+          status: 413,
+          statusText: 'Payload Too Large',
+          headers: AUTHENTICATED_HEADERS
+        })
       }
       return new Response(
         JSON.stringify({
@@ -105,7 +107,7 @@ describe('StorageClientBase sync response retry', () => {
         }),
         {
           status: 200,
-          headers: { 'Content-Type': 'application/json' }
+          headers: { 'Content-Type': 'application/json', ...AUTHENTICATED_HEADERS }
         }
       )
     })
@@ -130,11 +132,15 @@ describe('StorageClientBase sync response retry', () => {
     let remainingFailures = 1
     const fetch = jest.fn(async (_url: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body))
-      if (remainingFailures-- > 0) return new Response('', {
-        status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After': '0' }
-      })
+      if (remainingFailures-- > 0)
+        return new Response('', {
+          status: 429,
+          statusText: 'Too Many Requests',
+          headers: { 'Retry-After': '0', ...AUTHENTICATED_HEADERS }
+        })
       return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: 1024 }), {
-        status: 200, headers: { 'Content-Type': 'application/json' }
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...AUTHENTICATED_HEADERS }
       })
     })
     Reflect.set(client, 'authClient', { fetch })
@@ -146,5 +152,4 @@ describe('StorageClientBase sync response retry', () => {
     await expect(call('writeSyncTransferPart', { identityKey: makeArgs().identityKey })).rejects.toThrow('429')
     expect(fetch).toHaveBeenCalledTimes(3)
   })
-
 })

@@ -1,18 +1,15 @@
 import { BlockHeader } from '../../Api/BlockHeaderApi'
 import { HeightRange } from '../../util/HeightRange'
+import { deserializeBlockHeader } from '../../util/blockHeaderUtilities'
 import { ChaintracksStorageBase } from '../ChaintracksStorageBase'
+import { readFileSync } from 'node:fs'
 
-function makeHeader(height: number, hashByte: string, previousHash: string): BlockHeader {
-  return {
-    height,
-    hash: hashByte.repeat(64),
-    version: 1,
-    previousHash,
-    merkleRoot: '11'.repeat(32),
-    time: 1,
-    bits: 0x1d00ffff,
-    nonce: height
-  }
+const fixture = new Uint8Array(
+  readFileSync('src/services/chaintracker/chaintracks/__tests/data/cdnTest499/mainNet_0.headers')
+)
+
+function makeHeader(height: number): BlockHeader {
+  return deserializeBlockHeader(fixture, height, height * 80)
 }
 
 function makeStorage(
@@ -43,33 +40,59 @@ describe('ChaintracksStorageBase.addBulkHeaders', () => {
     expect(read).toHaveBeenCalledTimes(1)
   })
 
-  it('selects the most-work branch, ignores duplicate tips, and retains live headers', async () => {
+  it('selects a validated chain, ignores duplicate tips, and retains live headers', async () => {
     const mergeIncrementalBlockHeaders = jest.fn(async () => {})
     const storage = makeStorage(new HeightRange(0, -1), mergeIncrementalBlockHeaders)
-    const h0 = makeHeader(0, 'a', '00'.repeat(32))
-    const h1Original = makeHeader(1, 'b', h0.hash)
-    const h1Fork = makeHeader(1, 'c', h0.hash)
-    const h2Fork = makeHeader(2, 'd', h1Fork.hash)
+    const h0 = makeHeader(0)
+    const h1 = makeHeader(1)
+    const h2 = makeHeader(2)
 
-    const live = await storage.addBulkHeaders(
-      [h0, h1Original, h1Fork, { ...h1Fork }, h2Fork],
-      new HeightRange(0, 1),
-      []
-    )
+    const live = await storage.addBulkHeaders([h0, h1, { ...h1 }, h2], new HeightRange(0, 1), [])
 
-    expect(live).toEqual([h2Fork])
+    expect(live).toEqual([h2])
     expect(mergeIncrementalBlockHeaders).toHaveBeenCalledTimes(1)
-    expect(mergeIncrementalBlockHeaders.mock.calls[0][0]).toEqual([h0, h1Fork])
+    expect(mergeIncrementalBlockHeaders.mock.calls[0][0]).toEqual([h0, h1])
     expect(mergeIncrementalBlockHeaders.mock.calls[0][1]).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it('derives the next live height from empty and populated bulk storage', async () => {
-    const header0 = makeHeader(0, 'a', '00'.repeat(32))
+    const header0 = makeHeader(0)
     const emptyStorage = makeStorage(new HeightRange(0, -1))
     await expect(emptyStorage.addBulkHeaders([header0], new HeightRange(0, -1), [])).resolves.toEqual([header0])
 
-    const header10 = makeHeader(10, 'b', header0.hash)
+    const header10 = makeHeader(10)
     const populatedStorage = makeStorage(new HeightRange(0, 9))
     await expect(populatedStorage.addBulkHeaders([header10], new HeightRange(0, -1), [])).resolves.toEqual([header10])
+  })
+
+  it('rejects forged and proof-invalid candidates before chain-work selection', async () => {
+    const mergeIncrementalBlockHeaders = jest.fn(async () => {})
+    const storage = makeStorage(new HeightRange(0, -1), mergeIncrementalBlockHeaders)
+    const forged = { ...makeHeader(0), hash: '11'.repeat(32) }
+    await expect(storage.addBulkHeaders([forged], new HeightRange(0, 0), [])).rejects.toThrow('hash is invalid')
+
+    const invalidBytes = fixture.slice(0, 80)
+    invalidBytes[76] ^= 1
+    const proofInvalid = deserializeBlockHeader(invalidBytes, 0)
+    await expect(storage.addBulkHeaders([proofInvalid], new HeightRange(0, 0), [])).rejects.toThrow(
+      'not less than specified target'
+    )
+    expect(mergeIncrementalBlockHeaders).not.toHaveBeenCalled()
+  })
+
+  it('accepts trusted live metadata only after reducing it to canonical header fields', async () => {
+    const storage = makeStorage(new HeightRange(0, -1))
+    const liveHeader = {
+      ...makeHeader(0),
+      chainWork: '00'.repeat(32),
+      isChainTip: true,
+      isActive: true,
+      headerId: 1,
+      previousHeaderId: null
+    }
+
+    const [result] = await storage.addBulkHeaders([], new HeightRange(0, -1), [liveHeader])
+    expect(result).toEqual(makeHeader(0))
+    expect(result).not.toHaveProperty('headerId')
   })
 })

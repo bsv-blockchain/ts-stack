@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Knex, knex as makeKnex } from 'knex'
-import { AUTH_SESSION_MIGRATION, KnexMigrations } from '../../schema/KnexMigrations'
-import { AUTH_SESSION_TABLE, KnexSessionManager } from '../KnexSessionManager'
+import { AUTH_MESSAGE_NONCE_MIGRATION, AUTH_SESSION_MIGRATION, KnexMigrations } from '../../schema/KnexMigrations'
+import { AUTH_MESSAGE_NONCE_TABLE, AUTH_SESSION_TABLE, KnexSessionManager } from '../KnexSessionManager'
 
 describe('KnexSessionManager', () => {
   let folder: string
@@ -29,6 +29,8 @@ describe('KnexSessionManager', () => {
     const migrations = new KnexMigrations('test', 'auth session tests', '1'.repeat(64), 1024)
     const migration = await migrations.getMigration(AUTH_SESSION_MIGRATION)
     await migration.up(knexA)
+    const nonceMigration = await migrations.getMigration(AUTH_MESSAGE_NONCE_MIGRATION)
+    await nonceMigration.up(knexA)
 
     now = 1_000
     const options = { ttlMs: 100, now: () => now }
@@ -57,11 +59,13 @@ describe('KnexSessionManager', () => {
   })
 
   it('returns the most recently updated session for an identity', async () => {
-    await managerA.addSession(makeSession({
-      sessionNonce: 'older',
-      peerIdentityKey: 'shared-identity',
-      lastUpdate: 900
-    }))
+    await managerA.addSession(
+      makeSession({
+        sessionNonce: 'older',
+        peerIdentityKey: 'shared-identity',
+        lastUpdate: 900
+      })
+    )
     const newer = makeSession({
       sessionNonce: 'newer',
       peerIdentityKey: 'shared-identity',
@@ -70,6 +74,37 @@ describe('KnexSessionManager', () => {
     await managerB.addSession(newer)
 
     await expect(managerA.getSession('shared-identity')).resolves.toEqual(newer)
+  })
+
+  it('does not let unsigned or certificate-pending rows shadow an authorization-ready session', async () => {
+    const ready = makeSession({
+      sessionNonce: 'ready',
+      peerIdentityKey: 'shared-identity',
+      isAuthenticated: true,
+      certificatesRequired: true,
+      certificatesValidated: true,
+      lastUpdate: 980
+    })
+    await managerA.addSession(ready)
+    await managerB.addSession(
+      makeSession({
+        sessionNonce: 'newer-unsigned',
+        peerIdentityKey: 'shared-identity',
+        lastUpdate: 990
+      })
+    )
+    await managerB.addSession(
+      makeSession({
+        sessionNonce: 'newer-pending',
+        peerIdentityKey: 'shared-identity',
+        isAuthenticated: true,
+        certificatesRequired: true,
+        certificatesValidated: false,
+        lastUpdate: 999
+      })
+    )
+
+    await expect(managerA.getSession('shared-identity')).resolves.toEqual(ready)
   })
 
   it('does not allow a stale writer or stale remover to replace newer state', async () => {
@@ -136,35 +171,144 @@ describe('KnexSessionManager', () => {
     await expect(managerB.pruneExpiredSessions()).resolves.toBe(1)
   })
 
+  it('retains signed nonce claims across an active session TTL extension', async () => {
+    const session = makeSession()
+    await managerA.addSession(session)
+    await expect(managerA.claimMessageNonce('session-nonce', 'message-a')).resolves.toBe(true)
+
+    now = 1_050
+    session.lastUpdate = now
+    await managerA.updateSession(session)
+    now = 1_100
+    await expect(managerB.pruneExpiredSessions()).resolves.toBe(0)
+    await expect(managerB.claimMessageNonce('session-nonce', 'message-a')).resolves.toBe(false)
+
+    now = 1_150
+    await expect(managerB.pruneExpiredSessions()).resolves.toBe(1)
+    await expect(knexA(AUTH_MESSAGE_NONCE_TABLE).where({ sessionNonce: 'session-nonce' })).resolves.toHaveLength(0)
+  })
+
+  it('atomically rejects replayed message nonces across managers and cleans them with sessions', async () => {
+    await managerA.addSession(makeSession())
+
+    await expect(managerA.claimMessageNonce('session-nonce', 'message-a')).resolves.toBe(true)
+    await expect(managerB.claimMessageNonce('session-nonce', 'message-a')).resolves.toBe(false)
+    await expect(managerB.claimMessageNonce('session-nonce', 'message-b')).resolves.toBe(true)
+
+    await managerA.removeSession(makeSession())
+    await expect(knexA(AUTH_MESSAGE_NONCE_TABLE).where({ sessionNonce: 'session-nonce' })).resolves.toHaveLength(0)
+  })
+
+  it('bounds per-session replay claims and requires an active session', async () => {
+    const bounded = new KnexSessionManager(knexA, {
+      ttlMs: 100,
+      maxMessageNoncesPerSession: 1,
+      now: () => now
+    })
+    await bounded.addSession(makeSession())
+    await expect(bounded.claimMessageNonce('session-nonce', 'first')).resolves.toBe(true)
+    await expect(bounded.claimMessageNonce('session-nonce', 'first')).resolves.toBe(false)
+    await expect(bounded.claimMessageNonce('session-nonce', 'second')).rejects.toThrow('capacity')
+    await expect(bounded.claimMessageNonce('missing', 'first')).rejects.toThrow('Session not found')
+  })
+
+  it('atomically rejects initial-request replay across replicas and expires the claim', async () => {
+    const identityKey = `02${'11'.repeat(32)}`
+    const initialNonce = 'A'.repeat(64)
+    await expect(managerA.claimInitialRequestNonce(identityKey, initialNonce)).resolves.toBe(true)
+    await expect(managerB.claimInitialRequestNonce(identityKey, initialNonce)).resolves.toBe(false)
+
+    now += 100
+    await expect(managerB.claimInitialRequestNonce(identityKey, initialNonce)).resolves.toBe(true)
+  })
+
+  it('bounds initial-request replay claims with oldest-claim eviction', async () => {
+    const bounded = new KnexSessionManager(knexA, {
+      ttlMs: 100,
+      maxInitialRequestNoncesPerIdentity: 1,
+      now: () => now
+    })
+    const identityKey = `02${'11'.repeat(32)}`
+    const first = 'A'.repeat(64)
+    const second = 'B'.repeat(64)
+
+    await expect(bounded.claimInitialRequestNonce(identityKey, first)).resolves.toBe(true)
+    await expect(bounded.claimInitialRequestNonce(identityKey, first)).resolves.toBe(false)
+    now += 1
+    await expect(bounded.claimInitialRequestNonce(identityKey, second)).resolves.toBe(true)
+    await expect(bounded.claimInitialRequestNonce(identityKey, second)).resolves.toBe(false)
+    await expect(
+      knexA(AUTH_MESSAGE_NONCE_TABLE)
+        .where({ sessionNonce: `initial:${identityKey}` })
+        .select('messageNonce')
+    ).resolves.toEqual([{ messageNonce: second }])
+
+    await expect(bounded.claimInitialRequestNonce(identityKey, first)).resolves.toBe(true)
+    await expect(
+      knexA(AUTH_MESSAGE_NONCE_TABLE)
+        .where({ sessionNonce: `initial:${identityKey}` })
+        .select('messageNonce')
+    ).resolves.toEqual([{ messageNonce: first }])
+  })
+
+  it('bounds initial-request replay claims globally across attacker-selected identities', async () => {
+    const bounded = new KnexSessionManager(knexA, {
+      ttlMs: 100,
+      maxInitialRequestNonces: 1,
+      maxInitialRequestNoncesPerIdentity: 2,
+      now: () => now
+    })
+    const firstIdentity = `02${'11'.repeat(32)}`
+    const secondIdentity = `03${'22'.repeat(32)}`
+    const first = 'A'.repeat(64)
+    const second = 'B'.repeat(64)
+
+    await expect(bounded.claimInitialRequestNonce(firstIdentity, first)).resolves.toBe(true)
+    now += 1
+    await expect(bounded.claimInitialRequestNonce(secondIdentity, second)).resolves.toBe(true)
+    await expect(
+      knexA(AUTH_MESSAGE_NONCE_TABLE).where('sessionNonce', 'like', 'initial:%').select('messageNonce')
+    ).resolves.toEqual([{ messageNonce: second }])
+    await expect(bounded.claimInitialRequestNonce(firstIdentity, first)).resolves.toBe(true)
+  })
+
   it('coalesces only recent timestamp touches for a row-backed authenticated session', async () => {
-    await managerA.addSession(makeSession({
-      isAuthenticated: true,
-      lastUpdate: 1_000
-    }))
+    await managerA.addSession(
+      makeSession({
+        isAuthenticated: true,
+        lastUpdate: 1_000
+      })
+    )
     const session = await managerB.getSession('session-nonce')
     expect(session).toBeDefined()
 
     now = 1_010
     session!.lastUpdate = now
     await managerB.updateSession(session!)
-    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
-      .resolves.toMatchObject({ lastUpdate: 1_000, expiresAt: 1_100 })
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first()).resolves.toMatchObject({
+      lastUpdate: 1_000,
+      expiresAt: 1_100
+    })
 
     // The test TTL gives the default touch window a 25 ms boundary. Reaching
     // that boundary refreshes the durable timestamp and expiration.
     now = 1_025
     session!.lastUpdate = now
     await managerB.updateSession(session!)
-    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
-      .resolves.toMatchObject({ lastUpdate: 1_025, expiresAt: 1_125 })
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first()).resolves.toMatchObject({
+      lastUpdate: 1_025,
+      expiresAt: 1_125
+    })
   })
 
   it('persists security-state transitions and supports exact timestamp persistence', async () => {
-    await managerA.addSession(makeSession({
-      isAuthenticated: true,
-      certificatesRequired: true,
-      certificatesValidated: false
-    }))
+    await managerA.addSession(
+      makeSession({
+        isAuthenticated: true,
+        certificatesRequired: true,
+        certificatesValidated: false
+      })
+    )
     const session = await managerB.getSession('session-nonce')
     expect(session).toBeDefined()
 
@@ -172,8 +316,10 @@ describe('KnexSessionManager', () => {
     session!.lastUpdate = now
     session!.certificatesValidated = true
     await managerB.updateSession(session!)
-    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
-      .resolves.toMatchObject({ lastUpdate: 1_005, certificatesValidated: 1 })
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first()).resolves.toMatchObject({
+      lastUpdate: 1_005,
+      certificatesValidated: 1
+    })
 
     const exactManager = new KnexSessionManager(knexB, {
       ttlMs: 100,
@@ -185,14 +331,17 @@ describe('KnexSessionManager', () => {
     now = 1_006
     exactSession!.lastUpdate = now
     await exactManager.updateSession(exactSession!)
-    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first())
-      .resolves.toMatchObject({ lastUpdate: 1_006, expiresAt: 1_106 })
+    await expect(knexA(AUTH_SESSION_TABLE).where({ sessionNonce: 'session-nonce' }).first()).resolves.toMatchObject({
+      lastUpdate: 1_006,
+      expiresAt: 1_106
+    })
   })
 
   it('retries a current session update after a concurrent insert becomes visible', async () => {
     const session = makeSession()
     await managerA.addSession(session)
-    const update = jest.spyOn(managerA as any, 'updateIfCurrentOrNewer')
+    const update = jest
+      .spyOn(managerA as any, 'updateIfCurrentOrNewer')
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(1)
 
@@ -200,17 +349,15 @@ describe('KnexSessionManager', () => {
 
     expect(update).toHaveBeenCalledTimes(2)
 
-    update.mockClear()
-      .mockResolvedValueOnce(0)
-      .mockResolvedValueOnce(0)
+    update.mockClear().mockResolvedValueOnce(0).mockResolvedValueOnce(0)
     await managerA.addSession(session)
     expect(update).toHaveBeenCalledTimes(2)
   })
 
   it('recovers from a duplicate-key insert race and preserves other insert failures', async () => {
-    const duplicateInsert = jest.fn(async () => await Promise.reject(
-      Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' })
-    ))
+    const duplicateInsert = jest.fn(
+      async () => await Promise.reject(Object.assign(new Error('duplicate'), { code: 'ER_DUP_ENTRY' }))
+    )
     const failingInsert = jest.fn(async () => await Promise.reject(new Error('database unavailable')))
     const makeKnex = (insert: jest.Mock): Knex => {
       const first = jest.fn(async () => undefined)
@@ -219,14 +366,16 @@ describe('KnexSessionManager', () => {
     }
 
     const duplicateManager = new KnexSessionManager(makeKnex(duplicateInsert))
-    const duplicateUpdate = jest.spyOn(duplicateManager as any, 'updateIfCurrentOrNewer')
+    const duplicateUpdate = jest
+      .spyOn(duplicateManager as any, 'updateIfCurrentOrNewer')
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(1)
     await duplicateManager.addSession(makeSession())
     expect(duplicateUpdate).toHaveBeenCalledTimes(2)
 
     const unchangedManager = new KnexSessionManager(makeKnex(duplicateInsert))
-    const unchangedUpdate = jest.spyOn(unchangedManager as any, 'updateIfCurrentOrNewer')
+    const unchangedUpdate = jest
+      .spyOn(unchangedManager as any, 'updateIfCurrentOrNewer')
       .mockResolvedValueOnce(0)
       .mockResolvedValueOnce(0)
     await unchangedManager.addSession(makeSession())
@@ -241,13 +390,20 @@ describe('KnexSessionManager', () => {
     expect(() => new KnexSessionManager(knexA, { ttlMs: 0 })).toThrow('ttlMs')
     expect(() => new KnexSessionManager(knexA, { touchIntervalMs: -1 })).toThrow('touchIntervalMs')
     expect(() => new KnexSessionManager(knexA, { touchIntervalMs: 1.5 })).toThrow('touchIntervalMs')
+    expect(() => new KnexSessionManager(knexA, { maxMessageNoncesPerSession: 0 })).toThrow('maxMessageNoncesPerSession')
+    expect(() => new KnexSessionManager(knexA, { maxInitialRequestNonces: 0 })).toThrow('maxInitialRequestNonces')
+    expect(() => new KnexSessionManager(knexA, { maxInitialRequestNoncesPerIdentity: 0 })).toThrow(
+      'maxInitialRequestNoncesPerIdentity'
+    )
     await expect(managerA.addSession(makeSession({ sessionNonce: undefined }))).rejects.toThrow('sessionNonce')
     await expect(managerA.addSession(makeSession({ lastUpdate: Number.NaN }))).rejects.toThrow('lastUpdate')
-    await expect(managerA.addSession(makeSession({ lastUpdate: Number.MAX_SAFE_INTEGER }))).rejects.toThrow('safe integer')
+    await expect(managerA.addSession(makeSession({ lastUpdate: Number.MAX_SAFE_INTEGER }))).rejects.toThrow(
+      'safe integer'
+    )
   })
 })
 
-function makeSession (overrides: Partial<PeerSession> = {}): PeerSession {
+function makeSession(overrides: Partial<PeerSession> = {}): PeerSession {
   return {
     isAuthenticated: false,
     sessionNonce: 'session-nonce',

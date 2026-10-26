@@ -155,14 +155,16 @@ describe('TransactionTemplate', () => {
       }).not.toThrow()
     })
 
-    test('should throw error when satoshis is negative', async () => {
+    test('should reject invalid satoshi amounts', async () => {
       const privateKey = new PrivateKey(6)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())
       const publicKey = privateKey.toPublicKey().toString()
 
-      expect(() => {
-        new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis: -100 })
-      }).toThrow('satoshis must be a non-negative number')
+      for (const satoshis of [-100, Number.NaN, Number.POSITIVE_INFINITY, 0.5, 21e14 + 1]) {
+        expect(() => {
+          new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis })
+        }).toThrow('satoshis must be a non-negative number')
+      }
     })
 
     test('should throw error when description is not a string', async () => {
@@ -512,9 +514,9 @@ describe('TransactionTemplate', () => {
         .options({ acceptDelayedBroadcast: false })
         .options({ returnTXIDOnly: true })
         .options({ noSend: false })
-        .options({ knownTxids: ['abc123', 'def456'] })
-        .options({ noSendChange: ['txid.0', 'txid.1'] })
-        .options({ sendWith: ['xyz789'] })
+        .options({ knownTxids: ['aa'.repeat(32), 'bb'.repeat(32)] })
+        .options({ noSendChange: [`${'cc'.repeat(32)}.0`, `${'dd'.repeat(32)}.1`] })
+        .options({ sendWith: ['ee'.repeat(32)] })
 
       expect(template).toBeDefined()
     })
@@ -597,6 +599,14 @@ describe('TransactionTemplate', () => {
         // @ts-expect-error - intentionally testing invalid input
         new TransactionBuilder(wallet).options({ sendWith: [null] })
       }).toThrow('sendWith[0] must be a string (hex txid)')
+
+      expect(() => {
+        new TransactionBuilder(wallet).options({ knownTxids: ['not-a-txid'] })
+      }).toThrow('knownTxids[0] must be a 32-byte hexadecimal transaction ID')
+
+      expect(() => {
+        new TransactionBuilder(wallet).options({ noSendChange: [`${'aa'.repeat(32)}.01`] })
+      }).toThrow('noSendChange[0] must be a canonical txid.outputIndex outpoint')
     })
   })
 
@@ -863,6 +873,17 @@ describe('TransactionTemplate', () => {
   })
 
   describe('preview mode', () => {
+    test('rejects truthy non-boolean preview flags', async () => {
+      const privateKey = new PrivateKey(109)
+      const wallet = await makeWallet('test', storageURL, privateKey.toHex())
+      const publicKey = privateKey.toPublicKey().toString()
+      const builder = new TransactionBuilder(wallet).addP2PKHOutput({ publicKey, satoshis: 1 })
+
+      await expect(builder.build({ preview: 'yes' as any })).rejects.toThrow(
+        'preview must be a boolean'
+      )
+    })
+
     test('should return createAction args without executing when preview=true', async () => {
       const privateKey = new PrivateKey(110)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())
@@ -1181,6 +1202,61 @@ describe('TransactionTemplate', () => {
       ).toThrow(expected)
     })
 
+    test('rejects invalid or conflicting source-output signing context', async () => {
+      const wallet = await makeWallet('test', storageURL, new PrivateKey(198).toHex())
+      const lockingScript = LockingScript.fromASM('OP_TRUE')
+      const source = new Transaction()
+      source.addInput({
+        sourceTXID: '00'.repeat(32),
+        sourceOutputIndex: 0,
+        unlockingScript: Script.fromASM('OP_TRUE')
+      })
+      source.addOutput({ satoshis: 7, lockingScript })
+
+      for (const sourceOutputIndex of [Number.NaN, 0.5, -1, 0x100000000]) {
+        expect(() =>
+          new TransactionBuilder(wallet).addP2PKHInput({
+            sourceTransaction: source,
+            sourceOutputIndex
+          })
+        ).toThrow('sourceOutputIndex must be an unsigned 32-bit integer')
+      }
+      expect(() =>
+        new TransactionBuilder(wallet).addP2PKHInput({
+          sourceTransaction: source,
+          sourceOutputIndex: 1
+        })
+      ).toThrow('sourceTransaction has no output at index 1')
+      expect(() =>
+        new TransactionBuilder(wallet).addP2PKHInput({
+          sourceTransaction: source,
+          sourceOutputIndex: 0,
+          sourceSatoshis: 8
+        })
+      ).toThrow('sourceSatoshis does not match sourceTransaction output')
+      expect(() =>
+        new TransactionBuilder(wallet).addP2PKHInput({
+          sourceTransaction: source,
+          sourceOutputIndex: 0,
+          lockingScript: Script.fromASM('OP_FALSE')
+        })
+      ).toThrow('lockingScript does not match sourceTransaction output')
+      expect(() =>
+        new TransactionBuilder(wallet).addP2PKHInput({
+          sourceTransaction: source,
+          sourceOutputIndex: 0,
+          signOutputs: 'invalid' as any
+        })
+      ).toThrow('signOutputs must be "all", "none", or "single"')
+      expect(() =>
+        new TransactionBuilder(wallet).addP2PKHInput({
+          sourceTransaction: source,
+          sourceOutputIndex: 0,
+          anyoneCanPay: 1 as any
+        })
+      ).toThrow('anyoneCanPay must be a boolean')
+    })
+
     test('should prepare a transaction with P2PKH input and output', async () => {
       const privateKey = new PrivateKey(200)
       const wallet = await makeWallet('test', storageURL, privateKey.toHex())
@@ -1330,7 +1406,7 @@ describe('TransactionTemplate', () => {
       })
       sourceTransaction.addOutput({
         lockingScript,
-        satoshis: 1
+        satoshis: 1000
       })
       sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(
         sourceTransaction.id('hex'),
@@ -1805,6 +1881,17 @@ describe('TransactionBuilder refactored artifact helpers', () => {
         [{ unlockingScriptLength: 0 }]
       )
     ).rejects.toThrow('unlockingScriptTemplate must have an estimateLength() method')
+
+    ;(builder as any).inputs = [{ type: 'custom' }]
+    for (const invalidLength of [Number.NaN, Number.POSITIVE_INFINITY, -1, 0.5, 0x100000000]) {
+      await expect(
+        (builder as any).populateUnlockingScriptLengths(
+          preimage,
+          [{ estimateLength: async () => invalidLength }],
+          [{ unlockingScriptLength: 0 }]
+        )
+      ).rejects.toThrow('unlockingScriptLength for input 0 must be an unsigned 32-bit integer')
+    }
   })
 
   test('applies, removes, and validates calculated change outputs', () => {
@@ -1824,53 +1911,93 @@ describe('TransactionBuilder refactored artifact helpers', () => {
     ).toThrow('Change output at index 0 has no satoshis after fee calculation')
   })
 
-  test('validates and signs wallet-created actions', async () => {
-    await expect(
-      (builder as any).signCreatedAction({ txid: 'txid', tx: [1] }, [])
-    ).resolves.toEqual({ txid: 'txid', tx: [1] })
-
+  test('binds wallet-created input actions by outpoint and aborts substituted outputs', async () => {
+    const requestedSource = new Transaction()
+    requestedSource.addOutput({ satoshis: 10, lockingScript: Script.fromASM('OP_1') })
+    const walletSource = new Transaction()
+    walletSource.addOutput({ satoshis: 11, lockingScript: Script.fromASM('OP_1') })
+    const sourceTXID = requestedSource.id('hex')
+    const outpoint = `${sourceTXID}.0`
+    const requestedOutput = LockingScript.fromASM('OP_9')
     ;(builder as any).inputs = [
       {
         type: 'custom',
-        sourceTransaction,
-        sourceOutputIndex: 0,
-        unlockingScriptTemplate: {}
+        sourceTransaction: requestedSource,
+        sourceOutputIndex: 0
       }
     ]
-    await expect((builder as any).signCreatedAction({}, [{}])).rejects.toThrow(
-      'Failed to create signable transaction'
+    const createArgs = {
+      description: 'Bound helper action',
+      inputs: [
+        {
+          outpoint,
+          inputDescription: 'Requested input',
+          unlockingScriptLength: 1
+        }
+      ],
+      outputs: [
+        {
+          satoshis: 1,
+          lockingScript: requestedOutput.toHex(),
+          outputDescription: 'Requested output'
+        }
+      ]
+    }
+    let partial: Transaction | undefined
+    let substituteOutput = false
+    ;(wallet.createAction as any) = jest.fn(async (args: typeof createArgs) => {
+      partial = new Transaction()
+      partial.addInput({
+        sourceTransaction: walletSource,
+        sourceOutputIndex: 0,
+        unlockingScript: Script.fromASM('OP_0')
+      })
+      partial.addInput({
+        sourceTransaction: requestedSource,
+        sourceOutputIndex: 0,
+        unlockingScript: Script.fromASM('OP_0')
+      })
+      partial.addOutput({
+        satoshis: substituteOutput ? 2 : args.outputs![0].satoshis,
+        lockingScript: Script.fromHex(args.outputs![0].lockingScript)
+      })
+      return {
+        signableTransaction: {
+          reference: 'Ym91bmQtd2FsbGV0LWhlbHBlcg==',
+          tx: partial.toAtomicBEEF(true)
+        }
+      }
+    })
+    ;(wallet.signAction as any) = jest.fn(async ({ spends }: any) => {
+      const signed = Transaction.fromAtomicBEEF(partial!.toAtomicBEEF(true))
+      for (const [index, spend] of Object.entries(spends) as Array<
+        [string, { unlockingScript: string }]
+      >) {
+        signed.inputs[Number(index)].unlockingScript = Script.fromHex(spend.unlockingScript)
+      }
+      return { txid: signed.id('hex'), tx: signed.toAtomicBEEF(true) }
+    })
+    ;(wallet.abortAction as any) = jest.fn(async () => ({ aborted: true }))
+    const sign = jest.fn(async (_transaction: Transaction, inputIndex: number) => {
+      expect(inputIndex).toBe(1)
+      return Script.fromASM('OP_1')
+    })
+
+    const result = await (builder as any).completeInputAction(createArgs, [{ sign }])
+    expect(Transaction.fromAtomicBEEF(result.tx).inputs[1].unlockingScript?.toHex()).toBe(
+      Script.fromASM('OP_1').toHex()
+    )
+    expect(wallet.signAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        spends: { 1: { unlockingScript: Script.fromASM('OP_1').toHex() } }
+      }),
+      undefined
     )
 
-    const sign = jest.fn(async () => {})
-    const input = { unlockingScript: undefined as any }
-    const fromBeef = jest.spyOn(Transaction, 'fromBEEF').mockReturnValue({
-      inputs: [input],
-      sign
-    } as any)
-    await expect(
-      (builder as any).signCreatedAction(
-        { signableTransaction: { reference: 'reference', tx: [1] } },
-        [{}]
-      )
-    ).rejects.toThrow('Missing unlocking script for input 0')
-
-    input.unlockingScript = { toHex: () => 'unlocking-script' }
-    ;(wallet.signAction as any).mockResolvedValue({ txid: 'signed', tx: [2] })
-    await expect(
-      (builder as any).signCreatedAction(
-        { signableTransaction: { reference: 'reference', tx: [1] } },
-        [{ template: true }]
-      )
-    ).resolves.toEqual({ txid: 'signed', tx: [2] })
-    expect(input).toMatchObject({
-      unlockingScriptTemplate: { template: true },
-      sourceTransaction
-    })
-    expect(sign).toHaveBeenCalledTimes(2)
-    expect(wallet.signAction).toHaveBeenCalledWith({
-      reference: 'reference',
-      spends: { '0': { unlockingScript: 'unlocking-script' } }
-    })
-    expect(fromBeef).toHaveBeenCalledTimes(2)
+    substituteOutput = true
+    await expect((builder as any).completeInputAction(createArgs, [{ sign }])).rejects.toThrow(
+      'omitted or substituted a requested output'
+    )
+    expect(wallet.abortAction).toHaveBeenCalledTimes(1)
   })
 })

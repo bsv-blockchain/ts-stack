@@ -81,7 +81,7 @@ Two entry points in `@bsv/simple`:
 
 **`@bsv/simple/browser`** — Browser entry point. Communicates with the user's BRC-100 wallet over localhost, postMessage, or another SDK wallet substrate. The app never holds private keys. Exports include `createWallet`, `Wallet`, `Overlay`, `Certifier`, `DID`, `CredentialSchema`, `CredentialIssuer`, and `MemoryRevocationStore`.
 
-**`@bsv/simple/server`** — Manages a self-custodial server wallet from a private key, using a wallet storage endpoint such as Wallet Infra. Suitable for automated agents, backend services, and MCP servers. Exports include `ServerWallet`, `ServerWalletManager`, `FileRevocationStore`, handler factories, `JsonFileStore`, `IdentityRegistry`, and `DIDResolverService`.
+**`@bsv/simple/server`** — Manages a self-custodial server wallet from a private key, using a wallet storage endpoint such as Wallet Infra. Suitable for automated agents, backend services, and MCP servers. Exports include `ServerWallet`, `ServerWalletManager`, `FileRevocationStore`, handler factories, `JsonFileStore`, `IdentityRegistry`.
 
 ## Direct service access
 

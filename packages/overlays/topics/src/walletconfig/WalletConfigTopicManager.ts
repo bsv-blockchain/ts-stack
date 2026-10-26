@@ -1,22 +1,22 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { LockingScript, PushDrop } from '@bsv/sdk'
+import { LockingScript } from '@bsv/sdk'
 import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 import {
-  decodeRegistryUtf8Fields,
-  verifyRegistryToken
+  authenticateSignedRegistryToken,
+  registryText,
+  registryUrl
 } from '../shared/registryTokenValidation.js'
 
 async function validateWalletConfigOutput(lockingScript: LockingScript): Promise<void> {
-  const { lockingPublicKey, fields } = PushDrop.decode(lockingScript)
-
-  const [, , , , , , , registryOperator] = decodeRegistryUtf8Fields(fields, 8)
-  await verifyRegistryToken({
-    fields,
-    lockingPublicKey,
-    registryOperator,
-    protocolID: [1, 'wallet config option'],
-    linkageError: 'WalletConfig token not linked to registry operator!'
-  })
+  const [configID, name, icon, wab, storage, messagebox, legal] =
+    await authenticateSignedRegistryToken(lockingScript, 8, [1, 'wallet config option'])
+  registryText(configID, 'Wallet config ID', 1, 300)
+  registryText(name, 'Wallet config name', 1, 300)
+  registryUrl(icon, 'Wallet config icon')
+  registryUrl(wab, 'WAB URL')
+  registryUrl(storage, 'Storage URL')
+  registryUrl(messagebox, 'Message Box URL')
+  registryUrl(legal, 'Legal URL')
 }
 
 export default class WalletConfigTopicManager implements TopicManager {

@@ -3,10 +3,10 @@ import { PublicKey } from '@bsv/sdk'
 import { Logger, log } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { getRecipientFee, getServerDeliveryFee } from '../../utils/messagePermissions.js'
+import { isCanonicalMessageBox, MAX_MESSAGE_BOX_BYTES } from '../../security/messageFields.js'
 
 export const MAX_QUOTE_RECIPIENTS = 100
 export const QUOTE_CONCURRENCY = 10
-const MAX_MESSAGE_BOX_BYTES = 128
 
 export interface GetQuoteRequest extends AuthRequest {
   query: {
@@ -48,22 +48,32 @@ function validationError(
   return { statusCode, body: { status: 'error', code, description } }
 }
 
-function invalidRecipientIndexes(recipients: string[]): number[] {
+function normalizeRecipientKeys(recipients: string[]): {
+  recipients: string[]
+  invalidIndexes: number[]
+} {
+  const normalizedRecipients: string[] = []
   const invalidIndexes: number[] = []
   recipients.forEach((recipient, index) => {
     try {
-      PublicKey.fromString(recipient)
+      normalizedRecipients.push(PublicKey.fromString(recipient).toString())
     } catch {
       invalidIndexes.push(index)
     }
   })
-  return invalidIndexes
+  return { recipients: normalizedRecipients, invalidIndexes }
 }
 
 function validateQuoteInput(req: GetQuoteRequest): ValidatedQuoteInput | QuoteValidationError {
   const sender = req.auth?.identityKey
   if (sender == null) {
     Logger.log('[DEBUG] Authentication required for message quote')
+    return validationError(401, 'ERR_AUTHENTICATION_REQUIRED', 'Authentication required.')
+  }
+  let normalizedSender: string
+  try {
+    normalizedSender = PublicKey.fromString(sender).toString()
+  } catch {
     return validationError(401, 'ERR_AUTHENTICATION_REQUIRED', 'Authentication required.')
   }
 
@@ -76,15 +86,11 @@ function validateQuoteInput(req: GetQuoteRequest): ValidatedQuoteInput | QuoteVa
       'recipient and messageBox parameters are required.'
     )
   }
-  if (
-    typeof messageBox !== 'string' ||
-    messageBox.trim() === '' ||
-    Buffer.byteLength(messageBox, 'utf8') > MAX_MESSAGE_BOX_BYTES
-  ) {
+  if (!isCanonicalMessageBox(messageBox)) {
     return validationError(
       400,
       'ERR_INVALID_MESSAGE_BOX',
-      `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
+      `messageBox must be an exact, control-free string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
     )
   }
 
@@ -100,7 +106,8 @@ function validateQuoteInput(req: GetQuoteRequest): ValidatedQuoteInput | QuoteVa
     )
   }
 
-  const invalidIndexes = invalidRecipientIndexes(recipients)
+  const normalized = normalizeRecipientKeys(recipients)
+  const { invalidIndexes } = normalized
   if (invalidIndexes.length > 0) {
     Logger.log('[DEBUG] Invalid recipient public key format in array')
     return validationError(
@@ -109,8 +116,15 @@ function validateQuoteInput(req: GetQuoteRequest): ValidatedQuoteInput | QuoteVa
       `Invalid recipient public key at index(es): ${invalidIndexes.join(', ')}.`
     )
   }
+  if (new Set(normalized.recipients).size !== normalized.recipients.length) {
+    return validationError(
+      400,
+      'ERR_DUPLICATE_RECIPIENT',
+      'Each recipient may appear only once in a quote.'
+    )
+  }
 
-  return { sender, recipients, messageBox }
+  return { sender: normalizedSender, recipients: normalized.recipients, messageBox }
 }
 
 function isQuoteValidationError(
@@ -200,7 +214,8 @@ async function buildMultiRecipientQuote(
  *         required: true
  *         schema:
  *           type: string
- *         description: messageBox type
+ *           maxLength: 128
+ *         description: Exact control-free messageBox type
  *     responses:
  *       200:
  *         description: Quote(s) retrieved successfully
@@ -250,8 +265,8 @@ export default {
         description: `Message delivery quotes generated for ${input.recipients.length} recipients.`,
         ...quote
       })
-    } catch (error) {
-      Logger.error('[ERROR] Internal Server Error in message quote:', error)
+    } catch {
+      Logger.error('[ERROR] Message quote generation failed.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',

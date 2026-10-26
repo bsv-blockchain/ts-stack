@@ -127,7 +127,10 @@ export class AirGapDecoder {
     this.crc = crc
     this.blockBytes = 0
     this.seen = new Set()
-    this.solved = Array.from({ length: total }, () => null)
+    // Grow with actual progress. A hostile one-byte part may legitimately
+    // advertise K=65,535; starting that session must not allocate 65,535
+    // array slots before it has solved a single block.
+    this.solved = []
     this.solvedCount = 0
     this.pending = []
     this.pendingIndices = 0
@@ -173,7 +176,7 @@ export class AirGapDecoder {
     const msgLen = view.getUint32(15)
     const crc = view.getUint32(19)
     const payload = bytes.subarray(HEADER_BYTES)
-    if (total === 0 || msgLen === 0 || msgLen > MAX_MESSAGE_BYTES) return null
+    if (!total || !msgLen || msgLen > MAX_MESSAGE_BYTES) return null
     // Block size, msgLen and K must agree, or the sender and this decoder are
     // not talking about the same message shape.
     if (Math.ceil(msgLen / payload.length) !== total) return null
@@ -192,7 +195,7 @@ export class AirGapDecoder {
    */
   accept(text: string): AirGapProgress {
     const part = this.parse(text)
-    if (part === null) return this.rejected()
+    if (!part) return this.rejected()
     if (!this.enterSession(part)) return this.rejected()
 
     // A completed session is immutable: acknowledge and change nothing.
@@ -200,7 +203,7 @@ export class AirGapDecoder {
 
     // The agreement check in parse admits a *range* of payload lengths for a
     // given (msgLen, K); only the pin can tell two block sizes apart.
-    if (this.blockBytes === 0) this.blockBytes = part.payload.length
+    if (!this.blockBytes) this.blockBytes = part.payload.length
     else if (part.payload.length !== this.blockBytes) return this.rejected()
 
     if (this.seen.has(part.seq)) return this.accepted()
@@ -213,7 +216,7 @@ export class AirGapDecoder {
    * session that has not yet earned the switch.
    */
   private enterSession(part: ParsedPart): boolean {
-    if (this.key === '') {
+    if (!this.key) {
       this.startSession(part.key, part.total, part.msgLen, part.crc)
       return true
     }
@@ -238,8 +241,10 @@ export class AirGapDecoder {
 
   /** Feed one new in-session part into the peeling state, within budgets. */
   private ingest(part: ParsedPart): AirGapProgress {
-    const indices =
-      part.seq < this.total ? new Set([part.seq]) : new Set(blocksForPart(part.seq, this.total))
+    const indices = new Set(
+      part.seq < this.total ? [part.seq] : blocksForPart(part.seq, this.total, MAX_PENDING_INDICES)
+    )
+    if (!indices.size) return this.rejected()
     const candidate: PendingPart = { indices, payload: part.payload }
     this.reduce(candidate)
     if (candidate.indices.size > 1) {
@@ -330,9 +335,9 @@ export class AirGapDecoder {
    * never see unverified bytes, and never have to handle a retry themselves.
    */
   message(): Uint8Array | null {
-    if (this.total === 0 || this.solvedCount !== this.total || this.blockBytes === 0) return null
+    if (!this.total || this.solvedCount !== this.total || !this.blockBytes) return null
     const out = new Uint8Array(this.total * this.blockBytes)
-    for (let i = 0; i < this.total; i++) out.set(this.solved[i]!, i * this.blockBytes)
+    for (let i = this.total; i-- > 0;) out.set(this.solved[i]!, i * this.blockBytes)
     const trimmed = out.subarray(0, this.msgLen)
     if (crc32(trimmed) !== this.crc) {
       this.reset()

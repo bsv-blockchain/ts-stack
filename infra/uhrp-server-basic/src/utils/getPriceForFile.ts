@@ -1,24 +1,50 @@
 import axios from 'axios'
 import { log } from '../logger'
 
-const { PRICE_PER_GB_MO } = process.env
-
 interface PriceCalculationParams {
   retentionPeriod: number
   fileSize: number
 }
 
 const FALLBACK_EXCHANGE_RATE = 30
+const MIN_EXCHANGE_RATE = 0.01
+const MAX_EXCHANGE_RATE = 1_000_000
+const EXCHANGE_RATE_TIMEOUT_MS = 10_000
+const EXCHANGE_RATE_MAX_BYTES = 64 * 1024
+
+function readPricePerGBMonth(value = process.env.PRICE_PER_GB_MO): number {
+  const normalized = value?.trim()
+  if (normalized == null || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(normalized)) {
+    throw new TypeError('PRICE_PER_GB_MO must be a canonical positive decimal number')
+  }
+  const price = Number(normalized)
+  if (!Number.isFinite(price) || price <= 0 || price > 1_000_000) {
+    throw new TypeError('PRICE_PER_GB_MO must be a bounded positive decimal number')
+  }
+  return price
+}
 
 function hasUsableExchangeRate(data: unknown): data is { rate: number } {
   if (typeof data !== 'object' || data === null || !('rate' in data)) return false
   const { rate } = data
-  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0
+  return (
+    typeof rate === 'number' &&
+    Number.isFinite(rate) &&
+    rate >= MIN_EXCHANGE_RATE &&
+    rate <= MAX_EXCHANGE_RATE
+  )
 }
 
 async function fetchExchangeRate(): Promise<number> {
   try {
-    const response = await axios.get('https://api.whatsonchain.com/v1/bsv/main/exchangerate')
+    const response = await axios.get('https://api.whatsonchain.com/v1/bsv/main/exchangerate', {
+      signal: AbortSignal.timeout(EXCHANGE_RATE_TIMEOUT_MS),
+      timeout: EXCHANGE_RATE_TIMEOUT_MS,
+      maxRedirects: 0,
+      maxContentLength: EXCHANGE_RATE_MAX_BYTES,
+      maxBodyLength: EXCHANGE_RATE_MAX_BYTES,
+      validateStatus: status => status === 200
+    })
     if (!hasUsableExchangeRate(response.data)) {
       throw new TypeError('Invalid rate response')
     }
@@ -47,14 +73,13 @@ const getPriceForFile = async ({
   retentionPeriod,
   fileSize
 }: PriceCalculationParams): Promise<number> => {
-  if (!PRICE_PER_GB_MO) {
-    throw new Error('PRICE_PER_GB_MO is undefined')
+  if (!Number.isSafeInteger(fileSize) || fileSize < 1) {
+    throw new RangeError('fileSize must be a positive safe integer')
   }
-
-  const pricePerGBMonth = Number.parseFloat(PRICE_PER_GB_MO)
-  if (Number.isNaN(pricePerGBMonth)) {
-    throw new TypeError('PRICE_PER_GB_MO must be a valid number')
+  if (!Number.isSafeInteger(retentionPeriod) || retentionPeriod < 1) {
+    throw new RangeError('retentionPeriod must be a positive safe integer')
   }
+  const pricePerGBMonth = readPricePerGBMonth()
 
   // File size is in bytes, convert to gigabytes
   const fileSizeGB = fileSize / 1000000000
@@ -72,6 +97,9 @@ const getPriceForFile = async ({
 
   // Account for server overhead in our prices, so there is a minimum of 10 satoshis
   const satPrice = Math.max(10, Math.floor(usdPrice * exchangeRateInSatoshis))
+  if (!Number.isSafeInteger(satPrice) || satPrice < 1 || satPrice > 21e14) {
+    throw new RangeError('Calculated storage price is outside the supported satoshi range')
+  }
   return satPrice
 }
 

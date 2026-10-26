@@ -194,17 +194,20 @@ describe('AuthFetch.handleFetchAndValidate (private)', () => {
 
     expect(response.status).toBe(200)
     expect(peerToUse.supportsMutualAuth).toBe(false)
+    expect(global.fetch).toHaveBeenCalledWith('https://example.com', {
+      method: 'GET',
+      headers: undefined,
+      body: undefined,
+      redirect: 'error'
+    })
   })
 
   it('throws when response contains an x-bsv header (spoofing detection)', async () => {
     const authFetch = new AuthFetch(buildWallet())
 
-    // The source iterates response.headers.forEach((value, name) => ...)
-    // and checks if the VALUE starts with 'x-bsv'. To trigger spoofing
-    // detection we need a header whose value starts with 'x-bsv'.
     const mockResponse = new Response('', {
       status: 200,
-      headers: { 'x-custom-header': 'x-bsv-auth-identity-key' }
+      headers: { 'x-bsv-auth-identity-key': 'attacker-controlled' }
     })
     jest.spyOn(global, 'fetch').mockResolvedValue(mockResponse)
 
@@ -215,6 +218,24 @@ describe('AuthFetch.handleFetchAndValidate (private)', () => {
         { supportsMutualAuth: undefined }
       )
     ).rejects.toThrow('The server is trying to claim it has been authenticated')
+  })
+
+  it('does not treat an ordinary header value beginning with x-bsv as an auth claim', async () => {
+    const authFetch = new AuthFetch(buildWallet())
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response('', {
+        status: 200,
+        headers: { 'x-custom-header': 'x-bsv-is-just-the-value' }
+      })
+    )
+
+    await expect(
+      (authFetch as any).handleFetchAndValidate(
+        'https://example.com',
+        {},
+        { supportsMutualAuth: undefined }
+      )
+    ).resolves.toBeInstanceOf(Response)
   })
 
   it('throws when response is not ok', async () => {
@@ -290,6 +311,18 @@ describe('AuthFetch.handlePaymentAndRetry – header validation', () => {
       (authFetch as any).handlePaymentAndRetry('https://example.com', {}, response)
     ).rejects.toThrow('Invalid x-bsv-payment-satoshis-required response header value')
   })
+
+  it.each(['1junk', '1.5', '+1', '01', '9007199254740992'])(
+    'throws when satoshis value is non-canonical or unsafe: %s',
+    async value => {
+      const authFetch = new AuthFetch(buildWallet())
+      const response = make402Response({ 'x-bsv-payment-satoshis-required': value })
+
+      await expect(
+        (authFetch as any).handlePaymentAndRetry('https://example.com', {}, response)
+      ).rejects.toThrow('Invalid x-bsv-payment-satoshis-required response header value')
+    }
+  )
 
   it('throws when x-bsv-auth-identity-key header is missing', async () => {
     const authFetch = new AuthFetch(buildWallet())
@@ -942,6 +975,21 @@ describe('AuthFetch.consumeReceivedCertificates', () => {
     const authFetch = new AuthFetch(buildWallet())
     expect(authFetch.consumeReceivedCertificates()).toEqual([])
   })
+
+  it('retains a bounded most-recent certificate buffer', () => {
+    const authFetch = new AuthFetch(buildWallet())
+    for (let batch = 0; batch < 11; batch++) {
+      ;(authFetch as any).retainReceivedCertificates(
+        Array.from({ length: 100 }, (_, index) => ({
+          serialNumber: `${batch}-${index}`
+        }))
+      )
+    }
+    const retained = authFetch.consumeReceivedCertificates() as any[]
+    expect(retained).toHaveLength(1000)
+    expect(retained[0].serialNumber).toBe('1-0')
+    expect(retained[999].serialNumber).toBe('10-99')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -1033,6 +1081,42 @@ describe('AuthFetch.logPaymentAttempt (private)', () => {
   })
 })
 
+describe('AuthFetch payment telemetry redaction', () => {
+  it('omits transaction and derivation material from logged details', () => {
+    const authFetch = new AuthFetch(buildWallet())
+    const details = (authFetch as any).composePaymentLogDetails(
+      'https://user:password@example.com/pay?token=secret',
+      {
+        satoshisRequired: 10,
+        transactionBase64: 'private-transaction',
+        derivationPrefix: 'private-prefix',
+        derivationSuffix: 'private-suffix',
+        serverIdentityKey: 'server',
+        clientIdentityKey: 'client',
+        attempts: 1,
+        maxAttempts: 3,
+        errors: [],
+        requestSummary: {
+          url: 'https://example.com',
+          method: 'GET',
+          headers: {},
+          bodyType: 'none',
+          bodyByteLength: 0
+        }
+      }
+    )
+    expect(details.url).toBe('https://example.com')
+    expect(details.payment).toEqual({
+      satoshis: 10,
+      serverIdentityKey: 'server',
+      clientIdentityKey: 'client'
+    })
+    expect(JSON.stringify(details)).not.toContain('private-')
+    expect(JSON.stringify(details)).not.toContain('password')
+    expect(JSON.stringify(details)).not.toContain('secret')
+  })
+})
+
 // ---------------------------------------------------------------------------
 // 17. createPaymentErrorEntry
 // ---------------------------------------------------------------------------
@@ -1104,7 +1188,8 @@ describe('AuthFetch.buildPaymentFailureError (private)', () => {
       new Error('last error')
     )
     expect(err).toBeInstanceOf(Error)
-    expect(err.message).toContain('https://example.com/pay')
+    expect(err.message).toContain('https://example.com')
+    expect(err.message).not.toContain('/pay')
     expect(err.message).toContain('3/3')
     expect(err.message).toContain('10 satoshis')
   })
@@ -1118,6 +1203,9 @@ describe('AuthFetch.buildPaymentFailureError (private)', () => {
     expect(err.details).toBeDefined()
     expect(err.details.payment.satoshis).toBe(10)
     expect(err.details.attempts.used).toBe(3)
+    expect(err.details.payment).not.toHaveProperty('transactionBase64')
+    expect(err.details.payment).not.toHaveProperty('derivationPrefix')
+    expect(err.details.payment).not.toHaveProperty('derivationSuffix')
   })
 
   it('sets cause when lastError is an Error', () => {
@@ -1152,9 +1240,9 @@ describe('AuthFetch.buildPaymentRequestSummary (private)', () => {
       headers: { 'X-Custom': 'value' },
       body: 'hello'
     })
-    expect(summary.url).toBe('https://example.com/resource')
+    expect(summary.url).toBe('https://example.com')
     expect(summary.method).toBe('POST')
-    expect(summary.headers).toMatchObject({ 'X-Custom': 'value' })
+    expect(summary.headers).toMatchObject({ 'X-Custom': '[redacted]' })
     expect(summary.bodyType).toBe('string')
     expect(summary.bodyByteLength).toBe(5)
   })
@@ -1163,5 +1251,25 @@ describe('AuthFetch.buildPaymentRequestSummary (private)', () => {
     const authFetch = new AuthFetch(buildWallet())
     const summary = (authFetch as any).buildPaymentRequestSummary('https://example.com', {})
     expect(summary.method).toBe('GET')
+  })
+
+  it('does not retain URL credentials, query secrets, or authorization values', () => {
+    const authFetch = new AuthFetch(buildWallet())
+    const summary = (authFetch as any).buildPaymentRequestSummary(
+      'https://user:password@example.com/private?token=secret',
+      {
+        headers: {
+          Authorization: 'Bearer secret',
+          'x-bsv-api-key': 'secret-key',
+          'Content-Type': 'application/json'
+        }
+      }
+    )
+    expect(summary.url).toBe('https://example.com')
+    expect(summary.headers).toEqual({
+      Authorization: '[redacted]',
+      'x-bsv-api-key': '[redacted]',
+      'Content-Type': 'application/json'
+    })
   })
 })

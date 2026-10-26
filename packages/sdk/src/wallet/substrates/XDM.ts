@@ -1,8 +1,9 @@
 import Random from '../../primitives/Random.js'
-import * as Utils from '../../primitives/utils.js'
-import { WalletError } from '../WalletError.js'
+import { toArray, toBase64 } from '../../primitives/utils.js'
+import { WalletError, walletErrors } from '../WalletError.js'
 import { CallType } from './WalletWireCalls.js'
 import { InvokableWalletBase } from './InvokableWalletBase.js'
+import { validateWalletResult } from '../WalletResultValidation.js'
 
 type CWIResponse = {
   type: 'CWI'
@@ -11,6 +12,9 @@ type CWIResponse = {
 } & (
   { status: 'success'; result?: unknown } | { status: 'error'; description: string; code: number }
 )
+
+const MAX_PENDING_XDM_INVOCATIONS = 1024
+const MAX_XDM_RESPONSE_TIMEOUT_MS = 60 * 60 * 1000
 
 function isCWIResponse(value: unknown, id: string): value is CWIResponse {
   if (typeof value !== 'object' || value === null) return false
@@ -22,8 +26,11 @@ function isCWIResponse(value: unknown, id: string): value is CWIResponse {
   return (
     response.status === 'error' &&
     typeof response.description === 'string' &&
+    toArray(response.description, 'utf8').length <= 4096 &&
     typeof response.code === 'number' &&
-    Number.isSafeInteger(response.code)
+    Number.isSafeInteger(response.code) &&
+    response.code >= 1 &&
+    response.code <= 255
   )
 }
 
@@ -37,8 +44,10 @@ function isCWIResponse(value: unknown, id: string): value is CWIResponse {
  */
 export default class XDMSubstrate extends InvokableWalletBase {
   private readonly domain: string
+  private readonly responseTimeout?: number
+  private pendingInvocations = 0
 
-  constructor(domain: string = '*') {
+  constructor(domain: string = '*', responseTimeout?: number) {
     super()
     if (typeof globalThis.window !== 'object') {
       throw new TypeError('The XDM substrate requires a global window object.')
@@ -46,12 +55,48 @@ export default class XDMSubstrate extends InvokableWalletBase {
     if (typeof globalThis.window.postMessage !== 'function') {
       throw new TypeError('The window object does not seem to support postMessage calls.')
     }
+    if (
+      responseTimeout !== undefined &&
+      (!Number.isSafeInteger(responseTimeout) ||
+        responseTimeout < 1 ||
+        responseTimeout > MAX_XDM_RESPONSE_TIMEOUT_MS)
+    ) {
+      throw new TypeError(
+        `XDM responseTimeout must be an integer from 1 to ${MAX_XDM_RESPONSE_TIMEOUT_MS}.`
+      )
+    }
     this.domain = domain
+    this.responseTimeout = responseTimeout
   }
 
-  async invoke(call: CallType, args: any): Promise<any> {
+  protected override async invokeRaw(
+    call: CallType,
+    args: any,
+    bindingRequest: unknown
+  ): Promise<any> {
+    if (this.pendingInvocations >= MAX_PENDING_XDM_INVOCATIONS) {
+      throw new Error('XDM wallet pending invocation limit reached.')
+    }
+    const id = toBase64(Random(12))
+    this.pendingInvocations++
     return await new Promise((resolve, reject) => {
-      const id = Utils.toBase64(Random(12))
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+      let listenerRegistered = false
+      let active = true
+      const cleanup = (): void => {
+        if (!active) return
+        active = false
+        this.pendingInvocations--
+        if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
+        if (listenerRegistered && typeof window.removeEventListener === 'function') {
+          try {
+            window.removeEventListener('message', listener)
+          } catch {
+            // Cleanup failures must not retain the invocation or replace the
+            // operation's actual result.
+          }
+        }
+      }
       const listener = (e: MessageEvent): void => {
         if (
           !e.isTrusted ||
@@ -61,27 +106,48 @@ export default class XDMSubstrate extends InvokableWalletBase {
         ) {
           return
         }
-        if (typeof window.removeEventListener === 'function') {
-          window.removeEventListener('message', listener)
-        }
+        cleanup()
         if (e.data.status === 'error') {
-          const err = new WalletError(e.data.description, e.data.code)
+          const isAssignedCode =
+            e.data.code >= walletErrors.unsupportedAction &&
+            e.data.code <= walletErrors.abortRefused
+          const description = isAssignedCode ? e.data.description : 'Wallet operation failed'
+          const err = new WalletError(
+            description,
+            isAssignedCode ? e.data.code : walletErrors.unknownError
+          )
           reject(err)
         } else {
-          resolve(e.data.result)
+          try {
+            resolve(validateWalletResult(call, e.data.result, bindingRequest))
+          } catch (error) {
+            reject(error)
+          }
         }
       }
-      window.addEventListener('message', listener)
-      window.parent.postMessage(
-        {
-          type: 'CWI',
-          isInvocation: true,
-          id,
-          call,
-          args
-        },
-        this.domain
-      )
+      try {
+        window.addEventListener('message', listener)
+        listenerRegistered = true
+        if (this.responseTimeout !== undefined) {
+          timeoutHandle = setTimeout(() => {
+            cleanup()
+            reject(new Error('XDM wallet response timed out.'))
+          }, this.responseTimeout)
+        }
+        window.parent.postMessage(
+          {
+            type: 'CWI',
+            isInvocation: true,
+            id,
+            call,
+            args
+          },
+          this.domain
+        )
+      } catch (error) {
+        cleanup()
+        reject(error)
+      }
     })
   }
 }

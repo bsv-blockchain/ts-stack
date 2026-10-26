@@ -23,19 +23,23 @@ export async function brc29Funding() {
   const env = Setup.getEnv('test')
   const setup = await Setup.createWalletClient({ env })
 
-  /**
-   * EDIT THIS INITIALIZER WITH THE INFORMATION FOR YOUR BRC29 FUNDING OUTPUT:
-   */
-  const funding = {
-    beef: Beef.fromString(''),
-    outpoint: '',
-    fromIdentityKey: '',
-    satoshis: 0,
-    derivationPrefix: '',
-    derivationSuffix: ''
-  }
+  try {
+    /**
+     * EDIT THIS INITIALIZER WITH THE INFORMATION FOR YOUR BRC29 FUNDING OUTPUT:
+     */
+    const funding = {
+      beef: Beef.fromString(''),
+      outpoint: '',
+      fromIdentityKey: '',
+      satoshis: 0,
+      derivationPrefix: '',
+      derivationSuffix: ''
+    }
 
-  await inputBRC29(setup, funding)
+    await inputBRC29(setup, funding)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

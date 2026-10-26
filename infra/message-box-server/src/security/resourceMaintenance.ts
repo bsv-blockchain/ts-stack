@@ -45,10 +45,10 @@ export function startMessageBoxMaintenance(knex: Knex): MessageBoxMaintenance {
         deleteExpired(knex, 'auth_sessions', 'expiresAt', Date.now(), batchSize)
       ])
       if (messages + replays + sessions > 0) {
-        Logger.log('[MAINTENANCE] Removed expired rows', { messages, replays, sessions })
+        Logger.log('[MAINTENANCE] Removed expired rows.')
       }
-    } catch (error) {
-      Logger.error('[MAINTENANCE] Failed to remove expired rows:', error)
+    } catch {
+      Logger.error('[MAINTENANCE] Failed to remove expired rows.')
     } finally {
       running = false
     }

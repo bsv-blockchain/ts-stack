@@ -1,9 +1,33 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
-import { JanitorService } from '../JanitorService.js'
+import {
+  JanitorService as ProductionJanitorService,
+  type JanitorConfig
+} from '../JanitorService.js'
 import { Db } from 'mongodb'
 
 // Mock fetch globally
 global.fetch = jest.fn() as any
+
+const testFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const value: any = await global.fetch(input, init)
+  if (value instanceof Response) return value
+  const status = typeof value?.status === 'number' ? value.status : value?.ok === true ? 200 : 500
+  const headers = new Headers()
+  const declared = value?.headers?.get?.('content-length')
+  if (declared != null) headers.set('Content-Length', String(declared))
+  let body: string | undefined
+  if (value?.ok === true && (declared == null || Number(declared) <= 64 * 1024)) {
+    body = JSON.stringify(await value.json())
+    headers.set('Content-Type', 'application/json')
+  }
+  return new Response(body, { status, headers })
+}
+
+class JanitorService extends ProductionJanitorService {
+  constructor(config: JanitorConfig) {
+    super({ fetchImpl: testFetch as typeof fetch, ...config })
+  }
+}
 
 describe('JanitorService', () => {
   let mockDb: Db
@@ -15,10 +39,10 @@ describe('JanitorService', () => {
 
     mockCollection = {
       find: jest.fn().mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([] as any)
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([] as any)
       }),
-      updateOne: jest.fn<any>().mockResolvedValue({} as any),
-      deleteOne: jest.fn<any>().mockResolvedValue({} as any)
+      updateOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({} as any),
+      deleteOne: jest.fn<(...args: any[]) => any>().mockResolvedValue({} as any)
     }
 
     mockDb = {
@@ -82,6 +106,34 @@ describe('JanitorService', () => {
           })
       ).toThrow(expectedField)
     })
+
+    it('rejects type-confused mutation and network-authority toggles', () => {
+      expect(
+        () =>
+          new ProductionJanitorService({
+            mongoDb: mockDb,
+            autoBanOnRemoval: 'false' as unknown as boolean
+          })
+      ).toThrow('autoBanOnRemoval')
+      expect(
+        () =>
+          new ProductionJanitorService({
+            mongoDb: mockDb,
+            allowPrivateHosts: 'false' as unknown as boolean
+          })
+      ).toThrow('allowPrivateHosts')
+    })
+
+    it('rejects accessor-backed constructor configuration without invoking it', () => {
+      const getter = jest.fn(() => true)
+      const config: Record<string, unknown> = { mongoDb: mockDb }
+      Object.defineProperty(config, 'allowPrivateHosts', { get: getter, enumerable: true })
+
+      expect(() => new ProductionJanitorService(config as unknown as JanitorConfig)).toThrow(
+        'own data property'
+      )
+      expect(getter).not.toHaveBeenCalled()
+    })
   })
 
   describe('run', () => {
@@ -109,7 +161,7 @@ describe('JanitorService', () => {
         logger: mockLogger
       })
 
-      await janitor.run()
+      await expect(janitor.run()).rejects.toThrow('Database error')
       expect(mockLogger.error).toHaveBeenCalled()
     })
 
@@ -167,12 +219,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -195,12 +247,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -223,12 +275,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -251,12 +303,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -278,7 +330,7 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
       const janitor = new JanitorService({
@@ -303,12 +355,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -331,7 +383,7 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
       const janitor = new JanitorService({
@@ -354,12 +406,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -383,12 +435,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -412,14 +464,14 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         headers: { get: jest.fn().mockReturnValue(null) },
         status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -479,11 +531,11 @@ describe('JanitorService', () => {
     it.each(['https://8.8.8.8', 'https://[2606:4700:4700::1111]'])(
       'allows public IP health targets %s',
       async target => {
-        ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+        ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
           ok: true,
           headers: { get: jest.fn().mockReturnValue(null) },
           status: 200,
-          json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+          json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
         })
         const janitor = new JanitorService({
           mongoDb: mockDb,
@@ -512,12 +564,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -540,12 +592,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -568,10 +620,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: false
       })
 
@@ -595,10 +647,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: false
       })
 
@@ -624,12 +676,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
       const abortError = new Error('Aborted')
       abortError.name = 'AbortError'
-      ;(global.fetch as jest.Mock<any>).mockRejectedValue(abortError)
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockRejectedValue(abortError)
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -652,10 +704,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockRejectedValue(new Error('Network error'))
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockRejectedValue(new Error('Network error'))
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -677,12 +729,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockRejectedValue(new Error('Invalid JSON'))
+        json: jest.fn<(...args: any[]) => any>().mockRejectedValue(new Error('Invalid JSON'))
       })
 
       const janitor = new JanitorService({
@@ -705,12 +757,12 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
-        json: jest.fn<any>().mockResolvedValue({ status: 'error' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'error' })
       })
 
       const janitor = new JanitorService({
@@ -726,10 +778,10 @@ describe('JanitorService', () => {
 
   describe('checkHost', () => {
     it('should return healthy when health endpoint returns ok', async () => {
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -757,7 +809,7 @@ describe('JanitorService', () => {
     })
 
     it('should return unhealthy when health endpoint returns non-ok status', async () => {
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: false,
         status: 503
       })
@@ -775,10 +827,10 @@ describe('JanitorService', () => {
     })
 
     it('should return unhealthy when response does not have status ok', async () => {
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'error' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'error' })
       })
 
       const janitor = new JanitorService({
@@ -795,7 +847,7 @@ describe('JanitorService', () => {
     it('should handle timeout (AbortError)', async () => {
       const abortError = new Error('Aborted')
       abortError.name = 'AbortError'
-      ;(global.fetch as jest.Mock<any>).mockRejectedValue(abortError)
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockRejectedValue(abortError)
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -810,7 +862,7 @@ describe('JanitorService', () => {
     })
 
     it('should handle network errors', async () => {
-      ;(global.fetch as jest.Mock<any>).mockRejectedValue(new Error('ECONNREFUSED'))
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockRejectedValue(new Error('ECONNREFUSED'))
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -828,8 +880,8 @@ describe('JanitorService', () => {
     })
 
     it('should reject oversized health responses before parsing JSON', async () => {
-      const json = jest.fn<any>()
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      const json = jest.fn<(...args: any[]) => any>()
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         status: 200,
         headers: {
@@ -853,10 +905,10 @@ describe('JanitorService', () => {
     })
 
     it('should prepend https:// to domains without protocol', async () => {
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -894,7 +946,7 @@ describe('JanitorService', () => {
       // First call returns ship records, second returns slap records
       let callCount = 0
       mockCollection.find.mockImplementation(() => ({
-        toArray: jest.fn<any>().mockResolvedValue(callCount++ === 0 ? [shipOutput] : [slapOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue(callCount++ === 0 ? [shipOutput] : [slapOutput])
       }))
 
       const janitor = new JanitorService({
@@ -927,8 +979,8 @@ describe('JanitorService', () => {
     it('pushes bounded report reads into MongoDB and supports explicit unlimited reads', async () => {
       const records = [{ txid: 'tx', outputIndex: 0, domain: 'https://node.example' }]
       const boundedCursor: any = {
-        limit: jest.fn<any>().mockReturnThis(),
-        toArray: jest.fn<any>().mockResolvedValue(records)
+        limit: jest.fn<(...args: any[]) => any>().mockReturnThis(),
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue(records)
       }
       mockCollection.find.mockReturnValue(boundedCursor)
       const bounded = new JanitorService({
@@ -941,7 +993,7 @@ describe('JanitorService', () => {
       expect(boundedCursor.limit).toHaveBeenCalledWith(2)
 
       const unlimitedCursor = {
-        toArray: jest.fn<any>().mockResolvedValue(records)
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue(records)
       }
       mockCollection.find.mockReturnValue(unlimitedCursor)
       const unlimited = new JanitorService({
@@ -959,8 +1011,8 @@ describe('JanitorService', () => {
   describe('ban service integration', () => {
     it('should auto-ban domain and outpoint when threshold is reached', async () => {
       const mockBanService = {
-        banDomain: jest.fn<any>().mockResolvedValue(undefined),
-        banOutpoint: jest.fn<any>().mockResolvedValue(undefined)
+        banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
 
       const mockOutput = {
@@ -972,10 +1024,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({ ok: false })
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({ ok: false })
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -997,12 +1049,48 @@ describe('JanitorService', () => {
         'https://dead-host.com',
         expect.stringContaining('Auto-banned')
       )
+      expect(mockBanService.banOutpoint.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCollection.deleteOne.mock.invocationCallOrder[0]
+      )
+      expect(mockBanService.banDomain.mock.invocationCallOrder[0]).toBeLessThan(
+        mockCollection.deleteOne.mock.invocationCallOrder[0]
+      )
+    })
+
+    it('does not delete an output if its persistent ban cannot be written', async () => {
+      const mockBanService = {
+        banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<(...args: any[]) => any>().mockRejectedValue(new Error('ban storage unavailable'))
+      }
+      mockCollection.find.mockReturnValue({
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([
+          {
+            _id: '123',
+            txid: 'abc123',
+            outputIndex: 0,
+            domain: 'https://dead-host.com',
+            down: 2
+          }
+        ])
+      })
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({ ok: false })
+      const janitor = new JanitorService({
+        mongoDb: mockDb,
+        logger: mockLogger,
+        hostDownRevokeScore: 3,
+        banService: mockBanService as any
+      })
+
+      await janitor.run()
+
+      expect(mockBanService.banOutpoint).toHaveBeenCalled()
+      expect(mockCollection.deleteOne).not.toHaveBeenCalled()
     })
 
     it('should not auto-ban when autoBanOnRemoval is false', async () => {
       const mockBanService = {
-        banDomain: jest.fn<any>().mockResolvedValue(undefined),
-        banOutpoint: jest.fn<any>().mockResolvedValue(undefined)
+        banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
 
       const mockOutput = {
@@ -1014,10 +1102,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({ ok: false })
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({ ok: false })
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -1036,8 +1124,8 @@ describe('JanitorService', () => {
 
     it('should not ban domain when domain is unknown', async () => {
       const mockBanService = {
-        banDomain: jest.fn<any>().mockResolvedValue(undefined),
-        banOutpoint: jest.fn<any>().mockResolvedValue(undefined)
+        banDomain: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined),
+        banOutpoint: jest.fn<(...args: any[]) => any>().mockResolvedValue(undefined)
       }
 
       const mockOutput = {
@@ -1049,10 +1137,10 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({ ok: false })
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({ ok: false })
 
       const janitor = new JanitorService({
         mongoDb: mockDb,
@@ -1079,13 +1167,13 @@ describe('JanitorService', () => {
       }
 
       mockCollection.find.mockReturnValue({
-        toArray: jest.fn<any>().mockResolvedValue([mockOutput])
+        toArray: jest.fn<(...args: any[]) => any>().mockResolvedValue([mockOutput])
       })
 
-      ;(global.fetch as jest.Mock<any>).mockResolvedValue({
+      ;(global.fetch as jest.Mock<(...args: any[]) => any>).mockResolvedValue({
         ok: true,
         status: 200,
-        json: jest.fn<any>().mockResolvedValue({ status: 'ok' })
+        json: jest.fn<(...args: any[]) => any>().mockResolvedValue({ status: 'ok' })
       })
 
       const janitor = new JanitorService({
@@ -1103,7 +1191,7 @@ describe('JanitorService', () => {
       expect(report.summary.banned).toBe(0)
     })
 
-    it('should handle collection errors gracefully and return empty report', async () => {
+    it('should surface collection errors rather than report a false clean run', async () => {
       ;(mockDb as any).collection = jest.fn().mockImplementation(() => {
         throw new Error('Database error')
       })
@@ -1113,11 +1201,7 @@ describe('JanitorService', () => {
         logger: mockLogger
       })
 
-      // checkTopicOutputs catches errors internally, so run() returns an empty report
-      const report = await janitor.run()
-      expect(report.summary.totalChecked).toBe(0)
-      expect(report.shipResults).toEqual([])
-      expect(report.slapResults).toEqual([])
+      await expect(janitor.run()).rejects.toThrow('Database error')
       expect(mockLogger.error).toHaveBeenCalled()
     })
   })

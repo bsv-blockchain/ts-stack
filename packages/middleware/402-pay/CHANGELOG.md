@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+### 0.3.2 candidate — replay-safe Atomic BEEF payments
+
 ### Maintenance
 
 - Align the development-only Vitest runner and V8 coverage provider at 4.1.11.
@@ -13,6 +15,13 @@
   subject, reduce legacy over-inclusive envelopes to that subject's dependency
   closure, reject trailing bytes and plain BEEF, and require an affirmative
   wallet acceptance before serving paid content.
+- Add an independent bounded atomic transaction replay claim so wallets that
+  omit the non-public `isMerge` detail cannot authorize duplicate access.
+  Multi-process and multi-node deployments must inject the same durable atomic
+  `PaymentReplayStore` in every serving process.
+- Preserve the actual overpayment in middleware receipts, keep diagnostics
+  opt-in and redacted, and return an unchallenged HTTP 503 after ambiguous
+  wallet or replay-store failures so a client is not induced to spend twice.
 
 ## [0.1.0] - 2026-04-04
 

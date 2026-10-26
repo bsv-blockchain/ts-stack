@@ -2,42 +2,65 @@ import { WalletCertificate, WalletInterface } from '../../wallet/index'
 import { IdentityClient } from '../IdentityClient'
 import { Certificate } from '../../auth/certificates/index.js'
 import { KNOWN_IDENTITY_TYPES, defaultIdentity } from '../types/index.js'
-import { TopicBroadcaster } from '../../overlay-tools/index.js'
+import TopicBroadcaster from '../../overlay-tools/SHIPBroadcaster.js'
+
+const CONTACT_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const OTHER_CONTACT_KEY = '0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const MISSING_CONTACT_KEY = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+const CONTACT_KEY_ID = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+const CONTACT_TXID = 'aa'.repeat(32)
 
 // ----- Mocks for external dependencies -----
-jest.mock('../../script', () => {
+jest.mock('../../overlay-tools/SHIPBroadcaster.js', () => {
   return {
-    PushDrop: jest.fn().mockImplementation(() => ({
-      lock: jest.fn().mockResolvedValue({
-        toHex: () => 'lockingScriptHex'
-      }),
-      unlock: jest.fn()
-    }))
-  }
-})
-
-jest.mock('../../overlay-tools/index.js', () => {
-  return {
-    TopicBroadcaster: jest.fn().mockImplementation(() => ({
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
       broadcast: jest.fn().mockResolvedValue('broadcastResult')
     }))
   }
 })
 
-jest.mock('../../transaction/index.js', () => {
+jest.mock('../../transaction/Transaction.js', () => {
+  const contactTxid = 'aa'.repeat(32)
+  const transaction = () => ({
+    id: () => contactTxid,
+    version: 1,
+    lockTime: 0,
+    inputs: [
+      {
+        sourceTXID: contactTxid,
+        sourceOutputIndex: 0,
+        sequence: 0xffffffff,
+        unlockingScript: { toHex: () => 'unlockingScriptHex' }
+      }
+    ],
+    outputs: [
+      {
+        lockingScript: {
+          toHex: () => 'lockingScriptHex',
+          chunks: [
+            { op: 33, data: new Uint8Array(33) },
+            { op: 0xac },
+            { op: 4, data: new Uint8Array([1, 2, 3, 4]) },
+            { op: 8, data: new Uint8Array(8) },
+            { op: 0x6d }
+          ]
+        },
+        satoshis: 1
+      }
+    ],
+    toHexBEEF: () => 'transactionHex'
+  })
   return {
-    Transaction: {
-      fromAtomicBEEF: jest.fn().mockImplementation(_tx => ({
-        toHexBEEF: () => 'transactionHex'
-      })),
-      fromBEEF: jest.fn().mockReturnValue({
-        outputs: [{ lockingScript: { toHex: () => 'mockLockingScript' } }]
-      })
+    __esModule: true,
+    default: {
+      fromAtomicBEEF: jest.fn().mockImplementation(transaction),
+      fromBEEF: jest.fn().mockImplementation(transaction)
     }
   }
 })
 
-jest.mock('../../script', () => {
+jest.mock('../../script/templates/PushDrop.js', () => {
   const mockPushDropInstance = {
     lock: jest.fn().mockResolvedValue({
       toHex: () => 'lockingScriptHex'
@@ -51,14 +74,32 @@ jest.mock('../../script', () => {
 
   const mockPushDrop: any = jest.fn().mockImplementation(() => mockPushDropInstance)
   mockPushDrop.decode = jest.fn().mockReturnValue({
-    fields: [new Uint8Array([1, 2, 3, 4])]
+    lockingPublicKey: {
+      toString: () => '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+    },
+    fields: [new Uint8Array([1, 2, 3, 4]), new Uint8Array(8)]
   })
 
   return {
-    PushDrop: mockPushDrop,
-    // Provide LockingScript.fromHex to satisfy ContactsManager.getContacts decode path
-    LockingScript: {
-      fromHex: jest.fn().mockImplementation((hex: string) => ({ toHex: () => hex }))
+    __esModule: true,
+    default: mockPushDrop
+  }
+})
+
+jest.mock('../../script/LockingScript.js', () => {
+  return {
+    __esModule: true,
+    default: {
+      fromHex: jest.fn().mockImplementation((hex: string) => ({
+        toHex: () => hex,
+        chunks: [
+          { op: 33, data: new Uint8Array(33) },
+          { op: 0xac },
+          { op: 4, data: new Uint8Array([1, 2, 3, 4]) },
+          { op: 8, data: new Uint8Array(8) },
+          { op: 0x6d }
+        ]
+      }))
     }
   }
 })
@@ -66,10 +107,13 @@ jest.mock('../../script', () => {
 jest.mock('../../primitives/index.js', () => {
   return {
     Utils: {
-      toBase64: jest.fn().mockReturnValue('mockKeyID'),
+      toBase64: jest.fn().mockReturnValue('AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='),
       toArray: jest.fn().mockReturnValue(new Uint8Array()),
       toUTF8: jest.fn().mockImplementation(data => {
         return new TextDecoder().decode(data)
+      }),
+      toUTF8Strict: jest.fn().mockImplementation(data => {
+        return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(data))
       }),
       toHex: jest.fn().mockReturnValue('0102030405060708')
     },
@@ -78,7 +122,10 @@ jest.mock('../../primitives/index.js', () => {
       toPublicKey: jest.fn().mockReturnValue({
         toString: jest.fn().mockReturnValue('mockPublicKeyString')
       })
-    }))
+    })),
+    PublicKey: {
+      fromString: jest.fn().mockImplementation((key: string) => ({ toString: () => key }))
+    }
   }
 })
 
@@ -101,7 +148,9 @@ describe('IdentityClient', () => {
 
     // Create a fake wallet implementing the methods used by IdentityClient.
     walletMock = {
-      proveCertificate: jest.fn().mockResolvedValue({ keyringForVerifier: 'fakeKeyring' }),
+      proveCertificate: jest.fn().mockResolvedValue({
+        keyringForVerifier: { name: CONTACT_KEY_ID }
+      }),
       createAction: jest.fn().mockResolvedValue({
         tx: [1, 2, 3],
         signableTransaction: { tx: [1, 2, 3], reference: 'ref' }
@@ -117,9 +166,12 @@ describe('IdentityClient', () => {
       discoverByAttributes: jest.fn(),
       // ContactsManager specific methods
       listOutputs: jest.fn().mockResolvedValue({ outputs: [], BEEF: [] }),
-      createHmac: jest.fn().mockResolvedValue({ hmac: new Uint8Array([1, 2, 3, 4]) }),
+      createHmac: jest.fn().mockResolvedValue({ hmac: new Uint8Array(32) }),
       decrypt: jest.fn().mockResolvedValue({ plaintext: new Uint8Array() }),
-      encrypt: jest.fn().mockResolvedValue({ ciphertext: new Uint8Array([5, 6, 7, 8]) })
+      encrypt: jest.fn().mockResolvedValue({ ciphertext: new Uint8Array([5, 6, 7, 8]) }),
+      getPublicKey: jest.fn().mockResolvedValue({ publicKey: CONTACT_KEY }),
+      verifySignature: jest.fn().mockResolvedValue({ valid: true }),
+      abortAction: jest.fn().mockResolvedValue({ aborted: true })
     }
 
     identityClient = new IdentityClient(walletMock as WalletInterface)
@@ -219,6 +271,39 @@ describe('IdentityClient', () => {
 
       // Validate that createAction was called.
       expect(walletMock.createAction).toHaveBeenCalled()
+    })
+
+    it('rejects a wallet proof that reveals fields the caller did not authorize', async () => {
+      const certificate = {
+        fields: { name: 'Alice', email: 'alice@example.com' },
+        type: 'xCert',
+        serialNumber: '12345',
+        subject: 'abcdef1234567890',
+        certifier: 'CertifierX',
+        revocationOutpoint: 'outpoint1',
+        signature: 'signature1'
+      } as any as WalletCertificate
+      jest.spyOn(Certificate.prototype, 'verify').mockResolvedValue(true)
+      ;(walletMock.proveCertificate as jest.Mock).mockResolvedValue({
+        keyringForVerifier: { name: CONTACT_KEY_ID, email: CONTACT_KEY_ID }
+      })
+
+      await expect(identityClient.publiclyRevealAttributes(certificate, ['name'])).rejects.toThrow(
+        'keyring for unrequested fields'
+      )
+      expect(walletMock.createAction).not.toHaveBeenCalled()
+    })
+
+    it('rejects duplicate or absent reveal fields before asking the wallet', async () => {
+      const certificate = { fields: { name: 'Alice' } } as any as WalletCertificate
+
+      await expect(
+        identityClient.publiclyRevealAttributes(certificate, ['name', 'name'])
+      ).rejects.toThrow('duplicate certificate field')
+      await expect(identityClient.publiclyRevealAttributes(certificate, ['email'])).rejects.toThrow(
+        'requested field is not present'
+      )
+      expect(walletMock.proveCertificate).not.toHaveBeenCalled()
     })
 
     it('uses an explicit TerraTestNet preset instead of the wallet network', async () => {
@@ -577,9 +662,9 @@ describe('IdentityClient', () => {
   describe('ContactsManager Integration', () => {
     const mockContact = {
       name: 'Alice Smith',
-      identityKey: 'abcdef1234567890abcdef1234567890',
+      identityKey: CONTACT_KEY,
       avatarURL: 'https://example.com/avatar.jpg',
-      abbreviatedKey: 'abcdef1234...',
+      abbreviatedKey: `${CONTACT_KEY.slice(0, 10)}...`,
       badgeLabel: 'Verified User',
       badgeIconURL: 'https://example.com/badge.png',
       badgeClickURL: 'https://example.com/verify'
@@ -611,7 +696,7 @@ describe('IdentityClient', () => {
             protocolID: [2, 'contact'],
             keyID: mockContact.identityKey,
             counterparty: 'self',
-            data: expect.any(Uint8Array)
+            data: expect.any(Array)
           },
           undefined
         )
@@ -619,7 +704,7 @@ describe('IdentityClient', () => {
         // Verify contact data was encrypted
         expect(walletMock.encrypt).toHaveBeenCalledWith(
           {
-            plaintext: expect.any(Uint8Array),
+            plaintext: expect.any(Array),
             protocolID: [2, 'contact'],
             keyID: expect.any(String),
             counterparty: 'self'
@@ -680,8 +765,8 @@ describe('IdentityClient', () => {
 
         // Now mock finding the existing contact for update
         const existingOutput = {
-          outpoint: 'txid.0',
-          customInstructions: JSON.stringify({ keyID: 'existingKeyID' })
+          outpoint: `${CONTACT_TXID}.0`,
+          customInstructions: JSON.stringify({ keyID: CONTACT_KEY_ID })
         }
 
         ;(walletMock.listOutputs as jest.Mock).mockResolvedValueOnce({
@@ -703,7 +788,7 @@ describe('IdentityClient', () => {
             inputBEEF: [1, 2, 3],
             inputs: expect.arrayContaining([
               expect.objectContaining({
-                outpoint: 'txid.0'
+                outpoint: `${CONTACT_TXID}.0`
               })
             ])
           }),
@@ -738,8 +823,8 @@ describe('IdentityClient', () => {
 
       it('should load contacts from wallet basket when cache is empty', async () => {
         const mockOutput = {
-          outpoint: 'txid.0',
-          customInstructions: JSON.stringify({ keyID: 'mockKeyID' }),
+          outpoint: `${CONTACT_TXID}.0`,
+          customInstructions: JSON.stringify({ keyID: CONTACT_KEY_ID }),
           lockingScript: 'lockingScriptHex'
         }
 
@@ -801,7 +886,12 @@ describe('IdentityClient', () => {
         })
         await identityClient.saveContact(mockContact)
 
-        const otherContact = { ...mockContact, identityKey: 'different-key', name: 'Bob' }
+        const otherContact = {
+          ...mockContact,
+          identityKey: OTHER_CONTACT_KEY,
+          abbreviatedKey: `${OTHER_CONTACT_KEY.slice(0, 10)}...`,
+          name: 'Bob'
+        }
         await identityClient.saveContact(otherContact)
 
         // Filter by specific identity key
@@ -834,13 +924,18 @@ describe('IdentityClient', () => {
         })
         await identityClient.saveContact(mockContact)
 
-        const otherContact = { ...mockContact, identityKey: 'other-key', name: 'Bob' }
+        const otherContact = {
+          ...mockContact,
+          identityKey: OTHER_CONTACT_KEY,
+          abbreviatedKey: `${OTHER_CONTACT_KEY.slice(0, 10)}...`,
+          name: 'Bob'
+        }
         await identityClient.saveContact(otherContact)
 
         // Mock finding the contact to remove
         const mockOutput = {
-          outpoint: 'txid.0',
-          customInstructions: JSON.stringify({ keyID: 'mockKeyID' })
+          outpoint: `${CONTACT_TXID}.0`,
+          customInstructions: JSON.stringify({ keyID: CONTACT_KEY_ID })
         }
 
         ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
@@ -861,7 +956,7 @@ describe('IdentityClient', () => {
             inputBEEF: [1, 2, 3],
             inputs: expect.arrayContaining([
               expect.objectContaining({
-                outpoint: 'txid.0'
+                outpoint: `${CONTACT_TXID}.0`
               })
             ]),
             outputs: [] // No outputs for deletion
@@ -883,7 +978,7 @@ describe('IdentityClient', () => {
         })
 
         // Should not throw when contact doesn't exist
-        await expect(identityClient.removeContact('non-existent-key')).resolves.toBeUndefined()
+        await expect(identityClient.removeContact(MISSING_CONTACT_KEY)).resolves.toBeUndefined()
 
         // Should not call createAction since no contact found
         expect(walletMock.createAction).not.toHaveBeenCalled()

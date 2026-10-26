@@ -65,7 +65,12 @@ import {
   LookupQuestion,
   LookupResolver,
   PrivateKey,
-  ProtoWallet
+  ProtoWallet,
+  WalletClient,
+  WalletWireProcessor,
+  WalletWireTransceiver,
+  type ListActionsResult,
+  type ListActionsArgs
 } from '@bsv/sdk'
 
 // Wallet-toolbox imports via moduleNameMapper aliases (see jest.config.mjs).
@@ -138,6 +143,12 @@ function makeWallet(input: Record<string, unknown>): ProtoWallet {
     getString(input, 'root_key') ||
     '0000000000000000000000000000000000000000000000000000000000000001'
   return new ProtoWallet(PrivateKey.fromHex(rootHex))
+}
+
+function withVectorData(args: Record<string, unknown>): Record<string, unknown> {
+  const normalized = { ...args }
+  if (Object.prototype.hasOwnProperty.call(args, 'data')) normalized.data = toDataArray(args.data)
+  return normalized
 }
 
 // ─── REAL WALLET HARNESS ──────────────────────────────────────────────────────
@@ -367,7 +378,7 @@ async function dispatchCreateHmac(
 ): Promise<void> {
   const wallet = makeWallet(input)
   const args = (input.args as Record<string, unknown>) ?? {}
-  const argsWithData = { ...args, data: toDataArray(args.data) }
+  const argsWithData = withVectorData(args)
 
   if ('error' in expected) {
     await expect(wallet.createHmac(argsWithData as any)).rejects.toThrow()
@@ -387,7 +398,7 @@ async function dispatchVerifyHmac(
 ): Promise<void> {
   const wallet = makeWallet(input)
   const args = (input.args as Record<string, unknown>) ?? {}
-  const argsWithData = { ...args, data: toDataArray(args.data) }
+  const argsWithData = withVectorData(args)
 
   if ('error' in expected) {
     await expect(wallet.verifyHmac(argsWithData as any)).rejects.toThrow()
@@ -410,7 +421,7 @@ async function dispatchCreateSignature(
 ): Promise<void> {
   const wallet = makeWallet(input)
   const args = (input.args as Record<string, unknown>) ?? {}
-  const argsWithData = { ...args, data: toDataArray(args.data) }
+  const argsWithData = withVectorData(args)
 
   if ('error' in expected) {
     await expect(wallet.createSignature(argsWithData as any)).rejects.toThrow()
@@ -430,7 +441,7 @@ async function dispatchVerifySignature(
 ): Promise<void> {
   const wallet = makeWallet(input)
   const args = (input.args as Record<string, unknown>) ?? {}
-  const argsWithData = { ...args, data: toDataArray(args.data) }
+  const argsWithData = withVectorData(args)
 
   if ('error' in expected) {
     await expect(wallet.verifySignature(argsWithData as any)).rejects.toThrow()
@@ -531,6 +542,7 @@ async function dispatchRevealSpecificKeyLinkage(
   expect(result).toHaveProperty('encryptedLinkageProof')
 
   if ('prover' in expected) expect(result.prover).toBe(expected.prover)
+  if ('verifier' in expected) expect(result.verifier).toBe(expected.verifier)
   if ('counterparty' in expected) expect(result.counterparty).toBe(expected.counterparty)
   if (Array.isArray(expected.protocolID)) expect(result.protocolID).toEqual(expected.protocolID)
   if ('keyID' in expected) expect(result.keyID).toBe(expected.keyID)
@@ -688,6 +700,18 @@ async function dispatchListActions(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
+  if (input.walletResult !== undefined) {
+    const result = input.walletResult as ListActionsResult
+    const provider = await setupTestWallet()
+    provider.listActions = async () => result
+    const binary = new WalletWireTransceiver(new WalletWireProcessor(provider))
+    for (const substrate of [provider, binary]) {
+      const client = new WalletClient(substrate, 'conformance.example')
+      await expect(client.listActions(input.args as ListActionsArgs)).resolves.toEqual(expected)
+    }
+    return
+  }
+
   // Vector 14 expects 1 action (pre-populated state) — demoted.
   // All other vectors expect empty results from a fresh wallet.
   const rootHex =

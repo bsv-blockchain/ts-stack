@@ -9,7 +9,7 @@ function client(
   options: {
     height?: number
     hash?: string
-    valid?: boolean
+    valid?: unknown
     heightError?: unknown
     tipError?: unknown
     headerError?: unknown
@@ -119,6 +119,24 @@ describe('LocalChainTracker', () => {
 
     await expect(tracker.isValidRootForHeight('root', 100)).resolves.toBe(true)
     expect(tracker.getStatus()).toMatchObject({ activeSource: 'fallback-2' })
+  })
+
+  test('never counts a truthy non-boolean tracker verdict as valid evidence', async () => {
+    const fallback = client({ valid: true })
+    const tracker = new LocalChainTracker({
+      local: client({ valid: 'true' }),
+      fallbacks: [fallback]
+    })
+
+    await expect(tracker.isValidRootForHeight('root', 100)).resolves.toBe(true)
+    expect(fallback.isValidRootForHeight).toHaveBeenCalledTimes(1)
+
+    const malformedOnly = new LocalChainTracker({
+      local: client(),
+      mode: 'remote-only',
+      fallbacks: [client({ valid: 'true' })]
+    })
+    await expect(malformedOnly.isValidRootForHeight('root', 100)).rejects.toThrow('non-boolean')
   })
 
   test('compares local history with independent references at a shared height', async () => {

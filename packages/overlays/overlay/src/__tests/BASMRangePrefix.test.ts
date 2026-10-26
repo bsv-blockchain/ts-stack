@@ -55,12 +55,13 @@ function harness(options: {
   engine.logger = { ...console, error: jest.fn() }
   const submit = jest.spyOn(engine, 'submit').mockResolvedValue({})
   const requests: Array<{ path: string; body: Record<string, unknown> }> = []
-  jest.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+  const fetchMock = jest.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(url)).pathname
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     requests.push({ path, body })
     return Response.json(options.handle(path, body))
   })
+  ;(engine as unknown as { basmFetchImpl: typeof fetch }).basmFetchImpl = fetchMock
   return { engine, storage, tracker, submit, requests }
 }
 

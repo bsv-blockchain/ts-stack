@@ -60,33 +60,28 @@ export async function listChange(): Promise<void> {
       env,
       rootKeyHex: env.devKeys[identityKey]
     })
-    console.log(`
+    try {
+      console.log(`
 
 Change for:
   identityKey ${identityKey}
 `)
-    const { actions, totalActions } = await setup.wallet.listActions({
-      labels: [],
-      includeOutputs: true,
-      limit: 1000
-    })
-    for (const stati of [['nosend'], ['completed', 'unproven']])
-      for (const a of actions.reverse()) {
-        if (stati.indexOf(a.status) >= 0) {
-          for (const o of a.outputs!) {
-            if (o.spendable && o.basket === 'default') {
-              console.log(
-                `${ar(o.satoshis, 10)} ${al(a.status, 10)} ${ar(o.outputIndex, 3)} ${a.txid}`
-              )
-            }
-          }
-        }
+      const { actions } = await setup.wallet.listActions({
+        labels: [],
+        includeOutputs: true,
+        limit: 1000
+      })
+      const actionsNewestFirst = [...actions]
+      actionsNewestFirst.reverse()
+      for (const statuses of [['nosend'], ['completed', 'unproven']]) {
+        logSpendableChange(actionsNewestFirst, statuses)
       }
+    } finally {
+      await setup.wallet.destroy()
+    }
   }
 }
 ```
-
-See also: [al](./listChange.md#function-al), [ar](./listChange.md#function-ar)
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 

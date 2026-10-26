@@ -2,8 +2,9 @@
 /// <reference path="../../types/bsv-sdk-aesgcm.d.ts" />
 /* eslint-enable @typescript-eslint/triple-slash-reference */
 
-import { Random, Utils } from '@bsv/sdk'
+import { Random } from '@bsv/sdk'
 import { AESGCM, AESGCMDecrypt } from '@bsv/sdk/primitives/AESGCM'
+import { toArray, toBase64, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { argon2id } from '../../utility/hashWasm'
 import { StorageProvider } from '../StorageProvider'
 import {
@@ -24,7 +25,7 @@ import {
   TableUser
 } from '../schema/tables'
 import { createSyncMap, SyncMap } from '../schema/entities/EntityBase'
-import * as sdk from '../../sdk'
+import type * as sdk from '../../sdk'
 import { verifyOne, verifyOneOrNone, verifyTruthy } from '../../utility/utilityHelpers'
 import { upgradeLegacyManagedChangeBasketDefault } from '../methods/managedChangePolicy'
 
@@ -167,7 +168,7 @@ const dateFieldsByKind: Partial<Record<string, string[]>> = {
   syncState: ['created_at', 'updated_at', 'when']
 }
 
-export async function exportBRC38 (storage: StorageProvider, identityKey: string): Promise<BRC38WalletData> {
+export async function exportBRC38(storage: StorageProvider, identityKey: string): Promise<BRC38WalletData> {
   const sourceStorage = await storage.makeAvailable()
   const user = verifyTruthy(await storage.findUserByIdentityKey(identityKey))
   const userId = user.userId
@@ -191,11 +192,11 @@ export async function exportBRC38 (storage: StorageProvider, identityKey: string
   const commissions = await storage.findCommissions({ partial: { userId } })
   const outputs = await storage.findOutputs({ partial: { userId } })
   const outputTags = await storage.findOutputTags({ partial: { userId } })
-  const outputTagMaps = (await storage.getOutputTagMapsForUser({ userId }))
-    .filter(m => outputs.some(o => o.outputId === m.outputId))
+  const outputTagMaps = (await storage.getOutputTagMapsForUser({ userId })).filter(m =>
+    outputs.some(o => o.outputId === m.outputId)
+  )
   const txLabels = await storage.findTxLabels({ partial: { userId } })
-  const txLabelMaps = (await storage.getTxLabelMapsForUser({ userId }))
-    .filter(m => transactionIds.has(m.transactionId))
+  const txLabelMaps = (await storage.getTxLabelMapsForUser({ userId })).filter(m => transactionIds.has(m.transactionId))
   const certificates = await storage.findCertificates({ partial: { userId } })
   const certificateFields = await storage.findCertificateFields({ partial: { userId } })
   const syncStates = await storage.findSyncStates({ partial: { userId } })
@@ -233,11 +234,11 @@ export async function exportBRC38 (storage: StorageProvider, identityKey: string
   return data
 }
 
-export async function exportBRC38Json (storage: StorageProvider, identityKey: string): Promise<string> {
+export async function exportBRC38Json(storage: StorageProvider, identityKey: string): Promise<string> {
   return canonicalize(await exportBRC38(storage, identityKey))
 }
 
-export function parseBRC38Json (json: string): BRC38WalletData {
+export function parseBRC38Json(json: string): BRC38WalletData {
   let data: unknown
   try {
     data = JSON.parse(json)
@@ -247,7 +248,7 @@ export function parseBRC38Json (json: string): BRC38WalletData {
   return validateBRC38(data)
 }
 
-export async function importBRC38 (
+export async function importBRC38(
   storage: StorageProvider,
   documentOrJson: BRC38WalletData | string,
   options: BRC38ImportOptions
@@ -256,14 +257,16 @@ export async function importBRC38 (
   const targetSettings = await storage.makeAvailable()
   const decoded = decodeBRC38(data)
   if (decoded.sourceStorage.chain !== targetSettings.chain) {
-    throw new Error(`BRC-38 chain mismatch: payload is ${decoded.sourceStorage.chain}, target is ${targetSettings.chain}`)
+    throw new Error(
+      `BRC-38 chain mismatch: payload is ${decoded.sourceStorage.chain}, target is ${targetSettings.chain}`
+    )
   }
   if (options.mode === 'restore') return await restoreBRC38(storage, decoded)
   if (options.mode === 'merge') return await mergeBRC38(storage, decoded, targetSettings)
   throw new Error(`Unsupported BRC-38 import mode: ${String((options as { mode?: unknown }).mode)}`)
 }
 
-export async function exportBRC39 (
+export async function exportBRC39(
   storage: StorageProvider,
   identityKey: string,
   password: string,
@@ -272,7 +275,7 @@ export async function exportBRC39 (
   return await encryptBRC39(await exportBRC38(storage, identityKey), password, options)
 }
 
-export async function importBRC39 (
+export async function importBRC39(
   storage: StorageProvider,
   bytes: number[] | Uint8Array,
   password: string,
@@ -281,13 +284,13 @@ export async function importBRC39 (
   return await importBRC38(storage, await decryptBRC39(bytes, password), options)
 }
 
-export async function encryptBRC39 (
+export async function encryptBRC39(
   documentOrJson: BRC38WalletData | string,
   password: string,
   options?: BRC39Options
 ): Promise<number[]> {
   const data = typeof documentOrJson === 'string' ? parseBRC38Json(documentOrJson) : validateBRC38(documentOrJson)
-  const plaintext = new Uint8Array(Utils.toArray(canonicalize(data), 'utf8'))
+  const plaintext = new Uint8Array(toArray(canonicalize(data), 'utf8'))
   const salt = new Uint8Array(Random(BRC39_SALT_LENGTH))
   const nonce = new Uint8Array(Random(BRC39_NONCE_LENGTH))
   const iterations = options?.iterations ?? BRC39_DEFAULT_ITERATIONS
@@ -324,7 +327,7 @@ interface BRC39Header {
   hashLength: number
 }
 
-function parseBRC39Header (file: Uint8Array): BRC39Header {
+function parseBRC39Header(file: Uint8Array): BRC39Header {
   if (file.length < BRC39_HEADER_LENGTH + BRC39_TAG_LENGTH + 2) throw new Error('Invalid BRC-39 file: too short')
   for (let i = 0; i < BRC39_MAGIC.length; i++) {
     if (file[i] !== BRC39_MAGIC[i]) throw new Error('Invalid BRC-39 file: bad magic')
@@ -345,7 +348,7 @@ function parseBRC39Header (file: Uint8Array): BRC39Header {
   return { saltLength, nonceLength, iterations, memoryKiB, parallelism, hashLength }
 }
 
-function assertHeaderConstants (file: Uint8Array): void {
+function assertHeaderConstants(file: Uint8Array): void {
   if (file[4] !== 1) throw new Error('Unsupported BRC-39 format version')
   if (file[5] !== 1) throw new Error('Unsupported BRC-39 protector type')
   if (file[6] !== 38) throw new Error('Unsupported BRC-39 inner format')
@@ -353,7 +356,7 @@ function assertHeaderConstants (file: Uint8Array): void {
   if (file[8] !== 0) throw new Error('Invalid BRC-39 flags')
 }
 
-export async function decryptBRC39 (bytes: number[] | Uint8Array, password: string): Promise<BRC38WalletData> {
+export async function decryptBRC39(bytes: number[] | Uint8Array, password: string): Promise<BRC38WalletData> {
   const file = new Uint8Array(bytes)
   const header = parseBRC39Header(file)
   const payloadStart = BRC39_HEADER_LENGTH + header.saltLength + header.nonceLength
@@ -365,10 +368,10 @@ export async function decryptBRC39 (bytes: number[] | Uint8Array, password: stri
   const key = await deriveBRC39Key(password, salt, header.iterations, header.memoryKiB, header.parallelism)
   const plaintext = AESGCMDecrypt(ciphertext, nonce, tag, key)
   if (plaintext == null) throw new Error('BRC-39 authentication failed')
-  return parseBRC38Json(Utils.toUTF8(Array.from(plaintext)))
+  return parseBRC38Json(toUTF8(Array.from(plaintext)))
 }
 
-function validateBRC38 (value: unknown): BRC38WalletData {
+function validateBRC38(value: unknown): BRC38WalletData {
   rejectNulls(value, 'document')
   if (!isObject(value)) throw new Error('BRC-38 document must be an object')
   const data = value as unknown as BRC38WalletData
@@ -401,7 +404,7 @@ function validateBRC38 (value: unknown): BRC38WalletData {
   return data
 }
 
-function decodeBRC38 (data: BRC38WalletData): DecodedBRC38 {
+function decodeBRC38(data: BRC38WalletData): DecodedBRC38 {
   return {
     sourceStorage: fromPortableRow<TableSettings>('settings', data.sourceStorage),
     user: fromPortableRow<TableUser>('user', data.user),
@@ -416,12 +419,14 @@ function decodeBRC38 (data: BRC38WalletData): DecodedBRC38 {
     txLabels: data.tables.txLabels.map(r => fromPortableRow<TableTxLabel>('txLabel', r)),
     txLabelMaps: data.tables.txLabelMaps.map(r => fromPortableRow<TableTxLabelMap>('txLabelMap', r)),
     certificates: data.tables.certificates.map(r => fromPortableRow<TableCertificate>('certificate', r)),
-    certificateFields: data.tables.certificateFields.map(r => fromPortableRow<TableCertificateField>('certificateField', r)),
+    certificateFields: data.tables.certificateFields.map(r =>
+      fromPortableRow<TableCertificateField>('certificateField', r)
+    ),
     syncStates: data.tables.syncStates.map(r => fromPortableRow<TableSyncState>('syncState', r))
   }
 }
 
-async function restoreBRC38 (storage: StorageProvider, data: DecodedBRC38): Promise<BRC38ImportResult> {
+async function restoreBRC38(storage: StorageProvider, data: DecodedBRC38): Promise<BRC38ImportResult> {
   await assertRestoreTargetEmpty(storage)
   await storage.transaction(async trx => {
     await storage.insertUser({ ...data.user }, trx)
@@ -450,7 +455,7 @@ async function restoreBRC38 (storage: StorageProvider, data: DecodedBRC38): Prom
   }
 }
 
-async function mergeBRC38 (
+async function mergeBRC38(
   storage: StorageProvider,
   data: DecodedBRC38,
   targetSettings: TableSettings
@@ -531,13 +536,13 @@ async function mergeBRC38 (
   }
 }
 
-async function mergeImportedSyncStates (
+async function mergeImportedSyncStates(
   storage: StorageProvider,
   syncStates: TableSyncState[],
   userId: number,
   importMap: SyncMap,
   sourceStorage: TableSettings
-): Promise<{ inserts: number, updates: number }> {
+): Promise<{ inserts: number; updates: number }> {
   let inserts = 0
   let updates = 0
   for (const source of syncStates) {
@@ -574,7 +579,7 @@ async function mergeImportedSyncStates (
   return { inserts, updates }
 }
 
-function remapSyncMap (source: unknown, importMap: SyncMap): SyncMap {
+function remapSyncMap(source: unknown, importMap: SyncMap): SyncMap {
   const copy = normalizeSyncMap(source)
   remapEntityIdMap(copy.provenTx.idMap, importMap.provenTx.idMap)
   remapEntityIdMap(copy.outputBasket.idMap, importMap.outputBasket.idMap)
@@ -588,7 +593,7 @@ function remapSyncMap (source: unknown, importMap: SyncMap): SyncMap {
   return copy
 }
 
-function normalizeSyncMap (source: unknown): SyncMap {
+function normalizeSyncMap(source: unknown): SyncMap {
   const normalized = createSyncMap()
   if (!isObject(source)) return normalized
   for (const key of Object.keys(normalized) as Array<keyof SyncMap>) {
@@ -598,14 +603,14 @@ function normalizeSyncMap (source: unknown): SyncMap {
   return normalized
 }
 
-function mergeSyncMapEntry (target: SyncMap[keyof SyncMap], incoming: Record<string, unknown>): void {
+function mergeSyncMapEntry(target: SyncMap[keyof SyncMap], incoming: Record<string, unknown>): void {
   if (typeof incoming.entityName === 'string') target.entityName = incoming.entityName
   if (Number.isInteger(incoming.count)) target.count = incoming.count as number
   if (isObject(incoming.idMap)) target.idMap = parseIdMap(incoming.idMap)
   applyMaxUpdatedAt(target, incoming.maxUpdated_at)
 }
 
-function parseIdMap (incoming: Record<string, unknown>): Record<number, number> {
+function parseIdMap(incoming: Record<string, unknown>): Record<number, number> {
   const idMap: Record<number, number> = {}
   for (const [remoteId, localId] of Object.entries(incoming)) {
     const parsedRemoteId = Number(remoteId)
@@ -616,7 +621,7 @@ function parseIdMap (incoming: Record<string, unknown>): Record<number, number> 
   return idMap
 }
 
-function applyMaxUpdatedAt (target: SyncMap[keyof SyncMap], value: unknown): void {
+function applyMaxUpdatedAt(target: SyncMap[keyof SyncMap], value: unknown): void {
   if (typeof value === 'string') {
     const maxUpdatedAt = new Date(value)
     if (!Number.isNaN(maxUpdatedAt.getTime())) target.maxUpdated_at = maxUpdatedAt
@@ -625,14 +630,14 @@ function applyMaxUpdatedAt (target: SyncMap[keyof SyncMap], value: unknown): voi
   }
 }
 
-function remapEntityIdMap (idMap: Record<number, number>, importIdMap: Record<number, number>): void {
+function remapEntityIdMap(idMap: Record<number, number>, importIdMap: Record<number, number>): void {
   for (const key of Object.keys(idMap)) {
     const targetId = importIdMap[idMap[Number(key)]]
     if (targetId != null) idMap[Number(key)] = targetId
   }
 }
 
-async function assertRestoreTargetEmpty (storage: StorageProvider): Promise<void> {
+async function assertRestoreTargetEmpty(storage: StorageProvider): Promise<void> {
   const counts = await Promise.all([
     storage.countUsers({ partial: {} }),
     storage.countProvenTxs({ partial: {} }),
@@ -653,11 +658,22 @@ async function assertRestoreTargetEmpty (storage: StorageProvider): Promise<void
   if (counts.some(c => c > 0)) throw new Error('BRC-38 restore requires an empty target storage except settings')
 }
 
-function countDecodedRows (data: DecodedBRC38): number {
-  return data.provenTxs.length + data.provenTxReqs.length + data.outputBaskets.length + data.transactions.length +
-    data.commissions.length + data.outputs.length + data.outputTags.length + data.outputTagMaps.length +
-    data.txLabels.length + data.txLabelMaps.length + data.certificates.length + data.certificateFields.length +
+function countDecodedRows(data: DecodedBRC38): number {
+  return (
+    data.provenTxs.length +
+    data.provenTxReqs.length +
+    data.outputBaskets.length +
+    data.transactions.length +
+    data.commissions.length +
+    data.outputs.length +
+    data.outputTags.length +
+    data.outputTagMaps.length +
+    data.txLabels.length +
+    data.txLabelMaps.length +
+    data.certificates.length +
+    data.certificateFields.length +
     data.syncStates.length
+  )
 }
 
 interface RelationshipIndex {
@@ -672,7 +688,7 @@ interface RelationshipIndex {
   certificateIds: Set<number>
 }
 
-function buildRelationshipIndex (data: BRC38WalletData): RelationshipIndex {
+function buildRelationshipIndex(data: BRC38WalletData): RelationshipIndex {
   return {
     userId: requireNumber(data.user.userId, 'user.userId'),
     txIds: ids(data.tables.transactions, 'transactionId', 'transactions'),
@@ -686,83 +702,127 @@ function buildRelationshipIndex (data: BRC38WalletData): RelationshipIndex {
   }
 }
 
-function requireRef (set: Set<number>, value: unknown, path: string, message: string): void {
+function requireRef(set: Set<number>, value: unknown, path: string, message: string): void {
   if (!set.has(requireNumber(value, path))) throw new Error(message)
 }
 
-function validateTransactions (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateTransactions(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.transactions) {
     requireUserId(row, idx.userId, 'transactions')
     if (row.provenTxId != null) {
-      requireRef(idx.provenTxIds, row.provenTxId, 'transaction.provenTxId',
-        'BRC-38 transaction.provenTxId does not reference an exported provenTx')
+      requireRef(
+        idx.provenTxIds,
+        row.provenTxId,
+        'transaction.provenTxId',
+        'BRC-38 transaction.provenTxId does not reference an exported provenTx'
+      )
     }
   }
 }
 
-function validateOutputs (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateOutputs(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.outputs) {
     requireUserId(row, idx.userId, 'outputs')
-    requireRef(idx.txIds, row.transactionId, 'output.transactionId',
-      'BRC-38 output.transactionId does not reference an exported transaction')
+    requireRef(
+      idx.txIds,
+      row.transactionId,
+      'output.transactionId',
+      'BRC-38 output.transactionId does not reference an exported transaction'
+    )
     if (row.basketId != null) {
-      requireRef(idx.basketIds, row.basketId, 'output.basketId',
-        'BRC-38 output.basketId does not reference an exported output basket')
+      requireRef(
+        idx.basketIds,
+        row.basketId,
+        'output.basketId',
+        'BRC-38 output.basketId does not reference an exported output basket'
+      )
     }
     if (row.spentBy != null) {
-      requireRef(idx.txIds, row.spentBy, 'output.spentBy',
-        'BRC-38 output.spentBy does not reference an exported transaction')
+      requireRef(
+        idx.txIds,
+        row.spentBy,
+        'output.spentBy',
+        'BRC-38 output.spentBy does not reference an exported transaction'
+      )
     }
   }
 }
 
-function validateCommissions (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateCommissions(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.commissions) {
     requireUserId(row, idx.userId, 'commissions')
-    requireRef(idx.txIds, row.transactionId, 'commission.transactionId',
-      'BRC-38 commission.transactionId does not reference an exported transaction')
+    requireRef(
+      idx.txIds,
+      row.transactionId,
+      'commission.transactionId',
+      'BRC-38 commission.transactionId does not reference an exported transaction'
+    )
   }
 }
 
-function validateTxLabelMaps (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateTxLabelMaps(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.txLabelMaps) {
-    requireRef(idx.txIds, row.transactionId, 'txLabelMap.transactionId',
-      'BRC-38 txLabelMap.transactionId does not reference an exported transaction')
-    requireRef(idx.txLabelIds, row.txLabelId, 'txLabelMap.txLabelId',
-      'BRC-38 txLabelMap.txLabelId does not reference an exported transaction label')
+    requireRef(
+      idx.txIds,
+      row.transactionId,
+      'txLabelMap.transactionId',
+      'BRC-38 txLabelMap.transactionId does not reference an exported transaction'
+    )
+    requireRef(
+      idx.txLabelIds,
+      row.txLabelId,
+      'txLabelMap.txLabelId',
+      'BRC-38 txLabelMap.txLabelId does not reference an exported transaction label'
+    )
   }
 }
 
-function validateOutputTagMaps (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateOutputTagMaps(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.outputTagMaps) {
-    requireRef(idx.outputIds, row.outputId, 'outputTagMap.outputId',
-      'BRC-38 outputTagMap.outputId does not reference an exported output')
-    requireRef(idx.outputTagIds, row.outputTagId, 'outputTagMap.outputTagId',
-      'BRC-38 outputTagMap.outputTagId does not reference an exported output tag')
+    requireRef(
+      idx.outputIds,
+      row.outputId,
+      'outputTagMap.outputId',
+      'BRC-38 outputTagMap.outputId does not reference an exported output'
+    )
+    requireRef(
+      idx.outputTagIds,
+      row.outputTagId,
+      'outputTagMap.outputTagId',
+      'BRC-38 outputTagMap.outputTagId does not reference an exported output tag'
+    )
   }
 }
 
-function validateCertificateFields (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateCertificateFields(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.certificateFields) {
     requireUserId(row, idx.userId, 'certificateFields')
-    requireRef(idx.certificateIds, row.certificateId, 'certificateField.certificateId',
-      'BRC-38 certificateField.certificateId does not reference an exported certificate')
+    requireRef(
+      idx.certificateIds,
+      row.certificateId,
+      'certificateField.certificateId',
+      'BRC-38 certificateField.certificateId does not reference an exported certificate'
+    )
   }
 }
 
-function validateProvenTxReqs (data: BRC38WalletData, idx: RelationshipIndex): void {
+function validateProvenTxReqs(data: BRC38WalletData, idx: RelationshipIndex): void {
   for (const row of data.tables.provenTxReqs) {
     if (!idx.txidValues.has(requireString(row.txid, 'provenTxReq.txid'))) {
       throw new Error('BRC-38 provenTxReq.txid does not match an exported transaction')
     }
     if (row.provenTxId != null) {
-      requireRef(idx.provenTxIds, row.provenTxId, 'provenTxReq.provenTxId',
-        'BRC-38 provenTxReq.provenTxId does not reference an exported provenTx')
+      requireRef(
+        idx.provenTxIds,
+        row.provenTxId,
+        'provenTxReq.provenTxId',
+        'BRC-38 provenTxReq.provenTxId does not reference an exported provenTx'
+      )
     }
   }
 }
 
-function validateRelationships (data: BRC38WalletData): void {
+function validateRelationships(data: BRC38WalletData): void {
   const idx = buildRelationshipIndex(data)
   validateTransactions(data, idx)
   for (const row of data.tables.outputBaskets) requireUserId(row, idx.userId, 'outputBaskets')
@@ -778,7 +838,7 @@ function validateRelationships (data: BRC38WalletData): void {
   validateProvenTxReqs(data, idx)
 }
 
-function validatePortableRows (kind: string, rows: PortableRow[], path: string): void {
+function validatePortableRows(kind: string, rows: PortableRow[], path: string): void {
   const dateFields = new Set(dateFieldsByKind[kind] ?? [])
   const binaryFields = new Set(binaryFieldsByKind[kind] ?? [])
   const jsonFields = new Set(jsonFieldsByKind[kind] ?? [])
@@ -787,7 +847,7 @@ function validatePortableRows (kind: string, rows: PortableRow[], path: string):
   }
 }
 
-function validatePortableRow (
+function validatePortableRow(
   row: PortableRow,
   rowPath: string,
   dateFields: Set<string>,
@@ -806,7 +866,7 @@ function validatePortableRow (
   }
 }
 
-function portableRow (kind: string, row: object): PortableRow {
+function portableRow(kind: string, row: object): PortableRow {
   const out: PortableRow = {}
   const binaryFields = new Set(binaryFieldsByKind[kind] ?? [])
   const jsonFields = new Set(jsonFieldsByKind[kind] ?? [])
@@ -814,9 +874,9 @@ function portableRow (kind: string, row: object): PortableRow {
     if (value == null) continue
     if (key === 'logger') continue
     if (binaryFields.has(key)) {
-      out[key] = Utils.toBase64(value as number[])
+      out[key] = toBase64(value as number[])
     } else if (jsonFields.has(key)) {
-      out[key] = typeof value === 'string' ? JSON.parse(value) as JsonValue : value as JsonValue
+      out[key] = typeof value === 'string' ? (JSON.parse(value) as JsonValue) : (value as JsonValue)
     } else if (value instanceof Date) {
       out[key] = isoDate(value)
     } else {
@@ -826,21 +886,21 @@ function portableRow (kind: string, row: object): PortableRow {
   return out
 }
 
-function fromPortableRow<T> (kind: string, row: PortableRow): T {
+function fromPortableRow<T>(kind: string, row: PortableRow): T {
   const out: Record<string, unknown> = {}
   const dateFields = new Set(dateFieldsByKind[kind] ?? [])
   const binaryFields = new Set(binaryFieldsByKind[kind] ?? [])
   const jsonFields = new Set(jsonFieldsByKind[kind] ?? [])
   for (const [key, value] of Object.entries(row)) {
     if (dateFields.has(key)) out[key] = new Date(value as string)
-    else if (binaryFields.has(key)) out[key] = Utils.toArray(value, 'base64')
+    else if (binaryFields.has(key)) out[key] = toArray(value, 'base64')
     else if (jsonFields.has(key)) out[key] = JSON.stringify(value)
     else out[key] = value
   }
   return out as T
 }
 
-function sortBRC38Tables (tables: BRC38Tables): void {
+function sortBRC38Tables(tables: BRC38Tables): void {
   tables.provenTxs.sort(byNumber('provenTxId'))
   tables.provenTxReqs.sort(byNumber('provenTxReqId'))
   tables.outputBaskets.sort(byNumber('basketId'))
@@ -861,7 +921,7 @@ function sortBRC38Tables (tables: BRC38Tables): void {
   tables.syncStates.sort(byNumber('syncStateId'))
 }
 
-function byNumber (field: string, secondField?: string): (a: PortableRow, b: PortableRow) => number {
+function byNumber(field: string, secondField?: string): (a: PortableRow, b: PortableRow) => number {
   return (a, b) => {
     const first = requireNumber(a[field], field) - requireNumber(b[field], field)
     if (first !== 0 || secondField == null) return first
@@ -869,7 +929,7 @@ function byNumber (field: string, secondField?: string): (a: PortableRow, b: Por
   }
 }
 
-function ids (rows: PortableRow[], field: string, label: string): Set<number> {
+function ids(rows: PortableRow[], field: string, label: string): Set<number> {
   const set = new Set<number>()
   for (const row of rows) {
     const id = requireNumber(row[field], `${label}.${field}`)
@@ -879,21 +939,22 @@ function ids (rows: PortableRow[], field: string, label: string): Set<number> {
   return set
 }
 
-function requireUserId (row: PortableRow, userId: number, label: string): void {
-  if (requireNumber(row.userId, `${label}.userId`) !== userId) throw new Error(`BRC-38 ${label}.userId does not match user.userId`)
+function requireUserId(row: PortableRow, userId: number, label: string): void {
+  if (requireNumber(row.userId, `${label}.userId`) !== userId)
+    throw new Error(`BRC-38 ${label}.userId does not match user.userId`)
 }
 
-function requireNumber (value: unknown, path: string): number {
+function requireNumber(value: unknown, path: string): number {
   if (!Number.isInteger(value)) throw new Error(`BRC-38 ${path} must be an integer`)
   return value as number
 }
 
-function requireString (value: unknown, path: string): string {
+function requireString(value: unknown, path: string): string {
   if (typeof value !== 'string') throw new Error(`BRC-38 ${path} must be a string`)
   return value
 }
 
-function assertIsoDate (value: unknown, path: string): void {
+function assertIsoDate(value: unknown, path: string): void {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
     throw new Error(`BRC-38 ${path} must be a UTC ISO timestamp`)
   }
@@ -901,13 +962,13 @@ function assertIsoDate (value: unknown, path: string): void {
   if (Number.isNaN(date.getTime()) || date.toISOString() !== value) throw new Error(`BRC-38 ${path} is invalid`)
 }
 
-function assertBase64 (value: unknown, path: string): void {
+function assertBase64(value: unknown, path: string): void {
   if (typeof value !== 'string' || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value)) {
     throw new Error(`BRC-38 ${path} must be padded base64`)
   }
 }
 
-function rejectNulls (value: unknown, path: string): void {
+function rejectNulls(value: unknown, path: string): void {
   if (value === null) throw new Error(`BRC-38 ${path} must omit null values`)
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) rejectNulls(value[i], `${path}[${i}]`)
@@ -916,7 +977,7 @@ function rejectNulls (value: unknown, path: string): void {
   }
 }
 
-function canonicalize (value: unknown): string {
+function canonicalize(value: unknown): string {
   if (value === null || value === undefined) throw new Error('Cannot canonicalize null or undefined')
   if (typeof value === 'string') return JSON.stringify(value)
   if (typeof value === 'number') {
@@ -934,29 +995,29 @@ function canonicalize (value: unknown): string {
   throw new Error(`Unsupported JSON value type: ${typeof value}`)
 }
 
-function canonicalizeEntry (key: string, value: unknown): string {
+function canonicalizeEntry(key: string, value: unknown): string {
   return `${JSON.stringify(key)}:${canonicalize(value)}`
 }
 
-function compareCodepoints (a: string, b: string): number {
+function compareCodepoints(a: string, b: string): number {
   if (a < b) return -1
   if (a > b) return 1
   return 0
 }
 
-function isoDate (date: Date): string {
+function isoDate(date: Date): string {
   return date.toISOString()
 }
 
-function isObject (value: unknown): value is Record<string, unknown> {
+function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function compareNumber (a: number, b: number): number {
+function compareNumber(a: number, b: number): number {
   return a - b
 }
 
-function concatBytes (...arrays: Uint8Array[]): Uint8Array {
+function concatBytes(...arrays: Uint8Array[]): Uint8Array {
   const total = arrays.reduce((sum, a) => sum + a.length, 0)
   const out = new Uint8Array(total)
   let offset = 0
@@ -967,7 +1028,7 @@ function concatBytes (...arrays: Uint8Array[]): Uint8Array {
   return out
 }
 
-async function deriveBRC39Key (
+async function deriveBRC39Key(
   password: string,
   salt: Uint8Array,
   iterations: number,
@@ -976,7 +1037,7 @@ async function deriveBRC39Key (
 ): Promise<Uint8Array> {
   const normalized = password.normalize('NFC')
   const hash = await argon2id({
-    password: new Uint8Array(Utils.toArray(normalized, 'utf8')),
+    password: new Uint8Array(toArray(normalized, 'utf8')),
     salt,
     iterations,
     memorySize: memoryKiB,
@@ -987,14 +1048,15 @@ async function deriveBRC39Key (
   return new Uint8Array(hash)
 }
 
-function validateKdfParams (iterations: number, memoryKiB: number, parallelism: number, hashLength: number): void {
+function validateKdfParams(iterations: number, memoryKiB: number, parallelism: number, hashLength: number): void {
   if (!Number.isInteger(iterations) || iterations <= 0) throw new Error('Invalid BRC-39 Argon2id iterations')
   if (!Number.isInteger(memoryKiB) || memoryKiB <= 0) throw new Error('Invalid BRC-39 Argon2id memoryKiB')
-  if (!Number.isInteger(parallelism) || parallelism <= 0 || parallelism > 255) throw new Error('Invalid BRC-39 Argon2id parallelism')
+  if (!Number.isInteger(parallelism) || parallelism <= 0 || parallelism > 255)
+    throw new Error('Invalid BRC-39 Argon2id parallelism')
   if (hashLength !== BRC39_HASH_LENGTH) throw new Error('Invalid BRC-39 Argon2id hashLength')
 }
 
-function validateExportKdfParams (iterations: number, memoryKiB: number): void {
+function validateExportKdfParams(iterations: number, memoryKiB: number): void {
   if (iterations < BRC39_DEFAULT_ITERATIONS) {
     throw new Error('BRC-39 export iterations must not be weaker than the canonical default')
   }
@@ -1003,7 +1065,7 @@ function validateExportKdfParams (iterations: number, memoryKiB: number): void {
   }
 }
 
-function writeUInt32BE (target: Uint8Array, offset: number, value: number): void {
+function writeUInt32BE(target: Uint8Array, offset: number, value: number): void {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) throw new Error('BRC-39 integer out of range')
   target[offset] = (value >>> 24) & 0xff
   target[offset + 1] = (value >>> 16) & 0xff
@@ -1011,6 +1073,6 @@ function writeUInt32BE (target: Uint8Array, offset: number, value: number): void
   target[offset + 3] = value & 0xff
 }
 
-function readUInt32BE (source: Uint8Array, offset: number): number {
+function readUInt32BE(source: Uint8Array, offset: number): number {
   return ((source[offset] << 24) >>> 0) + (source[offset + 1] << 16) + (source[offset + 2] << 8) + source[offset + 3]
 }

@@ -20,8 +20,29 @@ export function compileOriginMatcher(
 ): ((origin: string) => boolean) | null {
   if (allowed == null) return null
   if (typeof allowed === 'string') return o => o === allowed
-  if (Array.isArray(allowed)) return o => allowed.includes(o)
-  if (allowed instanceof RegExp) return o => allowed.test(o)
-  if (typeof allowed === 'function') return allowed
-  return null
+  if (Array.isArray(allowed)) {
+    if (allowed.some(origin => typeof origin !== 'string')) {
+      throw new TypeError('allowedOrigins arrays may contain only strings')
+    }
+    const exactOrigins = [...allowed]
+    return o => exactOrigins.includes(o)
+  }
+  if (allowed instanceof RegExp)
+    return o => {
+      // Global and sticky regexes retain lastIndex between calls. Reset it on
+      // both sides so an allowlist cannot alternate allow/deny decisions.
+      allowed.lastIndex = 0
+      const matches = allowed.test(o)
+      allowed.lastIndex = 0
+      return matches
+    }
+  if (typeof allowed === 'function')
+    return o => {
+      try {
+        return allowed(o) === true
+      } catch {
+        return false
+      }
+    }
+  throw new TypeError('allowedOrigins must be a string, string array, RegExp, or predicate')
 }

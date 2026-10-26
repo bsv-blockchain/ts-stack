@@ -3,10 +3,10 @@ id: bsv-sdk
 title: '@bsv/sdk'
 kind: package
 domain: sdk
-version: '2.7.1'
+version: '4.0.0'
 npm: '@bsv/sdk'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 status: stable
 tags: ['sdk', 'crypto', 'transactions']
@@ -15,11 +15,173 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk'
 
 # @bsv/sdk
 
-The current unpublished candidate corrects BUMP offset arithmetic above 32 bits
+The 4.0.0 source candidate types `ListOutputsResult.totalOutputs` as
+`PositiveIntegerOrZero | DecimalString`. A BRC-112 module balance query
+(`p <module> balance <basket>`) returns the exact balance as decimal text with
+no outputs and no BEEF; every other query returns a count. The binary
+`listOutputs` response carries that text and each output's `spendable` byte, so
+both ends of a binary connection must update together. Code that uses
+`totalOutputs` as a number must check `typeof totalOutputs === 'number'` first.
+This candidate is not publication.
+
+The isolated SDK3 retirement candidate removes the obsolete serial-DID token
+validation module. Native identity, certificate and authentication APIs remain.
+Use the [identity/DID/VC guide](../../guides/identity-did-vc.md) and
+[migration map](../../guides/identity-did-vc-migration.md). SDK3 consumer peer
+qualification remains a draft prerequisite; existing SDK2 floors are preserved.
+
+The 3.2.0 source candidate fixes saved-contact `any` searches and retains
+contact-only matches in parallel public searches. Both identity-resolution
+methods accept opt-in bounded contact recovery through `contactErrorMode`,
+`contactTimeoutMs` and `onContactError`. Legacy defaults and contact failures
+are preserved; public-discovery errors, certificate checks and wallet
+permission gates remain intact. See the [SDK README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/sdk)
+for integration details. Consumers must adopt recovery explicitly and render
+lookup errors separately from successful empty results. A contact deadline
+does not cancel an underlying wallet request or permission prompt. This
+candidate is not publication or a deployed search-component update.
+
+The 3.2.1 source candidate aligns the Script interpreter with
+[SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+`OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operands are decoded through the node's
+checked int64 script-number path: an operand longer than nine bytes, or whose
+value lies outside the signed 64-bit range, is a script number overflow instead
+of being read from its first eight bytes, and `OP_SPLIT` also rejects a
+position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
+no API, wire or wallet-data migration is required. This candidate is not
+publication.
+
+The 4.0.0 source candidate refuses a one-level Merkle proof whose only leaf
+is not at offset 0. A block of one transaction contains only its coinbase, at
+index 0, so any other offset is a missing sibling. Parsing, construction, and
+root computation throw `Missing hash for index <offset> at height 0`, and
+`combine()` leaves the receiver unchanged when the merged root differs.
+Offset 0, including `fromCoinbaseTxidAndHeight`, is unchanged. This candidate
+is not publication.
+
+For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
+see [registry metadata](../../guides/registry-metadata.md). It covers exact
+lookups, BRC-based inclusion requests, publisher choice and the boundary between
+display metadata and wallet permissions.
+
+Published SDK 2.8.10 restores WhatsOnChain Merkle-proof verification
+for block headers containing the provider's full metadata. Header objects may
+contain up to 64 owned data properties, matching the existing header-list
+bound. Merkle-root equality, response size limits, and rejection of accessors,
+symbols, and inherited properties remain unchanged. No API, wire, proof, or
+wallet-data migration is required. Protected release
+[36324548797](https://github.com/bsv-blockchain/ts-stack/actions/runs/36324548797)
+verified the exact registry bytes, source provenance and CycloneDX SBOM for
+source `5a4053223692b020372f5a8e20f59bf9c82cc968`.
+
+The 2.8.8 source candidate aligns explicit script verification flags with
+spending-era rules, historical signature hashing, locktime operations, and
+bounded numeric allocations. The default JavaScript interpreter still lacks
+the block and coin heights needed for exact node consensus validation.
+There is no default local allocation cap. Callers evaluating untrusted scripts
+may supply a finite `memoryLimit`; a resource limit does not prove that a script
+is invalid. This candidate is not yet published.
+
+The 2.8.6 source candidate fixes BRC-29 payment acceptance.
+`Brc29RemittanceModule.acceptSettlement` now derives the recipient's own
+BRC-42 child key (`forSelf: true`) when checking that the settlement output
+pays the recipient. SDK 2.8.0 through 2.8.5 derived the sender-facing key, so
+every valid incoming BRC-29 payment was refused with `brc29.internalize_failed`
+before `internalizeAction`; no funds were internalized to a wrong key and
+refused payments remain pending. `RemittanceManager` and Message Box
+`PeerPayClient` acceptance recover after upgrading. No API, BRC100 wire or
+wallet-data migration is required. This candidate is not yet published.
+
+The 2.8.5 source candidate restores larger BRC-105 HTTP payment proofs and
+raises request and signed-response header capacity by 4x: 32 KiB per ordinary
+value, 256 KiB aggregate names and values, 512 headers, and 1 KiB per name.
+The requested-certificate policy header also increases to 256 KiB, checked
+before JSON parsing. Only `x-bsv-payment` request values may share the full
+aggregate budget rather than the ordinary per-value limit. Resource bounds
+remain finite; wire framing, body limits, deadlines and signature validation
+are unchanged. The response-frame overhead allowance increases from 128 KiB
+to 512 KiB to accommodate the larger header budget.
+Server, proxy and fetch-runtime limits apply independently and must be verified
+end to end for larger proofs. Applications affected by these client limits can
+upgrade without changing BRC100 calls, public APIs, wire bytes or wallet data.
+Wallets remain compatible with existing conforming applications. Publication
+follows the protected SDK workflow; this candidate is not yet published.
+
+### Transport-owned general payload policy
+
+SDK 2.8.5 adds an optional seventh `Peer` constructor argument,
+`AuthMessageValidationOptions`, also accepted as the second argument to
+`snapshotAuthMessage`. `maxGeneralPayloadBytes` may be a positive safe integer
+for a separate general-message payload budget, or `null` to delegate payload
+capacity to the transport. Omission preserves the prior aggregate message
+budget. The setting is local configuration and is never taken from a peer's
+message; `Peer` snapshots it when constructed.
+
+```ts
+const peer = new Peer(wallet, transport, undefined, undefined, undefined, undefined, {
+  maxGeneralPayloadBytes: null
+})
+```
+
+Delegation excludes only the top-level general-message byte payload from the
+SDK message-size accounting. Metadata budgets, dense byte validation, owned
+snapshots, signatures, session identity, nonce/replay handling, and handshake
+and certificate-message validation remain. Configure HTTP server and edge
+capacity before delegating. The HTTP SDK client's own request/response bounds
+still apply independently.
+
+Authentication middleware 2.2.8 requires SDK 2.8.5 and selects this transport
+policy itself, so its received payment headers do not hit a hidden SDK envelope
+budget. Custom `ExpressTransport`/`Peer` integrations should select the same
+policy when the HTTP layer owns payload admission.
+
+Published version 2.8.4 also restores `listActions` responses containing empty
+stored descriptions or unassigned basket names, including ordinary generated
+change. The original strings are preserved; wallets need not fabricate display
+metadata or rewrite history. Nonempty description limits, UTF-8 byte ceilings,
+required scripts and labels, signed net values, nonnegative outputs and all
+new-action request validation remain unchanged. Direct, HTTP JSON and binary
+clients share the same regression coverage and a portable conformance vector.
+No API, wire or account-data migration is required; only clients already bundling
+the affected hardened SDK need a dependency update for this defect.
+
+The 2.8.3 candidate repairs HTTP wallet discovery with an explicit BRC100
+originator and binds the default JSON transport fetch receiver for browsers.
+It restores signed `listActions` net amounts with the historical wire encoding,
+matching JSON validation; count, length and individual output bounds stay intact.
+Apps affected by these client defects can update the SDK without changing calls.
+Wallets retain the existing BRC100 contract; an ecosystem-wide application
+migration is not required. The candidate is not published until the protected
+release workflow completes.
+
+The action-history compatibility regression affects signed `listActions` values
+in the 2.8.x binary processor and client. Updating a wallet repairs responses for
+older compatible clients; an application already bundling the affected 2.8.x
+binary client also needs the SDK patch. No call or persisted-data change is
+needed. Synthetic cross-version checks cover SDK 2.4.0, 2.5.0, 2.7.1, 2.8.1 and
+2.8.2 at eight signed/unsigned boundaries: all 40 candidate cases pass, all 32
+previously valid cases retain exact response bytes, and the eight known negative
+2.8.1/2.8.2 failures are recorded separately. These checks are bounded fixture
+evidence, not a claim that every ecosystem application has been tested.
+
+Version 2.8.1 repairs portable decryption of authenticated empty
+AES-GCM plaintext. Browser/mobile and native Node envelopes now interoperate
+for empty encrypted fields. Encryption bytes and the full authentication tag
+remain unchanged. No ciphertext, account-data or API migration is required.
+The patch is published through the protected [SDK release](https://github.com/bsv-blockchain/ts-stack/actions/runs/35888747366) from commit `e09515508bf5bf22d7b56085170debc2b0803b2a`, with matching npm integrity and verified provenance.
+
+Version 2.8.0 corrects BUMP offset arithmetic above 32 bits
 through `Number.MAX_SAFE_INTEGER`, preserving existing wire encodings. Root
 calculation, extraction, combination and trimming use the same exact numeric
 domain; malformed non-integer and unsafe offsets fail explicitly. No consumer
 migration is needed for this correction.
+
+It also adds `TOTP.generateSecure()` and `TOTP.validateSecure()` for new
+authentication flows. These methods default to conventional six-character,
+zero-padded codes. The existing `TOTP.generate()` and `TOTP.validate()` methods
+retain their published two-digit, unpadded default so existing wire protocols
+do not change; applications should preserve secure codes as strings and apply
+an independent attempt limit.
 
 The foundational cryptographic and transaction library for the BSV blockchain. Zero external dependencies — all cryptographic primitives have been validated by a third-party auditor. Every other library in the ts-stack builds on top of `@bsv/sdk`. <!-- audio: ts-stack.m4a @ 27:00 -->
 
@@ -34,6 +196,13 @@ Authenticated general messages, certificate requests, and certificate
 responses are bound to the identity in the nonce-selected peer session.
 Transport identity metadata must match that session, and callbacks receive
 only the identity used for signature verification.
+
+Completed `createAction` and `signAction` transaction results must evidence
+the value of every direct input. A completed `createAction` may rely on the
+caller's immutable `inputBEEF`; otherwise the returned BEEF must include each
+direct source transaction. Deferred `signableTransaction` results may remain
+partial for compatibility, but the final result must be complete. Duplicate
+input outpoints and zero-input transactions that create value fail validation.
 
 ## Install
 
@@ -91,7 +260,8 @@ const broadcast = await tx.broadcast()
 - **Auth & identity** — `Certificate`, `IdentityKey`, `AuthModule` for peer authentication
 - **Storage & KV** — `Storage` interface with `LocalStorageAdapter`, `InMemoryStorage`; `KVStore` for distributed data
 - **Overlay integration** — `TopicBroadcaster`, `TopicListener`, `RemittanceProtocol`, `IdentityResolver`, `Registry`
-- **2FA** — `generateTOTP()`, `verifyTOTP()` for time-based one-time passwords
+- **2FA** — `TOTP.generateSecure()` and `TOTP.validateSecure()` for new flows;
+  compatibility methods remain available for existing protocols
 
 ## AuthFetch payment ancestry
 
@@ -106,6 +276,13 @@ invalid-only header preserves existing payment behavior, so existing consumers
 require no migration. Browser services must expose the optional response header
 through their existing CORS policy to enable this optimization.
 The header is an optional SDK extension, not a standardized BRC-105 header.
+
+Authenticated HTTP response bodies use a bounded streaming buffer before
+signed-message decoding: 16 MiB for application responses and 1 MiB for auth
+handshakes by default. `SimplifiedFetchTransportOptions` exposes
+`maxResponseBytes` and `maxHandshakeResponseBytes` for explicit deployment
+limits. Malformed response frames with excessive headers or lengths,
+truncation, or trailing bytes are rejected.
 
 ## Common patterns
 
@@ -285,6 +462,12 @@ const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 
 > **UTXO reuse across parallel transactions** — If two transactions reference the same UTXO, only one will confirm. Wallet implementations must track pending outputs.
 
+> **AuthFetch payment authority** — Automatic BRC-105 payment creation delegates
+> spending authorization to the configured wallet's `createAction` policy. Use
+> a wallet that requires the intended user or policy approval. Diagnostics omit
+> URL credentials/path/query, sensitive header values, transaction bytes, and
+> derivation material.
+
 > **Script evaluation order** — Unlocking script is evaluated first, then locking script. Stack must be left with true atop for success.
 
 > **Broadcast endpoint differences** — ARC, WhatsOnChain, Teranode have different response formats and rate limits. Implement retry logic and fallback chains.
@@ -304,11 +487,22 @@ const output = { lockingScript: lockingScript.toHex(), satoshis: 1 }
 ## Certificate policy and observer callbacks
 
 SDK 2.7 records the locally requested certificate policy for each BRC-103
-session. Standalone responses must match one complete outstanding dynamic
-request or the session's handshake policy. Policies are copied before sending,
-so a later edit of the caller's object does not change validation. Responses
-never select their own validation policy. A different dynamic request cannot
-satisfy an unmet handshake requirement.
+session. Standalone responses must fit one complete locally recorded dynamic
+request allowlist or the session's handshake allowlist. Policies are copied
+before sending, so a later edit of the caller's object does not change
+validation. Responses never select their own validation policy. A different
+dynamic request cannot satisfy an unmet handshake requirement.
+
+The legacy v0.1 `RequestedCertificateSet` has no all-of, any-of, threshold, or
+optional-field expression. Compatibility validation therefore proves only that
+each supplied certificate and each non-empty disclosed-field subset is allowed
+by one locally recorded set. It does **not** prove that every listed certificate
+type or every requested field was supplied. Each party chooses what to request,
+what to provide, and how much to disclose. Before granting access, inspect the
+actual certificate types, certifiers, and decrypted fields and enforce the
+application's complete authorization policy. Terminate or constrain the
+session or operation when the disclosures are insufficient; protocol-level
+authentication never declares the claims sufficient for the application.
 
 The v0.1 AuthMessage fields, signatures and encodings are unchanged. Because a
 certificateResponse does not echo the request nonce, concurrent responses are
@@ -317,11 +511,25 @@ successful dynamic response consumes one matching request; failed validation
 keeps it available for retry. Request the intended set explicitly instead of
 relying on unrequested certificates.
 
+An `initialRequest` is unsigned, and the v0.1 `initialResponse` signature binds
+the nonce pair and identity but not its `requestedCertificates` or
+`certificates` members. Built-in wallet proving encrypts revealed field keys to
+the requested identity, but a certificate-request callback can observe only a
+claimed identity during the initial exchange. Do not disclose plaintext or
+authorize side effects from that callback. Because the requested set is
+mutable, make every decision from the certificates and fields actually
+disclosed and validated, never from the request alone. Prefer wallet-backed
+proof creation, and use a signed post-authentication certificate request or an
+application-layer integrity check when request integrity itself matters.
+
 `listenForCertificatesReceived` is an observer. The SDK commits certificate
 validation and releases its waiters before invoking listeners. A throwing or
 rejecting listener stops later listeners and rejects message handling, but does
-not roll back validation. Apply the requested certificate policy and explicit
-application authorization before performing protected work.
+not roll back validation. The callback's third argument is the local session
+nonce and its optional fourth argument is the peer nonce, allowing adapters to
+bind application approval to the exact validated exchange; existing two-argument
+callbacks remain compatible. Apply the requested certificate policy and
+explicit application authorization before performing protected work.
 
 Custom `AsyncSessionManager` implementations must retain the complete
 `PeerSession`, including the optional local `certificatePolicy` and
@@ -329,3 +537,41 @@ Custom `AsyncSessionManager` implementations must retain the complete
 Peer serializes its own certificate read-modify-write operations; shared stores
 must also coordinate writers across instances. Older stored sessions without
 these fields use the configured handshake policy.
+
+The in-process session store evicts only unauthenticated sessions at capacity.
+If every slot is authenticated, new handshakes fail until a session expires or
+is removed. Only a successful locally initiated handshake can select the
+implicit destination for a later `Peer` call; inbound messages cannot retarget
+it.
+
+### Wallet discovery deadlines since 2.8.2
+
+Automatic React Native and XDM probes retain their short discovery deadlines
+and remove listeners when unavailable. A successful probe creates a separate
+operational connection so authentication, permission approval and valid slow
+responses do not inherit the one-second/200-millisecond discovery deadline.
+Explicitly configured substrate `responseTimeout` values remain enforced, and
+response validation and origin checks are unchanged. No API or wire migration
+is needed. Applications affected by the timeout defect can update their bundled
+SDK; a wallet release alone cannot replace code served by a web application.
+
+## Faucet output authorization
+
+The source candidate adds exact completed-action binding for independently
+validated local storage fees and change. The SDK capability marker is
+`completeBoundAction.outputAuthorizationVersion=1`; upgrade the wallet and SDK together.
+Existing SDK2 peers retain strict behavior. The separate SDK3 migration still
+applies; SDK2 consumers need an additive backport or that migration. Serialized
+wallet results do not carry local authority. The fee fix does not change signup
+persistence or interrupted-funding reconciliation. See the package README and
+[release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

@@ -6,15 +6,16 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | | | |
 | --- | --- | --- |
-| [ArcConfig](#interface-arcconfig) | [FeeModel](#interface-feemodel) | [TransactionEvidence](#interface-transactionevidence) |
-| [BdkVerifierInterface](#interface-bdkverifierinterface) | [FetchOptions](#interface-fetchoptions) | [TransactionEvidenceContext](#interface-transactionevidencecontext) |
-| [BdkVerifyScriptsParams](#interface-bdkverifyscriptsparams) | [HttpClient](#interface-httpclient) | [TransactionEvidenceCoordinatorOptions](#interface-transactionevidencecoordinatoroptions) |
+| [ArcConfig](#interface-arcconfig) | [FetchOptions](#interface-fetchoptions) | [TransactionEvidence](#interface-transactionevidence) |
+| [BdkVerifierInterface](#interface-bdkverifierinterface) | [HttpClient](#interface-httpclient) | [TransactionEvidenceContext](#interface-transactionevidencecontext) |
+| [BdkVerifyScriptsParams](#interface-bdkverifyscriptsparams) | [HttpClientLimits](#interface-httpclientlimits) | [TransactionEvidenceCoordinatorOptions](#interface-transactionevidencecoordinatoroptions) |
 | [BroadcastFailure](#interface-broadcastfailure) | [HttpClientRequestOptions](#interface-httpclientrequestoptions) | [TransactionEvidenceLimits](#interface-transactionevidencelimits) |
 | [BroadcastResponse](#interface-broadcastresponse) | [HttpsModuleLike](#interface-httpsmodulelike) | [TransactionInput](#interface-transactioninput) |
 | [Broadcaster](#interface-broadcaster) | [HttpsNodejs](#interface-httpsnodejs) | [TransactionOutput](#interface-transactionoutput) |
 | [ChainTracker](#interface-chaintracker) | [MerklePathLeaf](#interface-merklepathleaf) | [VerifiedTransactionOutput](#interface-verifiedtransactionoutput) |
 | [EvidenceCandidate](#interface-evidencecandidate) | [NodejsHttpClientRequest](#interface-nodejshttpclientrequest) | [WhatsOnChainConfig](#interface-whatsonchainconfig) |
 | [EvidenceScriptScope](#interface-evidencescriptscope) | [NodejsRequestLike](#interface-nodejsrequestlike) |  |
+| [FeeModel](#interface-feemodel) | [NormalizedArcConfig](#interface-normalizedarcconfig) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -35,51 +36,56 @@ export interface ArcConfig {
 }
 ```
 
-See also: [HttpClient](./transaction.md#interface-httpclient)
+See also: [HttpClient](./transaction.md#interface-httpclient), [string](./remittance.md#function-string)
 
 #### Property apiKey
 
-Authentication token for the ARC API
+Authentication token for the ARC API.
 
 ```ts
 apiKey?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property callbackToken
 
-default access token for notification callback endpoint. It will be used as a Authorization header for the http callback
+Access token sent to the configured notification callback.
 
 ```ts
 callbackToken?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property callbackUrl
 
-notification callback endpoint for proofs and double spend notification
+Notification callback endpoint for proofs and double-spend notifications.
 
 ```ts
 callbackUrl?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property deploymentId
 
-Deployment id used annotating api calls in XDeployment-ID header - this value will be randomly generated if not set
+Deployment ID sent in the XDeployment-ID header.
 
 ```ts
 deploymentId?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property headers
 
-additional headers to be attached to all tx submissions.
+Additional request headers, snapshotted when the broadcaster is constructed.
 
 ```ts
 headers?: Record<string, string>
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property httpClient
 
-The HTTP client used to make requests to the ARC API.
+The explicitly trusted HTTP adapter used to make provider requests.
 
 ```ts
 httpClient?: HttpClient
@@ -163,7 +169,7 @@ export interface BdkVerifyScriptsParams {
 }
 ```
 
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -182,6 +188,8 @@ export interface BroadcastFailure {
 }
 ```
 
+See also: [string](./remittance.md#function-string)
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
@@ -197,6 +205,8 @@ export interface BroadcastResponse {
     competingTxs?: string[];
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -249,6 +259,8 @@ export default interface ChainTracker {
 }
 ```
 
+See also: [string](./remittance.md#function-string)
+
 #### Property getVerificationContext
 
 Optional trusted local provider/policy/recovery context. Change this value
@@ -259,6 +271,7 @@ Implementations without cancellable I/O may ignore the optional signals.
 ```ts
 getVerificationContext?: () => string | number
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property getVerificationContextToken
 
@@ -271,6 +284,7 @@ an intervening transition back to the identical tip (ABA).
 ```ts
 getVerificationContextToken?: (signal?: AbortSignal) => Promise<string>
 ```
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -290,7 +304,7 @@ export interface EvidenceCandidate {
 }
 ```
 
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -336,8 +350,12 @@ export interface FetchOptions {
     method?: string;
     headers?: Record<string, string>;
     body?: string | null;
+    redirect?: "error";
+    signal?: AbortSignal;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 #### Property body
 
@@ -346,6 +364,7 @@ An object or null to set request's body.
 ```ts
 body?: string | null
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property headers
 
@@ -354,6 +373,7 @@ An object literal set request's headers.
 ```ts
 headers?: Record<string, string>
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property method
 
@@ -361,6 +381,23 @@ A string to set request's method.
 
 ```ts
 method?: string
+```
+See also: [string](./remittance.md#function-string)
+
+#### Property redirect
+
+Redirects are prohibited so credentials cannot escape the configured endpoint.
+
+```ts
+redirect?: "error"
+```
+
+#### Property signal
+
+Cancels both the request and response-body read.
+
+```ts
+signal?: AbortSignal
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -376,7 +413,7 @@ export interface HttpClient {
 }
 ```
 
-See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse)
+See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [string](./remittance.md#function-string)
 
 #### Property request
 
@@ -385,7 +422,19 @@ Makes a request to the server.
 ```ts
 request: <T = any, D = any>(url: string, options: HttpClientRequestOptions<D>) => Promise<HttpClientResponse<T>>
 ```
-See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse)
+See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: HttpClientLimits
+
+```ts
+export interface HttpClientLimits {
+    maxResponseBytes?: number;
+    timeoutMs?: number;
+}
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -403,6 +452,8 @@ export interface HttpClientRequestOptions<Data = any> {
 }
 ```
 
+See also: [string](./remittance.md#function-string)
+
 #### Property data
 
 An object or null to set request's body.
@@ -418,6 +469,7 @@ An object literal set request's headers.
 ```ts
 headers?: Record<string, string>
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property method
 
@@ -426,6 +478,7 @@ A string to set request's method.
 ```ts
 method?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property signal
 
@@ -448,7 +501,7 @@ export interface HttpsModuleLike {
 }
 ```
 
-See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [NodejsRequestLike](./transaction.md#interface-nodejsrequestlike)
+See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [NodejsRequestLike](./transaction.md#interface-nodejsrequestlike), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -463,7 +516,7 @@ export interface HttpsNodejs {
 }
 ```
 
-See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [NodejsHttpClientRequest](./transaction.md#interface-nodejshttpclientrequest)
+See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [NodejsHttpClientRequest](./transaction.md#interface-nodejshttpclientrequest), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -478,6 +531,8 @@ export interface MerklePathLeaf {
     duplicate?: boolean;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -494,6 +549,8 @@ export interface NodejsHttpClientRequest {
 }
 ```
 
+See also: [string](./remittance.md#function-string)
+
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
@@ -506,8 +563,30 @@ export interface NodejsRequestLike {
     write: (chunk: any) => void;
     on: (event: string, callback: (data: any) => void) => void;
     end: () => void;
+    destroy?: (error?: Error) => void;
+    setTimeout?: (milliseconds: number, callback: () => void) => unknown;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: NormalizedArcConfig
+
+```ts
+export interface NormalizedArcConfig {
+    apiKey?: string;
+    httpClient: HttpClient;
+    deploymentId: string;
+    callbackUrl?: string;
+    callbackToken?: string;
+    headers?: Readonly<Record<string, string>>;
+}
+```
+
+See also: [HttpClient](./transaction.md#interface-httpclient), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -523,6 +602,8 @@ export interface TransactionEvidence {
     txid?: string;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -540,7 +621,7 @@ export interface TransactionEvidenceContext {
 }
 ```
 
-See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [ChainTracker](./transaction.md#interface-chaintracker)
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [ChainTracker](./transaction.md#interface-chaintracker), [string](./remittance.md#function-string)
 
 #### Property chainNamespace
 
@@ -549,6 +630,7 @@ Network/genesis identifier or an explicit application chain namespace.
 ```ts
 chainNamespace: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property policyId
 
@@ -557,6 +639,7 @@ Semantic verification policy/backend version; change it when policy changes.
 ```ts
 policyId: string
 ```
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -638,7 +721,7 @@ export default interface TransactionInput {
 }
 ```
 
-See also: [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
+See also: [Transaction](./transaction.md#class-transaction), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -686,7 +769,7 @@ export interface VerifiedTransactionOutput {
 }
 ```
 
-See also: [LockingScript](./script.md#class-lockingscript)
+See also: [LockingScript](./script.md#class-lockingscript), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -702,7 +785,7 @@ export interface WhatsOnChainConfig {
 }
 ```
 
-See also: [HttpClient](./transaction.md#interface-httpclient)
+See also: [HttpClient](./transaction.md#interface-httpclient), [string](./remittance.md#function-string)
 
 #### Property apiKey
 
@@ -711,6 +794,7 @@ Authentication token for the WhatsOnChain API
 ```ts
 apiKey?: string
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Property httpClient
 
@@ -752,15 +836,17 @@ export default class ARC implements Broadcaster {
     readonly callbackUrl: string | undefined;
     readonly callbackToken: string | undefined;
     readonly headers: Record<string, string> | undefined;
+    readonly #httpClient: HttpClient;
     constructor(URL: string, config?: ArcConfig);
     constructor(URL: string, apiKey?: string);
-    constructor(URL: string, config?: string | ArcConfig) 
-    async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> 
-    async broadcastMany(txs: Transaction[]): Promise<object[]> 
+    constructor(URL: string, config?: string | ArcConfig)
+    #requestHeaders(): Record<string, string>
+    async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure>
+    async broadcastMany(txs: Transaction[]): Promise<object[]>
 }
 ```
 
-See also: [ArcConfig](./transaction.md#interface-arcconfig), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [Transaction](./transaction.md#class-transaction)
+See also: [ArcConfig](./transaction.md#interface-arcconfig), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [HttpClient](./transaction.md#interface-httpclient), [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 #### Constructor
 
@@ -769,7 +855,7 @@ Constructs an instance of the ARC broadcaster.
 ```ts
 constructor(URL: string, config?: ArcConfig)
 ```
-See also: [ArcConfig](./transaction.md#interface-arcconfig)
+See also: [ArcConfig](./transaction.md#interface-arcconfig), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -785,6 +871,7 @@ Constructs an instance of the ARC broadcaster.
 ```ts
 constructor(URL: string, apiKey?: string)
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -793,12 +880,21 @@ Argument Details
 + **apiKey**
   + The API key used for authorization with the ARC API.
 
+#### Method
+
+Constructs a dictionary of the default & supplied request headers.
+
+```ts
+#requestHeaders(): Record<string, string>
+```
+See also: [string](./remittance.md#function-string)
+
 #### Method broadcast
 
 Broadcasts a transaction via ARC.
 
 ```ts
-async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure> 
+async broadcast(tx: Transaction): Promise<BroadcastResponse | BroadcastFailure>
 ```
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Transaction](./transaction.md#class-transaction)
 
@@ -817,7 +913,7 @@ Broadcasts multiple transactions via ARC.
 Handles mixed responses where some transactions succeed and others fail.
 
 ```ts
-async broadcastMany(txs: Transaction[]): Promise<object[]> 
+async broadcastMany(txs: Transaction[]): Promise<object[]>
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -841,57 +937,339 @@ export class Beef {
     txs: BeefTx[] = [];
     version: number = BEEF_V2;
     atomicTxid: string | undefined = undefined;
-    constructor(version: number = BEEF_V2) 
-    isAtomic(txid: string = this.atomicTxid ?? ""): boolean 
-    findTxid(txid: string): BeefTx | undefined 
-    makeTxidOnly(txid: string): BeefTx | undefined 
-    findBump(txid: string): MerklePath | undefined 
-    findTransactionForSigning(txid: string): Transaction | undefined 
-    findAtomicTransaction(txid: string): Transaction | undefined 
-    mergeBump(bump: MerklePath): number 
+    #txidIndex: Map<string, BeefTx> | undefined = undefined;
+    #txPositionIndex: Map<string, number> | undefined = undefined;
+    #bumpIndexesByHeight: Map<number, number[]> | undefined = undefined;
+    #bumpIndexByTxid: Map<string, number> | undefined = undefined;
+    #rawBytesCache?: Uint8Array;
+    #hexCache?: string;
+    readonly #atomicBytesCache = new Map<string, Uint8Array>();
+    #atomicCacheTxs?: BeefTxSerializationState[];
+    #atomicCacheBumps?: MerklePath[];
+    #atomicCacheVersion?: number;
+    #rawCacheVersion?: number;
+    #rawCacheTxs?: BeefTxSerializationState[];
+    #rawCacheBumps?: MerklePath[];
+    #bumpState?: BeefBumpSerializationState[];
+    #needsSort: boolean = true;
+    #sortResultCache?: BeefSortResult;
+    #sortTxState?: BeefSortTxState[];
+    constructor(version: number = BEEF_V2)
+    #invalidateSerializationCaches(): void
+    #captureSerializationState(): void
+    #captureTransactionState(): BeefTxSerializationState[]
+    #transactionStateMatches(cachedTxs: BeefTxSerializationState[] | undefined): boolean
+    #captureBumpState(): void
+    #bumpLeafStateMatches(leaf: MerklePath["path"][number][number], state: BeefBumpLeafSerializationState): boolean
+    #bumpLevelStateMatches(level: MerklePath["path"][number], state: BeefBumpLevelSerializationState): boolean
+    #singleBumpStateMatches(bump: MerklePath, state: BeefBumpSerializationState): boolean
+    #bumpStateMatches(): boolean
+    #synchronizeNestedBumpMutations(): void
+    #serializationCacheMatchesState(): boolean
+    #markMutated(requiresSort: boolean = true): void
+    #ensureSerializableState(): void
+    #ensureSortedForSerialization(): void
+    #getSerializedBytes(): Uint8Array
+    #getBeefForAtomic(txid: string): Beef
+    #getAtomicSerializedBytes(txid: string): Uint8Array
+    #collectAtomicTransactions(subject: BeefTx, txidToTx: Map<string, BeefTx>): Set<BeefTx>
+    #hasMatchingBump(tx: BeefTx): boolean
+    #copySelectedTransactions(included: Set<BeefTx>): Beef
+    isAtomic(txid: string = this.atomicTxid ?? ""): boolean
+    findTxid(txid: string): BeefTx | undefined
+    #findTxidIndexed(txid: string): BeefTx | undefined
+    #ensureTxidIndex(): Map<string, BeefTx>
+    #ensureTxPositionIndex(): Map<string, number>
+    #rebuildTxIndexes(): void
+    #addToIndex(tx: BeefTx, position: number = this.txs.length - 1): void
+    #replaceOrAppendTx(tx: BeefTx): void
+    makeTxidOnly(txid: string): BeefTx | undefined
+    findBump(txid: string): MerklePath | undefined
+    #ensureBumpTxidIndex(): Map<string, number>
+    #ensureBumpHeightIndex(): Map<number, number[]>
+    #invalidateBumpIndexes(): void
+    findTransactionForSigning(txid: string): Transaction | undefined
+    findAtomicTransaction(txid: string): Transaction | undefined
+    #addInputProof(tx: Transaction): void
+    #resolveInputSource(i: Transaction["inputs"][number]): void
+    mergeBump(bump: MerklePath): number
     mergeProvenTxs(entries: Array<{
         rawTx: number[] | Uint8Array;
         merklePath: MerklePath;
         merkleRoot?: string;
-    }>): BeefTx[] 
-    mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx 
-    mergeTransaction(tx: Transaction): BeefTx 
-    removeExistingTxid(txid: string): void 
-    mergeTxidOnly(txid: string): BeefTx 
-    mergeBeefTx(btx: BeefTx): BeefTx 
-    mergeBeef(beef: Beef | number[] | Uint8Array): void 
-    isValid(allowTxidOnly?: boolean): boolean 
-    async verify(chainTracker: ChainTracker, allowTxidOnly?: boolean): Promise<boolean> 
+    }>): BeefTx[]
+    #combineCompatibleBumps(paths: MerklePath[], validateCombined: boolean = false): MerklePath
+    #mergeBumpEntry(bump: MerklePath): number
+    #findOrInsertBump(bump: MerklePath): number
+    #tryMarkTxProvenByBump(tx: BeefTx, b: MerklePath, bumpIndex: number): void
+    mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx
+    #mergeRawTxEntry(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx
+    #mergeTransactionEntry(current: Transaction): BeefTx
+    #queueSourceTransactions(current: Transaction, stack: Transaction[]): void
+    mergeTransaction(tx: Transaction): BeefTx
+    #mergeTransactionGraph(tx: Transaction): BeefTx
+    removeExistingTxid(txid: string): void
+    mergeTxidOnly(txid: string): BeefTx
+    mergeBeefTx(btx: BeefTx): BeefTx
+    #mergeBeefTxEntry(btx: BeefTx): BeefTx
+    mergeBeef(beef: Beef | number[] | Uint8Array): void
+    isValid(allowTxidOnly?: boolean): boolean
+    async verify(chainTracker: ChainTracker, allowTxidOnly?: boolean): Promise<boolean>
     verifyValid(allowTxidOnly?: boolean): {
         valid: boolean;
         roots: Record<number, string>;
-    } 
-    toWriter(writer: Writer | WriterUint8Array): void 
-    toBinary(): number[] 
-    toUint8Array(): Uint8Array 
-    toBinaryAtomic(txid: string): number[] 
-    toUint8ArrayAtomic(txid: string): Uint8Array 
-    toHex(): string 
-    static fromReader(br: Reader | ReaderUint8Array): Beef 
-    static fromBinary(bin: number[] | Uint8Array): Beef 
-    static fromBinaryView(bin: Uint8Array): Beef 
-    static fromString(s: string, enc: "hex" | "utf8" | "base64" = "hex"): Beef 
+    }
+    #hasDuplicateTxids(): boolean
+    #collectTxidOnlyTxids(txids: Record<string, boolean>, allowTxidOnly?: boolean): boolean
+    #collectBumpTxids(txids: Record<string, boolean>, r: {
+        valid: boolean;
+        roots: Record<number, string>;
+    }): boolean
+    #verifyBumpIndexLeaves(): boolean
+    #verifyInputDependencies(txids: Record<string, boolean>): boolean
+    #confirmComputedRoot(b: MerklePath, txid: string, r: {
+        valid: boolean;
+        roots: Record<number, string>;
+    }): boolean
+    toWriter(writer: Writer | WriterUint8Array): void
+    toBinary(): number[]
+    toUint8Array(): Uint8Array
+    toBinaryAtomic(txid: string): number[]
+    toUint8ArrayAtomic(txid: string): Uint8Array
+    toHex(): string
+    static fromReader(br: Reader | ReaderUint8Array): Beef
+    static fromBinary(bin: number[] | Uint8Array): Beef
+    static fromBinaryStrict(bin: number[] | Uint8Array): Beef
+    static fromBinaryView(bin: Uint8Array): Beef
+    static fromString(s: string, enc: "hex" | "utf8" | "base64" = "hex"): Beef
+    #tryToValidateBumpIndex(newTx: BeefTx): boolean
     sortTxs(): {
         missingInputs: string[];
         notValid: string[];
         valid: string[];
         withMissingInputs: string[];
         txidOnly: string[];
-    } 
-    clone(): Beef 
-    trimKnownTxids(knownTxids: string[]): void 
-    getValidTxids(): string[] 
-    toLogString(): string 
-    addComputedLeaves(): void 
+    }
+    #captureSortTxState(): void
+    #sortTxStateMatches(): boolean
+    #cloneSortResult(result: BeefSortResult): BeefSortResult
+    #separateMissingInputs(candidates: BeefTx[], txidToTx: Record<string, BeefTx>): {
+        txsMissingInputs: BeefTx[];
+        missingInputs: Record<string, boolean>;
+        remaining: BeefTx[];
+    }
+    #topoSort(queue: BeefTx[], validTxids: Record<string, boolean>, result: BeefTx[]): BeefTx[]
+    #buildTopoSortGraph(queue: BeefTx[], validTxids: Record<string, boolean>): {
+        indegree: Map<string, number>;
+        dependents: Map<string, BeefTx[]>;
+        originalIndex: Map<string, number>;
+        round: Map<string, number>;
+    }
+    #processTopoSortQueue(queue: BeefTx[], indegree: Map<string, number>, dependents: Map<string, BeefTx[]>, originalIndex: Map<string, number>, round: Map<string, number>): Set<string>
+    #appendTopoSortResult(queue: BeefTx[], processed: Set<string>, round: Map<string, number>, validTxids: Record<string, boolean>, result: BeefTx[]): void
+    clone(): Beef
+    trimKnownTxids(knownTxids: string[]): void
+    #removeKnownTxidOnlyTxs(knownTxids: Set<string>): boolean
+    #reindexBumps(): boolean
+    getValidTxids(): string[]
+    toLogString(): string
+    addComputedLeaves(): void
+    #addComputedLeavesForRow(bump: MerklePath, row: number): void
 }
 ```
 
-See also: [BEEF_V2](./transaction.md#variable-beef_v2), [BeefTx](./transaction.md#class-beeftx), [ChainTracker](./transaction.md#interface-chaintracker), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Transaction](./transaction.md#class-transaction), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
+See also: [BEEF_V2](./transaction.md#variable-beef_v2), [BeefTx](./transaction.md#class-beeftx), [ChainTracker](./transaction.md#interface-chaintracker), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Transaction](./transaction.md#class-transaction), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
+
+#### Method
+
+Iteratively attach merkle paths and source transactions to all inputs.
+
+```ts
+#addInputProof(tx: Transaction): void
+```
+See also: [Transaction](./transaction.md#class-transaction)
+
+#### Method
+
+Combine already root-matched paths while preserving the first path reference.
+
+```ts
+#combineCompatibleBumps(paths: MerklePath[], validateCombined: boolean = false): MerklePath
+```
+See also: [MerklePath](./transaction.md#class-merklepath)
+
+#### Method
+
+Merge one bump after the caller has synchronized and marked the BEEF.
+
+```ts
+#mergeBumpEntry(bump: MerklePath): number
+```
+See also: [MerklePath](./transaction.md#class-merklepath)
+
+#### Method
+
+Find an existing compatible bump or insert a new one; return its index.
+
+```ts
+#findOrInsertBump(bump: MerklePath): number
+```
+See also: [MerklePath](./transaction.md#class-merklepath)
+
+#### Method
+
+If bump's level-0 path contains tx's txid, record the bumpIndex on tx.
+
+```ts
+#tryMarkTxProvenByBump(tx: BeefTx, b: MerklePath, bumpIndex: number): void
+```
+See also: [BeefTx](./transaction.md#class-beeftx), [MerklePath](./transaction.md#class-merklepath)
+
+#### Method
+
+Merge one raw transaction after the caller has synchronized and marked the BEEF.
+
+```ts
+#mergeRawTxEntry(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx
+```
+See also: [BeefTx](./transaction.md#class-beeftx)
+
+#### Method
+
+Merge one transaction graph after the caller has synchronized and marked the BEEF.
+
+```ts
+#mergeTransactionGraph(tx: Transaction): BeefTx
+```
+See also: [BeefTx](./transaction.md#class-beeftx), [Transaction](./transaction.md#class-transaction)
+
+#### Method
+
+Merge one BEEF transaction after the caller has synchronized and marked the BEEF.
+
+```ts
+#mergeBeefTxEntry(btx: BeefTx): BeefTx
+```
+See also: [BeefTx](./transaction.md#class-beeftx)
+
+#### Method
+
+Add txidOnly transaction txids; return false if not allowed.
+
+```ts
+#collectTxidOnlyTxids(txids: Record<string, boolean>, allowTxidOnly?: boolean): boolean
+```
+See also: [string](./remittance.md#function-string)
+
+#### Method
+
+Record txids proven by bumps; validate all bump roots agree per block height.
+Returns false if any root conflict is detected.
+
+```ts
+#collectBumpTxids(txids: Record<string, boolean>, r: {
+    valid: boolean;
+    roots: Record<number, string>;
+}): boolean
+```
+See also: [string](./remittance.md#function-string)
+
+#### Method
+
+Verify that every tx with a bumpIndex has a matching txid leaf in its bump.
+
+```ts
+#verifyBumpIndexLeaves(): boolean
+```
+
+#### Method
+
+Verify all input txids appear before the spending tx in sorted order.
+
+```ts
+#verifyInputDependencies(txids: Record<string, boolean>): boolean
+```
+See also: [string](./remittance.md#function-string)
+
+#### Method
+
+Confirm the computed merkle root for txid in bump matches previously accepted root for that height.
+
+```ts
+#confirmComputedRoot(b: MerklePath, txid: string, r: {
+    valid: boolean;
+    roots: Record<number, string>;
+}): boolean
+```
+See also: [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
+
+#### Method
+
+Try to validate newTx.bumpIndex by looking for an existing bump
+that proves newTx.txid
+
+```ts
+#tryToValidateBumpIndex(newTx: BeefTx): boolean
+```
+See also: [BeefTx](./transaction.md#class-beeftx)
+
+Returns
+
+true if a bump was found, false otherwise
+
+Argument Details
+
++ **newTx**
+  + A new `BeefTx` that has been added to this.txs
+
+#### Method
+
+Separate queue entries that have at least one input txid not present in txidToTx.
+
+```ts
+#separateMissingInputs(candidates: BeefTx[], txidToTx: Record<string, BeefTx>): {
+    txsMissingInputs: BeefTx[];
+    missingInputs: Record<string, boolean>;
+    remaining: BeefTx[];
+}
+```
+See also: [BeefTx](./transaction.md#class-beeftx), [string](./remittance.md#function-string)
+
+#### Method
+
+Topologically sort queue into result; return anything that cannot be sorted.
+
+```ts
+#topoSort(queue: BeefTx[], validTxids: Record<string, boolean>, result: BeefTx[]): BeefTx[]
+```
+See also: [BeefTx](./transaction.md#class-beeftx), [string](./remittance.md#function-string)
+
+#### Method
+
+Remove txidOnly entries that appear in knownTxids; return true if any were removed.
+
+```ts
+#removeKnownTxidOnlyTxs(knownTxids: Set<string>): boolean
+```
+See also: [string](./remittance.md#function-string)
+
+#### Method
+
+Remove bumps that are no longer referenced by any tx and update bumpIndex references.
+Returns true if any bumps were removed.
+
+```ts
+#reindexBumps(): boolean
+```
+
+#### Method
+
+Add any missing computable leaf at `row` derived from two known leaves at `row - 1`.
+
+```ts
+#addComputedLeavesForRow(bump: MerklePath, row: number): void
+```
+See also: [MerklePath](./transaction.md#class-merklepath)
 
 #### Method addComputedLeaves
 
@@ -899,13 +1277,13 @@ In some circumstances it may be helpful for the BUMP MerklePaths to include
 leaves that can be computed from row zero.
 
 ```ts
-addComputedLeaves(): void 
+addComputedLeaves(): void
 ```
 
 #### Method clone
 
 ```ts
-clone(): Beef 
+clone(): Beef
 ```
 See also: [Beef](./transaction.md#class-beef)
 
@@ -920,9 +1298,9 @@ Builds the proof tree rooted at a specific `Transaction`.
 To succeed, the Beef must contain all the required transaction and merkle path data.
 
 ```ts
-findAtomicTransaction(txid: string): Transaction | undefined 
+findAtomicTransaction(txid: string): Transaction | undefined
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -936,9 +1314,9 @@ Argument Details
 #### Method findBump
 
 ```ts
-findBump(txid: string): MerklePath | undefined 
+findBump(txid: string): MerklePath | undefined
 ```
-See also: [MerklePath](./transaction.md#class-merklepath)
+See also: [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
 
 Returns
 
@@ -952,9 +1330,9 @@ and adds any missing input SourceTransactions from this `Beef`.
 The result is suitable for signing.
 
 ```ts
-findTransactionForSigning(txid: string): Transaction | undefined 
+findTransactionForSigning(txid: string): Transaction | undefined
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -968,9 +1346,9 @@ Argument Details
 #### Method findTxid
 
 ```ts
-findTxid(txid: string): BeefTx | undefined 
+findTxid(txid: string): BeefTx | undefined
 ```
-See also: [BeefTx](./transaction.md#class-beeftx)
+See also: [BeefTx](./transaction.md#class-beeftx), [string](./remittance.md#function-string)
 
 Returns
 
@@ -983,10 +1361,8 @@ Argument Details
 
 #### Method fromBinary
 
-Constructs an instance of the Beef class based on the provided binary array
-
 ```ts
-static fromBinary(bin: number[] | Uint8Array): Beef 
+static fromBinary(bin: number[] | Uint8Array): Beef
 ```
 See also: [Beef](./transaction.md#class-beef)
 
@@ -999,13 +1375,23 @@ Argument Details
 + **bin**
   + The binary array or Uint8Array from which to construct BEEF
 
+#### Method fromBinaryStrict
+
+Parses one complete BEEF object from an isolated copy of `bin` and rejects
+any trailing bytes. Use this for data received across a trust boundary.
+
+```ts
+static fromBinaryStrict(bin: number[] | Uint8Array): Beef
+```
+See also: [Beef](./transaction.md#class-beef)
+
 #### Method fromBinaryView
 
 Parses BEEF while retaining zero-copy views over `bin`. The caller must not
 mutate the buffer for the lifetime of the returned object.
 
 ```ts
-static fromBinaryView(bin: Uint8Array): Beef 
+static fromBinaryView(bin: Uint8Array): Beef
 ```
 See also: [Beef](./transaction.md#class-beef)
 
@@ -1014,9 +1400,9 @@ See also: [Beef](./transaction.md#class-beef)
 Constructs an instance of the Beef class based on the provided string
 
 ```ts
-static fromString(s: string, enc: "hex" | "utf8" | "base64" = "hex"): Beef 
+static fromString(s: string, enc: "hex" | "utf8" | "base64" = "hex"): Beef
 ```
-See also: [Beef](./transaction.md#class-beef)
+See also: [Beef](./transaction.md#class-beef), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1032,8 +1418,9 @@ Argument Details
 #### Method getValidTxids
 
 ```ts
-getValidTxids(): string[] 
+getValidTxids(): string[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1046,8 +1433,9 @@ validation: the subject must exist and every included transaction must be
 in its recursive dependency graph.
 
 ```ts
-isAtomic(txid: string = this.atomicTxid ?? ""): boolean 
+isAtomic(txid: string = this.atomicTxid ?? ""): boolean
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method isValid
 
@@ -1062,7 +1450,7 @@ Validity requirements:
 4. No transactions with duplicate txids.
 
 ```ts
-isValid(allowTxidOnly?: boolean): boolean 
+isValid(allowTxidOnly?: boolean): boolean
 ```
 
 Argument Details
@@ -1079,9 +1467,9 @@ updated by this method without affecting the
 original.
 
 ```ts
-makeTxidOnly(txid: string): BeefTx | undefined 
+makeTxidOnly(txid: string): BeefTx | undefined
 ```
-See also: [BeefTx](./transaction.md#class-beeftx)
+See also: [BeefTx](./transaction.md#class-beeftx), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1092,7 +1480,7 @@ undefined if txid is unknown.
 Merge a MerklePath that is assumed to be fully valid.
 
 ```ts
-mergeBump(bump: MerklePath): number 
+mergeBump(bump: MerklePath): number
 ```
 See also: [MerklePath](./transaction.md#class-merklepath)
 
@@ -1114,9 +1502,9 @@ mergeProvenTxs(entries: Array<{
     rawTx: number[] | Uint8Array;
     merklePath: MerklePath;
     merkleRoot?: string;
-}>): BeefTx[] 
+}>): BeefTx[]
 ```
-See also: [BeefTx](./transaction.md#class-beeftx), [MerklePath](./transaction.md#class-merklepath)
+See also: [BeefTx](./transaction.md#class-beeftx), [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
 
 #### Method mergeRawTx
 
@@ -1127,7 +1515,7 @@ Checks that a transaction with the same txid hasn't already been merged.
 Replaces existing transaction with same txid.
 
 ```ts
-mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx 
+mergeRawTx(rawTx: number[] | Uint8Array, bumpIndex?: number): BeefTx
 ```
 See also: [BeefTx](./transaction.md#class-beeftx)
 
@@ -1149,7 +1537,7 @@ Replaces existing transaction with same txid.
 Attempts to match an existing bump to the new transaction.
 
 ```ts
-mergeTransaction(tx: Transaction): BeefTx 
+mergeTransaction(tx: Transaction): BeefTx
 ```
 See also: [BeefTx](./transaction.md#class-beeftx), [Transaction](./transaction.md#class-transaction)
 
@@ -1162,8 +1550,9 @@ txid of tx
 Removes an existing transaction from the BEEF, given its TXID
 
 ```ts
-removeExistingTxid(txid: string): void 
+removeExistingTxid(txid: string): void
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1186,8 +1575,9 @@ sortTxs(): {
     valid: string[];
     withMissingInputs: string[];
     txidOnly: string[];
-} 
+}
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1198,7 +1588,7 @@ Returns
 Returns a binary array representing the serialized BEEF
 
 ```ts
-toBinary(): number[] 
+toBinary(): number[]
 ```
 
 Returns
@@ -1216,8 +1606,9 @@ Serialize this Beef as AtomicBEEF.
 includes exactly the subject transaction and its recursive dependencies
 
 ```ts
-toBinaryAtomic(txid: string): number[] 
+toBinaryAtomic(txid: string): number[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1228,8 +1619,9 @@ serialized contents of this Beef with AtomicBEEF prefix.
 Returns a hex string representing the serialized BEEF
 
 ```ts
-toHex(): string 
+toHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1238,8 +1630,9 @@ A hex string representing the BEEF
 #### Method toLogString
 
 ```ts
-toLogString(): string 
+toLogString(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1250,7 +1643,7 @@ Summary of `Beef` contents as multi-line string.
 Returns a binary array representing the serialized BEEF
 
 ```ts
-toUint8Array(): Uint8Array 
+toUint8Array(): Uint8Array
 ```
 
 Returns
@@ -1266,8 +1659,9 @@ Serialize this Beef as AtomicBEEF.
 includes exactly the subject transaction and its recursive dependencies
 
 ```ts
-toUint8ArrayAtomic(txid: string): Uint8Array 
+toUint8ArrayAtomic(txid: string): Uint8Array
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1278,7 +1672,7 @@ serialized contents of this Beef with AtomicBEEF prefix.
 Serializes this data to `writer`
 
 ```ts
-toWriter(writer: Writer | WriterUint8Array): void 
+toWriter(writer: Writer | WriterUint8Array): void
 ```
 See also: [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array)
 
@@ -1287,8 +1681,9 @@ See also: [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitive
 Ensure that all the txids in `knownTxids` are txidOnly
 
 ```ts
-trimKnownTxids(knownTxids: string[]): void 
+trimKnownTxids(knownTxids: string[]): void
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method verify
 
@@ -1303,7 +1698,7 @@ Validity requirements:
 4. No transactions with duplicate txids.
 
 ```ts
-async verify(chainTracker: ChainTracker, allowTxidOnly?: boolean): Promise<boolean> 
+async verify(chainTracker: ChainTracker, allowTxidOnly?: boolean): Promise<boolean>
 ```
 See also: [ChainTracker](./transaction.md#interface-chaintracker)
 
@@ -1331,8 +1726,9 @@ Validity requirements:
 verifyValid(allowTxidOnly?: boolean): {
     valid: boolean;
     roots: Record<number, string>;
-} 
+}
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1371,23 +1767,24 @@ The size and redundancy of these Beefs becomes a problem when chained transactio
 ```ts
 export class BeefParty extends Beef {
     knownTo: Record<string, Record<string, boolean>> = Object.create(null) as Record<string, Record<string, boolean>>;
-    constructor(parties?: string[]) 
-    isParty(party: string): boolean 
-    addParty(party: string): void 
-    getKnownTxidsForParty(party: string): string[] 
-    getTrimmedBeefForParty(party: string): Beef 
-    addKnownTxidsForParty(party: string, knownTxids: string[]): void 
-    mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void 
+    constructor(parties?: string[])
+    isParty(party: string): boolean
+    addParty(party: string): void
+    getKnownTxidsForParty(party: string): string[]
+    getTrimmedBeefForParty(party: string): Beef
+    addKnownTxidsForParty(party: string, knownTxids: string[]): void
+    mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void
 }
 ```
 
-See also: [Beef](./transaction.md#class-beef)
+See also: [Beef](./transaction.md#class-beef), [string](./remittance.md#function-string)
 
 #### Constructor
 
 ```ts
-constructor(parties?: string[]) 
+constructor(parties?: string[])
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1402,14 +1799,16 @@ values are records of txids with truthy value for which the party already has va
 ```ts
 knownTo: Record<string, Record<string, boolean>> = Object.create(null) as Record<string, Record<string, boolean>>
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method addKnownTxidsForParty
 
 Make note of additional txids "known" to `party`.
 
 ```ts
-addKnownTxidsForParty(party: string, knownTxids: string[]): void 
+addKnownTxidsForParty(party: string, knownTxids: string[]): void
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1421,14 +1820,16 @@ Argument Details
 Adds a new unique party identifier to this `BeefParty`.
 
 ```ts
-addParty(party: string): void 
+addParty(party: string): void
 ```
+See also: [string](./remittance.md#function-string)
 
 #### Method getKnownTxidsForParty
 
 ```ts
-getKnownTxidsForParty(party: string): string[] 
+getKnownTxidsForParty(party: string): string[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1437,9 +1838,9 @@ Array of txids "known" to `party`.
 #### Method getTrimmedBeefForParty
 
 ```ts
-getTrimmedBeefForParty(party: string): Beef 
+getTrimmedBeefForParty(party: string): Beef
 ```
-See also: [Beef](./transaction.md#class-beef)
+See also: [Beef](./transaction.md#class-beef), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1448,8 +1849,9 @@ trimmed beef of unknown transactions and proofs for `party`
 #### Method isParty
 
 ```ts
-isParty(party: string): boolean 
+isParty(party: string): boolean
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1464,9 +1866,9 @@ corresponding to transactions for which `party`
 has raw transaction and validity proof data.
 
 ```ts
-mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void 
+mergeBeefFromParty(party: string, beef: number[] | Uint8Array | Beef): void
 ```
-See also: [Beef](./transaction.md#class-beef)
+See also: [Beef](./transaction.md#class-beef), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1489,32 +1891,32 @@ export default class BeefTx {
     _txid?: string;
     inputTxids: string[] = [];
     isValid?: boolean = undefined;
-    get bumpIndex(): number | undefined 
-    set bumpIndex(v: number | undefined) 
-    get hasProof(): boolean 
-    get isTxidOnly(): boolean 
-    get txid(): string 
-    get tx(): Transaction | undefined 
-    get rawTx(): number[] | undefined 
-    get rawTxUint8Array(): Uint8Array | undefined 
-    syncRawTxFromTransaction(): boolean 
-    constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[]) 
-    static fromTx(tx: Transaction, bumpIndex?: number): BeefTx 
-    static fromRawTx(rawTx: Uint8Array | number[], bumpIndex?: number): BeefTx 
-    static fromTxid(txid: string, bumpIndex?: number): BeefTx 
-    toWriter(writer: Writer | WriterUint8Array, version: number): void 
-    static fromReader(br: Reader | ReaderUint8Array, version: number): BeefTx 
+    get bumpIndex(): number | undefined
+    set bumpIndex(v: number | undefined)
+    get hasProof(): boolean
+    get isTxidOnly(): boolean
+    get txid(): string
+    get tx(): Transaction | undefined
+    get rawTx(): number[] | undefined
+    get rawTxUint8Array(): Uint8Array | undefined
+    syncRawTxFromTransaction(): boolean
+    constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[], retainRawView: boolean = false)
+    static fromTx(tx: Transaction, bumpIndex?: number): BeefTx
+    static fromRawTx(rawTx: Uint8Array | number[], bumpIndex?: number): BeefTx
+    static fromTxid(txid: string, bumpIndex?: number): BeefTx
+    toWriter(writer: Writer | WriterUint8Array, version: number): void
+    static fromReader(br: Reader | ReaderUint8Array, version: number): BeefTx
 }
 ```
 
-See also: [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Transaction](./transaction.md#class-transaction), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array)
+See also: [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Transaction](./transaction.md#class-transaction), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string)
 
 #### Constructor
 
 ```ts
-constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[]) 
+constructor(tx: Transaction | Uint8Array | number[] | string, bumpIndex?: number, inputTxids?: string[], retainRawView: boolean = false)
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1540,7 +1942,7 @@ Transaction APIs. Returns true when its serialized identity or dependencies
 changed.
 
 ```ts
-syncRawTxFromTransaction(): boolean 
+syncRawTxFromTransaction(): boolean
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -1552,10 +1954,10 @@ Internal cache. Only coordinator-owned transactions are bound to its scope below
 
 ```ts
 export class EvidenceScriptWork {
-    constructor(private readonly limits: Readonly<TransactionEvidenceLimits>) 
-    clear(): void 
-    inputs(scope: EvidenceScriptScope, params: BdkVerifyScriptsParams, verify: (skipScripts: boolean) => InputResult): InputResult 
-    async batch(scope: EvidenceScriptScope, params: readonly BdkVerifyScriptsParams[], backend: BdkVerifierInterface): Promise<boolean[]> 
+    constructor(private readonly limits: Readonly<TransactionEvidenceLimits>)
+    clear(): void
+    inputs(scope: EvidenceScriptScope, params: BdkVerifyScriptsParams, verify: (skipScripts: boolean) => InputResult): InputResult
+    async batch(scope: EvidenceScriptScope, params: readonly BdkVerifyScriptsParams[], backend: BdkVerifierInterface): Promise<boolean[]>
 }
 ```
 
@@ -1570,12 +1972,12 @@ Adapter for Node Https module to be used as HttpClient
 
 ```ts
 export class FetchHttpClient implements HttpClient {
-    constructor(private readonly fetch: Fetch) 
-    async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> 
+    constructor(private readonly fetch: Fetch, limits: HttpClientLimits = {})
+    async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>>
 }
 ```
 
-See also: [Fetch](./transaction.md#type-fetch), [HttpClient](./transaction.md#interface-httpclient), [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse)
+See also: [Fetch](./transaction.md#type-fetch), [HttpClient](./transaction.md#interface-httpclient), [HttpClientLimits](./transaction.md#interface-httpclientlimits), [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1587,9 +1989,9 @@ Extends SatoshisPerKilobyte to reuse transaction size calculation logic.
 
 ```ts
 export default class LivePolicy extends SatoshisPerKilobyte {
-    constructor(cacheValidityMs: number = 5 * 60 * 1000) 
-    static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy 
-    override async computeFee(tx: Transaction): Promise<number> 
+    constructor(cacheValidityMs: number = 5 * 60 * 1000)
+    static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy
+    override async computeFee(tx: Transaction): Promise<number>
 }
 ```
 
@@ -1600,7 +2002,7 @@ See also: [SatoshisPerKilobyte](./transaction.md#class-satoshisperkilobyte), [Tr
 Constructs an instance of the live policy fee model.
 
 ```ts
-constructor(cacheValidityMs: number = 5 * 60 * 1000) 
+constructor(cacheValidityMs: number = 5 * 60 * 1000)
 ```
 
 Argument Details
@@ -1614,7 +2016,7 @@ Computes the fee for a given transaction using the current live rate.
 Overrides the parent method to use dynamic rate fetching.
 
 ```ts
-override async computeFee(tx: Transaction): Promise<number> 
+override async computeFee(tx: Transaction): Promise<number>
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -1632,7 +2034,7 @@ Argument Details
 Gets the singleton instance of LivePolicy to ensure cache sharing across the application.
 
 ```ts
-static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy 
+static getInstance(cacheValidityMs: number = 5 * 60 * 1000): LivePolicy
 ```
 See also: [LivePolicy](./transaction.md#class-livepolicy)
 
@@ -1671,37 +2073,55 @@ export default class MerklePath {
         txid?: boolean;
         duplicate?: boolean;
     }>>;
-    static fromHex(hex: string): MerklePath 
-    static fromReader(reader: Reader | ReaderUint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
-    static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
-    static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath 
+    static fromHex(hex: string): MerklePath
+    static fromReader(reader: Reader | ReaderUint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath
+    static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath
+    static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath
     constructor(blockHeight: number, path: Array<Array<{
         offset: number;
         hash?: string;
         txid?: boolean;
         duplicate?: boolean;
-    }>>, legalOffsetsOnly: boolean = true, validateRoots: boolean = true) 
-    toWriter(writer: Writer | WriterUint8Array): void 
-    toBinary(): number[] 
-    toBinaryUint8Array(): Uint8Array 
-    toHex(): string 
-    computeRoot(txid?: string): string 
-    findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined 
-    async verify(txid: string, chainTracker: ChainTracker): Promise<boolean> 
-    combine(other: MerklePath): void 
-    trim(): void 
-    extract(txids: string[]): MerklePath 
+    }>>, legalOffsetsOnly: boolean = true, validateRoots: boolean = true)
+    toWriter(writer: Writer | WriterUint8Array): void
+    toBinary(): number[]
+    toBinaryUint8Array(): Uint8Array
+    toHex(): string
+    indexOf(txid: string): number
+    computeRootCached(txid: string | undefined, sourceIndex: Array<Map<number, MerklePathLeaf>>, hashCache: Map<string, MerklePathLeaf | undefined>, nodeHashCache: Map<string, string>, maxOffset: number): string
+    computeRoot(txid?: string): string
+    findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined
+    async verify(txid: string, chainTracker: ChainTracker): Promise<boolean>
+    combine(other: MerklePath): void
+    trim(): void
+    cachedFindLeaf(height: number, offset: number, sourceIndex: Array<Map<number, MerklePathLeaf>>, hashCache: Map<string, MerklePathLeaf | undefined>, maxOffset: number): MerklePathLeaf | undefined
+    extract(txids: string[]): MerklePath
+    createSourceLeafIndex(): Array<Map<number, MerklePathLeaf>>
+    createTxidToOffsetIndex(): Map<string, number>
+    createNeededLeafLevels(treeHeight: number): Array<Map<number, MerklePathLeaf>>
+    collectExtractedLeaves(txid: string, txidToOffset: Map<string, number>, neededPerLevel: Array<Map<number, MerklePathLeaf>>, sourceIndex: Array<Map<number, MerklePathLeaf>>, hashCache: Map<string, MerklePathLeaf | undefined>, maxOffset: number, treeHeight: number): void
+    buildExtractedPath(neededPerLevel: Array<Map<number, MerklePathLeaf>>): MerklePathLeaf[][]
 }
 ```
 
-See also: [ChainTracker](./transaction.md#interface-chaintracker), [MerklePathLeaf](./transaction.md#interface-merklepathleaf), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [toHex](./primitives.md#variable-tohex), [verify](./compat.md#variable-verify)
+See also: [ChainTracker](./transaction.md#interface-chaintracker), [MerklePathLeaf](./transaction.md#interface-merklepathleaf), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [verify](./compat.md#variable-verify)
+
+#### Method cachedFindLeaf
+
+Cached leaf finder for extract(). Uses Map-based indexes for O(1) lookups
+and caches computed intermediate hashes to avoid redundant work.
+
+```ts
+cachedFindLeaf(height: number, offset: number, sourceIndex: Array<Map<number, MerklePathLeaf>>, hashCache: Map<string, MerklePathLeaf | undefined>, maxOffset: number): MerklePathLeaf | undefined
+```
+See also: [MerklePathLeaf](./transaction.md#interface-merklepathleaf), [string](./remittance.md#function-string)
 
 #### Method combine
 
 Combines this MerklePath with another to create a compound proof.
 
 ```ts
-combine(other: MerklePath): void 
+combine(other: MerklePath): void
 ```
 See also: [MerklePath](./transaction.md#class-merklepath)
 
@@ -1719,8 +2139,9 @@ Throws
 Computes the Merkle root from the provided transaction ID.
 
 ```ts
-computeRoot(txid?: string): string 
+computeRoot(txid?: string): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1747,9 +2168,9 @@ into a single trimmed compound path.
 The extracted path is verified to compute the same Merkle root as the source.
 
 ```ts
-extract(txids: string[]): MerklePath 
+extract(txids: string[]): MerklePath
 ```
-See also: [MerklePath](./transaction.md#class-merklepath)
+See also: [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1781,7 +2202,7 @@ Find leaf with `offset` at `height` or compute from level below, recursively.
 Does not add computed leaves to path.
 
 ```ts
-findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined 
+findOrComputeLeaf(height: number, offset: number): MerklePathLeaf | undefined
 ```
 See also: [MerklePathLeaf](./transaction.md#interface-merklepathleaf)
 
@@ -1790,7 +2211,7 @@ See also: [MerklePathLeaf](./transaction.md#interface-merklepathleaf)
 Creates a MerklePath instance from a binary array.
 
 ```ts
-static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath 
+static fromBinary(bump: number[] | Uint8Array, legalOffsetsOnly: boolean = true, validateRoots: boolean = true): MerklePath
 ```
 See also: [MerklePath](./transaction.md#class-merklepath)
 
@@ -1806,9 +2227,9 @@ Argument Details
 #### Method fromCoinbaseTxidAndHeight
 
 ```ts
-static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath 
+static fromCoinbaseTxidAndHeight(txid: string, height: number): MerklePath
 ```
-See also: [MerklePath](./transaction.md#class-merklepath)
+See also: [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1826,9 +2247,9 @@ Argument Details
 Creates a MerklePath instance from a hexadecimal string.
 
 ```ts
-static fromHex(hex: string): MerklePath 
+static fromHex(hex: string): MerklePath
 ```
-See also: [MerklePath](./transaction.md#class-merklepath)
+See also: [MerklePath](./transaction.md#class-merklepath), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1844,7 +2265,7 @@ Argument Details
 Converts the MerklePath to a binary array format.
 
 ```ts
-toBinary(): number[] 
+toBinary(): number[]
 ```
 
 Returns
@@ -1856,7 +2277,7 @@ Returns
 Converts the MerklePath to a binary array format.
 
 ```ts
-toBinaryUint8Array(): Uint8Array 
+toBinaryUint8Array(): Uint8Array
 ```
 
 Returns
@@ -1868,8 +2289,9 @@ Returns
 Converts the MerklePath to a hexadecimal string format.
 
 ```ts
-toHex(): string 
+toHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1880,7 +2302,7 @@ Returns
 Serializes the MerklePath to the writer provided.
 
 ```ts
-toWriter(writer: Writer | WriterUint8Array): void 
+toWriter(writer: Writer | WriterUint8Array): void
 ```
 See also: [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array)
 
@@ -1896,7 +2318,7 @@ Assumes that at least all required nodes are present.
 Leaves all levels sorted by increasing offset.
 
 ```ts
-trim(): void 
+trim(): void
 ```
 
 #### Method verify
@@ -1904,9 +2326,9 @@ trim(): void
 Verifies if the given transaction ID is part of the Merkle tree at the specified block height.
 
 ```ts
-async verify(txid: string, chainTracker: ChainTracker): Promise<boolean> 
+async verify(txid: string, chainTracker: ChainTracker): Promise<boolean>
 ```
-See also: [ChainTracker](./transaction.md#interface-chaintracker)
+See also: [ChainTracker](./transaction.md#interface-chaintracker), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1928,12 +2350,12 @@ Adapter for Node Https module to be used as HttpClient
 
 ```ts
 export class NodejsHttpClient implements HttpClient {
-    constructor(private readonly https: HttpsNodejs) 
-    async request(url: string, requestOptions: HttpClientRequestOptions): Promise<HttpClientResponse> 
+    constructor(private readonly https: HttpsNodejs)
+    async request(url: string, requestOptions: HttpClientRequestOptions): Promise<HttpClientResponse>
 }
 ```
 
-See also: [HttpClient](./transaction.md#interface-httpclient), [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [HttpsNodejs](./transaction.md#interface-httpsnodejs)
+See also: [HttpClient](./transaction.md#interface-httpclient), [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [HttpsNodejs](./transaction.md#interface-httpsnodejs), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1945,8 +2367,8 @@ Represents the "satoshis per kilobyte" transaction fee model.
 ```ts
 export default class SatoshisPerKilobyte implements FeeModel {
     value: number;
-    constructor(value: number) 
-    async computeFee(tx: Transaction): Promise<number> 
+    constructor(value: number)
+    async computeFee(tx: Transaction): Promise<number>
 }
 ```
 
@@ -1957,7 +2379,7 @@ See also: [FeeModel](./transaction.md#interface-feemodel), [Transaction](./trans
 Constructs an instance of the sat/kb fee model.
 
 ```ts
-constructor(value: number) 
+constructor(value: number)
 ```
 
 Argument Details
@@ -1970,7 +2392,7 @@ Argument Details
 Computes the fee for a given transaction.
 
 ```ts
-async computeFee(tx: Transaction): Promise<number> 
+async computeFee(tx: Transaction): Promise<number>
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -2012,13 +2434,52 @@ export default class Transaction {
     lockTime: number;
     metadata: Record<string, any>;
     merklePath?: MerklePath;
-    getSignatureHashCache(): SignatureHashCache 
-    materializeSourceTXIDs(): void 
-    static fromBEEF(beef: number[] | Uint8Array, txid?: string): Transaction 
-    static fromBEEFView(beef: Uint8Array, txid?: string): Transaction 
-    static fromAtomicBEEF(beef: number[] | Uint8Array): Transaction 
-    static fromAtomicBEEFView(beef: Uint8Array): Transaction 
-    static fromEF(ef: number[] | Uint8Array): Transaction 
+    #cachedHash?: number[];
+    #cachedIdHex?: string;
+    #rawBytesCache?: Uint8Array;
+    #efBytesCache?: Uint8Array;
+    #hexCache?: string;
+    #activeSignatureHashCache?: SignatureHashCache;
+    #rawCacheState?: {
+        version: number;
+        lockTime: number;
+        inputs: Array<{
+            ref: TransactionInput;
+            sourceTXID: string | undefined;
+            sourceTransactionId: string | undefined;
+            sourceOutputIndex: number;
+            sequence: number | undefined;
+            unlockingScript: TransactionInput["unlockingScript"];
+            unlockingScriptBytes: Uint8Array | undefined;
+            sourceOutput: TransactionOutput | undefined;
+            sourceSatoshis: number | undefined;
+            sourceLockingScript: TransactionOutput["lockingScript"] | undefined;
+            sourceLockingScriptBytes: Uint8Array | undefined;
+        }>;
+        outputs: Array<{
+            ref: TransactionOutput;
+            satoshis: number | undefined;
+            lockingScript: TransactionOutput["lockingScript"];
+            lockingScriptBytes: Uint8Array;
+        }>;
+    };
+    getSignatureHashCache(): SignatureHashCache
+    #completeSourceTransaction(tx: Transaction, visiting: Set<Transaction>, complete: Set<Transaction>): void
+    #scheduleSourceTransactions(tx: Transaction, visiting: Set<Transaction>, complete: Set<Transaction>, stack: Array<{
+        tx: Transaction;
+        expanded: boolean;
+    }>): void
+    materializeSourceTXIDs(): void
+    static fromBEEF(beef: number[] | Uint8Array, txid?: string): Transaction
+    static fromBEEFView(beef: Uint8Array, txid?: string): Transaction
+    static fromAtomicBEEF(beef: number[] | Uint8Array): Transaction
+    static fromAtomicBEEFView(beef: Uint8Array): Transaction
+    static #fromAnyBeef(beef: number[] | Uint8Array, txid?: string, zeroCopy: boolean = false): {
+        tx: Transaction;
+        beef: Beef;
+        txid: string;
+    }
+    static fromEF(ef: number[] | Uint8Array): Transaction
     static parseScriptOffsets(bin: number[] | Uint8Array): {
         inputs: Array<{
             vin: number;
@@ -2030,57 +2491,110 @@ export default class Transaction {
             offset: number;
             length: number;
         }>;
-    } 
-    static fromReader(br: Reader | ReaderUint8Array): Transaction 
-    static fromBinary(bin: number[] | Uint8Array): Transaction 
-    static fromBinaryView(bin: Uint8Array): Transaction 
-    static fromHex(hex: string): Transaction 
-    static fromHexEF(hex: string): Transaction 
-    static fromHexBEEF(hex: string, txid?: string): Transaction 
-    constructor(version: number = 1, inputs: TransactionInput[] = [], outputs: TransactionOutput[] = [], lockTime: number = 0, metadata: Record<string, any> = new Map(), merklePath?: MerklePath) 
-    addInput(input: TransactionInput): void 
-    addOutput(output: TransactionOutput): void 
-    addP2PKHOutput(address: number[] | string, satoshis?: number): void 
-    updateMetadata(metadata: Record<string, any>): void 
-    async fee(modelOrFee: FeeModel | number = LivePolicy.getInstance(), changeDistribution: "equal" | "random" = "equal"): Promise<void> 
-    getFee(): number 
+    }
+    static fromReader(br: Reader | ReaderUint8Array): Transaction
+    static #fromReaderInternal(br: Reader | ReaderUint8Array, zeroCopyScripts: boolean): Transaction
+    static fromBinary(bin: number[] | Uint8Array): Transaction
+    static fromBinaryView(bin: Uint8Array): Transaction
+    static fromHex(hex: string): Transaction
+    static fromHexEF(hex: string): Transaction
+    static fromHexBEEF(hex: string, txid?: string): Transaction
+    constructor(version: number = 1, inputs: TransactionInput[] = [], outputs: TransactionOutput[] = [], lockTime: number = 0, metadata: Record<string, any> = new Map(), merklePath?: MerklePath)
+    #invalidateSerializationCaches(): void
+    #sourceTransactionId(input: TransactionInput): string | undefined
+    #captureSerializationState(): void
+    #serializationCacheMatchesState(): boolean
+    addInput(input: TransactionInput): void
+    addOutput(output: TransactionOutput): void
+    addP2PKHOutput(address: number[] | string, satoshis?: number): void
+    updateMetadata(metadata: Record<string, any>): void
+    async fee(modelOrFee: FeeModel | number = LivePolicy.getInstance(), changeDistribution: "equal" | "random" = "equal"): Promise<void>
+    #calculateChange(fee: number): number
+    #distributeChange(change: number, changeDistribution: "equal" | "random"): void
+    #distributeRandomChange(change: number, changeOutputs: TransactionOutput[]): void
+    #distributeEqualChange(change: number, changeOutputs: TransactionOutput[]): void
+    #benfordNumber(min: number, max: number): number
+    getFee(): number
     async sign(options: {
         skipExistingSignatures?: boolean;
-    } = {}): Promise<void> 
-    async broadcast(broadcaster: Broadcaster = defaultBroadcaster()): Promise<BroadcastResponse | BroadcastFailure> 
-    toBinary(): number[] 
-    toUint8Array(): Uint8Array 
-    toEF(): number[] 
-    toEFUint8Array(): Uint8Array 
-    toEFBinary(): Uint8Array 
-    toHexEF(): string 
-    toHex(): string 
-    toHexBEEF(): string 
-    toHexAtomicBEEF(): string 
-    hash(enc?: "hex"): number[] | string 
+    } = {}): Promise<void>
+    async broadcast(broadcaster: Broadcaster = defaultBroadcaster()): Promise<BroadcastResponse | BroadcastFailure>
+    #writeTransactionBody(writer: Writer | WriterUint8Array): void
+    #buildSerializedBytes(): Uint8Array
+    #getSerializedBytes(): Uint8Array
+    [serializedBytes](): Uint8Array
+    [knownId](txid: string): void
+    toBinary(): number[]
+    toUint8Array(): Uint8Array
+    #writeEF(writer: Writer | WriterUint8Array): void
+    toEF(): number[]
+    toEFUint8Array(): Uint8Array
+    #getEFBytes(): Uint8Array
+    toEFBinary(): Uint8Array
+    toHexEF(): string
+    toHex(): string
+    toHexBEEF(): string
+    toHexAtomicBEEF(): string
+    hash(enc?: "hex"): number[] | string
     id(): number[];
     id(enc: "hex"): string;
-    id(enc?: "hex"): number[] | string 
-    async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean> 
-    writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void 
-    toBEEF(allowPartial?: boolean): number[] 
-    toBEEFUint8Array(allowPartial?: boolean): Uint8Array 
-    toBEEFBytes(allowPartial?: boolean): Uint8Array 
-    toAtomicBEEF(allowPartial?: boolean): number[] 
-    toAtomicBEEFUint8Array(allowPartial?: boolean): Uint8Array 
-    async completeWithWallet(wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void> 
-    preimage(inputIndex?: number, signatureScope?: number, subscript?: LockingScript): number[] 
+    id(enc?: "hex"): number[] | string
+    async #completeVerificationFromMerklePath(tx: Transaction, scriptsOnly: boolean, chainTracker: ChainTracker | "scripts only", getTxid: () => string, verifiedTransactions: Set<Transaction>, verifiedTxids: Set<string>): Promise<boolean>
+    #validateUnminedTransactionStructure(tx: Transaction, getTxid: () => string): void
+    #queueSourceTransactionForVerification(sourceTransaction: Transaction, sourceTxid: string, state: TransactionVerificationState): void
+    #verifyTransactionInputs(tx: Transaction, useVerifier: boolean, getTxid: () => string, state: TransactionVerificationState): {
+        valid: boolean;
+        inputTotal: number;
+    }
+    #totalVerifiedOutputs(tx: Transaction): number
+    async #verifyQueuedScripts(verifierQueue: QueuedScriptVerification[], selectedVerifier: BdkVerifierInterface | undefined): Promise<void>
+    #isTransactionAlreadyVerified(tx: Transaction, getTxid: () => string, state: TransactionVerificationState): boolean
+    #snapshotTransactionGraph(includeTemplates: boolean = false): Transaction
+    #signingStateMatches(snapshot: Transaction, inputRefs: TransactionInput[], sourceRefs: Array<Transaction | undefined>, templateRefs: Array<TransactionInput["unlockingScriptTemplate"]>, outputRefs: TransactionOutput[]): boolean
+    async #verifyUnminedTransaction(tx: Transaction, getTxid: () => string, context: UnminedTransactionVerificationContext): Promise<boolean>
+    async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean>
+    async #verifySnapshot(chainTracker: ChainTracker | "scripts only", feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface, scriptWork?: EvidenceScriptScope): Promise<boolean>
+    writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void
+    #collectBEEFTransactions(allowPartial?: boolean): {
+        bumps: MerklePath[];
+        txs: Array<{
+            tx: Transaction;
+            pathIndex?: number;
+        }>;
+    }
+    #appendBEEFTransaction(tx: Transaction, seenTxids: Set<string>, txs: Array<{
+        tx: Transaction;
+        pathIndex?: number;
+    }>, bumps: MerklePath[], bumpIndexByInstance: Map<MerklePath, number>, bumpIndexByRoot: Map<string, number>): void
+    #scheduleBEEFTransaction(tx: Transaction, allowPartial: boolean | undefined, scheduledTxids: Set<string>, stack: Array<{
+        tx: Transaction;
+        expanded: boolean;
+    }>): void
+    #getBEEFPathIndex(merklePath: MerklePath, bumps: MerklePath[], bumpIndexByInstance: Map<MerklePath, number>, bumpIndexByRoot: Map<string, number>): number
+    #reserveBEEFWriter(writer: Writer | WriterUint8Array, bumps: MerklePath[], txs: Array<{
+        tx: Transaction;
+        pathIndex?: number;
+    }>): Uint8Array[] | undefined
+    toBEEF(allowPartial?: boolean): number[]
+    toBEEFUint8Array(allowPartial?: boolean): Uint8Array
+    toBEEFBytes(allowPartial?: boolean): Uint8Array
+    toAtomicBEEF(allowPartial?: boolean): number[]
+    toAtomicBEEFUint8Array(allowPartial?: boolean): Uint8Array
+    async completeWithWallet(wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void>
+    async #buildWalletActionArgs(description: DescriptionString5to50Bytes, hasTemplates: boolean): Promise<CreateActionArgs>
+    async #buildWalletInputArg(input: TransactionInput, index: number, hasTemplates: boolean): Promise<any>
+    preimage(inputIndex?: number, signatureScope?: number, subscript?: LockingScript): number[]
 }
 ```
 
-See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [ChainTracker](./transaction.md#interface-chaintracker), [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [FeeModel](./transaction.md#interface-feemodel), [LivePolicy](./transaction.md#class-livepolicy), [LockingScript](./script.md#class-lockingscript), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [defaultBroadcaster](./transaction.md#function-defaultbroadcaster), [defaultChainTracker](./transaction.md#function-defaultchaintracker), [sign](./compat.md#variable-sign), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
+See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [Beef](./transaction.md#class-beef), [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [ChainTracker](./transaction.md#interface-chaintracker), [CreateActionArgs](./wallet.md#interface-createactionargs), [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [FeeModel](./transaction.md#interface-feemodel), [LivePolicy](./transaction.md#class-livepolicy), [LockingScript](./script.md#class-lockingscript), [MerklePath](./transaction.md#class-merklepath), [Reader](./primitives.md#class-reader), [ReaderUint8Array](./primitives.md#class-readeruint8array), [SignatureHashCache](./primitives.md#interface-signaturehashcache), [TransactionInput](./transaction.md#interface-transactioninput), [TransactionOutput](./transaction.md#interface-transactionoutput), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array), [defaultBroadcaster](./transaction.md#function-defaultbroadcaster), [defaultChainTracker](./transaction.md#function-defaultchaintracker), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string), [toHex](./primitives.md#variable-tohex), [toUint8Array](./primitives.md#variable-touint8array), [verify](./compat.md#variable-verify)
 
 #### Method addInput
 
 Adds a new input to the transaction.
 
 ```ts
-addInput(input: TransactionInput): void 
+addInput(input: TransactionInput): void
 ```
 See also: [TransactionInput](./transaction.md#interface-transactioninput)
 
@@ -2098,7 +2612,7 @@ Throws
 Adds a new output to the transaction.
 
 ```ts
-addOutput(output: TransactionOutput): void 
+addOutput(output: TransactionOutput): void
 ```
 See also: [TransactionOutput](./transaction.md#interface-transactionoutput)
 
@@ -2112,8 +2626,9 @@ Argument Details
 Adds a new P2PKH output to the transaction.
 
 ```ts
-addP2PKHOutput(address: number[] | string, satoshis?: number): void 
+addP2PKHOutput(address: number[] | string, satoshis?: number): void
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -2127,7 +2642,7 @@ Argument Details
 Broadcasts a transaction.
 
 ```ts
-async broadcast(broadcaster: Broadcaster = defaultBroadcaster()): Promise<BroadcastResponse | BroadcastFailure> 
+async broadcast(broadcaster: Broadcaster = defaultBroadcaster()): Promise<BroadcastResponse | BroadcastFailure>
 ```
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [Broadcaster](./transaction.md#interface-broadcaster), [defaultBroadcaster](./transaction.md#function-defaultbroadcaster)
 
@@ -2148,9 +2663,9 @@ transaction into a format that can be processed by the wallet, and then
 updates this transaction object with the result from the wallet.
 
 ```ts
-async completeWithWallet(wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void> 
+async completeWithWallet(wallet: WalletInterface, actionDescription?: DescriptionString5to50Bytes, originator?: string, options?: CreateActionOptions): Promise<void>
 ```
-See also: [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [CreateActionOptions](./wallet.md#interface-createactionoptions), [DescriptionString5to50Bytes](./wallet.md#type-descriptionstring5to50bytes), [WalletInterface](./wallet.md#interface-walletinterface), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -2170,7 +2685,7 @@ If no fee model is provided, uses a LivePolicy fee model that fetches current ra
 If fee is a number, the transaction uses that value as fee.
 
 ```ts
-async fee(modelOrFee: FeeModel | number = LivePolicy.getInstance(), changeDistribution: "equal" | "random" = "equal"): Promise<void> 
+async fee(modelOrFee: FeeModel | number = LivePolicy.getInstance(), changeDistribution: "equal" | "random" = "equal"): Promise<void>
 ```
 See also: [FeeModel](./transaction.md#interface-feemodel), [LivePolicy](./transaction.md#class-livepolicy)
 
@@ -2188,7 +2703,7 @@ Creates a new transaction from an Atomic BEEF (BRC-95) structure.
 Extracts the subject transaction and supporting merkle path and source transactions contained in the BEEF data
 
 ```ts
-static fromAtomicBEEF(beef: number[] | Uint8Array): Transaction 
+static fromAtomicBEEF(beef: number[] | Uint8Array): Transaction
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -2209,9 +2724,9 @@ If the TXID is provided but not found in the BEEF data, an error will be thrown.
 If no TXID is provided, the last transaction in the BEEF data is returned, or the atomic txid.
 
 ```ts
-static fromBEEF(beef: number[] | Uint8Array, txid?: string): Transaction 
+static fromBEEF(beef: number[] | Uint8Array, txid?: string): Transaction
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2229,7 +2744,7 @@ Argument Details
 Creates a Transaction instance from a binary array.
 
 ```ts
-static fromBinary(bin: number[] | Uint8Array): Transaction 
+static fromBinary(bin: number[] | Uint8Array): Transaction
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -2248,7 +2763,7 @@ Parses a transaction while retaining zero-copy views over `bin` for the raw
 transaction and its scripts. The caller must not mutate `bin`.
 
 ```ts
-static fromBinaryView(bin: Uint8Array): Transaction 
+static fromBinaryView(bin: Uint8Array): Transaction
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -2256,8 +2771,15 @@ See also: [Transaction](./transaction.md#class-transaction)
 
 Creates a new transaction, linked to its inputs and their associated merkle paths, from a EF (BRC-30) structure.
 
+EF source descriptors contain only a claimed source TXID, locking script,
+and amount. They do not authenticate the complete source transaction or
+prove that the described output exists or remains spendable. In an
+adversarial environment the recipient must already be familiar with the
+source information or independently verify it through trusted full
+transaction and chain-state evidence before signing or authorizing value.
+
 ```ts
-static fromEF(ef: number[] | Uint8Array): Transaction 
+static fromEF(ef: number[] | Uint8Array): Transaction
 ```
 See also: [Transaction](./transaction.md#class-transaction)
 
@@ -2275,9 +2797,9 @@ Argument Details
 Creates a Transaction instance from a hexadecimal string.
 
 ```ts
-static fromHex(hex: string): Transaction 
+static fromHex(hex: string): Transaction
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2296,9 +2818,9 @@ If the TXID is provided but not found in the BEEF data, an error will be thrown.
 If no TXID is provided, the last transaction in the BEEF data is returned.
 
 ```ts
-static fromHexBEEF(hex: string, txid?: string): Transaction 
+static fromHexBEEF(hex: string, txid?: string): Transaction
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2316,9 +2838,9 @@ Argument Details
 Creates a Transaction instance from a hexadecimal string encoded EF.
 
 ```ts
-static fromHexEF(hex: string): Transaction 
+static fromHexEF(hex: string): Transaction
 ```
-See also: [Transaction](./transaction.md#class-transaction)
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
 
 Returns
 
@@ -2334,7 +2856,7 @@ Argument Details
 Utility method that returns the current fee based on inputs and outputs
 
 ```ts
-getFee(): number 
+getFee(): number
 ```
 
 Returns
@@ -2347,7 +2869,7 @@ Returns the transaction-wide signature hash cache active during signing.
 Callers outside a signing operation receive an isolated cache.
 
 ```ts
-getSignatureHashCache(): SignatureHashCache 
+getSignatureHashCache(): SignatureHashCache
 ```
 See also: [SignatureHashCache](./primitives.md#interface-signaturehashcache)
 
@@ -2356,8 +2878,9 @@ See also: [SignatureHashCache](./primitives.md#interface-signaturehashcache)
 Calculates the transaction's hash.
 
 ```ts
-hash(enc?: "hex"): number[] | string 
+hash(enc?: "hex"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2387,6 +2910,7 @@ Calculates the transaction's ID in hexadecimal format.
 ```ts
 id(enc: "hex"): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2402,8 +2926,9 @@ Argument Details
 Calculates the transaction's ID.
 
 ```ts
-id(enc?: "hex"): number[] | string 
+id(enc?: "hex"): number[] | string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2420,7 +2945,7 @@ Iteratively materializes source transaction IDs so deep spend chains do not
 recurse through `hash()` while serializing their parents.
 
 ```ts
-materializeSourceTXIDs(): void 
+materializeSourceTXIDs(): void
 ```
 
 #### Method parseScriptOffsets
@@ -2445,7 +2970,7 @@ static parseScriptOffsets(bin: number[] | Uint8Array): {
         offset: number;
         length: number;
     }>;
-} 
+}
 ```
 
 Returns
@@ -2464,7 +2989,7 @@ Argument Details
 Returns the formatted preimage of a transaction for the requested input index, signature scope (default SIGHASH_FORKID | SIGHASH_ALL), and optional subscript.
 
 ```ts
-preimage(inputIndex?: number, signatureScope?: number, subscript?: LockingScript): number[] 
+preimage(inputIndex?: number, signatureScope?: number, subscript?: LockingScript): number[]
 ```
 See also: [LockingScript](./script.md#class-lockingscript)
 
@@ -2488,7 +3013,7 @@ Signs a transaction, hydrating all its unlocking scripts based on the provided s
 ```ts
 async sign(options: {
     skipExistingSignatures?: boolean;
-} = {}): Promise<void> 
+} = {}): Promise<void>
 ```
 
 Argument Details
@@ -2504,7 +3029,7 @@ and then the BEEF data containing only the subject transaction and its dependenc
 This format ensures that the BEEF structure is atomic and contains no unrelated transactions.
 
 ```ts
-toAtomicBEEF(allowPartial?: boolean): number[] 
+toAtomicBEEF(allowPartial?: boolean): number[]
 ```
 
 Returns
@@ -2528,7 +3053,7 @@ and then the BEEF data containing only the subject transaction and its dependenc
 This format ensures that the BEEF structure is atomic and contains no unrelated transactions.
 
 ```ts
-toAtomicBEEFUint8Array(allowPartial?: boolean): Uint8Array 
+toAtomicBEEFUint8Array(allowPartial?: boolean): Uint8Array
 ```
 
 Returns
@@ -2549,7 +3074,7 @@ Error if there are any missing sourceTransactions unless `allowPartial` is true.
 Serializes this transaction, together with its inputs and the respective merkle proofs, into the BEEF (BRC-62) format. This enables efficient verification of its compliance with the rules of SPV.
 
 ```ts
-toBEEF(allowPartial?: boolean): number[] 
+toBEEF(allowPartial?: boolean): number[]
 ```
 
 Returns
@@ -2570,7 +3095,7 @@ Error if there are any missing sourceTransactions unless `allowPartial` is true.
 Serializes BEEF to a real typed byte array.
 
 ```ts
-toBEEFBytes(allowPartial?: boolean): Uint8Array 
+toBEEFBytes(allowPartial?: boolean): Uint8Array
 ```
 
 #### Method toBEEFUint8Array
@@ -2578,7 +3103,7 @@ toBEEFBytes(allowPartial?: boolean): Uint8Array
 Serializes this transaction, together with its inputs and the respective merkle proofs, into the BEEF (BRC-62) format. This enables efficient verification of its compliance with the rules of SPV.
 
 ```ts
-toBEEFUint8Array(allowPartial?: boolean): Uint8Array 
+toBEEFUint8Array(allowPartial?: boolean): Uint8Array
 ```
 
 Returns
@@ -2599,7 +3124,7 @@ Error if there are any missing sourceTransactions unless `allowPartial` is true.
 Converts the transaction to a binary array format.
 
 ```ts
-toBinary(): number[] 
+toBinary(): number[]
 ```
 
 Returns
@@ -2611,7 +3136,7 @@ Returns
 Converts the transaction to a BRC-30 EF format.
 
 ```ts
-toEF(): number[] 
+toEF(): number[]
 ```
 
 Returns
@@ -2620,10 +3145,10 @@ Returns
 
 #### Method toEFBinary
 
-Converts the transaction to a memoized BRC-30 EF byte array.
+Converts the transaction to an independently owned BRC-30 EF byte array.
 
 ```ts
-toEFBinary(): Uint8Array 
+toEFBinary(): Uint8Array
 ```
 
 Returns
@@ -2635,7 +3160,7 @@ The cached BRC-30 EF representation.
 Converts the transaction to a BRC-30 EF format.
 
 ```ts
-toEFUint8Array(): Uint8Array 
+toEFUint8Array(): Uint8Array
 ```
 
 Returns
@@ -2647,8 +3172,9 @@ Returns
 Converts the transaction to a hexadecimal string format.
 
 ```ts
-toHex(): string 
+toHex(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2659,8 +3185,9 @@ Returns
 Converts the transaction to a hexadecimal string Atomic BEEF.
 
 ```ts
-toHexAtomicBEEF(): string 
+toHexAtomicBEEF(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2671,8 +3198,9 @@ Returns
 Converts the transaction to a hexadecimal string BEEF.
 
 ```ts
-toHexBEEF(): string 
+toHexBEEF(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2683,8 +3211,9 @@ Returns
 Converts the transaction to a hexadecimal string EF.
 
 ```ts
-toHexEF(): string 
+toHexEF(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -2695,8 +3224,9 @@ Returns
 Updates the transaction's metadata.
 
 ```ts
-updateMetadata(metadata: Record<string, any>): void 
+updateMetadata(metadata: Record<string, any>): void
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -2708,7 +3238,7 @@ Argument Details
 Verifies the legitimacy of the Bitcoin transaction according to the rules of SPV by ensuring all the input transactions link back to valid block headers, the chain of spends for all inputs are valid, and the sum of inputs is not less than the sum of outputs.
 
 ```ts
-async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean> 
+async verify(chainTracker: ChainTracker | "scripts only" = defaultChainTracker(), feeModel?: FeeModel, memoryLimit?: number, verifier?: BdkVerifierInterface): Promise<boolean>
 ```
 See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [ChainTracker](./transaction.md#interface-chaintracker), [FeeModel](./transaction.md#interface-feemodel), [defaultChainTracker](./transaction.md#function-defaultchaintracker)
 
@@ -2740,7 +3270,7 @@ tx.verify(new WhatsOnChain(), LivePolicy.getInstance())
 Serializes this transaction, together with its inputs and the respective merkle proofs, into the BEEF (BRC-62) format. This enables efficient verification of its compliance with the rules of SPV.
 
 ```ts
-writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void 
+writeSerializedBEEF(writer: Writer | WriterUint8Array, allowPartial?: boolean): void
 ```
 See also: [Writer](./primitives.md#class-writer), [WriterUint8Array](./primitives.md#class-writeruint8array)
 
@@ -2772,12 +3302,12 @@ Synchronous parsing/script execution is byte/memory bounded, not preemptible.
 ```ts
 export class TransactionEvidenceCoordinator {
     readonly limits: Readonly<TransactionEvidenceLimits>;
-    constructor(options: TransactionEvidenceCoordinatorOptions) 
-    setContext(context: TransactionEvidenceContext): void 
-    dispose(): void 
+    constructor(options: TransactionEvidenceCoordinatorOptions)
+    setContext(context: TransactionEvidenceContext): void
+    dispose(): void
     async verify(evidence: TransactionEvidence, options: {
         signal?: AbortSignal;
-    } = {}): Promise<VerifiedTransactionOutput> 
+    } = {}): Promise<VerifiedTransactionOutput>
     getStats(): {
         pendingTransactions: number;
         consumers: number;
@@ -2785,7 +3315,7 @@ export class TransactionEvidenceCoordinator {
         retainedBytes: number;
         pendingChainCalls: number;
         activeAttempts: number;
-    } 
+    }
 }
 ```
 
@@ -2803,7 +3333,7 @@ getStats(): {
     retainedBytes: number;
     pendingChainCalls: number;
     activeAttempts: number;
-} 
+}
 ```
 
 #### Method setContext
@@ -2811,7 +3341,7 @@ getStats(): {
 Explicit session/network/policy change. Stale in-flight work cannot publish.
 
 ```ts
-setContext(context: TransactionEvidenceContext): void 
+setContext(context: TransactionEvidenceContext): void
 ```
 See also: [TransactionEvidenceContext](./transaction.md#interface-transactionevidencecontext)
 
@@ -2822,7 +3352,7 @@ Snapshot intake is synchronous up to the returned Promise's first await.
 ```ts
 async verify(evidence: TransactionEvidence, options: {
     signal?: AbortSignal;
-} = {}): Promise<VerifiedTransactionOutput> 
+} = {}): Promise<VerifiedTransactionOutput>
 ```
 See also: [TransactionEvidence](./transaction.md#interface-transactionevidence), [VerifiedTransactionOutput](./transaction.md#interface-verifiedtransactionoutput)
 
@@ -2835,7 +3365,7 @@ Bounded, payload-free outcome; rejected receipts never permanently reject a txid
 
 ```ts
 export class TransactionEvidenceError extends Error {
-    constructor(public readonly code: TransactionEvidenceErrorCode) 
+    constructor(public readonly code: TransactionEvidenceErrorCode)
 }
 ```
 
@@ -2854,21 +3384,21 @@ export default class WhatsOnChain implements ChainTracker {
     readonly apiKey: string;
     protected readonly URL: string;
     protected readonly httpClient: HttpClient;
-    constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
-    async isValidRootForHeight(root: string, height: number): Promise<boolean> 
-    async currentHeight(): Promise<number> 
-    protected getHttpHeaders(): Record<string, string> 
+    constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {})
+    async isValidRootForHeight(root: string, height: number): Promise<boolean>
+    async currentHeight(): Promise<number>
+    protected getHttpHeaders(): Record<string, string>
 }
 ```
 
-See also: [ChainTracker](./transaction.md#interface-chaintracker), [HttpClient](./transaction.md#interface-httpclient), [WhatsOnChainConfig](./transaction.md#interface-whatsonchainconfig)
+See also: [ChainTracker](./transaction.md#interface-chaintracker), [HttpClient](./transaction.md#interface-httpclient), [WhatsOnChainConfig](./transaction.md#interface-whatsonchainconfig), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs an instance of the WhatsOnChain ChainTracker.
 
 ```ts
-constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {}) 
+constructor(network: "main" | "test" | "stn" = "main", config: WhatsOnChainConfig = {})
 ```
 See also: [WhatsOnChainConfig](./transaction.md#interface-whatsonchainconfig)
 
@@ -2884,16 +3414,17 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Functions
 
-| | |
-| --- | --- |
-| [assertEvidenceUnchanged](#function-assertevidenceunchanged) | [isBroadcastResponse](#function-isbroadcastresponse) |
-| [defaultBroadcaster](#function-defaultbroadcaster) | [isChainTracker](#function-ischaintracker) |
-| [defaultChainTracker](#function-defaultchaintracker) | [parseEvidence](#function-parseevidence) |
-| [defaultHttpClient](#function-defaulthttpclient) | [registerScriptVerificationBackend](#function-registerscriptverificationbackend) |
-| [evidenceError](#function-evidenceerror) | [scopedScriptBackend](#function-scopedscriptbackend) |
-| [evidenceScriptScope](#function-evidencescriptscope) | [scriptVerificationBackend](#function-scriptverificationbackend) |
-| [executeNodejsRequest](#function-executenodejsrequest) | [unregisterScriptVerificationBackend](#function-unregisterscriptverificationbackend) |
-| [isBroadcastFailure](#function-isbroadcastfailure) | [withEvidenceScriptWork](#function-withevidencescriptwork) |
+| | | |
+| --- | --- | --- |
+| [assertEvidenceUnchanged](#function-assertevidenceunchanged) | [isBroadcastResponse](#function-isbroadcastresponse) | [scopedScriptBackend](#function-scopedscriptbackend) |
+| [cacheKnownTransactionId](#function-cacheknowntransactionid) | [isChainTracker](#function-ischaintracker) | [scriptVerificationBackend](#function-scriptverificationbackend) |
+| [defaultBroadcaster](#function-defaultbroadcaster) | [lockConfiguration](#function-lockconfiguration) | [timedRequestSignal](#function-timedrequestsignal) |
+| [defaultChainTracker](#function-defaultchaintracker) | [normalizeArcConfig](#function-normalizearcconfig) | [transactionSerializationIdentity](#function-transactionserializationidentity) |
+| [defaultHttpClient](#function-defaulthttpclient) | [normalizeArcUrl](#function-normalizearcurl) | [unregisterScriptVerificationBackend](#function-unregisterscriptverificationbackend) |
+| [evidenceError](#function-evidenceerror) | [normalizeHttpClientLimits](#function-normalizehttpclientlimits) | [validateBroadcastResult](#function-validatebroadcastresult) |
+| [evidenceScriptScope](#function-evidencescriptscope) | [parseEvidence](#function-parseevidence) | [withEvidenceScriptWork](#function-withevidencescriptwork) |
+| [executeNodejsRequest](#function-executenodejsrequest) | [readFetchResponseText](#function-readfetchresponsetext) |  |
+| [isBroadcastFailure](#function-isbroadcastfailure) | [registerScriptVerificationBackend](#function-registerscriptverificationbackend) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -2904,7 +3435,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Fence all owned transaction/proof bytes, including backend readiness callbacks.
 
 ```ts
-export function assertEvidenceUnchanged(candidate: EvidenceCandidate): void 
+export function assertEvidenceUnchanged(candidate: EvidenceCandidate): void
 ```
 
 See also: [EvidenceCandidate](./transaction.md#interface-evidencecandidate)
@@ -2912,10 +3443,21 @@ See also: [EvidenceCandidate](./transaction.md#interface-evidencecandidate)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: cacheKnownTransactionId
+
+```ts
+export function cacheKnownTransactionId(transaction: Transaction, txid: string): void
+```
+
+See also: [Transaction](./transaction.md#class-transaction), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: defaultBroadcaster
 
 ```ts
-export function defaultBroadcaster(isTestnet: boolean = false, config: ArcConfig = {}): Broadcaster 
+export function defaultBroadcaster(isTestnet: boolean = false, config: ArcConfig = {}): Broadcaster
 ```
 
 See also: [ArcConfig](./transaction.md#interface-arcconfig), [Broadcaster](./transaction.md#interface-broadcaster)
@@ -2926,7 +3468,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: defaultChainTracker
 
 ```ts
-export function defaultChainTracker(): ChainTracker 
+export function defaultChainTracker(): ChainTracker
 ```
 
 See also: [ChainTracker](./transaction.md#interface-chaintracker)
@@ -2941,7 +3483,7 @@ This method will attempt to use `window.fetch` if available (in browser environm
 then `globalThis.fetch` (service workers, Deno, Node 18+), then the Node `https` module.
 
 ```ts
-export function defaultHttpClient(): HttpClient 
+export function defaultHttpClient(): HttpClient
 ```
 
 See also: [HttpClient](./transaction.md#interface-httpclient)
@@ -2954,7 +3496,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Keep bounded-work outcomes distinct without exposing errors containing evidence.
 
 ```ts
-export function evidenceError(error: unknown): TransactionEvidenceError 
+export function evidenceError(error: unknown): TransactionEvidenceError
 ```
 
 See also: [TransactionEvidenceError](./transaction.md#class-transactionevidenceerror)
@@ -2965,7 +3507,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: evidenceScriptScope
 
 ```ts
-export function evidenceScriptScope(tx: Transaction): EvidenceScriptScope | undefined 
+export function evidenceScriptScope(tx: Transaction): EvidenceScriptScope | undefined
 ```
 
 See also: [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [Transaction](./transaction.md#class-transaction)
@@ -2979,10 +3521,10 @@ Shared implementation for handling Node.js HTTP requests.
 Used by both NodejsHttpClient and BinaryNodejsHttpClient.
 
 ```ts
-export function executeNodejsRequest(https: HttpsModuleLike, url: string, requestOptions: HttpClientRequestOptions, serializeData: (data: any) => any): Promise<HttpClientResponse> 
+export function executeNodejsRequest(https: HttpsModuleLike, url: string, requestOptions: HttpClientRequestOptions, serializeData: (data: any) => any): Promise<HttpClientResponse>
 ```
 
-See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [HttpsModuleLike](./transaction.md#interface-httpsmodulelike)
+See also: [HttpClientRequestOptions](./transaction.md#interface-httpclientrequestoptions), [HttpClientResponse](./transaction.md#type-httpclientresponse), [HttpsModuleLike](./transaction.md#interface-httpsmodulelike), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -3003,7 +3545,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Convenience type guard for response from `Broadcaster.broadcast`
 
 ```ts
-export function isBroadcastFailure(r: BroadcastResponse | BroadcastFailure): r is BroadcastFailure 
+export function isBroadcastFailure(r: BroadcastResponse | BroadcastFailure): r is BroadcastFailure
 ```
 
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse)
@@ -3016,7 +3558,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Convenience type guard for response from `Broadcaster.broadcast`
 
 ```ts
-export function isBroadcastResponse(r: BroadcastResponse | BroadcastFailure): r is BroadcastResponse 
+export function isBroadcastResponse(r: BroadcastResponse | BroadcastFailure): r is BroadcastResponse
 ```
 
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse)
@@ -3030,7 +3572,7 @@ Convenience type guard for a `ChainTracker` implementation.
 Optional verification-context methods are not required.
 
 ```ts
-export function isChainTracker(value: unknown): value is ChainTracker 
+export function isChainTracker(value: unknown): value is ChainTracker
 ```
 
 See also: [ChainTracker](./transaction.md#interface-chaintracker)
@@ -3038,13 +3580,76 @@ See also: [ChainTracker](./transaction.md#interface-chaintracker)
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: lockConfiguration
+
+Makes constructor-owned configuration effective at runtime as well as at
+compile time. TypeScript's `readonly` modifier alone does not prevent a
+JavaScript caller from replacing a provider URL, credential, or client.
+
+```ts
+export function lockConfiguration(target: object, names: string[]): void
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: normalizeArcConfig
+
+Snapshot security-relevant ARC constructor configuration exactly once.
+
+```ts
+export function normalizeArcConfig(config: string | ArcConfig | undefined, defaultDeploymentId: () => string): NormalizedArcConfig
+```
+
+See also: [ArcConfig](./transaction.md#interface-arcconfig), [NormalizedArcConfig](./transaction.md#interface-normalizedarcconfig), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: normalizeArcUrl
+
+Require a stable, bounded primitive URL without changing caller-selected endpoint authority.
+
+```ts
+export function normalizeArcUrl(value: unknown): string
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: normalizeHttpClientLimits
+
+```ts
+export function normalizeHttpClientLimits(limits: HttpClientLimits = {}): Required<HttpClientLimits>
+```
+
+See also: [HttpClientLimits](./transaction.md#interface-httpclientlimits)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: parseEvidence
 
 ```ts
-export function parseEvidence(evidence: TransactionEvidence, limits: TransactionEvidenceLimits): EvidenceCandidate 
+export function parseEvidence(evidence: TransactionEvidence, limits: TransactionEvidenceLimits): EvidenceCandidate
 ```
 
 See also: [EvidenceCandidate](./transaction.md#interface-evidencecandidate), [TransactionEvidence](./transaction.md#interface-transactionevidence), [TransactionEvidenceLimits](./transaction.md#interface-transactionevidencelimits)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: readFetchResponseText
+
+```ts
+export async function readFetchResponseText(response: Response, maximumBytes: number): Promise<string>
+```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3054,7 +3659,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Installs a process/page-wide optional script backend.
 
 ```ts
-export function registerScriptVerificationBackend(backend: ScriptVerificationBackend): void 
+export function registerScriptVerificationBackend(backend: ScriptVerificationBackend): void
 ```
 
 See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
@@ -3065,7 +3670,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Function: scopedScriptBackend
 
 ```ts
-export function scopedScriptBackend(scope: EvidenceScriptScope, backend: BdkVerifierInterface): BdkVerifierInterface 
+export function scopedScriptBackend(scope: EvidenceScriptScope, backend: BdkVerifierInterface): BdkVerifierInterface
 ```
 
 See also: [BdkVerifierInterface](./transaction.md#interface-bdkverifierinterface), [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope)
@@ -3078,10 +3683,33 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Returns the currently registered optional script backend, if any.
 
 ```ts
-export function scriptVerificationBackend(): ScriptVerificationBackend | undefined 
+export function scriptVerificationBackend(): ScriptVerificationBackend | undefined
 ```
 
 See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: timedRequestSignal
+
+```ts
+export function timedRequestSignal(parent: AbortSignal | undefined, timeoutMs: number): {
+    signal: AbortSignal;
+    dispose(): void;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: transactionSerializationIdentity
+
+```ts
+export function transactionSerializationIdentity(transaction: Transaction): Uint8Array
+```
+
+See also: [Transaction](./transaction.md#class-transaction)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3091,7 +3719,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 Removes `backend` if it is still the active optional implementation.
 
 ```ts
-export function unregisterScriptVerificationBackend(backend: ScriptVerificationBackend): void 
+export function unregisterScriptVerificationBackend(backend: ScriptVerificationBackend): void
 ```
 
 See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationbackend)
@@ -3099,10 +3727,24 @@ See also: [ScriptVerificationBackend](./transaction.md#type-scriptverificationba
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: validateBroadcastResult
+
+Validates and owns the security-relevant fields returned by a broadcaster.
+A success is accepted only when it acknowledges the exact submitted transaction.
+
+```ts
+export function validateBroadcastResult(result: unknown, expectedTxid: string): BroadcastResponse | BroadcastFailure
+```
+
+See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: withEvidenceScriptWork
 
 ```ts
-export async function withEvidenceScriptWork<T>(tx: Transaction, scope: EvidenceScriptScope, verify: () => Promise<T>): Promise<T> 
+export async function withEvidenceScriptWork<T>(tx: Transaction, scope: EvidenceScriptScope, verify: () => Promise<T>): Promise<T>
 ```
 
 See also: [EvidenceScriptScope](./transaction.md#interface-evidencescriptscope), [Transaction](./transaction.md#class-transaction), [verify](./compat.md#variable-verify)
@@ -3133,7 +3775,7 @@ Makes a request to the server.
 export type Fetch = (url: string, options: FetchOptions) => Promise<Response>
 ```
 
-See also: [FetchOptions](./transaction.md#interface-fetchoptions)
+See also: [FetchOptions](./transaction.md#interface-fetchoptions), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3155,6 +3797,8 @@ export type HttpClientResponse<T = any> = {
     ok: false;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -3203,6 +3847,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [ATOMIC_BEEF](#variable-atomic_beef) |
 | [BEEF_V1](#variable-beef_v1) |
 | [BEEF_V2](#variable-beef_v2) |
+| [DEFAULT_HTTP_CLIENT_MAX_RESPONSE_BYTES](#variable-default_http_client_max_response_bytes) |
+| [DEFAULT_HTTP_CLIENT_TIMEOUT_MS](#variable-default_http_client_timeout_ms) |
 | [defaultTransactionEvidenceLimits](#variable-defaulttransactionevidencelimits) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -3231,6 +3877,24 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 BEEF_V2 = 4022206466
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_HTTP_CLIENT_MAX_RESPONSE_BYTES
+
+```ts
+DEFAULT_HTTP_CLIENT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_HTTP_CLIENT_TIMEOUT_MS
+
+```ts
+DEFAULT_HTTP_CLIENT_TIMEOUT_MS = 30000
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)

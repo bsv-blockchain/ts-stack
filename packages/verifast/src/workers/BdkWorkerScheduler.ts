@@ -7,56 +7,58 @@ import type { BdkWorkerRequestWithoutId, BdkWorkerResult } from './BdkWorkerProt
  * classic-script consumers do not download worker-only orchestration.
  */
 export default class BdkWorkerScheduler {
-  private readonly itemThreshold: number
-  private readonly maxBatchItems: number
-  private readonly maxBatchBytes: number
-  private pool: BdkWorkerPool | undefined
-  private ready = false
-  private loading: Promise<void> | undefined
+  readonly #createPool: (onFailure: (error: Error) => void) => BdkWorkerPool
+  readonly #itemThreshold: number
+  readonly #maxBatchItems: number
+  readonly #maxBatchBytes: number
+  #pool: BdkWorkerPool | undefined
+  #ready = false
+  #loading: Promise<void> | undefined
 
   constructor(
-    private readonly createPool: (onFailure: (error: Error) => void) => BdkWorkerPool,
+    createPool: (onFailure: (error: Error) => void) => BdkWorkerPool,
     options: BdkVerifierOptions
   ) {
-    this.itemThreshold = options.batchWorkerThreshold ?? 32
-    this.maxBatchItems = options.maxBatchItems ?? 256
-    this.maxBatchBytes = options.maxBatchBytes ?? 32 * 1024 * 1024
+    this.#createPool = createPool
+    this.#itemThreshold = options.batchWorkerThreshold ?? 32
+    this.#maxBatchItems = options.maxBatchItems ?? 256
+    this.#maxBatchBytes = options.maxBatchBytes ?? 32 * 1024 * 1024
   }
 
   async preload(module: BdkWasmModule): Promise<void> {
-    if (this.ready) return
-    if (this.pool === undefined) {
-      const created = this.createPool(() => {
-        if (this.pool === created) {
-          this.pool = undefined
-          this.loading = undefined
-          this.ready = false
+    if (this.#ready) return
+    if (this.#pool === undefined) {
+      const created = this.#createPool(() => {
+        if (this.#pool === created) {
+          this.#pool = undefined
+          this.#loading = undefined
+          this.#ready = false
         }
       })
-      this.pool = created
+      this.#pool = created
     }
-    const pool = this.pool
+    const pool = this.#pool
     const snapshot = module.ExportVerificationTables?.()
-    this.loading ??= pool
+    this.#loading ??= pool
       .preload(snapshot)
       .then(() => {
-        this.ready = true
+        this.#ready = true
       })
       .catch(error => {
-        if (this.pool === pool) {
+        if (this.#pool === pool) {
           pool.terminate()
-          this.pool = undefined
-          this.loading = undefined
-          this.ready = false
+          this.#pool = undefined
+          this.#loading = undefined
+          this.#ready = false
         }
         throw error
       })
-    await this.loading
+    await this.#loading
   }
 
   shouldUse(itemCount: number, prepare: () => Promise<void>): boolean {
-    if (itemCount < this.itemThreshold) return false
-    if (this.ready) return true
+    if (itemCount < this.#itemThreshold) return false
+    if (this.#ready) return true
     // The first large batch retains the single-instance path while worker
     // startup proceeds in parallel for subsequent high-volume work.
     void prepare().catch(() => {})
@@ -65,24 +67,24 @@ export default class BdkWorkerScheduler {
 
   parallelChunks<T>(items: readonly T[], itemBytes: (item: T) => number): T[][] {
     if (items.length === 0) return []
-    if (this.pool === undefined) return []
+    if (this.#pool === undefined) return []
     const sizes = items.map(itemBytes)
-    const chunks = this.createSizeBoundChunks(items, sizes)
-    const desiredChunks = Math.min(this.pool.size, items.length)
+    const chunks = this.#createSizeBoundChunks(items, sizes)
+    const desiredChunks = Math.min(this.#pool.size, items.length)
     while (chunks.length < desiredChunks) {
-      if (!this.splitLargestChunk(chunks, itemBytes)) break
+      if (!this.#splitLargestChunk(chunks, itemBytes)) break
     }
     return chunks
   }
 
-  private createSizeBoundChunks<T>(items: readonly T[], sizes: number[]): T[][] {
+  #createSizeBoundChunks<T>(items: readonly T[], sizes: number[]): T[][] {
     const chunks: T[][] = []
     let chunk: T[] = []
     let chunkBytes = 0
     for (let index = 0; index < items.length; index++) {
       if (
         chunk.length > 0 &&
-        (chunk.length >= this.maxBatchItems || chunkBytes + sizes[index] > this.maxBatchBytes)
+        (chunk.length >= this.#maxBatchItems || chunkBytes + sizes[index] > this.#maxBatchBytes)
       ) {
         chunks.push(chunk)
         chunk = []
@@ -95,7 +97,7 @@ export default class BdkWorkerScheduler {
     return chunks
   }
 
-  private splitLargestChunk<T>(chunks: T[][], itemBytes: (item: T) => number): boolean {
+  #splitLargestChunk<T>(chunks: T[][], itemBytes: (item: T) => number): boolean {
     let splitIndex = -1
     let splitBytes = -1
     for (let index = 0; index < chunks.length; index++) {
@@ -121,16 +123,16 @@ export default class BdkWorkerScheduler {
   }
 
   async execute(requests: readonly BdkWorkerRequestWithoutId[]): Promise<BdkWorkerResult[]> {
-    if (this.pool === undefined) {
+    if (this.#pool === undefined) {
       throw new Error('BDK worker scheduler is not preloaded')
     }
-    return await this.pool.execute(requests)
+    return await this.#pool.execute(requests)
   }
 
   terminate(): void {
-    this.pool?.terminate()
-    this.pool = undefined
-    this.loading = undefined
-    this.ready = false
+    this.#pool?.terminate()
+    this.#pool = undefined
+    this.#loading = undefined
+    this.#ready = false
   }
 }

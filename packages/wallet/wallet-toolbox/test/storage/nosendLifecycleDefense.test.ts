@@ -205,6 +205,31 @@ describe('nosend orphan-output failure mode', () => {
       }
     })
 
+    test('performs the external chain query before opening the storage write transaction', async () => {
+      for (const storage of storages) {
+        const seed = await seedNoSendTx(storage, '2a'.repeat(32))
+        let writeScopeDepth = 0
+        const originalTransaction = storage.transaction.bind(storage)
+        jest.spyOn(storage, 'transaction').mockImplementation(async (scope, trx) =>
+          await originalTransaction(async token => {
+            writeScopeDepth++
+            try {
+              return await scope(token)
+            } finally {
+              writeScopeDepth--
+            }
+          }, trx)
+        )
+        storage.setServices(mockServices(txids => {
+          expect(writeScopeDepth).toBe(0)
+          return successResult(txids, ['known'])
+        }))
+
+        await expect(storage.abortAction(seed.auth, { reference: seed.reference })).resolves.toEqual({ aborted: false })
+        expect(writeScopeDepth).toBe(0)
+      }
+    })
+
     test('PROCEEDS normally when chain reports the tx as unknown (genuinely off-chain)', async () => {
       for (const storage of storages) {
         const seed = await seedNoSendTx(storage, '33'.repeat(32))

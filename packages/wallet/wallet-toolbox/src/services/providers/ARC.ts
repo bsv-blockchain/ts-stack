@@ -2,37 +2,34 @@ import {
   Beef,
   BEEF_V1,
   BEEF_V2,
-  defaultHttpClient,
   HexString,
   HttpClient,
   HttpClientResponse,
   HttpClientRequestOptions,
-  Random,
-  Utils
+  Random
 } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { PostBeefResult, PostTxResultForTxid, PostTxResultForTxidError } from '../../sdk/WalletServices.interfaces'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { ReqHistoryNote } from '../../sdk/types'
 import { WalletError } from '../../sdk/WalletError'
+import {
+  MAX_POST_BEEF_BYTES,
+  normalizePostRawHex,
+  normalizePostTxids,
+  snapshotPostBeefRequest,
+  validatePostBeefResultOrServiceError,
+  validatePostTxResultOrServiceError
+} from '../validatePostBeefResult'
+import { normalizeArcProviderConfig, type ArcConfig } from './arcProviderConfig'
+import { validateArcTxData } from './arcTxDataValidation'
+import { normalizeTxid } from '../validateMerklePathResult'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
-/** Configuration options for the ARC broadcaster. */
-export interface ArcConfig {
-  /** Authentication token for the ARC API */
-  apiKey?: string
-  /** The HTTP client used to make requests to the ARC API. */
-  httpClient?: HttpClient
-  /** Deployment id used annotating api calls in XDeployment-ID header - this value will be randomly generated if not set */
-  deploymentId?: string
-  /** notification callback endpoint for proofs and double spend notification */
-  callbackUrl?: string
-  /** default access token for notification callback endpoint. It will be used as a Authorization header for the http callback */
-  callbackToken?: string
-  /** additional headers to be attached to all tx submissions. */
-  headers?: Record<string, string>
-}
+export type { ArcConfig } from './arcProviderConfig'
 
-function defaultDeploymentId (): string {
-  return `ts-sdk-${Utils.toHex(Random(16))}`
+function defaultDeploymentId(): string {
+  return `ts-sdk-${toHex(Random(16))}`
 }
 
 const arcAcceptedTxStatuses = new Set([
@@ -46,41 +43,36 @@ const arcAcceptedTxStatuses = new Set([
   'IMMUTABLE'
 ])
 
-const arcDoubleSpendTxStatuses = new Set([
-  'DOUBLE_SPEND_ATTEMPTED',
-  'SEEN_IN_ORPHAN_MEMPOOL'
-])
+const arcDoubleSpendTxStatuses = new Set(['DOUBLE_SPEND_ATTEMPTED', 'SEEN_IN_ORPHAN_MEMPOOL'])
 
-const arcInvalidTxStatuses = new Set([
-  'INVALID',
-  'MALFORMED',
-  'REJECTED'
-])
+const arcInvalidTxStatuses = new Set(['INVALID', 'MALFORMED', 'REJECTED'])
 
-export function isArcAcceptedTxStatus (txStatus: string | undefined): boolean {
+export function isArcAcceptedTxStatus(txStatus: string | undefined): boolean {
   return txStatus != null && arcAcceptedTxStatuses.has(txStatus)
 }
 
-export function isArcDoubleSpendTxStatus (txStatus: string | undefined): boolean {
+export function isArcDoubleSpendTxStatus(txStatus: string | undefined): boolean {
   return txStatus != null && arcDoubleSpendTxStatuses.has(txStatus)
 }
 
-export function isArcInvalidTxStatus (txStatus: string | undefined): boolean {
+export function isArcInvalidTxStatus(txStatus: string | undefined): boolean {
   return txStatus != null && arcInvalidTxStatuses.has(txStatus)
 }
 
-export function isArcServiceErrorStatus (status: number | undefined, detail?: string): boolean {
+export function isArcServiceErrorStatus(status: number | undefined, detail?: string): boolean {
   if (status == null) return true
   if (status === 408 || status === 429 || status === 476 || status >= 500) return true
   if (detail == null) return false
   const d = detail.toLowerCase()
-  return d.includes('maximum batch size') ||
+  return (
+    d.includes('maximum batch size') ||
     d.includes('too many requests') ||
     d.includes('rate limit') ||
     d.includes('timeout') ||
     d.includes('temporarily') ||
     d.includes('backpressure') ||
     d.includes('unavailable')
+  )
 }
 
 interface ArcPostNoteContext {
@@ -113,40 +105,31 @@ export class ARC {
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {ArcConfig} config - Configuration options for the ARC broadcaster.
    */
-  constructor (URL: string, config?: ArcConfig, name?: string)
+  constructor(URL: string, config?: ArcConfig, name?: string)
   /**
    * Constructs an instance of the ARC broadcaster.
    *
    * @param {string} URL - The URL endpoint for the ARC API.
    * @param {string} apiKey - The API key used for authorization with the ARC API.
    */
-  constructor (URL: string, apiKey?: string, name?: string)
+  constructor(URL: string, apiKey?: string, name?: string)
 
-  constructor (URL: string, config?: string | ArcConfig, name?: string) {
+  constructor(URL: string, config?: string | ArcConfig, name?: string) {
     this.name = name ?? 'ARC'
     this.URL = URL
-    if (typeof config === 'string') {
-      this.apiKey = config
-      this.httpClient = defaultHttpClient()
-      this.deploymentId = defaultDeploymentId()
-      this.callbackToken = undefined
-      this.callbackUrl = undefined
-    } else {
-      const configObj: ArcConfig = config ?? {}
-      const { apiKey, deploymentId, httpClient, callbackToken, callbackUrl, headers } = configObj
-      this.apiKey = apiKey
-      this.httpClient = httpClient ?? defaultHttpClient()
-      this.deploymentId = deploymentId ?? defaultDeploymentId()
-      this.callbackToken = callbackToken
-      this.callbackUrl = callbackUrl
-      this.headers = headers
-    }
+    const normalized = normalizeArcProviderConfig(config, defaultDeploymentId)
+    this.apiKey = normalized.apiKey
+    this.httpClient = normalized.httpClient
+    this.deploymentId = normalized.deploymentId
+    this.callbackToken = normalized.callbackToken
+    this.callbackUrl = normalized.callbackUrl
+    this.headers = normalized.headers
   }
 
   /**
    * Constructs a dictionary of the default & supplied request headers.
    */
-  private requestHeaders (): Record<string, string> {
+  private requestHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'XDeployment-ID': this.deploymentId
@@ -165,19 +148,15 @@ export class ARC {
     }
 
     if (this.headers != null) {
-      for (const key in this.headers) {
-        headers[key] = this.headers[key]
+      for (const [key, value] of Object.entries(this.headers)) {
+        headers[key] = value
       }
     }
 
     return headers
   }
 
-  private applySuccessfulPostRawTx (
-    result: PostTxResultForTxid,
-    data: ArcResponse,
-    notes: ArcPostNoteContext
-  ): void {
+  private applySuccessfulPostRawTx(result: PostTxResultForTxid, data: ArcResponse, notes: ArcPostNoteContext): void {
     const { txid, extraInfo, txStatus, competingTxs } = data
     result.data = `${txStatus} ${extraInfo}`
     if (result.txid !== txid) result.data += ` txid altered from ${result.txid} to ${txid}`
@@ -198,7 +177,7 @@ export class ARC {
     result.notes!.push({ ...notes.nn(), ...responseNote, what: 'postRawTxSuccess' })
   }
 
-  private applyFailedPostRawTx (
+  private applyFailedPostRawTx(
     result: PostTxResultForTxid,
     response: Exclude<HttpClientResponse<ArcResponse>, { ok: true }>,
     data: ArcResponse,
@@ -245,7 +224,7 @@ export class ARC {
     result.notes!.push(note)
   }
 
-  private applyPostRawTxResponse (
+  private applyPostRawTxResponse(
     result: PostTxResultForTxid,
     response: HttpClientResponse<ArcResponse>,
     notes: ArcPostNoteContext
@@ -257,11 +236,7 @@ export class ARC {
     }
   }
 
-  private applyPostRawTxCatch (
-    result: PostTxResultForTxid,
-    error_: unknown,
-    notes: ArcPostNoteContext
-  ): void {
+  private applyPostRawTxCatch(result: PostTxResultForTxid, error_: unknown, notes: ArcPostNoteContext): void {
     const error = WalletError.fromUnknown(error_)
     result.status = 'error'
     result.serviceError = true
@@ -287,11 +262,13 @@ export class ARC {
    * @param txids
    * @returns
    */
-  async postRawTx (rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
-    let txid = Utils.toHex(doubleSha256BE(Utils.toArray(rawTx, 'hex')))
+  async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
+    rawTx = normalizePostRawHex(rawTx, MAX_POST_BEEF_BYTES)
+    let txid = toHex(doubleSha256BE(toArray(rawTx, 'hex')))
     if (txids == null) {
       txids = [txid]
     } else {
+      txids = normalizePostTxids(txids)
       txid = txids.at(-1)!
     }
 
@@ -327,7 +304,7 @@ export class ARC {
       this.applyPostRawTxCatch(r, error_, notes)
     }
 
-    return r
+    return validatePostTxResultOrServiceError(r, txid, this.name)
   }
 
   /**
@@ -340,7 +317,10 @@ export class ARC {
    * @param txids
    * @returns
    */
-  async postBeef (beef: Beef, txids: string[]): Promise<PostBeefResult> {
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+    const request = snapshotPostBeefRequest(beef, txids)
+    beef = Beef.fromBinaryStrict(request.beefBytes)
+    txids = request.txids
     const r: PostBeefResult = {
       name: this.name,
       status: 'success',
@@ -410,7 +390,7 @@ export class ARC {
       if (r.status === 'success' && tr.status === 'error') r.status = 'error'
     }
 
-    return r
+    return validatePostBeefResultOrServiceError(r, txids, this.name)
   }
 
   /**
@@ -418,15 +398,23 @@ export class ARC {
    * @param txid
    * @returns
    */
-  async getTxData (txid: string): Promise<ArcMinerGetTxData> {
+  async getTxData(txid: string): Promise<ArcMinerGetTxData> {
+    const normalizedTxid = normalizeTxid(txid)
     const requestOptions: HttpClientRequestOptions = {
       method: 'GET',
-      headers: this.requestHeaders()
+      headers: this.requestHeaders(),
+      signal: AbortSignal.timeout(1000 * 30)
     }
 
-    const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/v1/tx/${txid}`, requestOptions)
+    const response = await this.httpClient.request<ArcMinerGetTxData>(
+      `${this.URL}/v1/tx/${normalizedTxid}`,
+      requestOptions
+    )
 
-    return response.data
+    if (!response.ok || Number(response.status) !== 200) {
+      throw new WERR_INVALID_OPERATION(`ARC transaction data response ${String(response.status)}`)
+    }
+    return validateArcTxData(response.data, normalizedTxid, Number(response.status))
   }
 }
 

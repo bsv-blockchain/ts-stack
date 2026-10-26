@@ -110,6 +110,8 @@ describe('profiles, selections, prices, and policies', () => {
     expect(fromBase64Url(toBase64Url(value))).toEqual(value)
     expect(fromHex(toHex(value))).toEqual(value)
     expect(() => fromHex('AA')).toThrow()
+    expect(() => fromBase64Url('A')).toThrow('Invalid unpadded base64url')
+    expect(() => fromBase64Url('AB')).toThrow('Non-canonical base64url')
   })
 
   it('uses half-open time windows at exact rental boundaries', () => {
@@ -168,7 +170,11 @@ describe('issuer and acquisition orchestration', () => {
       },
       payment: {
         protocol: LCH_MECHANISMS.brc105Single,
-        recoveryPeriodSeconds: 86_400
+        endpoint: 'https://issuer.test/lch',
+        asset: 'BSV',
+        unit: 'satoshi',
+        recoveryPeriodSeconds: 86_400,
+        pricing: { kind: 'quote' }
       },
       keyDelivery: { mechanism: LCH_MECHANISMS.brc78Key },
       enforcement: {
@@ -188,6 +194,34 @@ describe('issuer and acquisition orchestration', () => {
     await expect(
       validateOffer(emptyWindow, new PublicBRC77Verifier(), signer.identityKey)
     ).rejects.toMatchObject({ code: 'ERR_LCH_LICENSE' })
+    const unsafeEndpoint = await signObject(
+      'offer',
+      {
+        ...offer.body,
+        payment: {
+          ...(offer.body.payment as Record<string, LCHValue>),
+          endpoint: 'http://169.254.169.254/latest/meta-data'
+        }
+      },
+      signer
+    )
+    await expect(
+      validateOffer(unsafeEndpoint, new PublicBRC77Verifier(), signer.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_ENDPOINT' })
+    const privateHttpsEndpoint = await signObject(
+      'offer',
+      {
+        ...offer.body,
+        payment: {
+          ...(offer.body.payment as Record<string, LCHValue>),
+          endpoint: 'https://127.0.0.1/internal'
+        }
+      },
+      signer
+    )
+    await expect(
+      validateOffer(privateHttpsEndpoint, new PublicBRC77Verifier(), signer.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_ENDPOINT' })
     const missingNotBeforeBody = { ...offer.body }
     delete missingNotBeforeBody.notBefore
     const missingNotBefore = await signObject('offer', missingNotBeforeBody, signer)
@@ -232,14 +266,30 @@ describe('issuer and acquisition orchestration', () => {
       preflight: jest.fn(async () => undefined),
       quote: jest.fn(async () => object),
       deliver: jest.fn(async () => object),
-      recover: jest.fn(async () => object)
+      recoverUnverified: jest.fn(async () => ({ unverifiedLicense: object }))
     }
     const acquisition = new LCHAcquisition(transport)
     await acquisition.preflight(object)
     await expect(acquisition.quote(object)).resolves.toBe(object)
     await expect(acquisition.deliver(object, Uint8Array.of(1))).resolves.toBe(object)
-    await expect(acquisition.recover(bytes(1, 32))).resolves.toBe(object)
+    await expect(acquisition.recoverUnverified(bytes(1, 32))).resolves.toEqual({
+      unverifiedLicense: object
+    })
     expect(transport.deliver).toHaveBeenCalledWith(object, Uint8Array.of(1))
+  })
+
+  it('wraps legacy transport recovery without treating it as a verified License', async () => {
+    const object: SignedObject = { body: {}, signatures: [] }
+    const acquisition = new LCHAcquisition({
+      preflight: async () => undefined,
+      quote: async () => object,
+      deliver: async () => object,
+      recover: async () => object
+    })
+
+    await expect(acquisition.recover(bytes(1, 32))).resolves.toEqual({
+      unverifiedLicense: object
+    })
   })
 
   it('authorizes a delegated Header signer only through the application callback', async () => {
@@ -273,6 +323,12 @@ describe('issuer and acquisition orchestration', () => {
     await expect(new LCHReader(storage).inspect(published.bytes)).rejects.toMatchObject({
       code: 'ERR_LCH_AUTHORITY'
     })
+    const malformedAuthorization = jest.fn(async () => 'true' as unknown as boolean)
+    await expect(
+      new LCHReader(storage, undefined, {
+        authorizeHeaderSigner: malformedAuthorization
+      }).inspect(published.bytes)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_AUTHORITY' })
     const authorizeHeaderSigner = jest.fn(async () => true)
     await expect(
       new LCHReader(storage, undefined, { authorizeHeaderSigner }).inspect(published.bytes)

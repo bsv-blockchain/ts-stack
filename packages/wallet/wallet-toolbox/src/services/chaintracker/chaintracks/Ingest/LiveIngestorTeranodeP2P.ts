@@ -1,5 +1,6 @@
 import { BlockHeader, Chain } from '../../../../sdk'
 import { LiveIngestorBase, LiveIngestorBaseOptions } from './LiveIngestorBase'
+import { safeDiagnostic } from '../util/safeDiagnostic'
 
 export interface LiveIngestorTeranodeP2POptions extends LiveIngestorBaseOptions {
   /**
@@ -35,8 +36,11 @@ export class LiveIngestorTeranodeP2P extends LiveIngestorBase {
       const ok = true // await this.woc.listenForNewBlockHeaders(enqueue, error, this.idleWait)
 
       if (!ok || errors.length > 0) {
-        console.log(`TeranodeP2P live ingestor ok=${ok} error count=${errors.length}`)
-        for (const e of errors) console.log(`TeranodeP2P error code=${e.code} count=${e.count} message=${e.message}`)
+        this.log(`TeranodeP2P live ingestor ok=${ok} error count=${errors.length}`)
+        for (const e of errors.slice(0, 16)) {
+          const message = safeDiagnostic(e.message)
+          this.log(`TeranodeP2P error code=${e.code} count=${e.count} message=${message}`)
+        }
       }
 
       if (ok) break

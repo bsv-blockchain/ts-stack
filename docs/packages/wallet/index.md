@@ -4,8 +4,8 @@ title: Wallet
 kind: meta
 domain: wallet
 version: 'n/a'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'wallet']
@@ -19,15 +19,16 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 
 ## Packages in this Domain
 
-| Package                                                    | Purpose                                                                                                                            |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [@bsv/wallet-toolbox](./wallet-toolbox.md)                 | Node BRC-100 wallet implementation with SQLite/MySQL storage, background monitoring, Shamir key sharing, and permission management |
-| [@bsv/wallet-toolbox-client](./wallet-toolbox-client.md)   | Browser-safe wallet, IndexedDB, and remote storage distribution                                                                    |
-| [@bsv/wallet-toolbox-mobile](./wallet-toolbox-mobile.md)   | React Native/mobile-safe wallet and remote storage distribution                                                                    |
-| [@bsv/btms](./btms.md)                                     | UTXO-based token issuance, transfer, burning, and ownership proof validation                                                       |
-| [@bsv/btms-permission-module](./btms-permission-module.md) | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
-| [@bsv/ecpm-permission-module](./ecpm-permission-module.md) | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                     |
-| [@bsv/wallet-relay](./wallet-relay.md)                     | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
+| Package                                                      | Purpose                                                                                                                            |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [@bsv/wallet-toolbox](./wallet-toolbox.md)                   | Node BRC-100 wallet implementation with SQLite/MySQL storage, background monitoring, Shamir key sharing, and permission management |
+| [@bsv/wallet-toolbox-client](./wallet-toolbox-client.md)     | Browser-safe wallet, IndexedDB, and remote storage distribution                                                                    |
+| [@bsv/wallet-toolbox-mobile](./wallet-toolbox-mobile.md)     | React Native/mobile-safe wallet and remote storage distribution                                                                    |
+| [@bsv/btms](./btms.md)                                       | UTXO-based token issuance, transfer, burning, and ownership proof validation                                                       |
+| [@bsv/btms-permission-module](./btms-permission-module.md)   | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
+| [@bsv/ecpm-permission-module](./ecpm-permission-module.md)   | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                      |
+| [@bsv/color-permission-module](./color-permission-module.md) | BRC-207 module for holding, sending and receiving BRC-162 fungible tokens                                                          |
+| [@bsv/wallet-relay](./wallet-relay.md)                       | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
 ## Common Use Cases
 
@@ -62,6 +63,13 @@ Use [@bsv/ecpm-permission-module](./ecpm-permission-module.md) to install the
 a BRC-42/43-derived scalar from a named point without extending the BRC-100
 wallet interface or exposing the scalar.
 
+### I need BRC-162 tokens in a wallet
+
+Use [@bsv/color-permission-module](./color-permission-module.md) to install the
+BRC-207 `color` scheme. Applications send, receive and list tokens through the
+ordinary BRC-100 calls; the module selects, signs and verifies token outputs
+against the asset overlays.
+
 ## Key Concepts
 
 - **BRC-100 Wallet Interface** — Standard interface implemented by all wallet packages. Apps can work with any wallet (desktop, mobile, hardware) without code changes.
@@ -82,15 +90,16 @@ wallet interface or exposing the scalar.
 
 ## Storage & Platform Support
 
-| Package                    | Node.js       | Browser           | Mobile                   |
-| -------------------------- | ------------- | ----------------- | ------------------------ |
-| **wallet-toolbox**         | SQLite, MySQL | —                 | —                        |
-| **wallet-toolbox-client**  | Build tooling | IndexedDB, Remote | Hybrid/WebView dependent |
-| **wallet-toolbox-mobile**  | Build tooling | —                 | Remote                   |
-| **btms**                   | ✓             | ✓                 | ✓                        |
-| **btms-permission-module** | ✓             | ✓                 | ✓                        |
-| **ecpm-permission-module** | ✓             | ✓                 | Host-dependent           |
-| **wallet-relay**           | Server        | React components  | Supported via relay      |
+| Package                     | Node.js       | Browser           | Mobile                   |
+| --------------------------- | ------------- | ----------------- | ------------------------ |
+| **wallet-toolbox**          | SQLite, MySQL | —                 | —                        |
+| **wallet-toolbox-client**   | Build tooling | IndexedDB, Remote | Hybrid/WebView dependent |
+| **wallet-toolbox-mobile**   | Build tooling | —                 | Remote                   |
+| **btms**                    | ✓             | ✓                 | ✓                        |
+| **btms-permission-module**  | ✓             | ✓                 | ✓                        |
+| **ecpm-permission-module**  | ✓             | ✓                 | Host-dependent           |
+| **color-permission-module** | ✓             | ✓                 | Host-dependent           |
+| **wallet-relay**            | Server        | React components  | Supported via relay      |
 
 ## When to Use Each Package
 
@@ -128,6 +137,14 @@ wallet interface or exposing the scalar.
 
 - Don't use wallet packages if you only need transaction building — use [@bsv/sdk](../sdk/bsv-sdk.md) directly
 - Don't use wallet-toolbox if you only need BRC-100 interface types — import from SDK instead
+
+## Backup and recovery
+
+Wallet recovery needs both key material and records/derivation metadata.
+Browser storage, remote replication and key-manager snapshots each cover only
+part of that requirement. Use the [recovery guide](../../guides/wallet-backup-recovery.md),
+[BRC-38/39 API guide](../../guides/wallet-data-portability.md) and
+[recovery drill](../../guides/wallet-recovery-drill.md) before shipping a wallet.
 
 ## Next Steps
 

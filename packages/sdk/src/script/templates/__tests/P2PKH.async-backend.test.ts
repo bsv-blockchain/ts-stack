@@ -8,7 +8,7 @@ import Script from '../../Script'
 import Transaction from '../../../transaction/Transaction'
 import P2PKH from '../P2PKH'
 
-function backendFor (key: PrivateKey, publicKey: Uint8Array): AsyncCryptoBackend {
+function backendFor(key: PrivateKey, publicKey: Uint8Array): AsyncCryptoBackend {
   const derSignature = Uint8Array.from(key.sign(Array.from({ length: 32 }, () => 1)).toDER())
   return {
     preload: async () => {},
@@ -24,7 +24,7 @@ function backendFor (key: PrivateKey, publicKey: Uint8Array): AsyncCryptoBackend
   }
 }
 
-function spendFor (key: PrivateKey): { tx: Transaction; template: ReturnType<P2PKH['unlock']> } {
+function spendFor(key: PrivateKey): { tx: Transaction; template: ReturnType<P2PKH['unlock']> } {
   const source = new Transaction()
   source.addInput({
     sourceTXID: '00'.repeat(32),
@@ -41,6 +41,33 @@ function spendFor (key: PrivateKey): { tx: Transaction; template: ReturnType<P2P
 }
 
 describe('P2PKH async crypto backend', () => {
+  test('snapshots the signing key before an asynchronous signer yields', async () => {
+    const key = PrivateKey.fromRandom()
+    const expectedPublicKey = key.toPublicKey().encode(true) as number[]
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => {
+      resume = resolve
+    })
+    const signature = Uint8Array.from(new PrivateKey(42).sign([1, 2, 3]).toDER())
+    const backend = backendFor(key, Uint8Array.from(expectedPublicKey))
+    backend.supportsCrypto = operation => operation === 'signDigest'
+    backend.signDigest = async () => {
+      await gate
+      return signature
+    }
+    registerAsyncCryptoBackend(backend)
+    try {
+      const { tx } = spendFor(key)
+      const pending = new P2PKH().unlock(key).sign(tx, 0)
+      key.iaddn(1)
+      resume()
+      const script = await pending
+      expect(script.chunks.at(-1)?.data).toEqual(expectedPublicKey)
+    } finally {
+      unregisterAsyncCryptoBackend(backend)
+    }
+  })
+
   test('forwards the validated compressed public key without parsing it again', async () => {
     const key = PrivateKey.fromRandom()
     const publicKey = Uint8Array.from(key.toPublicKey().encode(true) as number[])

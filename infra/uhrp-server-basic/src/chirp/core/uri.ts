@@ -1,5 +1,5 @@
-import { StorageUtils } from '@bsv/sdk'
 import { CHIRPError } from './errors.js'
+import { hashForObjectIdentifier } from './hash.js'
 
 const CHIRP_URI = /^chirp:(?:\/\/)?([^/?#]+)$/i
 
@@ -15,7 +15,7 @@ export function parseCHIRPURL(value: string): ParsedCHIRPURL {
   }
   const match = CHIRP_URI.exec(value)
   const rootIdentifier = match?.[1]
-  if (rootIdentifier == null || !StorageUtils.isValidURL(rootIdentifier)) {
+  if (rootIdentifier == null || !isCanonicalObjectIdentifier(rootIdentifier)) {
     throw new CHIRPError('ERR_CHIRP_URL', 'Invalid CHIRP URL.')
   }
   return {
@@ -26,10 +26,10 @@ export function parseCHIRPURL(value: string): ParsedCHIRPURL {
 }
 
 export function chirpURLForIdentifier(rootIdentifier: string): string {
-  if (!StorageUtils.isValidURL(rootIdentifier)) {
+  if (!isCanonicalObjectIdentifier(rootIdentifier)) {
     throw new CHIRPError('ERR_CHIRP_IDENTIFIER', 'Invalid CHIRP root identifier.')
   }
-  return `chirp://${StorageUtils.normalizeURL(rootIdentifier)}`
+  return `chirp://${rootIdentifier}`
 }
 
 export function deriveCHIRPObjectURL(
@@ -38,6 +38,15 @@ export function deriveCHIRPObjectURL(
   objectIdentifier: string,
   allowInsecureHTTP = false
 ): string {
+  if (
+    !isCanonicalObjectIdentifier(rootIdentifier) ||
+    !isCanonicalObjectIdentifier(objectIdentifier)
+  ) {
+    throw new CHIRPError(
+      'ERR_CHIRP_IDENTIFIER',
+      'CHIRP root and object identifiers must be canonical BRC-26 identifiers.'
+    )
+  }
   let parsed: URL
   try {
     parsed = new URL(advertisedRootURL)
@@ -61,4 +70,14 @@ export function deriveCHIRPObjectURL(
   }
   parsed.pathname = `${parsed.pathname.slice(0, -rootIdentifier.length)}${objectIdentifier}`
   return parsed.toString()
+}
+
+function isCanonicalObjectIdentifier(identifier: unknown): identifier is string {
+  if (typeof identifier !== 'string') return false
+  try {
+    hashForObjectIdentifier(identifier)
+    return true
+  } catch {
+    return false
+  }
 }

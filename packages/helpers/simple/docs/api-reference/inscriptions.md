@@ -8,12 +8,12 @@ The inscriptions module creates OP_RETURN data inscriptions on the BSV blockchai
 
 Each inscription type has a default basket name:
 
-| Type | Default Basket |
-|------|---------------|
-| `text` | `'text'` |
-| `json` | `'json'` |
-| `file-hash` | `'hash-document'` |
-| `image-hash` | `'hash-image'` |
+| Type         | Default Basket    |
+| ------------ | ----------------- |
+| `text`       | `'text'`          |
+| `json`       | `'json'`          |
+| `file-hash`  | `'hash-document'` |
+| `image-hash` | `'hash-image'`    |
 
 ## inscribeText()
 
@@ -26,11 +26,11 @@ async inscribeText(
 
 Create a text inscription on-chain.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `text` | `string` | *required* | Text content to inscribe |
-| `opts.basket` | `string` | `'text'` | Basket to store the output |
-| `opts.description` | `string` | `'Text inscription'` | Transaction description |
+| Parameter          | Type     | Default              | Description                                    |
+| ------------------ | -------- | -------------------- | ---------------------------------------------- |
+| `text`             | `string` | _required_           | Text content to inscribe (maximum 1 MiB UTF-8) |
+| `opts.basket`      | `string` | `'text'`             | Basket to store the output                     |
+| `opts.description` | `string` | `'Text inscription'` | Transaction description                        |
 
 **Returns:** [`InscriptionResult`](types.md#inscriptionresult)
 
@@ -48,15 +48,17 @@ async inscribeJSON(
 ): Promise<InscriptionResult>
 ```
 
-Serialize an object to JSON and inscribe it on-chain.
+Serialize an object to JSON and inscribe it on-chain. Serialization and the 1 MiB UTF-8 size check complete before the wallet is called, so unsupported data cannot produce a transaction followed by a local reporting error.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data` | `object` | *required* | Object to serialize and inscribe |
-| `opts.basket` | `string` | `'json'` | Basket to store the output |
-| `opts.description` | `string` | `'JSON inscription'` | Transaction description |
+| Parameter          | Type     | Default              | Description                      |
+| ------------------ | -------- | -------------------- | -------------------------------- |
+| `data`             | `object` | _required_           | Object to serialize and inscribe |
+| `opts.basket`      | `string` | `'json'`             | Basket to store the output       |
+| `opts.description` | `string` | `'JSON inscription'` | Transaction description          |
 
 **Returns:** [`InscriptionResult`](types.md#inscriptionresult)
+
+**Throws:** `TypeError` if the value is not JSON serializable, or `RangeError` if the encoded JSON exceeds 1 MiB.
 
 ```typescript
 const result = await wallet.inscribeJSON({ title: 'Document', version: 1 })
@@ -74,11 +76,11 @@ async inscribeFileHash(
 
 Inscribe a SHA-256 file hash on-chain.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `hash` | `string` | *required* | 64-character hex SHA-256 hash |
-| `opts.basket` | `string` | `'hash-document'` | Basket to store the output |
-| `opts.description` | `string` | `'File hash inscription'` | Transaction description |
+| Parameter          | Type     | Default                   | Description                   |
+| ------------------ | -------- | ------------------------- | ----------------------------- |
+| `hash`             | `string` | _required_                | 64-character hex SHA-256 hash |
+| `opts.basket`      | `string` | `'hash-document'`         | Basket to store the output    |
+| `opts.description` | `string` | `'File hash inscription'` | Transaction description       |
 
 **Returns:** [`InscriptionResult`](types.md#inscriptionresult)
 
@@ -100,11 +102,11 @@ async inscribeImageHash(
 
 Inscribe a SHA-256 image hash on-chain.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `hash` | `string` | *required* | 64-character hex SHA-256 hash |
-| `opts.basket` | `string` | `'hash-image'` | Basket to store the output |
-| `opts.description` | `string` | `'Image hash inscription'` | Transaction description |
+| Parameter          | Type     | Default                    | Description                   |
+| ------------------ | -------- | -------------------------- | ----------------------------- |
+| `hash`             | `string` | _required_                 | 64-character hex SHA-256 hash |
+| `opts.basket`      | `string` | `'hash-image'`             | Basket to store the output    |
+| `opts.description` | `string` | `'Image hash inscription'` | Transaction description       |
 
 **Returns:** [`InscriptionResult`](types.md#inscriptionresult)
 
@@ -127,3 +129,5 @@ core.send({
 ```
 
 This creates an `OP_FALSE OP_RETURN <data>` script with 0 satoshis. The output is tracked in the specified basket and can be queried via `listOutputs()`.
+
+`dataSize` is the exact UTF-8 byte count written to the output, not JavaScript string length.

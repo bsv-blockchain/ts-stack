@@ -42,7 +42,37 @@ export class BanService {
     if (typeof value !== 'string') {
       throw new TypeError('Invalid input: expected a string value')
     }
+    if (
+      value.length === 0 ||
+      new TextEncoder().encode(value).byteLength > 4096 ||
+      Array.from(value).some(character => {
+        const codePoint = character.codePointAt(0) ?? 0
+        return codePoint <= 0x1f || codePoint === 0x7f
+      })
+    ) {
+      throw new TypeError('Invalid input: expected a non-empty bounded string')
+    }
     return value
+  }
+
+  private outpointValue(txid: unknown, outputIndex: unknown): string {
+    const safeTxid = this.sanitize(txid)
+    if (!/^[0-9a-fA-F]{64}$/.test(safeTxid)) {
+      throw new TypeError('txid must be 32 bytes of hexadecimal data')
+    }
+    if (!Number.isSafeInteger(outputIndex) || (outputIndex as number) < 0 || (outputIndex as number) > 0xffffffff) {
+      throw new TypeError('outputIndex must be an unsigned 32-bit integer')
+    }
+    return `${safeTxid.toLowerCase()}.${String(outputIndex)}`
+  }
+
+  private validateOptionalText(value: unknown, label: string): string | undefined {
+    if (value === undefined) return undefined
+    const text = this.sanitize(value)
+    if (new TextEncoder().encode(text).byteLength > 1024) {
+      throw new TypeError(`${label} must not exceed 1024 bytes`)
+    }
+    return text
   }
 
   /**
@@ -58,15 +88,17 @@ export class BanService {
    */
   async banDomain (domain: string, reason?: string, bannedBy?: string): Promise<void> {
     const safeDomain = this.sanitize(domain)
+    const safeReason = this.validateOptionalText(reason, 'reason')
+    const safeBannedBy = this.validateOptionalText(bannedBy, 'bannedBy')
     await this.bans.updateOne(
       { type: 'domain', value: safeDomain },
       {
         $set: {
           type: 'domain',
           value: safeDomain,
-          reason: reason ?? 'Manually banned',
+          reason: safeReason ?? 'Manually banned',
           bannedAt: new Date(),
-          bannedBy
+          bannedBy: safeBannedBy
         }
       },
       { upsert: true }
@@ -92,17 +124,20 @@ export class BanService {
    * Bans a specific outpoint (txid.outputIndex), preventing it from being re-admitted.
    */
   async banOutpoint (txid: string, outputIndex: number, reason?: string, domain?: string, bannedBy?: string): Promise<void> {
-    const value = `${this.sanitize(txid)}.${Number(outputIndex)}`
+    const value = this.outpointValue(txid, outputIndex)
+    const safeDomain = domain === undefined ? undefined : this.sanitize(domain)
+    const safeReason = this.validateOptionalText(reason, 'reason')
+    const safeBannedBy = this.validateOptionalText(bannedBy, 'bannedBy')
     await this.bans.updateOne(
       { type: 'outpoint', value },
       {
         $set: {
           type: 'outpoint',
           value,
-          domain: domain != null ? this.sanitize(domain) : undefined,
-          reason: reason ?? 'Manually banned',
+          domain: safeDomain,
+          reason: safeReason ?? 'Manually banned',
           bannedAt: new Date(),
-          bannedBy
+          bannedBy: safeBannedBy
         }
       },
       { upsert: true }
@@ -113,7 +148,7 @@ export class BanService {
    * Removes an outpoint ban.
    */
   async unbanOutpoint (txid: string, outputIndex: number): Promise<void> {
-    const value = `${this.sanitize(txid)}.${Number(outputIndex)}`
+    const value = this.outpointValue(txid, outputIndex)
     await this.bans.deleteOne({ type: 'outpoint', value })
   }
 
@@ -121,7 +156,7 @@ export class BanService {
    * Checks if a specific outpoint is banned.
    */
   async isOutpointBanned (txid: string, outputIndex: number): Promise<boolean> {
-    const value = `${this.sanitize(txid)}.${Number(outputIndex)}`
+    const value = this.outpointValue(txid, outputIndex)
     const record = await this.bans.findOne({ type: 'outpoint', value })
     return record !== null
   }
@@ -149,7 +184,16 @@ export class BanService {
    * Removes a ban by type and value.
    */
   async removeBan (type: 'domain' | 'outpoint', value: string): Promise<void> {
-    await this.bans.deleteOne({ type: this.sanitize(type) as 'domain' | 'outpoint', value: this.sanitize(value) })
+    if (type !== 'domain' && type !== 'outpoint') throw new TypeError('Invalid ban type')
+    const safeValue = this.sanitize(value)
+    if (type === 'outpoint') {
+      const separator = safeValue.lastIndexOf('.')
+      if (separator !== 64 || !/^(0|[1-9]\d*)$/.test(safeValue.slice(separator + 1))) {
+        throw new TypeError('Invalid outpoint value')
+      }
+      this.outpointValue(safeValue.slice(0, separator), Number(safeValue.slice(separator + 1)))
+    }
+    await this.bans.deleteOne({ type, value: type === 'outpoint' ? safeValue.toLowerCase() : safeValue })
   }
 
   /**

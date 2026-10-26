@@ -1,3 +1,4 @@
+import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { BTMSStorageManager } from './BTMSStorageManager.js'
 import {
   AdmissionMode,
@@ -8,10 +9,18 @@ import {
   OutputSpent,
   SpendNotificationMode
 } from '@bsv/overlay'
-import { LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
+import { LockingScript, PushDrop, Transaction } from '@bsv/sdk'
 import { Db } from 'mongodb'
-import { btmsProtocol, BTMSLookupResult, BTMSQuery, BTMSRecord } from './types.js'
+import { btmsProtocol, BTMSLookupResult, BTMSRecord } from './types.js'
 import docs from '../docs/BTMSLookupDocs.js'
+import {
+  readBoolean,
+  readInteger,
+  readSortOrder,
+  readString,
+  requireLookupQuery,
+  requirePublicKey
+} from './lookupQueryValidation.js'
 
 /**
  * Implements a lookup service for BTMS tokens
@@ -30,8 +39,8 @@ class BTMSLookupService implements LookupService {
     if (field.length < 40) {
       return false
     }
-    const asText = Utils.toUTF8(field)
-    const roundTrip = Utils.toArray(asText, 'utf8')
+    const asText = toUTF8(field)
+    const roundTrip = toArray(asText, 'utf8')
     if (roundTrip.length !== field.length) {
       return true
     }
@@ -68,20 +77,20 @@ class BTMSLookupService implements LookupService {
       throw new Error(`BTMS token must have 2-4 fields, got ${decoded.fields.length}`)
     }
 
-    const assetIdField = Utils.toUTF8(decoded.fields[btmsProtocol.assetId])
-    const amountRaw = Utils.toUTF8(decoded.fields[btmsProtocol.amount])
+    const assetIdField = toUTF8(decoded.fields[btmsProtocol.assetId])
+    const amountRaw = toUTF8(decoded.fields[btmsProtocol.amount])
     const amount = Number(amountRaw)
-    if (!Number.isInteger(amount) || amount < 1) {
+    if (!/^[1-9]\d*$/.test(amountRaw) || !Number.isSafeInteger(amount)) {
       throw new Error(`Invalid token amount: ${amountRaw}`)
     }
 
     let metadata: string | undefined
     if (decoded.fields.length === 3) {
       if (!this.isLikelySignatureField(decoded.fields[btmsProtocol.metadata])) {
-        metadata = Utils.toUTF8(decoded.fields[btmsProtocol.metadata])
+        metadata = toUTF8(decoded.fields[btmsProtocol.metadata])
       }
     } else if (decoded.fields.length === 4) {
-      metadata = Utils.toUTF8(decoded.fields[btmsProtocol.metadata])
+      metadata = toUTF8(decoded.fields[btmsProtocol.metadata])
     }
 
     const assetId = assetIdField === 'ISSUE' ? `${txid}.${outputIndex}` : assetIdField
@@ -131,32 +140,38 @@ class BTMSLookupService implements LookupService {
   }
 
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) {
-      throw new Error('A valid query must be provided')
-    }
-    if (question.service !== BTMSLookupService.SERVICE_ID) {
-      throw new Error('Lookup service not supported')
-    }
-
-    const query = question.query as BTMSQuery
+    const query = requireLookupQuery(question, BTMSLookupService.SERVICE_ID, [
+      'assetId',
+      'ownerKey',
+      'limit',
+      'skip',
+      'sortOrder',
+      'history'
+    ])
+    const assetId = readString(query, 'assetId', 256)
+    const ownerKey = requirePublicKey(readString(query, 'ownerKey', 66))
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const sortOrder = readSortOrder(query)
+    const history = readBoolean(query, 'history')
 
     // Check if we have any filters to apply
-    const hasFilters = query.assetId || query.ownerKey
+    const hasFilters = assetId !== undefined || ownerKey !== undefined
 
     let results: BTMSRecord[]
 
     if (hasFilters) {
       results = await this.storageManager.findWithFilters(
         {
-          assetId: query.assetId,
-          ownerKey: query.ownerKey
+          assetId,
+          ownerKey
         },
-        query.limit,
-        query.skip,
-        query.sortOrder
+        limit,
+        skip,
+        sortOrder
       )
     } else {
-      results = await this.storageManager.findAllRecords(query.limit, query.skip, query.sortOrder)
+      results = await this.storageManager.findAllRecords(limit, skip, sortOrder)
     }
 
     const lookupResults: BTMSLookupResult[] = []
@@ -165,7 +180,7 @@ class BTMSLookupService implements LookupService {
       lookupResults.push({
         txid: result.txid,
         outputIndex: result.outputIndex,
-        history: query.history
+        history: history
           ? async (beef: number[], outputIndex: number, _currentDepth: number) => {
               return await this.historySelector(beef, outputIndex, result.assetId)
             }

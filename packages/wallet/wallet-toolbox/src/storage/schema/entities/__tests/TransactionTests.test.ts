@@ -15,8 +15,17 @@ describe('Transaction class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('transactionTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('transactionTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('transactionTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('transactionTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('transactionTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('transactionTests2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {
@@ -152,7 +161,7 @@ describe('Transaction class method tests', () => {
 
   // Test: `getBsvTx` returns parsed transaction
   test('3_getBsvTx_returns_parsed_transaction', () => {
-    const rawTx = Uint8Array.from([1, 2, 3])
+    const rawTx = new bsv.Transaction().toBinary()
     const tx = new EntityTransaction({
       rawTx: Array.from(rawTx)
     } as TableTransaction)
@@ -170,7 +179,7 @@ describe('Transaction class method tests', () => {
 
   // Test: `getBsvTxIns` returns parsed inputs
   test('5_getBsvTxIns_returns_inputs', () => {
-    const rawTx = Uint8Array.from([1, 2, 3])
+    const rawTx = new bsv.Transaction().toBinary()
     const tx = new EntityTransaction({
       rawTx: Array.from(rawTx)
     } as TableTransaction)
@@ -187,7 +196,7 @@ describe('Transaction class method tests', () => {
       const tx = new EntityTransaction(txData.tx)
 
       // Assign rawTx to simulate transaction inputs
-      const rawTx = Uint8Array.from([1, 2, 3])
+      const rawTx = new bsv.Transaction().toBinary()
       tx.rawTx = Array.from(rawTx)
 
       // Insert test outputs with spentBy linked to the transaction

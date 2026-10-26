@@ -208,7 +208,9 @@ describe('StorageClient tests', () => {
       maxItems: 4096,
       preferredEncodings: ['brotli', 'gzip', 'identity'] as ['brotli', 'gzip', 'identity']
     }
-    await expect(client.storage.putActionBatchPack(pack)).rejects.toThrow('prepared action batch manifest')
+    const unpreparedUpload = client.storage.putActionBatchPack(pack)
+    await expect(unpreparedUpload).rejects.toThrow('network error 400')
+    await expect(unpreparedUpload).rejects.not.toThrow('prepared action batch manifest')
     const logicalBytes = values.flatMap(bytes => Array.from(bytes))
     const dependencyBeefDigest = actionBatchBlobDigest(logicalBytes)
     const withoutDigest = {
@@ -247,7 +249,9 @@ describe('StorageClient tests', () => {
     })
 
     expect(response.status).toBe(400)
-    await expect(response.text()).resolves.toContain('binary action batch body required')
+    const responseText = await response.text()
+    expect(responseText).toContain('An internal error has occurred.')
+    expect(responseText).not.toContain('binary action batch body required')
   })
 
   test('1bd action batch resume and structured lifecycle errors cross RPC', async () => {
@@ -266,13 +270,15 @@ describe('StorageClient tests', () => {
     })
     await cleanupExpiredActionBatches(server.setup.activeStorage)
 
-    await expect(client.storage.resumeActionBatch({
-      batchId,
-      outpoints: [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
-        txid: output.txid!,
-        vout: output.vout
-      }))
-    })).resolves.toEqual({ expiresAt: expect.any(String) })
+    await expect(
+      client.storage.resumeActionBatch({
+        batchId,
+        outpoints: [...begun.reservedOutputs, ...begun.explicitOutputs].map(output => ({
+          txid: output.txid!,
+          vout: output.vout
+        }))
+      })
+    ).resolves.toEqual({ expiresAt: expect.any(String) })
 
     await server.setup.activeStorage.updateActionBatch(batch!.actionBatchId, {
       expiresAt: new Date(Date.now() - 2),

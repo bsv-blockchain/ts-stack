@@ -367,7 +367,7 @@ type MessageObject struct {
 	// back-compat but must not be used simultaneously.
 	Recipient *MessageObject_Recipient `json:"recipient,omitempty"`
 
-	// Recipients Preferred plural form. Takes precedence over `recipient` when both are present.
+	// Recipients Preferred plural form. Takes precedence over `recipient` when both are present. Compressed and uncompressed encodings of the same key count as one recipient and must not be repeated.
 	Recipients *[]PubKeyHex `json:"recipients,omitempty"`
 }
 
@@ -403,8 +403,9 @@ type Payment struct {
 	Description string    `json:"description"`
 	Labels      *[]string `json:"labels,omitempty"`
 
-	// Outputs Output list. When a server delivery fee applies, output[0] must be the
-	// server's delivery fee output. Subsequent outputs are recipient-side.
+	// Outputs Output list. When a server delivery fee applies, output[0] must pay
+	// the per-recipient delivery fee multiplied by the number of recipients.
+	// Subsequent outputs are recipient-side.
 	Outputs        []PaymentOutput `json:"outputs"`
 	SeekPermission *bool           `json:"seekPermission,omitempty"`
 

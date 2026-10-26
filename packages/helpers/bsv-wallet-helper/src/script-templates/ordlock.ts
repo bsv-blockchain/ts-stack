@@ -1,20 +1,15 @@
+import { Writer, fromBase58Check, toArray, toHex as bytesToHex } from '@bsv/sdk/primitives/utils'
 import {
   BigNumber,
-  Hash,
   LockingScript,
   OP,
-  PublicKey,
   Script,
   ScriptTemplate,
-  Signature,
   Transaction,
-  TransactionSignature,
   UnlockingScript,
-  Utils,
   WalletInterface,
   WalletProtocol
 } from '@bsv/sdk'
-
 import { calculatePreimage } from '../utils/createPreimage'
 import P2PKH from './p2pkh'
 import {
@@ -37,7 +32,71 @@ const OLOCK_SUFFIX =
 
 // String -> hex helper
 const toHex = (str: string): string => {
-  return Utils.toHex(Utils.toArray(str))
+  return bytesToHex(toArray(str))
+}
+
+const MAX_SATOSHIS = 21e14
+const MAX_JSON_DEPTH = 64
+const MAX_JSON_NODES = 100000
+
+function requireSatoshis(value: unknown, name: string, minimum = 0): number {
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < minimum ||
+    (value as number) > MAX_SATOSHIS
+  ) {
+    throw new Error(`${name} must be a safe integer between ${minimum} and ${MAX_SATOSHIS}`)
+  }
+  return value as number
+}
+
+function validateJsonData(value: unknown, name: string): void {
+  const ancestors = new WeakSet<object>()
+  let nodes = 0
+
+  const visit = (current: unknown, path: string, depth: number): void => {
+    nodes++
+    if (nodes > MAX_JSON_NODES) throw new Error(`${name} exceeds ${MAX_JSON_NODES} JSON values`)
+    if (depth > MAX_JSON_DEPTH) throw new Error(`${name} exceeds maximum JSON depth`)
+    if (current === null || typeof current === 'string' || typeof current === 'boolean') {
+      return
+    }
+    if (typeof current === 'number') {
+      if (!Number.isFinite(current)) throw new Error(`${path} must be a finite JSON number`)
+      return
+    }
+    if (typeof current !== 'object') {
+      throw new Error(`${path} must contain only JSON data`)
+    }
+    const object = current as object
+    const prototype = Object.getPrototypeOf(object)
+    if (!Array.isArray(object) && prototype !== Object.prototype && prototype !== null) {
+      throw new Error(`${path} must be a plain JSON object or array`)
+    }
+    if (ancestors.has(object)) throw new Error(`${path} must not contain a cycle`)
+    ancestors.add(object)
+    const descriptors = Object.getOwnPropertyDescriptors(object)
+    if (Array.isArray(object)) {
+      for (let index = 0; index < object.length; index++) {
+        if (!Object.prototype.hasOwnProperty.call(descriptors, String(index))) {
+          throw new Error(`${path} must not contain sparse arrays`)
+        }
+      }
+    }
+    for (const [key, descriptor] of Object.entries(descriptors)) {
+      if (key === 'length' && Array.isArray(object)) continue
+      if (!('value' in descriptor) || descriptor.get != null || descriptor.set != null) {
+        throw new Error(`${path}.${key} must be a data property`)
+      }
+      if (descriptor.enumerable) visit(descriptor.value, `${path}.${key}`, depth + 1)
+    }
+    if (Object.getOwnPropertySymbols(object).length > 0) {
+      throw new Error(`${path} must not contain symbol properties`)
+    }
+    ancestors.delete(object)
+  }
+
+  visit(value, name, 0)
 }
 
 // Validate the lock parameters
@@ -51,9 +110,7 @@ function validateLockParams(params: OrdLockLockParams): void {
   if (!params.payAddress || typeof params.payAddress !== 'string') {
     throw new Error('payAddress is required and must be a string')
   }
-  if (!Number.isSafeInteger(params.price) || params.price < 1) {
-    throw new Error('price is required and must be an integer greater than 0')
-  }
+  requireSatoshis(params.price, 'price', 1)
   if (!params.assetId || typeof params.assetId !== 'string') {
     throw new Error('assetId is required and must be a string')
   }
@@ -73,11 +130,14 @@ function validateLockParams(params: OrdLockLockParams): void {
   ) {
     throw new Error('itemData must be an object')
   }
+  if (params.metadata !== undefined) validateJsonData(params.metadata, 'metadata')
+  if (params.itemData !== undefined) validateJsonData(params.itemData, 'itemData')
 }
 
 // Build an output specification for the contract
 function buildOutput(satoshis: number, script: number[]): number[] {
-  const writer = new Utils.Writer()
+  requireSatoshis(satoshis, 'output satoshis')
+  const writer = new Writer()
   writer.writeUInt64LEBn(new BigNumber(satoshis))
   writer.writeVarIntNum(script.length)
   writer.write(script)
@@ -117,8 +177,11 @@ export default class OrdLock implements ScriptTemplate {
     validateLockParams(params)
 
     // Extract the public key hashes from the addresses
-    const cancelPkh = Utils.fromBase58Check(params.ordAddress).data as number[]
-    const payPkh = Utils.fromBase58Check(params.payAddress).data as number[]
+    const cancelPkh = fromBase58Check(params.ordAddress).data as number[]
+    const payPkh = fromBase58Check(params.payAddress).data as number[]
+    if (cancelPkh.length !== 20)
+      throw new Error('ordAddress must contain a 20-byte public key hash')
+    if (payPkh.length !== 20) throw new Error('payAddress must contain a 20-byte public key hash')
 
     const inscription = {
       p: 'bsv-20',
@@ -141,9 +204,9 @@ export default class OrdLock implements ScriptTemplate {
     // Create the pay output script using the existing P2PKH template
     const payLockingScript = await this.p2pkh.lock({ pubkeyhash: payPkh })
     const payOutputBytes = buildOutput(params.price, payLockingScript.toBinary())
-    const payOutputHex = Utils.toHex(payOutputBytes)
+    const payOutputHex = bytesToHex(payOutputBytes)
 
-    const cancelPkhHex = Utils.toHex(cancelPkh)
+    const cancelPkhHex = bytesToHex(cancelPkh)
 
     const contentTypeHex = toHex('application/bsv-20')
 
@@ -195,67 +258,33 @@ export default class OrdLock implements ScriptTemplate {
    */
   cancelUnlock(params?: OrdLockCancelUnlockParams): {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-    estimateLength: () => Promise<108>
+    estimateLength: () => Promise<109>
   } {
     if (this.wallet == null) {
       throw new Error('Wallet is required for unlocking')
     }
 
     // Set default values for the unlock parameters
-    const protocolID = params?.protocolID ?? ([0, 'ordlock'] as WalletProtocol)
-    const keyID = params?.keyID ?? '0'
-    const counterparty = params?.counterparty ?? 'self'
-    const signOutputs = params?.signOutputs ?? 'all'
-    const anyoneCanPay = params?.anyoneCanPay ?? false
-    const sourceSatoshis = params?.sourceSatoshis
-    const lockingScript = params?.lockingScript
-
-    const wallet = this.wallet
+    const p2pkhUnlock = this.p2pkh.unlock({
+      protocolID: params?.protocolID ?? ([0, 'ordlock'] as WalletProtocol),
+      keyID: params?.keyID ?? '0',
+      counterparty: params?.counterparty ?? 'self',
+      signOutputs: params?.signOutputs ?? 'all',
+      anyoneCanPay: params?.anyoneCanPay ?? false,
+      sourceSatoshis: params?.sourceSatoshis,
+      lockingScript: params?.lockingScript
+    })
 
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
-        // Calculate the preimage for the signature
-        const { preimage, signatureScope } = calculatePreimage(
-          tx,
-          inputIndex,
-          signOutputs,
-          anyoneCanPay,
-          sourceSatoshis,
-          lockingScript
+        const unlockScript = UnlockingScript.fromHex(
+          (await p2pkhUnlock.sign(tx, inputIndex)).toHex()
         )
-
-        // Create the signature using the wallet
-        const { signature } = await wallet.createSignature({
-          hashToDirectlySign: Hash.hash256(preimage),
-          protocolID,
-          keyID,
-          counterparty
-        })
-
-        // Get the public key
-        const { publicKey } = await wallet.getPublicKey({
-          protocolID,
-          keyID,
-          counterparty,
-          forSelf: true
-        })
-
-        // Convert the signature to the format required by the script
-        const rawSignature = Signature.fromDER(signature, 'hex')
-        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, signatureScope)
-
-        const sigForScript = sig.toChecksigFormat()
-        const pubkeyForScript = PublicKey.fromString(publicKey).encode(true) as number[]
-
-        // Build unlocking script: <signature> <compressedPubKey> OP_1
-        const unlockScript = new UnlockingScript()
-        unlockScript.writeBin(sigForScript)
-        unlockScript.writeBin(pubkeyForScript)
         unlockScript.writeOpCode(OP.OP_1)
 
         return unlockScript
       },
-      estimateLength: async () => 108
+      estimateLength: async () => 109
     }
   }
 
@@ -283,16 +312,21 @@ export default class OrdLock implements ScriptTemplate {
 
         // Build output specifications blob required by the contract
         const output0 = buildOutput(
-          tx.outputs[0].satoshis || 0,
+          requireSatoshis(tx.outputs[0].satoshis, 'output 0 satoshis'),
           tx.outputs[0].lockingScript.toBinary()
         )
 
         // Build the other outputs blob
         let otherOutputs: number[] | undefined
         if (tx.outputs.length > 2) {
-          const writer = new Utils.Writer()
+          const writer = new Writer()
           for (const output of tx.outputs.slice(2)) {
-            writer.write(buildOutput(output.satoshis || 0, output.lockingScript.toBinary()))
+            writer.write(
+              buildOutput(
+                requireSatoshis(output.satoshis, 'output satoshis'),
+                output.lockingScript.toBinary()
+              )
+            )
           }
           otherOutputs = writer.toArray()
         }

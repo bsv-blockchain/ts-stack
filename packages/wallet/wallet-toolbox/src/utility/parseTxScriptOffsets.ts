@@ -1,4 +1,4 @@
-import { Utils as SdkUtils } from '@bsv/sdk'
+import { Transaction } from '@bsv/sdk'
 
 export interface TxScriptOffsets {
   inputs: Array<{ vin: number, offset: number, length: number }>
@@ -6,24 +6,5 @@ export interface TxScriptOffsets {
 }
 
 export function parseTxScriptOffsets (rawTx: number[] | Uint8Array): TxScriptOffsets {
-  const br = SdkUtils.ReaderUint8Array.makeReader(rawTx)
-  const inputs: Array<{ vin: number, offset: number, length: number }> = []
-  const outputs: Array<{ vout: number, offset: number, length: number }> = []
-
-  br.pos += 4 // version
-  const inputsLength = br.readVarIntNum()
-  for (let i = 0; i < inputsLength; i++) {
-    br.pos += 36 // txid and vout
-    const scriptLength = br.readVarIntNum()
-    inputs.push({ vin: i, offset: br.pos, length: scriptLength })
-    br.pos += scriptLength + 4 // script and sequence
-  }
-  const outputsLength = br.readVarIntNum()
-  for (let i = 0; i < outputsLength; i++) {
-    br.pos += 8 // satoshis
-    const scriptLength = br.readVarIntNum()
-    outputs.push({ vout: i, offset: br.pos, length: scriptLength })
-    br.pos += scriptLength
-  }
-  return { inputs, outputs }
+  return Transaction.parseScriptOffsets(rawTx)
 }

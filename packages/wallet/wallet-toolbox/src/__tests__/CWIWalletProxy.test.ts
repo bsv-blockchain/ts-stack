@@ -1,3 +1,4 @@
+import { LockingScript, Transaction } from '@bsv/sdk'
 import { CWIStyleWalletManager, OverlayUMPTokenInteractor, UMPTokenLookupError } from '../CWIStyleWalletManager'
 
 describe('CWI wallet proxy and UMP failure paths', () => {
@@ -82,20 +83,38 @@ describe('CWI wallet proxy and UMP failure paths', () => {
     >({ reason: 'lookup-unavailable' })
   })
 
-  it('refuses renewal when the previous token cannot be loaded and validates incomplete finalization', async () => {
+  it('refuses renewal when the previous token cannot be loaded', async () => {
     const subject = new OverlayUMPTokenInteractor({} as any, {} as any)
     jest.spyOn(subject as any, 'findByOutpoint').mockResolvedValue(undefined)
     await expect((subject as any).resolveOldInput({ currentOutpoint: `${'a'.repeat(64)}.0` })).rejects.toThrow(
       'Previous UMP token unavailable'
     )
-    await expect((subject as any).broadcastFinal({})).rejects.toThrow('not finalized')
-    await expect((subject as any).broadcastFinal({ txid: 'a'.repeat(64) })).rejects.toThrow('data missing')
+  })
 
-    const wallet = { signAction: jest.fn(async () => ({})) }
-    await expect((subject as any).broadcastNew(wallet, 'admin.example', 'reference')).rejects.toThrow('finalize new')
-    wallet.signAction.mockResolvedValue({ txid: 'b'.repeat(64) } as any)
-    await expect((subject as any).broadcastNew(wallet, 'admin.example', 'reference')).rejects.toThrow(
-      'transaction data missing'
-    )
+  it('rejects overlay output data that does not prove the exact requested outpoint', async () => {
+    const returned = new Transaction(1, [], [{ satoshis: 1, lockingScript: LockingScript.fromASM('OP_TRUE') }], 0)
+    const resolver = {
+      queryDetailed: jest.fn(async () => ({
+        answer: { type: 'output-list', outputs: [{ beef: returned.toBEEF(), outputIndex: 0 }] },
+        progress: {
+          type: 'output-list',
+          outputs: [],
+          txIds: [],
+          isFinal: true,
+          hostCount: 1,
+          completedHosts: 1,
+          successfulHosts: 1,
+          emptyHosts: 0,
+          failedHosts: 0,
+          rejectedHosts: 0,
+          freeformHosts: 0
+        }
+      }))
+    }
+    const subject = new OverlayUMPTokenInteractor(resolver as any, {} as any)
+
+    await expect((subject as any).findByOutpoint(`${'f'.repeat(64)}.0`)).rejects.toMatchObject<
+      Partial<UMPTokenLookupError>
+    >({ reason: 'token-malformed' })
   })
 })

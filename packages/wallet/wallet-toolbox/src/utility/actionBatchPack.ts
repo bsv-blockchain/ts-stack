@@ -1,8 +1,5 @@
-import { Utils } from '@bsv/sdk'
-import type {
-  ActionBatchPackEncoding,
-  ActionBatchPackItem
-} from '../sdk/ActionBatch.interfaces'
+import { toHex, toUint8Array } from '@bsv/sdk/primitives/utils'
+import type { ActionBatchPackEncoding, ActionBatchPackItem } from '../sdk/ActionBatch.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import { asUint8Array } from './utilityHelpers.noBuffer'
 
@@ -11,31 +8,25 @@ const PACK_HEADER_BYTES = 8
 const ITEM_HEADER_BYTES = 36
 export const ACTION_BATCH_PACK_ENCODING_HEADER = 'X-BSV-Action-Batch-Encoding'
 
-type ExtendedCompressionStreamConstructor = new (
-  format: CompressionFormat | 'brotli'
-) => CompressionStream
+type ExtendedCompressionStreamConstructor = new (format: CompressionFormat | 'brotli') => CompressionStream
 
-type ExtendedDecompressionStreamConstructor = new (
-  format: CompressionFormat | 'brotli'
-) => DecompressionStream
+type ExtendedDecompressionStreamConstructor = new (format: CompressionFormat | 'brotli') => DecompressionStream
 
-function makeCompressionStream (encoding: Exclude<ActionBatchPackEncoding, 'identity'>): CompressionStream {
+function makeCompressionStream(encoding: Exclude<ActionBatchPackEncoding, 'identity'>): CompressionStream {
   const Constructor = globalThis.CompressionStream as ExtendedCompressionStreamConstructor
   return new Constructor(encoding)
 }
 
-function makeDecompressionStream (encoding: Exclude<ActionBatchPackEncoding, 'identity'>): DecompressionStream {
+function makeDecompressionStream(encoding: Exclude<ActionBatchPackEncoding, 'identity'>): DecompressionStream {
   const Constructor = globalThis.DecompressionStream as ExtendedDecompressionStreamConstructor
   return new Constructor(encoding)
 }
 
-function arrayBufferView (bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  return bytes.buffer instanceof ArrayBuffer
-    ? bytes as Uint8Array<ArrayBuffer>
-    : Uint8Array.from(bytes)
+function arrayBufferView(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
+  return bytes.buffer instanceof ArrayBuffer ? (bytes as Uint8Array<ArrayBuffer>) : Uint8Array.from(bytes)
 }
 
-export function actionBatchPackLength (items: ActionBatchPackItem[]): number {
+export function actionBatchPackLength(items: ActionBatchPackItem[]): number {
   let length = PACK_HEADER_BYTES
   for (const item of items) {
     length += ITEM_HEADER_BYTES + item.bytes.length
@@ -46,11 +37,7 @@ export function actionBatchPackLength (items: ActionBatchPackItem[]): number {
   return length
 }
 
-function validatePackShape (
-  items: ActionBatchPackItem[],
-  maxBytes: number,
-  maxItems: number
-): number {
+function validatePackShape(items: ActionBatchPackItem[], maxBytes: number, maxItems: number): number {
   if (items.length === 0 || items.length > maxItems) {
     throw new WERR_INVALID_PARAMETER('items', `between 1 and ${String(maxItems)} blobs`)
   }
@@ -59,15 +46,15 @@ function validatePackShape (
   return length
 }
 
-function packHeader (itemCount: number): Uint8Array {
+function packHeader(itemCount: number): Uint8Array {
   const bytes = new Uint8Array(PACK_HEADER_BYTES)
   bytes.set(PACK_MAGIC)
   new DataView(bytes.buffer).setUint32(4, itemCount, true)
   return bytes
 }
 
-function packItemHeader (item: ActionBatchPackItem): Uint8Array {
-  const digest = Utils.toUint8Array(item.digest, 'hex')
+function packItemHeader(item: ActionBatchPackItem): Uint8Array {
+  const digest = toUint8Array(item.digest, 'hex')
   if (digest.length !== 32) {
     throw new WERR_INVALID_PARAMETER('digest', 'a 32-byte hexadecimal SHA-256 digest')
   }
@@ -78,11 +65,7 @@ function packItemHeader (item: ActionBatchPackItem): Uint8Array {
 }
 
 /** Encode independently content-addressed blobs into one transport frame. */
-export function encodeActionBatchPack (
-  items: ActionBatchPackItem[],
-  maxBytes: number,
-  maxItems: number
-): Uint8Array {
+export function encodeActionBatchPack(items: ActionBatchPackItem[], maxBytes: number, maxItems: number): Uint8Array {
   const length = validatePackShape(items, maxBytes, maxItems)
   const bytes = new Uint8Array(length)
   bytes.set(packHeader(items.length))
@@ -99,13 +82,12 @@ export function encodeActionBatchPack (
 }
 
 /** Decode a transport frame without copying its individual blob payloads. */
-export function decodeActionBatchPack (
-  bytes: Uint8Array,
-  maxBytes: number,
-  maxItems: number
-): ActionBatchPackItem[] {
-  if (bytes.length < PACK_HEADER_BYTES || bytes.length > maxBytes ||
-    !PACK_MAGIC.every((value, index) => bytes[index] === value)) {
+export function decodeActionBatchPack(bytes: Uint8Array, maxBytes: number, maxItems: number): ActionBatchPackItem[] {
+  if (
+    bytes.length < PACK_HEADER_BYTES ||
+    bytes.length > maxBytes ||
+    !PACK_MAGIC.every((value, index) => bytes[index] === value)
+  ) {
     throw new WERR_INVALID_PARAMETER('pack', 'a bounded action batch pack')
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
@@ -119,7 +101,7 @@ export function decodeActionBatchPack (
     if (offset + ITEM_HEADER_BYTES > bytes.length) {
       throw new WERR_INVALID_PARAMETER('pack', 'complete item headers')
     }
-    const digest = Utils.toHex(bytes.subarray(offset, offset + 32))
+    const digest = toHex(bytes.subarray(offset, offset + 32))
     offset += 32
     const length = view.getUint32(offset, true)
     offset += 4
@@ -131,8 +113,7 @@ export function decodeActionBatchPack (
   return items
 }
 
-function supportsTransform (encoding: ActionBatchPackEncoding, decompress: boolean): boolean {
-  if (encoding === 'identity') return true
+function supportsTransform(encoding: Exclude<ActionBatchPackEncoding, 'identity'>, decompress: boolean): boolean {
   try {
     if (decompress) {
       if (typeof globalThis.DecompressionStream !== 'function') return false
@@ -147,7 +128,7 @@ function supportsTransform (encoding: ActionBatchPackEncoding, decompress: boole
   }
 }
 
-export function supportedActionBatchPackEncodings (): ActionBatchPackEncoding[] {
+export function supportedActionBatchPackEncodings(): ActionBatchPackEncoding[] {
   const encodings: ActionBatchPackEncoding[] = []
   // CompressionStream does not expose Brotli quality controls. Its runtime
   // default can favor density at substantially higher latency, so prefer the
@@ -159,10 +140,7 @@ export function supportedActionBatchPackEncodings (): ActionBatchPackEncoding[] 
   return encodings
 }
 
-async function collectStream (
-  stream: ReadableStream<Uint8Array>,
-  maxBytes?: number
-): Promise<Uint8Array> {
+async function collectStream(stream: ReadableStream<Uint8Array>, maxBytes?: number): Promise<Uint8Array> {
   const reader = stream.getReader()
   const chunks: Uint8Array[] = []
   let length = 0
@@ -185,7 +163,7 @@ async function collectStream (
   return bytes
 }
 
-async function transform (
+async function transform(
   bytes: Uint8Array,
   encoding: ActionBatchPackEncoding,
   decompress: boolean,
@@ -200,9 +178,7 @@ async function transform (
   if (!supportsTransform(encoding, decompress)) {
     throw new WERR_INVALID_OPERATION(`action batch ${encoding} compression is unavailable in this runtime`)
   }
-  const codec = decompress
-    ? makeDecompressionStream(encoding)
-    : makeCompressionStream(encoding)
+  const codec = decompress ? makeDecompressionStream(encoding) : makeCompressionStream(encoding)
   const output = collectStream(codec.readable, maxBytes)
   const writer = codec.writable.getWriter()
   const input = (async () => {
@@ -213,7 +189,7 @@ async function transform (
   return result
 }
 
-export async function compressActionBatchPack (
+export async function compressActionBatchPack(
   bytes: Uint8Array,
   encoding: ActionBatchPackEncoding
 ): Promise<Uint8Array> {
@@ -224,7 +200,7 @@ export async function compressActionBatchPack (
  * Compress a pack directly from its item views. Successful compression avoids
  * allocating and copying an additional uncompressed aggregate frame.
  */
-export async function compressActionBatchPackItems (
+export async function compressActionBatchPackItems(
   items: ActionBatchPackItem[],
   encoding: ActionBatchPackEncoding,
   maxBytes: number,
@@ -250,7 +226,7 @@ export async function compressActionBatchPackItems (
   return result
 }
 
-export async function decompressActionBatchPack (
+export async function decompressActionBatchPack(
   bytes: Uint8Array,
   encoding: ActionBatchPackEncoding,
   maxBytes: number

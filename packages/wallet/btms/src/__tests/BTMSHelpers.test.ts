@@ -1,10 +1,14 @@
 import type { ListActionsResult } from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import {
+  addTokenAmounts,
   accumulateOutputIntoBalances,
+  assertSafeTokenAmount,
   calcActionAmount,
   mapActionToTransaction,
   stripLabelPrefix,
+  subtractTokenAmounts,
+  resolveOutputAssetId,
   verifyProvenTokenAssetId
 } from '../BTMSHelpers.js'
 import { BTMSToken } from '../BTMSToken.js'
@@ -15,6 +19,16 @@ const TXID = 'ab'.repeat(32)
 const ASSET_ID = `${TXID}.0`
 
 describe('BTMS helper edge cases', () => {
+  it('fails closed when token arithmetic would round or underflow', () => {
+    expect(() => addTokenAmounts(Number.MAX_SAFE_INTEGER, 1, 'Balance')).toThrow(
+      'safe integer range'
+    )
+    expect(() => subtractTokenAmounts(1, 2, 'Change')).toThrow('must not be negative')
+    expect(() => assertSafeTokenAmount(0)).toThrow(
+      'Token amount must be a positive integer within the safe integer range'
+    )
+  })
+
   it.each(['issue', 'receive', 'send', 'burn'] as const)(
     'returns zero for an empty %s action',
     type => {
@@ -63,6 +77,12 @@ describe('BTMS helper edge cases', () => {
     ).toThrow('Token asset ID does not match proof asset ID')
   })
 
+  it('resolves issuance markers and validates explicit output asset IDs', () => {
+    expect(resolveOutputAssetId({ assetId: ISSUE_MARKER } as never, `${TXID}.0`)).toBe(ASSET_ID)
+    expect(resolveOutputAssetId({ assetId: ASSET_ID } as never, `${TXID}.1`)).toBe(ASSET_ID)
+    expect(resolveOutputAssetId({ assetId: 'invalid' } as never, `${TXID}.1`)).toBeUndefined()
+  })
+
   it('keeps the first decoded metadata while accumulating an asset balance', () => {
     jest.spyOn(BTMSToken, 'decode').mockReturnValueOnce({
       valid: true,
@@ -90,6 +110,28 @@ describe('BTMS helper edge cases', () => {
     })
   })
 
+  it('rejects an asset balance that exceeds the exact integer range', () => {
+    jest.spyOn(BTMSToken, 'decode').mockReturnValueOnce({
+      valid: true,
+      assetId: ASSET_ID,
+      amount: 1,
+      lockingPublicKey: ''
+    })
+    const balances = new Map([[ASSET_ID, { balance: Number.MAX_SAFE_INTEGER }]])
+
+    expect(() =>
+      accumulateOutputIntoBalances(
+        {
+          spendable: true,
+          satoshis: 1,
+          outpoint: `${TXID}.1`,
+          lockingScript: 'mocked'
+        },
+        balances
+      )
+    ).toThrow('safe integer range')
+  })
+
   it('reports unknown non-Error JSON failures without losing UTXO context', () => {
     jest.spyOn(JSON, 'parse').mockImplementationOnce(() => {
       throw 'malformed'
@@ -98,5 +140,20 @@ describe('BTMS helper edge cases', () => {
     expect(() => parseCustomInstructions('{}', TXID, 3)).toThrow(
       `Invalid customInstructions for UTXO ${TXID}.3: Unknown error`
     )
+  })
+
+  it('rejects missing and incomplete custom derivation instructions exactly', () => {
+    expect(() => parseCustomInstructions(undefined, TXID, 4)).toThrow(
+      `Missing customInstructions for UTXO ${TXID}.4`
+    )
+    for (const instructions of [
+      { derivationPrefix: '', derivationSuffix: 'suffix' },
+      { derivationPrefix: 'prefix', derivationSuffix: '' },
+      { derivationPrefix: 'prefix', derivationSuffix: 'suffix', senderIdentityKey: 1 }
+    ]) {
+      expect(() => parseCustomInstructions(JSON.stringify(instructions), TXID, 5)).toThrow(
+        `Invalid customInstructions for UTXO ${TXID}.5: Missing derivation info in customInstructions`
+      )
+    }
   })
 })

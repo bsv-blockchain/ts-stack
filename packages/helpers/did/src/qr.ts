@@ -1,5 +1,16 @@
 import QRCode from 'qrcode'
 import type { JsonObject, QrCodeOptions, QrMode, SdJwtPresentation, SdJwtVc } from './types.js'
+import { assertBoundedString, getOwnDataProperties, snapshotJsonValue } from './validation.js'
+
+const MAX_QR_PAYLOAD_BYTES = 4_096
+const QR_OPTION_KEYS = new Set([
+  'output',
+  'moduleSize',
+  'margin',
+  'darkColor',
+  'lightColor',
+  'errorCorrectionLevel'
+])
 
 interface QrBitMatrix {
   size: number
@@ -22,13 +33,19 @@ export function generateQrCode(
   mode: QrMode,
   options: QrCodeOptions = {}
 ): string {
-  const payload = typeof value === 'string' ? value : JSON.stringify(value)
+  if (mode !== 'did' && mode !== 'vc') throw new TypeError('QR mode must be "did" or "vc"')
+  const input = getOwnDataProperties(options, 'QR options', QR_OPTION_KEYS)
+  const normalizedOptions = normalizeQrOptions(input)
+  const payload =
+    typeof value === 'string' ? value : JSON.stringify(snapshotJsonValue(value, 'QR JSON payload'))
+  assertBoundedString(payload, 'QR payload', MAX_QR_PAYLOAD_BYTES)
   const qr = (QRCode as unknown as QrFactory).create(payload, {
-    errorCorrectionLevel: options.errorCorrectionLevel ?? 'M'
+    errorCorrectionLevel: normalizedOptions.errorCorrectionLevel ?? 'M'
   })
-  const svg = renderSvg(qr.modules, options)
+  assertQrMatrix(qr.modules)
+  const svg = renderSvg(qr.modules, normalizedOptions)
 
-  if (options.output === 'data-url') {
+  if (normalizedOptions.output === 'data-url') {
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
   }
 
@@ -70,4 +87,50 @@ function escapeAttribute(value: string): string {
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+}
+
+function normalizeQrOptions(input: Record<string, unknown>): QrCodeOptions {
+  if (input.output !== undefined && input.output !== 'svg' && input.output !== 'data-url') {
+    throw new TypeError('QR output must be "svg" or "data-url"')
+  }
+  if (input.moduleSize !== undefined) assertIntegerRange(input.moduleSize, 'moduleSize', 1, 32)
+  if (input.margin !== undefined) assertIntegerRange(input.margin, 'margin', 0, 32)
+  if (input.darkColor !== undefined) assertSafeColor(input.darkColor, 'darkColor')
+  if (input.lightColor !== undefined) assertSafeColor(input.lightColor, 'lightColor')
+  if (
+    input.errorCorrectionLevel !== undefined &&
+    !['low', 'medium', 'quartile', 'high', 'L', 'M', 'Q', 'H'].includes(
+      input.errorCorrectionLevel as string
+    )
+  ) {
+    throw new TypeError('Invalid QR error correction level')
+  }
+  return input as QrCodeOptions
+}
+
+function assertSafeColor(value: unknown, label: string): asserts value is string {
+  if (
+    typeof value !== 'string' ||
+    !/^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value)
+  ) {
+    throw new TypeError(`QR ${label} must be a hexadecimal color`)
+  }
+}
+
+function assertIntegerRange(value: unknown, label: string, minimum: number, maximum: number): void {
+  if (!Number.isSafeInteger(value) || (value as number) < minimum || (value as number) > maximum) {
+    throw new TypeError(`QR ${label} is out of range`)
+  }
+}
+
+function assertQrMatrix(modules: QrBitMatrix): void {
+  if (
+    !Number.isSafeInteger(modules.size) ||
+    modules.size < 21 ||
+    modules.size > 177 ||
+    modules.data == null ||
+    modules.data.length !== modules.size * modules.size
+  ) {
+    throw new Error('QR encoder returned an invalid module matrix')
+  }
 }

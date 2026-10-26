@@ -1,5 +1,5 @@
 import { mockUnderlyingWallet, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager } from '../WalletPermissionsManager'
+import { maybeDecryptMetadata, WalletPermissionsManager } from '../WalletPermissionsManager'
 import { jest } from '@jest/globals'
 import { Utils } from '@bsv/sdk'
 
@@ -97,6 +97,22 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       // The manager should return the original ciphertext if decryption throws
       expect(result).toBe(ciphertext)
     })
+
+    it('lets a permission module decrypt metadata through the underlying wallet with the same scheme', async () => {
+      underlying.decrypt.mockResolvedValueOnce({ plaintext: [72, 105] })
+      const ciphertext = Utils.toBase64(Utils.toArray('module-basket-metadata'))
+
+      await expect(maybeDecryptMetadata(underlying, ciphertext, 'module.example')).resolves.toBe('Hi')
+      expect(underlying.decrypt).toHaveBeenCalledWith(
+        { ciphertext: expect.any(Array), protocolID: [2, 'admin metadata encryption'], keyID: '1' },
+        'module.example'
+      )
+
+      underlying.decrypt.mockImplementationOnce(() => {
+        throw new Error('Decryption error')
+      })
+      await expect(maybeDecryptMetadata(underlying, '{"plaintext":true}')).resolves.toBe('{"plaintext":true}')
+    })
   })
 
   describe('Integration Tests for createAction + listActions (round-trip encryption)', () => {
@@ -120,7 +136,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
           description: actionDescription,
           inputs: [
             {
-              outpoint: '0231.0',
+              outpoint: `${'11'.repeat(32)}.0`,
               unlockingScriptLength: 73,
               inputDescription: inputDesc
             }
@@ -218,7 +234,7 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
           description: actionDescription,
           inputs: [
             {
-              outpoint: '9876.0',
+              outpoint: `${'22'.repeat(32)}.0`,
               unlockingScriptLength: 73,
               inputDescription: inputDesc
             }
@@ -266,10 +282,11 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
       // This allows us to disable it on a wallet that had it in the past. The result is that when not encrypted,
       // the plaintext is returned if decryption fails. If it was encrypted from metadata encryption being enabled in
       // the past (even when not enabled now), we will still decrypt and see the correct plaintext rather than garbage.
-      // To simulate, we make decryption pass through.
-      underlying.decrypt.mockImplementation(x => x)
+      // Plaintext is not valid metadata ciphertext, so decryption fails and the
+      // compatibility fallback preserves each original value.
+      underlying.decrypt.mockRejectedValue(new Error('plaintext metadata'))
       const listResult = await (manager as any).listActions({}, 'nonadmin.com')
-      expect(underlying.decrypt).toHaveBeenCalledTimes(3)
+      expect(underlying.decrypt).toHaveBeenCalledTimes(4)
 
       // Confirm the returned data is the same as originally provided (plaintext)
       const [first] = listResult.actions

@@ -2,7 +2,6 @@ import {
   Beef,
   type BdkVerifierInterface,
   type DigestVerification,
-  Hash,
   ScriptEvaluationError,
   Spend,
   Transaction,
@@ -11,6 +10,7 @@ import {
   type SpendVerificationContext,
   type SpendVerifierInterface
 } from '@bsv/sdk'
+import { hash160, hash256 } from '@bsv/sdk/primitives/Hash'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 
 export interface UnlockScriptVerificationResult {
@@ -56,10 +56,7 @@ function invalidUnlockingScript(inputIndex: number, detail?: string): WERR_INVAL
 async function verifyOneSpend(pending: PendingSpendVerification, verifier?: SpendVerifierInterface): Promise<void> {
   const [inputIndex, , spend, context] = pending
   try {
-    const valid =
-      verifier === undefined
-        ? spend.validate(context)
-        : await spend.validateWith(verifier, context)
+    const valid = verifier === undefined ? spend.validate(context) : await spend.validateWith(verifier, context)
     if (!valid) throw invalidUnlockingScript(inputIndex)
   } catch (error: unknown) {
     if (error instanceof ScriptEvaluationError) {
@@ -108,13 +105,11 @@ function wholeTransactionVerifier(
 ): (SpendVerifierInterface & BdkVerifierInterface) | undefined {
   const candidate = verifier as (SpendVerifierInterface & Partial<BdkVerifierInterface>) | undefined
   return typeof candidate?.verifyScripts === 'function'
-    ? candidate as SpendVerifierInterface & BdkVerifierInterface
+    ? (candidate as SpendVerifierInterface & BdkVerifierInterface)
     : undefined
 }
 
-function digestBatchVerifier(
-  verifier?: SpendVerifierInterface
-): DigestBatchVerifier | undefined {
+function digestBatchVerifier(verifier?: SpendVerifierInterface): DigestBatchVerifier | undefined {
   const candidate = verifier as (SpendVerifierInterface & Partial<DigestBatchVerifier>) | undefined
   if (typeof candidate?.verifyDigestBatch !== 'function') return undefined
   if (candidate.isReady?.() === false) return undefined
@@ -131,12 +126,14 @@ function equalBytes(left: ArrayLike<number>, right: ArrayLike<number>): boolean 
 }
 
 function isCanonicalP2PKHLock(lock: Uint8Array): boolean {
-  return lock.length === 25 &&
+  return (
+    lock.length === 25 &&
     lock[0] === 0x76 &&
     lock[1] === 0xa9 &&
     lock[2] === 0x14 &&
     lock[23] === 0x88 &&
     lock[24] === 0xac
+  )
 }
 
 function parseCanonicalP2PKHUnlock(
@@ -150,13 +147,12 @@ function parseCanonicalP2PKHUnlock(
     signatureLength > 73 ||
     unlock.length !== 1 + signatureLength + 1 + 33 ||
     unlock[1 + signatureLength] !== 33
-  ) return undefined
+  )
+    return undefined
   const checksig = Array.from(unlock.subarray(1, 1 + signatureLength))
   const publicKey = unlock.subarray(1 + signatureLength + 1)
-  if (
-    (publicKey[0] !== 0x02 && publicKey[0] !== 0x03) ||
-    !equalBytes(Hash.hash160(publicKey), lock.subarray(3, 23))
-  ) return undefined
+  if ((publicKey[0] !== 0x02 && publicKey[0] !== 0x03) || !equalBytes(hash160(publicKey), lock.subarray(3, 23)))
+    return undefined
 
   let signature: TransactionSignature
   try {
@@ -168,7 +164,8 @@ function parseCanonicalP2PKHUnlock(
     signature.scope !== canonicalP2PKHScope ||
     !signature.hasLowS() ||
     !equalBytes(signature.toChecksigFormat(), checksig)
-  ) return undefined
+  )
+    return undefined
   return [checksig, publicKey, signature]
 }
 
@@ -210,7 +207,7 @@ function standardP2PKHDigests(tx: Transaction): DigestVerification[] | undefined
     })
     items.push({
       publicKey,
-      digest: Uint8Array.from(Hash.hash256(preimage)),
+      digest: Uint8Array.from(hash256(preimage)),
       signature: Uint8Array.from(checksig.slice(0, -1))
     })
   }
@@ -263,10 +260,7 @@ function hydrateTransactionSources(
   return tx
 }
 
-function transactionIndex(
-  txids: readonly string[],
-  beef: Beef
-): Map<string, Transaction | undefined> {
+function transactionIndex(txids: readonly string[], beef: Beef): Map<string, Transaction | undefined> {
   // One public lookup synchronizes nested transaction mutations and rebuilds
   // BEEF's internal indexes if necessary. Repeating that synchronization for
   // every input turns a large fragmented action into quadratic work.
@@ -281,9 +275,10 @@ async function verifyWholeTransactions(
   if (pending.length === 0) return new Set()
   let verdicts: boolean[]
   try {
-    verdicts = verifier.verifyScriptsBatch === undefined
-      ? await Promise.all(pending.map(async item => await verifier.verifyScripts(item[1])))
-      : await verifier.verifyScriptsBatch(pending.map(item => item[1]))
+    verdicts =
+      verifier.verifyScriptsBatch === undefined
+        ? await Promise.all(pending.map(async item => await verifier.verifyScripts(item[1])))
+        : await verifier.verifyScriptsBatch(pending.map(item => item[1]))
   } catch (error: unknown) {
     // Whole-transaction backends cannot identify the failing input. Preserve
     // the historical per-input diagnostic lane for consensus script errors;
@@ -432,13 +427,11 @@ export async function verifyUnlockScriptsBatch(
     digestVerifier !== undefined || wholeVerifier !== undefined
   )
   const digestAttempted = new Set(digestPending.map(item => item[0]))
-  const digestVerified = digestVerifier === undefined
-    ? new Set<number>()
-    : await verifyStandardP2PKHDigests(digestPending, digestVerifier)
+  const digestVerified =
+    digestVerifier === undefined ? new Set<number>() : await verifyStandardP2PKHDigests(digestPending, digestVerifier)
   const wholePending = collectWholeTransactionVerifications(hydrated, digestAttempted, wholeVerifier)
-  const wholeVerified = wholeVerifier === undefined
-    ? new Set<number>()
-    : await verifyWholeTransactions(wholePending, wholeVerifier)
+  const wholeVerified =
+    wholeVerifier === undefined ? new Set<number>() : await verifyWholeTransactions(wholePending, wholeVerifier)
   const accelerated = new Set([...digestVerified, ...wholeVerified])
   const pending = collectFallbackSpends(txids, transactions, accelerated, results)
   await verifyPendingSpends(pending, verifier)

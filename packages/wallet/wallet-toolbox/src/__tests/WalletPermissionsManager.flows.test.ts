@@ -217,6 +217,57 @@ describe('WalletPermissionsManager - Permission Request Flow & Active Requests',
       )
     })
 
+    it.each([
+      'https://example.com',
+      'example.com/manifest.json',
+      'user@example.com',
+      '127.0.0.1',
+      '2130706433',
+      '[::1]'
+    ])('rejects an unsafe manifest originator: %s', originator => {
+      expect(() => (manager as any).prepareOriginator(originator)).toThrow(/Originator|IP address/)
+    })
+
+    it('accepts ports while sharing one hostname-scoped originator authority', () => {
+      const first = (manager as any).prepareOriginator('Example.COM:8443')
+      const second = (manager as any).prepareOriginator('example.com:9443')
+      expect(first.normalized).toBe('example.com')
+      expect(second.normalized).toBe('example.com')
+      expect((manager as any).prepareOriginator('localhost:3000').normalized).toBe('localhost')
+      expect(
+        (manager as any).buildRequestKey({
+          type: 'basket',
+          originator: 'example.com:8443',
+          basket: 'documents'
+        })
+      ).toBe(
+        (manager as any).buildRequestKey({
+          type: 'basket',
+          originator: 'example.com:9443',
+          basket: 'documents'
+        })
+      )
+    })
+
+    it('bounds manifest bytes and prohibits fetch redirects', async () => {
+      const fetchMock = globalThis.fetch as any
+      fetchMock.mockResolvedValueOnce(
+        new Response(new Uint8Array(256 * 1024 + 1), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      )
+
+      await expect((manager as any).fetchManifestPermissions('example.com')).resolves.toEqual({
+        groupPermissions: null,
+        counterpartyPermissions: null
+      })
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://example.com/manifest.json',
+        expect.objectContaining({ redirect: 'error', signal: expect.any(AbortSignal) })
+      )
+    })
+
     it('should ignore counterparty for level-1 protocol permission prompts (counterparty passed as undefined to callback)', async () => {
       mockNoTokensFound(manager)
 

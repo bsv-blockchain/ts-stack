@@ -1,4 +1,6 @@
-import { StorageDownloader, type LookupNetworkPreset } from '@bsv/sdk'
+import type { LookupNetworkPreset } from '@bsv/sdk/overlay-tools/LookupResolver'
+import { createPublicNetworkFetch } from '@bsv/sdk/storage/PublicHTTPSFetch'
+import { StorageDownloader } from '@bsv/sdk/storage/StorageDownloader'
 import {
   CHIRP_CHUNK_SIZE,
   CHIRP_MAX_DEPTH,
@@ -32,6 +34,8 @@ export interface CHIRPDownloaderConfig {
   maxDownloadBytes?: number
   maxObjectBytes?: number
   allowInsecureHTTP?: boolean
+  /** Explicit local/development opt-in for private advertised hosts. */
+  allowPrivateHosts?: boolean
   requestTimeoutMs?: number
   resolutionTimeoutMs?: number
   urlPolicy?: (url: URL) => void | Promise<void>
@@ -55,10 +59,14 @@ interface RootContext {
   profileCanonical: boolean
 }
 
+const MAX_ADVERTISED_LOCATIONS = 256
+const MAX_UINT64 = 0xffffffffffffffffn
+
 export class CHIRPDownloader {
   private readonly resolveLocations: (uhrpURL: string) => Promise<string[]>
   private readonly fetcher: typeof fetch
-  private readonly cache: CHIRPObjectCache
+  private readonly cacheGet: CHIRPObjectCache['get']
+  private readonly cacheSet: CHIRPObjectCache['set']
   private readonly defaultConcurrency: number
   private readonly retriesPerObject: number
   private readonly maxLogicalLength: bigint
@@ -72,68 +80,112 @@ export class CHIRPDownloader {
   private nextHost = 0
 
   constructor(config: CHIRPDownloaderConfig = {}) {
-    if (config.resolve != null) {
-      this.resolveLocations = config.resolve
+    const values = snapshotDownloaderConfig(config)
+    if (values.resolve != null) {
+      const resolver = values.resolve
+      this.resolveLocations = async uhrpURL => await Reflect.apply(resolver, undefined, [uhrpURL])
     } else {
-      const downloader = new StorageDownloader({ networkPreset: config.networkPreset ?? 'mainnet' })
+      const downloader = new StorageDownloader({
+        networkPreset: values.networkPreset ?? 'mainnet'
+      })
       this.resolveLocations = async uhrpURL => await downloader.resolve(uhrpURL)
     }
-    this.fetcher = config.fetch ?? fetch
-    this.cache = config.cache ?? new MemoryCHIRPCache()
-    this.defaultConcurrency = boundedInteger(config.concurrency ?? 4, 1, 64, 'concurrency')
-    this.retriesPerObject = boundedInteger(config.retriesPerObject ?? 3, 1, 16, 'retriesPerObject')
-    this.maxLogicalLength = config.maxLogicalLength ?? 64n * 1024n * 1024n * 1024n
-    this.maxObjects = boundedInteger(config.maxObjects ?? 100_000, 1, 10_000_000, 'maxObjects')
+    const allowInsecureHTTP = values.allowInsecureHTTP === true
+    const allowPrivateHosts = values.allowPrivateHosts === true
+    const configuredFetch = values.fetch
+    this.fetcher =
+      configuredFetch === undefined
+        ? allowPrivateHosts
+          ? fetch
+          : createPublicNetworkFetch({ allowHTTP: allowInsecureHTTP })
+        : async (input, init) => await Reflect.apply(configuredFetch, undefined, [input, init])
+    const cache = values.cache ?? new MemoryCHIRPCache()
+    const cacheGet = cache?.get
+    const cacheSet = cache?.set
+    if (
+      cache === null ||
+      typeof cache !== 'object' ||
+      typeof cacheGet !== 'function' ||
+      typeof cacheSet !== 'function'
+    ) {
+      throw new TypeError('cache must implement CHIRPObjectCache.')
+    }
+    this.cacheGet = objectIdentifier => Reflect.apply(cacheGet, cache, [objectIdentifier])
+    this.cacheSet = (objectIdentifier, bytes) =>
+      Reflect.apply(cacheSet, cache, [objectIdentifier, bytes])
+    this.defaultConcurrency = boundedInteger(values.concurrency ?? 4, 1, 64, 'concurrency')
+    this.retriesPerObject = boundedInteger(values.retriesPerObject ?? 3, 1, 16, 'retriesPerObject')
+    this.maxLogicalLength = values.maxLogicalLength ?? 64n * 1024n * 1024n * 1024n
+    if (
+      typeof this.maxLogicalLength !== 'bigint' ||
+      this.maxLogicalLength < 0n ||
+      this.maxLogicalLength > MAX_UINT64
+    ) {
+      throw new RangeError('maxLogicalLength must be a bigint in the uint64 range.')
+    }
+    this.maxObjects = boundedInteger(values.maxObjects ?? 100_000, 1, 10_000_000, 'maxObjects')
     this.maxDownloadBytes = boundedInteger(
-      config.maxDownloadBytes ?? 512 * 1024 * 1024,
+      values.maxDownloadBytes ?? 512 * 1024 * 1024,
       1,
       Number.MAX_SAFE_INTEGER,
       'maxDownloadBytes'
     )
     this.maxObjectBytes = boundedInteger(
-      config.maxObjectBytes ?? 64 * 1024 * 1024,
+      values.maxObjectBytes ?? 64 * 1024 * 1024,
       1,
       Number.MAX_SAFE_INTEGER,
       'maxObjectBytes'
     )
-    this.allowInsecureHTTP = config.allowInsecureHTTP ?? false
+    this.allowInsecureHTTP = allowInsecureHTTP
     this.requestTimeoutMs = boundedInteger(
-      config.requestTimeoutMs ?? 30_000,
+      values.requestTimeoutMs ?? 30_000,
       1,
       10 * 60_000,
       'requestTimeoutMs'
     )
     this.resolutionTimeoutMs = boundedInteger(
-      config.resolutionTimeoutMs ?? 30_000,
+      values.resolutionTimeoutMs ?? 30_000,
       1,
       10 * 60_000,
       'resolutionTimeoutMs'
     )
-    this.urlPolicy = config.urlPolicy ?? defaultURLPolicy
+    const policy = values.urlPolicy ?? (allowPrivateHosts ? () => {} : defaultURLPolicy)
+    this.urlPolicy = async url => await Reflect.apply(policy, undefined, [url])
   }
 
   async inspect(chirpURL: string, signal?: AbortSignal): Promise<RootContext> {
     const parsed = parseCHIRPURL(chirpURL)
-    const advertisedLocations = (
-      await withTimeout(
-        this.resolveLocations(parsed.uhrpURL),
-        this.resolutionTimeoutMs,
-        'UHRP root resolution timed out.',
-        signal
+    const resolved = await withTimeout(
+      this.resolveLocations(parsed.uhrpURL),
+      this.resolutionTimeoutMs,
+      'UHRP root resolution timed out.',
+      signal
+    )
+    if (!Array.isArray(resolved) || resolved.length > MAX_ADVERTISED_LOCATIONS) {
+      throw new CHIRPError(
+        'ERR_CHIRP_HOSTS',
+        'CHIRP resolution returned an invalid or excessive host list.'
       )
-    ).filter(location => {
-      try {
-        deriveCHIRPObjectURL(
-          location,
-          parsed.rootIdentifier,
-          parsed.rootIdentifier,
-          this.allowInsecureHTTP
-        )
-        return true
-      } catch {
-        return false
-      }
-    })
+    }
+    const advertisedLocations = [
+      ...new Set(
+        resolved.flatMap(location => {
+          if (typeof location !== 'string') return []
+          try {
+            return [
+              deriveCHIRPObjectURL(
+                location,
+                parsed.rootIdentifier,
+                parsed.rootIdentifier,
+                this.allowInsecureHTTP
+              )
+            ]
+          } catch {
+            return []
+          }
+        })
+      )
+    ]
     if (advertisedLocations.length === 0) {
       throw new CHIRPError('ERR_CHIRP_NO_HOSTS', 'No valid complete CHIRP hosts were advertised.')
     }
@@ -162,9 +214,14 @@ export class CHIRPDownloader {
     }
   }
 
-  async *stream(
+  stream(chirpURL: string, options: CHIRPDownloadOptions = {}): AsyncGenerator<CHIRPVerifiedChunk> {
+    const snapshot = snapshotDownloadOptions(options)
+    return this.streamOwned(chirpURL, snapshot)
+  }
+
+  private async *streamOwned(
     chirpURL: string,
-    options: CHIRPDownloadOptions = {}
+    options: CHIRPDownloadOptions
   ): AsyncGenerator<CHIRPVerifiedChunk> {
     throwIfAborted(options.signal)
     const context = await this.inspect(chirpURL, options.signal)
@@ -338,6 +395,7 @@ export class CHIRPDownloader {
     chirpURL: string,
     options: CHIRPDownloadOptions = {}
   ): Promise<CHIRPDownloadResult> {
+    options = snapshotDownloadOptions(options)
     const context = await this.inspect(chirpURL, options.signal)
     const range = normalizeRange(options.range, context.root.logicalLength)
     const expectedLength = range.endExclusive - range.start
@@ -378,7 +436,17 @@ export class CHIRPDownloader {
     signal?: AbortSignal,
     expectedBytes?: number
   ): Promise<Uint8Array> {
-    const cached = await this.cache.get(objectIdentifier)
+    let cached: Uint8Array | undefined
+    try {
+      cached = await withTimeout(
+        Promise.resolve(this.cacheGet(objectIdentifier)),
+        this.requestTimeoutMs,
+        'CHIRP cache read timed out.',
+        signal
+      )
+    } catch {
+      throwIfAborted(signal)
+    }
     if (cached != null) {
       return verifiedCachedObject(objectIdentifier, cached, maximumBytes, expectedBytes)
     }
@@ -395,22 +463,39 @@ export class CHIRPDownloader {
           objectIdentifier,
           this.allowInsecureHTTP
         )
-        await this.urlPolicy(new URL(url))
         const timed = timedSignal(signal, this.requestTimeoutMs)
         try {
-          const response = await this.fetcher(url, {
-            method: 'GET',
-            headers: { Accept: 'application/octet-stream, application/vnd.bsv.chirp-node' },
-            redirect: 'error',
-            signal: timed.signal
-          })
+          await raceWithSignal(Promise.resolve(this.urlPolicy(new URL(url))), timed.signal)
+          const responsePromise = Promise.resolve(
+            this.fetcher(url, {
+              method: 'GET',
+              headers: { Accept: 'application/octet-stream, application/vnd.bsv.chirp-node' },
+              redirect: 'error',
+              signal: timed.signal
+            })
+          )
+          void responsePromise.then(
+            response => {
+              if (timed.signal.aborted) cancelResponseBody(response, timed.signal.reason)
+            },
+            () => {}
+          )
+          const response = await raceWithSignal(responsePromise, timed.signal)
           const bytes = await readVerifiedResponse(
             response,
             objectIdentifier,
             maximumBytes,
-            expectedBytes
+            expectedBytes,
+            timed.signal
           )
-          await this.cache.set(objectIdentifier, bytes)
+          try {
+            await raceWithSignal(
+              Promise.resolve(this.cacheSet(objectIdentifier, bytes.slice())),
+              timed.signal
+            )
+          } catch {
+            throwIfAborted(timed.signal)
+          }
           return bytes
         } finally {
           timed.dispose()
@@ -431,17 +516,21 @@ async function readVerifiedResponse(
   response: Response,
   objectIdentifier: string,
   maximumBytes: number,
-  expectedBytes?: number
+  expectedBytes: number | undefined,
+  signal: AbortSignal
 ): Promise<Uint8Array> {
   if (response.status !== 200 || response.body == null) {
+    cancelResponseBody(response, signal.reason)
     throw new CHIRPError('ERR_CHIRP_HTTP', `CHIRP host returned HTTP ${response.status}.`)
   }
   const encoding = response.headers.get('content-encoding')
   if (encoding != null && encoding.toLowerCase() !== 'identity') {
+    cancelResponseBody(response, signal.reason)
     throw new CHIRPError('ERR_CHIRP_ENCODING', 'CHIRP objects must not use content encoding.')
   }
   const declaredLength = response.headers.get('content-length')
   if (declaredLength != null && !/^(0|[1-9]\d*)$/.test(declaredLength)) {
+    cancelResponseBody(response, signal.reason)
     throw new CHIRPError('ERR_CHIRP_LENGTH', 'CHIRP object response has invalid Content-Length.')
   }
   const headerLength = declaredLength == null ? null : Number(declaredLength)
@@ -449,18 +538,26 @@ async function readVerifiedResponse(
     headerLength != null &&
     (!Number.isSafeInteger(headerLength) || headerLength > maximumBytes)
   ) {
+    cancelResponseBody(response, signal.reason)
     throw new CHIRPError(
       'ERR_CHIRP_OBJECT_SIZE',
       'CHIRP object response exceeds its permitted size.'
     )
   }
   if (headerLength != null && expectedBytes != null && headerLength !== expectedBytes) {
+    cancelResponseBody(response, signal.reason)
     throw new CHIRPError(
       'ERR_CHIRP_LENGTH',
       'CHIRP object Content-Length differs from its verified reference.'
     )
   }
-  const bytes = await readBodyBounded(response.body, headerLength, maximumBytes, expectedBytes)
+  const bytes = await readBodyBounded(
+    response.body,
+    headerLength,
+    maximumBytes,
+    expectedBytes,
+    signal
+  )
   verifyObjectBytes(objectIdentifier, bytes)
   return bytes
 }
@@ -484,45 +581,60 @@ function verifyCompleteStream(
 
 function verifiedCachedObject(
   objectIdentifier: string,
-  cached: Uint8Array,
+  cached: unknown,
   maximumBytes: number,
   expectedBytes?: number
 ): Uint8Array {
-  verifyObjectBytes(objectIdentifier, cached)
-  if (cached.byteLength > maximumBytes) {
+  if (!(cached instanceof Uint8Array)) {
+    throw new CHIRPError('ERR_CHIRP_OBJECT_TYPE', 'CHIRP cache returned non-byte data.')
+  }
+  const owned = cached.slice()
+  verifyObjectBytes(objectIdentifier, owned)
+  if (owned.byteLength > maximumBytes) {
     throw new CHIRPError('ERR_CHIRP_OBJECT_SIZE', 'Cached CHIRP object exceeds its permitted size.')
   }
-  if (expectedBytes != null && cached.byteLength !== expectedBytes) {
+  if (expectedBytes != null && owned.byteLength !== expectedBytes) {
     throw new CHIRPError(
       'ERR_CHIRP_LENGTH',
       'Cached CHIRP object differs from its reference length.'
     )
   }
-  return cached
+  return owned
 }
 
 async function readBodyBounded(
   body: ReadableStream<Uint8Array>,
   declaredLength: number | null,
   maximumBytes: number,
-  expectedBytes?: number
+  expectedBytes: number | undefined,
+  signal: AbortSignal
 ): Promise<Uint8Array> {
   const reader = body.getReader()
   const chunks: Uint8Array[] = []
   let length = 0
   try {
     while (true) {
-      const result = await reader.read()
+      const result = await raceWithSignal(reader.read(), signal)
       if (result.done) break
+      if (!(result.value instanceof Uint8Array)) {
+        cancelReader(reader, new TypeError('CHIRP response body yielded non-byte data.'))
+        throw new CHIRPError('ERR_CHIRP_OBJECT_TYPE', 'CHIRP response body yielded non-byte data.')
+      }
       length += result.value.byteLength
       if (length > maximumBytes || (declaredLength != null && length > declaredLength)) {
-        await reader.cancel()
+        cancelReader(reader, new RangeError('CHIRP response exceeded its declared bound.'))
         throw new CHIRPError('ERR_CHIRP_OBJECT_SIZE', 'CHIRP response exceeded its declared bound.')
       }
-      chunks.push(result.value)
+      chunks.push(result.value.slice())
     }
   } finally {
-    reader.releaseLock()
+    if (signal.aborted) cancelReader(reader, signal.reason)
+    try {
+      reader.releaseLock()
+    } catch {
+      // A non-cooperative custom stream may retain a pending read after the
+      // timeout race. Its cancellation promise is already contained above.
+    }
   }
   if (declaredLength != null && length !== declaredLength) {
     throw new CHIRPError('ERR_CHIRP_LENGTH', 'CHIRP response length differs from Content-Length.')
@@ -537,6 +649,14 @@ async function readBodyBounded(
     offset += chunk.byteLength
   }
   return bytes
+}
+
+function cancelResponseBody(response: Response, reason?: unknown): void {
+  void response.body?.cancel(reason).catch(() => {})
+}
+
+function cancelReader(reader: ReadableStreamDefaultReader<Uint8Array>, reason?: unknown): void {
+  void reader.cancel(reason).catch(() => {})
 }
 
 async function* mapConcurrentOrdered<T, R>(
@@ -569,6 +689,8 @@ async function* mapConcurrentOrdered<T, R>(
 function normalizeRange(range: CHIRPRange | undefined, logicalLength: bigint): CHIRPRange {
   const normalized = range ?? { start: 0n, endExclusive: logicalLength }
   if (
+    typeof normalized.start !== 'bigint' ||
+    typeof normalized.endExclusive !== 'bigint' ||
     normalized.start < 0n ||
     normalized.endExclusive < normalized.start ||
     normalized.endExclusive > logicalLength
@@ -576,6 +698,127 @@ function normalizeRange(range: CHIRPRange | undefined, logicalLength: bigint): C
     throw new CHIRPError('ERR_CHIRP_RANGE', 'Invalid CHIRP logical byte range.')
   }
   return normalized
+}
+
+function snapshotDownloadOptions(options: CHIRPDownloadOptions): CHIRPDownloadOptions {
+  if (
+    options === null ||
+    typeof options !== 'object' ||
+    Array.isArray(options) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(options))
+  ) {
+    throw new TypeError('CHIRP download options must be a plain object.')
+  }
+  const allowed = new Set(['range', 'signal', 'concurrency'])
+  const values = Object.create(null) as Record<string, unknown>
+  for (const key of Reflect.ownKeys(options)) {
+    if (typeof key !== 'string' || !allowed.has(key)) {
+      throw new TypeError('CHIRP download options contain an unsupported property.')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(options, key)!
+    if (!('value' in descriptor)) {
+      throw new TypeError('CHIRP download options cannot use accessors.')
+    }
+    values[key] = descriptor.value
+  }
+
+  let range: CHIRPRange | undefined
+  if (values.range !== undefined) {
+    const candidate = values.range
+    if (
+      candidate === null ||
+      typeof candidate !== 'object' ||
+      Array.isArray(candidate) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(candidate)) ||
+      Reflect.ownKeys(candidate).some(key => key !== 'start' && key !== 'endExclusive')
+    ) {
+      throw new TypeError('CHIRP range must be a plain start/endExclusive object.')
+    }
+    const start = Object.getOwnPropertyDescriptor(candidate, 'start')
+    const end = Object.getOwnPropertyDescriptor(candidate, 'endExclusive')
+    if (
+      start === undefined ||
+      end === undefined ||
+      !('value' in start) ||
+      !('value' in end) ||
+      typeof start.value !== 'bigint' ||
+      typeof end.value !== 'bigint'
+    ) {
+      throw new TypeError('CHIRP range boundaries must be own bigint data properties.')
+    }
+    range = { start: start.value, endExclusive: end.value }
+  }
+  if (values.signal !== undefined && !isAbortSignal(values.signal)) {
+    throw new TypeError('signal must be an AbortSignal.')
+  }
+  if (values.concurrency !== undefined) {
+    boundedInteger(values.concurrency as number, 1, 64, 'concurrency')
+  }
+  return {
+    range,
+    signal: values.signal as AbortSignal | undefined,
+    concurrency: values.concurrency as number | undefined
+  }
+}
+
+function snapshotDownloaderConfig(config: CHIRPDownloaderConfig): CHIRPDownloaderConfig {
+  if (
+    config === null ||
+    typeof config !== 'object' ||
+    Array.isArray(config) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(config))
+  ) {
+    throw new TypeError('CHIRP downloader config must be a plain object.')
+  }
+  const allowed = new Set([
+    'networkPreset',
+    'resolve',
+    'fetch',
+    'cache',
+    'concurrency',
+    'retriesPerObject',
+    'maxLogicalLength',
+    'maxObjects',
+    'maxDownloadBytes',
+    'maxObjectBytes',
+    'allowInsecureHTTP',
+    'allowPrivateHosts',
+    'requestTimeoutMs',
+    'resolutionTimeoutMs',
+    'urlPolicy'
+  ])
+  const values = Object.create(null) as Record<string, unknown>
+  for (const key of Reflect.ownKeys(config)) {
+    if (typeof key !== 'string' || !allowed.has(key)) {
+      throw new TypeError('CHIRP downloader config contains an unsupported property.')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(config, key)!
+    if (!('value' in descriptor)) {
+      throw new TypeError('CHIRP downloader config cannot use accessors.')
+    }
+    values[key] = descriptor.value
+  }
+  for (const callback of ['resolve', 'fetch', 'urlPolicy'] as const) {
+    if (values[callback] !== undefined && typeof values[callback] !== 'function') {
+      throw new TypeError(`${callback} must be a function.`)
+    }
+  }
+  for (const option of ['allowInsecureHTTP', 'allowPrivateHosts'] as const) {
+    if (values[option] !== undefined && typeof values[option] !== 'boolean') {
+      throw new TypeError(`${option} must be a boolean.`)
+    }
+  }
+  return values as CHIRPDownloaderConfig
+}
+
+function isAbortSignal(value: unknown): value is AbortSignal {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof (value as AbortSignal).aborted === 'boolean' &&
+    typeof (value as AbortSignal).addEventListener === 'function' &&
+    typeof (value as AbortSignal).removeEventListener === 'function'
+  )
 }
 
 function overlaps(start: bigint, end: bigint, range: CHIRPRange): boolean {
@@ -595,6 +838,29 @@ function boundedInteger(value: number, minimum: number, maximum: number, name: s
     throw new RangeError(`${name} must be an integer from ${minimum} through ${maximum}.`)
   }
   return value
+}
+
+async function raceWithSignal<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  throwIfAborted(signal)
+  return await new Promise<T>((resolve, reject) => {
+    const abort = (): void =>
+      reject(
+        signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('The CHIRP request was aborted.', 'AbortError')
+      )
+    signal.addEventListener('abort', abort, { once: true })
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', abort)
+        resolve(value)
+      },
+      error => {
+        signal.removeEventListener('abort', abort)
+        reject(error)
+      }
+    )
+  })
 }
 
 function defaultURLPolicy(url: URL): void {

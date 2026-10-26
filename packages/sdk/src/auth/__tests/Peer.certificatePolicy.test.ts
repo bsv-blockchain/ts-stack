@@ -5,30 +5,74 @@ import type { VerifiableCertificate } from '../certificates/VerifiableCertificat
 import { SessionManager, type AsyncSessionManager } from '../SessionManager.js'
 
 import { Peer } from '../Peer.js'
-import { validateCertificates, verifyNonce as verifyNonceFunction } from '../utils/index.js'
+import { validateCertificates } from '../utils/validateCertificates.js'
+import { verifyNonce as verifyNonceFunction } from '../utils/verifyNonce.js'
+import PrivateKey from '../../primitives/PrivateKey.js'
+import * as Utils from '../../primitives/utils.js'
 
-jest.mock('../utils/index.js', () => ({
-  createNonce: async () => 'generated-session',
-  verifyNonce: jest.fn(async () => true),
-  getVerifiableCertificates: async () => [],
+jest.mock('../utils/createNonce.js', () => ({
+  createNonce: async () => 'generated-session'
+}))
+jest.mock('../utils/verifyNonce.js', () => ({
+  verifyNonce: jest.fn(async () => true)
+}))
+jest.mock('../utils/getVerifiableCertificates.js', () => ({
+  getVerifiableCertificates: async () => []
+}))
+jest.mock('../utils/validateCertificates.js', () => ({
   validateCertificates: jest.fn(async () => {})
 }))
 const validate = jest.mocked(validateCertificates)
 const verifyNonce = jest.mocked(verifyNonceFunction)
 
+const labels = [
+  'local',
+  'remote',
+  'initial',
+  'different',
+  'dynamic',
+  'first',
+  'second',
+  'certifier',
+  'another-peer',
+  'unproven-peer',
+  'unrelated-peer'
+]
+const identity = (label: string): string =>
+  new PrivateKey(labels.indexOf(label) + 40).toPublicKey().toString()
+const certificateType = (label: string): string =>
+  Utils.toBase64(
+    Array.from(
+      { length: 32 },
+      (_value, index) => (label.charCodeAt(index % label.length) + index) % 256
+    )
+  )
+const REMOTE = identity('remote')
+
 const policy = (certifier: string, type: string): RequestedCertificateSet => ({
-  certifiers: [certifier],
-  types: { [type]: ['name'] }
+  certifiers: [identity(certifier)],
+  types: { [certificateType(type)]: ['name'] }
 })
-const cert = (certifier: string, type: string): VerifiableCertificate =>
-  ({ certifier, type, subject: 'remote' }) as VerifiableCertificate
+const cert = (
+  certifier: string,
+  type: string,
+  fields: string[] = ['name']
+): VerifiableCertificate =>
+  ({
+    certifier: identity(certifier),
+    type: certificateType(type),
+    subject: REMOTE,
+    keyring: Object.fromEntries(fields.map(field => [field, 'AQ==']))
+  }) as VerifiableCertificate
+
+let responseNonce = 0
 
 function response(certificates: VerifiableCertificate[], session = 'session'): AuthMessage {
   return {
     version: '0.1',
     messageType: 'certificateResponse',
-    identityKey: 'remote',
-    nonce: 'response-nonce',
+    identityKey: REMOTE,
+    nonce: `response-nonce-${++responseNonce}`,
     initialNonce: 'remote-session',
     yourNonce: session,
     certificates,
@@ -53,11 +97,17 @@ async function setup(requested = policy('initial', 'initial'), copyStore = false
     },
     async hasSession(id) {
       return backing.hasSession(id)
+    },
+    async claimMessageNonce(sessionNonce, messageNonce) {
+      return backing.claimMessageNonce(sessionNonce, messageNonce)
+    },
+    async claimInitialRequestNonce(identityKey, initialNonce) {
+      return backing.claimInitialRequestNonce(identityKey, initialNonce)
     }
   }
   const transport: Transport = { send: jest.fn(async () => {}), async onData() {} }
   const wallet = {
-    getPublicKey: jest.fn(async () => ({ publicKey: 'local' })),
+    getPublicKey: jest.fn(async () => ({ publicKey: identity('local') })),
     createSignature: jest.fn(async () => ({ signature: [1] })),
     verifySignature: jest.fn(async () => ({ valid: true }))
   } as unknown as WalletInterface
@@ -74,8 +124,8 @@ async function setup(requested = policy('initial', 'initial'), copyStore = false
     isAuthenticated: true,
     sessionNonce: 'session',
     peerNonce: 'remote-session',
-    peerIdentityKey: 'remote',
-    lastUpdate: 1,
+    peerIdentityKey: REMOTE,
+    lastUpdate: Date.now(),
     certificatePolicy: structuredClone(requested),
     certificatesRequired: true,
     certificatesValidated: false
@@ -121,11 +171,11 @@ test('records dynamic policy snapshots and accepts out-of-order responses on an 
   const { peer, backing, transport } = await setup(undefined, true)
   const first = policy('first', 'first')
   await Promise.all([
-    peer.requestCertificates(first, 'remote'),
-    peer.requestCertificates(policy('second', 'second'), 'remote')
+    peer.requestCertificates(first, REMOTE),
+    peer.requestCertificates(policy('second', 'second'), REMOTE)
   ])
   first.certifiers[0] = 'changed-by-caller'
-  first.types.first.push('changed-by-caller')
+  first.types[certificateType('first')].push('changed-by-caller')
   expect(Object.keys(backing.getSession('session')!.pendingCertificateRequests!)).toHaveLength(2)
   await (peer as any).processCertificateResponse(response([cert('second', 'second')]))
   await (peer as any).processCertificateResponse(response([cert('first', 'first')]))
@@ -149,18 +199,38 @@ test('records dynamic policy snapshots and accepts out-of-order responses on an 
   }
 })
 
+test('matches otherwise identical pending policies by the exact revealed field set', async () => {
+  const { peer, backing } = await setup()
+  const certifier = identity('dynamic')
+  const type = certificateType('dynamic')
+  const first = { certifiers: [certifier], types: { [type]: ['name'] } }
+  const second = { certifiers: [certifier], types: { [type]: ['email'] } }
+  await peer.requestCertificates(first, REMOTE)
+  await peer.requestCertificates(second, REMOTE)
+
+  await (peer as any).processCertificateResponse(response([cert('dynamic', 'dynamic', ['email'])]))
+
+  expect(validate).toHaveBeenLastCalledWith(
+    expect.anything(),
+    expect.anything(),
+    second,
+    'app.example'
+  )
+  expect(Object.values(backing.getSession('session')!.pendingCertificateRequests!)).toEqual([first])
+})
+
 test('does not combine permissions from separate requests or another session', async () => {
   const { peer, backing } = await setup()
-  await peer.requestCertificates(policy('first', 'first'), 'remote')
-  await peer.requestCertificates(policy('second', 'second'), 'remote')
+  await peer.requestCertificates(policy('first', 'first'), REMOTE)
+  await peer.requestCertificates(policy('second', 'second'), REMOTE)
   await expect(
     (peer as any).processCertificateResponse(response([cert('first', 'second')]))
   ).rejects.toThrow('locally requested set')
   backing.addSession({
     isAuthenticated: true,
     sessionNonce: 'other',
-    peerIdentityKey: 'remote',
-    lastUpdate: 2,
+    peerIdentityKey: REMOTE,
+    lastUpdate: Date.now() + 1,
     certificatePolicy: policy('initial', 'initial')
   })
   await expect(
@@ -171,7 +241,7 @@ test('does not combine permissions from separate requests or another session', a
 
 test('preserves a pending request after failed validation and removes it after a valid retry', async () => {
   const { peer, backing } = await setup()
-  await peer.requestCertificates(policy('dynamic', 'dynamic'), 'remote')
+  await peer.requestCertificates(policy('dynamic', 'dynamic'), REMOTE)
   validate.mockRejectedValueOnce(new Error('certificate validation failed'))
   await expect(
     (peer as any).processCertificateResponse(response([cert('dynamic', 'dynamic')]))
@@ -186,22 +256,24 @@ test('records requests before synchronous transport delivery and cleans failed s
   ;(transport.send as jest.MockedFunction<Transport['send']>).mockImplementationOnce(async () => {
     await (peer as any).processCertificateResponse(response([cert('dynamic', 'dynamic')]))
   })
-  await peer.requestCertificates(policy('dynamic', 'dynamic'), 'remote')
+  await peer.requestCertificates(policy('dynamic', 'dynamic'), REMOTE)
   expect(backing.getSession('session')?.pendingCertificateRequests).toEqual({})
   ;(transport.send as jest.MockedFunction<Transport['send']>).mockRejectedValueOnce(
     new Error('offline')
   )
-  await expect(peer.requestCertificates(policy('dynamic', 'dynamic'), 'remote')).rejects.toThrow(
+  await expect(peer.requestCertificates(policy('dynamic', 'dynamic'), REMOTE)).rejects.toThrow(
     'offline'
   )
   expect(backing.getSession('session')?.pendingCertificateRequests).toEqual({})
 })
 
-test('observers run after validation and cannot roll it back when they reject', async () => {
+test('observers receive the exact validated session and cannot roll validation back', async () => {
   const { peer, backing } = await setup()
   const later = jest.fn()
-  peer.listenForCertificatesReceived(async () => {
+  peer.listenForCertificatesReceived(async (_sender, _certificates, sessionNonce, peerNonce) => {
     expect(backing.getSession('session')?.certificatesValidated).toBe(true)
+    expect(sessionNonce).toBe('session')
+    expect(peerNonce).toBe('remote-session')
     throw new Error('observer failed')
   })
   peer.listenForCertificatesReceived(later)
@@ -217,10 +289,22 @@ test('rejects a mismatched session identity before certificate processing', asyn
   await expect(
     (peer as any).processCertificateResponse({
       ...response([cert('initial', 'initial')]),
-      identityKey: 'another-peer'
+      identityKey: identity('another-peer')
     })
   ).rejects.toThrow('identity does not match')
   expect(validate).not.toHaveBeenCalled()
+})
+
+test('rejects initial-response identity substitution for a targeted handshake', async () => {
+  const { peer, wallet } = await setup()
+  await expect(
+    (peer as any).authenticateInitialResponse({
+      ...response([]),
+      messageType: 'initialResponse',
+      identityKey: identity('another-peer')
+    })
+  ).rejects.toThrow('requested peer identity')
+  expect(wallet.verifySignature).not.toHaveBeenCalled()
 })
 
 test('does not dispatch a general message under transport-supplied identity metadata', async () => {
@@ -236,13 +320,58 @@ test('does not dispatch a general message under transport-supplied identity meta
     (peer as any).processGeneralMessage({
       ...response([]),
       messageType: 'general',
-      identityKey: 'unrelated-peer',
+      identityKey: identity('unrelated-peer'),
       payload: [1]
     })
   ).rejects.toThrow('identity does not match')
 
   expect(delivered).not.toHaveBeenCalled()
-  expect((peer as any).lastInteractedWithPeer).not.toBe('unrelated-peer')
+  expect((peer as any).lastInteractedWithPeer).not.toBe(identity('unrelated-peer'))
+})
+
+test('dispatches a signed general nonce once and rejects an exact replay', async () => {
+  const { peer, backing } = await setup()
+  const session = backing.getSession('session')!
+  session.certificatesRequired = false
+  session.certificatesValidated = true
+  backing.updateSession(session)
+  const delivered = jest.fn()
+  peer.listenForGeneralMessages(delivered)
+  const message = {
+    ...response([]),
+    messageType: 'general' as const,
+    payload: [1, 2, 3]
+  }
+
+  await (peer as any).processGeneralMessage(message)
+  await expect((peer as any).processGeneralMessage(message)).rejects.toThrow('Replayed general')
+
+  expect(delivered).toHaveBeenCalledTimes(1)
+  expect(delivered).toHaveBeenCalledWith(REMOTE, [1, 2, 3])
+})
+
+test('keeps an unsigned initial-request session unauthenticated', async () => {
+  const { peer, backing } = await setup()
+  await (peer as any).processInitialRequest({
+    version: '0.1',
+    messageType: 'initialRequest',
+    identityKey: identity('unproven-peer'),
+    initialNonce: 'unproven-nonce'
+  })
+
+  expect(backing.getSession('generated-session')).toMatchObject({
+    isAuthenticated: false,
+    peerIdentityKey: identity('unproven-peer'),
+    peerNonce: 'unproven-nonce'
+  })
+  await expect(
+    (peer as any).processInitialRequest({
+      version: '0.1',
+      messageType: 'initialRequest',
+      identityKey: identity('unproven-peer'),
+      initialNonce: 'unproven-nonce'
+    })
+  ).rejects.toThrow('Replayed initialRequest')
 })
 
 test('does not dispatch a certificate request under transport-supplied identity metadata', async () => {
@@ -254,7 +383,7 @@ test('does not dispatch a certificate request under transport-supplied identity 
     (peer as any).processCertificateRequest({
       ...response([]),
       messageType: 'certificateRequest',
-      identityKey: 'unrelated-peer',
+      identityKey: identity('unrelated-peer'),
       requestedCertificates: policy('certifier', 'type')
     })
   ).rejects.toThrow('identity does not match')
@@ -295,6 +424,24 @@ test('missing-session updates reject and release their serialization queue', asy
   expect((peer as any).certificateSessionUpdates.size).toBe(0)
 })
 
+test('times out an unanswered initial handshake and releases callback and session state', async () => {
+  jest.useFakeTimers()
+  try {
+    const { peer, backing } = await setup()
+    const handshake = (peer as any).initiateHandshake(REMOTE) as Promise<string>
+    const rejection = expect(handshake).rejects.toThrow('initial response')
+    await Promise.resolve()
+    await Promise.resolve()
+    await jest.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect((peer as any).onInitialResponseReceivedCallbacks.size).toBe(0)
+    expect(backing.getSession('generated-session')).toBeUndefined()
+  } finally {
+    jest.useRealTimers()
+  }
+})
+
 test('an awaiting general message cannot restore stale validation state in a copy store', async () => {
   const { peer, backing } = await setup(undefined, true)
   const delivered = jest.fn()
@@ -314,13 +461,49 @@ test('an awaiting general message cannot restore stale validation state in a cop
   expect((peer as any).certificateValidationPromises.has('session')).toBe(true)
   peer.listenForCertificatesReceived(async () => {
     await general
-    expect(delivered).toHaveBeenCalledWith('remote', [1])
+    expect(delivered).toHaveBeenCalledWith(REMOTE, [1])
     throw new Error('observer cannot veto delivery')
   })
   await expect(
     (peer as any).processCertificateResponse(response([cert('initial', 'initial')]))
   ).rejects.toThrow('observer cannot veto delivery')
   expect(backing.getSession('session')?.certificatesValidated).toBe(true)
+})
+
+test('concurrent general messages share one certificate-validation gate', async () => {
+  const { peer, backing } = await setup(undefined, true)
+  const delivered = jest.fn()
+  peer.listenForGeneralMessages(delivered)
+  const firstMessage = {
+    ...response([]),
+    messageType: 'general' as const,
+    payload: [1]
+  }
+  const secondMessage = {
+    ...response([]),
+    messageType: 'general' as const,
+    payload: [2]
+  }
+
+  const first = (peer as any).processGeneralMessage(firstMessage) as Promise<void>
+  const second = (peer as any).processGeneralMessage(secondMessage) as Promise<void>
+  for (
+    let attempt = 0;
+    attempt < 20 && !(peer as any).certificateValidationPromises.has('session');
+    attempt++
+  ) {
+    await Promise.resolve()
+  }
+  expect((peer as any).certificateValidationPromises.size).toBe(1)
+
+  await (peer as any).processCertificateResponse(response([cert('initial', 'initial')]))
+  await Promise.all([first, second])
+
+  expect(backing.getSession('session')?.certificatesValidated).toBe(true)
+  expect(delivered.mock.calls).toEqual([
+    [REMOTE, [1]],
+    [REMOTE, [2]]
+  ])
 })
 
 test('initial-response validation preserves concurrent dynamic requests in an async copy store', async () => {
@@ -342,7 +525,7 @@ test('initial-response validation preserves concurrent dynamic requests in an as
     structuredClone(backing.getSession('session'))
   ) as Promise<void>
   await validating
-  const request = peer.requestCertificates(policy('dynamic', 'dynamic'), 'remote')
+  const request = peer.requestCertificates(policy('dynamic', 'dynamic'), REMOTE)
   for (let turn = 0; turn < 20; turn++) await Promise.resolve()
   expect(transport.send).not.toHaveBeenCalled()
   release()

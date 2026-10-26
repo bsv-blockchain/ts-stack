@@ -13,14 +13,14 @@
   "prohibitedExports": [],
   "maximumBytes": {
     "vite": {
-      "raw": 805000,
-      "gzip": 321000,
-      "brotli": 138000
+      "raw": 845000,
+      "gzip": 337000,
+      "brotli": 145000
     },
     "esbuild": {
-      "raw": 42000,
-      "gzip": 14200,
-      "brotli": 12700
+      "raw": 44000,
+      "gzip": 15100,
+      "brotli": 13500
     }
   },
   "umd": {
@@ -28,9 +28,9 @@
     "additionalPaths": ["dist/src/wasm/bdk-core.umd.js", "dist/src/wasm/bdk-core.umd.wasm"],
     "global": "bsvVerifast",
     "maximumBytes": {
-      "raw": 300000,
-      "gzip": 121000,
-      "brotli": 95000
+      "raw": 330000,
+      "gzip": 129000,
+      "brotli": 102000
     }
   }
 }

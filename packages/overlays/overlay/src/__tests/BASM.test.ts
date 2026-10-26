@@ -35,6 +35,23 @@ describe('BRC-136 BASM helpers', () => {
     expect(root).toBe('b4100303b9e99ada4b479b0bb93d9b549cb057a1c4be08896bc982debe20ce39')
   })
 
+  it('rejects malformed or ambiguous admission sets', () => {
+    expect(() => computeBasmRoot([{ txid: TXID_1, blockIndex: -1 }])).toThrow('invalid')
+    expect(() =>
+      computeBasmRoot([
+        { txid: TXID_1, blockIndex: 0 },
+        { txid: TXID_1, blockIndex: 1 }
+      ])
+    ).toThrow('unique')
+    expect(() =>
+      computeBasmRoot([
+        { txid: TXID_1, blockIndex: 0 },
+        { txid: TXID_2, blockIndex: 0 }
+      ])
+    ).toThrow('unique')
+    expect(() => computeBasmRoot(['not-a-txid'])).toThrow('32 bytes of hex')
+  })
+
   it('chains TAC in internal byte order', () => {
     const root = computeBasmRoot([TXID_1, TXID_2, TXID_3])
     expect(computeTac(ZERO, BLOCK_HASH, root)).toBe(

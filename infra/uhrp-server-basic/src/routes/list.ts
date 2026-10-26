@@ -1,8 +1,7 @@
 import { Request, Response } from 'express'
-import { getWallet } from '../utils/walletSingleton'
-import { Utils } from '@bsv/sdk'
 import { log } from '../logger'
 import { normalizeUhrpPagination } from '../resourceLimits'
+import { listVerifiedAdvertisements } from '../utils/storedAdvertisements'
 
 interface ListRequest extends Request {
   auth: {
@@ -42,44 +41,26 @@ const listHandler = async (req: ListRequest, res: Response<ListResponse>) => {
       })
     }
 
-    const wallet = await getWallet()
-
     const { limit, offset } = normalizeUhrpPagination(
       req.body?.limit ?? req.query.limit,
       req.body?.offset ?? req.query.offset
     )
 
-    const { outputs } = await wallet.listOutputs({
-      basket: 'uhrp advertisements',
-      tags: [`uploader_identity_key_${identityKey}`],
-      includeTags: true,
-      tagQueryMode: 'all',
+    const { advertisements } = await listVerifiedAdvertisements({
+      uploaderIdentityKey: identityKey,
       limit,
       offset
     })
     const result: ListResponse['uploads'] = []
 
-    for (const out of outputs) {
-      if (!out.tags) continue
-
-      const uhrpUrlTag = out.tags.find(t => t.startsWith('uhrp_url_'))
-      const expiryTimeTag = out.tags.find(t => t.startsWith('expiry_time_'))
-
-      const uhrpUrl = uhrpUrlTag
-        ? Utils.toUTF8(Utils.toArray(uhrpUrlTag.substring('uhrp_url_'.length), 'hex'))
-        : ''
-
-      const expiryTime = expiryTimeTag
-        ? Number.parseInt(expiryTimeTag.substring('expiry_time_'.length), 10)
-        : 0
-
-      if (Date.now() > expiryTime * 1000) {
+    for (const advertisement of advertisements) {
+      if (Date.now() > advertisement.metadata.expiryTime * 1000) {
         continue
       }
 
       result.push({
-        uhrpUrl,
-        expiryTime
+        uhrpUrl: advertisement.metadata.uhrpUrl,
+        expiryTime: advertisement.metadata.expiryTime
       })
     }
 

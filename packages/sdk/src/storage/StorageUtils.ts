@@ -1,5 +1,5 @@
 import { toHex, fromBase58Check, toBase58Check, toArray } from '../primitives/utils.js'
-import { Hash } from '../primitives/index.js'
+import { SHA256 } from '../primitives/Hash.js'
 
 /**
  * Takes a UHRP URL and removes any prefixes.
@@ -32,7 +32,7 @@ export const getURLForHash = (hash: number[]): string => {
  */
 export const getURLForFile = (file: Uint8Array | number[]): string => {
   const data = file instanceof Uint8Array ? file : Uint8Array.from(file)
-  const hasher = new Hash.SHA256()
+  const hasher = new SHA256()
   const chunkSize = 1024 * 1024
   for (let i = 0; i < data.length; i += chunkSize) {
     const chunk = data.subarray(i, i + chunkSize)

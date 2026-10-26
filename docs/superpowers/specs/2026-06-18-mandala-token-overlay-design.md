@@ -3,14 +3,16 @@ id: mandala-token-overlay-design
 title: Mandala Token Regulated-Transfer Overlay — Design
 kind: spec
 domain: overlays
-version: "n/a"
-last_updated: "2026-06-18"
-last_verified: "2026-06-18"
+version: 'n/a'
+last_updated: '2026-06-18'
+last_verified: '2026-06-18'
 status: experimental
 tags: [mandala, brc-92, overlay, regulated-token]
 ---
 
 # Mandala Token Regulated-Transfer Overlay — Design
+
+> **Superseded (2026-10):** Mandala moved to BRC-162 binary tokens — see @bsv/templates 2.0.0 Bsv21Binary and @bsv/overlay-topics 2.0.0.
 
 **Date:** 2026-06-18
 **Branch:** `feature/mandala-token-overlay`
@@ -92,6 +94,7 @@ OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
 - One satoshi per token output (BRC-92).
 
 Methods:
+
 - `lock(assetId, amount, pubKeyHash)` — raw form.
 - `lock` BRC-29 helper — derive the locking public key / hash from a wallet
   (`protocolID`, `keyID`, `counterparty`), mirroring `P2MSKH.addressBRC29`.
@@ -116,16 +119,18 @@ Locking script:
   URDNA2015 is the alternative if a semantic RDF graph is ever needed; JCS is preferred here as it
   canonicalizes arbitrary JSON without requiring an `@context`.) The `keyID` is also the
   `commitment` that anchors the action into the chain.
-- Each administrative transaction spends authorization outpoint *n* and creates outpoint *n+1*,
+- Each administrative transaction spends authorization outpoint _n_ and creates outpoint _n+1_,
   forming an immutable linked hash chain in the transaction DAG since genesis.
 
 Action kinds:
+
 - `register` — genesis authorization outpoint; establishes the `assetId` basis.
 - `issue` / mint — create new FT supply.
 - `redeem` — destroy FT supply.
 - `recover` — reissue burnt tokens.
 
 Methods:
+
 - `canonicalize(actionDetails)` → canonical string (RFC 8785 JCS).
 - `deriveBoundKey(wallet, protocolID, actionDetails)` →
   `{ boundKey, keyID }` via `wallet.getPublicKey({ protocolID, keyID, counterparty: 'anyone' })`
@@ -144,14 +149,14 @@ action's JSON to the authorization chain.
 
 File layout mirrors existing topics (UHRP / Identity):
 
-| File | Responsibility |
-|------|----------------|
-| `types.ts` | `MandalaTokenRecord`, off-chain linkage payload types, `ScreeningProvider` interface |
-| `verifyKeyLinkage.ts` | Decrypt (overlay as verifier) + EC point-addition verification of `revealSpecificKeyLinkage` data → controlling identity pubkey per input/output |
-| `MandalaTopicManager.ts` | `TopicManager` implementation (admittance + all enforcement) |
-| `MandalaLookupService.ts` | `LookupService` implementation (persistence + queries) |
-| `MandalaStorageManager.ts` | MongoDB persistence |
-| `MandalaTopicDocs.md.ts` / `MandalaLookupDocs.md.ts` | Markdown docs (message-box pattern) |
+| File                                                 | Responsibility                                                                                                                                   |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `types.ts`                                           | `MandalaTokenRecord`, off-chain linkage payload types, `ScreeningProvider` interface                                                             |
+| `verifyKeyLinkage.ts`                                | Decrypt (overlay as verifier) + EC point-addition verification of `revealSpecificKeyLinkage` data → controlling identity pubkey per input/output |
+| `MandalaTopicManager.ts`                             | `TopicManager` implementation (admittance + all enforcement)                                                                                     |
+| `MandalaLookupService.ts`                            | `LookupService` implementation (persistence + queries)                                                                                           |
+| `MandalaStorageManager.ts`                           | MongoDB persistence                                                                                                                              |
+| `MandalaTopicDocs.md.ts` / `MandalaLookupDocs.md.ts` | Markdown docs (message-box pattern)                                                                                                              |
 
 All exported from `packages/overlays/topics/src/index.ts`.
 
@@ -195,6 +200,7 @@ Also implements `identifyNeededInputs` (anchor token history), `getDocumentation
 ### 4.3 `MandalaLookupService`
 
 On `outputAdmittedByTopic` / `outputSpent`, persist via `MandalaStorageManager`:
+
 - token UTXO records (assetId, amount, outpoint, controlling identity key),
 - **retained linkage records** — the `encryptedLinkage`/`encryptedLinkageProof` ciphertext stored
   verbatim (encrypted at rest by construction), with `prover`/`protocolID`/`keyID` metadata,
@@ -206,6 +212,7 @@ balance-by-identity-key query exposed.
 ### 4.4 `MandalaStorageManager` (MongoDB)
 
 Collections:
+
 - `tokens` — current UTXO set for token outputs.
 - `linkageRecords` — retained **encrypted** linkage ciphertext + metadata, **no TTL expiry**
   (must persist ≥5 years; deletion is an out-of-band retention-policy action, not an automatic
@@ -254,25 +261,26 @@ this is a deterministic local wallet acting as the verifier.
    wallet; this protects the one key that can decrypt it.)
 2. Production `ScreeningProvider` backed by a real sanctioned-parties feed.
 3. Operational hardening of the overlay host (physical/logical/operational controls).
-4. **Issuer-side sanctions screening (I3, from whole-branch review):** admin issuance currently
-   screens the FT output recipients but not the issuing identity itself (the admin output exposes a
-   derived `boundKey`, not the issuer identity key). Add the issuer identity key to the admin
-   off-chain payload and screen it, so an OFAC-listed issuer cannot mint. Design §4.2.6 intent.
+4. **Issuer-side sanctions screening (addressed):** the topic manager resolves and validates the
+   configured administrative wallet's local identity whenever an admin output is admitted and
+   screens it with all token parties. This preserves the existing wire format while ensuring a
+   sanctioned issuer cannot mint or alter policy.
 5. **Canonical JSON → full RFC 8785 JCS (I1, from whole-branch review):** `MandalaAdmin.canonicalize`
    is a deterministic JSON subset (recursive key sorting + `JSON.stringify` scalars), not full JCS
    (no number/Unicode normalization). It is internally consistent (the overlay re-derives with the
    same function), so it is safe in-system, but a third party implementing literal JCS would compute
    a different `boundKey`. Either adopt a vetted JCS library or amend this spec to declare the
    implemented form normative before independent implementers build against it.
-6. **Admin-chain depth:** the overlay verifies one hop (boundKey re-derivation + that the prior
-   authorization outpoint is spent for non-`register` kinds); it does not walk the authorization
-   chain back to genesis. A self-consistent forged `actionDetails` whose `priorOutpoint` points at
-   any spent input the issuer controls passes the one-hop check. Add full chain-to-genesis walking.
+6. **Admin-chain depth (addressed):** every non-registration action must spend an admitted admin
+   outpoint from that same asset's history. Because registration alone establishes the genesis
+   asset and each admitted successor repeats this check, the stored history forms an inductively
+   verified chain to genesis without trusting the submitted payload.
 7. **Redeem/burn output mechanics:** conservation currently requires `Σout === Σin + authorizedIssue`
    per assetId, which admits transfers and authorized issuance but does not model `redeem` (supply
    reduction) output rules. Define and enforce redeem semantics.
 
 ### Deferred minor items (from per-task reviews; triaged non-blocking)
+
 - `MandalaToken.unlock` lacks an end-to-end `spendTx.verify()` test (signature correct by inspection
   vs SDK P2PKH); add full-interpreter verification.
 - `MandalaLookupService.outputSpent` does a redundant `findByOutpoint` + `getTokenRow`; collapse to

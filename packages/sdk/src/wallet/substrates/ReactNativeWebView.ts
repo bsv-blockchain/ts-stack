@@ -1,15 +1,20 @@
 import Random from '../../primitives/Random.js'
-import * as Utils from '../../primitives/utils.js'
-import { WalletError } from '../WalletError.js'
+import { toArray, toBase64, toUint8Array } from '../../primitives/utils.js'
+import { WalletError, walletErrors } from '../WalletError.js'
 import { CallType } from './WalletWireCalls.js'
 import { InvokableWalletBase } from './InvokableWalletBase.js'
 import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '../BRC100ByteEncoding.js'
+import { validateWalletResult } from '../WalletResultValidation.js'
 
 type ReactNativeWindow = Window & {
   ReactNativeWebView: {
     postMessage: (message: any) => void
   }
 }
+
+const MAX_PENDING_REACT_NATIVE_INVOCATIONS = 1024
+const MAX_REACT_NATIVE_RESPONSE_TIMEOUT_MS = 60 * 60 * 1000
+const MAX_REACT_NATIVE_MESSAGE_BYTES = 256 * 1024 * 1024
 
 /**
  * Facilitates wallet operations over cross-document messaging.
@@ -30,13 +35,19 @@ type ReactNativeWindow = Window & {
 export default class ReactNativeWebView extends InvokableWalletBase {
   private readonly domain: string
   private readonly responseTimeout?: number
+  private pendingInvocations = 0
 
   constructor(domain: string = '*', responseTimeout?: number) {
     super()
     if (typeof globalThis.window !== 'object') {
       throw new TypeError('The XDM substrate requires a global window object.')
     }
-    if (!(globalThis.window as unknown as ReactNativeWindow).hasOwnProperty('ReactNativeWebView')) {
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        globalThis.window as unknown as ReactNativeWindow,
+        'ReactNativeWebView'
+      )
+    ) {
       throw new Error('The window object does not have a ReactNativeWebView property.')
     }
     if (
@@ -47,18 +58,46 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         'The window.ReactNativeWebView property does not seem to support postMessage calls.'
       )
     }
+    if (
+      responseTimeout !== undefined &&
+      (!Number.isSafeInteger(responseTimeout) ||
+        responseTimeout < 1 ||
+        responseTimeout > MAX_REACT_NATIVE_RESPONSE_TIMEOUT_MS)
+    ) {
+      throw new TypeError(
+        `ReactNativeWebView responseTimeout must be an integer from 1 to ${MAX_REACT_NATIVE_RESPONSE_TIMEOUT_MS}.`
+      )
+    }
     this.domain = normalizeOrigin(domain)
     this.responseTimeout = responseTimeout
   }
 
-  async invoke(call: CallType, args: any): Promise<any> {
+  protected override async invokeRaw(
+    call: CallType,
+    args: any,
+    bindingRequest: unknown
+  ): Promise<any> {
+    if (this.pendingInvocations >= MAX_PENDING_REACT_NATIVE_INVOCATIONS) {
+      throw new Error('React Native wallet pending invocation limit reached.')
+    }
+    const id = toBase64(Random(12))
+    this.pendingInvocations++
     return await new Promise((resolve, reject) => {
-      const id = Utils.toBase64(Random(12))
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+      let listenerRegistered = false
+      let active = true
       const cleanup = (): void => {
+        if (!active) return
+        active = false
+        this.pendingInvocations--
         if (timeoutHandle !== undefined) clearTimeout(timeoutHandle)
-        if (typeof globalThis.window.removeEventListener === 'function') {
-          globalThis.window.removeEventListener('message', listener)
+        if (listenerRegistered && typeof globalThis.window.removeEventListener === 'function') {
+          try {
+            globalThis.window.removeEventListener('message', listener)
+          } catch {
+            // Cleanup failures must not retain the invocation or replace the
+            // operation's actual result.
+          }
         }
       }
       const listener = (e: MessageEvent): void => {
@@ -73,13 +112,24 @@ export default class ReactNativeWebView extends InvokableWalletBase {
         if (!isBridgeDelivered(e, this.domain)) {
           return
         }
+        if (typeof e.data !== 'string') return
+        if (toUint8Array(e.data, 'utf8').length > MAX_REACT_NATIVE_MESSAGE_BYTES) {
+          cleanup()
+          reject(new Error('React Native wallet response exceeds the maximum permitted size.'))
+          return
+        }
         let data: any
         try {
           data = JSON.parse(e.data)
         } catch {
           return
         }
-        if (data?.type !== 'CWI' || data.id !== id || data.isInvocation === true) {
+        if (
+          data?.type !== 'CWI' ||
+          data.id !== id ||
+          data.isInvocation !== false ||
+          (data.status !== 'success' && data.status !== 'error')
+        ) {
           return
         }
         // A configured domain also pins host-synthesized responses, which
@@ -99,22 +149,41 @@ export default class ReactNativeWebView extends InvokableWalletBase {
           return
         }
         cleanup()
-        normalizeBRC100WalletByteFields(data.result)
         if (data.status === 'error') {
-          const err = new WalletError(data.description, data.code)
-          reject(err)
+          if (
+            typeof data.description !== 'string' ||
+            toArray(data.description, 'utf8').length > 4096 ||
+            !Number.isSafeInteger(data.code) ||
+            data.code < 1 ||
+            data.code > 255
+          ) {
+            reject(new Error('Invalid React Native wallet error response.'))
+          } else {
+            const isAssignedCode =
+              data.code >= walletErrors.unsupportedAction && data.code <= walletErrors.abortRefused
+            const description = isAssignedCode ? data.description : 'Wallet operation failed'
+            reject(
+              new WalletError(description, isAssignedCode ? data.code : walletErrors.unknownError)
+            )
+          }
         } else {
-          resolve(data.result)
+          try {
+            const result = normalizeBRC100WalletByteFields(data.result)
+            resolve(validateWalletResult(call, result, bindingRequest))
+          } catch (error) {
+            reject(error)
+          }
         }
       }
-      globalThis.window.addEventListener('message', listener)
-      if (this.responseTimeout !== undefined) {
-        timeoutHandle = setTimeout(() => {
-          cleanup()
-          reject(new Error('React Native wallet response timed out.'))
-        }, this.responseTimeout)
-      }
       try {
+        globalThis.window.addEventListener('message', listener)
+        listenerRegistered = true
+        if (this.responseTimeout !== undefined) {
+          timeoutHandle = setTimeout(() => {
+            cleanup()
+            reject(new Error('React Native wallet response timed out.'))
+          }, this.responseTimeout)
+        }
         const message = stringifyBRC100({
           type: 'CWI',
           isInvocation: true,
@@ -122,6 +191,9 @@ export default class ReactNativeWebView extends InvokableWalletBase {
           call,
           args
         })
+        if (toUint8Array(message, 'utf8').length > MAX_REACT_NATIVE_MESSAGE_BYTES) {
+          throw new Error('React Native wallet request exceeds the maximum permitted size.')
+        }
         ;(globalThis.window as unknown as ReactNativeWindow).ReactNativeWebView.postMessage(message)
       } catch (error) {
         cleanup()

@@ -10,15 +10,27 @@ export interface PackedArrays<T extends Uint8Array | Int32Array | Uint32Array> {
   offsets: Uint32Array
 }
 
+export function uint32(value: number, name: string): number {
+  if (value >>> 0 !== value) {
+    throw new RangeError(`${name} must be a uint32 integer`)
+  }
+  return value
+}
+
 export function flagsForInputCount(
   inputCount: number,
   verifyFlags?: string | string[],
   customFlags?: readonly number[] | Uint32Array
 ): Uint32Array {
+  uint32(inputCount, 'inputCount')
   if (customFlags !== undefined) {
-    if (customFlags.length !== 0 && customFlags.length !== inputCount) {
-      throw new RangeError('Custom flag count must be zero or match the input count')
+    if (!Array.isArray(customFlags) && !(customFlags instanceof Uint32Array)) {
+      throw new TypeError('Custom flags must be an array or Uint32Array')
     }
+    if (customFlags.length !== 0 && customFlags.length !== inputCount)
+      throw new RangeError('Custom flag count must be zero or match the input count')
+    if (Array.isArray(customFlags) && customFlags.some(flag => flag >>> 0 !== flag))
+      throw new RangeError('customFlags must be a uint32 integer array')
     return Uint32Array.from(customFlags)
   }
   if (verifyFlags === undefined) return new Uint32Array()

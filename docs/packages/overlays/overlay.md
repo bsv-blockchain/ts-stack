@@ -4,9 +4,9 @@ title: '@bsv/overlay'
 kind: package
 domain: overlays
 npm: '@bsv/overlay'
-version: '2.6.0'
-last_updated: '2026-09-18'
-last_verified: '2026-09-18'
+version: '2.6.5'
+last_updated: '2026-09-26'
+last_verified: '2026-09-26'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay'
 status: stable
@@ -14,6 +14,10 @@ tags: ['overlay', 'framework']
 ---
 
 # @bsv/overlay
+
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Core library defining the Overlay Services Engine for UTXO-based systems on BSV.
 
@@ -235,6 +239,12 @@ invalid transactions stop appearing in lookup results immediately.
 - Supports SHIP (Service Host Interconnect Protocol) and SLAP (Service Lookup Availability Protocol) for peer discovery
 - Integrates Graph Aware Sync Protocol (GASP) for historical synchronization with other overlay nodes
 - Supports BRC-136 BASM primitives for topic anchors and chain reorg handling
+
+SHIP tracker responses are untrusted discovery hints. The Engine authenticates
+the canonical identity-linked advertisement signature and binds its
+one-satoshi output, BEEF/TXID, and requested topic before using the endpoint for
+GASP; the connection still requires the normal public-HTTPS and DNS-pinning
+controls.
 
 ## Common pitfalls
 

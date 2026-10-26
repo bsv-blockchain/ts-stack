@@ -1,9 +1,11 @@
 import {
-  Beef,
-  ListActionsResult,
-  ListOutputsResult,
-  Validation
-} from '@bsv/sdk'
+  type ValidCreateActionArgs,
+  type ValidListActionsArgs,
+  type ValidListOutputsArgs,
+  type ValidProcessActionArgs,
+  validateCreateActionOptions
+} from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, ListActionsResult, ListOutputsResult } from '@bsv/sdk'
 import type { PendingSignAction, Wallet } from '../../Wallet'
 import {
   ActionBatchCommitAction,
@@ -15,11 +17,7 @@ import {
 } from '../../sdk/ActionBatch.interfaces'
 import { actionBatchBootstrap } from './actionBatchBootstrap'
 import { StorageCreateActionResult, StorageProcessActionResults } from '../../sdk/WalletStorage.interfaces'
-import {
-  WERR_ACTION_BATCH_STATE,
-  WERR_INSUFFICIENT_FUNDS,
-  WERR_INVALID_OPERATION
-} from '../../sdk/WERR_errors'
+import { WERR_ACTION_BATCH_STATE, WERR_INSUFFICIENT_FUNDS, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
 import { asString, asUint8Array } from '../../utility/utilityHelpers.noBuffer'
 import {
@@ -29,10 +27,7 @@ import {
   specOpWalletBalance,
   specOpWalletManagedUtxos
 } from '../../sdk/types'
-import {
-  actionBatchBlobDigest,
-  actionBatchManifestDigest
-} from '../../utility/actionBatchDigest'
+import { actionBatchBlobDigest, actionBatchManifestDigest } from '../../utility/actionBatchDigest'
 import {
   ActionBatchPlannedAction,
   ActionBatchPlannerState,
@@ -44,12 +39,13 @@ import {
   stageTransactionOutputs
 } from './ActionBatchPlanner'
 import { beefForTxids } from '../../utility/beefForTxids'
+import { numericTotalOutputs } from '../../utility/numericTotalOutputs'
 import { actionBatchPackLength } from '../../utility/actionBatchPack'
 
 export type ActionBatchMode = 'auto' | 'legacy'
 
 interface PendingBatchPlan {
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
   planned: ActionBatchPlannedAction
 }
 
@@ -58,69 +54,62 @@ interface UploadBlob {
   bytes: Uint8Array
 }
 
-function mergeUnique (values: string[]): string[] {
+function mergeUnique(values: string[]): string[] {
   return [...new Set(values)]
 }
 
-function isActionBatchStateError (error: unknown): error is WERR_ACTION_BATCH_STATE {
+function isActionBatchStateError(error: unknown): error is WERR_ACTION_BATCH_STATE {
   if (error instanceof WERR_ACTION_BATCH_STATE) return true
   if (error == null || typeof error !== 'object') return false
-  const candidate = error as { name?: unknown, code?: unknown, state?: unknown }
-  return (candidate.name === 'WERR_ACTION_BATCH_STATE' || candidate.code === 'WERR_ACTION_BATCH_STATE') &&
+  const candidate = error as { name?: unknown; code?: unknown; state?: unknown }
+  return (
+    (candidate.name === 'WERR_ACTION_BATCH_STATE' || candidate.code === 'WERR_ACTION_BATCH_STATE') &&
     typeof candidate.state === 'string'
+  )
 }
 
-function isActionBatchCapacityError (error: unknown): boolean {
+function isActionBatchCapacityError(error: unknown): boolean {
   if (error == null || typeof error !== 'object') return false
-  const candidate = error as { name?: unknown, code?: unknown, parameter?: unknown, message?: unknown }
-  const code = candidate.name === 'Error' ? candidate.code : candidate.name ?? candidate.code
+  const candidate = error as { name?: unknown; code?: unknown; parameter?: unknown; message?: unknown }
+  const code = candidate.name === 'Error' ? candidate.code : (candidate.name ?? candidate.code)
   if (code === 'WERR_INVALID_PARAMETER' && candidate.parameter === 'firstAction') return true
-  return code === 'WERR_INVALID_OPERATION' &&
+  return (
+    code === 'WERR_INVALID_OPERATION' &&
     typeof candidate.message === 'string' &&
     candidate.message.includes('action batch') &&
     (candidate.message.includes('maximum') || candidate.message.includes('reserve'))
+  )
 }
 
-function nextGeometricTarget (value: number): number {
+function nextGeometricTarget(value: number): number {
   return Math.min(Number.MAX_SAFE_INTEGER, value * 2)
 }
 
-export function additionalFundingTarget (error: WERR_INSUFFICIENT_FUNDS): number {
+export function additionalFundingTarget(error: WERR_INSUFFICIENT_FUNDS): number {
   return error.moreSatoshisNeeded
 }
 
-export function fundingRunwayExtension (
+export function fundingRunwayExtension(
   runwayTarget: number,
   ewmaConfirmedInputs: number,
   ewmaConfirmedSatoshis: number,
   availableConfirmed: Array<{ satoshis: number }>
-): { nextRunwayTarget: number, requestedOutputs: number, targetSatoshis: number } | undefined {
+): { nextRunwayTarget: number; requestedOutputs: number; targetSatoshis: number } | undefined {
   const availableConfirmedCount = availableConfirmed.length
-  const availableConfirmedSatoshis = availableConfirmed
-    .reduce((sum, output) => sum + output.satoshis, 0)
+  const availableConfirmedSatoshis = availableConfirmed.reduce((sum, output) => sum + output.satoshis, 0)
   const predictedByInputs = availableConfirmedCount / Math.max(1, ewmaConfirmedInputs)
-  const predictedBySatoshis = ewmaConfirmedSatoshis > 0
-    ? availableConfirmedSatoshis / ewmaConfirmedSatoshis
-    : Number.POSITIVE_INFINITY
+  const predictedBySatoshis =
+    ewmaConfirmedSatoshis > 0 ? availableConfirmedSatoshis / ewmaConfirmedSatoshis : Number.POSITIVE_INFINITY
   if (Math.min(predictedByInputs, predictedBySatoshis) >= 2) return undefined
   const nextRunwayTarget = nextGeometricTarget(runwayTarget)
   return {
     nextRunwayTarget,
-    requestedOutputs: Math.max(
-      1,
-      Math.ceil(nextRunwayTarget * ewmaConfirmedInputs) - availableConfirmedCount
-    ),
-    targetSatoshis: Math.max(
-      1,
-      nextRunwayTarget * ewmaConfirmedSatoshis - availableConfirmedSatoshis
-    )
+    requestedOutputs: Math.max(1, Math.ceil(nextRunwayTarget * ewmaConfirmedInputs) - availableConfirmedCount),
+    targetSatoshis: Math.max(1, nextRunwayTarget * ewmaConfirmedSatoshis - availableConfirmedSatoshis)
   }
 }
 
-function makePlannerState (
-  begin: BeginActionBatchResult,
-  firstAction: Validation.ValidCreateActionArgs
-): ActionBatchPlannerState {
+function makePlannerState(begin: BeginActionBatchResult, firstAction: ValidCreateActionArgs): ActionBatchPlannerState {
   const sharedBeef = new Beef()
   if (begin.inputBeef != null) sharedBeef.mergeBeef(begin.inputBeef)
   if (firstAction.inputBEEF != null) sharedBeef.mergeBeef(firstAction.inputBEEF)
@@ -164,10 +153,10 @@ class ActionBatchWorkspace {
   private readonly eagerUploadLanes: Array<Promise<void>>
   private eagerUploadCursor = 0
 
-  constructor (
+  constructor(
     private readonly wallet: Wallet,
     begin: BeginActionBatchResult,
-    firstAction: Validation.ValidCreateActionArgs,
+    firstAction: ValidCreateActionArgs,
     private readonly capabilities: NonNullable<StorageCapabilities['actionBatch']>
   ) {
     this.batchId = begin.batchId
@@ -176,59 +165,53 @@ class ActionBatchWorkspace {
     this.canResume = capabilities.resume === true && wallet.storage.resumeActionBatch != null
     this.eagerUploadLanes = Array.from(
       {
-        length: capabilities.packedUploads == null
-          ? 1
-          : Math.max(1, capabilities.maxConcurrentUploads)
+        length: capabilities.packedUploads == null ? 1 : Math.max(1, capabilities.maxConcurrentUploads)
       },
       async () => {}
     )
   }
 
-  private get usesCompactManifest (): boolean {
+  private get usesCompactManifest(): boolean {
     return this.capabilities.manifestVersion === 2
   }
 
-  private get packedUploads (): NonNullable<typeof this.capabilities.packedUploads> | undefined {
-    return this.capabilities.packedUploads?.version === 1
-      ? this.capabilities.packedUploads
-      : undefined
+  private get packedUploads(): NonNullable<typeof this.capabilities.packedUploads> | undefined {
+    return this.capabilities.packedUploads?.version === 1 ? this.capabilities.packedUploads : undefined
   }
 
-  ownsReference (reference: string): boolean {
+  ownsReference(reference: string): boolean {
     if (this.planned.has(reference)) return true
     if (this.actions.some(action => action.reference === reference || action.txid === reference)) return true
-    return Object.entries(this.wallet.pendingSignActions)
-      .some(([pendingReference, pending]) =>
-        this.planned.has(pendingReference) && pending.tx.id('hex') === reference
+    return Object.entries(this.wallet.pendingSignActions).some(
+      ([pendingReference, pending]) => this.planned.has(pendingReference) && pending.tx.id('hex') === reference
+    )
+  }
+
+  ownsTransaction(txid: string): boolean {
+    return (
+      this.actions.some(action => action.txid === txid) ||
+      Object.entries(this.wallet.pendingSignActions).some(
+        ([reference, pending]) => this.planned.has(reference) && pending.tx.id('hex') === txid
       )
+    )
   }
 
-  ownsTransaction (txid: string): boolean {
-    return this.actions.some(action => action.txid === txid) ||
-      Object.entries(this.wallet.pendingSignActions)
-        .some(([reference, pending]) => this.planned.has(reference) && pending.tx.id('hex') === txid)
-  }
-
-  references (args: Validation.ValidCreateActionArgs): boolean {
-    const referencesStagedOutput = [
-      ...args.inputs.map(input => input.outpoint),
-      ...args.options.noSendChange
-    ].some(outpoint => this.state.staged.has(`${outpoint.txid}.${outpoint.vout}`))
+  references(args: ValidCreateActionArgs): boolean {
+    const referencesStagedOutput = [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange].some(
+      outpoint => this.state.staged.has(`${outpoint.txid}.${outpoint.vout}`)
+    )
     return referencesStagedOutput || args.options.sendWith.some(txid => this.ownsTransaction(txid))
   }
 
-  referencesSendWith (txids: string[]): boolean {
+  referencesSendWith(txids: string[]): boolean {
     return txids.some(txid => this.ownsTransaction(txid))
   }
 
-  get isEmpty (): boolean {
+  get isEmpty(): boolean {
     return this.planned.size === 0 && this.actions.length === 0
   }
 
-  overlayListActions (
-    persisted: ListActionsResult,
-    args: Validation.ValidListActionsArgs
-  ): ListActionsResult {
+  overlayListActions(persisted: ListActionsResult, args: ValidListActionsArgs): ListActionsResult {
     if (args.labels.includes(specOpFailedActions)) return persisted
     const controlLabels = new Set(args.labels.includes(specOpNoSendActions) ? ['abort'] : [])
     const ordinaryLabels = args.labels.filter(label => !isListActionsSpecOp(label) && !controlLabels.has(label))
@@ -293,10 +276,7 @@ class ActionBatchWorkspace {
     }
   }
 
-  overlayListOutputs (
-    persisted: ListOutputsResult,
-    args: Validation.ValidListOutputsArgs
-  ): ListOutputsResult {
+  overlayListOutputs(persisted: ListOutputsResult, args: ValidListOutputsArgs): ListOutputsResult {
     const isBalance = args.basket === specOpWalletBalance || args.tags.includes(specOpWalletBalance)
     const managedOnly = args.basket === specOpWalletManagedUtxos || isBalance
     const consumed = this.state.consumed
@@ -318,9 +298,9 @@ class ActionBatchWorkspace {
           : undefined,
         spendable: true,
         customInstructions: args.includeCustomInstructions ? output.customInstructions : undefined,
-        tags: args.includeTags ? output.tags ?? [] : undefined,
+        tags: args.includeTags ? (output.tags ?? []) : undefined,
         outpoint,
-        labels: args.includeLabels && output.txid != null ? stagedLabels.get(output.txid) ?? [] : undefined
+        labels: args.includeLabels && output.txid != null ? (stagedLabels.get(output.txid) ?? []) : undefined
       }))
 
     if (isBalance) {
@@ -328,20 +308,19 @@ class ActionBatchWorkspace {
         .filter(([outpoint]) => consumed.has(outpoint))
         .reduce((sum, [, output]) => sum + output.satoshis, 0)
       return {
-        totalOutputs: persisted.totalOutputs - consumedConfirmed + staged.reduce((sum, output) => sum + output.satoshis, 0),
+        totalOutputs:
+          numericTotalOutputs(persisted) - consumedConfirmed + staged.reduce((sum, output) => sum + output.satoshis, 0),
         outputs: []
       }
     }
 
     const persistedUnconsumed = persisted.outputs.filter(output => !consumed.has(output.outpoint))
-    const outputs = [
-      ...persistedUnconsumed,
-      ...staged
-    ]
+    const outputs = [...persistedUnconsumed, ...staged]
     const ordered = args.offset < 0 ? [...outputs].reverse() : outputs
     const offset = args.offset < 0 ? Math.max(0, -args.offset - 1) : args.offset
     const result: ListOutputsResult = {
-      totalOutputs: persisted.totalOutputs - (persisted.outputs.length - persistedUnconsumed.length) + staged.length,
+      totalOutputs:
+        numericTotalOutputs(persisted) - (persisted.outputs.length - persistedUnconsumed.length) + staged.length,
       outputs: ordered.slice(offset, offset + args.limit)
     }
     if (args.includeTransactions) {
@@ -354,13 +333,11 @@ class ActionBatchWorkspace {
     return result
   }
 
-  private mergeExtension (
-    extension: {
-      reservedOutputs: BeginActionBatchResult['reservedOutputs']
-      explicitOutputs: BeginActionBatchResult['explicitOutputs']
-      inputBeef?: number[] | Uint8Array
-    }
-  ): void {
+  private mergeExtension(extension: {
+    reservedOutputs: BeginActionBatchResult['reservedOutputs']
+    explicitOutputs: BeginActionBatchResult['explicitOutputs']
+    inputBeef?: number[] | Uint8Array
+  }): void {
     for (const output of [...extension.reservedOutputs, ...extension.explicitOutputs]) {
       if (output.sourceTransaction != null) {
         this.state.sharedBeef.mergeRawTx(output.sourceTransaction)
@@ -373,22 +350,25 @@ class ActionBatchWorkspace {
     }
   }
 
-  private missingExplicitOutpoints (args: Validation.ValidCreateActionArgs): Array<{ txid: string, vout: number }> {
-    return [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange]
-      .filter(outpoint => {
-        const key = `${outpoint.txid}.${outpoint.vout}`
-        return !this.state.staged.has(key) && !this.state.explicit.has(key) &&
-          !this.state.reserved.has(key) && (this.state.discardedStagedTxids.has(outpoint.txid) ||
-            this.state.sharedBeef.findTxid(outpoint.txid)?.tx == null)
-      })
+  private missingExplicitOutpoints(args: ValidCreateActionArgs): Array<{ txid: string; vout: number }> {
+    return [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange].filter(outpoint => {
+      const key = `${outpoint.txid}.${outpoint.vout}`
+      return (
+        !this.state.staged.has(key) &&
+        !this.state.explicit.has(key) &&
+        !this.state.reserved.has(key) &&
+        (this.state.discardedStagedTxids.has(outpoint.txid) ||
+          this.state.sharedBeef.findTxid(outpoint.txid)?.tx == null)
+      )
+    })
   }
 
-  private async extend (
+  private async extend(
     targetSatoshis: number,
     requestedOutputs: number,
-    explicitOutpoints: Array<{ txid: string, vout: number }>,
+    explicitOutpoints: Array<{ txid: string; vout: number }>,
     includeSourceTransactions: boolean
-  ): Promise<{ outputCount: number, satoshis: number }> {
+  ): Promise<{ outputCount: number; satoshis: number }> {
     const extension = await this.wallet.storage.extendActionBatch({
       batchId: this.batchId,
       targetSatoshis: Math.max(1, Math.ceil(targetSatoshis)),
@@ -404,28 +384,33 @@ class ActionBatchWorkspace {
     }
   }
 
-  async resume (): Promise<void> {
-    const outpoints = [...new Map(
-      [...this.state.reserved.values(), ...this.state.explicit.values()]
-        .filter(output => output.txid != null)
-        .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
-    ).values()]
-    const result = await this.wallet.storage.resumeActionBatch!({
+  async resume(): Promise<void> {
+    const outpoints = [
+      ...new Map(
+        [...this.state.reserved.values(), ...this.state.explicit.values()]
+          .filter(output => output.txid != null)
+          .map(output => [`${output.txid}.${output.vout}`, { txid: output.txid!, vout: output.vout }])
+      ).values()
+    ]
+    const result = await this.wallet.storage.resumeActionBatch({
       batchId: this.batchId,
       outpoints
     })
     this.expiresAt = Date.parse(result.expiresAt)
   }
 
-  private async renewIfNeeded (): Promise<void> {
+  private async renewIfNeeded(): Promise<void> {
     if (Date.now() >= this.expiresAt) {
       if (this.canResume) await this.resume()
       return
     }
     const renewAt = this.expiresAt - this.capabilities.leaseMs * 0.2
     if (Date.now() < renewAt) return
-    this.renewal ??= this.wallet.storage.renewActionBatch(this.batchId)
-      .then(result => { this.expiresAt = Date.parse(result.expiresAt) })
+    this.renewal ??= this.wallet.storage
+      .renewActionBatch(this.batchId)
+      .then(result => {
+        this.expiresAt = Date.parse(result.expiresAt)
+      })
       .catch(async error => {
         if (isActionBatchStateError(error) && error.state === 'expired') {
           // Providers without the optional resume extension retain the v1
@@ -436,11 +421,13 @@ class ActionBatchWorkspace {
         }
         throw error
       })
-      .finally(() => { this.renewal = undefined })
+      .finally(() => {
+        this.renewal = undefined
+      })
     await this.renewal
   }
 
-  async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
+  async plan(args: ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (this.committed) throw new WERR_INVALID_OPERATION('action batch is already committed')
     await this.renewIfNeeded()
     if (this.extension != null) await this.extension
@@ -472,7 +459,7 @@ class ActionBatchWorkspace {
     return planned.dcr
   }
 
-  private updateEwma (plan: PendingBatchPlan): void {
+  private updateEwma(plan: PendingBatchPlan): void {
     const confirmed = plan.planned.consumedOutpoints
       .map(outpoint => this.state.reserved.get(outpoint))
       .filter((output): output is NonNullable<typeof output> => output != null)
@@ -488,7 +475,7 @@ class ActionBatchWorkspace {
     this.ewmaConfirmedSatoshis = 0.5 * satoshis + 0.5 * this.ewmaConfirmedSatoshis
   }
 
-  stage (prior: PendingSignAction, processArgs: Validation.ValidProcessActionArgs): void {
+  stage(prior: PendingSignAction, processArgs: ValidProcessActionArgs): void {
     if (this.actions.some(action => action.reference === prior.reference)) return
     const pending = this.planned.get(prior.reference)
     if (pending == null) throw new WERR_INVALID_OPERATION('signed action does not belong to active action batch')
@@ -541,20 +528,24 @@ class ActionBatchWorkspace {
     this.scheduleExtensionIfNeeded()
   }
 
-  private physicalBlobs (
-    logicalDigest: string,
-    bytes: Uint8Array
-  ): { chunks?: string[], blobs: UploadBlob[] } {
+  private physicalBlobs(logicalDigest: string, bytes: Uint8Array): { chunks?: string[]; blobs: UploadBlob[] } {
     const packed = this.packedUploads
-    const maxPhysicalBytes = packed == null
-      ? this.capabilities.maxBlobBytes
-      : Math.min(
-          this.capabilities.maxBlobBytes,
-          Math.max(1, packed.maxPackBytes - actionBatchPackLength([{
-            digest: logicalDigest,
-            bytes: new Uint8Array()
-          }]))
-        )
+    const maxPhysicalBytes =
+      packed == null
+        ? this.capabilities.maxBlobBytes
+        : Math.min(
+            this.capabilities.maxBlobBytes,
+            Math.max(
+              1,
+              packed.maxPackBytes -
+                actionBatchPackLength([
+                  {
+                    digest: logicalDigest,
+                    bytes: new Uint8Array()
+                  }
+                ])
+            )
+          )
     if (bytes.length <= maxPhysicalBytes) {
       return { blobs: [{ digest: logicalDigest, bytes }] }
     }
@@ -569,7 +560,7 @@ class ActionBatchWorkspace {
     return { chunks, blobs }
   }
 
-  private queueEagerLogicalBlob (digest: string, bytes: Uint8Array): void {
+  private queueEagerLogicalBlob(digest: string, bytes: Uint8Array): void {
     const packed = this.packedUploads
     if (packed?.eager !== true || !this.usesCompactManifest) return
     const physical = this.physicalBlobs(digest, bytes)
@@ -584,25 +575,23 @@ class ActionBatchWorkspace {
     }
   }
 
-  private takePack (final: boolean): UploadBlob[] {
+  private takePack(final: boolean): UploadBlob[] {
     const packed = this.packedUploads
     if (packed == null || this.eagerPending.size === 0) return []
     const items: UploadBlob[] = []
     for (const [digest, bytes] of this.eagerPending) {
       const candidate = [...items, { digest, bytes }]
-      if (candidate.length > packed.maxItems ||
-        actionBatchPackLength(candidate) > packed.maxPackBytes) break
+      if (candidate.length > packed.maxItems || actionBatchPackLength(candidate) > packed.maxPackBytes) break
       items.push({ digest, bytes })
     }
     if (items.length === 0) throw new WERR_INVALID_OPERATION('action batch blob cannot fit provider pack')
     const length = actionBatchPackLength(items)
-    if (!final && items.length === this.eagerPending.size &&
-      length < Math.floor(packed.maxPackBytes * 0.9)) return []
+    if (!final && items.length === this.eagerPending.size && length < Math.floor(packed.maxPackBytes * 0.9)) return []
     for (const item of items) this.eagerPending.delete(item.digest)
     return items
   }
 
-  private schedulePackUpload (items: UploadBlob[]): void {
+  private schedulePackUpload(items: UploadBlob[]): void {
     const packed = this.packedUploads
     if (packed == null || items.length === 0) return
     const lane = this.eagerUploadCursor++ % this.eagerUploadLanes.length
@@ -623,11 +612,11 @@ class ActionBatchWorkspace {
       })
   }
 
-  private async awaitEagerUploads (): Promise<void> {
+  private async awaitEagerUploads(): Promise<void> {
     await Promise.all(this.eagerUploadLanes)
   }
 
-  private flushEagerPacks (final: boolean): void {
+  private flushEagerPacks(final: boolean): void {
     if (!this.eagerEnabled) return
     for (;;) {
       const items = this.takePack(final)
@@ -636,10 +625,11 @@ class ActionBatchWorkspace {
     }
   }
 
-  private scheduleExtensionIfNeeded (): void {
+  private scheduleExtensionIfNeeded(): void {
     if (this.extension != null) return
-    const availableConfirmed = [...this.state.reserved.entries()]
-      .filter(([outpoint]) => !this.state.consumed.has(outpoint))
+    const availableConfirmed = [...this.state.reserved.entries()].filter(
+      ([outpoint]) => !this.state.consumed.has(outpoint)
+    )
     const request = fundingRunwayExtension(
       this.runwayTarget,
       this.ewmaConfirmedInputs,
@@ -651,27 +641,27 @@ class ActionBatchWorkspace {
       .then(added => {
         // A failed or partial extension must not geometrically inflate the
         // next request against a runway that the wallet never acquired.
-        if (
-          added.outputCount >= request.requestedOutputs &&
-          added.satoshis >= request.targetSatoshis
-        ) {
+        if (added.outputCount >= request.requestedOutputs && added.satoshis >= request.targetSatoshis) {
           this.runwayTarget = request.nextRunwayTarget
         }
       })
       .catch(() => {})
-      .finally(() => { this.extension = undefined })
+      .finally(() => {
+        this.extension = undefined
+      })
   }
 
-  private addLockingScriptBlobs (blobs: Map<string, Uint8Array>): void {
+  private addLockingScriptBlobs(blobs: Map<string, Uint8Array>): void {
     if (this.usesCompactManifest) return
     for (const [digest, script] of this.lockingScripts) {
       if (!blobs.has(digest)) blobs.set(digest, asUint8Array(script))
     }
   }
 
-  private preparePhysicalUploads (
-    blobs: Map<string, Uint8Array>
-  ): { uploadBlobs: Map<string, Uint8Array>; blobChunks: Record<string, string[]> } {
+  private preparePhysicalUploads(blobs: Map<string, Uint8Array>): {
+    uploadBlobs: Map<string, Uint8Array>
+    blobChunks: Record<string, string[]>
+  } {
     const uploadBlobs = new Map<string, Uint8Array>()
     const blobChunks: Record<string, string[]> = {}
     for (const [digest, bytes] of blobs) {
@@ -684,9 +674,14 @@ class ActionBatchWorkspace {
     return { uploadBlobs, blobChunks }
   }
 
-  private buildManifest (sendWith: string[], isDelayed: boolean): { manifest: ActionBatchManifest, uploads: UploadBlob[] } {
+  private buildManifest(
+    sendWith: string[],
+    isDelayed: boolean
+  ): { manifest: ActionBatchManifest; uploads: UploadBlob[] } {
+    const normalizedSendWith = validateCreateActionOptions({ sendWith: mergeUnique(sendWith) }).sendWith
     const stagedTxids = new Set(this.actions.map(action => action.txid))
-    const externalTxids = this.actions.flatMap(action => action.plan.inputs)
+    const externalTxids = this.actions
+      .flatMap(action => action.plan.inputs)
       .map(input => input.sourceTxid)
       .filter(txid => !stagedTxids.has(txid))
     const dependencyBytes = beefForTxids(this.state.sharedBeef, externalTxids).toUint8Array()
@@ -719,11 +714,9 @@ class ActionBatchWorkspace {
       batchId: this.batchId,
       actions,
       dependencyBeefDigest,
-      inlineBlobs: useUploads
-        ? undefined
-        : Object.fromEntries(blobs),
+      inlineBlobs: useUploads ? undefined : Object.fromEntries(blobs),
       blobChunks: Object.keys(blobChunks).length === 0 ? undefined : blobChunks,
-      sendWith: mergeUnique(sendWith),
+      sendWith: normalizedSendWith,
       isDelayed
     }
     return {
@@ -732,7 +725,7 @@ class ActionBatchWorkspace {
     }
   }
 
-  private async uploadMissing (manifest: ActionBatchManifest, uploads: UploadBlob[]): Promise<void> {
+  private async uploadMissing(manifest: ActionBatchManifest, uploads: UploadBlob[]): Promise<void> {
     this.flushEagerPacks(true)
     await this.awaitEagerUploads()
     const prepared = await this.wallet.storage.prepareActionBatchCommit(manifest)
@@ -744,91 +737,96 @@ class ActionBatchWorkspace {
       let current: UploadBlob[] = []
       for (const upload of pending) {
         const candidate = [...current, upload]
-        if (current.length > 0 && (
-          candidate.length > packed.maxItems ||
-          actionBatchPackLength(candidate) > packed.maxPackBytes
-        )) {
+        if (
+          current.length > 0 &&
+          (candidate.length > packed.maxItems || actionBatchPackLength(candidate) > packed.maxPackBytes)
+        ) {
           packs.push(current)
           current = []
         }
         current.push(upload)
       }
       if (current.length > 0) packs.push(current)
-      const concurrency = Math.max(1, Math.min(
-        prepared.maxConcurrentUploads,
-        this.capabilities.maxConcurrentUploads,
-        packs.length
-      ))
+      const concurrency = Math.max(
+        1,
+        Math.min(prepared.maxConcurrentUploads, this.capabilities.maxConcurrentUploads, packs.length)
+      )
       let packCursor = 0
-      await Promise.all(Array.from({ length: concurrency }, async () => {
-        for (;;) {
-          const pack = packs[packCursor++]
-          if (pack == null) return
-          await this.wallet.storage.putActionBatchPack({
-            batchId: this.batchId,
-            items: pack,
-            maxPackBytes: packed.maxPackBytes,
-            maxItems: packed.maxItems,
-            preferredEncodings: packed.encodings
-          })
-        }
-      }))
+      await Promise.all(
+        Array.from({ length: concurrency }, async () => {
+          for (;;) {
+            const pack = packs[packCursor++]
+            if (pack == null) return
+            await this.wallet.storage.putActionBatchPack({
+              batchId: this.batchId,
+              items: pack,
+              maxPackBytes: packed.maxPackBytes,
+              maxItems: packed.maxItems,
+              preferredEncodings: packed.encodings
+            })
+          }
+        })
+      )
       return
     }
-    const concurrency = Math.max(1, Math.min(
-      prepared.maxConcurrentUploads,
-      this.capabilities.maxConcurrentUploads,
-      pending.length
-    ))
+    const concurrency = Math.max(
+      1,
+      Math.min(prepared.maxConcurrentUploads, this.capabilities.maxConcurrentUploads, pending.length)
+    )
     let cursor = 0
-    await Promise.all(Array.from({ length: concurrency }, async () => {
-      for (;;) {
-        const index = cursor++
-        if (index >= pending.length) return
-        const upload = pending[index]
-        if (upload.bytes.length > prepared.maxBlobBytes) {
-          throw new WERR_INVALID_OPERATION(`action batch blob ${upload.digest} exceeds provider limit`)
+    await Promise.all(
+      Array.from({ length: concurrency }, async () => {
+        for (;;) {
+          const index = cursor++
+          if (index >= pending.length) return
+          const upload = pending[index]
+          if (upload.bytes.length > prepared.maxBlobBytes) {
+            throw new WERR_INVALID_OPERATION(`action batch blob ${upload.digest} exceeds provider limit`)
+          }
+          await this.wallet.storage.putActionBatchBlob({
+            batchId: this.batchId,
+            digest: upload.digest,
+            bytes: upload.bytes
+          })
         }
-        await this.wallet.storage.putActionBatchBlob({
-          batchId: this.batchId,
-          digest: upload.digest,
-          bytes: upload.bytes
-        })
-      }
-    }))
+      })
+    )
   }
 
-  async commit (sendWith: string[], isDelayed: boolean): Promise<CommitActionBatchResult> {
+  async commit(sendWith: string[], isDelayed: boolean): Promise<CommitActionBatchResult> {
     if (this.extension != null) await this.extension
     await this.renewIfNeeded()
-    if (this.planned.size > 0) throw new WERR_INVALID_OPERATION('all two-step actions must be signed before batch commit')
+    if (this.planned.size > 0) {
+      throw new WERR_INVALID_OPERATION('all two-step actions must be signed before batch commit')
+    }
     const { manifest, uploads } = this.buildManifest(sendWith, isDelayed)
     if (uploads.length > 0) await this.uploadMissing(manifest, uploads)
-    const result = uploads.length > 0 && manifest.format === 2 && this.capabilities.commitByDigest === true
-      ? await this.wallet.storage.commitActionBatchByDigest({
-          batchId: manifest.batchId,
-          digest: manifest.digest
-        })
-      : await this.wallet.storage.commitActionBatch(manifest)
+    const result =
+      uploads.length > 0 && manifest.format === 2 && this.capabilities.commitByDigest === true
+        ? await this.wallet.storage.commitActionBatchByDigest({
+            batchId: manifest.batchId,
+            digest: manifest.digest
+          })
+        : await this.wallet.storage.commitActionBatch(manifest)
     this.committed = true
     return result
   }
 
-  abortAction (referenceOrTxid: string): boolean {
+  abortAction(referenceOrTxid: string): boolean {
     let pendingReference: string | undefined
     if (this.planned.has(referenceOrTxid)) {
       pendingReference = referenceOrTxid
     } else {
-      pendingReference = Object.entries(this.wallet.pendingSignActions)
-        .find(([reference, pending]) =>
-          this.planned.has(reference) && pending.tx.id('hex') === referenceOrTxid
-        )?.[0]
+      pendingReference = Object.entries(this.wallet.pendingSignActions).find(
+        ([reference, pending]) => this.planned.has(reference) && pending.tx.id('hex') === referenceOrTxid
+      )?.[0]
     }
-    const actionIndex = this.actions.findIndex(action =>
-      action.reference === referenceOrTxid || action.txid === referenceOrTxid
+    const actionIndex = this.actions.findIndex(
+      action => action.reference === referenceOrTxid || action.txid === referenceOrTxid
     )
     const action = actionIndex < 0 ? undefined : this.actions[actionIndex]
-    const targetTxid = action?.txid ??
+    const targetTxid =
+      action?.txid ??
       (pendingReference == null ? undefined : this.wallet.pendingSignActions[pendingReference]?.tx.id('hex'))
     if (targetTxid != null && this.hasDependentAction(targetTxid, action?.reference ?? pendingReference)) {
       throw new WERR_INVALID_OPERATION(
@@ -848,18 +846,21 @@ class ActionBatchWorkspace {
     return true
   }
 
-  private hasDependentAction (txid: string, excludedReference: string | undefined): boolean {
-    if (this.actions.some(action =>
-      action.reference !== excludedReference &&
-      action.plan.inputs.some(input => input.sourceTxid === txid)
-    )) return true
-    return [...this.planned.entries()].some(([reference, pending]) =>
-      reference !== excludedReference &&
-      pending.planned.dcr.inputs.some(input => input.sourceTxid === txid)
+  private hasDependentAction(txid: string, excludedReference: string | undefined): boolean {
+    if (
+      this.actions.some(
+        action => action.reference !== excludedReference && action.plan.inputs.some(input => input.sourceTxid === txid)
+      )
+    ) {
+      return true
+    }
+    return [...this.planned.entries()].some(
+      ([reference, pending]) =>
+        reference !== excludedReference && pending.planned.dcr.inputs.some(input => input.sourceTxid === txid)
     )
   }
 
-  private rebuildStagedState (): void {
+  private rebuildStagedState(): void {
     this.state.consumed.clear()
     this.state.staged.clear()
     this.state.estimatedChangeCount = this.state.begin.availableChangeCount
@@ -893,7 +894,7 @@ class ActionBatchWorkspace {
     }
   }
 
-  async abort (): Promise<void> {
+  async abort(): Promise<void> {
     if (this.committed) return
     await this.awaitEagerUploads()
     await this.wallet.storage.abortActionBatch(this.batchId)
@@ -906,38 +907,47 @@ export class ActionBatchController {
   private readonly capabilities = new Map<string, Promise<StorageCapabilities['actionBatch'] | undefined>>()
   private serial: Promise<void> = Promise.resolve()
 
-  constructor (private readonly wallet: Wallet, readonly mode: ActionBatchMode) {}
+  constructor(
+    private readonly wallet: Wallet,
+    readonly mode: ActionBatchMode
+  ) {}
 
-  get hasWorkspace (): boolean { return this.workspace != null }
+  get hasWorkspace(): boolean {
+    return this.workspace != null
+  }
 
-  overlayListActions (persisted: ListActionsResult, args: Validation.ValidListActionsArgs): ListActionsResult {
+  overlayListActions(persisted: ListActionsResult, args: ValidListActionsArgs): ListActionsResult {
     return this.workspace?.overlayListActions(persisted, args) ?? persisted
   }
 
-  overlayListOutputs (persisted: ListOutputsResult, args: Validation.ValidListOutputsArgs): ListOutputsResult {
+  overlayListOutputs(persisted: ListOutputsResult, args: ValidListOutputsArgs): ListOutputsResult {
     return this.workspace?.overlayListOutputs(persisted, args) ?? persisted
   }
 
-  private async runExclusive<T> (operation: () => Promise<T>): Promise<T> {
+  private async runExclusive<T>(operation: () => Promise<T>): Promise<T> {
     const run = this.serial.then(operation)
-    this.serial = run.then(() => {}, () => {})
+    this.serial = run.then(
+      () => {},
+      () => {}
+    )
     return await run
   }
 
-  private async negotiate (): Promise<StorageCapabilities['actionBatch'] | undefined> {
+  private async negotiate(): Promise<StorageCapabilities['actionBatch'] | undefined> {
     if (this.mode === 'legacy') return undefined
     const activeStore = this.wallet.storage.getActiveStore()
     let capabilities = this.capabilities.get(activeStore)
     if (capabilities == null) {
-      capabilities = this.wallet.storage.getCapabilities()
-        .then(result => result.actionBatch?.version === 1 ? result.actionBatch : undefined)
+      capabilities = this.wallet.storage
+        .getCapabilities()
+        .then(result => (result.actionBatch?.version === 1 ? result.actionBatch : undefined))
         .catch(() => undefined)
       this.capabilities.set(activeStore, capabilities)
     }
     return await capabilities
   }
 
-  private async begin (args: Validation.ValidCreateActionArgs): Promise<ActionBatchWorkspace | undefined> {
+  private async begin(args: ValidCreateActionArgs): Promise<ActionBatchWorkspace | undefined> {
     if (args.inputs.length > 8) return undefined
     const capabilities = await this.negotiate()
     if (capabilities == null) return undefined
@@ -948,38 +958,36 @@ export class ActionBatchController {
     return this.workspace
   }
 
-  private async retire (workspace: ActionBatchWorkspace): Promise<void> {
+  private async retire(workspace: ActionBatchWorkspace): Promise<void> {
     await workspace.abort().catch(() => undefined)
     if (this.workspace === workspace) this.workspace = undefined
   }
 
-  private async recover (
+  private async recover(
     workspace: ActionBatchWorkspace,
-    input: Validation.ValidCreateActionArgs
+    input: ValidCreateActionArgs
   ): Promise<StorageCreateActionResult>
-  private async recover (
+  private async recover(
     workspace: ActionBatchWorkspace,
     input: string[],
     isDelayed: boolean,
     resume?: boolean
   ): Promise<StorageProcessActionResults>
-  private async recover (
+  private async recover(
     workspace: ActionBatchWorkspace,
-    input: Validation.ValidCreateActionArgs | string[],
+    input: ValidCreateActionArgs | string[],
     isDelayed: boolean,
     resume: boolean
   ): Promise<StorageCreateActionResult | StorageProcessActionResults>
-  private async recover (
+  private async recover(
     workspace: ActionBatchWorkspace,
-    input: Validation.ValidCreateActionArgs | string[],
+    input: ValidCreateActionArgs | string[],
     isDelayed = false,
     resume = false
   ): Promise<StorageCreateActionResult | StorageProcessActionResults> {
     try {
       if (resume) await workspace.resume()
-      return Array.isArray(input)
-        ? await workspace.commit(input, isDelayed)
-        : await workspace.plan(input)
+      return Array.isArray(input) ? await workspace.commit(input, isDelayed) : await workspace.plan(input)
     } catch (error) {
       if (!resume && isActionBatchStateError(error) && error.state === 'expired' && workspace.canResume) {
         return await this.recover(workspace, input, isDelayed, true)
@@ -991,7 +999,7 @@ export class ActionBatchController {
     }
   }
 
-  async plan (args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
+  async plan(args: ValidCreateActionArgs): Promise<StorageCreateActionResult | undefined> {
     return await this.runExclusive(async () => {
       if (!args.isNewTx) return undefined
       const workspace = this.workspace
@@ -1024,9 +1032,9 @@ export class ActionBatchController {
     })
   }
 
-  async process (
+  async process(
     prior: PendingSignAction | undefined,
-    args: Validation.ValidProcessActionArgs
+    args: ValidProcessActionArgs
   ): Promise<StorageProcessActionResults | undefined> {
     return await this.runExclusive(async () => {
       const workspace = this.workspace
@@ -1049,8 +1057,7 @@ export class ActionBatchController {
           logger: args.logger
         })
       }
-      const shouldCommit = referencesWorkspace ||
-        (prior != null && !args.isNoSend)
+      const shouldCommit = referencesWorkspace || (prior != null && !args.isNoSend)
       if (!shouldCommit) return { sendWithResults: [] }
       const sendWith = [...args.options.sendWith]
       if (prior != null && !args.isNoSend && !sendWith.includes(prior.tx.id('hex'))) {
@@ -1062,11 +1069,11 @@ export class ActionBatchController {
     })
   }
 
-  ownsReference (reference: string): boolean {
+  ownsReference(reference: string): boolean {
     return this.workspace?.ownsReference(reference) ?? false
   }
 
-  async abort (): Promise<boolean> {
+  async abort(): Promise<boolean> {
     return await this.runExclusive(async () => {
       if (this.workspace == null) return false
       await this.workspace.abort()
@@ -1075,7 +1082,7 @@ export class ActionBatchController {
     })
   }
 
-  async abortAction (referenceOrTxid: string): Promise<boolean> {
+  async abortAction(referenceOrTxid: string): Promise<boolean> {
     return await this.runExclusive(async () => {
       const workspace = this.workspace
       if (workspace == null) return false

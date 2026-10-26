@@ -168,6 +168,11 @@ export interface WalletStorageSync extends WalletStorageWriter {
   setActive: (auth: AuthId, newActiveStorageIdentityKey: string) => Promise<number>
 
   getSyncChunk: (args: RequestSyncChunkArgs) => Promise<SyncChunk>
+  /**
+   * Apply one sync page. First-party providers throw on failure.
+   * A custom writer may instead set `ProcessSyncChunkResult.error`;
+   * `WalletStorageManager` live-sync loops throw that error and stop.
+   */
   processSyncChunk: (args: RequestSyncChunkArgs, chunk: SyncChunk) => Promise<ProcessSyncChunkResult>
 }
 
@@ -335,7 +340,8 @@ export interface StorageActivateNoSendExpiryArgs {
 export interface StorageActivateNoSendExpiryResult {
   action: StorageCreateActionResult
   expiry: Brc177NoSendExpiry
-  deadline: number
+  /** Absolute deadline in the expiry mode's units; null for `never`. */
+  deadline: number | null
   anchorTxid: string
   anchorVout: number
 }
@@ -715,6 +721,12 @@ export interface ProcessSyncChunkResult {
   maxUpdated_at: Date | undefined
   updates: number
   inserts: number
+  /**
+   * Optional non-throwing failure from a custom writer. First-party
+   * `StorageProvider` implementations throw instead of setting this field.
+   * `WalletStorageManager.syncToWriter` and `syncFromReader` throw `error`
+   * immediately and do not request another chunk.
+   */
   error?: WalletError
 }
 

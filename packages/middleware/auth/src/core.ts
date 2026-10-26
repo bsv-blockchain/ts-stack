@@ -1,5 +1,11 @@
-import { Utils, Random, type WalletProtocol } from '@bsv/sdk'
-import { DEFAULT_PROTOCOL, DEFAULT_WINDOW_MS, DEFAULT_CLOCK_SKEW_MS } from './constants.js'
+import { Writer, toArray, toBase64 } from '@bsv/sdk/primitives/utils'
+import { Random, PublicKey, type WalletProtocol } from '@bsv/sdk'
+import {
+  DEFAULT_PROTOCOL,
+  DEFAULT_WINDOW_MS,
+  DEFAULT_CLOCK_SKEW_MS,
+  DEFAULT_MAX_BODY_BYTES
+} from './constants.js'
 import type {
   AuthProof,
   AuthProofOptions,
@@ -14,20 +20,267 @@ interface ResolvedOptions {
   protocol: WalletProtocol
   windowMs: number
   clockSkewMs: number
+  maxBodyBytes: number
+}
+
+const MAX_ACTION_BYTES = 256
+const MAX_SIGNATURE_BYTES = 1_024
+
+function ownDataValue(value: object, name: string): unknown | undefined {
+  const descriptor = Object.getOwnPropertyDescriptor(value, name)
+  return descriptor !== undefined && Object.prototype.hasOwnProperty.call(descriptor, 'value')
+    ? descriptor.value
+    : undefined
+}
+
+function exactBytes(value: unknown, maxBytes: number): number[] | undefined {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maxBytes) return undefined
+  const copy = Array.from({ length: value.length }, () => 0)
+  try {
+    for (let index = 0; index < value.length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, index)
+      if (
+        descriptor === undefined ||
+        !Object.prototype.hasOwnProperty.call(descriptor, 'value') ||
+        !Number.isInteger(descriptor.value) ||
+        descriptor.value < 0 ||
+        descriptor.value > 255
+      ) {
+        return undefined
+      }
+      copy[index] = descriptor.value
+    }
+  } catch {
+    return undefined
+  }
+  return copy
+}
+
+function isCompressedPublicKey(value: unknown): value is string {
+  if (typeof value !== 'string' || !/^(02|03)[0-9a-f]{64}$/u.test(value)) return false
+  try {
+    return PublicKey.fromString(value).toString() === value
+  } catch {
+    return false
+  }
+}
+
+function isCanonicalNonce(value: unknown): value is string {
+  if (
+    typeof value !== 'string' ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value)
+  ) {
+    return false
+  }
+  try {
+    const decoded = toArray(value, 'base64')
+    return decoded.length === 32 && toBase64(decoded) === value
+  } catch {
+    return false
+  }
+}
+
+function isValidAction(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_ACTION_BYTES &&
+    toArray(value, 'utf8').length <= MAX_ACTION_BYTES &&
+    !/[\p{Cc}\p{Cf}\p{Cs}]/u.test(value)
+  )
+}
+
+function validateProtocol(protocol: unknown): WalletProtocol {
+  let securityLevel: unknown
+  let protocolName: unknown
+  try {
+    if (!Array.isArray(protocol) || protocol.length !== 2) {
+      throw new TypeError('protocol must be a valid wallet protocol tuple')
+    }
+    securityLevel = ownDataValue(protocol, '0')
+    protocolName = ownDataValue(protocol, '1')
+  } catch {
+    throw new TypeError('protocol must be a valid wallet protocol tuple')
+  }
+  if (
+    (securityLevel !== 0 && securityLevel !== 1 && securityLevel !== 2) ||
+    typeof protocolName !== 'string' ||
+    toArray(protocolName, 'utf8').length < 5 ||
+    toArray(protocolName, 'utf8').length > 400 ||
+    protocolName !== protocolName.trim() ||
+    protocolName.includes('  ') ||
+    protocolName.toLowerCase().endsWith(' protocol') ||
+    !/^[A-Za-z0-9 ]+$/u.test(protocolName)
+  ) {
+    throw new TypeError('protocol must use a valid wallet security level and protocol name')
+  }
+  return [securityLevel, protocolName]
+}
+
+function positiveSafeInteger(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive safe integer`)
+  }
+  return value
+}
+
+function nonNegativeSafeInteger(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${name} must be a non-negative safe integer`)
+  }
+  return value
+}
+
+function utf8ByteLength(value: string): number {
+  let length = 0
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code <= 0x7f) length += 1
+    else if (code <= 0x7ff) length += 2
+    else if (code >= 0xd800 && code <= 0xdbff && index + 1 < value.length) {
+      const low = value.charCodeAt(index + 1)
+      if (low >= 0xdc00 && low <= 0xdfff) {
+        length += 4
+        index += 1
+      } else {
+        length += 3
+      }
+    } else length += 3
+  }
+  return length
+}
+
+function assertBoundedJsonBody(value: unknown, maxBodyBytes: number): void {
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
+  const seen = new WeakSet<object>()
+  let nodes = 0
+  let bytes = 0
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    nodes += 1
+    if (nodes > 100_000 || current.depth > 64) {
+      throw new RangeError('Authentication proof body exceeds structural limits')
+    }
+    const candidate = current.value
+    if (candidate === null) {
+      bytes += 4
+      continue
+    }
+    if (typeof candidate === 'string') {
+      bytes += utf8ByteLength(candidate)
+      if (bytes > maxBodyBytes) {
+        throw new RangeError('Authentication proof body exceeds maxBodyBytes')
+      }
+      continue
+    }
+    if (typeof candidate === 'number') {
+      if (!Number.isFinite(candidate) || Object.is(candidate, -0)) {
+        throw new TypeError('Authentication proof body must contain canonical JSON numbers')
+      }
+      bytes += 32
+      continue
+    }
+    if (typeof candidate === 'boolean') {
+      bytes += 5
+      continue
+    }
+    if (typeof candidate !== 'object') {
+      throw new TypeError('Authentication proof body must contain JSON-compatible plain data')
+    }
+    if (seen.has(candidate)) {
+      throw new TypeError('Authentication proof body must not contain cycles')
+    }
+    seen.add(candidate)
+    const prototype = Object.getPrototypeOf(candidate)
+    if (!Array.isArray(candidate) && prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError('Authentication proof body must contain JSON-compatible plain data')
+    }
+    if (Array.isArray(candidate) && candidate.length > 100_000) {
+      throw new RangeError('Authentication proof body exceeds structural limits')
+    }
+    for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(candidate))) {
+      if (descriptor.get !== undefined || descriptor.set !== undefined) {
+        throw new TypeError('Authentication proof body must not contain accessors')
+      }
+      bytes += utf8ByteLength(key)
+      pending.push({ value: descriptor.value, depth: current.depth + 1 })
+    }
+    if (bytes > maxBodyBytes) {
+      throw new RangeError('Authentication proof body exceeds maxBodyBytes')
+    }
+  }
 }
 
 function resolveOptions(options: AuthProofOptions = {}): ResolvedOptions {
-  return {
-    protocol: options.protocol ?? DEFAULT_PROTOCOL,
-    windowMs: options.windowMs ?? DEFAULT_WINDOW_MS,
-    clockSkewMs: options.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS
+  const protocol = validateProtocol(options.protocol ?? DEFAULT_PROTOCOL)
+  const windowMs = positiveSafeInteger(options.windowMs ?? DEFAULT_WINDOW_MS, 'windowMs')
+  const clockSkewMs = nonNegativeSafeInteger(
+    options.clockSkewMs ?? DEFAULT_CLOCK_SKEW_MS,
+    'clockSkewMs'
+  )
+  if (!Number.isSafeInteger(windowMs + clockSkewMs)) {
+    throw new RangeError('windowMs plus clockSkewMs must be a safe integer')
   }
+  return {
+    protocol,
+    windowMs,
+    clockSkewMs,
+    maxBodyBytes: positiveSafeInteger(
+      options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
+      'maxBodyBytes'
+    )
+  }
+}
+
+function snapshotAuthSigData(value: unknown): AuthSigData | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  try {
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) return undefined
+    const action = ownDataValue(value, 'action')
+    const identityKey = ownDataValue(value, 'identityKey')
+    const expiresAt = ownDataValue(value, 'expiresAt')
+    const nonce = ownDataValue(value, 'nonce')
+    if (
+      !isValidAction(action) ||
+      !isCompressedPublicKey(identityKey) ||
+      !Number.isSafeInteger(expiresAt) ||
+      (expiresAt as number) < 0 ||
+      !isCanonicalNonce(nonce)
+    ) {
+      return undefined
+    }
+    return { action, identityKey, expiresAt: expiresAt as number, nonce }
+  } catch {
+    return undefined
+  }
+}
+
+function snapshotAuthProof(value: unknown): AuthProof | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  try {
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) return undefined
+    const data = snapshotAuthSigData(ownDataValue(value, 'data'))
+    const signature = exactBytes(ownDataValue(value, 'signature'), MAX_SIGNATURE_BYTES)
+    return data === undefined || signature === undefined ? undefined : { data, signature }
+  } catch {
+    return undefined
+  }
+}
+
+function serializeCanonicalAuthSigData(data: AuthSigData): number[] {
+  const canonical = [data.action, data.identityKey, String(data.expiresAt), data.nonce].join('\n')
+  return toArray(canonical, 'utf8')
 }
 
 /** Canonical bytes both sides hash. Fixed field order; '\n' is a safe delimiter. */
 export function serializeAuthSigData(data: AuthSigData): number[] {
-  const canonical = [data.action, data.identityKey, String(data.expiresAt), data.nonce].join('\n')
-  return Utils.toArray(canonical, 'utf8')
+  const snapshot = snapshotAuthSigData(data)
+  if (snapshot === undefined) {
+    throw new TypeError('Authentication signature data must contain canonical own data fields')
+  }
+  return serializeCanonicalAuthSigData(snapshot)
 }
 
 /**
@@ -37,13 +290,24 @@ export function serializeAuthSigData(data: AuthSigData): number[] {
  * binary is preserved), and anything else — a plain object or any array — is
  * JSON-encoded then UTF-8.
  */
-export function normalizeBody(body: RequestBody): number[] {
-  if (typeof body === 'string') return Utils.toArray(body, 'utf8')
-  if (body instanceof ArrayBuffer) return Array.from(new Uint8Array(body))
+export function normalizeBody(
+  body: RequestBody,
+  maxBodyBytes: number = DEFAULT_MAX_BODY_BYTES
+): number[] {
+  positiveSafeInteger(maxBodyBytes, 'maxBodyBytes')
+  let normalized: number[]
+  if (typeof body === 'string') normalized = toArray(body, 'utf8')
+  else if (body instanceof ArrayBuffer) normalized = Array.from(new Uint8Array(body))
   if (ArrayBuffer.isView(body)) {
-    return Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength))
+    normalized = Array.from(new Uint8Array(body.buffer, body.byteOffset, body.byteLength))
+  } else if (typeof body !== 'string' && !(body instanceof ArrayBuffer)) {
+    assertBoundedJsonBody(body, maxBodyBytes)
+    normalized = toArray(JSON.stringify(body), 'utf8') // plain objects and all arrays → JSON
   }
-  return Utils.toArray(JSON.stringify(body), 'utf8') // plain objects and all arrays → JSON
+  if (normalized!.length > maxBodyBytes) {
+    throw new RangeError('Authentication proof body exceeds maxBodyBytes')
+  }
+  return normalized!
 }
 
 /**
@@ -54,14 +318,26 @@ export function normalizeBody(body: RequestBody): number[] {
  * byte-for-byte unchanged. A body-bound proof and a bodyless one never collide:
  * an empty body (length 0) still differs from "no body" (nothing appended).
  */
-export function serializeSignablePayload(data: AuthSigData, body?: RequestBody): number[] {
-  const head = serializeAuthSigData(data)
+export function serializeSignablePayload(
+  data: AuthSigData,
+  body?: RequestBody,
+  maxBodyBytes: number = DEFAULT_MAX_BODY_BYTES
+): number[] {
+  const snapshot = snapshotAuthSigData(data)
+  if (snapshot === undefined) {
+    throw new TypeError('Authentication signature data must contain canonical own data fields')
+  }
+  const bytes = body === undefined ? undefined : normalizeBody(body, maxBodyBytes)
+  return serializeNormalizedPayload(snapshot, bytes)
+}
+
+function serializeNormalizedPayload(data: AuthSigData, body?: number[]): number[] {
+  const head = serializeCanonicalAuthSigData(data)
   if (body === undefined) return head
-  const writer = new Utils.Writer()
+  const writer = new Writer()
   writer.write(head)
-  const bytes = normalizeBody(body)
-  writer.writeVarIntNum(bytes.length)
-  writer.write(bytes)
+  writer.writeVarIntNum(body.length)
+  writer.write(body)
   return writer.toArray()
 }
 
@@ -73,11 +349,22 @@ export function createAuthSigData(
   now: number = Date.now()
 ): AuthSigData {
   const { windowMs } = resolveOptions(options)
+  if (
+    !isValidAction(action) ||
+    !isCompressedPublicKey(identityKey) ||
+    !Number.isSafeInteger(now) ||
+    now < 0
+  ) {
+    throw new TypeError('action, identityKey, and now must be canonical authentication fields')
+  }
+  if (!Number.isSafeInteger(now + windowMs)) {
+    throw new RangeError('Authentication proof expiry exceeds the safe integer range')
+  }
   return {
     action,
     identityKey,
     expiresAt: now + windowMs,
-    nonce: Utils.toBase64(Random(32))
+    nonce: toBase64(Random(32))
   }
 }
 
@@ -88,26 +375,27 @@ export function checkAuthSigData(
   now: number,
   options?: AuthProofOptions
 ): { valid: boolean; error?: string } {
-  const { windowMs, clockSkewMs } = resolveOptions(options)
+  const resolved = resolveOptions(options)
+  const snapshot = snapshotAuthSigData(data)
+  if (snapshot === undefined) {
+    return { valid: false, error: 'Malformed proof' }
+  }
+  return checkCanonicalAuthSigData(snapshot, expectedAction, now, resolved)
+}
 
-  if (!data || typeof data !== 'object') {
+function checkCanonicalAuthSigData(
+  data: AuthSigData,
+  expectedAction: string,
+  now: number,
+  options: ResolvedOptions
+): { valid: boolean; error?: string } {
+  const { windowMs, clockSkewMs } = options
+  if (!isValidAction(expectedAction) || !Number.isSafeInteger(now) || now < 0) {
     return { valid: false, error: 'Malformed proof' }
   }
-  const { action, identityKey, expiresAt, nonce } = data
-  if (
-    typeof action !== 'string' ||
-    typeof identityKey !== 'string' ||
-    identityKey.length === 0 ||
-    typeof nonce !== 'string' ||
-    nonce.length === 0
-  ) {
-    return { valid: false, error: 'Malformed proof' }
-  }
+  const { action, expiresAt } = data
   if (action !== expectedAction) {
     return { valid: false, error: 'Action mismatch' }
-  }
-  if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)) {
-    return { valid: false, error: 'Malformed proof' }
   }
   if (now >= expiresAt) {
     return { valid: false, error: 'Proof expired' }
@@ -132,16 +420,35 @@ export function checkAuthSigData(
  */
 export async function createAuthProof(args: CreateAuthProofArgs): Promise<AuthProof> {
   const { wallet, counterparty, action, body } = args
-  const { protocol } = resolveOptions(args)
-  const { publicKey: identityKey } = await wallet.getPublicKey({ identityKey: true })
-  const data = createAuthSigData(action, identityKey, args)
+  const resolved = resolveOptions(args)
+  const { protocol, maxBodyBytes } = resolved
+  if (!isCompressedPublicKey(counterparty) || !isValidAction(action)) {
+    throw new TypeError('counterparty and action must be canonical authentication fields')
+  }
+  const normalizedBody = body === undefined ? undefined : normalizeBody(body, maxBodyBytes)
+  const identityResult: unknown = await wallet.getPublicKey({ identityKey: true })
+  if (identityResult === null || typeof identityResult !== 'object') {
+    throw new TypeError('Wallet returned a malformed identity key')
+  }
+  const identityKey = ownDataValue(identityResult, 'publicKey')
+  if (!isCompressedPublicKey(identityKey)) {
+    throw new TypeError('Wallet returned a malformed identity key')
+  }
+  const data = createAuthSigData(action, identityKey, resolved)
 
-  const { signature } = await wallet.createSignature({
-    data: serializeSignablePayload(data, body),
+  const signatureResult: unknown = await wallet.createSignature({
+    data: serializeNormalizedPayload(data, normalizedBody),
     protocolID: protocol,
     keyID: data.nonce,
     counterparty
   })
+  if (signatureResult === null || typeof signatureResult !== 'object') {
+    throw new TypeError('Wallet returned a malformed authentication signature')
+  }
+  const signature = exactBytes(ownDataValue(signatureResult, 'signature'), MAX_SIGNATURE_BYTES)
+  if (signature === undefined) {
+    throw new TypeError('Wallet returned a malformed authentication signature')
+  }
 
   return { data, signature }
 }
@@ -157,32 +464,35 @@ export async function createAuthProof(args: CreateAuthProofArgs): Promise<AuthPr
  */
 export async function verifyAuthProof(args: VerifyAuthProofArgs): Promise<VerifyAuthProofResult> {
   const { wallet, proof, action: expectedAction, consumeNonce, body } = args
-  const { protocol } = resolveOptions(args)
+  const resolved = resolveOptions(args)
+  const { protocol, maxBodyBytes } = resolved
   const now = args.now ?? Date.now()
-
-  if (!proof || typeof proof !== 'object' || !proof.data || !Array.isArray(proof.signature)) {
+  const snapshot = snapshotAuthProof(proof)
+  if (snapshot === undefined) {
     return { valid: false, error: 'Malformed proof' }
   }
 
-  const shape = checkAuthSigData(proof.data, expectedAction, now, args)
+  const shape = checkCanonicalAuthSigData(snapshot.data, expectedAction, now, resolved)
   if (!shape.valid) {
     return { valid: false, error: shape.error }
   }
 
-  const { identityKey, nonce, expiresAt } = proof.data
+  const { identityKey, nonce, expiresAt } = snapshot.data
 
   // identityKey and signature come from the request; a malformed key or signature
   // can make verification throw, so treat any failure as an invalid signature.
   let signatureValid = false
   try {
-    const result = await wallet.verifySignature({
-      data: serializeSignablePayload(proof.data, body),
-      signature: proof.signature,
+    const normalizedBody = body === undefined ? undefined : normalizeBody(body, maxBodyBytes)
+    const result: unknown = await wallet.verifySignature({
+      data: serializeNormalizedPayload(snapshot.data, normalizedBody),
+      signature: snapshot.signature,
       protocolID: protocol,
       keyID: nonce,
       counterparty: identityKey
     })
-    signatureValid = result.valid
+    signatureValid =
+      result !== null && typeof result === 'object' && ownDataValue(result, 'valid') === true
   } catch {
     signatureValid = false
   }
@@ -190,8 +500,8 @@ export async function verifyAuthProof(args: VerifyAuthProofArgs): Promise<Verify
     return { valid: false, error: 'Invalid signature' }
   }
 
-  const fresh = await consumeNonce(nonce, new Date(expiresAt))
-  if (!fresh) {
+  const fresh: unknown = await consumeNonce(nonce, new Date(expiresAt))
+  if (fresh !== true) {
     return { valid: false, error: 'Proof already used' }
   }
 

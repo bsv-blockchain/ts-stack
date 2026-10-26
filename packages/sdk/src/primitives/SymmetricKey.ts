@@ -13,8 +13,7 @@ import { toArray, encode } from './utils.js'
 // runtimes, without leaving a static Node dependency for their bundlers.
 // ---------------------------------------------------------------------------
 const NODE_CRYPTO_SYM = (() => {
-  const processLike =
-    typeof globalThis === 'undefined' ? undefined : (globalThis as any).process
+  const processLike = typeof globalThis === 'undefined' ? undefined : (globalThis as any).process
   const getBuiltinModule = processLike?.getBuiltinModule
   if (typeof getBuiltinModule === 'function') {
     try {
@@ -43,11 +42,7 @@ const NATIVE_AES_GCM_AVAILABLE: boolean = (() => {
  *
  * Returns `null` on any failure so the caller can fall back to pure-TS.
  */
-function nativeEncrypt (
-  plaintext: Uint8Array,
-  iv: Uint8Array,
-  key: Uint8Array
-): Uint8Array | null {
+function nativeEncrypt(plaintext: Uint8Array, iv: Uint8Array, key: Uint8Array): Uint8Array | null {
   try {
     const cipher = NODE_CRYPTO_SYM.createCipheriv(
       'aes-256-gcm',
@@ -62,8 +57,10 @@ function nativeEncrypt (
 
     const out = new Uint8Array(iv.length + encrypted.length + authTag.length)
     let offset = 0
-    out.set(iv, offset); offset += iv.length
-    out.set(encrypted, offset); offset += encrypted.length
+    out.set(iv, offset)
+    offset += iv.length
+    out.set(encrypted, offset)
+    offset += encrypted.length
     out.set(authTag, offset)
     return out
   } catch {
@@ -78,7 +75,7 @@ function nativeEncrypt (
  * Returns the plaintext on success, `null` on authentication failure, or
  * `undefined` to signal a non-auth error so the caller can fall back.
  */
-function nativeDecrypt (
+function nativeDecrypt(
   msgBytes: Uint8Array,
   ivLength: number,
   tagLength: number,
@@ -93,9 +90,12 @@ function nativeDecrypt (
     const decipher = NODE_CRYPTO_SYM.createDecipheriv(
       'aes-256-gcm',
       Buffer.from(key.buffer, key.byteOffset, key.byteLength),
-      Buffer.from(iv.buffer, iv.byteOffset, iv.byteLength)
+      Buffer.from(iv.buffer, iv.byteOffset, iv.byteLength),
+      { authTagLength: tagLength }
     )
-    decipher.setAuthTag(Buffer.from(messageTag.buffer, messageTag.byteOffset, messageTag.byteLength))
+    decipher.setAuthTag(
+      Buffer.from(messageTag.buffer, messageTag.byteOffset, messageTag.byteLength)
+    )
 
     // Decryption authenticates on final(); throws if tag is wrong.
     const decrypted: Buffer = Buffer.concat([
@@ -131,7 +131,7 @@ export default class SymmetricKey extends BigNumber {
    * @example
    * const symmetricKey = SymmetricKey.fromRandom();
    */
-  static fromRandom (): SymmetricKey {
+  static fromRandom(): SymmetricKey {
     return new SymmetricKey(Random(32))
   }
 
@@ -149,7 +149,7 @@ export default class SymmetricKey extends BigNumber {
    * const key = new SymmetricKey(1234);
    * const encryptedMessage = key.encrypt('plainText', 'utf8');
    */
-  encrypt (msg: number[] | string, enc?: 'hex'): string | number[] {
+  encrypt(msg: number[] | string, enc?: 'hex'): string | number[] {
     const iv = new Uint8Array(Random(32))
     const msgBytes = new Uint8Array(toArray(msg, enc))
     const keyBytes = new Uint8Array(this.toArray('be', 32))
@@ -164,11 +164,7 @@ export default class SymmetricKey extends BigNumber {
     }
 
     // Pure-TS fallback.
-    const { result, authenticationTag } = AESGCM(
-      msgBytes,
-      iv,
-      keyBytes
-    )
+    const { result, authenticationTag } = AESGCM(msgBytes, iv, keyBytes)
 
     const totalLength = iv.length + result.length + authenticationTag.length
     const combined = new Uint8Array(totalLength)
@@ -199,7 +195,7 @@ export default class SymmetricKey extends BigNumber {
    *
    * @throws {Error} Will throw an error if the decryption fails, likely due to message tampering or incorrect decryption key.
    */
-  decrypt (msg: number[] | string, enc?: 'hex' | 'utf8'): string | number[] {
+  decrypt(msg: number[] | string, enc?: 'hex' | 'utf8'): string | number[] {
     const msgBytes = new Uint8Array(toArray(msg, enc))
 
     const ivLength = 32
@@ -231,12 +227,7 @@ export default class SymmetricKey extends BigNumber {
     const ciphertext = msgBytes.slice(ivLength, tagStart)
     const messageTag = msgBytes.slice(tagStart)
 
-    const result = AESGCMDecrypt(
-      ciphertext,
-      iv,
-      messageTag,
-      keyBytes
-    )
+    const result = AESGCMDecrypt(ciphertext, iv, messageTag, keyBytes)
     if (result === null) {
       throw new Error('Decryption failed!')
     }

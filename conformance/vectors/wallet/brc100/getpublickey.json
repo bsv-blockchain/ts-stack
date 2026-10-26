@@ -45,7 +45,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -93,7 +94,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -141,7 +143,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -189,7 +192,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -237,7 +241,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -285,7 +290,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -333,7 +339,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -381,7 +388,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -429,7 +437,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -477,7 +486,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -525,7 +535,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -573,7 +584,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -621,7 +633,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -669,7 +682,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -717,7 +731,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -766,7 +781,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -816,7 +832,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -866,7 +883,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -916,7 +934,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -966,7 +985,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1016,7 +1036,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1066,7 +1087,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1116,7 +1138,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1166,7 +1189,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1216,7 +1240,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1266,7 +1291,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1316,7 +1342,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1366,7 +1393,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1416,7 +1444,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1466,7 +1495,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1515,7 +1545,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1563,7 +1594,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1611,7 +1643,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1659,7 +1692,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1707,7 +1741,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1755,7 +1790,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1803,7 +1839,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1851,7 +1888,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1899,7 +1937,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1947,7 +1986,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -1995,7 +2035,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2043,7 +2084,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2091,7 +2133,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2139,7 +2182,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2187,7 +2231,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2235,7 +2280,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2283,7 +2329,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2331,7 +2378,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2379,7 +2427,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2427,7 +2476,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2475,7 +2525,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2523,7 +2574,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2571,7 +2623,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2619,7 +2672,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2667,7 +2721,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2715,7 +2770,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2763,7 +2819,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2811,7 +2868,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2859,7 +2917,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2907,7 +2966,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -2955,7 +3015,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3003,7 +3064,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3051,7 +3113,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3099,7 +3162,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3147,7 +3211,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3195,7 +3260,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3243,7 +3309,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3291,7 +3358,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3339,7 +3407,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3387,7 +3456,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3435,7 +3505,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3483,7 +3554,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3531,7 +3603,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3579,7 +3652,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3627,7 +3701,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3675,7 +3750,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3723,7 +3799,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3771,7 +3848,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3819,7 +3897,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3867,7 +3946,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3915,7 +3995,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -3963,7 +4044,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4011,7 +4093,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4059,7 +4142,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4107,7 +4191,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4155,7 +4240,8 @@
           ],
           "keyID": "backup",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4203,7 +4289,8 @@
           ],
           "keyID": "backup",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4251,7 +4338,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4299,7 +4387,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4347,7 +4436,8 @@
           ],
           "keyID": "test-key-42",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4396,7 +4486,8 @@
           ],
           "keyID": "1",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4446,7 +4537,8 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4496,7 +4588,8 @@
           ],
           "keyID": "1",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4546,7 +4639,8 @@
           ],
           "keyID": "2",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4596,7 +4690,8 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4646,7 +4741,8 @@
           ],
           "keyID": "2",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4696,7 +4792,8 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4746,7 +4843,8 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4796,7 +4894,8 @@
           ],
           "keyID": "primary",
           "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {
@@ -4846,7 +4945,8 @@
           ],
           "keyID": "backup",
           "counterparty": "self",
-          "privileged": true
+          "privileged": true,
+          "privilegedReason": "Conformance key derivation"
         }
       },
       "expected": {

@@ -1,3 +1,6 @@
+const nobleTransform = ['babel-jest', { plugins: ['@babel/plugin-transform-modules-commonjs'] }]
+const nobleTransformIgnore = ['node_modules/.pnpm/(?!(?:@noble\\+curves|@noble\\+hashes)@)']
+
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',
@@ -5,6 +8,7 @@ module.exports = {
   testEnvironment: 'node',
   testTimeout: 30000,
   transform: {
+    '^.+\\.js$': nobleTransform,
     '^.+\\.tsx?$': [
       'ts-jest',
       {
@@ -15,6 +19,7 @@ module.exports = {
       }
     ]
   },
+  transformIgnorePatterns: nobleTransformIgnore,
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },

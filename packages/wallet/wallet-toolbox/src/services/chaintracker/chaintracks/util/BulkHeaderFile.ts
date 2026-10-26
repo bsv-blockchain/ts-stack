@@ -2,7 +2,7 @@ import { HeightRange } from './HeightRange'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { ChaintracksStorageBase } from '../Storage/ChaintracksStorageBase'
-import { Hash } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
 import { Chain } from '../../../../sdk/types'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { asArray, asString } from '../../../../utility/utilityHelpers.noBuffer'
@@ -98,6 +98,20 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
 
   abstract readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined>
 
+  protected validateReadBounds(length: number, offset: number): void {
+    const maximum = this.count * 80
+    if (
+      !Number.isSafeInteger(length) ||
+      !Number.isSafeInteger(offset) ||
+      length < 0 ||
+      offset < 0 ||
+      !Number.isSafeInteger(offset + length) ||
+      offset + length > maximum
+    ) {
+      throw new WERR_INVALID_PARAMETER('length and offset', `a non-negative slice within ${maximum} bytes`)
+    }
+  }
+
   get heightRange(): HeightRange {
     return new HeightRange(this.firstHeight, this.firstHeight + this.count - 1)
   }
@@ -113,7 +127,7 @@ export abstract class BulkHeaderFile implements BulkHeaderFileInfo {
    */
   async computeFileHash(): Promise<string> {
     if (this.data == null) throw new WERR_INVALID_OPERATION('requires defined data')
-    return asString(Hash.sha256(asArray(this.data)), 'base64')
+    return asString(sha256(asArray(this.data)), 'base64')
   }
 
   async releaseData(): Promise<void> {
@@ -161,6 +175,7 @@ export class BulkHeaderFileFs extends BulkHeaderFile {
   }
 
   override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> {
+    this.validateReadBounds(length, offset)
     if (this.data != null) {
       return this.data.slice(offset, offset + length)
     }
@@ -197,23 +212,19 @@ export class BulkHeaderFileStorage extends BulkHeaderFile {
   }
 
   override async readDataFromFile(length: number, offset: number): Promise<Uint8Array | undefined> {
+    this.validateReadBounds(length, offset)
     return (await this.ensureData()).slice(offset, offset + length)
   }
 
   override async ensureData(): Promise<Uint8Array> {
     if (this.data != null) return this.data
-    if (!this.sourceUrl || this.fetch == null) {
-      throw new WERR_INVALID_PARAMETER('sourceUrl and fetch', 'defined. Or data must be defined.')
-    }
-    const url = this.fetch.pathJoin(this.sourceUrl, this.fileName)
-    this.data = await this.fetch.download(url, this.count * 80)
-    if (!this.data) throw new WERR_INVALID_OPERATION(`failed to download data from ${url}`)
-    if (this.validated) {
-      const hash = await this.computeFileHash()
-      if (hash !== this.fileHash) {
-        throw new WERR_INVALID_OPERATION(`BACKING DOWNLOAD DATA CORRUPTION: invalid fileHash for ${this.fileName}`)
-      }
-    }
+    // Resolve through the manager rather than independently trusting persisted
+    // `validated` metadata or downloading a slice. The manager verifies the
+    // complete immutable object's length, digest, linkage, chain work, genesis,
+    // and proof of work before returning any bytes.
+    this.data = await this.storage.bulkManager.getDataFromFile(this.toStorageInfo(), 0, this.count * 80)
+    if (this.data == null) throw new WERR_INVALID_OPERATION(`failed to retrieve validated data for ${this.fileName}`)
+    this.validated = true
     return this.data
   }
 }

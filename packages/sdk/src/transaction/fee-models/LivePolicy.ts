@@ -1,5 +1,6 @@
 import SatoshisPerKilobyte from './SatoshisPerKilobyte.js'
 import Transaction from '../Transaction.js'
+import { defaultHttpClient } from '../http/DefaultHttpClient.js'
 
 /**
  * Represents a live fee policy that fetches current rates from ARC GorillaPool.
@@ -19,6 +20,9 @@ export default class LivePolicy extends SatoshisPerKilobyte {
    */
   constructor(cacheValidityMs: number = 5 * 60 * 1000) {
     super(100) // Initialize with dummy value, will be overridden by fetchFeeRate
+    if (!Number.isSafeInteger(cacheValidityMs) || cacheValidityMs < 0) {
+      throw new RangeError('cacheValidityMs must be a non-negative safe integer')
+    }
     this.cacheValidityMs = cacheValidityMs
   }
 
@@ -47,39 +51,51 @@ export default class LivePolicy extends SatoshisPerKilobyte {
     }
 
     try {
-      const response = await fetch(LivePolicy.ARC_POLICY_URL)
+      const response = await defaultHttpClient().request<unknown>(LivePolicy.ARC_POLICY_URL, {
+        method: 'GET',
+        headers: { Accept: 'application/json' }
+      })
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error('Fee-policy provider request failed')
       }
 
-      const response_data = await response.json()
+      const responseData = response.data as {
+        policy?: { miningFee?: { satoshis?: unknown; bytes?: unknown } }
+      }
+      const satoshis = responseData?.policy?.miningFee?.satoshis
+      const bytes = responseData?.policy?.miningFee?.bytes
 
       if (
-        !response_data.policy?.miningFee ||
-        typeof response_data.policy.miningFee.satoshis !== 'number' ||
-        typeof response_data.policy.miningFee.bytes !== 'number'
+        !Number.isSafeInteger(satoshis) ||
+        (satoshis as number) < 1 ||
+        (satoshis as number) > 21e14 ||
+        !Number.isSafeInteger(bytes) ||
+        (bytes as number) < 1 ||
+        (bytes as number) > 1_000_000_000
       ) {
         throw new Error('Invalid policy response format')
       }
 
       // Convert to satoshis per kilobyte
-      const rate =
-        (response_data.policy.miningFee.satoshis / response_data.policy.miningFee.bytes) * 1000
+      const rate = ((satoshis as number) / (bytes as number)) * 1000
+      if (!Number.isFinite(rate) || rate <= 0 || rate > 1_000_000_000) {
+        throw new Error('Invalid policy fee rate')
+      }
 
       // Cache the result
       this.cachedRate = rate
       this.cacheTimestamp = now
 
       return rate
-    } catch (error) {
+    } catch {
       // If we have a cached rate, use it as fallback
       if (this.cachedRate !== null) {
-        console.warn('Failed to fetch live fee rate, using cached value:', error)
+        console.warn('Failed to fetch live fee rate; using cached value.')
         return this.cachedRate
       }
 
       // Otherwise, use a reasonable default (100 sat/kb)
-      console.warn('Failed to fetch live fee rate, using default 100 sat/kb:', error)
+      console.warn('Failed to fetch live fee rate; using default 100 sat/kb.')
       return 100
     }
   }

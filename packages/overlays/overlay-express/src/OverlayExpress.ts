@@ -1,3 +1,4 @@
+import { Reader, Writer } from '@bsv/sdk/primitives/utils'
 import express, { type Request, type Response } from 'express'
 import bodyParser from 'body-parser'
 import {
@@ -23,7 +24,6 @@ import {
   DEFAULT_TESTNET_SLAP_TRACKERS,
   DEFAULT_TTN_SLAP_TRACKERS,
   DEFAULT_SLAP_TRACKERS,
-  Utils,
   Beef,
   Transaction,
   PrivateKey,
@@ -35,10 +35,18 @@ import {
 import Knex from 'knex'
 import { MongoClient, Db } from 'mongodb'
 import makeUserInterface, { type UIConfig } from './makeUserInterface.js'
-import * as DiscoveryServices from '@bsv/overlay-discovery-services'
+import {
+  SHIPLookupService,
+  SHIPStorage,
+  SHIPTopicManager,
+  SLAPLookupService,
+  SLAPStorage,
+  SLAPTopicManager,
+  WalletAdvertiser
+} from '@bsv/overlay-discovery-services'
 import chalk from 'chalk'
 import { v4 as uuidv4 } from 'uuid'
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { JanitorService, type JanitorReport } from './JanitorService.js'
 import { BanService } from './BanService.js'
 import { BanAwareLookupWrapper } from './BanAwareLookupWrapper.js'
@@ -51,6 +59,15 @@ import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middle
 import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
 import { ProviderChainBroadcaster, type NamedBroadcaster } from './ProviderChainBroadcaster.js'
 import { ChaintracksProvider } from './ChaintracksProvider.js'
+import {
+  assertBoundedString,
+  assertHash,
+  assertNonnegativeSafeInteger,
+  fetchWithDeadline,
+  isRecord,
+  readBoundedJson,
+  secureServiceFetch
+} from './OutboundSecurity.js'
 import type { Server } from 'node:http'
 import {
   bodyParserErrorHandler,
@@ -137,6 +154,7 @@ export interface EngineConfig {
   enableBASMSync?: boolean
   unprovenEvictionBlocks?: number
   reorgStreamUrl?: string
+  reorgStreamAllowPrivateHosts?: boolean
   reorgScanDepth?: number
   unprovenMaintenanceIntervalMs?: number
   /** Maximum lookup formulas hydrated by the engine. Use -1 to opt out. */
@@ -172,6 +190,18 @@ export interface HealthConfig {
   timeoutMs: number
   contextProvider?: () => Promise<Record<string, any> | undefined> | Record<string, any> | undefined
 }
+
+const MAX_HEALTH_TIMEOUT_MS = 60_000
+const MAX_HEALTH_CHECKS = 128
+const MAX_HEALTH_NAME_BYTES = 128
+const MAX_HEALTH_MESSAGE_BYTES = 1024
+const MAX_HEALTH_REPORT_DATA_BYTES = 1024 * 1024
+const MIN_SHARED_SECRET_BYTES = 32
+const MAX_SHARED_SECRET_BYTES = 16 * 1024
+const MAX_BLOCK_HEADER_RESPONSE_BYTES = 64 * 1024
+const BLOCK_HEADER_REQUEST_TIMEOUT_MS = 30_000
+const MAX_CONFIGURED_BODY_BYTES = 512 * 1024 * 1024
+const MAX_CONFIGURED_ORIGINS = 128
 
 export interface HealthReport {
   status: HealthStatus
@@ -217,7 +247,7 @@ interface BASMCapableEngine extends Engine {
   provideTopicAnchorRange: (topic: string, fromHeight: number, toHeight: number) => Promise<any>
   provideAdmittedList: (topic: string, blockHeight: number, blockHash?: string) => Promise<any>
   provideCompoundMerklePath: (topic: string, blockHeight: number, txids: string[]) => Promise<any>
-  provideRawTransactions: (txids: string[]) => Promise<any>
+  provideRawTransactions: (txids: string[], topic?: string) => Promise<any>
   startBASMSync: () => Promise<any>
   advanceTopicAnchorChains: (toHeight?: number) => Promise<void>
   evictUnprovenTransactions: (options?: {
@@ -275,6 +305,116 @@ function secretMatches(provided: string, expected: string): boolean {
   return timingSafeEqual(providedDigest, expectedDigest)
 }
 
+function assertSharedSecret(value: unknown, label: string): asserts value is string {
+  if (typeof value !== 'string' || value !== value.trim()) {
+    throw new TypeError(`${label} must not contain leading or trailing whitespace`)
+  }
+  const byteLength = new TextEncoder().encode(value).byteLength
+  if (byteLength < MIN_SHARED_SECRET_BYTES || byteLength > MAX_SHARED_SECRET_BYTES) {
+    throw new TypeError(
+      `${label} must contain between ${MIN_SHARED_SECRET_BYTES} and ${MAX_SHARED_SECRET_BYTES} UTF-8 bytes`
+    )
+  }
+  if (
+    Array.from(value).some(character => {
+      const codePoint = character.codePointAt(0) ?? 0
+      return codePoint <= 0x1f || codePoint === 0x7f
+    })
+  ) {
+    throw new TypeError(`${label} must not contain control characters`)
+  }
+}
+
+function assertConfigurationObject(value: unknown, label: string): asserts value is object {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`)
+  }
+}
+
+function assertBooleanOption(value: unknown, label: string): asserts value is boolean {
+  if (typeof value !== 'boolean') throw new TypeError(`${label} must be a boolean`)
+}
+
+function assertSingleLineString(
+  value: unknown,
+  label: string,
+  maxBytes: number,
+  allowEmpty = true
+): asserts value is string {
+  assertBoundedString(value, label, maxBytes, allowEmpty)
+  if (
+    Array.from(value).some(character => {
+      const codePoint = character.codePointAt(0) ?? 0
+      return codePoint <= 0x1f || codePoint === 0x7f
+    })
+  ) {
+    throw new TypeError(`${label} must not contain control characters`)
+  }
+}
+
+function assertIntegerOption(
+  value: unknown,
+  label: string,
+  minimum: number,
+  maximum: number,
+  allowUnlimited = false
+): asserts value is number {
+  if (
+    !Number.isSafeInteger(value) ||
+    ((value as number) < minimum && !(allowUnlimited && value === -1)) ||
+    (value as number) > maximum
+  ) {
+    const unlimited = allowUnlimited ? ' or -1' : ''
+    throw new TypeError(`${label} must be an integer between ${minimum} and ${maximum}${unlimited}`)
+  }
+}
+
+function normalizeConfiguredOrigin(value: unknown): string {
+  assertSingleLineString(value, 'Allowed origin', 2048, false)
+  let parsed: URL
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new TypeError('Allowed origins must be valid HTTP(S) origins')
+  }
+  if (
+    (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') ||
+    parsed.username !== '' ||
+    parsed.password !== '' ||
+    parsed.pathname !== '/' ||
+    parsed.search !== '' ||
+    parsed.hash !== '' ||
+    parsed.origin === 'null'
+  ) {
+    throw new TypeError(
+      'Allowed origins must not contain credentials, paths, queries, or fragments'
+    )
+  }
+  return parsed.origin
+}
+
+function normalizeAdvertisableFQDN(value: unknown): string {
+  assertSingleLineString(value, 'Advertisable FQDN', 2048, false)
+  let parsed: URL
+  try {
+    parsed = new URL(value.includes('://') ? value : `https://${value}`)
+  } catch {
+    throw new TypeError('Advertisable FQDN must be a valid HTTPS host')
+  }
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.username !== '' ||
+    parsed.password !== '' ||
+    parsed.pathname !== '/' ||
+    parsed.search !== '' ||
+    parsed.hash !== '' ||
+    parsed.hostname === ''
+  ) {
+    throw new TypeError('Advertisable FQDN must be an HTTPS host without credentials or a path')
+  }
+  return parsed.host
+}
+
 function parseTopicsHeader(header: string): string[] {
   const value = header.trim()
   let parsed: unknown
@@ -295,6 +435,21 @@ function parseTopicsHeader(header: string): string[] {
     )
   }
   return parsed
+}
+
+function assertRegistryName(value: unknown, label: string): asserts value is string {
+  assertBoundedString(value, label, 256, false)
+  if (
+    value === '__proto__' ||
+    value === 'prototype' ||
+    value === 'constructor' ||
+    Array.from(value).some(character => {
+      const codePoint = character.codePointAt(0) ?? 0
+      return codePoint <= 0x1f || codePoint === 0x7f
+    })
+  ) {
+    throw new TypeError(`${label} is invalid`)
+  }
 }
 
 /**
@@ -335,10 +490,10 @@ export default class OverlayExpress {
   engine?: Engine
 
   // Configured Topic Managers
-  managers: Record<string, TopicManager> = {}
+  managers: Record<string, TopicManager> = Object.create(null) as Record<string, TopicManager>
 
   // Configured Lookup Services
-  services: Record<string, LookupService> = {}
+  services: Record<string, LookupService> = Object.create(null) as Record<string, LookupService>
 
   // Enable GASP Sync
   // (We allow an on/off toggle, but also can do advanced custom sync config below)
@@ -369,6 +524,7 @@ export default class OverlayExpress {
   // When set, reorgs are reconciled in real time; the block poll also runs a
   // revalidation sweep as a fallback / reconnect catch-up.
   reorgStreamUrl?: string
+  reorgStreamAllowPrivateHosts: boolean = false
 
   // Depth (in blocks from the tip) for the reorg revalidation sweep.
   reorgScanDepth: number = 3
@@ -391,6 +547,7 @@ export default class OverlayExpress {
   arcadeApiKey: string | undefined = undefined
   arcadeDeploymentId: string | undefined = undefined
   arcadeChaintracksApiPrefix: string = '/chaintracks/v2'
+  arcadeAllowPrivateHosts: boolean = false
 
   private arcadeProvider?: ArcadeProvider
 
@@ -442,7 +599,7 @@ export default class OverlayExpress {
 
   // Health endpoint configuration
   healthConfig: HealthConfig = {
-    includeDetails: true,
+    includeDetails: false,
     timeoutMs: 5000
   }
 
@@ -471,7 +628,7 @@ export default class OverlayExpress {
     },
     securityHeaders: {
       contentSecurityPolicy:
-        "default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://bsvblockchain.org; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+        "default-src 'none'; script-src 'none'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
   }
 
@@ -489,6 +646,8 @@ export default class OverlayExpress {
     public advertisableFQDN: string,
     adminToken?: string
   ) {
+    if (adminToken !== undefined) assertSharedSecret(adminToken, 'The administrative Bearer token')
+    this.advertisableFQDN = normalizeAdvertisableFQDN(advertisableFQDN)
     this.app = express()
     this.logger.log(chalk.green.bold(`${name} constructed`))
     this.adminToken = adminToken ?? uuidv4() // generate random if not provided
@@ -506,6 +665,7 @@ export default class OverlayExpress {
    * @param port - The port number
    */
   configurePort(port: number): void {
+    assertIntegerOption(port, 'Server port', 1, 65_535)
     this.port = port
     this.logger.log(chalk.blue(`Server port set to ${port}`))
   }
@@ -530,10 +690,33 @@ export default class OverlayExpress {
    *   - maxReportResults: Maximum retained result details; -1 retains all
    */
   configureJanitor(config: Partial<typeof this.janitorConfig>): void {
-    this.janitorConfig = {
-      ...this.janitorConfig,
-      ...config
+    assertConfigurationObject(config, 'Janitor configuration')
+    const next = { ...this.janitorConfig }
+    if (config.requestTimeoutMs !== undefined) {
+      assertIntegerOption(config.requestTimeoutMs, 'Janitor requestTimeoutMs', 1, 300_000)
+      next.requestTimeoutMs = config.requestTimeoutMs
     }
+    if (config.hostDownRevokeScore !== undefined) {
+      assertIntegerOption(config.hostDownRevokeScore, 'Janitor hostDownRevokeScore', 1, 1000)
+      next.hostDownRevokeScore = config.hostDownRevokeScore
+    }
+    if (config.autoBanOnRemoval !== undefined) {
+      assertBooleanOption(config.autoBanOnRemoval, 'Janitor autoBanOnRemoval')
+      next.autoBanOnRemoval = config.autoBanOnRemoval
+    }
+    if (config.allowPrivateHosts !== undefined) {
+      assertBooleanOption(config.allowPrivateHosts, 'Janitor allowPrivateHosts')
+      next.allowPrivateHosts = config.allowPrivateHosts
+    }
+    if (config.batchSize !== undefined) {
+      assertIntegerOption(config.batchSize, 'Janitor batchSize', 1, 100_000, true)
+      next.batchSize = config.batchSize
+    }
+    if (config.maxReportResults !== undefined) {
+      assertIntegerOption(config.maxReportResults, 'Janitor maxReportResults', 1, 1_000_000, true)
+      next.maxReportResults = config.maxReportResults
+    }
+    this.janitorConfig = next
     this.logger.log(chalk.blue('Janitor service has been configured.'))
   }
 
@@ -541,10 +724,35 @@ export default class OverlayExpress {
    * Configures health-report behavior.
    */
   configureHealth(config: Partial<HealthConfig>): void {
-    this.healthConfig = {
-      ...this.healthConfig,
-      ...config
+    if (typeof config !== 'object' || config === null || Array.isArray(config)) {
+      throw new TypeError('Health configuration must be an object')
     }
+    const next = { ...this.healthConfig }
+    if (Object.prototype.hasOwnProperty.call(config, 'includeDetails')) {
+      if (typeof config.includeDetails !== 'boolean') {
+        throw new TypeError('Health includeDetails must be a boolean')
+      }
+      next.includeDetails = config.includeDetails
+    }
+    if (Object.prototype.hasOwnProperty.call(config, 'timeoutMs')) {
+      if (
+        !Number.isSafeInteger(config.timeoutMs) ||
+        (config.timeoutMs as number) < 1 ||
+        (config.timeoutMs as number) > MAX_HEALTH_TIMEOUT_MS
+      ) {
+        throw new TypeError(
+          `Health timeoutMs must be an integer from 1 to ${MAX_HEALTH_TIMEOUT_MS}`
+        )
+      }
+      next.timeoutMs = config.timeoutMs as number
+    }
+    if (Object.prototype.hasOwnProperty.call(config, 'contextProvider')) {
+      if (config.contextProvider !== undefined && typeof config.contextProvider !== 'function') {
+        throw new TypeError('Health contextProvider must be a function')
+      }
+      next.contextProvider = config.contextProvider
+    }
+    this.healthConfig = next
     this.logger.log(chalk.blue('Health reporting has been configured.'))
   }
 
@@ -559,28 +767,120 @@ export default class OverlayExpress {
       securityHeaders?: SecurityHeadersOptions
     }
   ): void {
-    const { http, securityHeaders: headerConfig, ...topLevel } = config
-    const definedTopLevel = Object.fromEntries(
-      Object.entries(topLevel).filter(([, value]) => value !== undefined)
-    ) as Partial<Omit<EdgePolicyConfig, 'http' | 'securityHeaders'>>
-    const definedHttp = Object.fromEntries(
-      Object.entries(http ?? {}).filter(([, value]) => value !== undefined)
-    ) as Partial<HttpServerPolicyDefaults>
-    const definedHeaders = Object.fromEntries(
-      Object.entries(headerConfig ?? {}).filter(([, value]) => value !== undefined)
-    ) as SecurityHeadersOptions
-    this.edgePolicyConfig = {
+    assertConfigurationObject(config, 'HTTP edge policy')
+    const next: EdgePolicyConfig = {
       ...this.edgePolicyConfig,
-      ...definedTopLevel,
-      http: {
-        ...this.edgePolicyConfig.http,
-        ...definedHttp
-      },
-      securityHeaders: {
-        ...this.edgePolicyConfig.securityHeaders,
-        ...definedHeaders
+      allowedOrigins:
+        this.edgePolicyConfig.allowedOrigins === undefined
+          ? undefined
+          : [...this.edgePolicyConfig.allowedOrigins],
+      http: { ...this.edgePolicyConfig.http },
+      securityHeaders: { ...this.edgePolicyConfig.securityHeaders }
+    }
+    if (config.environmentPrefix !== undefined) {
+      if (
+        typeof config.environmentPrefix !== 'string' ||
+        !/^[A-Z][A-Z0-9_]{0,63}$/.test(config.environmentPrefix)
+      ) {
+        throw new TypeError('HTTP edge environmentPrefix is invalid')
+      }
+      next.environmentPrefix = config.environmentPrefix
+    }
+    if (config.allowedOrigins !== undefined) {
+      if (
+        !Array.isArray(config.allowedOrigins) ||
+        config.allowedOrigins.length > MAX_CONFIGURED_ORIGINS
+      ) {
+        throw new TypeError(`allowedOrigins must contain at most ${MAX_CONFIGURED_ORIGINS} origins`)
+      }
+      next.allowedOrigins = [...new Set(config.allowedOrigins.map(normalizeConfiguredOrigin))]
+    }
+    if (config.jsonBodyLimitBytes !== undefined) {
+      assertIntegerOption(
+        config.jsonBodyLimitBytes,
+        'JSON body limit',
+        1,
+        MAX_CONFIGURED_BODY_BYTES,
+        true
+      )
+      next.jsonBodyLimitBytes = config.jsonBodyLimitBytes
+    }
+    if (config.binaryBodyLimitBytes !== undefined) {
+      assertIntegerOption(
+        config.binaryBodyLimitBytes,
+        'Binary body limit',
+        1,
+        MAX_CONFIGURED_BODY_BYTES,
+        true
+      )
+      next.binaryBodyLimitBytes = config.binaryBodyLimitBytes
+    }
+    if (config.maxConcurrentRequests !== undefined) {
+      assertIntegerOption(
+        config.maxConcurrentRequests,
+        'Maximum concurrent requests',
+        1,
+        100_000,
+        true
+      )
+      next.maxConcurrentRequests = config.maxConcurrentRequests
+    }
+
+    if (config.http !== undefined) {
+      assertConfigurationObject(config.http, 'HTTP server policy')
+      const httpBounds: Array<[keyof HttpServerPolicyDefaults, number, boolean]> = [
+        ['requestTimeoutMs', 3_600_000, false],
+        ['headersTimeoutMs', 3_600_000, false],
+        ['keepAliveTimeoutMs', 3_600_000, false],
+        ['socketTimeoutMs', 3_600_000, false],
+        ['maxRequestsPerSocket', 1_000_000, false],
+        ['maxConnections', 1_000_000, true]
+      ]
+      for (const [key, maximum, allowUnlimited] of httpBounds) {
+        const value = config.http[key]
+        if (value === undefined) continue
+        assertIntegerOption(value, `HTTP ${key}`, 1, maximum, allowUnlimited)
+        next.http[key] = value
+      }
+      if (next.http.headersTimeoutMs > next.http.requestTimeoutMs) {
+        throw new TypeError('HTTP headersTimeoutMs cannot exceed requestTimeoutMs')
+      }
+      if (next.http.keepAliveTimeoutMs > next.http.requestTimeoutMs) {
+        throw new TypeError('HTTP keepAliveTimeoutMs cannot exceed requestTimeoutMs')
       }
     }
+
+    if (config.securityHeaders !== undefined) {
+      assertConfigurationObject(config.securityHeaders, 'Security headers policy')
+      const headers = config.securityHeaders
+      if (Object.prototype.hasOwnProperty.call(headers, 'environmentPrefix')) {
+        throw new TypeError('Security headers must use the top-level environmentPrefix')
+      }
+      for (const key of ['contentSecurityPolicy', 'permissionsPolicy'] as const) {
+        const value = headers[key]
+        if (value === undefined) continue
+        if (value !== false) assertSingleLineString(value, `Security header ${key}`, 16 * 1024)
+        next.securityHeaders[key] = value
+      }
+      const enumeratedHeaders = {
+        crossOriginResourcePolicy: ['same-origin', 'same-site', 'cross-origin'],
+        crossOriginOpenerPolicy: ['same-origin', 'same-origin-allow-popups', 'unsafe-none'],
+        frameOptions: ['DENY', 'SAMEORIGIN']
+      } as const
+      for (const key of Object.keys(enumeratedHeaders) as Array<keyof typeof enumeratedHeaders>) {
+        const value = headers[key]
+        if (value === undefined) continue
+        if (value !== false && !(enumeratedHeaders[key] as readonly unknown[]).includes(value)) {
+          throw new TypeError(`Security header ${key} is invalid`)
+        }
+        ;(next.securityHeaders as Record<string, unknown>)[key] = value
+      }
+      if (headers.strictTransportSecurity !== undefined) {
+        assertBooleanOption(headers.strictTransportSecurity, 'Strict-Transport-Security setting')
+        next.securityHeaders.strictTransportSecurity = headers.strictTransportSecurity
+      }
+    }
+    this.edgePolicyConfig = next
     this.logger.log(chalk.blue('HTTP edge policy has been configured.'))
   }
 
@@ -588,11 +888,48 @@ export default class OverlayExpress {
    * Registers an application-specific health check.
    */
   registerHealthCheck(definition: HealthCheckDefinition): void {
+    if (typeof definition !== 'object' || definition === null || Array.isArray(definition)) {
+      throw new TypeError('Health check definition must be an object')
+    }
+    if (
+      typeof definition.name !== 'string' ||
+      definition.name.length === 0 ||
+      new TextEncoder().encode(definition.name).byteLength > MAX_HEALTH_NAME_BYTES ||
+      Array.from(definition.name).some(character => {
+        const codePoint = character.codePointAt(0) ?? 0
+        return codePoint <= 0x1f || codePoint === 0x7f
+      })
+    ) {
+      throw new TypeError('Health check name is invalid')
+    }
+    if (['process', 'engine', 'knex', 'mongo'].includes(definition.name)) {
+      throw new TypeError('Health check name is reserved')
+    }
+    if (
+      definition.scope !== undefined &&
+      definition.scope !== 'live' &&
+      definition.scope !== 'ready'
+    ) {
+      throw new TypeError('Health check scope is invalid')
+    }
+    if (definition.critical !== undefined && typeof definition.critical !== 'boolean') {
+      throw new TypeError('Health check critical must be a boolean')
+    }
+    if (typeof definition.handler !== 'function') {
+      throw new TypeError('Health check handler must be a function')
+    }
+    if (
+      !this.healthChecks.some(check => check.name === definition.name) &&
+      this.healthChecks.length >= MAX_HEALTH_CHECKS
+    ) {
+      throw new RangeError(`Cannot register more than ${MAX_HEALTH_CHECKS} health checks`)
+    }
     this.healthChecks = this.healthChecks.filter(check => check.name !== definition.name)
     this.healthChecks.push({
-      scope: 'ready',
-      critical: false,
-      ...definition
+      name: definition.name,
+      scope: definition.scope ?? 'ready',
+      critical: definition.critical ?? false,
+      handler: definition.handler
     })
     this.logger.log(chalk.blue(`Registered health check ${definition.name}`))
   }
@@ -605,6 +942,9 @@ export default class OverlayExpress {
    * @param identityKey - The hex-encoded public key of the admin
    */
   configureAdminIdentityKey(identityKey: string): void {
+    if (typeof identityKey !== 'string' || !/^(?:02|03)[0-9a-fA-F]{64}$/.test(identityKey)) {
+      throw new TypeError('Admin identity key must be a compressed secp256k1 public key')
+    }
     this.adminIdentityKey = identityKey
     this.logger.log(chalk.blue('Admin identity key has been configured.'))
   }
@@ -624,6 +964,9 @@ export default class OverlayExpress {
    * @param logger - A logger object (e.g., console)
    */
   configureLogger(logger: typeof console): void {
+    if (typeof logger !== 'object' || logger === null || typeof logger.log !== 'function') {
+      throw new TypeError('Logger must provide a log function')
+    }
     this.logger = logger
     this.logger.log(chalk.blue('Logger has been configured.'))
   }
@@ -635,6 +978,9 @@ export default class OverlayExpress {
    * @param network - The network ('main', 'test', or 'ttn')
    */
   configureNetwork(network: OverlayNetwork): void {
+    if (network !== 'main' && network !== 'test' && network !== 'ttn') {
+      throw new TypeError('Network must be main, test, or ttn')
+    }
     this.network = network
     this.chainTracker =
       network === 'ttn'
@@ -662,6 +1008,15 @@ export default class OverlayExpress {
       }
       chainTracker = new WhatsOnChain(this.network)
     }
+    if (
+      chainTracker !== 'scripts only' &&
+      (typeof chainTracker !== 'object' ||
+        chainTracker === null ||
+        typeof chainTracker.isValidRootForHeight !== 'function' ||
+        typeof chainTracker.currentHeight !== 'function')
+    ) {
+      throw new TypeError('ChainTracker must implement root validation and currentHeight')
+    }
     this.chainTracker = chainTracker
     this.logger.log(chalk.blue('ChainTracker has been configured.'))
   }
@@ -671,6 +1026,7 @@ export default class OverlayExpress {
    * @param apiKey - The ARC API key
    */
   configureArcApiKey(apiKey: string): void {
+    assertSingleLineString(apiKey, 'ARC API key', MAX_SHARED_SECRET_BYTES)
     this.arcApiKey = apiKey
     this.logger.log(chalk.blue('ARC API key has been configured.'))
   }
@@ -680,6 +1036,7 @@ export default class OverlayExpress {
    * @param token - The token ARC should present when posting callback notifications.
    */
   configureArcCallbackToken(token: string): void {
+    assertSharedSecret(token, 'The ARC callback token')
     this.arcCallbackToken = token
     this.logger.log(chalk.blue('ARC callback token has been configured.'))
   }
@@ -693,11 +1050,36 @@ export default class OverlayExpress {
       apiKey?: string
       deploymentId?: string
       chaintracksApiPrefix?: string
+      allowPrivateHosts?: boolean
     } = {}
   ): void {
+    assertConfigurationObject(config, 'Arcade configuration')
+    if (config.allowPrivateHosts !== undefined) {
+      assertBooleanOption(config.allowPrivateHosts, 'Arcade allowPrivateHosts')
+    }
+    const allowPrivateHosts = config.allowPrivateHosts ?? false
+    secureServiceFetch(url, undefined, allowPrivateHosts)
+    if (config.apiKey !== undefined) {
+      assertSingleLineString(config.apiKey, 'Arcade API key', MAX_SHARED_SECRET_BYTES)
+    }
+    if (config.deploymentId !== undefined) {
+      assertSingleLineString(config.deploymentId, 'Arcade deployment ID', 1024)
+    }
+    if (config.chaintracksApiPrefix !== undefined) {
+      assertSingleLineString(config.chaintracksApiPrefix, 'Arcade Chaintracks API prefix', 2048)
+      // Reuse the provider's URL-path parser even when Chaintracks is configured later.
+      const chaintracksStreamUrl = new ChaintracksProvider(url, {
+        apiPrefix: config.chaintracksApiPrefix,
+        allowPrivateHosts
+      }).reorgStreamUrl()
+      if (!chaintracksStreamUrl.endsWith('/reorg/stream')) {
+        throw new TypeError('Chaintracks API prefix must be a URL path')
+      }
+    }
     this.arcadeUrl = url
     this.arcadeApiKey = config.apiKey
     this.arcadeDeploymentId = config.deploymentId
+    this.arcadeAllowPrivateHosts = allowPrivateHosts
     if (config.chaintracksApiPrefix !== undefined) {
       this.arcadeChaintracksApiPrefix = config.chaintracksApiPrefix
     }
@@ -714,10 +1096,24 @@ export default class OverlayExpress {
       apiPrefix?: string
       reorgStream?: boolean
       scanDepth?: number
+      allowPrivateHosts?: boolean
     } = {}
   ): void {
+    assertConfigurationObject(config, 'Chaintracks configuration')
+    if (config.reorgStream !== undefined) {
+      assertBooleanOption(config.reorgStream, 'Chaintracks reorgStream')
+    }
+    if (config.allowPrivateHosts !== undefined) {
+      assertBooleanOption(config.allowPrivateHosts, 'Chaintracks allowPrivateHosts')
+    }
+    if (config.scanDepth !== undefined) {
+      assertIntegerOption(config.scanDepth, 'Chaintracks scanDepth', 1, 100_000)
+    }
     const apiPrefix = config.apiPrefix ?? '/chaintracks/v2'
-    const client = new ChaintracksProvider(url, { apiPrefix })
+    const client = new ChaintracksProvider(url, {
+      apiPrefix,
+      allowPrivateHosts: config.allowPrivateHosts
+    })
     this.configureChainTracker(client)
     this.configureTopicAnchorHeaderResolver(async blockHeight => {
       const header = await client.findHeaderForHeight(blockHeight)
@@ -729,7 +1125,7 @@ export default class OverlayExpress {
       }
     })
     if (config.reorgStream !== false) {
-      this.configureReorgStream(client.reorgStreamUrl(), config.scanDepth)
+      this.configureReorgStream(client.reorgStreamUrl(), config.scanDepth, config.allowPrivateHosts)
     }
     this.logger.log(chalk.blue('go-chaintracks provider has been configured.'))
   }
@@ -740,6 +1136,7 @@ export default class OverlayExpress {
    * @param enable - true to enable, false to disable
    */
   configureEnableGASPSync(enable: boolean): void {
+    assertBooleanOption(enable, 'GASP synchronization setting')
     this.enableGASPSync = enable
     this.logger.log(chalk.blue(`GASP synchronization ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -749,6 +1146,7 @@ export default class OverlayExpress {
    * BASM is opt-in because it requires direct proofs and block hash resolution.
    */
   configureEnableBASMSync(enable: boolean): void {
+    assertBooleanOption(enable, 'BASM synchronization setting')
     this.enableBASMSync = enable
     this.logger.log(chalk.blue(`BASM synchronization ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -757,6 +1155,9 @@ export default class OverlayExpress {
    * Configures the block header resolver used to derive BASM block hashes.
    */
   configureTopicAnchorHeaderResolver(resolver: TopicAnchorHeaderResolver): void {
+    if (typeof resolver !== 'function') {
+      throw new TypeError('Topic anchor header resolver must be a function')
+    }
     this.topicAnchorHeaderResolver = resolver
     this.logger.log(chalk.blue('BASM topic anchor header resolver has been configured.'))
   }
@@ -767,11 +1168,14 @@ export default class OverlayExpress {
    * @param url - The reorg stream URL, e.g. `https://arcade.example/v2/reorg/stream`.
    * @param scanDepth - Optional revalidation-sweep depth in blocks (default 3).
    */
-  configureReorgStream(url: string, scanDepth?: number): void {
-    this.reorgStreamUrl = url
+  configureReorgStream(url: string, scanDepth?: number, allowPrivateHosts = false): void {
+    assertBooleanOption(allowPrivateHosts, 'Reorg stream allowPrivateHosts')
     if (scanDepth !== undefined) {
+      assertIntegerOption(scanDepth, 'Reorg scanDepth', 1, 100_000)
       this.reorgScanDepth = scanDepth
     }
+    this.reorgStreamUrl = secureServiceFetch(url, undefined, allowPrivateHosts).baseUrl
+    this.reorgStreamAllowPrivateHosts = allowPrivateHosts
     this.logger.log(chalk.blue('BASM reorg stream has been configured.'))
   }
 
@@ -780,6 +1184,13 @@ export default class OverlayExpress {
    */
   configureUnprovenEviction(config: { thresholdBlocks?: number }): void {
     if (config.thresholdBlocks !== undefined) {
+      if (
+        !Number.isSafeInteger(config.thresholdBlocks) ||
+        config.thresholdBlocks < 1 ||
+        config.thresholdBlocks > 10_000_000
+      ) {
+        throw new TypeError('thresholdBlocks must be an integer between 1 and 10000000')
+      }
       this.unprovenEvictionBlocks = config.thresholdBlocks
     }
     this.logger.log(chalk.blue('Unproven transaction eviction has been configured.'))
@@ -791,10 +1202,17 @@ export default class OverlayExpress {
    */
   configureUnprovenMaintenance(config: { intervalMs?: number; thresholdBlocks?: number }): void {
     if (config.intervalMs !== undefined) {
+      if (
+        !Number.isSafeInteger(config.intervalMs) ||
+        config.intervalMs < 0 ||
+        config.intervalMs > 0x7fffffff
+      ) {
+        throw new TypeError('intervalMs must be an integer between 0 and 2147483647')
+      }
       this.unprovenMaintenanceIntervalMs = config.intervalMs
     }
     if (config.thresholdBlocks !== undefined) {
-      this.unprovenEvictionBlocks = config.thresholdBlocks
+      this.configureUnprovenEviction({ thresholdBlocks: config.thresholdBlocks })
     }
     this.logger.log(chalk.blue('Unproven transaction maintenance has been configured.'))
   }
@@ -804,6 +1222,9 @@ export default class OverlayExpress {
    * follow the chain tip. Set to 0 to disable periodic polling.
    */
   configureBASMBlockPollInterval(intervalMs: number): void {
+    if (!Number.isSafeInteger(intervalMs) || intervalMs < 0 || intervalMs > 0x7fffffff) {
+      throw new TypeError('intervalMs must be an integer between 0 and 2147483647')
+    }
     this.basmBlockPollIntervalMs = intervalMs
     this.logger.log(chalk.blue(`BASM block poll interval set to ${intervalMs}ms.`))
   }
@@ -813,6 +1234,7 @@ export default class OverlayExpress {
    * @param enable - true to enable, false to disable
    */
   configureVerboseRequestLogging(enable: boolean): void {
+    assertBooleanOption(enable, 'Verbose request logging setting')
     this.verboseRequestLogging = enable
     this.logger.log(chalk.blue(`Verbose request logging ${enable ? 'enabled' : 'disabled'}.`))
   }
@@ -857,6 +1279,7 @@ export default class OverlayExpress {
    * @param manager - An instance of TopicManager
    */
   configureTopicManager(name: string, manager: TopicManager): void {
+    assertRegistryName(name, 'Topic manager name')
     this.managers[name] = manager
     this.logger.log(chalk.blue(`Configured topic manager ${name}`))
   }
@@ -867,6 +1290,7 @@ export default class OverlayExpress {
    * @param service - An instance of LookupService
    */
   configureLookupService(name: string, service: LookupService): void {
+    assertRegistryName(name, 'Lookup service name')
     this.services[name] = service
     this.logger.log(chalk.blue(`Configured lookup service ${name}`))
   }
@@ -880,6 +1304,7 @@ export default class OverlayExpress {
     name: string,
     serviceFactory: (knex: Knex.Knex) => { service: LookupService; migrations: Migration[] }
   ): void {
+    assertRegistryName(name, 'Lookup service name')
     const knex = this.ensureKnex()
     const factoryResult = serviceFactory(knex)
     this.services[name] = factoryResult.service
@@ -896,6 +1321,7 @@ export default class OverlayExpress {
     name: string,
     serviceFactory: (mongoDb: Db) => LookupService
   ): void {
+    assertRegistryName(name, 'Lookup service name')
     const mongoDb = this.ensureMongo()
     this.services[name] = serviceFactory(mongoDb)
     this.logger.log(chalk.blue(`Configured lookup service ${name} with MongoDB`))
@@ -916,9 +1342,89 @@ export default class OverlayExpress {
    * in the `configureEngine()` method below.
    */
   configureEngineParams(params: EngineConfig): void {
+    assertConfigurationObject(params, 'Engine configuration')
+    for (const key of [
+      'logTime',
+      'throwOnBroadcastFailure',
+      'suppressDefaultSyncAdvertisements',
+      'enableBASMSync',
+      'reorgStreamAllowPrivateHosts'
+    ] as const) {
+      const value = params[key]
+      if (value !== undefined) assertBooleanOption(value, `Engine ${key}`)
+    }
+    if (params.logPrefix !== undefined) {
+      assertSingleLineString(params.logPrefix, 'Engine logPrefix', 1024)
+    }
+    if (
+      params.topicAnchorHeaderResolver !== undefined &&
+      typeof params.topicAnchorHeaderResolver !== 'function'
+    ) {
+      throw new TypeError('Engine topicAnchorHeaderResolver must be a function')
+    }
+    if (params.chainTracker !== undefined && params.chainTracker !== 'scripts only') {
+      if (
+        typeof params.chainTracker !== 'object' ||
+        params.chainTracker === null ||
+        typeof params.chainTracker.isValidRootForHeight !== 'function' ||
+        typeof params.chainTracker.currentHeight !== 'function'
+      ) {
+        throw new TypeError('Engine chainTracker must implement root validation and currentHeight')
+      }
+    }
+    if (params.reorgScanDepth !== undefined) {
+      assertIntegerOption(params.reorgScanDepth, 'Engine reorgScanDepth', 1, 100_000)
+    }
+    if (params.unprovenMaintenanceIntervalMs !== undefined) {
+      assertIntegerOption(
+        params.unprovenMaintenanceIntervalMs,
+        'Engine unprovenMaintenanceIntervalMs',
+        0,
+        0x7fffffff
+      )
+    }
+    if (params.unprovenEvictionBlocks !== undefined) {
+      assertIntegerOption(
+        params.unprovenEvictionBlocks,
+        'Engine unprovenEvictionBlocks',
+        1,
+        10_000_000
+      )
+    }
+    if (params.maxLookupResults !== undefined) {
+      assertIntegerOption(
+        params.maxLookupResults,
+        'Engine maxLookupResults',
+        1,
+        Number.MAX_SAFE_INTEGER,
+        true
+      )
+    }
+    if (params.reorgStreamUrl !== undefined) {
+      assertSingleLineString(params.reorgStreamUrl, 'Engine reorgStreamUrl', 2048, false)
+      secureServiceFetch(
+        params.reorgStreamUrl,
+        undefined,
+        params.reorgStreamAllowPrivateHosts ?? false
+      )
+    }
+    for (const key of ['shipTrackers', 'slapTrackers'] as const) {
+      const trackers = params[key]
+      if (trackers !== undefined && !Array.isArray(trackers)) {
+        throw new TypeError(`Engine ${key} must be an array`)
+      }
+    }
     this.engineConfig = {
       ...this.engineConfig,
-      ...params
+      ...params,
+      shipTrackers:
+        params.shipTrackers === undefined
+          ? this.engineConfig.shipTrackers
+          : [...params.shipTrackers],
+      slapTrackers:
+        params.slapTrackers === undefined
+          ? this.engineConfig.slapTrackers
+          : [...params.slapTrackers]
     }
     this.logger.log(chalk.blue('Advanced Engine configuration params have been updated.'))
   }
@@ -951,16 +1457,16 @@ export default class OverlayExpress {
 
     if (autoConfigureShipSlap) {
       const mongoDb = this.ensureMongo()
-      const shipStorage = new DiscoveryServices.SHIPStorage(mongoDb)
-      const slapStorage = new DiscoveryServices.SLAPStorage(mongoDb)
+      const shipStorage = new SHIPStorage(mongoDb)
+      const slapStorage = new SLAPStorage(mongoDb)
 
       // Run the one-time discovery migration before the engine can accept
       // traffic, so a failed unique-index build is a visible startup failure.
       await shipStorage.ensureIndexes()
       await slapStorage.ensureIndexes()
 
-      this.configureTopicManager('tm_ship', new DiscoveryServices.SHIPTopicManager())
-      this.configureTopicManager('tm_slap', new DiscoveryServices.SLAPTopicManager())
+      this.configureTopicManager('tm_ship', new SHIPTopicManager())
+      this.configureTopicManager('tm_slap', new SLAPTopicManager())
 
       const shipStorageForLookup =
         this.banService === undefined
@@ -972,11 +1478,11 @@ export default class OverlayExpress {
           : new BanAwareSLAPStorage(slapStorage, this.banService, this.logger)
 
       this.services.ls_ship = new ResourceBoundedLookupWrapper(
-        new DiscoveryServices.SHIPLookupService(shipStorageForLookup as any),
+        new SHIPLookupService(shipStorageForLookup as any),
         maxLookupResults
       )
       this.services.ls_slap = new ResourceBoundedLookupWrapper(
-        new DiscoveryServices.SLAPLookupService(slapStorageForLookup as any),
+        new SLAPLookupService(slapStorageForLookup as any),
         maxLookupResults
       )
       this.logger.log(chalk.blue('Configured lookup service ls_ship with MongoDB'))
@@ -1054,7 +1560,7 @@ export default class OverlayExpress {
     if (this.enableGASPSync) {
       return this.engineConfig.syncConfiguration ?? {}
     }
-    const syncConfig: SyncConfigurationMap = {}
+    const syncConfig: SyncConfigurationMap = Object.create(null) as SyncConfigurationMap
     for (const name of Object.keys(this.managers)) {
       syncConfig[name] = false
     }
@@ -1071,7 +1577,8 @@ export default class OverlayExpress {
         apiKey: this.arcadeApiKey,
         callbackUrl,
         callbackToken: this.arcCallbackToken,
-        deploymentId: this.arcadeDeploymentId
+        deploymentId: this.arcadeDeploymentId,
+        allowPrivateHosts: this.arcadeAllowPrivateHosts
       })
       providers.push({
         name: 'Arcade',
@@ -1105,7 +1612,8 @@ export default class OverlayExpress {
       apiKey: this.arcadeApiKey,
       callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
       callbackToken: this.arcCallbackToken,
-      deploymentId: this.arcadeDeploymentId
+      deploymentId: this.arcadeDeploymentId,
+      allowPrivateHosts: this.arcadeAllowPrivateHosts
     })
     return this.arcadeProvider
   }
@@ -1124,7 +1632,7 @@ export default class OverlayExpress {
       throw new Error(`Arcade proof for ${txid} did not include a block height`)
     }
     const valid = await chainTracker.isValidRootForHeight(proof.merkleRoot, blockHeight)
-    if (!valid) {
+    if (valid !== true) {
       throw new Error(
         `Arcade proof for ${txid} did not match the chain tracker at height ${blockHeight}`
       )
@@ -1156,22 +1664,31 @@ export default class OverlayExpress {
     if (this.network === 'ttn') return undefined
 
     return async (blockHeight: number) => {
-      const response = await fetch(
+      assertNonnegativeSafeInteger(blockHeight, 'WhatsOnChain block height')
+      const response = await fetchWithDeadline(
+        fetch,
         `https://api.whatsonchain.com/v1/bsv/${this.network}/block/${blockHeight}/header`,
         {
           method: 'GET',
           headers: { Accept: 'application/json' }
-        }
+        },
+        BLOCK_HEADER_REQUEST_TIMEOUT_MS
       )
       if (!response.ok) {
+        await response.body?.cancel()
         throw new Error(
           `WhatsOnChain header lookup failed for height ${blockHeight}: ${response.status}`
         )
       }
-      const header = (await response.json()) as { hash?: string; merkleroot?: string }
-      if (typeof header.hash !== 'string') {
-        throw new TypeError(`WhatsOnChain did not return a block hash for height ${blockHeight}`)
-      }
+      const header = await readBoundedJson(
+        response,
+        MAX_BLOCK_HEADER_RESPONSE_BYTES,
+        'WhatsOnChain header response',
+        BLOCK_HEADER_REQUEST_TIMEOUT_MS
+      )
+      if (!isRecord(header)) throw new TypeError('WhatsOnChain returned an invalid block header')
+      assertHash(header.hash, 'WhatsOnChain block hash')
+      assertHash(header.merkleroot, 'WhatsOnChain Merkle root')
       return {
         blockHeight,
         blockHash: header.hash,
@@ -1200,7 +1717,7 @@ export default class OverlayExpress {
         ? 'https://staging-storage.babbage.systems'
         : 'https://storage.babbage.systems'
     try {
-      return new DiscoveryServices.WalletAdvertiser(
+      return new WalletAdvertiser(
         this.network,
         this.privateKey,
         storageBase,
@@ -1332,14 +1849,18 @@ export default class OverlayExpress {
     reason?: string
   ): Promise<express.Response> {
     const dotIndex = value.lastIndexOf('.')
-    if (dotIndex === -1) {
+    if (dotIndex !== 64 || !/^(0|[1-9]\d*)$/.test(value.substring(dotIndex + 1))) {
       return res
         .status(400)
         .json({ status: 'error', message: 'Outpoint format must be "txid.outputIndex"' })
     }
     const txid = value.substring(0, dotIndex)
-    const outputIndex = Number.parseInt(value.substring(dotIndex + 1))
-    if (Number.isNaN(outputIndex)) {
+    const outputIndex = Number(value.substring(dotIndex + 1))
+    try {
+      assertHash(txid, 'Outpoint txid')
+      assertNonnegativeSafeInteger(outputIndex, 'Outpoint outputIndex')
+      if (outputIndex > 0xffffffff) throw new TypeError('Outpoint outputIndex is too large')
+    } catch {
       return res.status(400).json({ status: 'error', message: 'Invalid outputIndex in outpoint' })
     }
     await this.banService!.banOutpoint(txid, outputIndex, reason)
@@ -1358,7 +1879,9 @@ export default class OverlayExpress {
     service?: string
   ): Promise<void> {
     if (typeof service === 'string') {
-      const svc = engine.lookupServices[service]
+      const svc = Object.prototype.hasOwnProperty.call(engine.lookupServices, service)
+        ? engine.lookupServices[service]
+        : undefined
       if (svc !== undefined) await svc.outputEvicted(txid, outputIndex)
       return
     }
@@ -1404,7 +1927,7 @@ export default class OverlayExpress {
 
     try {
       const result = ((await Promise.race([
-        Promise.resolve(definition.handler()),
+        Promise.resolve().then(async () => await definition.handler()),
         new Promise<never>((_, reject) => {
           timeout = setTimeout(
             () => reject(new Error(`Timed out after ${this.healthConfig.timeoutMs}ms`)),
@@ -1417,13 +1940,28 @@ export default class OverlayExpress {
         details?: Record<string, any>
       }
 
+      if (
+        typeof result !== 'object' ||
+        result === null ||
+        (result.status !== undefined && !['ok', 'degraded', 'error'].includes(result.status)) ||
+        (result.message !== undefined &&
+          (typeof result.message !== 'string' ||
+            new TextEncoder().encode(result.message).byteLength > MAX_HEALTH_MESSAGE_BYTES))
+      ) {
+        throw new TypeError('Health check returned an invalid result')
+      }
+      const details =
+        result.details === undefined
+          ? undefined
+          : this.cloneBoundedHealthData(result.details, 'Health check details')
+
       return {
         name: definition.name,
         scope: definition.scope,
         critical: definition.critical,
         status: result.status ?? 'ok',
         message: result.message,
-        details: result.details,
+        details,
         durationMs: Date.now() - startedAt
       }
     } catch (error) {
@@ -1443,6 +1981,23 @@ export default class OverlayExpress {
     } finally {
       if (timeout !== undefined) clearTimeout(timeout)
     }
+  }
+
+  private cloneBoundedHealthData(value: unknown, label: string): Record<string, any> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new TypeError(`${label} must be an object`)
+    }
+    let serialized: string | undefined
+    try {
+      serialized = JSON.stringify(value)
+    } catch {
+      throw new TypeError(`${label} must be JSON serializable`)
+    }
+    if (serialized === undefined) throw new TypeError(`${label} must be JSON serializable`)
+    if (Buffer.byteLength(serialized, 'utf8') > MAX_HEALTH_REPORT_DATA_BYTES) {
+      throw new RangeError(`${label} exceeds ${MAX_HEALTH_REPORT_DATA_BYTES} bytes`)
+    }
+    return JSON.parse(serialized) as Record<string, any>
   }
 
   private async collectHealthReport(mode: 'live' | 'ready' | 'full'): Promise<HealthReport> {
@@ -1550,10 +2105,31 @@ export default class OverlayExpress {
       status = 'degraded'
     }
 
-    const context =
+    let context: Record<string, any> | undefined
+    if (
+      mode === 'full' &&
+      this.healthConfig.includeDetails &&
       typeof this.healthConfig.contextProvider === 'function'
-        ? await this.healthConfig.contextProvider()
-        : undefined
+    ) {
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        const suppliedContext = await Promise.race([
+          Promise.resolve().then(async () => await this.healthConfig.contextProvider?.()),
+          new Promise<never>((_, reject) => {
+            timeout = setTimeout(
+              () => reject(new Error(`Timed out after ${this.healthConfig.timeoutMs}ms`)),
+              this.healthConfig.timeoutMs
+            )
+          })
+        ])
+        context =
+          suppliedContext === undefined
+            ? undefined
+            : this.cloneBoundedHealthData(suppliedContext, 'Health context')
+      } finally {
+        if (timeout !== undefined) clearTimeout(timeout)
+      }
+    }
 
     const report: HealthReport = {
       status,
@@ -1619,18 +2195,17 @@ export default class OverlayExpress {
     if (typeof headerToken === 'string' && headerToken.startsWith('Bearer ')) {
       return headerToken.slice('Bearer '.length)
     }
-    return headerToken
+    return undefined
   }
 
   private arcCallbackAuthorized(req: Request): boolean {
     if (typeof this.arcCallbackToken !== 'string' || this.arcCallbackToken.length === 0) {
-      return true
+      return false
     }
     const callbackHeader = req.headers['x-callback-token']
     const callbackToken = Array.isArray(callbackHeader) ? callbackHeader[0] : callbackHeader
-    return (
-      this.arcCallbackRequestToken(req) === this.arcCallbackToken ||
-      callbackToken === this.arcCallbackToken
+    return [this.arcCallbackRequestToken(req), callbackToken].some(
+      candidate => typeof candidate === 'string' && secretMatches(candidate, this.arcCallbackToken!)
     )
   }
 
@@ -1746,6 +2321,17 @@ export default class OverlayExpress {
   async start(): Promise<void> {
     const engine = this.ensureEngine()
     const knex = this.ensureKnex()
+    const hasConfiguredArcProvider =
+      (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
+      (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
+    if (
+      hasConfiguredArcProvider &&
+      (typeof this.arcCallbackToken !== 'string' || this.arcCallbackToken.length === 0)
+    ) {
+      throw new Error(
+        'ARC/Arcade is configured without an ARC callback token; configureArcCallbackToken is required'
+      )
+    }
     this.startTime = new Date()
 
     const edgePolicy = this.edgePolicyConfig
@@ -1807,16 +2393,27 @@ export default class OverlayExpress {
       rawPageValue: unknown,
       rawLimitValue: unknown
     ): { page: number; limit: number; skip: number } => {
-      const rawPage = Number.parseInt(typeof rawPageValue === 'string' ? rawPageValue : '', 10)
-      const requestedPage = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+      const rawPageText = typeof rawPageValue === 'string' ? rawPageValue.trim() : ''
+      if (rawPageText.length > 0 && !/^[1-9]\d*$/.test(rawPageText)) {
+        throw new TypeError('page must be a positive integer')
+      }
+      const requestedPage = rawPageText.length === 0 ? 1 : Number(rawPageText)
+      if (!Number.isSafeInteger(requestedPage)) {
+        throw new TypeError('page must be a positive safe integer')
+      }
       const rawLimitText =
         typeof rawLimitValue === 'string' ? rawLimitValue.trim().toLowerCase() : ''
+      if (
+        rawLimitText.length > 0 &&
+        rawLimitText !== '-1' &&
+        rawLimitText !== 'unlimited' &&
+        !/^[1-9]\d*$/.test(rawLimitText)
+      ) {
+        throw new TypeError('limit must be a positive integer, -1, or unlimited')
+      }
       const parsedLimit =
-        rawLimitText === '-1' || rawLimitText === 'unlimited'
-          ? -1
-          : Number.parseInt(rawLimitText, 10)
-      const requestedLimit =
-        rawLimitText.length === 0 || Number.isNaN(parsedLimit) ? adminListDefaultLimit : parsedLimit
+        rawLimitText === '-1' || rawLimitText === 'unlimited' ? -1 : Number(rawLimitText)
+      const requestedLimit = rawLimitText.length === 0 ? adminListDefaultLimit : parsedLimit
       if (requestedLimit !== -1 && (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1)) {
         throw new TypeError('limit must be a positive integer, -1, or unlimited')
       }
@@ -1832,12 +2429,28 @@ export default class OverlayExpress {
       }
       return { page, limit, skip }
     }
+    const parseAdminSearch = (rawSearchValue: unknown): string | undefined => {
+      if (rawSearchValue === undefined) return undefined
+      assertBoundedString(rawSearchValue, 'search', 256)
+      const search = rawSearchValue.trim()
+      if (search.length === 0) return undefined
+      for (const character of search) {
+        const codePoint = character.codePointAt(0) ?? 0
+        if (codePoint <= 0x1f || codePoint === 0x7f) {
+          throw new TypeError('search must not contain control characters')
+        }
+      }
+      // Search is literal. Treating authenticated operator input as a MongoDB
+      // regular expression still enables catastrophic backtracking and broad
+      // accidental scans when an admin token or browser is compromised.
+      return search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    }
     this.app.disable('x-powered-by')
     this.app.use(initialDoubleSlashCompatibility)
     this.app.use(
       securityHeaders({
-        environmentPrefix: edgePolicy.environmentPrefix,
-        ...edgePolicy.securityHeaders
+        ...edgePolicy.securityHeaders,
+        environmentPrefix: edgePolicy.environmentPrefix
       })
     )
     this.app.use(
@@ -1882,17 +2495,25 @@ export default class OverlayExpress {
 
     // Serve a static documentation site or user interface
     this.app.get('/', (req, res) => {
+      const scriptNonce = randomBytes(18).toString('base64')
       res.set('content-type', 'text/html')
+      res.set(
+        'Content-Security-Policy',
+        `default-src 'none'; script-src 'nonce-${scriptNonce}' 'strict-dynamic'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; font-src 'self' https://cdn.jsdelivr.net; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
+      )
       res.send(
         makeUserInterface({
           ...this.webUIConfig,
-          adminIdentityKey: this.adminIdentityKey
+          adminIdentityKey: this.adminIdentityKey,
+          scriptNonce
         })
       )
     })
 
     // Serve health check endpoints
     this.app.get('/health/live', (_, res) => {
+      res.set('Cache-Control', 'no-store, max-age=0')
+      res.set('Pragma', 'no-cache')
       ;(async () => {
         const report = await this.collectHealthReport('live')
         return res.status(report.live ? 200 : 503).json(report)
@@ -1907,6 +2528,8 @@ export default class OverlayExpress {
 
     // Compatibility alias used by Kubernetes probes and existing deployments.
     this.app.get('/healthz', (_, res) => {
+      res.set('Cache-Control', 'no-store, max-age=0')
+      res.set('Pragma', 'no-cache')
       ;(async () => {
         const report = await this.collectHealthReport('live')
         return res.status(report.live ? 200 : 503).json(report)
@@ -1917,6 +2540,8 @@ export default class OverlayExpress {
     })
 
     this.app.get('/health/ready', (_, res) => {
+      res.set('Cache-Control', 'no-store, max-age=0')
+      res.set('Pragma', 'no-cache')
       ;(async () => {
         const report = await this.collectHealthReport('ready')
         return res.status(report.ready ? 200 : 503).json(report)
@@ -1930,6 +2555,8 @@ export default class OverlayExpress {
     })
 
     this.app.get('/health', (_, res) => {
+      res.set('Cache-Control', 'no-store, max-age=0')
+      res.set('Pragma', 'no-cache')
       ;(async () => {
         const report = await this.collectHealthReport('full')
         return res.status(report.ready ? 200 : 503).json(report)
@@ -2042,8 +2669,8 @@ export default class OverlayExpress {
           let offChainValues: number[] | undefined
           let beef = Array.from(body as number[])
           if (includesOffChain) {
-            const r = new Utils.Reader(beef)
-            const l = r.readVarIntNum()
+            const r = new Reader(beef)
+            const l = r.readVarIntNumStrict(false)
             beef = r.read(l)
             offChainValues = r.read()
           }
@@ -2109,7 +2736,7 @@ export default class OverlayExpress {
           const outputs = result.outputs
 
           // Serialize in the format expected by LookupResolver
-          const writer = new Utils.Writer()
+          const writer = new Writer()
 
           // Write number of outpoints
           writer.writeVarIntNum(outputs.length)
@@ -2152,10 +2779,12 @@ export default class OverlayExpress {
     })
 
     // ARC/Arcade ingest route (only if a provider is configured)
-    if (
+    const hasArcProvider =
       (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
       (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
-    ) {
+    const hasArcCallbackToken =
+      typeof this.arcCallbackToken === 'string' && this.arcCallbackToken.length > 0
+    if (hasArcProvider && hasArcCallbackToken) {
       this.app.post('/arc-ingest', (req, res) => {
         ;(async () => {
           try {
@@ -2176,7 +2805,7 @@ export default class OverlayExpress {
           })
         })
       })
-    } else {
+    } else if (!hasArcProvider) {
       this.logger.warn(
         chalk.yellow('Disabling ARC/Arcade ingest because no provider was configured.')
       )
@@ -2191,7 +2820,9 @@ export default class OverlayExpress {
             const response = await engine.provideForeignSyncResponse(req.body, topic)
             return res.status(200).json(response)
           } catch (error) {
-            console.error(chalk.red('Error in /requestSyncResponse:'), error)
+            this.logger.error(
+              chalk.red(`Error in /requestSyncResponse: error=${serializeErrorForLog(error)}`)
+            )
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)
@@ -2209,10 +2840,16 @@ export default class OverlayExpress {
         ;(async () => {
           try {
             const { graphID, txid, outputIndex } = req.body
-            const response = await engine.provideForeignGASPNode(graphID, txid, outputIndex)
+            const header = req.headers['x-bsv-topic']
+            if (typeof header !== 'string' || header.length === 0) {
+              throw new PublicRequestError('Missing x-bsv-topic header')
+            }
+            const response = await engine.provideForeignGASPNode(graphID, txid, outputIndex, header)
             return res.status(200).json(response)
           } catch (error) {
-            console.error(chalk.red('Error in /requestForeignGASPNode:'), error)
+            this.logger.error(
+              chalk.red(`Error in /requestForeignGASPNode: error=${serializeErrorForLog(error)}`)
+            )
             return res.status(400).json({
               status: 'error',
               message: publicErrorMessage(error)
@@ -2375,9 +3012,10 @@ export default class OverlayExpress {
     })
 
     registerJsonRoute('/requestRawTransactions', async req => {
+      const topic = readBasmTopic(req)
       const txids = requireTxids(req.body.txids, false)
       requireBasmCapability('provideRawTransactions')
-      return await basmEngine.provideRawTransactions(txids)
+      return await basmEngine.provideRawTransactions(txids, topic)
     })
 
     /**
@@ -2413,6 +3051,11 @@ export default class OverlayExpress {
       res: express.Response,
       next: express.NextFunction
     ): void => {
+      // Administrative responses contain sensitive operational state and must
+      // never survive logout in browser, proxy, or shared-cache storage.
+      res.setHeader('Cache-Control', 'no-store, max-age=0')
+      res.setHeader('Pragma', 'no-cache')
+
       // Method 1: BSV mutual authentication (identity key match)
       const authReq = req as unknown as AuthRequest
       if (
@@ -2510,7 +3153,7 @@ export default class OverlayExpress {
           const db = this.ensureMongo()
           const collection = db.collection('shipRecords')
 
-          const search = typeof req.query.search === 'string' ? req.query.search : undefined
+          const search = parseAdminSearch(req.query.search)
           const { page, limit, skip } = parseAdminPage(req.query.page, req.query.limit)
 
           const query: any = {}
@@ -2562,7 +3205,7 @@ export default class OverlayExpress {
           const db = this.ensureMongo()
           const collection = db.collection('slapRecords')
 
-          const search = typeof req.query.search === 'string' ? req.query.search : undefined
+          const search = parseAdminSearch(req.query.search)
           const { page, limit, skip } = parseAdminPage(req.query.page, req.query.limit)
 
           const query: any = {}
@@ -2733,11 +3376,18 @@ export default class OverlayExpress {
       ;(async () => {
         try {
           const { txid, outputIndex, service, ban, banDomain: shouldBanDomain } = req.body
-          if (typeof txid !== 'string' || typeof outputIndex !== 'number') {
+          try {
+            assertHash(txid, 'txid')
+            assertNonnegativeSafeInteger(outputIndex, 'outputIndex')
+            if (outputIndex > 0xffffffff) throw new TypeError('outputIndex is too large')
+          } catch {
             return res.status(400).json({
               status: 'error',
-              message: 'txid (string) and outputIndex (number) are required'
+              message: 'txid and outputIndex must form a valid outpoint'
             })
+          }
+          if (service !== undefined && typeof service !== 'string') {
+            return res.status(400).json({ status: 'error', message: 'service must be a string' })
           }
 
           // Look up domain before eviction if needed for banning
@@ -2746,8 +3396,8 @@ export default class OverlayExpress {
             removedDomain = await this.lookupDomainForOutpoint(txid, outputIndex)
           }
 
-          await this.evictFromServices(engine, txid, outputIndex, service)
-
+          // Persist requested bans before eviction so a concurrent GASP sync
+          // cannot re-admit the output during the administrative operation.
           if (ban === true && this.banService !== undefined) {
             await this.banService.banOutpoint(
               txid,
@@ -2767,6 +3417,8 @@ export default class OverlayExpress {
               'Domain banned by admin via token removal'
             )
           }
+
+          await this.evictFromServices(engine, txid, outputIndex, service)
 
           const banMsg = ban === true ? ' Outpoint banned.' : ''
           const domainMsg =
@@ -2910,19 +3562,17 @@ export default class OverlayExpress {
     this.app.post('/admin/evictOutpoint', checkAdminAuth as any, (req, res) => {
       ;(async () => {
         try {
-          if (typeof req.body.service === 'string') {
-            const service = engine.lookupServices[req.body.service]
-            await service.outputEvicted(req.body.txid, req.body.outputIndex)
-          } else {
-            const services = Object.values(engine.lookupServices)
-            for (const service of services) {
-              try {
-                await service.outputEvicted(req.body.txid, req.body.outputIndex)
-              } catch {
-                continue
-              }
+          const { txid, outputIndex, service } = req.body ?? {}
+          assertHash(txid, 'txid')
+          assertNonnegativeSafeInteger(outputIndex, 'outputIndex')
+          if (outputIndex > 0xffffffff) throw new TypeError('outputIndex is too large')
+          if (service !== undefined) {
+            assertBoundedString(service, 'service', 256, false)
+            if (!Object.prototype.hasOwnProperty.call(engine.lookupServices, service)) {
+              throw new TypeError('service must name a configured lookup service')
             }
           }
+          await this.evictFromServices(engine, txid, outputIndex, service)
           return res.status(200).json({ status: 'success', message: 'Outpoint evicted' })
         } catch (error) {
           console.error(chalk.red('Error in /admin/evictOutpoint:'), error)
@@ -3047,7 +3697,7 @@ export default class OverlayExpress {
    */
   private async runStartupSync(): Promise<void> {
     // The legacy Ninja advertiser has a setLookupEngine method.
-    if (this.engine?.advertiser instanceof DiscoveryServices.WalletAdvertiser) {
+    if (this.engine?.advertiser instanceof WalletAdvertiser) {
       this.logger.log(
         chalk.cyan(
           `${this.name} will now advertise with SHIP and SLAP as appropriate at FQDN: ${this.advertisableFQDN}`
@@ -3139,7 +3789,9 @@ export default class OverlayExpress {
       onConnect: async () => {
         await basmEngine?.revalidateRecentAnchors(reorgScanDepth)
       },
-      logger: this.logger
+      logger: this.logger,
+      allowPrivateHosts:
+        this.engineConfig.reorgStreamAllowPrivateHosts ?? this.reorgStreamAllowPrivateHosts
     })
     this.reorgAdapter.start()
     this.logger.log(chalk.green(`BASM reorg stream listening at ${reorgStreamUrl}`))

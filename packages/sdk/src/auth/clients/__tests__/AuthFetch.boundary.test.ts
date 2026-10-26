@@ -26,6 +26,171 @@ function buildResponsePayload(
   return writer.toArray()
 }
 
+function parseAuthenticatedResponse(
+  authFetch: AuthFetch,
+  nonce: number[],
+  payload: number[],
+  sender = 'server-identity-key'
+): Response | undefined {
+  return (authFetch as any).parseAuthenticatedResponse(
+    'https://service.example',
+    Utils.toBase64(nonce),
+    sender,
+    payload
+  )
+}
+
+describe('AuthFetch authenticated response framing', () => {
+  const nonce = Array.from({ length: 32 }, (_, index) => index)
+
+  test('accepts both status endpoints, exact-size bodies, and absent peer state', async () => {
+    const authFetch = new AuthFetch({} as never, undefined, undefined, undefined, {
+      maxResponseBytes: 4
+    })
+    const lower = parseAuthenticatedResponse(
+      authFetch,
+      nonce,
+      buildResponsePayload(nonce, 200, { 'x-answer': 'yes' }, [1, 2, 3, 4])
+    )!
+    expect(lower.status).toBe(200)
+    expect(lower.statusText).toBe('200')
+    expect(lower.headers.get('x-answer')).toBe('yes')
+    expect(lower.headers.get('x-bsv-auth-identity-key')).toBe('server-identity-key')
+    await expect(lower.arrayBuffer()).resolves.toEqual(Uint8Array.of(1, 2, 3, 4).buffer)
+
+    const upper = parseAuthenticatedResponse(
+      authFetch,
+      nonce,
+      buildResponsePayload(nonce, 599, {}, [])
+    )!
+    expect(upper.status).toBe(599)
+    await expect(upper.text()).resolves.toBe('')
+  })
+
+  test.each([199, 600])('rejects out-of-range HTTP status %i', status => {
+    const authFetch = new AuthFetch({} as never)
+    expect(() =>
+      parseAuthenticatedResponse(authFetch, nonce, buildResponsePayload(nonce, status, {}, []))
+    ).toThrow('Authenticated response contains an invalid HTTP status code.')
+  })
+
+  test('ignores another request nonce without mutating the peer identity', () => {
+    const authFetch = new AuthFetch({} as never)
+    ;(authFetch as any).peers['https://service.example'] = {
+      peer: {},
+      identityKey: 'original',
+      supportsMutualAuth: false,
+      pendingCertificateRequests: []
+    }
+    const otherNonce = nonce.map(value => value ^ 0xff)
+    expect(
+      parseAuthenticatedResponse(
+        authFetch,
+        nonce,
+        buildResponsePayload(otherNonce, 200, {}, []),
+        'substituted'
+      )
+    ).toBeUndefined()
+    expect(authFetch.peers['https://service.example']).toMatchObject({
+      identityKey: 'original',
+      supportsMutualAuth: false
+    })
+  })
+
+  test('updates the authenticated identity only after the nonce matches', () => {
+    const authFetch = new AuthFetch({} as never)
+    ;(authFetch as any).peers['https://service.example'] = {
+      peer: {},
+      pendingCertificateRequests: []
+    }
+    parseAuthenticatedResponse(
+      authFetch,
+      nonce,
+      buildResponsePayload(nonce, 204, {}, []),
+      'authenticated-server'
+    )
+    expect(authFetch.peers['https://service.example']).toMatchObject({
+      identityKey: 'authenticated-server',
+      supportsMutualAuth: true
+    })
+  })
+
+  test('enforces the frame ceiling before parsing and permits its exact endpoint', () => {
+    const authFetch = new AuthFetch({} as never, undefined, undefined, undefined, {
+      maxResponseBytes: 4
+    })
+    const maximumFrameBytes = 4 + 512 * 1024
+    const atLimit = buildResponsePayload(nonce, 200, {}, [])
+    while (atLimit.length < maximumFrameBytes) atLimit.push(0)
+    expect(() => parseAuthenticatedResponse(authFetch, nonce, atLimit)).toThrow(
+      'Authenticated response contains trailing bytes.'
+    )
+    expect(() => parseAuthenticatedResponse(authFetch, nonce, [...atLimit, 0])).toThrow(
+      'Authenticated response frame exceeds the configured limit.'
+    )
+  })
+
+  test.each([
+    ['empty name', '', '', 'invalid response header name length'],
+    ['oversized name', 'k'.repeat(1025), '', 'invalid response header name length'],
+    ['oversized value', 'key', 'v'.repeat(32 * 1024 + 1), 'invalid response header value length']
+  ])('rejects an %s', (_case, key, value, message) => {
+    const authFetch = new AuthFetch({} as never)
+    expect(() =>
+      parseAuthenticatedResponse(
+        authFetch,
+        nonce,
+        buildResponsePayload(nonce, 200, { [key]: value }, [])
+      )
+    ).toThrow(`Authenticated response contains an ${message}.`)
+  })
+
+  test('enforces the aggregate header byte ceiling', () => {
+    const authFetch = new AuthFetch({} as never)
+    const headers = Object.fromEntries(
+      Array.from({ length: 9 }, (_, index) => [`x-${index}`, 'v'.repeat(32 * 1024)])
+    )
+    expect(() =>
+      parseAuthenticatedResponse(authFetch, nonce, buildResponsePayload(nonce, 200, headers, []))
+    ).toThrow('Authenticated response headers exceed the configured limit.')
+  })
+
+  test('rejects a declared body above the configured ceiling before reading it', () => {
+    const authFetch = new AuthFetch({} as never, undefined, undefined, undefined, {
+      maxResponseBytes: 4
+    })
+    const writer = new Utils.Writer()
+    writer.write(nonce)
+    writer.writeVarIntNum(200)
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(5)
+    expect(() => parseAuthenticatedResponse(authFetch, nonce, writer.toArray())).toThrow(
+      'Authenticated response body exceeds the configured limit.'
+    )
+  })
+
+  test('classifies stale-session errors only with their complete authenticated context', () => {
+    const authFetch = new AuthFetch({} as never)
+    const classify = (error: unknown, identityKey?: string): boolean =>
+      (authFetch as any).isStaleSessionError(error, {
+        identityKey,
+        peer: {},
+        pendingCertificateRequests: []
+      })
+    expect(classify('Session not found for nonce')).toBe(false)
+    expect(classify(new Error('Session not found for nonce expired'))).toBe(true)
+    const unauthenticated = (status?: number): Error =>
+      Object.assign(new Error('response arrived without valid BSV authentication'), {
+        details: status === undefined ? undefined : { status }
+      })
+    expect(classify(unauthenticated(401))).toBe(false)
+    expect(classify(unauthenticated(), 'server')).toBe(false)
+    expect(classify(unauthenticated(403), 'server')).toBe(false)
+    expect(classify(unauthenticated(401), 'server')).toBe(true)
+    expect(classify(new Error('unrelated'), 'server')).toBe(false)
+  })
+})
+
 describe('AuthFetch pending-request boundary', () => {
   test('cleans request state when an authenticated response payload is malformed', async () => {
     let generalMessage: ((senderPublicKey: string, payload: number[]) => void) | undefined
@@ -53,6 +218,69 @@ describe('AuthFetch pending-request boundary', () => {
 
     await expect(authFetch.fetch('https://service.example/resource')).rejects.toThrow()
     expect(stopListeningForGeneralMessages).toHaveBeenCalledWith(41)
+    expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+  })
+
+  test.each([
+    [
+      'excessive header count',
+      (nonce: number[]) => {
+        const writer = new Utils.Writer()
+        writer.write(nonce)
+        writer.writeVarIntNum(200)
+        writer.writeVarIntNum(1_000_000)
+        return writer.toArray()
+      },
+      'invalid response header count'
+    ],
+    [
+      'truncated body',
+      (nonce: number[]) => {
+        const writer = new Utils.Writer()
+        writer.write(nonce)
+        writer.writeVarIntNum(200)
+        writer.writeVarIntNum(0)
+        writer.writeVarIntNum(5)
+        writer.write([1])
+        return writer.toArray()
+      },
+      'truncated while reading response body'
+    ],
+    [
+      'trailing data',
+      (nonce: number[]) => {
+        const writer = new Utils.Writer()
+        writer.write(nonce)
+        writer.writeVarIntNum(200)
+        writer.writeVarIntNum(0)
+        writer.writeVarIntNum(-1)
+        writer.write([1])
+        return writer.toArray()
+      },
+      'trailing bytes'
+    ]
+  ])('rejects a malicious authenticated response with %s', async (_case, build, message) => {
+    let generalMessage: ((senderPublicKey: string, payload: number[]) => void) | undefined
+    const peer = {
+      listenForGeneralMessages: jest.fn(listener => {
+        generalMessage = listener
+        return 51
+      }),
+      stopListeningForGeneralMessages: jest.fn(),
+      toPeer: jest.fn(async (payload: number[]) => {
+        generalMessage?.('server-identity-key', build(payload.slice(0, 32)))
+      })
+    }
+    const authFetch = new AuthFetch({} as never)
+    ;(authFetch as any).peers['https://service.example'] = {
+      peer,
+      identityKey: 'server-identity-key',
+      supportsMutualAuth: true,
+      pendingCertificateRequests: []
+    }
+
+    await expect(authFetch.fetch('https://service.example/resource')).rejects.toThrow(message)
+    expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledWith(51)
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)
   })
 
@@ -364,7 +592,9 @@ describe('AuthFetch expired-request dispatch boundary', () => {
     jest.useFakeTimers()
     try {
       let finishCertificates!: () => void
-      const wait = new Promise<void>(resolve => { finishCertificates = resolve })
+      const wait = new Promise<void>(resolve => {
+        finishCertificates = resolve
+      })
       const peer = {
         listenForGeneralMessages: jest.fn(() => 101),
         stopListeningForGeneralMessages: jest.fn(),
@@ -372,11 +602,19 @@ describe('AuthFetch expired-request dispatch boundary', () => {
       }
       const authFetch = new AuthFetch({} as never)
       ;(authFetch as any).peers['https://service.example'] = {
-        peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: [true]
+        peer,
+        identityKey: 'server',
+        supportsMutualAuth: true,
+        pendingCertificateRequests: [true]
       }
       jest.spyOn(authFetch as any, 'waitForPendingCertificateRequests').mockReturnValue(wait)
-      const pending = authFetch.fetch('https://service.example/write', { method: 'POST', body: 'synthetic' })
-      const rejected = expect(pending).rejects.toThrow('Timed out waiting for authenticated response.')
+      const pending = authFetch.fetch('https://service.example/write', {
+        method: 'POST',
+        body: 'synthetic'
+      })
+      const rejected = expect(pending).rejects.toThrow(
+        'Timed out waiting for authenticated response.'
+      )
       await jest.advanceTimersByTimeAsync(30000)
       await rejected
       finishCertificates()
@@ -384,14 +622,18 @@ describe('AuthFetch expired-request dispatch boundary', () => {
       expect(peer.toPeer).not.toHaveBeenCalled()
       expect((authFetch as any).pendingRequestNonces.size).toBe(0)
       expect(jest.getTimerCount()).toBe(0)
-    } finally { jest.useRealTimers() }
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   test('a late stale-session failure never starts a retry after timeout', async () => {
     jest.useFakeTimers()
     try {
       let failSend!: (error: Error) => void
-      const send = new Promise<void>((_resolve, reject) => { failSend = reject })
+      const send = new Promise<void>((_resolve, reject) => {
+        failSend = reject
+      })
       const peer = {
         listenForGeneralMessages: jest.fn(() => 102),
         stopListeningForGeneralMessages: jest.fn(),
@@ -399,11 +641,19 @@ describe('AuthFetch expired-request dispatch boundary', () => {
       }
       const authFetch = new AuthFetch({} as never)
       ;(authFetch as any).peers['https://service.example'] = {
-        peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: []
+        peer,
+        identityKey: 'server',
+        supportsMutualAuth: true,
+        pendingCertificateRequests: []
       }
       const recover = jest.spyOn(authFetch as any, 'recoverAuthenticatedSend')
-      const pending = authFetch.fetch('https://service.example/write', { method: 'POST', body: 'synthetic' })
-      const rejected = expect(pending).rejects.toThrow('Timed out waiting for authenticated response.')
+      const pending = authFetch.fetch('https://service.example/write', {
+        method: 'POST',
+        body: 'synthetic'
+      })
+      const rejected = expect(pending).rejects.toThrow(
+        'Timed out waiting for authenticated response.'
+      )
       await jest.advanceTimersByTimeAsync(30000)
       await rejected
       failSend(new Error('Session not found for nonce'))
@@ -412,21 +662,32 @@ describe('AuthFetch expired-request dispatch boundary', () => {
       expect(recover).not.toHaveBeenCalled()
       expect((authFetch as any).pendingRequestNonces.size).toBe(0)
       expect(jest.getTimerCount()).toBe(0)
-    } finally { jest.useRealTimers() }
+    } finally {
+      jest.useRealTimers()
+    }
   })
 
   test('preserves an immediate gateway failure and cleans the waiter without retrying', async () => {
-    const failure = Object.assign(new Error('Unauthenticated HTTP 502 response'), { details: { status: 502 } })
+    const failure = Object.assign(new Error('Unauthenticated HTTP 502 response'), {
+      details: { status: 502 }
+    })
     const peer = {
       listenForGeneralMessages: jest.fn(() => 103),
       stopListeningForGeneralMessages: jest.fn(),
-      toPeer: jest.fn(async () => { throw failure })
+      toPeer: jest.fn(async () => {
+        throw failure
+      })
     }
     const authFetch = new AuthFetch({} as never)
     ;(authFetch as any).peers['https://service.example'] = {
-      peer, identityKey: 'server', supportsMutualAuth: true, pendingCertificateRequests: []
+      peer,
+      identityKey: 'server',
+      supportsMutualAuth: true,
+      pendingCertificateRequests: []
     }
-    await expect(authFetch.fetch('https://service.example/write', { method: 'POST' })).rejects.toBe(failure)
+    await expect(authFetch.fetch('https://service.example/write', { method: 'POST' })).rejects.toBe(
+      failure
+    )
     expect(peer.toPeer).toHaveBeenCalledTimes(1)
     expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledTimes(1)
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)

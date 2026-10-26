@@ -7,6 +7,8 @@ import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../Api/BlockHeaderApi'
 import { ChaintracksStorageBase } from '../Storage/ChaintracksStorageBase'
 
+const SUPPORTED_CHAINS = new Set<Chain>(['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'])
+
 export abstract class BulkIngestorBase implements BulkIngestorApi {
   /**
    *
@@ -14,7 +16,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param localCachePath defaults to './data/ingest_headers/'
    * @returns
    */
-  static createBulkIngestorBaseOptions (chain: Chain) {
+  static createBulkIngestorBaseOptions(chain: Chain) {
     const options: BulkIngestorBaseOptions = {
       chain,
       jsonResource: `${chain}NetBlockHeaders.json`
@@ -26,26 +28,44 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
   jsonFilename: string
   log: (...args: any[]) => void = () => {}
 
-  constructor (options: BulkIngestorBaseOptions) {
-    if (!options.jsonResource) throw new Error('The jsonFilename options property is required.')
+  constructor(options: BulkIngestorBaseOptions) {
+    if (options == null || typeof options !== 'object' || Array.isArray(options)) {
+      throw new Error('Bulk ingestor options must be a data object.')
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(options)
+    if (Object.keys(descriptors).length > 64 || Object.values(descriptors).some(d => d.get != null || d.set != null)) {
+      throw new Error('Bulk ingestor options must contain only bounded data properties.')
+    }
+    if (!SUPPORTED_CHAINS.has(options.chain)) throw new Error('chain must be a supported Chain value.')
+    if (
+      typeof options.jsonResource !== 'string' ||
+      options.jsonResource.length === 0 ||
+      options.jsonResource.length > 2048
+    ) {
+      throw new Error('The jsonResource options property must be a non-empty string no longer than 2048 characters.')
+    }
     this.chain = options.chain
     this.jsonFilename = options.jsonResource
   }
 
   private storageEngine: ChaintracksStorageBase | undefined
 
-  async setStorage (storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
+  async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
+    if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
+    if (typeof log !== 'function') throw new Error('log must be a function.')
     this.storageEngine = storage
     this.log = log
   }
 
-  async shutdown (): Promise<void> { /* intentional no-op: subclasses override when needed */ }
+  async shutdown(): Promise<void> {
+    /* intentional no-op: subclasses override when needed */
+  }
 
-  storageOrUndefined (): ChaintracksStorageApi | undefined {
+  storageOrUndefined(): ChaintracksStorageApi | undefined {
     return this.storageEngine
   }
 
-  storage (): ChaintracksStorageBase {
+  storage(): ChaintracksStorageBase {
     if (this.storageEngine == null) throw new Error('storageEngine must be set.')
     return this.storageEngine
   }
@@ -59,7 +79,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * At least one derived BulkIngestor must override this method to provide the current height of the active chain tip.
    * @returns undefined unless overridden
    */
-  async getPresentHeight (): Promise<number | undefined> {
+  async getPresentHeight(): Promise<number | undefined> {
     return undefined
   }
 
@@ -76,7 +96,7 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param priorLiveHeaders any headers accumulated by prior bulk ingestor(s) that are too recent for bulk storage.
    * @returns new live headers: headers in fetchRange but not in bulkRange
    */
-  abstract fetchHeaders (
+  abstract fetchHeaders(
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
@@ -93,11 +113,17 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * @param priorLiveHeaders any headers accumulated by prior bulk ingestor(s) that are too recent for bulk storage.
    * @returns updated priorLiveHeaders including any accumulated by this ingestor
    */
-  async synchronize (
+  async synchronize(
     presentHeight: number,
     before: HeightRanges,
     priorLiveHeaders: BlockHeader[]
   ): Promise<BulkSyncResult> {
+    if (!Number.isSafeInteger(presentHeight) || presentHeight < 0 || presentHeight > 0x7fffffff) {
+      throw new Error('presentHeight must be an integer from 0 through 2147483647.')
+    }
+    if (!Array.isArray(priorLiveHeaders) || priorLiveHeaders.length > 100_000) {
+      throw new Error('priorLiveHeaders must be an array of at most 100000 headers.')
+    }
     const storage = this.storage()
 
     const r: BulkSyncResult = {

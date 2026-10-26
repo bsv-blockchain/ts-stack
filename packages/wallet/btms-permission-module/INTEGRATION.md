@@ -122,6 +122,12 @@ For `createSignature`, the module verifies the 32-byte digest supplied by
 also accepted when its SHA-256 digest matches. Truncated, malformed,
 substituted, unbound, or expired requests are rejected.
 
+Signature inputs must be dense byte arrays and are bounded to the wallet's
+8 MiB action-envelope ceiling. The issuance-only fallback additionally
+requires exact BIP-143 framing, a canonical script-length encoding, and no
+trailing bytes. Prompt adapters authorize only by returning exact boolean
+`true`; truthy objects and strings are denials.
+
 ### Issuance
 
 Issuance does not spend an existing BTMS asset, so it can proceed without a

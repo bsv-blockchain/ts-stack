@@ -1,5 +1,5 @@
-import { WalletProtocol } from '../../wallet/index.js'
-import type { LookupNetworkPreset } from '../../overlay-tools/index.js'
+import type { WalletProtocol } from '../../wallet/Wallet.interfaces.js'
+import type { LookupNetworkPreset } from '../../overlay-tools/LookupResolver.js'
 
 export const defaultIdentity: DisplayableIdentity = {
   name: 'Unknown Identity',

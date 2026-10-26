@@ -1,11 +1,15 @@
 import {
   WalletInterface,
   LockingScript,
+  Script,
+  UnlockingScript,
   Transaction,
   CreateActionOutput,
   CreateActionOptions,
+  CreateActionArgs,
   SatoshisPerKilobyte,
-  Beef
+  Beef,
+  completeBoundAction
 } from '@bsv/sdk'
 
 import P2PKH from '../script-templates/p2pkh'
@@ -79,6 +83,93 @@ const BOOLEAN_ACTION_OPTIONS = [
   'randomizeOutputs'
 ] as const
 
+const MAX_SATOSHIS = 21e14
+const MAX_UINT32 = 0xffffffff
+
+function validateSatoshis(value: unknown, name = 'satoshis'): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > MAX_SATOSHIS) {
+    throw new TypeError(
+      `${name} must be a non-negative number represented as a safe integer no greater than ${MAX_SATOSHIS}`
+    )
+  }
+}
+
+function validateTxid(value: string, name: string): void {
+  if (!/^[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`${name} must be a 32-byte hexadecimal transaction ID`)
+  }
+}
+
+function validateOutpoint(value: string, name: string): void {
+  const match = /^([0-9a-fA-F]{64})\.(0|[1-9][0-9]*)$/.exec(value)
+  if (match == null || !Number.isSafeInteger(Number(match[2])) || Number(match[2]) > MAX_UINT32) {
+    throw new Error(`${name} must be a canonical txid.outputIndex outpoint`)
+  }
+}
+
+function validateSourceInput(params: {
+  sourceTransaction: Transaction
+  sourceOutputIndex: number
+  sourceSatoshis?: number
+  lockingScript?: Script
+  signOutputs?: unknown
+  anyoneCanPay?: unknown
+  description?: unknown
+}): void {
+  if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
+    throw new Error('sourceTransaction is required and must be a Transaction object')
+  }
+  if (typeof params.sourceTransaction.id !== 'function') {
+    throw new TypeError('sourceTransaction must be a valid Transaction object with an id() method')
+  }
+  if (
+    !Number.isSafeInteger(params.sourceOutputIndex) ||
+    params.sourceOutputIndex < 0 ||
+    params.sourceOutputIndex > MAX_UINT32
+  ) {
+    throw new Error('sourceOutputIndex must be an unsigned 32-bit integer')
+  }
+  const txid = params.sourceTransaction.id('hex')
+  validateTxid(txid, 'sourceTransaction ID')
+  const sourceOutput = params.sourceTransaction.outputs?.[params.sourceOutputIndex]
+  if (sourceOutput == null) {
+    throw new Error(`sourceTransaction has no output at index ${params.sourceOutputIndex}`)
+  }
+  validateSatoshis(sourceOutput.satoshis, 'sourceTransaction output satoshis')
+  if (
+    sourceOutput.lockingScript == null ||
+    typeof sourceOutput.lockingScript.toHex !== 'function'
+  ) {
+    throw new Error('sourceTransaction output lockingScript must be a Script')
+  }
+  if (params.sourceSatoshis !== undefined) {
+    validateSatoshis(params.sourceSatoshis, 'sourceSatoshis')
+    if (params.sourceSatoshis !== sourceOutput.satoshis) {
+      throw new Error('sourceSatoshis does not match sourceTransaction output')
+    }
+  }
+  if (params.lockingScript !== undefined) {
+    if (params.lockingScript == null || typeof params.lockingScript.toHex !== 'function') {
+      throw new Error('lockingScript must be a Script')
+    }
+    if (params.lockingScript.toHex() !== sourceOutput.lockingScript.toHex()) {
+      throw new Error('lockingScript does not match sourceTransaction output')
+    }
+  }
+  if (
+    params.signOutputs !== undefined &&
+    !['all', 'none', 'single'].includes(params.signOutputs as string)
+  ) {
+    throw new Error('signOutputs must be "all", "none", or "single"')
+  }
+  if (params.anyoneCanPay !== undefined && typeof params.anyoneCanPay !== 'boolean') {
+    throw new TypeError('anyoneCanPay must be a boolean')
+  }
+  if (params.description !== undefined && typeof params.description !== 'string') {
+    throw new Error('description must be a string')
+  }
+}
+
 function validateBooleanActionOptions(options: CreateActionOptions): void {
   for (const key of BOOLEAN_ACTION_OPTIONS) {
     const value = options[key]
@@ -91,7 +182,8 @@ function validateBooleanActionOptions(options: CreateActionOptions): void {
 function validateStringArrayOption(
   value: unknown,
   optionName: string,
-  itemDescription: string
+  itemDescription: string,
+  validateItem: (value: string, name: string) => void
 ): void {
   if (value === undefined) return
   if (!Array.isArray(value)) throw new TypeError(`${optionName} must be an array`)
@@ -99,6 +191,7 @@ function validateStringArrayOption(
     if (typeof value[index] !== 'string') {
       throw new TypeError(`${optionName}[${index}] must be a string (${itemDescription})`)
     }
+    validateItem(value[index], `${optionName}[${index}]`)
   }
 }
 
@@ -495,9 +588,14 @@ export class TransactionBuilder {
       }
     }
 
-    validateStringArrayOption(opts.knownTxids, 'knownTxids', 'hex txid')
-    validateStringArrayOption(opts.noSendChange, 'noSendChange', 'outpoint format')
-    validateStringArrayOption(opts.sendWith, 'sendWith', 'hex txid')
+    validateStringArrayOption(opts.knownTxids, 'knownTxids', 'hex txid', validateTxid)
+    validateStringArrayOption(
+      opts.noSendChange,
+      'noSendChange',
+      'outpoint format',
+      validateOutpoint
+    )
+    validateStringArrayOption(opts.sendWith, 'sendWith', 'hex txid', validateTxid)
 
     this.transactionOptions = { ...this.transactionOptions, ...opts }
     return this
@@ -518,21 +616,7 @@ export class TransactionBuilder {
    * @returns An InputBuilder for the new input
    */
   addP2PKHInput(params: AddP2PKHInputParams): InputBuilder {
-    // Validate parameters
-    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
-      throw new Error('sourceTransaction is required and must be a Transaction object')
-    }
-    if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError(
-        'sourceTransaction must be a valid Transaction object with an id() method'
-      )
-    }
-    if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
-      throw new Error('sourceOutputIndex must be a non-negative number')
-    }
-    if (params.description !== undefined && typeof params.description !== 'string') {
-      throw new Error('description must be a string')
-    }
+    validateSourceInput(params)
 
     const inputConfig: InputConfig = {
       type: 'p2pkh',
@@ -558,21 +642,7 @@ export class TransactionBuilder {
    * @returns An InputBuilder for the new input
    */
   addOrdLockInput(params: AddOrdLockInputParams): InputBuilder {
-    // Validate parameters
-    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
-      throw new Error('sourceTransaction is required and must be a Transaction object')
-    }
-    if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError(
-        'sourceTransaction must be a valid Transaction object with an id() method'
-      )
-    }
-    if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
-      throw new Error('sourceOutputIndex must be a non-negative number')
-    }
-    if (params.description !== undefined && typeof params.description !== 'string') {
-      throw new Error('description must be a string')
-    }
+    validateSourceInput(params)
     if (params.kind !== undefined && params.kind !== 'cancel' && params.kind !== 'purchase') {
       throw new Error("kind must be 'cancel' or 'purchase'")
     }
@@ -609,21 +679,7 @@ export class TransactionBuilder {
    * @returns An InputBuilder for the new input
    */
   addOrdinalP2PKHInput(params: AddOrdinalP2PKHInputParams): InputBuilder {
-    // Validate parameters
-    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
-      throw new Error('sourceTransaction is required and must be a Transaction object')
-    }
-    if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError(
-        'sourceTransaction must be a valid Transaction object with an id() method'
-      )
-    }
-    if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
-      throw new Error('sourceOutputIndex must be a non-negative number')
-    }
-    if (params.description !== undefined && typeof params.description !== 'string') {
-      throw new Error('description must be a string')
-    }
+    validateSourceInput(params)
 
     const inputConfig: InputConfig = {
       type: 'ordinalP2PKH',
@@ -661,20 +717,7 @@ export class TransactionBuilder {
     if (typeof params.unlockingScriptTemplate.estimateLength !== 'function') {
       throw new TypeError('unlockingScriptTemplate must have an estimateLength() method')
     }
-    if (!params.sourceTransaction || typeof params.sourceTransaction !== 'object') {
-      throw new Error('sourceTransaction is required and must be a Transaction object')
-    }
-    if (typeof params.sourceTransaction.id !== 'function') {
-      throw new TypeError(
-        'sourceTransaction must be a valid Transaction object with an id() method'
-      )
-    }
-    if (typeof params.sourceOutputIndex !== 'number' || params.sourceOutputIndex < 0) {
-      throw new Error('sourceOutputIndex must be a non-negative number')
-    }
-    if (params.description !== undefined && typeof params.description !== 'string') {
-      throw new Error('description must be a string')
-    }
+    validateSourceInput(params)
 
     const inputConfig: InputConfig = {
       type: 'custom',
@@ -697,10 +740,7 @@ export class TransactionBuilder {
    * @returns An OutputBuilder for configuring this output
    */
   addP2PKHOutput(params: AddP2PKHOutputParams): OutputBuilder {
-    // Validate parameters
-    if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new TypeError('satoshis must be a non-negative number')
-    }
+    validateSatoshis(params.satoshis)
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
@@ -746,7 +786,9 @@ export class TransactionBuilder {
           keyID: config.walletParams?.keyID,
           counterparty: config.walletParams?.counterparty,
           signOutputs: config.signOutputs,
-          anyoneCanPay: config.anyoneCanPay
+          anyoneCanPay: config.anyoneCanPay,
+          sourceSatoshis: config.sourceSatoshis,
+          lockingScript: config.lockingScript
         })
       }
       case 'ordLock': {
@@ -970,6 +1012,11 @@ export class TransactionBuilder {
       if (inputConfig?.type === 'ordLock' && inputConfig.kind === 'purchase') {
         length += 68
       }
+      if (!Number.isSafeInteger(length) || length < 0 || length > MAX_UINT32) {
+        throw new Error(
+          `unlockingScriptLength for input ${index} must be an unsigned 32-bit integer`
+        )
+      }
       actionInputs[index].unlockingScriptLength = length
     }
   }
@@ -989,6 +1036,7 @@ export class TransactionBuilder {
       if (preimageOutput.satoshis === undefined) {
         throw new Error(`Change output at index ${index} has no satoshis after fee calculation`)
       }
+      validateSatoshis(preimageOutput.satoshis, `Change output at index ${index} satoshis`)
       actionOutputs[index].satoshis = preimageOutput.satoshis
     }
     for (let index = outputIndicesToRemove.length - 1; index >= 0; index--) {
@@ -1023,32 +1071,26 @@ export class TransactionBuilder {
     return this.buildInputBEEF(inputArtifacts.preimageInputs)
   }
 
-  private async signCreatedAction(actionResult: any, templates: any[]): Promise<any> {
-    if (this.inputs.length === 0) {
-      return { txid: actionResult.txid, tx: actionResult.tx }
-    }
-    if (actionResult?.signableTransaction == null) {
-      throw new Error('Failed to create signable transaction')
-    }
-
-    const { reference } = actionResult.signableTransaction
-    const transaction = Transaction.fromBEEF(actionResult.signableTransaction.tx)
+  private async completeInputAction(
+    createActionArgs: CreateActionArgs,
+    templates: any[]
+  ): Promise<{ txid: string; tx: number[] }> {
+    const inputSigners = Object.create(null) as Record<
+      string,
+      (transaction: Transaction, inputIndex: number) => Promise<UnlockingScript | string>
+    >
     for (let index = 0; index < this.inputs.length; index++) {
-      transaction.inputs[index].unlockingScriptTemplate = templates[index]
-      transaction.inputs[index].sourceTransaction = this.inputs[index].sourceTransaction
-    }
-    await transaction.sign()
-
-    const spends: { [key: string]: { unlockingScript: string } } = {}
-    for (let index = 0; index < this.inputs.length; index++) {
-      const unlockingScript = transaction.inputs[index].unlockingScript?.toHex()
-      if (unlockingScript == null || unlockingScript === '') {
-        throw new Error(`Missing unlocking script for input ${index}`)
+      const config = this.inputs[index]
+      const template = templates[index]
+      if (typeof template?.sign !== 'function') {
+        throw new TypeError('unlockingScriptTemplate must have a sign() method')
       }
-      spends[String(index)] = { unlockingScript }
+      const outpoint = `${config.sourceTransaction.id('hex')}.${config.sourceOutputIndex}`
+      inputSigners[outpoint] = async (transaction, inputIndex) =>
+        await template.sign(transaction, inputIndex)
     }
-    const signedAction = await this.wallet.signAction({ reference, spends })
-    return { txid: signedAction.txid, tx: signedAction.tx }
+    const transaction = await completeBoundAction(this.wallet, createActionArgs, { inputSigners })
+    return { txid: transaction.id('hex'), tx: transaction.toAtomicBEEF() }
   }
 
   /**
@@ -1058,10 +1100,7 @@ export class TransactionBuilder {
    * @returns An OutputBuilder for configuring this output
    */
   addOrdLockOutput(params: AddOrdLockOutputParams): OutputBuilder {
-    // Validate parameters
-    if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new TypeError('satoshis must be a non-negative number')
-    }
+    validateSatoshis(params.satoshis)
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
@@ -1117,10 +1156,7 @@ export class TransactionBuilder {
    * @returns An OutputBuilder for configuring this output
    */
   addOrdinalP2PKHOutput(params: AddOrdinalP2PKHOutputParams): OutputBuilder {
-    // Validate parameters
-    if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new TypeError('satoshis must be a non-negative number')
-    }
+    validateSatoshis(params.satoshis)
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
@@ -1163,9 +1199,7 @@ export class TransactionBuilder {
     if (!params.lockingScript || typeof params.lockingScript.toHex !== 'function') {
       throw new Error('lockingScript must be a LockingScript instance')
     }
-    if (typeof params.satoshis !== 'number' || params.satoshis < 0) {
-      throw new TypeError('satoshis must be a non-negative number')
-    }
+    validateSatoshis(params.satoshis)
     if (params.description !== undefined && typeof params.description !== 'string') {
       throw new Error('description must be a string')
     }
@@ -1193,6 +1227,9 @@ export class TransactionBuilder {
    * @throws Error if no outputs are configured or if locking script creation fails
    */
   async build(params?: BuildParams): Promise<any> {
+    if (params?.preview !== undefined && typeof params.preview !== 'boolean') {
+      throw new TypeError('preview must be a boolean')
+    }
     this.validateBuildConfiguration()
     const inputArtifacts = this.buildInputArtifacts()
     const outputArtifacts = await this.buildOutputArtifacts()
@@ -1212,8 +1249,14 @@ export class TransactionBuilder {
       return createActionArgs
     }
 
+    if (this.inputs.length > 0) {
+      return await this.completeInputAction(
+        createActionArgs,
+        inputArtifacts.unlockingScriptTemplates
+      )
+    }
     const actionResult = await this.wallet.createAction(createActionArgs)
-    return await this.signCreatedAction(actionResult, inputArtifacts.unlockingScriptTemplates)
+    return { txid: actionResult.txid, tx: actionResult.tx }
   }
 
   /**
@@ -1243,9 +1286,7 @@ export class TransactionBuilder {
     if (typeof to !== 'string') {
       throw new TypeError('to must be a string')
     }
-    if (typeof satoshis !== 'number' || satoshis < 0) {
-      throw new TypeError('satoshis must be a non-negative number')
-    }
+    validateSatoshis(satoshis)
 
     if (isHexPublicKey(to)) {
       this.addP2PKHOutput({ publicKey: to, satoshis })

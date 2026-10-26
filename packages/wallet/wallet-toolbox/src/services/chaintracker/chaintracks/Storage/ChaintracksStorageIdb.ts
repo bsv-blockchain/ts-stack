@@ -13,6 +13,7 @@ import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
 import { IDBPDatabase, IDBPTransaction, openDB } from 'idb'
 
 import { BulkHeaderFileInfo } from '../util/BulkHeaderFile'
+import { normalizeBulkHeaderFileInfo, normalizeBulkHeaderFileSequence } from '../util/BulkFileDataManager'
 
 export interface ChaintracksStorageIdbOptions extends ChaintracksStorageBaseOptions {}
 
@@ -85,6 +86,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @returns number of deleted records
    */
   override async deleteOlderLiveBlockHeaders(maxHeight: number): Promise<number> {
+    this.validateHeight(maxHeight, 'maxHeight')
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['live_headers'])
@@ -99,8 +101,10 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const deletedCount = headersToDelete.length
 
     for (const id of headerIdsToDelete) {
-      const headerToUpdate = await previousHeaderIdIndex.get(id)
-      await store.put({ ...headerToUpdate, previousHeaderId: null })
+      const headersToUpdate = await previousHeaderIdIndex.getAll(id)
+      for (const headerToUpdate of headersToUpdate) {
+        await store.put({ ...headerToUpdate, previousHeaderId: null })
+      }
     }
 
     // Delete the headers
@@ -132,13 +136,14 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
     const activeTipIndex = store.index('activeTip')
-    let header = await activeTipIndex.get([1, 1])
-    header = this.repairStoredLiveHeader(header)
+    const headers = (await activeTipIndex.getAll([1, 1])).map(header => this.repairStoredLiveHeader(header)!)
     await trx.done
-    return header
+    if (headers.length > 1) throw new WERR_INVALID_OPERATION('multiple active chain tips exist in IndexedDB')
+    return headers[0]
   }
 
   override async findLiveHeaderForBlockHash(hash: string): Promise<LiveBlockHeader | null> {
+    this.validateHash(hash)
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -150,6 +155,9 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   override async findLiveHeaderForHeaderId(headerId: number): Promise<LiveBlockHeader> {
+    if (!Number.isSafeInteger(headerId) || headerId < 1) {
+      throw new WERR_INVALID_PARAMETER('headerId', 'a positive safe integer')
+    }
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
@@ -160,40 +168,42 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   override async findLiveHeaderForHeight(height: number): Promise<LiveBlockHeader | null> {
+    this.validateHeight(height)
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
     const heightIndex = store.index('height')
-    let header = await heightIndex.get(height)
-    header = this.repairStoredLiveHeader(header)
+    const headers = (await heightIndex.getAll(height))
+      .map(header => this.repairStoredLiveHeader(header)!)
+      .filter(header => header.isActive)
     await trx.done
-    return header || null
+    if (headers.length > 1) throw new WERR_INVALID_OPERATION(`multiple active headers exist at height ${height}`)
+    return headers[0] ?? null
   }
 
   override async findLiveHeaderForMerkleRoot(merkleRoot: string): Promise<LiveBlockHeader | null> {
+    this.validateHash(merkleRoot, 'merkleRoot')
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
     const merkleRootIndex = store.index('merkleRoot')
-    let header = await merkleRootIndex.get(merkleRoot)
-    header = this.repairStoredLiveHeader(header)
+    const headers = (await merkleRootIndex.getAll(merkleRoot)).map(header => this.repairStoredLiveHeader(header)!)
     await trx.done
-    return header || null
+    return headers.find(header => header.isActive) ?? headers[0] ?? null
   }
 
   override async findLiveHeightRange(): Promise<HeightRange> {
     await this.makeAvailable()
     const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
-    const heightIndex = store.index('height')
-
-    const minCursor = await heightIndex.openCursor(null, 'next')
-    const minValue = minCursor?.value.height ?? null
-
-    const maxCursor = await heightIndex.openCursor(null, 'prev')
-    const maxValue = maxCursor?.value.height ?? null
-
-    const range = minValue === null || maxValue === null ? HeightRange.empty : new HeightRange(minValue, maxValue)
+    const active = (await store.getAll()).map(header => this.repairStoredLiveHeader(header)!).filter(h => h.isActive)
+    const range =
+      active.length === 0
+        ? HeightRange.empty
+        : new HeightRange(
+            Math.min(...active.map(header => header.height)),
+            Math.max(...active.map(header => header.height))
+          )
 
     await trx.done
     return range
@@ -211,9 +221,12 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   override async liveHeadersForBulk(count: number): Promise<LiveBlockHeader[]> {
+    if (!Number.isSafeInteger(count) || count < 1 || count > 100_000) {
+      throw new WERR_INVALID_PARAMETER('count', 'an integer from 1 through 100000')
+    }
     await this.makeAvailable()
 
-    const trx = this.toDbTrxReadWrite(['live_headers'])
+    const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
     const heightIndex = store.index('height')
 
@@ -234,19 +247,20 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   override async getLiveHeaders(range: HeightRange): Promise<LiveBlockHeader[]> {
+    this.validateRange(range)
     if (range.isEmpty) return []
     await this.makeAvailable()
 
-    const trx = this.toDbTrxReadWrite(['live_headers'])
+    const trx = this.toDbTrxReadOnly(['live_headers'])
     const store = trx.objectStore('live_headers')
     const heightIndex = store.index('height')
 
-    let cursor = await heightIndex.openCursor(null, 'next')
+    let cursor = await heightIndex.openCursor(IDBKeyRange.bound(range.minHeight, range.maxHeight), 'next')
     const headers: LiveBlockHeader[] = []
 
     while (cursor != null) {
       const header = this.repairStoredLiveHeader(cursor.value)
-      if (header != null && range.contains(header.height)) {
+      if (header?.isActive) {
         headers.push(header)
       }
       cursor = await cursor.continue()
@@ -277,7 +291,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
       ...header,
       headerId: 0,
       previousHeaderId: null,
-      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits)),
+      chainWork: addWork(lastBulkFile.lastChainWork, convertBitsToWork(header.bits, this.chain)),
       isChainTip: true,
       isActive: true
     }
@@ -294,12 +308,19 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   ): Promise<LiveBlockHeader | undefined> {
     const store = trx.objectStore('live_headers')
     let activeAncestor = oneBack
+    const visited = new Set<number>()
     while (!activeAncestor.isActive) {
+      this.recordTraversalVisit(visited, activeAncestor, 'finding the active ancestor')
+      if (activeAncestor.previousHeaderId == null) {
+        result.noActiveAncestor = true
+        return undefined
+      }
       const previousHeader = this.repairStoredLiveHeader(await store.get(activeAncestor.previousHeaderId!))
       if (previousHeader == null) {
         result.noActiveAncestor = true
         return undefined
       }
+      this.validateStoredParentLink(activeAncestor, previousHeader)
       activeAncestor = previousHeader
     }
     return activeAncestor
@@ -314,8 +335,14 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     if (activeAncestor.headerId === oneBack.headerId) return
     const store = trx.objectStore('live_headers')
     const activeTipIndex = store.index('activeTip')
-    let headerToDeactivate = this.repairStoredLiveHeader(await activeTipIndex.get([1, 1]))!
+    const activeTips = (await activeTipIndex.getAll([1, 1])).map(header => this.repairStoredLiveHeader(header)!)
+    if (activeTips.length !== 1) {
+      throw new WERR_INVALID_OPERATION(`expected one active chain tip, found ${activeTips.length}`)
+    }
+    let headerToDeactivate = activeTips[0]
+    const deactivated = new Set<number>()
     while (headerToDeactivate != null && headerToDeactivate.headerId !== activeAncestor.headerId) {
+      this.recordTraversalVisit(deactivated, headerToDeactivate, 'deactivating the prior active chain')
       result.deactivatedHeaders.push(headerToDeactivate)
       await store.put(
         this.prepareStoredLiveHeader({
@@ -323,12 +350,33 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
           isActive: false
         })
       )
-      headerToDeactivate = this.repairStoredLiveHeader(await store.get(headerToDeactivate.previousHeaderId!))!
+      if (headerToDeactivate.previousHeaderId == null) {
+        throw new WERR_INVALID_OPERATION('active chain does not reach the selected reorganization ancestor')
+      }
+      const previousHeader = this.repairStoredLiveHeader(await store.get(headerToDeactivate.previousHeaderId))
+      if (previousHeader == null) {
+        throw new WERR_INVALID_OPERATION('active chain contains a missing parent header')
+      }
+      this.validateStoredParentLink(headerToDeactivate, previousHeader)
+      headerToDeactivate = previousHeader
+    }
+    if (headerToDeactivate == null) {
+      throw new WERR_INVALID_OPERATION('active chain does not reach the selected reorganization ancestor')
     }
     let headerToActivate = oneBack
+    const activated = new Set<number>()
     while (headerToActivate.headerId !== activeAncestor.headerId) {
+      this.recordTraversalVisit(activated, headerToActivate, 'activating the replacement chain')
       await store.put(this.prepareStoredLiveHeader({ ...headerToActivate, isActive: true }))
-      headerToActivate = this.repairStoredLiveHeader(await store.get(headerToActivate.previousHeaderId!))!
+      if (headerToActivate.previousHeaderId == null) {
+        throw new WERR_INVALID_OPERATION('replacement chain does not reach the selected reorganization ancestor')
+      }
+      const previousHeader = this.repairStoredLiveHeader(await store.get(headerToActivate.previousHeaderId))
+      if (previousHeader == null) {
+        throw new WERR_INVALID_OPERATION('replacement chain contains a missing parent header')
+      }
+      this.validateStoredParentLink(headerToActivate, previousHeader)
+      headerToActivate = previousHeader
     }
   }
 
@@ -349,6 +397,7 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   override async insertHeader(header: BlockHeader): Promise<InsertHeaderResult> {
+    header = this.validateIncomingHeader(header)
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['live_headers'])
@@ -357,134 +406,245 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
     const activeTipIndex = store.index('activeTip')
 
     const r = createInsertHeaderResult()
-
-    // Check for duplicate
-    if (await hashIndex.get(header.hash)) {
-      r.dupe = true
-      await trx.done
-      return r
-    }
-
-    // let all = await store.getAll()
-    // console.log(`idb store length: ${all.length} last: ${all[all.length - 1]?.height}`)
-    // let allHash = await hashIndex.getAll()
-
-    // Find previous header
-    const oneBack: LiveBlockHeader | undefined = this.repairStoredLiveHeader(await hashIndex.get(header.previousHash))
-
-    if (oneBack == null) {
-      if (await this.insertFirstHeader(trx, header, r)) {
+    try {
+      // Check for duplicate
+      if (await hashIndex.get(header.hash)) {
+        r.dupe = true
         await trx.done
         return r
       }
-      r.noPrev = true
+
+      // let all = await store.getAll()
+      // console.log(`idb store length: ${all.length} last: ${all[all.length - 1]?.height}`)
+      // let allHash = await hashIndex.getAll()
+
+      // Find previous header
+      const oneBack: LiveBlockHeader | undefined = this.repairStoredLiveHeader(await hashIndex.get(header.previousHash))
+
+      if (oneBack == null) {
+        if (await this.insertFirstHeader(trx, header, r)) {
+          await trx.done
+          return r
+        }
+        r.noPrev = true
+        await trx.done
+        return r
+      }
+
+      if (oneBack.height + 1 !== header.height) {
+        r.badPrev = true
+        await trx.done
+        return r
+      }
+
+      if (oneBack.isActive && oneBack.isChainTip) {
+        r.priorTip = oneBack
+      } else {
+        const activeTips = (await activeTipIndex.getAll([1, 1])).map(tip => this.repairStoredLiveHeader(tip)!)
+        if (activeTips.length > 1) {
+          trx.abort()
+          throw new WERR_INVALID_OPERATION('multiple active chain tips exist in IndexedDB')
+        }
+        r.priorTip = activeTips[0]
+      }
+
+      if (r.priorTip == null) {
+        // No active chain tip found. This is a logic error in state of live headers.
+        r.noTip = true
+        await trx.done
+        return r
+      }
+
+      // We have an acceptable new live header...and live headers has an active chain tip.
+
+      const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits, this.chain))
+
+      r.isActiveTip = isMoreWork(chainWork, r.priorTip.chainWork)
+
+      const newHeader: LiveBlockHeader = {
+        ...header,
+        headerId: 0,
+        previousHeaderId: oneBack.headerId,
+        chainWork,
+        isChainTip: r.isActiveTip,
+        isActive: r.isActiveTip
+      }
+
+      if (!(await this.prepareActiveTip(trx, header, oneBack, r))) {
+        await trx.done
+        return r
+      }
+
+      if (oneBack.isChainTip) {
+        await store.put(this.prepareStoredLiveHeader({ ...oneBack, isChainTip: false }))
+      }
+
+      await store.put(this.prepareStoredLiveHeader(newHeader, true))
+      r.added = true
+
+      // all = await store.getAll()
+      // console.log(`idb store length: ${all.length} last: ${all[all.length - 1]?.height}`)
+
+      if (r.added && r.isActiveTip) {
+        // this.pruneLiveBlockHeaders(newHeader.height)
+      }
+
       await trx.done
       return r
+    } catch (error: unknown) {
+      try {
+        trx.abort()
+      } catch {
+        // The transaction may already have aborted because an IndexedDB
+        // request failed. Either way, never mask the original failure.
+      }
+      await trx.done.catch(() => {})
+      throw error
     }
-
-    if (oneBack.isActive && oneBack.isChainTip) {
-      r.priorTip = oneBack
-    } else {
-      r.priorTip = this.repairStoredLiveHeader(await activeTipIndex.get([1, 1]))
-    }
-
-    if (r.priorTip == null) {
-      // No active chain tip found. This is a logic error in state of live headers.
-      r.noTip = true
-      await trx.done
-      return r
-    }
-
-    // We have an acceptable new live header...and live headers has an active chain tip.
-
-    const chainWork = addWork(oneBack.chainWork, convertBitsToWork(header.bits))
-
-    r.isActiveTip = isMoreWork(chainWork, r.priorTip.chainWork)
-
-    const newHeader: LiveBlockHeader = {
-      ...header,
-      headerId: 0,
-      previousHeaderId: oneBack.headerId,
-      chainWork,
-      isChainTip: r.isActiveTip,
-      isActive: r.isActiveTip
-    }
-
-    if (!(await this.prepareActiveTip(trx, header, oneBack, r))) {
-      await trx.done
-      return r
-    }
-
-    if (oneBack.isChainTip) {
-      await store.put(this.prepareStoredLiveHeader({ ...oneBack, isChainTip: false }))
-    }
-
-    await store.put(this.prepareStoredLiveHeader(newHeader, true))
-    r.added = true
-
-    // all = await store.getAll()
-    // console.log(`idb store length: ${all.length} last: ${all[all.length - 1]?.height}`)
-
-    if (r.added && r.isActiveTip) {
-      // this.pruneLiveBlockHeaders(newHeader.height)
-    }
-
-    await trx.done
-    return r
   }
 
   async deleteBulkFile(fileId: number): Promise<number> {
+    if (!Number.isSafeInteger(fileId) || fileId < 1) {
+      throw new WERR_INVALID_PARAMETER('fileId', 'a positive safe integer')
+    }
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
+    const existed = (await store.get(fileId)) != null
     await store.delete(fileId)
     await trx.done
-    // return number of records affected
-    return 1
+    return existed ? 1 : 0
   }
 
   async insertBulkFile(file: BulkHeaderFileInfo): Promise<number> {
     await this.makeAvailable()
 
+    const canonical = normalizeBulkHeaderFileInfo(file, true)
+    if (canonical.chain !== this.chain) throw new WERR_INVALID_PARAMETER('file.chain', this.chain)
+
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
-    const fileObj: Record<string, unknown> = { ...file }
+    const fileObj: Record<string, unknown> = { ...canonical }
     delete fileObj['fileId']
-    file.fileId = Number(await store.put(fileObj))
+    const fileId = Number(await store.put(fileObj))
     await trx.done
-    return file.fileId
+    return fileId
   }
 
   async updateBulkFile(fileId: number, file: BulkHeaderFileInfo): Promise<number> {
+    if (!Number.isSafeInteger(fileId) || fileId < 1) {
+      throw new WERR_INVALID_PARAMETER('fileId', 'a positive safe integer')
+    }
     await this.makeAvailable()
+
+    const canonical = normalizeBulkHeaderFileInfo(file, true)
+    if (canonical.chain !== this.chain) throw new WERR_INVALID_PARAMETER('file.chain', this.chain)
+    if (canonical.fileId !== undefined && canonical.fileId !== fileId) {
+      throw new WERR_INVALID_PARAMETER('file.fileId', 'undefined or equal to fileId')
+    }
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
-    file.fileId = fileId
-    await store.put(file)
+    await store.put({ ...canonical, fileId })
     await trx.done
     // return number of records affected
     return 1
   }
 
-  async getBulkFiles(): Promise<BulkHeaderFileInfo[]> {
+  async replaceBulkFiles(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]> {
+    const canonical = normalizeBulkHeaderFileSequence(files, true).map(value => {
+      if (value.chain !== this.chain) throw new WERR_INVALID_PARAMETER('file.chain', this.chain)
+      return value
+    })
     await this.makeAvailable()
 
     const trx = this.toDbTrxReadWrite(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
+    try {
+      const current = await store.getAll()
+      const currentById = new Map<number, BulkHeaderFileInfo>()
+      for (const file of current) {
+        const value = normalizeBulkHeaderFileInfo(file, true)
+        if (value.fileId === undefined || currentById.has(value.fileId)) {
+          throw new WERR_INVALID_OPERATION('IndexedDB contains an invalid or duplicate bulk-file id')
+        }
+        currentById.set(value.fileId, value)
+      }
 
-    const files: BulkHeaderFileInfo[] = await store.getAll()
+      const retainedIds = new Set<number>()
+      const committed: BulkHeaderFileInfo[] = []
+      for (const file of canonical) {
+        let fileId = file.fileId
+        if (fileId !== undefined) {
+          const prior = currentById.get(fileId)
+          if (prior == null || retainedIds.has(fileId)) {
+            throw new WERR_INVALID_PARAMETER('file.fileId', 'a unique id belonging to the current bulk-file set')
+          }
+          const stored = { ...file, data: file.data ?? prior.data, fileId }
+          await store.put(stored)
+        } else {
+          const stored: Record<string, unknown> = { ...file }
+          delete stored.fileId
+          fileId = Number(await store.add(stored))
+          if (!Number.isSafeInteger(fileId) || fileId < 1) {
+            throw new WERR_INVALID_OPERATION('IndexedDB returned an invalid bulk-file id')
+          }
+        }
+        retainedIds.add(fileId)
+        committed.push({ ...file, fileId })
+      }
+
+      for (const fileId of currentById.keys()) {
+        if (!retainedIds.has(fileId)) await store.delete(fileId)
+      }
+      await trx.done
+      return committed
+    } catch (error) {
+      try {
+        trx.abort()
+      } catch {
+        // The transaction may already have aborted. Preserve the first error.
+      }
+      await trx.done.catch(() => {})
+      throw error
+    }
+  }
+
+  async getBulkFiles(): Promise<BulkHeaderFileInfo[]> {
+    await this.makeAvailable()
+
+    const trx = this.toDbTrxReadOnly(['bulk_headers'])
+    const store = trx.objectStore('bulk_headers')
+
+    const files = (await store.getAll()).map(file => normalizeBulkHeaderFileInfo(file, true))
     files.sort((a, b) => a.firstHeight - b.firstHeight)
     for (const file of files) file.data = undefined
     return files
   }
 
   async getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined> {
-    if (!Number.isInteger(fileId)) throw new WERR_INVALID_PARAMETER('fileId', 'a valid, integer bulk_files fileId')
+    if (!Number.isSafeInteger(fileId) || fileId < 1) {
+      throw new WERR_INVALID_PARAMETER('fileId', 'a positive safe integer bulk_files fileId')
+    }
+    const hasOffset = offset !== undefined
+    const hasLength = length !== undefined
+    if (hasOffset !== hasLength) {
+      throw new WERR_INVALID_PARAMETER('offset and length', 'both defined or both undefined')
+    }
+    if (
+      hasOffset &&
+      (!Number.isSafeInteger(offset) ||
+        !Number.isSafeInteger(length) ||
+        offset! < 0 ||
+        length! < 0 ||
+        !Number.isSafeInteger(offset! + length!))
+    ) {
+      throw new WERR_INVALID_PARAMETER('offset and length', 'non-negative safe integers with a safe sum')
+    }
     await this.makeAvailable()
 
-    const trx = this.toDbTrxReadWrite(['bulk_headers'])
+    const trx = this.toDbTrxReadOnly(['bulk_headers'])
     const store = trx.objectStore('bulk_headers')
 
     const info: BulkHeaderFileInfo | undefined = await store.get(fileId)
@@ -492,10 +652,13 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
 
     let data: Uint8Array | undefined
 
-    if (info.data == null) return undefined
+    if (info.data == null) {
+      await trx.done
+      return undefined
+    }
 
-    if (offset !== undefined && length !== undefined && Number.isInteger(offset) && Number.isInteger(length)) {
-      data = info.data.slice(offset, offset + length)
+    if (hasOffset) {
+      data = info.data.slice(offset!, offset! + length!)
     } else {
       data = info.data
     }
@@ -512,14 +675,20 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
    * @param header
    * @returns copy of header with updated properties
    */
-  private repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined {
+  protected repairStoredLiveHeader(header?: LiveBlockHeader): LiveBlockHeader | undefined {
     if (header == null) return undefined
+    if (
+      ![undefined, true, 1].includes(header.isActive as unknown as undefined | true | 1) ||
+      ![undefined, true, 1].includes(header.isChainTip as unknown as undefined | true | 1)
+    ) {
+      throw new WERR_INVALID_OPERATION('IndexedDB contains a non-canonical live-header boolean')
+    }
     const h: LiveBlockHeader = {
       ...header,
-      isActive: !!header.isActive,
-      isChainTip: !!header.isChainTip
+      isActive: header.isActive === true || (header.isActive as unknown) === 1,
+      isChainTip: header.isChainTip === true || (header.isChainTip as unknown) === 1
     }
-    return h
+    return this.validateLiveHeaderRecord(h)
   }
 
   private prepareStoredLiveHeader(header: LiveBlockHeader, forInsert?: boolean): object {
@@ -535,16 +704,18 @@ export class ChaintracksStorageIdb extends ChaintracksStorageBase implements Cha
   }
 
   async insertLiveHeader(header: LiveBlockHeader): Promise<LiveBlockHeader> {
+    await this.makeAvailable()
+    const canonical = this.validateLiveHeaderRecord(header, true)
     const trx = this.toDbTrxReadWrite(['live_headers'])
     const store = trx.objectStore('live_headers')
 
-    const h = this.prepareStoredLiveHeader(header, true)
+    const h = this.prepareStoredLiveHeader(canonical, true)
 
-    header.headerId = Number(await store.add(h))
+    canonical.headerId = Number(await store.add(h))
 
     await trx.done
 
-    return header
+    return canonical
   }
 
   async initDB(): Promise<IDBPDatabase<ChaintracksStorageIdbSchema>> {

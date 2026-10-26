@@ -21,51 +21,53 @@ interface PendingRequest {
 
 /** Fixed warm worker pool used only for explicitly large packed batches. */
 export default class BdkWorkerPool {
-  private readonly workers: WorkerAdapter[]
-  private readonly pending = new Map<number, PendingRequest>()
-  private nextRequestId = 1
-  private closed = false
+  readonly #onFailure?: (error: Error) => void
+  readonly #workers: WorkerAdapter[]
+  readonly #pending = new Map<number, PendingRequest>()
+  #nextRequestId = 1
+  #closed = false
 
   constructor(
     workerCount: number,
     createWorker: () => WorkerAdapter,
-    private readonly onFailure?: (error: Error) => void
+    onFailure?: (error: Error) => void
   ) {
-    this.workers = Array.from({ length: workerCount }, createWorker)
-    for (const worker of this.workers) {
+    this.#onFailure = onFailure
+    this.#workers = Array.from({ length: workerCount }, createWorker)
+    for (const worker of this.#workers) {
       worker.onMessage(response => {
-        const pending = this.pending.get(response.id)
+        const pending = this.#pending.get(response.id)
         if (pending === undefined) return
-        this.pending.delete(response.id)
+        this.#pending.delete(response.id)
         if ('error' in response) pending.reject(new Error(response.error))
         else pending.resolve(response.result)
       })
       worker.onError(error => {
-        this.fail(error)
+        this.#fail(error)
       })
       worker.onExit(error => {
-        this.fail(error)
+        this.#fail(error)
       })
     }
   }
 
   get size(): number {
-    return this.workers.length
+    return this.#workers.length
   }
 
-  private async request(
+  async #request(
     worker: WorkerAdapter,
     request: BdkWorkerRequestWithoutId
   ): Promise<BdkWorkerResult> {
-    if (this.closed) throw new Error('BDK worker pool is unavailable')
-    const id = this.nextRequestId++
+    if (this.#closed) throw new Error('BDK worker pool is unavailable')
+    const id = this.#nextRequestId++
     const message: BdkWorkerRequest = { ...request, id }
     return await new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      this.#pending.set(id, { resolve, reject })
       try {
         worker.post(message, requestTransferables(message))
       } catch (error) {
-        this.pending.delete(id)
+        this.#pending.delete(id)
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
@@ -79,8 +81,8 @@ export default class BdkWorkerPool {
       sharedTables.set(verificationTables)
     }
     await Promise.all(
-      this.workers.map(async worker => {
-        await this.request(worker, {
+      this.#workers.map(async worker => {
+        await this.#request(worker, {
           operation: 'preload',
           verificationTables: sharedTables
         })
@@ -90,12 +92,12 @@ export default class BdkWorkerPool {
 
   async execute(requests: readonly BdkWorkerRequestWithoutId[]): Promise<BdkWorkerResult[]> {
     const results: BdkWorkerResult[] = []
-    for (let offset = 0; offset < requests.length; offset += this.workers.length) {
+    for (let offset = 0; offset < requests.length; offset += this.#workers.length) {
       results.push(
         ...(await Promise.all(
           requests
-            .slice(offset, offset + this.workers.length)
-            .map(async (request, index) => await this.request(this.workers[index], request))
+            .slice(offset, offset + this.#workers.length)
+            .map(async (request, index) => await this.#request(this.#workers[index], request))
         ))
       )
     }
@@ -103,20 +105,20 @@ export default class BdkWorkerPool {
   }
 
   terminate(): void {
-    if (this.closed) return
-    this.closed = true
+    if (this.#closed) return
+    this.#closed = true
     const error = new Error('BDK worker pool terminated')
-    for (const pending of this.pending.values()) pending.reject(error)
-    this.pending.clear()
-    for (const worker of this.workers) worker.terminate()
+    for (const pending of this.#pending.values()) pending.reject(error)
+    this.#pending.clear()
+    for (const worker of this.#workers) worker.terminate()
   }
 
-  private fail(error: Error): void {
-    if (this.closed) return
-    this.closed = true
-    for (const pending of this.pending.values()) pending.reject(error)
-    this.pending.clear()
-    for (const worker of this.workers) worker.terminate()
-    this.onFailure?.(error)
+  #fail(error: Error): void {
+    if (this.#closed) return
+    this.#closed = true
+    for (const pending of this.#pending.values()) pending.reject(error)
+    this.#pending.clear()
+    for (const worker of this.#workers) worker.terminate()
+    this.#onFailure?.(error)
   }
 }

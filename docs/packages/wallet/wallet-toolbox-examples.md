@@ -4,8 +4,8 @@ title: '@bsv/wallet-toolbox-examples'
 kind: package
 domain: wallet
 version: '1.1.157'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples'
 status: stable
@@ -16,11 +16,19 @@ tags: ['wallet', 'examples', 'reference']
 
 Reference wallet implementations built with `@bsv/wallet-toolbox`. Demonstrates common wallet construction patterns across different storage backends and deployment contexts.
 
-## Install
+## Run from the workspace
 
-```bash
-npm install @bsv/wallet-toolbox-examples
-```
+This is a private examples workspace, not a supported npm installation target.
+Follow the [workspace README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox-examples)
+for setup and safety requirements.
+
+## Backup example coverage
+
+The [SQLite backup example](https://github.com/bsv-blockchain/ts-stack/blob/main/packages/wallet/wallet-toolbox-examples/src/backup.ts)
+copies sensitive wallet data. It does not back up the root key, establish a
+retention policy or prove device-loss recovery. Use the
+[complete recovery guide](../../guides/wallet-backup-recovery.md) and
+[drill checklist](../../guides/wallet-recovery-drill.md).
 
 ## Purpose
 

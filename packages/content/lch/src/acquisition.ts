@@ -2,10 +2,10 @@ import { lchAssert } from './errors.js'
 import { encodeDeterministicCbor } from './cbor.js'
 import { objectId, toHex } from './hash.js'
 import { signObject, verifySignedObject } from './objects.js'
-import { recoveryUntil } from './payment.js'
-import { normalizeSelection } from './selection.js'
+import { checkedSatoshis, recoveryUntil } from './payment.js'
+import { normalizeSelection, validateNormalizedSelection } from './selection.js'
 import { PublicBRC77Verifier } from './signatures.js'
-import { LCH_SETTLEMENT_PROFILES } from './constants.js'
+import { LCH_LIMITS, LCH_SETTLEMENT_PROFILES } from './constants.js'
 import type {
   LCHSignatureVerifier,
   LCHSigner,
@@ -15,6 +15,14 @@ import type {
   SignedObject
 } from './types.js'
 import type { AuthorizedOutputEvidence } from './settlement.js'
+import {
+  ownDataValue,
+  snapshotBytes,
+  snapshotLCHRecord,
+  snapshotSignedObject,
+  snapshotStringArray,
+  snapshotStringSet
+} from './boundary.js'
 
 const MAX_UINT64 = 0xffffffffffffffffn
 
@@ -113,6 +121,8 @@ export interface PaymentCompletion {
 
 export interface AcquisitionValidationOptions {
   allowInsecureLocalOrigins?: readonly string[]
+  /** Critical extension identifiers whose semantics this application implements. */
+  supportedCriticalIdentifiers?: ReadonlySet<string>
 }
 
 export class LCHBuyer {
@@ -133,11 +143,19 @@ export class LCHBuyer {
     )
     nonempty(options.action, 'Requested action')
     bytes(options.acceptedPolicyDigest, 32, 'Accepted Policy digest')
+    lchAssert(
+      (options.acceptedHumanTermDigests?.length ?? 0) <= LCH_LIMITS.cborEntries &&
+        new Set((options.acceptedHumanTermDigests ?? []).map(toHex)).size ===
+          (options.acceptedHumanTermDigests?.length ?? 0),
+      'ERR_LCH_TERMS',
+      'Accepted human-term digests must be unique and bounded'
+    )
     for (const digest of options.acceptedHumanTermDigests ?? [])
       bytes(digest, 32, 'Accepted human-term digest')
     const requestNonce = options.requestNonce ?? this.random(16)
     bytes(requestNonce, 16, 'Request nonce')
     uint(options.createdAt, 'Request creation time', 'ERR_LCH_LICENSE')
+    mechanismChoices(options.mechanismChoices)
     extensions(options.critical)
     const body: Record<string, LCHValue> = {
       version: 1,
@@ -170,7 +188,11 @@ export class LCHBuyer {
       'ERR_LCH_SIGNATURE',
       'Payment Delivery signer is not the buyer'
     )
-    lchAssert(options.atomicBeef.length > 0, 'ERR_LCH_PAYMENT', 'Atomic BEEF is absent')
+    lchAssert(
+      options.atomicBeef.length > 0 && options.atomicBeef.length <= LCH_LIMITS.headerBytes,
+      'ERR_LCH_PAYMENT',
+      'Atomic BEEF is absent or oversized'
+    )
     outputIndex(options.outputIndex)
     bytes(options.derivationPrefix, 32, 'Derivation prefix')
     bytes(options.derivationSuffix, 32, 'Derivation suffix')
@@ -212,7 +234,7 @@ export class LCHPayee {
     bytes(options.buyer, 33, 'Demand buyer identity')
     nonempty(options.dutyUid, 'Duty UID')
     endpoint(options.endpoint, options.allowInsecureLocalEndpoint)
-    uint(options.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT')
+    checkedSatoshis(options.satoshis)
     const derivationPrefix = options.derivationPrefix ?? this.random(32)
     const challengeNonce = options.challengeNonce ?? this.random(16)
     bytes(derivationPrefix, 32, 'Derivation prefix')
@@ -261,7 +283,7 @@ export class LCHPayee {
     )
     bytes(options.txid, 32, 'Transaction ID')
     outputIndex(options.outputIndex)
-    uint(options.satoshis, 'Receipt amount', 'ERR_LCH_PAYMENT')
+    checkedSatoshis(options.satoshis)
     uint(options.receivedAt, 'Receipt time', 'ERR_LCH_PAYMENT')
     extensions(options.critical)
     return signObject(
@@ -347,24 +369,34 @@ export class LCHPayee {
 }
 
 export class LCHQuoteIssuer {
+  private readonly verifier: LCHSignatureVerifier
+  private readonly validationOptions: AcquisitionValidationOptions
+
   constructor(
     private readonly signer: LCHSigner,
-    private readonly verifier: LCHSignatureVerifier = new PublicBRC77Verifier()
-  ) {}
+    verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+    validationOptions: AcquisitionValidationOptions = {}
+  ) {
+    this.verifier = verifier
+    this.validationOptions = snapshotValidationOptions(validationOptions)
+  }
 
   async createQuote(options: QuoteOptions): Promise<SignedObject> {
+    options = snapshotLCHRecord(options, 'Quote options') as unknown as QuoteOptions
     bytes(options.requestId, 32, 'Request ID')
     bytes(options.offerId, 32, 'Offer ID')
     bytes(options.assetId, 32, 'Asset ID')
     bytes(options.buyer, 33, 'Quote buyer identity')
     lchAssert(options.demands.length > 0, 'ERR_LCH_QUOTE', 'Quote has no Payment Demands')
+    const demands = options.demands.map((demand, index) =>
+      snapshotSignedObject(demand, `Quote Payment Demand ${index}`)
+    )
     const expiresAt = uint(options.expiresAt, 'Quote expiry', 'ERR_LCH_QUOTE')
     const recovery = recoveryUntil(expiresAt, options.recoveryPeriodSeconds)
     let total = 0n
     const seen = new Set<string>()
-    for (const demand of options.demands) {
-      const payee = memberBytes(demand.body, 'payee', 33, 'Demand payee')
-      await verifySignedObject('payment-demand', demand, this.verifier, payee)
+    for (const demand of demands) {
+      await validatePaymentDemand(demand, this.verifier, this.validationOptions)
       equalId(demand.body.requestId, options.requestId, 'Demand Request ID')
       equalId(demand.body.offerId, options.offerId, 'Demand Offer ID')
       equalId(demand.body.buyer, options.buyer, 'Demand buyer identity')
@@ -383,7 +415,9 @@ export class LCHQuoteIssuer {
       const demandId = toHex(await objectId('payment-demand', demand.body))
       lchAssert(!seen.has(demandId), 'ERR_LCH_QUOTE', 'Quote repeats a Payment Demand')
       seen.add(demandId)
-      total += uint(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT')
+      total += checkedSatoshis(
+        integerValue(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT')
+      )
       lchAssert(total <= 2_100_000_000_000_000n, 'ERR_LCH_PAYMENT', 'Quote total is out of range')
     }
     extensions(options.critical)
@@ -403,7 +437,7 @@ export class LCHQuoteIssuer {
                 LCHValue
               >
             }),
-        demands: options.demands as unknown as LCHValue[],
+        demands: demands as unknown as LCHValue[],
         totalSatoshis: total,
         expiresAt: options.expiresAt,
         recoveryUntil: recovery,
@@ -416,14 +450,31 @@ export class LCHQuoteIssuer {
 
 export async function validateLicenseRequest(
   request: SignedObject,
-  verifier: LCHSignatureVerifier = new PublicBRC77Verifier()
+  verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+  options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  request = snapshotSignedObject(request, 'License Request')
   const buyer = memberBytes(request.body, 'buyer', 33, 'Buyer identity')
-  await verifySignedObject('license-request', request, verifier, buyer)
+  await verifySignedObject('license-request', request, verifier, buyer, options)
   memberBytes(request.body, 'offerId', 32, 'Offer ID')
   memberBytes(request.body, 'assetId', 32, 'Asset ID')
   nonempty(request.body.action, 'Requested action')
   memberBytes(request.body, 'acceptedPolicyDigest', 32, 'Accepted Policy digest')
+  memberBytes(request.body, 'requestNonce', 16, 'Request nonce')
+  const acceptedTerms = request.body.acceptedHumanTermDigests
+  if (acceptedTerms !== undefined) {
+    lchAssert(
+      Array.isArray(acceptedTerms) &&
+        acceptedTerms.length <= LCH_LIMITS.cborEntries &&
+        acceptedTerms.every(digest => digest instanceof Uint8Array && digest.length === 32) &&
+        new Set(acceptedTerms.map(digest => toHex(digest as Uint8Array))).size ===
+          acceptedTerms.length,
+      'ERR_LCH_TERMS',
+      'Accepted human-term digests are invalid'
+    )
+  }
+  mechanismChoicesValue(request.body.mechanismChoices)
   uint(request.body.createdAt, 'Request creation time', 'ERR_LCH_LICENSE')
   selection(request.body.selection)
   return objectId('license-request', request.body)
@@ -434,8 +485,10 @@ export async function validatePaymentDemand(
   verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
   options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  demand = snapshotSignedObject(demand, 'Payment Demand')
   const payee = memberBytes(demand.body, 'payee', 33, 'Payee identity')
-  await verifySignedObject('payment-demand', demand, verifier, payee)
+  await verifySignedObject('payment-demand', demand, verifier, payee, options)
   memberBytes(demand.body, 'requestId', 32, 'Request ID')
   memberBytes(demand.body, 'offerId', 32, 'Offer ID')
   memberBytes(demand.body, 'buyer', 33, 'Demand buyer identity')
@@ -444,7 +497,7 @@ export async function validatePaymentDemand(
   nonempty(demand.body.dutyUid, 'Duty UID')
   const demandEndpoint = demand.body.endpoint
   endpoint(demandEndpoint, isAllowedLocalOrigin(demandEndpoint, options.allowInsecureLocalOrigins))
-  uint(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT')
+  checkedSatoshis(integerValue(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT'))
   const expires = uint(demand.body.expiresAt, 'Demand expiry', 'ERR_LCH_QUOTE')
   const recovery = uint(demand.body.recoveryUntil, 'Demand recovery deadline', 'ERR_LCH_QUOTE')
   lchAssert(expires < recovery, 'ERR_LCH_QUOTE', 'Demand recovery window is empty')
@@ -465,9 +518,13 @@ export async function validateQuote(
   verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
   options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  quote = snapshotSignedObject(quote, 'Quote')
+  request = snapshotSignedObject(request, 'License Request')
   bytes(issuer, 33, 'Quote issuer')
-  const requestId = await validateLicenseRequest(request, verifier)
-  await verifySignedObject('quote', quote, verifier, issuer)
+  issuer = snapshotBytes(issuer, 'Quote issuer')
+  const requestId = await validateLicenseRequest(request, verifier, options)
+  await verifySignedObject('quote', quote, verifier, issuer, options)
   equalId(quote.body.requestId, requestId, 'Quote Request ID')
   const offerId = memberBytes(request.body, 'offerId', 32, 'Request Offer ID')
   const assetId = memberBytes(request.body, 'assetId', 32, 'Request Asset ID')
@@ -482,6 +539,15 @@ export async function validateQuote(
     'ERR_LCH_SELECTION',
     'Quote selection does not match the License Request'
   )
+  if (quote.body.segmentSelection !== undefined) {
+    const segmentSelection = selection(quote.body.segmentSelection)
+    lchAssert(
+      segmentSelection.type === 'segments',
+      'ERR_LCH_SELECTION',
+      'Quote segment selection must use segment ranges'
+    )
+    validateNormalizedSelection(quote.body.segmentSelection as unknown as Selection)
+  }
   const demands = quote.body.demands
   lchAssert(
     Array.isArray(demands) && demands.length > 0,
@@ -502,22 +568,7 @@ export async function validateQuote(
       'ERR_LCH_QUOTE',
       'Quote Payment Demand is invalid'
     )
-    const envelope = value as Record<string, LCHValue>
-    lchAssert(
-      envelope.body !== null &&
-        typeof envelope.body === 'object' &&
-        !Array.isArray(envelope.body) &&
-        !(envelope.body instanceof Uint8Array) &&
-        Array.isArray(envelope.signatures) &&
-        envelope.signatures.length > 0 &&
-        envelope.signatures.every(signature => signature instanceof Uint8Array),
-      'ERR_LCH_QUOTE',
-      'Quote Payment Demand is not a Signed Object'
-    )
-    const demand: SignedObject = {
-      body: envelope.body as Record<string, LCHValue>,
-      signatures: envelope.signatures as Uint8Array[]
-    }
+    const demand = snapshotSignedObject(value, 'Quote Payment Demand')
     const demandId = await validatePaymentDemand(demand, verifier, options)
     const demandIdHex = toHex(demandId)
     lchAssert(!seen.has(demandIdHex), 'ERR_LCH_QUOTE', 'Quote repeats a Payment Demand')
@@ -531,7 +582,7 @@ export async function validateQuote(
       'ERR_LCH_QUOTE',
       'Demand deadlines do not match the Quote'
     )
-    total += uint(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT')
+    total += checkedSatoshis(integerValue(demand.body.satoshis, 'Demand amount', 'ERR_LCH_PAYMENT'))
     lchAssert(total <= 2_100_000_000_000_000n, 'ERR_LCH_PAYMENT', 'Quote total is out of range')
   }
   lchAssert(
@@ -544,15 +595,23 @@ export async function validateQuote(
 
 export async function validatePaymentDelivery(
   delivery: SignedObject,
-  verifier: LCHSignatureVerifier = new PublicBRC77Verifier()
+  verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+  options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  delivery = snapshotSignedObject(delivery, 'Payment Delivery')
   const buyer = memberBytes(delivery.body, 'buyer', 33, 'Buyer identity')
-  await verifySignedObject('payment-delivery', delivery, verifier, buyer)
+  await verifySignedObject('payment-delivery', delivery, verifier, buyer, options)
   memberBytes(delivery.body, 'demandId', 32, 'Demand ID')
   memberBytes(delivery.body, 'requestId', 32, 'Request ID')
   memberBytes(delivery.body, 'derivationPrefix', 32, 'Derivation prefix')
   memberBytes(delivery.body, 'derivationSuffix', 32, 'Derivation suffix')
-  memberBytes(delivery.body, 'atomicBeef', undefined, 'Atomic BEEF')
+  const atomicBeef = memberBytes(delivery.body, 'atomicBeef', undefined, 'Atomic BEEF')
+  lchAssert(
+    atomicBeef.length <= LCH_LIMITS.headerBytes,
+    'ERR_LCH_PAYMENT',
+    'Atomic BEEF is oversized'
+  )
   outputIndex(delivery.body.outputIndex)
   return objectId('payment-delivery', delivery.body)
 }
@@ -564,9 +623,12 @@ export async function validatePaymentReadiness(
   verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
   options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  readiness = snapshotSignedObject(readiness, 'Payment Readiness')
+  demand = snapshotSignedObject(demand, 'Payment Demand')
   const demandId = await validatePaymentDemand(demand, verifier, options)
   const payee = memberBytes(readiness.body, 'payee', 33, 'Payee identity')
-  await verifySignedObject('payment-readiness', readiness, verifier, payee)
+  await verifySignedObject('payment-readiness', readiness, verifier, payee, options)
   equalId(readiness.body.demandId, demandId, 'Readiness Demand ID')
   equalId(
     readiness.body.requestId,
@@ -604,15 +666,18 @@ export async function validatePaymentReadiness(
 
 export async function validatePaymentReceipt(
   receipt: SignedObject,
-  verifier: LCHSignatureVerifier = new PublicBRC77Verifier()
+  verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+  options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  options = snapshotValidationOptions(options)
+  receipt = snapshotSignedObject(receipt, 'Payment Receipt')
   const payee = memberBytes(receipt.body, 'payee', 33, 'Payee identity')
-  await verifySignedObject('payment-receipt', receipt, verifier, payee)
+  await verifySignedObject('payment-receipt', receipt, verifier, payee, options)
   memberBytes(receipt.body, 'demandId', 32, 'Demand ID')
   memberBytes(receipt.body, 'requestId', 32, 'Request ID')
   memberBytes(receipt.body, 'txid', 32, 'Transaction ID')
   outputIndex(receipt.body.outputIndex)
-  uint(receipt.body.satoshis, 'Receipt amount', 'ERR_LCH_PAYMENT')
+  checkedSatoshis(integerValue(receipt.body.satoshis, 'Receipt amount', 'ERR_LCH_PAYMENT'))
   uint(receipt.body.receivedAt, 'Receipt time', 'ERR_LCH_PAYMENT')
   return objectId('payment-receipt', receipt.body)
 }
@@ -662,7 +727,28 @@ function uint(
 }
 
 function nonempty(value: unknown, name: string): asserts value is string {
-  lchAssert(typeof value === 'string' && value.length > 0, 'ERR_LCH_FRAMING', `${name} is absent`)
+  lchAssert(
+    typeof value === 'string' &&
+      value.length > 0 &&
+      value.length <= 4096 &&
+      !hasForbiddenIdentifierCharacter(value),
+    'ERR_LCH_FRAMING',
+    `${name} is absent or invalid`
+  )
+}
+
+function hasForbiddenIdentifierCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!
+    if (
+      codePoint <= 0x1f ||
+      codePoint === 0x7f ||
+      (codePoint >= 0x202a && codePoint <= 0x202e) ||
+      (codePoint >= 0x2066 && codePoint <= 0x2069)
+    )
+      return true
+  }
+  return false
 }
 
 function endpoint(value: unknown, allowInsecureLocal = false): void {
@@ -699,11 +785,16 @@ function extensions(values: readonly string[] | undefined): void {
   if (values === undefined) return
   const unique = new Set(values)
   lchAssert(
-    unique.size === values.length,
+    values.length > 0 && values.length <= 64 && unique.size === values.length,
     'ERR_LCH_PROFILE_UNSUPPORTED',
     'Critical identifiers repeat'
   )
   for (const value of values) {
+    lchAssert(
+      typeof value === 'string' && value.length > 0 && value.length <= 2048,
+      'ERR_LCH_PROFILE_UNSUPPORTED',
+      'Critical identifier is invalid'
+    )
     let parsed: URL
     try {
       parsed = new URL(value)
@@ -716,6 +807,44 @@ function extensions(values: readonly string[] | undefined): void {
       'Critical identifier is not absolute'
     )
   }
+}
+
+function integerValue(
+  value: unknown,
+  name: string,
+  code: 'ERR_LCH_LICENSE' | 'ERR_LCH_PAYMENT' | 'ERR_LCH_QUOTE'
+): number | bigint {
+  lchAssert(
+    typeof value === 'bigint' || (typeof value === 'number' && Number.isSafeInteger(value)),
+    code,
+    `${name} must be an exact integer`
+  )
+  return value
+}
+
+function mechanismChoices(values: Record<string, string> | undefined): void {
+  mechanismChoicesValue(values as unknown as LCHValue | undefined)
+}
+
+function mechanismChoicesValue(value: LCHValue | undefined): void {
+  if (value === undefined) return
+  lchAssert(
+    value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      !(value instanceof Uint8Array) &&
+      Object.keys(value).length <= 64 &&
+      Object.entries(value).every(
+        ([key, choice]) =>
+          key.length > 0 &&
+          key.length <= 2048 &&
+          typeof choice === 'string' &&
+          choice.length > 0 &&
+          choice.length <= 2048
+      ),
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Mechanism choices are invalid'
+  )
 }
 
 function outputIndex(value: unknown): asserts value is number {
@@ -745,4 +874,19 @@ function selection(value: LCHValue | undefined): Selection {
     'Selection is invalid'
   )
   return normalizeSelection(value as unknown as Selection)
+}
+
+function snapshotValidationOptions(
+  value: AcquisitionValidationOptions
+): AcquisitionValidationOptions {
+  return {
+    allowInsecureLocalOrigins: snapshotStringArray(
+      ownDataValue(value, 'allowInsecureLocalOrigins', 'Acquisition validation options'),
+      'Acquisition allowInsecureLocalOrigins'
+    ),
+    supportedCriticalIdentifiers: snapshotStringSet(
+      ownDataValue(value, 'supportedCriticalIdentifiers', 'Acquisition validation options'),
+      'Acquisition supportedCriticalIdentifiers'
+    )
+  }
 }

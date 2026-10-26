@@ -89,6 +89,9 @@ function makeClient(chain: sdk.Chain) {
   return new ChaintracksServiceClient(chain, chaintracksUrl)
 }
 
-function jsonResponse(body: unknown): any {
-  return { ok: true, status: 200, json: async () => body }
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
 }

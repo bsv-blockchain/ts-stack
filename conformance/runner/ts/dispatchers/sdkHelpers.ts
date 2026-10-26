@@ -265,7 +265,7 @@ export function serializationBeefHex(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): void {
-  const beef = Beef.fromBinary(hexToBytes(getString(input, 'beef_hex')))
+  const beef = Beef.fromBinaryStrict(hexToBytes(getString(input, 'beef_hex')))
   if (getString(expected, 'merkle_root') !== '' && beef.bumps.length > 0) {
     expect(beef.bumps[0].computeRoot()).toBe(getString(expected, 'merkle_root'))
   }

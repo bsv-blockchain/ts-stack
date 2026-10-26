@@ -1,4 +1,15 @@
+import {
+  type ValidCreateActionArgs,
+  type ValidListActionsArgs,
+  type ValidListCertificatesArgs,
+  type ValidListOutputsArgs,
+  validateAbortActionArgs,
+  validateInternalizeActionArgs,
+  validateRelinquishCertificateArgs,
+  validateRelinquishOutputArgs
+} from '@bsv/sdk/wallet/validationHelpers'
 import { SyncPageBudget } from './sync/SyncPageBudget'
+import { assertLiveSyncChainsMatch, throwIfProcessSyncChunkError } from './sync/liveSyncGuards'
 import { validateSyncCheckpoint } from './sync/syncCheckpoint'
 import {
   AbortActionArgs,
@@ -11,11 +22,18 @@ import {
   ListOutputsResult,
   MerklePath,
   RelinquishCertificateArgs,
-  RelinquishOutputArgs,
-  Validation
+  RelinquishOutputArgs
 } from '@bsv/sdk'
 import { EntitySyncState } from '../storage/schema/entities'
-import * as sdk from '../sdk'
+import type * as sdk from '../sdk'
+import {
+  WERR_INTERNAL,
+  WERR_INVALID_OPERATION,
+  WERR_INVALID_PARAMETER,
+  WERR_NOT_ACTIVE,
+  WERR_NOT_IMPLEMENTED,
+  WERR_UNAUTHORIZED
+} from '../sdk/WERR_errors'
 import {
   TableCertificate,
   TableCertificateX,
@@ -186,7 +204,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     this._conflictingActives = []
 
     if (this._stores.length < 1) {
-      throw new sdk.WERR_INVALID_PARAMETER('active', 'valid. Must add active storage provider to wallet.')
+      throw new WERR_INVALID_PARAMETER('active', 'valid. Must add active storage provider to wallet.')
     }
 
     const backups: ManagedStorage[] = []
@@ -211,7 +229,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   private verifyActive(): ManagedStorage {
     if (this._active == null || !this._isAvailable) {
-      throw new sdk.WERR_INVALID_OPERATION(
+      throw new WERR_INVALID_OPERATION(
         'An active WalletStorageProvider must be added to this WalletStorageManager and makeAvailable must be called.'
       )
     }
@@ -220,7 +238,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   async getAuth(mustBeActive?: boolean): Promise<sdk.AuthId> {
     if (!this.isAvailable()) await this.makeAvailable()
-    if (mustBeActive === true && this._authId.isActive !== true) throw new sdk.WERR_NOT_ACTIVE()
+    if (mustBeActive === true && this._authId.isActive !== true) throw new WERR_NOT_ACTIVE()
     return this._authId
   }
 
@@ -331,9 +349,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     const active = this.getActive()
     // We can finally confirm that active storage is still able to support `StorageProvider`
     if (!active.isStorageProvider()) {
-      throw new sdk.WERR_INVALID_OPERATION(
-        'Active "WalletStorageProvider" does not support "StorageProvider" interface.'
-      )
+      throw new WERR_INVALID_OPERATION('Active "WalletStorageProvider" does not support "StorageProvider" interface.')
     }
     // Allow the sync to proceed on the active store.
     return active as unknown as StorageProvider
@@ -440,7 +456,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   getServices(): sdk.WalletServices {
-    if (this._services == null) throw new sdk.WERR_INVALID_OPERATION('Must setServices first.')
+    if (this._services == null) throw new WERR_INVALID_OPERATION('Must setServices first.')
     return this._services
   }
 
@@ -463,13 +479,13 @@ export class WalletStorageManager implements sdk.WalletStorage {
 
   async findOrInsertUser(identityKey: string): Promise<{ user: TableUser; isNew: boolean }> {
     const auth = await this.getAuth()
-    if (identityKey !== auth.identityKey) throw new sdk.WERR_UNAUTHORIZED()
+    if (identityKey !== auth.identityKey) throw new WERR_UNAUTHORIZED()
 
     return await this.runAsWriter(async writer => {
       const r = await writer.findOrInsertUser(identityKey)
 
       if (auth.userId != null && auth.userId !== 0 && auth.userId !== r.user.userId) {
-        throw new sdk.WERR_INTERNAL('userId may not change for given identityKey')
+        throw new WERR_INTERNAL('userId may not change for given identityKey')
       }
       this._authId.userId = r.user.userId
       return r
@@ -477,14 +493,14 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async abortAction(args: AbortActionArgs): Promise<AbortActionResult> {
-    Validation.validateAbortActionArgs(args)
+    validateAbortActionArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.abortAction(auth, args)
     })
   }
 
-  async createAction(vargs: Validation.ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
+  async createAction(vargs: ValidCreateActionArgs): Promise<sdk.StorageCreateActionResult> {
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.createAction(auth, vargs)
@@ -492,7 +508,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async internalizeAction(args: InternalizeActionArgs): Promise<sdk.StorageInternalizeActionResult> {
-    Validation.validateInternalizeActionArgs(args)
+    validateInternalizeActionArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.internalizeAction(auth, args)
@@ -500,7 +516,8 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async relinquishCertificate(args: RelinquishCertificateArgs): Promise<number> {
-    Validation.validateRelinquishCertificateArgs(args)
+    // Validate an existing reference, including historical types; acquisition remains strict.
+    validateRelinquishCertificateArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.relinquishCertificate(auth, args)
@@ -508,7 +525,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   }
 
   async relinquishOutput(args: RelinquishOutputArgs): Promise<number> {
-    Validation.validateRelinquishOutputArgs(args)
+    validateRelinquishOutputArgs(args)
     return await this.runAsWriter(async writer => {
       const auth = await this.getAuth(true)
       return await writer.relinquishOutput(auth, args)
@@ -522,10 +539,10 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async prepareNoSendExpiry(args: Validation.ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
+  async prepareNoSendExpiry(args: ValidCreateActionArgs): Promise<sdk.StoragePrepareNoSendExpiryResult> {
     return await this.runAsWriter(async writer => {
       if (writer.prepareNoSendExpiry == null) {
-        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+        throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
       return await writer.prepareNoSendExpiry(await this.getAuth(true), args)
     })
@@ -536,7 +553,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   ): Promise<sdk.StorageActivateNoSendExpiryResult> {
     return await this.runAsWriter(async writer => {
       if (writer.activateNoSendExpiry == null) {
-        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+        throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
       return await writer.activateNoSendExpiry(await this.getAuth(true), args)
     })
@@ -545,7 +562,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async armNoSendExpiry(args: sdk.StorageArmNoSendExpiryArgs): Promise<void> {
     await this.runAsWriter(async writer => {
       if (writer.armNoSendExpiry == null) {
-        throw new sdk.WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
+        throw new WERR_INVALID_OPERATION('Active storage does not support BRC-177 noSend expiry')
       }
       await writer.armNoSendExpiry(await this.getAuth(true), args)
     })
@@ -570,7 +587,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async resumeActionBatch(args: sdk.ResumeActionBatchArgs): Promise<sdk.ResumeActionBatchResult> {
     return await this.runAsWriter(async writer => {
       if (writer.resumeActionBatch == null) {
-        throw new sdk.WERR_NOT_IMPLEMENTED('action batch resume is not available')
+        throw new WERR_NOT_IMPLEMENTED('action batch resume is not available')
       }
       return await writer.resumeActionBatch(await this.getAuth(true), args)
     })
@@ -589,7 +606,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async putActionBatchPack(args: sdk.PutActionBatchPackArgs): Promise<void> {
     return await this.runAsWriter(async writer => {
       if (writer.putActionBatchPack == null) {
-        throw new sdk.WERR_NOT_IMPLEMENTED('packed action batch uploads are not available')
+        throw new WERR_NOT_IMPLEMENTED('packed action batch uploads are not available')
       }
       await writer.putActionBatchPack(await this.getAuth(true), args)
     })
@@ -602,7 +619,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
   async commitActionBatchByDigest(args: sdk.CommitActionBatchByDigestArgs): Promise<sdk.CommitActionBatchResult> {
     return await this.runAsWriter(async writer => {
       if (writer.commitActionBatchByDigest == null) {
-        throw new sdk.WERR_NOT_IMPLEMENTED('digest-only action batch commit is not available')
+        throw new WERR_NOT_IMPLEMENTED('digest-only action batch commit is not available')
       }
       return await writer.commitActionBatchByDigest(await this.getAuth(true), args)
     })
@@ -619,21 +636,21 @@ export class WalletStorageManager implements sdk.WalletStorage {
     })
   }
 
-  async listActions(vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+  async listActions(vargs: ValidListActionsArgs): Promise<ListActionsResult> {
     const auth = await this.getAuth()
     return await this.runAsReader(async reader => {
       return await reader.listActions(auth, vargs)
     })
   }
 
-  async listCertificates(args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+  async listCertificates(args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
     const auth = await this.getAuth()
     return await this.runAsReader(async reader => {
       return await reader.listCertificates(auth, args)
     })
   }
 
-  async listOutputs(vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+  async listOutputs(vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
     const auth = await this.getAuth()
     return await this.runAsReader(async reader => {
       return await reader.listOutputs(auth, vargs)
@@ -787,7 +804,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     r.log += `      blockHash ${ptx.blockHash} -> ${String(update.blockHash)}\n`
     r.log += `      merkleRoot ${ptx.merkleRoot} -> ${String(update.merkleRoot)}\n`
     r.log += `      index ${ptx.index} -> ${String(update.index)}\n`
-    if (isValid) {
+    if (isValid === true) {
       r.updated = { update, logUpdate }
     } else {
       r.log += `    txid ${ptx.txid} chaintracker fails to confirm updated merkle path update invalid\n` + logUpdate
@@ -869,7 +886,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log: string = ''
   ): Promise<{ inserts: number; updates: number; log: string }> {
     const auth = await this.getAuth()
-    if (identityKey !== auth.identityKey) throw new sdk.WERR_UNAUTHORIZED()
+    if (identityKey !== auth.identityKey) throw new WERR_UNAUTHORIZED()
 
     const readerSettings = await reader.makeAvailable()
 
@@ -879,6 +896,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log = await this.runAsSync(async sync => {
       const writer = sync
       const writerSettings = this.getSettings()
+      assertLiveSyncChainsMatch(readerSettings, writerSettings)
 
       log += `syncFromReader from ${readerSettings.storageName} to ${writerSettings.storageName}\n`
 
@@ -900,6 +918,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
           chunk.user.activeStorage = ((this._active as ManagedStorage).user as TableUser).activeStorage
         }
         const r = await writer.processSyncChunk(pageArgs, chunk)
+        throwIfProcessSyncChunkError(r)
         budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
@@ -934,6 +953,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
     log = await this.runAsSync(async sync => {
       const reader = sync
       const readerSettings = reader.getSettings()
+      assertLiveSyncChainsMatch(readerSettings, writerSettings)
 
       log += progLog(`syncToWriter from ${readerSettings.storageName} to ${writerSettings.storageName}\n`)
 
@@ -952,6 +972,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
         const chunk = await reader.getSyncChunk(pageArgs)
         log += EntitySyncState.syncChunkSummary(chunk)
         const r = await writer.processSyncChunk(pageArgs, chunk)
+        throwIfProcessSyncChunkError(r)
         budget.committed(chunk, Date.now() - startedAt)
         inserts += r.inserts
         updates += r.updates
@@ -998,7 +1019,7 @@ export class WalletStorageManager implements sdk.WalletStorage {
       s => (s.settings as TableSettings).storageIdentityKey === storageIdentityKey
     )
     if (newActiveIndex < 0) {
-      throw new sdk.WERR_INVALID_PARAMETER(
+      throw new WERR_INVALID_PARAMETER(
         'storageIdentityKey',
         `registered with this "WalletStorageManager". ${storageIdentityKey} does not match any managed store.`
       )

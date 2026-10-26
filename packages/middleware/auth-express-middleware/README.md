@@ -5,10 +5,35 @@ BRC-104 HTTP transport. It handles the public handshake endpoint, verifies
 authenticated application requests, signs responses, and optionally exchanges
 verifiable certificates.
 
-Version 2.2.2 preserves BRC-100 byte fields in handshake and buffered JSON
-responses across number arrays, `Uint8Array`, and historical numeric-key JSON
-objects. Generic signed application-body canonicalization remains unchanged so
-old and new peers continue to verify the same bytes.
+The current release preserves BRC-100 byte fields across supported JSON and
+byte-array forms, snapshots handshake messages before asynchronous work, and
+rejects parsed bodies that cannot be represented without losing semantics.
+Version 2.2.6 also preserves bodyless authenticated requests on Express 4, whose
+JSON parser can supply an empty-object placeholder where Express 5 supplies
+`undefined`. HTTP message framing distinguishes that placeholder from a real
+JSON `{}` body, which remains signed data. Existing clients need no changes. Version 2.2.7 also
+preserves Express's one-argument `res.set({ ...headers })` overload, including
+payment challenge headers. The wrapper forwards the original argument count;
+Express retains its own header validation and coercion, and signed responses
+retain their existing BRC-104 representation.
+
+Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
+header-count ceilings. `createAuthMiddleware` configures its Peer with
+`maxGeneralPayloadBytes: null`, avoiding an indirect SDK general-message
+ceiling for received headers while retaining metadata and signature validation.
+Received headers are excluded from `maxRequestBytes`, which still applies to
+handshake/plain-data and encoded request bodies. The middleware preserves all
+selected header bytes for BRC-104 signing and verification, rather than rejecting
+a received payment because of an additional header budget. HTTP server, CDN,
+proxy and WAF configuration own transport header limits. Configure those layers
+for the largest supported payment proof and validate the complete route.
+
+Malformed or duplicate signed headers, unsafe header values, authentication
+failures and invalid signatures still fail validation. Body budgets, timeouts
+and replay protection remain separate. Clients consuming larger signed responses
+need matching capacity; SDK 2.8.5 raises its header limits by 4x. No BRC100 call,
+wire or wallet-data migration is required. Source publication is a separate
+protected release step.
 
 ## Requirements
 
@@ -68,11 +93,13 @@ const auth = createAuthMiddleware({
   sessionManager,
   certificatesToRequest,
   onCertificatesReceived,
+  certificateApprovalStore,
   logger,
   logLevel: 'error',
   transportLimits: {
     requestTimeoutMs: 30_000,
     maxPendingRequests: 1_000,
+    maxRequestBytes: 8 * 1024 * 1024,
     maxResponseBytes: 8 * 1024 * 1024
   }
 })
@@ -82,10 +109,25 @@ const auth = createAuthMiddleware({
 - `allowUnauthenticated` defaults to `false`.
 - `sessionManager` accepts the SDK's `SessionManager` or an
   `AsyncSessionManager`.
-- `certificatesToRequest` asks a peer for selected certificate fields.
+- `certificatesToRequest` asks a peer for allowed certificate types and
+  fields. The legacy v0.1 shape does not assert that every listed type or field
+  was supplied; inspect the validated certificates in
+  `onCertificatesReceived` before approving.
 - `onCertificatesReceived` may be synchronous or asynchronous. It receives
-  `(senderPublicKey, certificates, req, res, next)`. Calling `next` more than
-  once has no effect.
+  `(senderPublicKey, certificates, req, res, approve)`. When this callback is
+  configured, the protected request remains blocked unless the callback
+  explicitly calls `approve()`. Returning normally without approval is a
+  denial and eventually produces the configured authentication timeout.
+  Calling `approve` more than once has no effect. The callback must validate
+  every application-specific certificate policy, including required type and
+  field completeness, before approving.
+- `certificateApprovalStore` records that approval against the exact BRC-103
+  session nonce and identity. The default `InMemoryCertificateApprovalStore`
+  is bounded to 10,000 approvals and is appropriate only when the handshake
+  and protected request remain in one process. A replicated service using
+  `onCertificatesReceived` must inject a shared store and retain approvals for
+  at least the corresponding session lifetime. Store failures and every
+  verdict other than exact boolean `true` fail closed.
 - `logger` and `logLevel` enable structured lifecycle logs. Authentication
   headers, certificate bodies, signatures, response bodies, and wallet objects
   are not logged.
@@ -93,6 +135,9 @@ const auth = createAuthMiddleware({
   certificate, and response-signing state. It defaults to 30 seconds.
 - `transportLimits.maxPendingRequests` bounds per-process pending protocol
   state. It defaults to 1,000 and fails closed with `503` at capacity.
+- `transportLimits.maxRequestBytes` bounds handshake plain-data and encoded
+  request-body work before peer processing, excluding received HTTP headers. It defaults to 8 MiB. Set it to
+  `-1` only when the embedding service enforces an equivalent request budget.
 - `transportLimits.maxResponseBytes` bounds application responses buffered for
   BRC-104 signing, including files passed to `res.sendFile`. It defaults to 8
   MiB and fails closed with a signed `413` response. Set it to `-1` only when
@@ -131,8 +176,11 @@ app.use(createAuthMiddleware({ wallet, sessionManager }))
 ```
 
 The backing store must preserve the SDK's session semantics and should use
-appropriate atomicity, expiry, availability, and encryption controls. Sticky
-routing is not a substitute for shared state when instances can be replaced.
+appropriate atomicity, expiry, availability, and encryption controls. If
+`onCertificatesReceived` is configured, the same replicas must also share
+`certificateApprovalStore`; approval is keyed by exact session nonce and
+identity, not merely by identity. Sticky routing is not a substitute for
+shared state when instances can be replaced.
 
 ## Certificates
 
@@ -146,9 +194,9 @@ app.use(
         '<base64-certificate-type>': ['firstName']
       }
     },
-    async onCertificatesReceived(senderPublicKey, certificates, req, res, next) {
+    async onCertificatesReceived(senderPublicKey, certificates, req, res, approve) {
       await authorizeDisclosedFields(senderPublicKey, certificates)
-      next()
+      approve()
     }
   })
 )
@@ -159,6 +207,18 @@ revocation checks, and safe storage of disclosed data. A missing required
 certificate fails with a stable public error. Internal wallet, signing, and
 certificate-handler errors are logged only through the optional logger and are
 not returned to callers.
+
+Authenticated `res.sendFile()` responses preserve Express's `root`,
+`dotfiles`, `start`, `end`, and `headers` security-relevant options while the
+file is buffered for signing. Relative paths require `root`; traversal and
+symlink escapes outside that root fail closed. Other send-file cache and range
+negotiation options remain the application's responsibility.
+
+The response wrapper also buffers `write()`, `writeHead()`, `flushHeaders()`,
+and data passed to `end()` so those standard Node/Express paths cannot escape
+the signed response. Direct status and header state is captured before signing.
+Streaming remains bounded buffering: this protocol must know the complete body
+before it can sign it.
 
 ## Public services, CORS, and CSP
 
@@ -183,15 +243,15 @@ Do not hard-code a deployment-specific domain list in this middleware.
 Public errors are deliberately stable and do not include internal exception
 messages:
 
-| Status | Code                               | Meaning                                         |
-| ------ | ---------------------------------- | ----------------------------------------------- |
-| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers               |
-| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied         |
-| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent or failed             |
-| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out               |
-| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                 |
-| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed  |
-| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit |
+| Status | Code                               | Meaning                                                                              |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------ |
+| 400    | `ERR_AUTH_MALFORMED`               | Invalid handshake or auth headers                                                    |
+| 400    | `ERR_CERTIFICATES_REQUIRED`        | Required certificates were not supplied                                              |
+| 401    | `UNAUTHORIZED` / `ERR_AUTH_FAILED` | Authentication was absent, or nonce, signature, session, or HMAC verification failed |
+| 408    | `ERR_AUTH_TIMEOUT`                 | A bounded protocol step timed out                                                    |
+| 500    | `ERR_INTERNAL_SERVER_ERROR`        | Internal auth processing failed                                                      |
+| 500    | `ERR_RESPONSE_SIGNING_FAILED`      | The authenticated response could not be signed                                       |
+| 503    | `ERR_AUTH_CAPACITY`                | Pending-auth state reached its configured limit                                      |
 
 ## Security notes
 
@@ -204,6 +264,22 @@ messages:
 - Keep timeouts, response sizes, and capacity limits finite and monitor
   `408`/`413`/`503` rates.
 - Validate authorization separately after identity authentication.
+- BRC-104 v0.1 signs the method, pathname, query, selected headers, and body; it
+  does **not** sign the scheme/authority (`Host`), `Cookie`, forwarding headers,
+  or arbitrary standard headers. This is deliberate because browser and
+  webpage libraries often cannot safely observe those values when signing.
+  Never select a tenant or grant authority from those omitted values. Pin the
+  expected authority at the edge and compare any security-relevant value with
+  an exact signed `x-bsv-*` or `Authorization` field. Use distinct server
+  identity keys when virtual authorities are separate security principals. A
+  valid signature authenticates only this documented subset, not the complete
+  browser or proxy context.
+- Signed response headers are likewise limited to `x-bsv-*` (excluding the
+  auth envelope) and `Authorization`. Do not carry authenticated decisions in
+  unsigned `Location`, cookie, content-type, or other response metadata.
+- Parse JSON, URL-encoded, text, and binary bodies with their matching Express
+  parser before auth. URL-encoded parsed objects must contain only exact string
+  fields; nested/array coercions and unsupported nonempty bodies fail closed.
 - Keep request body limits and normal Express hardening in place.
 - Late authentication failures after a response or connection has already
   settled are contained to that request and are never written as a second
@@ -221,6 +297,11 @@ Type exports:
 - `AuthMiddlewareOptions`
 - `AuthRequest`
 - `AuthTransportLimits`
+- `CertificateApprovalStore`
+
+Runtime approval-store export:
+
+- `InMemoryCertificateApprovalStore`
 - `LogLevel`
 
 See [API.md](./API.md) for generated signatures.
@@ -236,7 +317,8 @@ pnpm pack:check
 ```
 
 `pack:check` builds and validates the exact npm tarball in ESM and CommonJS
-consumer probes. Tests do not rebuild the package as a side effect.
+consumer probes, plus real authenticated requests on Express 4 and 5 with
+legacy and current SDK clients. Tests do not rebuild the package as a side effect.
 
 ## Specifications
 

@@ -2,6 +2,10 @@ import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import { EntityProvenTxReq } from '../../storage/schema/entities'
+import { authenticateMerklePathResult } from '../../services/validateMerklePathResult'
+import { doubleSha256BE } from '../../utility/utilityHelpers'
+import { asString } from '../../utility/utilityHelpers.noBuffer'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 /**
  * Setting provenTxReq status to 'unfail' when 'invalid' will attempt to find a merklePath, and if successful:
  *
@@ -19,6 +23,7 @@ export class TaskUnFail extends WalletMonitorTask {
    * Set to true to trigger running this task
    */
   private static checkNowRequested = false
+  private readonly authenticatedRequests = new WeakSet<EntityProvenTxReq>()
   static get checkNow (): boolean { return this.checkNowRequested }
   static set checkNow (value: boolean) { this.checkNowRequested = value }
 
@@ -42,19 +47,20 @@ export class TaskUnFail extends WalletMonitorTask {
     TaskUnFail.checkNow = false
 
     const limit = 100
-    let offset = 0
     for (;;) {
       const reqs = await this.storage.findProvenTxReqs({
         partial: {},
         status: ['unfail'],
-        paged: { limit, offset }
+        // Every successfully processed row leaves the 'unfail' set, so keep
+        // reading its first page. Advancing an offset here skips rows after
+        // the preceding page is updated.
+        paged: { limit, offset: 0 }
       })
       if (reqs.length === 0) break
       log += `${reqs.length} reqs with status 'unfail'\n`
       const r = await this.unfail(reqs, 2)
       log += `${r.log}\n`
       if (reqs.length < limit) break
-      offset += limit
     }
 
     return log
@@ -67,14 +73,22 @@ export class TaskUnFail extends WalletMonitorTask {
       log += ' '.repeat(indent)
       log += `reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
       const r = await this.monitor.services.getMerklePath(req.txid)
-      if (r.merklePath != null) {
-        log += 'unfailed. status is now \'unmined\'\n'
-        log += await this.unfailReq(req, indent + 2)
-      } else {
+      try {
+        if (r.merklePath == null || r.header == null) throw new Error('No proof was returned.')
+        if (req.rawTx == null || asString(doubleSha256BE(req.rawTx)) !== req.txid.toLowerCase()) {
+          throw new Error('The request transaction bytes do not match its txid.')
+        }
+        await authenticateMerklePathResult(req.txid, r, this.monitor.chaintracks, false, false)
+      } catch {
         req.status = 'invalid'
-        log += 'returned to status \'invalid\'\n'
+        req.addHistoryNote({ what: 'unfailProofRejected' }, true)
+        log += 'proof unavailable or rejected; returned to status \'invalid\'\n'
         await req.updateStorageDynamicProperties(this.storage)
+        continue
       }
+      this.authenticatedRequests.add(req)
+      log += 'authenticated and unfailed. status is now \'unmined\'\n'
+      log += await this.unfailReq(req, indent + 2)
     }
     return { log }
   }
@@ -89,6 +103,9 @@ export class TaskUnFail extends WalletMonitorTask {
    * @returns
    */
   async unfailReq (req: EntityProvenTxReq, indent: number): Promise<string> {
+    if (!this.authenticatedRequests.delete(req)) {
+      throw new WERR_INVALID_OPERATION('Unfail requires a proof authenticated for this exact request.')
+    }
     return await this.storage.runAsStorageProvider(async sp =>
       await sp.unfailTransactionsForProof(req, indent, { status: 'unmined', attempts: 0 })
     )

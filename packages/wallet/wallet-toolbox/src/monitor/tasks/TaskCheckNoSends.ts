@@ -1,4 +1,5 @@
 import { Monitor } from '../Monitor'
+import { MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
 import { getProofs } from './TaskCheckForProofs'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
@@ -59,8 +60,12 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    * listener can set this true to cause
    */
   private static checkNowRequested = false
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
   /**
    * Aging-schedule constants for the `checkNow` path. Rows below `tier0FreshSkipMsecs`
@@ -69,13 +74,13 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    * checks happen on `block-height % tierNBlockInterval === 0` cadences with
    * growing intervals. The scheduled daily cadence (no checkNow) is unaffected.
    */
-  static readonly tier0FreshSkipMsecs   = 5 * 60 * 1000             // 5 min
-  static readonly tier1EveryBlockMsecs  = 60 * 60 * 1000            // 1 hr
-  static readonly tier2HourlyMsecs      = 24 * 60 * 60 * 1000       // 24 hr
-  static readonly tier3DailyMsecs       = 7 * 24 * 60 * 60 * 1000   // 7 days
-  static readonly tier2BlockInterval    = 6        // ~hourly on 10-min blocks
-  static readonly tier3BlockInterval    = 144      // ~daily  on 10-min blocks
-  static readonly tier4BlockInterval    = 1008     // ~weekly on 10-min blocks
+  static readonly tier0FreshSkipMsecs = 5 * 60 * 1000 // 5 min
+  static readonly tier1EveryBlockMsecs = 60 * 60 * 1000 // 1 hr
+  static readonly tier2HourlyMsecs = 24 * 60 * 60 * 1000 // 24 hr
+  static readonly tier3DailyMsecs = 7 * 24 * 60 * 60 * 1000 // 7 days
+  static readonly tier2BlockInterval = 6 // ~hourly on 10-min blocks
+  static readonly tier3BlockInterval = 144 // ~daily  on 10-min blocks
+  static readonly tier4BlockInterval = 1008 // ~weekly on 10-min blocks
 
   /**
    * Decide whether a single `nosend` row should be chain-checked on the
@@ -84,7 +89,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
    * across the modulo cycle). See class docstring for the full schedule
    * and staggering rationale.
    */
-  static shouldCheckOnCheckNow (
+  static shouldCheckOnCheckNow(
     createdAt: Date,
     nowMs: number,
     currentBlockHeight: number,
@@ -104,17 +109,18 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     return (currentBlockHeight + provenTxReqId) % TaskCheckNoSends.tier4BlockInterval === 0
   }
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneDay * 1
   ) {
     super(monitor, TaskCheckNoSends.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
   }
 
   /**
    * Normally triggered by checkNow getting set by new block header found event from chaintracks
    */
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskCheckNoSends.checkNow ||
@@ -122,7 +128,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
     }
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     let log = ''
     const wasCheckNow = TaskCheckNoSends.checkNow
     const countsAsAttempt = wasCheckNow
@@ -153,12 +159,7 @@ export class TaskCheckNoSends extends WalletMonitorTask {
       let eligible = reqs
       if (wasCheckNow) {
         eligible = reqs.filter(r =>
-          TaskCheckNoSends.shouldCheckOnCheckNow(
-            r.created_at,
-            nowMs,
-            maxAcceptableHeight,
-            r.provenTxReqId
-          )
+          TaskCheckNoSends.shouldCheckOnCheckNow(r.created_at, nowMs, maxAcceptableHeight, r.provenTxReqId)
         )
         const skipped = reqs.length - eligible.length
         if (skipped > 0) {
@@ -166,12 +167,14 @@ export class TaskCheckNoSends extends WalletMonitorTask {
         }
       }
 
+      let retainedEligible = 0
       if (eligible.length > 0) {
         const r = await getProofs(this, eligible, maxAcceptableHeight, 2, countsAsAttempt, false)
         log += `${r.log}\n`
+        retainedEligible = r.processed.filter(req => req.status === 'nosend').length
       }
       if (reqs.length < limit) break
-      offset += limit
+      offset += reqs.length - eligible.length + retainedEligible
     }
     return log
   }

@@ -1,6 +1,6 @@
+import { Reader, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { OP, Transaction, PushDrop, Utils } from '@bsv/sdk'
-
+import { OP, Transaction, PushDrop } from '@bsv/sdk'
 interface AssetBalance {
   amount: number
   isMint: boolean
@@ -31,9 +31,9 @@ function collectInputBalances(
       if (sourceOutput === undefined) throw new Error('Missing source output')
       const sourceTxid = sourceTransaction.id('hex')
       const token = PushDrop.decode(sourceOutput.lockingScript)
-      const amount = Number(String(new Utils.Reader(token.fields[1]).readUInt64LEBn()))
-      const tokenId = Utils.toUTF8(token.fields[0])
-      JSON.parse(Utils.toUTF8(token.fields[2]))
+      const amount = Number(String(new Reader(token.fields[1]).readUInt64LEBn()))
+      const tokenId = toUTF8(token.fields[0])
+      JSON.parse(toUTF8(token.fields[2]))
       const isMint = tokenId === '___mint___'
       const storageKey = isMint ? `${sourceTxid}.${input.sourceOutputIndex}` : tokenId
       updateAssetBalance(balances, tokenId, storageKey, amount, isMint)
@@ -53,9 +53,9 @@ function collectAdmissibleOutputs(
     try {
       if (output.lockingScript.chunks[1].op !== OP.OP_CHECKSIG) continue
       const token = PushDrop.decode(output.lockingScript)
-      const amount = Number(String(new Utils.Reader(token.fields[1]).readUInt64LEBn()))
-      const tokenId = Utils.toUTF8(token.fields[0])
-      JSON.parse(Utils.toUTF8(token.fields[2]))
+      const amount = Number(String(new Reader(token.fields[1]).readUInt64LEBn()))
+      const tokenId = toUTF8(token.fields[0])
+      JSON.parse(toUTF8(token.fields[2]))
       const isMint = tokenId === '___mint___'
       const storageKey = isMint ? `${txid}.${index}` : tokenId
       updateAssetBalance(balances, tokenId, storageKey, -amount, isMint)

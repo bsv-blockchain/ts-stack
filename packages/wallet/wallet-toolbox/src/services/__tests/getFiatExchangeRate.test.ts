@@ -20,9 +20,14 @@ const CHAINTRACKS_FIAT_RATES_PAYLOAD = {
 const realFetch = global.fetch
 beforeAll(() => {
   global.fetch = jest.fn(async (input: any, init?: any) => {
-    const url = typeof input === 'string' ? input : input?.url ?? ''
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : (input?.url ?? '')
     if (url.includes('chaintracks.babbage.systems/getFiatExchangeRates')) {
-      return { ok: true, status: 200, json: async () => CHAINTRACKS_FIAT_RATES_PAYLOAD } as any
+      return new Response(JSON.stringify(CHAINTRACKS_FIAT_RATES_PAYLOAD), { status: 200 })
     }
     return realFetch(input, init)
   }) as any
@@ -34,7 +39,7 @@ afterAll(() => {
 describe('getFiatExchangeRate service tests', () => {
   jest.setTimeout(99999999)
 
-  function makeFetchedRates (rates: Record<string, number>): FiatExchangeRates {
+  function makeFetchedRates(rates: Record<string, number>): FiatExchangeRates {
     return {
       timestamp: new Date('2026-03-25T00:00:00.000Z'),
       base: 'USD',
@@ -140,6 +145,7 @@ describe('getFiatExchangeRate service tests', () => {
 
   test('5 chaintracks works against the real service without an exchangeratesapi key', async () => {
     const options = Services.createDefaultOptions('main')
+    options.fiatExchangeRatesFetch = global.fetch
     options.fiatExchangeRates = {
       timestamp: new Date('2020-01-01T00:00:00.000Z'),
       base: 'USD',
@@ -173,5 +179,59 @@ describe('getFiatExchangeRate service tests', () => {
 
     expect(eurPerUsd).toBeGreaterThan(0)
     expect(services.updateFiatExchangeRateServices.name).toBe('exchangeratesapi')
+  })
+
+  test('7 rejects malformed custom-provider rates instead of caching financial poison', async () => {
+    const options = Services.createDefaultOptions('main')
+    options.fiatExchangeRates = {
+      timestamp: new Date('2020-01-01T00:00:00.000Z'),
+      base: 'USD',
+      rates: { USD: 1 }
+    }
+    const services = new Services(options)
+    const provider = jest.fn(async () => ({
+      timestamp: new Date(),
+      base: 'USD' as const,
+      rates: { EUR: Number.POSITIVE_INFINITY }
+    }))
+    services.updateFiatExchangeRateServices.services[0].service = provider
+
+    await expect(services.getFiatExchangeRate('EUR')).rejects.toThrow(WERR_INVALID_PARAMETER)
+    expect(services.options.fiatExchangeRates.rates.EUR).toBeUndefined()
+  })
+
+  test('8 treats a future-dated stored rate as stale and owns returned dates', async () => {
+    const future = new Date(Date.now() + 60 * 60 * 1000)
+    const options = Services.createDefaultOptions('main')
+    options.fiatExchangeRates = {
+      timestamp: future,
+      base: 'USD',
+      rates: { USD: 1, EUR: 0.9 },
+      rateTimestamps: { EUR: future }
+    }
+    const services = new Services(options)
+    const provider = jest.fn(async () => makeFetchedRates({ EUR: 0.8 }))
+    services.updateFiatExchangeRateServices.services[0].service = provider
+
+    const result = await services.getFiatExchangeRates(['EUR'])
+    expect(provider).toHaveBeenCalled()
+    expect(result.rates.EUR).toBe(0.8)
+
+    const retainedTimestamp = services.options.fiatExchangeRates.timestamp.getTime()
+    result.timestamp.setTime(0)
+    result.rateTimestamps?.EUR.setTime(0)
+    expect(services.options.fiatExchangeRates.timestamp.getTime()).toBe(retainedTimestamp)
+    expect(services.options.fiatExchangeRates.rateTimestamps?.EUR.getTime()).toBeGreaterThan(0)
+  })
+
+  test('9 rejects unsupported runtime currencies and unsafe update intervals', async () => {
+    const services = new Services(Services.createDefaultOptions('main'))
+
+    await expect(services.getFiatExchangeRate('BAD' as FiatCurrencyCode)).rejects.toThrow(
+      'currency is unsupported'
+    )
+    await expect(
+      services.updateFiatExchangeRates(['EUR'], Number.POSITIVE_INFINITY)
+    ).rejects.toThrow('bounded non-negative safe integer')
   })
 })

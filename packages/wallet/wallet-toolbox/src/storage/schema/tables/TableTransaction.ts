@@ -1,9 +1,6 @@
 import { Base64String } from '@bsv/sdk'
-import * as sdk from '../../../sdk'
-import type {
-  Brc177NoSendExpiryMode,
-  Brc177NoSendExpiryState
-} from '../../../utility/brc177NoSendExpiry'
+import type * as sdk from '../../../sdk'
+import type { Brc177NoSendExpiryMode, Brc177NoSendExpiryState } from '../../../utility/brc177NoSendExpiry'
 
 export interface TableTransaction extends sdk.EntityTimeStamp {
   created_at: Date

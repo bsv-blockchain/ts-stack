@@ -64,9 +64,12 @@ describe('beefForTxids', () => {
     expect(result.bumps[0].path[0]).not.toBe(source.bumps[0].path[0])
     expect(result.txs[0].rawTxUint8Array).not.toBe(source.txs[0].rawTxUint8Array)
     result.bumps[0].path[0][0].hash = 'aa'.repeat(32)
-    result.txs[0].rawTxUint8Array![0] ^= 0xff
+    const returnedBytes = result.txs[0].rawTxUint8Array!
+    const originalByte = returnedBytes[0]
+    returnedBytes[0] ^= 0xff
     expect(source.bumps[0].path[0][0].hash).toBe(required.id('hex'))
-    expect(source.txs[0].rawTxUint8Array![0]).not.toBe(result.txs[0].rawTxUint8Array![0])
+    expect(source.txs[0].rawTxUint8Array![0]).toBe(originalByte)
+    expect(result.txs[0].rawTxUint8Array![0]).toBe(originalByte)
   })
 
   test('reports the no-op case without rebuilding an equivalent BEEF', () => {

@@ -283,17 +283,30 @@ describe('addOpReturnData', () => {
     it('should throw error when number array contains non-numbers', () => {
       expect(() =>
         addOpReturnData(baseLockingScript, [[0x01, 'not a number', 0x03]] as any)
-      ).toThrow('Invalid field at index 0: array contains non-number')
+      ).toThrow('Invalid field at index 0: array contains a non-byte')
     })
 
-    it('should validate large arrays efficiently with sampling', () => {
-      // Create a large array with a non-number in the middle
+    it('should validate every value in large arrays', () => {
       const largeArray = Array.from({ length: 10000 }, () => 0xff)
-      largeArray[5000] = 'not a number' as any
+      largeArray[9999] = 256
 
-      // Should still catch the error through sampling
       expect(() => addOpReturnData(baseLockingScript, [largeArray])).toThrow(
-        'Invalid field at index 0: array contains non-number'
+        'Invalid field at index 0: array contains a non-byte at position 9999'
+      )
+    })
+
+    it.each([[[-1]], [[0.5]], [[256]]])('should reject out-of-range byte arrays', bytes => {
+      expect(() => addOpReturnData(baseLockingScript, [bytes])).toThrow(
+        'Invalid field at index 0: array contains a non-byte'
+      )
+    })
+
+    it('should reject sparse arrays', () => {
+      const sparse = Array.from({ length: 3 }) as number[]
+      sparse[0] = 1
+      sparse[2] = 3
+      expect(() => addOpReturnData(baseLockingScript, [sparse])).toThrow(
+        'Invalid field at index 0: array contains a non-byte at position 1'
       )
     })
   })

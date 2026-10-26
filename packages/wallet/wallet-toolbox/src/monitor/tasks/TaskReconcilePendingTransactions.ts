@@ -9,6 +9,13 @@ import {
 import { StorageProvider } from '../../storage/StorageProvider'
 import { TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { Monitor } from '../Monitor'
+import {
+  MAX_MONITOR_INTERVAL_MSECS,
+  MAX_MONITOR_OFFSET,
+  MAX_MONITOR_PAGE_SIZE,
+  optionalMonitorInteger,
+  requireMonitorInteger
+} from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 const REVIEW_STATUSES = ['callback', 'unmined', 'sending', 'unknown', 'unconfirmed'] as const
@@ -49,6 +56,10 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     public triggerQuickMsecs = Monitor.oneMinute
   ) {
     super(monitor, TaskReconcilePendingTransactions.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(reviewLimit, 'reviewLimit', 1, MAX_MONITOR_PAGE_SIZE)
+    requireMonitorInteger(minAgeMinutes, 'minAgeMinutes', 0, MAX_MONITOR_INTERVAL_MSECS / Monitor.oneMinute)
+    requireMonitorInteger(triggerQuickMsecs, 'triggerQuickMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
@@ -78,10 +89,11 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
       try {
         const parsed = JSON.parse(event.details) as Partial<ReconcilePendingCheckpoint>
         if (parsed.cycleComplete === true) return undefined
-        if (typeof parsed.resumeOffset === 'number') {
+        const resumeOffset = optionalMonitorInteger(parsed.resumeOffset, 0, MAX_MONITOR_OFFSET)
+        if (resumeOffset !== undefined) {
           return {
-            resumeOffset: parsed.resumeOffset,
-            expectedProvenTxReqId: parsed.expectedProvenTxReqId
+            resumeOffset,
+            expectedProvenTxReqId: optionalMonitorInteger(parsed.expectedProvenTxReqId, 1, MAX_MONITOR_OFFSET)
           }
         }
       } catch {

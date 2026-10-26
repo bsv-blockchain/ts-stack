@@ -34,7 +34,7 @@ The **Graph Aware Sync Protocol** (GASP) is a powerful protocol for synchronizin
 - **Metadata Support**: Optionally exchange metadata (e.g., invoice data, descriptions, basket or topical membership, etc.) for each transaction or output.
 - **Proof Anchoring**: Merkle proofs can be attached to each transaction, ensuring on-chain verifiability.
 - **Unidirectional**: If desired, you can configure “pull only” mode—where you fetch data from a remote but never push your own.
-- **Selective Concurrency**: Use fully parallel fetches (`Promise.all`) or sequential fetches (one at a time) to avoid potential DB locking.
+- **Selective Concurrency**: Use bounded parallel fetches or sequential fetches (one at a time) to avoid potential DB locking.
 - **Flexible Integration**: The `GASPStorage` and `GASPRemote` interfaces let you integrate with your own storage logic or remote transport.
 
 ---
@@ -50,6 +50,14 @@ The **Graph Aware Sync Protocol** (GASP) is a powerful protocol for synchronizin
 5. **Optional “Reply”**: In a **bidirectional** scenario, the second peer then does the same, ensuring both end up with a consistent set of data.
 
 If you set GASP to **unidirectional**, step 5 is skipped: your local node simply pulls data from the remote, but never sends data back.
+
+> **Bidirectional parent assumption:** the v1 `submitNode(node)` message does
+> not carry the `spentBy` parent outpoint. A receiver of a pushed child must
+> therefore already have the parent needed to validate that edge. If it does
+> not, it must request the parent in a subsequent synchronization round or
+> reject the graph. Pull-only mode avoids that assumption because the requester
+> already knows the exact parent input it requested. Never accept an unknown
+> parent edge merely because a peer submitted the child.
 
 ---
 
@@ -155,7 +163,7 @@ const gasp = new GASP(
   /* lastInteraction= */ 0,
   /* logPrefix= */ '[GASP] ',
   /* log= */ false, // legacy logging toggle
-  /* unidirectional= */ false, // if true, we only fetch from the remote, never push data
+  /* unidirectional= */ true, // choose pull-only when the receiver will not already have parents
   /* logLevel= */ LogLevel.INFO,
   /* sequential= */ false // if true, tasks run one-at-a-time rather than in parallel
 )
@@ -183,7 +191,7 @@ const aliceStorage = new MyCustomStorage()
 const bobRemote = new MyRemote()
 
 // Create GASP instance
-const aliceGASP = new GASP(aliceStorage, bobRemote)
+const aliceGASP = new GASP(aliceStorage, bobRemote, 0, '[GASP] ', false, true)
 
 // Run the sync
 await aliceGASP.sync()
@@ -202,7 +210,7 @@ const gasp = new GASP(
   0, // lastInteraction timestamp
   '[GASP Demo] ', // logPrefix
   false, // old boolean log toggle, for backwards-compat
-  false, // unidirectional? No, do full sync
+  true, // choose pull-only when the receiver cannot assume parent availability
   LogLevel.DEBUG, // Use DEBUG or WARN/ERROR
   true // sequential? If true, GASP will do tasks in sequence
 )
@@ -211,7 +219,10 @@ await gasp.sync()
 
 ### Unidirectional Pull-Only Sync
 
-You may only want to “pull” data from a remote server without uploading your own. This is common in “SPV client” use-cases.
+GASP v1 supports pull-only operation, which is common in SPV-client use cases.
+Pass `true` explicitly when the receiver must not rely on already having every
+parent for nodes pushed in the reply half. Bidirectional users must apply the
+parent assumption described above.
 
 ```ts
 // Alice sets unidirectional = true
@@ -250,6 +261,14 @@ async findNeededInputs(tx: GASPNode): Promise<GASPNodeResponse | void> {
 ```
 
 Your remote peer’s `requestNode(...)` method will deliver these missing pieces, if they exist, ensuring a “deep” transaction graph is built.
+
+Treat every remote response as untrusted. A storage/transport implementation
+must bind each node's raw transaction ID and output index to the request, verify
+that every child is an actual input of its requested parent, isolate temporary
+graphs, bound graph bytes and node count, reject cycles/conflicting spends, and
+finalize only after an affirmative anchor and topic-policy verdict. HTTP
+transports must also use authenticated public HTTPS, refuse redirects, and
+stream responses under byte and time limits.
 
 ---
 

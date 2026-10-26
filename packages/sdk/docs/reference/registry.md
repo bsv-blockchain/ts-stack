@@ -36,7 +36,7 @@ export interface BasketDefinitionData {
 }
 ```
 
-See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
+See also: [PubKeyHex](./wallet.md#type-pubkeyhex), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -55,6 +55,8 @@ export interface BasketQuery {
     name?: string;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -76,7 +78,7 @@ export interface CertificateDefinitionData {
 }
 ```
 
-See also: [CertificateFieldDescriptor](./registry.md#interface-certificatefielddescriptor), [PubKeyHex](./wallet.md#type-pubkeyhex)
+See also: [CertificateFieldDescriptor](./registry.md#interface-certificatefielddescriptor), [PubKeyHex](./wallet.md#type-pubkeyhex), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -93,6 +95,8 @@ export interface CertificateFieldDescriptor {
     fieldIcon: string;
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -111,6 +115,8 @@ export interface CertificateQuery {
     registryOperators?: string[];
 }
 ```
+
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -131,7 +137,7 @@ export interface ProtocolDefinitionData {
 }
 ```
 
-See also: [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -151,7 +157,7 @@ export interface ProtocolQuery {
 }
 ```
 
-See also: [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -187,7 +193,7 @@ export interface TokenData {
 }
 ```
 
-See also: [BEEF](./wallet.md#type-beef)
+See also: [BEEF](./wallet.md#type-beef), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -213,19 +219,116 @@ canonical references for baskets, protocols, and certificate types.
 
 ```ts
 export class RegistryClient {
-    constructor(private readonly wallet: WalletInterface = new WalletClient(), options: {
+    #network: LookupNetworkPreset | undefined;
+    readonly #networkPreset: LookupNetworkPreset | undefined;
+    #cachedIdentityKey: PubKeyHex | undefined;
+    readonly #acceptDelayedBroadcast: boolean;
+    readonly #wallet: WalletInterface;
+    readonly #originator?: OriginatorDomainNameStringUnder250Bytes;
+    constructor(wallet: WalletInterface = new WalletClient(), options: {
         acceptDelayedBroadcast?: boolean;
         resolver?: LookupResolver;
-    } = {}, private readonly originator?: OriginatorDomainNameStringUnder250Bytes) 
-    async registerDefinition(data: DefinitionData): Promise<BroadcastResponse | BroadcastFailure> 
-    async resolve<T extends DefinitionType>(definitionType: T, query: RegistryQueryMapping[T]): Promise<DefinitionData[]> 
-    async listOwnRegistryEntries(definitionType: DefinitionType): Promise<RegistryRecord[]> 
-    async removeDefinition(registryRecord: RegistryRecord): Promise<BroadcastResponse | BroadcastFailure> 
-    async updateDefinition(registryRecord: RegistryRecord, updatedData: DefinitionData): Promise<BroadcastResponse | BroadcastFailure> 
+        networkPreset?: LookupNetworkPreset;
+    } = {}, originator?: OriginatorDomainNameStringUnder250Bytes)
+    async #getIdentityKey(): Promise<PubKeyHex>
+    async #getNetwork(): Promise<LookupNetworkPreset>
+    async registerDefinition(data: DefinitionData): Promise<BroadcastResponse | BroadcastFailure>
+    async resolve<T extends DefinitionType>(definitionType: T, query: RegistryQueryMapping[T]): Promise<DefinitionData[]>
+    async listOwnRegistryEntries(definitionType: DefinitionType): Promise<RegistryRecord[]>
+    async removeDefinition(registryRecord: RegistryRecord): Promise<BroadcastResponse | BroadcastFailure>
+    async updateDefinition(registryRecord: RegistryRecord, updatedData: DefinitionData): Promise<BroadcastResponse | BroadcastFailure>
+    #buildPushDropFields(data: DefinitionData, registryOperator: PubKeyHex): number[][]
+    async #parseLockingScript(definitionType: DefinitionType, lockingScript: LockingScript): Promise<DefinitionData>
+    #mapDefinitionTypeToWalletProtocol(definitionType: DefinitionType): WalletProtocol
+    #mapDefinitionTypeToBasketName(definitionType: DefinitionType): string
+    #mapDefinitionTypeToTopic(definitionType: DefinitionType): string
+    #mapDefinitionTypeToServiceName(definitionType: DefinitionType): string
 }
 ```
 
-See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [DefinitionData](./registry.md#type-definitiondata), [DefinitionType](./registry.md#type-definitiontype), [LookupResolver](./overlay-tools.md#class-lookupresolver), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RegistryQueryMapping](./registry.md#interface-registryquerymapping), [RegistryRecord](./registry.md#type-registryrecord), [WalletClient](./wallet.md#class-walletclient), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [DefinitionData](./registry.md#type-definitiondata), [DefinitionType](./registry.md#type-definitiontype), [LockingScript](./script.md#class-lockingscript), [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset), [LookupResolver](./overlay-tools.md#class-lookupresolver), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [PubKeyHex](./wallet.md#type-pubkeyhex), [RegistryQueryMapping](./registry.md#interface-registryquerymapping), [RegistryRecord](./registry.md#type-registryrecord), [WalletClient](./wallet.md#class-walletclient), [WalletInterface](./wallet.md#interface-walletinterface), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
+
+#### Method
+
+Gets the wallet's identity key, caching it after the first call.
+
+```ts
+async #getIdentityKey(): Promise<PubKeyHex>
+```
+See also: [PubKeyHex](./wallet.md#type-pubkeyhex)
+
+Returns
+
+The public identity key as a hex string.
+
+#### Method
+
+Gets the network, initializing and caching it on first call.
+
+```ts
+async #getNetwork(): Promise<LookupNetworkPreset>
+```
+See also: [LookupNetworkPreset](./overlay-tools.md#type-lookupnetworkpreset)
+
+Returns
+
+The network type ('mainnet' or 'testnet').
+
+#### Method
+
+Convert definition data into an array of pushdrop fields (strings).
+Each definition type has a slightly different shape.
+
+```ts
+#buildPushDropFields(data: DefinitionData, registryOperator: PubKeyHex): number[][]
+```
+See also: [DefinitionData](./registry.md#type-definitiondata), [PubKeyHex](./wallet.md#type-pubkeyhex)
+
+#### Method
+
+Decodes a pushdrop locking script for a given definition type,
+returning a typed record with the appropriate fields.
+
+```ts
+async #parseLockingScript(definitionType: DefinitionType, lockingScript: LockingScript): Promise<DefinitionData>
+```
+See also: [DefinitionData](./registry.md#type-definitiondata), [DefinitionType](./registry.md#type-definitiontype), [LockingScript](./script.md#class-lockingscript)
+
+#### Method
+
+Convert our definitionType to the wallet protocol format ([protocolID, keyID]).
+
+```ts
+#mapDefinitionTypeToWalletProtocol(definitionType: DefinitionType): WalletProtocol
+```
+See also: [DefinitionType](./registry.md#type-definitiontype), [WalletProtocol](./wallet.md#type-walletprotocol)
+
+#### Method
+
+Convert 'basket'|'protocol'|'certificate' to the basket name used by the wallet.
+
+```ts
+#mapDefinitionTypeToBasketName(definitionType: DefinitionType): string
+```
+See also: [DefinitionType](./registry.md#type-definitiontype), [string](./remittance.md#function-string)
+
+#### Method
+
+Convert 'basket'|'protocol'|'certificate' to the broadcast topic name.
+
+```ts
+#mapDefinitionTypeToTopic(definitionType: DefinitionType): string
+```
+See also: [DefinitionType](./registry.md#type-definitiontype), [string](./remittance.md#function-string)
+
+#### Method
+
+Convert 'basket'|'protocol'|'certificate' to the lookup service name.
+
+```ts
+#mapDefinitionTypeToServiceName(definitionType: DefinitionType): string
+```
+See also: [DefinitionType](./registry.md#type-definitiontype), [string](./remittance.md#function-string)
 
 #### Method listOwnRegistryEntries
 
@@ -234,7 +337,7 @@ Lists the registry operator's published definitions for the given type.
 Returns parsed registry records including transaction details such as txid, outputIndex, satoshis, and the locking script.
 
 ```ts
-async listOwnRegistryEntries(definitionType: DefinitionType): Promise<RegistryRecord[]> 
+async listOwnRegistryEntries(definitionType: DefinitionType): Promise<RegistryRecord[]>
 ```
 See also: [DefinitionType](./registry.md#type-definitiontype), [RegistryRecord](./registry.md#type-registryrecord)
 
@@ -256,7 +359,7 @@ Registry operators (i.e., identity key owners) can create these definitions
 to establish canonical references for basket IDs, protocol specs, or certificate schemas.
 
 ```ts
-async registerDefinition(data: DefinitionData): Promise<BroadcastResponse | BroadcastFailure> 
+async registerDefinition(data: DefinitionData): Promise<BroadcastResponse | BroadcastFailure>
 ```
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [DefinitionData](./registry.md#type-definitiondata)
 
@@ -274,7 +377,7 @@ Argument Details
 Removes a registry definition by spending its associated UTXO.
 
 ```ts
-async removeDefinition(registryRecord: RegistryRecord): Promise<BroadcastResponse | BroadcastFailure> 
+async removeDefinition(registryRecord: RegistryRecord): Promise<BroadcastResponse | BroadcastFailure>
 ```
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [RegistryRecord](./registry.md#type-registryrecord)
 
@@ -300,7 +403,7 @@ The query object shape depends on the registry type:
   { type?: string; name?: string; registryOperators?: string[]; }
 
 ```ts
-async resolve<T extends DefinitionType>(definitionType: T, query: RegistryQueryMapping[T]): Promise<DefinitionData[]> 
+async resolve<T extends DefinitionType>(definitionType: T, query: RegistryQueryMapping[T]): Promise<DefinitionData[]>
 ```
 See also: [DefinitionData](./registry.md#type-definitiondata), [DefinitionType](./registry.md#type-definitiontype), [RegistryQueryMapping](./registry.md#interface-registryquerymapping)
 
@@ -320,7 +423,7 @@ Argument Details
 Updates an existing registry record by spending its UTXO and creating a new one with updated data.
 
 ```ts
-async updateDefinition(registryRecord: RegistryRecord, updatedData: DefinitionData): Promise<BroadcastResponse | BroadcastFailure> 
+async updateDefinition(registryRecord: RegistryRecord, updatedData: DefinitionData): Promise<BroadcastResponse | BroadcastFailure>
 ```
 See also: [BroadcastFailure](./transaction.md#interface-broadcastfailure), [BroadcastResponse](./transaction.md#interface-broadcastresponse), [DefinitionData](./registry.md#type-definitiondata), [RegistryRecord](./registry.md#type-registryrecord)
 
@@ -340,13 +443,49 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Functions
 
+| |
+| --- |
+| [decodeAndVerifyRegistryToken](#function-decodeandverifyregistrytoken) |
+| [decodeAndVerifySignedPushDropToken](#function-decodeandverifysignedpushdroptoken) |
+| [deserializeWalletProtocol](#function-deserializewalletprotocol) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Function: decodeAndVerifyRegistryToken
+
+Decode and cryptographically authenticate one canonical registry token.
+
+```ts
+export async function decodeAndVerifyRegistryToken(definitionType: DefinitionType, lockingScript: LockingScript): Promise<string[]>
+```
+
+See also: [DefinitionType](./registry.md#type-definitiontype), [LockingScript](./script.md#class-lockingscript), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: decodeAndVerifySignedPushDropToken
+
+Decode and cryptographically authenticate a canonical operator-signed PushDrop token.
+
+```ts
+export async function decodeAndVerifySignedPushDropToken(lockingScript: LockingScript, dataFieldCount: number, protocolID: WalletProtocol): Promise<string[]>
+```
+
+See also: [LockingScript](./script.md#class-lockingscript), [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: deserializeWalletProtocol
 
 ```ts
-export function deserializeWalletProtocol(str: string): WalletProtocol 
+export function deserializeWalletProtocol(str: string): WalletProtocol
 ```
 
-See also: [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -405,4 +544,3 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ## Enums
 
 ## Variables
-

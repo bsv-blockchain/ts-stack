@@ -110,6 +110,20 @@ describe('ShamirWalletManager', () => {
         return _
       }).toThrow('User must have at least 3 shares to recover independently')
     })
+
+    it('rejects non-integer, non-finite, excessive, and malformed recovery configuration', () => {
+      const base = {
+        wabServerUrl: 'https://test.example.com',
+        authMethodType: 'DevConsole',
+        walletBuilder: mockWalletBuilder
+      }
+      expect(() => new ShamirWalletManager({ ...base, threshold: 2.5 })).toThrow('safe integer')
+      expect(() => new ShamirWalletManager({ ...base, totalShares: Number.POSITIVE_INFINITY })).toThrow('safe integer')
+      expect(() => new ShamirWalletManager({ ...base, threshold: 256, totalShares: 256 })).toThrow('no greater than 255')
+      expect(() => new ShamirWalletManager({ ...base, authMethodType: '../TwilioPhone' })).toThrow(
+        'unsupported characters'
+      )
+    })
   })
 
   describe('Entropy Collection', () => {
@@ -158,9 +172,10 @@ describe('ShamirWalletManager', () => {
 
       expect(manager.getUserIdHash()).toBeUndefined()
 
-      manager.setUserIdHash('abc123')
+      manager.setUserIdHash('ab'.repeat(32))
 
-      expect(manager.getUserIdHash()).toBe('abc123')
+      expect(manager.getUserIdHash()).toBe('ab'.repeat(32))
+      expect(() => manager.setUserIdHash('abc123')).toThrow('32-byte hexadecimal')
     })
   })
 
@@ -174,7 +189,7 @@ describe('ShamirWalletManager', () => {
 
       // This should fail because the share format is invalid
       await expect(manager.recoverWithUserShares(['invalid-share', 'also-invalid'])).rejects.toThrow(
-        'Invalid share format'
+        'canonical bounded'
       )
     })
 
@@ -185,8 +200,8 @@ describe('ShamirWalletManager', () => {
         walletBuilder: mockWalletBuilder
       })
 
-      await expect(manager.recoverWithUserShares(['1.data.1.check', '2.data.1.check'])).rejects.toThrow(
-        'Invalid share: threshold must be at least 2'
+      await expect(manager.recoverWithUserShares(['1.data.1.deadbeef', '2.data.1.deadbeef'])).rejects.toThrow(
+        'canonical bounded'
       )
     })
   })
@@ -212,8 +227,20 @@ describe('ShamirWalletManager', () => {
         walletBuilder: mockWalletBuilder
       })
 
-      await expect(manager.recoverWithServerShare(['1.somedata.2.check'], { otp: '123456' })).rejects.toThrow(
+      await expect(manager.recoverWithServerShare(['1.somedata.2.deadbeef'], { otp: '123456' })).rejects.toThrow(
         'User ID hash not set'
+      )
+    })
+
+    it('rejects excessive recovery-share collections before parsing them', async () => {
+      const manager = new ShamirWalletManager({
+        wabServerUrl: 'https://test.example.com',
+        authMethodType: 'DevConsole',
+        walletBuilder: mockWalletBuilder
+      })
+      await expect(manager.recoverWithUserShares(Array(256).fill('invalid'))).rejects.toThrow('at most 255')
+      await expect(manager.recoverWithServerShare(Array(255).fill('invalid'), { otp: '123456' })).rejects.toThrow(
+        'at most 254'
       )
     })
   })
@@ -365,7 +392,7 @@ describe('ShamirWalletManager', () => {
         walletBuilder: mockWalletBuilder
       })
 
-      manager.setUserIdHash('abc123')
+      manager.setUserIdHash('ab'.repeat(32))
 
       await expect(manager.rotateKeys({ otp: '123456' }, async () => true)).rejects.toThrow(
         'Collect entropy before key rotation'

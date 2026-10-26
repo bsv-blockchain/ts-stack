@@ -8,3 +8,6 @@ export const DEFAULT_WINDOW_MS = 2 * 60 * 1000
 
 /** Default clock-skew tolerance: 30 seconds. */
 export const DEFAULT_CLOCK_SKEW_MS = 30 * 1000
+
+/** Default maximum body bytes retained while creating or verifying a proof. */
+export const DEFAULT_MAX_BODY_BYTES = 8 * 1024 * 1024

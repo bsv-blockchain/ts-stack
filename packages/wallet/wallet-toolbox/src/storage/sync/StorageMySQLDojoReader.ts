@@ -1,4 +1,5 @@
-import { Utils, Validation } from '@bsv/sdk'
+import { isHexString } from '@bsv/sdk/wallet/validationHelpers'
+import { toBase64 } from '@bsv/sdk/primitives/utils'
 import { Knex } from 'knex'
 import { StorageReader, StorageReaderOptions } from '../StorageReader'
 import { TableSettings } from '../schema/tables/TableSettings'
@@ -428,7 +429,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         k
           .select('*')
           .from('transactions')
-          .whereRaw(`proven_txs.provenTxId = transactions.provenTxId and transactions.userId = ${args.userId}`)
+          .whereRaw('proven_txs.provenTxId = transactions.provenTxId and transactions.userId = ?', [args.userId])
       )
     })
     if (args.paged != null) {
@@ -475,7 +476,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
         k
           .select('*')
           .from('transactions')
-          .whereRaw(`proven_tx_reqs.txid = transactions.txid and transactions.userId = ${args.userId}`)
+          .whereRaw('proven_tx_reqs.txid = transactions.txid and transactions.userId = ?', [args.userId])
       )
     })
     if (args.paged != null) {
@@ -517,7 +518,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
       k
         .select('*')
         .from('tx_labels')
-        .whereRaw(`tx_labels.txLabelId = tx_labels_map.txLabelId and tx_labels.userId = ${args.userId}`)
+        .whereRaw('tx_labels.txLabelId = tx_labels_map.txLabelId and tx_labels.userId = ?', [args.userId])
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
@@ -550,7 +551,7 @@ export class StorageMySQLDojoReader extends StorageReader implements WalletStora
       k
         .select('*')
         .from('output_tags')
-        .whereRaw(`output_tags.outputTagId = output_tags_map.outputTagId and output_tags.userId = ${args.userId}`)
+        .whereRaw('output_tags.outputTagId = output_tags_map.outputTagId and output_tags.userId = ?', [args.userId])
     )
     if (args.since != null) q = q.where('updated_at', '>=', this.validateDateForWhere(args.since))
     if (args.paged != null) {
@@ -749,6 +750,6 @@ function convertSyncStatus(status: DojoSyncStatus): SyncStatus {
 
 function forceToBase64(s?: string | null): string {
   if (!s) return randomBytesBase64(12)
-  if (Validation.isHexString(s)) return Utils.toBase64(asArray(s.trim()))
+  if (isHexString(s)) return toBase64(asArray(s.trim()))
   return s.trim()
 }

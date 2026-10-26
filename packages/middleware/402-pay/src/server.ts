@@ -1,5 +1,13 @@
-import { type WalletInterface, Utils, Beef, PublicKey } from '@bsv/sdk'
+import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
+import { Beef } from '@bsv/sdk/transaction/Beef'
+import type { WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 import { HEADERS, DEFAULT_PAYMENT_WINDOW_MS } from './constants.js'
+
+const MAX_BEEF_BYTES = 1024 * 1024
+const MAX_BEEF_BASE64_LENGTH = Math.ceil(MAX_BEEF_BYTES / 3) * 4
+const DEFAULT_REPLAY_CAPACITY = 100_000
+const PAYMENT_DESCRIPTION = 'BRC-121 payment'
 
 export interface PaymentResult {
   accepted: true
@@ -20,6 +28,82 @@ export interface PaymentMiddlewareOptions {
   calculatePrice: (path: string) => number | undefined
   /** Payment freshness window in milliseconds (default: 30000) */
   paymentWindowMs?: number
+  /** Atomic transaction claim store. Use a shared durable implementation when multiple processes serve a route. */
+  replayStore?: PaymentReplayStore
+  /** Optional structured diagnostics. The middleware is silent unless a logger is supplied. */
+  logger?: PaymentLogger
+}
+
+/**
+ * Replay claims must be atomic. `expiresAt` is the last millisecond at which
+ * the BRC-121 timestamp can still pass the configured freshness window.
+ */
+export interface PaymentReplayStore {
+  claim(transactionId: string, expiresAt: number): boolean | Promise<boolean>
+}
+
+export interface PaymentLogger {
+  error?: (message: string, context?: Record<string, unknown>) => void
+  warn?: (message: string, context?: Record<string, unknown>) => void
+  info?: (message: string, context?: Record<string, unknown>) => void
+}
+
+/**
+ * Process-local bounded replay protection. The default instance is shared by
+ * all middleware created with the same wallet object. Clustered services must
+ * still supply an atomic shared store.
+ */
+export class InMemoryPaymentReplayStore implements PaymentReplayStore {
+  private readonly claimed = new Map<string, number>()
+
+  constructor(private readonly maxEntries: number = DEFAULT_REPLAY_CAPACITY) {
+    if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) {
+      throw new RangeError('Replay-store capacity must be a positive safe integer')
+    }
+  }
+
+  claim(transactionId: string, expiresAt: number): boolean {
+    if (!/^[0-9a-f]{64}$/u.test(transactionId)) {
+      throw new TypeError('Replay claims require a canonical transaction ID')
+    }
+    if (!Number.isSafeInteger(expiresAt) || expiresAt < 0) {
+      throw new RangeError('Replay claims require a safe expiration timestamp')
+    }
+
+    const now = Date.now()
+    if (!Number.isSafeInteger(now) || now < 0) {
+      throw new Error('The system clock is outside the supported range')
+    }
+    const existingExpiry = this.claimed.get(transactionId)
+    if (existingExpiry !== undefined) {
+      if (existingExpiry >= now) return false
+      this.claimed.delete(transactionId)
+    }
+
+    if (this.claimed.size >= this.maxEntries) {
+      for (const [claimedTxid, expiry] of this.claimed) {
+        if (expiry < now) this.claimed.delete(claimedTxid)
+      }
+      if (this.claimed.size >= this.maxEntries) {
+        throw new Error('Payment replay store capacity exceeded')
+      }
+    }
+
+    this.claimed.set(transactionId, expiresAt)
+    return true
+  }
+}
+
+const defaultReplayStores = new WeakMap<object, InMemoryPaymentReplayStore>()
+
+function defaultReplayStoreFor(wallet: WalletInterface): InMemoryPaymentReplayStore {
+  const key = wallet as object
+  let store = defaultReplayStores.get(key)
+  if (store === undefined) {
+    store = new InMemoryPaymentReplayStore()
+    defaultReplayStores.set(key, store)
+  }
+  return store
 }
 
 /**
@@ -56,11 +140,66 @@ function isCompressedPublicKey(value: string): boolean {
   }
 }
 
+function isPaymentLogger(value: unknown): value is PaymentLogger | undefined {
+  if (value === undefined) return true
+  if (value === null || typeof value !== 'object') return false
+  const logger = value as Record<string, unknown>
+  return (
+    (logger.error === undefined || typeof logger.error === 'function') &&
+    (logger.warn === undefined || typeof logger.warn === 'function') &&
+    (logger.info === undefined || typeof logger.info === 'function')
+  )
+}
+
+function safeErrorContext(error: unknown): Record<string, unknown> {
+  try {
+    return error instanceof Error ? { errorName: 'Error' } : { errorType: typeof error }
+  } catch {
+    return { errorType: 'unknown' }
+  }
+}
+
+function emitLog(
+  logger: PaymentLogger | undefined,
+  level: 'error' | 'warn' | 'info',
+  message: string,
+  context?: Record<string, unknown>
+): void {
+  try {
+    const method = logger?.[level]
+    if (context === undefined) method?.call(logger, message)
+    else method?.call(logger, message, context)
+  } catch {
+    // Diagnostics are never part of payment authorization or delivery.
+  }
+}
+
+function internalizationVerdict(result: unknown): 'accepted' | 'replay' | 'rejected' {
+  if (result === null || typeof result !== 'object' || Array.isArray(result)) return 'rejected'
+  try {
+    const accepted = Object.getOwnPropertyDescriptor(result, 'accepted')
+    if (accepted === undefined || !Object.hasOwn(accepted, 'value') || accepted.value !== true) {
+      return 'rejected'
+    }
+    const isMerge = Object.getOwnPropertyDescriptor(result, 'isMerge')
+    if (isMerge === undefined) return 'accepted'
+    if (!Object.hasOwn(isMerge, 'value')) return 'rejected'
+    if (isMerge.value === true) return 'replay'
+    return isMerge.value === false ? 'accepted' : 'rejected'
+  } catch {
+    return 'rejected'
+  }
+}
+
 function isCanonicalBase64(value: string): boolean {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
     return false
   }
-  return Utils.toBase64(Utils.toArray(value, 'base64')) === value
+  try {
+    return toBase64(toArray(value, 'base64')) === value
+  } catch {
+    return false
+  }
 }
 
 /**
@@ -91,11 +230,12 @@ export async function validatePayment(
   req: PaymentRequest,
   wallet: WalletInterface,
   requiredSats: number,
-  paymentWindowMs: number = DEFAULT_PAYMENT_WINDOW_MS
+  paymentWindowMs: number = DEFAULT_PAYMENT_WINDOW_MS,
+  replayStore?: PaymentReplayStore
 ): Promise<PaymentResult | PaymentError | null> {
   const h = (name: string): string | undefined => {
     const v = req.headers[name]
-    return Array.isArray(v) ? v[0] : v
+    return typeof v === 'string' ? v : undefined
   }
 
   const sender = h(HEADERS.SENDER)
@@ -111,10 +251,12 @@ export async function validatePayment(
     !time ||
     !vout ||
     sender.length > 130 ||
+    beef.length > MAX_BEEF_BASE64_LENGTH ||
     nonce.length > 512 ||
     time.length > 16 ||
     vout.length > 10 ||
     !isCompressedPublicKey(sender) ||
+    !isCanonicalBase64(beef) ||
     !isCanonicalBase64(nonce) ||
     !isPositiveSafeInteger(requiredSats) ||
     !isPositiveSafeInteger(paymentWindowMs)
@@ -124,12 +266,24 @@ export async function validatePayment(
 
   // Validate timestamp freshness
   const timestamp = parseUnsignedInteger(time)
-  if (timestamp === undefined || Math.abs(Date.now() - timestamp) > paymentWindowMs) return null
+  const now = Date.now()
+  if (
+    timestamp === undefined ||
+    !Number.isSafeInteger(now) ||
+    now < 0 ||
+    timestamp > Number.MAX_SAFE_INTEGER - paymentWindowMs ||
+    Math.abs(now - timestamp) > paymentWindowMs
+  ) {
+    return null
+  }
+  const replayExpiresAt = timestamp + paymentWindowMs
 
   let beefArr: number[]
   let beefObj: Beef
   try {
-    beefObj = Beef.fromBinaryView(Uint8Array.from(Utils.toArray(beef, 'base64')))
+    const decodedBeef = toArray(beef, 'base64')
+    if (decodedBeef.length > MAX_BEEF_BYTES) return null
+    beefObj = Beef.fromBinaryView(Uint8Array.from(decodedBeef))
     const atomicTxid = beefObj.atomicTxid
     if (atomicTxid == null || beefObj.findTxid(atomicTxid) == null) return null
 
@@ -137,7 +291,7 @@ export async function validatePayment(
     // pricing and wallet internalization to the transaction named by the
     // BRC-95 subject prefix and its dependency closure.
     beefArr = beefObj.toBinaryAtomic(atomicTxid)
-    beefObj = Beef.fromBinary(beefArr)
+    beefObj = Beef.fromBinaryStrict(beefArr)
   } catch {
     return null
   }
@@ -152,7 +306,7 @@ export async function validatePayment(
   const output = paymentTx.outputs[voutIndex]
   if (output?.satoshis === undefined || output.satoshis < requiredSats) return null
 
-  const result = (await wallet.internalizeAction({
+  const result: unknown = await wallet.internalizeAction({
     tx: beefArr,
     outputs: [
       {
@@ -165,17 +319,32 @@ export async function validatePayment(
         }
       }
     ],
-    description: `Payment for ${req.path}`
-  })) as { accepted: boolean; isMerge?: boolean }
+    description: PAYMENT_DESCRIPTION
+  })
 
   // Reject replayed transactions with an explicit error so callers can log it
-  if (result.accepted !== true || result.isMerge === true) {
+  const verdict = internalizationVerdict(result)
+  if (verdict !== 'accepted') {
     return {
       accepted: false,
       reason:
-        result.isMerge === true
+        verdict === 'replay'
           ? `Replayed transaction: txid ${txid} has already been processed`
           : `Wallet rejected transaction: txid ${txid}`
+    }
+  }
+
+  const claimResult: unknown = await (replayStore ?? defaultReplayStoreFor(wallet)).claim(
+    txid,
+    replayExpiresAt
+  )
+  if (typeof claimResult !== 'boolean') {
+    throw new TypeError('The payment replay store returned an invalid claim verdict')
+  }
+  if (!claimResult) {
+    return {
+      accepted: false,
+      reason: `Replayed transaction: txid ${txid} has already been processed`
     }
   }
 
@@ -201,7 +370,36 @@ export async function validatePayment(
  * ```
  */
 export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
-  const { wallet, calculatePrice, paymentWindowMs } = options
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError('Payment middleware options are required')
+  }
+  const {
+    wallet,
+    calculatePrice,
+    paymentWindowMs = DEFAULT_PAYMENT_WINDOW_MS,
+    replayStore: configuredReplayStore,
+    logger
+  } = options
+  if (
+    wallet === null ||
+    typeof wallet !== 'object' ||
+    typeof wallet.internalizeAction !== 'function'
+  ) {
+    throw new TypeError('A valid wallet instance is required')
+  }
+  if (typeof calculatePrice !== 'function') {
+    throw new TypeError('calculatePrice must be a function')
+  }
+  if (!isPositiveSafeInteger(paymentWindowMs)) {
+    throw new RangeError('paymentWindowMs must be a positive safe integer')
+  }
+  const replayStore = configuredReplayStore ?? defaultReplayStoreFor(wallet)
+  if (replayStore === null || typeof replayStore.claim !== 'function') {
+    throw new TypeError('A replay store with an atomic claim method is required')
+  }
+  if (!isPaymentLogger(logger)) {
+    throw new TypeError('logger methods must be functions when provided')
+  }
   let identityKey = ''
 
   return async (req: any, res: any, next: any) => {
@@ -210,7 +408,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
         const { publicKey } = await wallet.getPublicKey({ identityKey: true })
         if (!isCompressedPublicKey(publicKey)) throw new Error('Invalid wallet identity key')
         identityKey = publicKey
-      } catch {
+      } catch (error) {
+        emitLog(logger, 'error', 'Payment identity initialization failed.', safeErrorContext(error))
         res.status(500).end()
         return
       }
@@ -219,7 +418,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
     let price: number | undefined
     try {
       price = calculatePrice(req.path)
-    } catch {
+    } catch (error) {
+      emitLog(logger, 'error', 'Payment pricing failed.', safeErrorContext(error))
       res.status(500).end()
       return
     }
@@ -236,20 +436,28 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions) {
 
     let result: PaymentResult | PaymentError | null
     try {
-      result = await validatePayment(req, wallet, price, paymentWindowMs)
-    } catch {
-      return send402(res, identityKey, price)
+      result = await validatePayment(req, wallet, price, paymentWindowMs, replayStore)
+    } catch (error) {
+      // The wallet or replay store may have accepted the transaction before
+      // failing. Do not issue a fresh payment challenge after an ambiguous
+      // state transition, because that can induce a second spend.
+      emitLog(logger, 'error', 'Payment validation failed.', safeErrorContext(error))
+      res.status(503).end()
+      return
     }
     if (!result) {
       return send402(res, identityKey, price)
     }
-    if (!result.accepted) {
-      console.error(`Payment rejected: ${req.path} | ${result.reason}`)
+    if (result.accepted !== true) {
+      emitLog(logger, 'warn', 'Payment rejected.')
       return send402(res, identityKey, price)
     }
 
-    req.payment = { ...result, satoshisPaid: price }
-    console.log(`Payment accepted: ${req.path} | ${price} sats | txid: ${result.txid}`)
+    req.payment = result
+    emitLog(logger, 'info', 'Payment accepted.', {
+      satoshisPaid: result.satoshisPaid,
+      txid: result.txid
+    })
     next()
   }
 }

@@ -1,4 +1,52 @@
-import { Transaction } from '@bsv/sdk'
+import Transaction from '@bsv/sdk/transaction/Transaction'
+
+const DEFAULT_SYNC_PAGE_SIZE = 1000
+const MAX_SYNC_PAGE_SIZE = 10_000
+const MAX_CONCURRENT_TASKS = 8
+const MAX_GRAPH_NODES = 10_000
+const MAX_PROTOCOL_IDENTIFIER_LENGTH = 128
+const MAX_RAW_TRANSACTION_HEX_LENGTH = 64 * 1024 * 1024
+const MAX_METADATA_LENGTH = 2 * 1024 * 1024
+const SAFE_IDENTIFIER = /^[A-Za-z0-9_-]+$/
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function assertIdentifier(value: unknown, label: string): asserts value is string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_PROTOCOL_IDENTIFIER_LENGTH ||
+    !SAFE_IDENTIFIER.test(value) ||
+    value === '__proto__' ||
+    value === 'constructor' ||
+    value === 'prototype'
+  ) {
+    throw new TypeError(`${label} is invalid`)
+  }
+}
+
+function assertOutputIndex(value: unknown, label: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 0xffffffff) {
+    throw new TypeError(`${label} is invalid`)
+  }
+}
+
+function assertScore(value: unknown, label: string): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0)
+    throw new TypeError(`${label} is invalid`)
+}
+
+function assertBoundedString(
+  value: unknown,
+  label: string,
+  maxLength: number
+): asserts value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maxLength) {
+    throw new TypeError(`${label} is invalid`)
+  }
+}
 
 /**
  * Represents the initial request made under the Graph Aware Sync Protocol.
@@ -270,8 +318,16 @@ export class GASP implements GASPRemote {
         await callback(item)
       }
     } else {
-      // Run in parallel
-      await Promise.all(items.map(callback))
+      let cursor = 0
+      const worker = async (): Promise<void> => {
+        while (cursor < items.length) {
+          const item = items[cursor++]
+          await callback(item)
+        }
+      }
+      await Promise.all(
+        Array.from({ length: Math.min(items.length, MAX_CONCURRENT_TASKS) }, worker)
+      )
     }
   }
 
@@ -319,9 +375,96 @@ export class GASP implements GASPRemote {
   }
 
   private validateLimit(limit: number | undefined): void {
-    if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
+    if (
+      limit !== undefined &&
+      (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_SYNC_PAGE_SIZE)
+    ) {
       throw new TypeError('Invalid limit format')
     }
+  }
+
+  private validateUTXOList(value: unknown, maxItems: number): GASPOutput[] {
+    if (!Array.isArray(value) || value.length > maxItems) {
+      throw new TypeError('Invalid or oversized UTXO list format')
+    }
+    const seen = new Set<string>()
+    for (const [index, item] of value.entries()) {
+      if (!isRecord(item)) throw new TypeError(`Invalid UTXO at index ${index}`)
+      assertIdentifier(item.txid, `UTXO ${index} txid`)
+      assertOutputIndex(item.outputIndex, `UTXO ${index} output index`)
+      assertScore(item.score, `UTXO ${index} score`)
+      const outpoint = `${item.txid}.${item.outputIndex}`
+      if (seen.has(outpoint)) throw new TypeError('Duplicate UTXO in GASP list')
+      seen.add(outpoint)
+    }
+    return value as GASPOutput[]
+  }
+
+  private validateInitialResponse(value: unknown, maxItems: number): GASPInitialResponse {
+    if (!isRecord(value)) throw new TypeError('Invalid initial response format')
+    this.validateTimestamp(value.since as number)
+    return {
+      since: value.since as number,
+      UTXOList: this.validateUTXOList(value.UTXOList, maxItems)
+    }
+  }
+
+  private validateNode(
+    value: unknown,
+    expected?: { graphID?: string; txid?: string; outputIndex?: number }
+  ): GASPNode {
+    if (!isRecord(value)) throw new TypeError('Invalid GASP node format')
+    this.deconstruct36ByteStructure(value.graphID as string)
+    assertBoundedString(value.rawTx, 'GASP raw transaction', MAX_RAW_TRANSACTION_HEX_LENGTH)
+    assertOutputIndex(value.outputIndex, 'GASP node output index')
+    let actualTxid: string
+    try {
+      actualTxid = Transaction.fromHex(value.rawTx).id('hex')
+    } catch {
+      throw new TypeError('GASP node raw transaction is invalid')
+    }
+    if (expected?.graphID !== undefined && value.graphID !== expected.graphID) {
+      throw new TypeError('GASP node graphID does not match the request')
+    }
+    if (expected?.outputIndex !== undefined && value.outputIndex !== expected.outputIndex) {
+      throw new TypeError('GASP node output index does not match the request')
+    }
+    if (expected?.txid !== undefined && actualTxid.toLowerCase() !== expected.txid.toLowerCase()) {
+      throw new TypeError('GASP node transaction does not match the requested txid')
+    }
+    for (const field of ['proof', 'txMetadata', 'outputMetadata'] as const) {
+      if (value[field] !== undefined) {
+        assertBoundedString(value[field], `GASP node ${field}`, MAX_METADATA_LENGTH)
+      }
+    }
+    if (value.inputs !== undefined) {
+      if (!isRecord(value.inputs) || Object.keys(value.inputs).length > MAX_GRAPH_NODES) {
+        throw new TypeError('Invalid GASP node input metadata')
+      }
+      for (const [outpoint, metadata] of Object.entries(value.inputs)) {
+        this.deconstruct36ByteStructure(outpoint)
+        if (!isRecord(metadata)) throw new TypeError('Invalid GASP node input metadata')
+        assertBoundedString(metadata.hash, 'GASP node input metadata hash', MAX_METADATA_LENGTH)
+      }
+    }
+    return value as GASPNode
+  }
+
+  private validateNodeResponse(value: unknown): GASPNodeResponse {
+    if (!isRecord(value) || !isRecord(value.requestedInputs)) {
+      throw new TypeError('Invalid GASP node response')
+    }
+    const entries = Object.entries(value.requestedInputs)
+    if (entries.length > MAX_GRAPH_NODES) throw new TypeError('Oversized GASP node response')
+    const requestedInputs: Record<string, { metadata: boolean }> = Object.create(null)
+    for (const [outpoint, request] of entries) {
+      this.deconstruct36ByteStructure(outpoint)
+      if (!isRecord(request) || typeof request.metadata !== 'boolean') {
+        throw new TypeError('Invalid GASP requested input')
+      }
+      requestedInputs[outpoint] = { metadata: request.metadata }
+    }
+    return { requestedInputs }
   }
 
   /**
@@ -331,6 +474,8 @@ export class GASP implements GASPRemote {
    * @returns A string representing the 36-byte structure.
    */
   private compute36ByteStructure(txid: string, index: number): string {
+    assertIdentifier(txid, 'GASP txid')
+    assertOutputIndex(index, 'GASP output index')
     const result = `${txid}.${index.toString()}`
     this.debugLog(`Computed 36-byte structure: ${result} from txid: ${txid}, index: ${index}`)
     return result
@@ -342,11 +487,19 @@ export class GASP implements GASPRemote {
    * @returns An object containing the transaction ID and output index.
    */
   private deconstruct36ByteStructure(outpoint: string): { txid: string; outputIndex: number } {
-    const [txid, index] = outpoint.split('.')
+    if (typeof outpoint !== 'string') throw new TypeError('Invalid GASP outpoint')
+    const separator = outpoint.lastIndexOf('.')
+    if (separator <= 0 || separator !== outpoint.indexOf('.'))
+      throw new TypeError('Invalid GASP outpoint')
+    const txid = outpoint.slice(0, separator)
+    const index = outpoint.slice(separator + 1)
+    assertIdentifier(txid, 'GASP outpoint txid')
+    if (!/^(0|[1-9]\d*)$/.test(index)) throw new TypeError('Invalid GASP outpoint index')
     const result = {
       txid,
-      outputIndex: Number.parseInt(index, 10)
+      outputIndex: Number(index)
     }
+    assertOutputIndex(result.outputIndex, 'GASP outpoint index')
     this.debugLog(
       `Deconstructed 36-byte structure: ${outpoint} into txid: ${txid}, outputIndex: ${result.outputIndex}`
     )
@@ -359,8 +512,9 @@ export class GASP implements GASPRemote {
    * @returns The computed transaction ID.
    */
   private computeTXID(tx: string): string {
+    assertBoundedString(tx, 'GASP raw transaction', MAX_RAW_TRANSACTION_HEX_LENGTH)
     const txid = Transaction.fromHex(tx).id('hex')
-    this.debugLog(`Computed TXID: ${txid} from transaction: ${tx}`)
+    this.debugLog(`Computed TXID: ${txid}`)
     return txid
   }
 
@@ -371,25 +525,35 @@ export class GASP implements GASPRemote {
    */
   async sync(host: string, limit?: number): Promise<void> {
     this.infoLog(`Starting sync process. Last interaction timestamp: ${this.lastInteraction}`)
+    assertBoundedString(host, 'GASP host', 2048)
+    const effectiveLimit = limit ?? DEFAULT_SYNC_PAGE_SIZE
+    this.validateLimit(effectiveLimit)
 
-    const localUTXOs = await this.storage.findKnownUTXOs(0)
+    const localUTXOs = this.validateUTXOList(
+      await this.storage.findKnownUTXOs(0, MAX_SYNC_PAGE_SIZE),
+      MAX_SYNC_PAGE_SIZE
+    )
     // Find which UTXOs we already have
     const knownOutpoints = new Set<string>()
-    for (const utxo of await this.storage.findKnownUTXOs(0)) {
+    for (const utxo of localUTXOs) {
       knownOutpoints.add(this.compute36ByteStructure(utxo.txid, utxo.outputIndex))
     }
     const sharedOutpoints = new Set<string>()
 
     let initialResponse: GASPInitialResponse
     do {
-      const initialRequest = await this.buildInitialRequest(this.lastInteraction, limit)
-      initialResponse = await this.remote.getInitialResponse(initialRequest)
+      const pageStart = this.lastInteraction
+      const initialRequest = await this.buildInitialRequest(pageStart, effectiveLimit)
+      initialResponse = this.validateInitialResponse(
+        await this.remote.getInitialResponse(initialRequest),
+        effectiveLimit
+      )
 
       const ingestQueue: GASPOutput[] = []
+      let pageMaxScore = pageStart
+      let pageHadFailures = false
       for (const utxo of initialResponse.UTXOList) {
-        if (utxo.score !== undefined && utxo.score > this.lastInteraction) {
-          this.lastInteraction = utxo.score
-        }
+        pageMaxScore = Math.max(pageMaxScore, utxo.score)
         const outpoint = this.compute36ByteStructure(utxo.txid, utxo.outputIndex)
         if (knownOutpoints.has(outpoint)) {
           sharedOutpoints.add(outpoint)
@@ -412,17 +576,35 @@ export class GASP implements GASPRemote {
             UTXO.outputIndex,
             true
           )
-          this.debugLog(`Received unspent graph node from remote: ${JSON.stringify(resolvedNode)}`)
-          await this.processIncomingNode(resolvedNode)
-          await this.completeGraph(resolvedNode.graphID)
-          sharedOutpoints.add(outpoint)
+          const validatedNode = this.validateNode(resolvedNode, {
+            graphID: outpoint,
+            txid: UTXO.txid,
+            outputIndex: UTXO.outputIndex
+          })
+          this.debugLog(`Received unspent graph node ${validatedNode.graphID} from remote`)
+          await this.processIncomingNode(validatedNode)
+          if (await this.completeGraph(validatedNode.graphID)) {
+            sharedOutpoints.add(outpoint)
+          } else {
+            pageHadFailures = true
+          }
         } catch (e) {
+          pageHadFailures = true
           this.warnLog(
             `Error with incoming UTXO ${UTXO.txid}.${UTXO.outputIndex}: ${(e as Error).message}`
           )
         }
       })
-    } while (limit && initialResponse.UTXOList.length >= limit)
+      if (!pageHadFailures) this.lastInteraction = pageMaxScore
+      if (
+        initialResponse.UTXOList.length >= effectiveLimit &&
+        this.lastInteraction <= initialRequest.since
+      ) {
+        throw new Error(
+          'GASP peer returned a full page without advancing the synchronization score'
+        )
+      }
+    } while (initialResponse.UTXOList.length >= effectiveLimit)
 
     // 2. Only do the “reply” half if unidirectional is disabled
     if (!this.unidirectional) {
@@ -441,7 +623,7 @@ export class GASP implements GASPRemote {
               UTXO.outputIndex,
               true
             )
-            this.debugLog(`Sending unspent graph node for remote: ${JSON.stringify(outgoingNode)}`)
+            this.debugLog(`Sending unspent graph node ${outgoingNode.graphID} to remote`)
             await this.processOutgoingNode(outgoingNode)
           } catch (e) {
             this.warnLog(
@@ -490,9 +672,13 @@ export class GASP implements GASPRemote {
     }
     this.validateTimestamp(request.since)
     this.validateLimit(request.limit)
+    const effectiveLimit = request.limit ?? DEFAULT_SYNC_PAGE_SIZE
     const response = {
       since: this.lastInteraction,
-      UTXOList: await this.storage.findKnownUTXOs(request.since, request.limit)
+      UTXOList: this.validateUTXOList(
+        await this.storage.findKnownUTXOs(request.since, effectiveLimit),
+        effectiveLimit
+      )
     }
     this.debugLog(`Built initial response: ${JSON.stringify(response)}`)
     return response
@@ -504,14 +690,17 @@ export class GASP implements GASPRemote {
    * @returns A promise for an initial reply
    */
   async getInitialReply(response: GASPInitialResponse): Promise<GASPInitialReply> {
-    this.infoLog(`Received initial response: ${JSON.stringify(response)}`)
-    this.validateTimestamp(response.since)
-    if (!Array.isArray(response.UTXOList)) {
-      throw new TypeError('Invalid UTXO list format')
-    }
-    const knownUTXOs = await this.storage.findKnownUTXOs(response.since)
+    this.infoLog('Received initial response')
+    const validatedResponse = this.validateInitialResponse(response, MAX_SYNC_PAGE_SIZE)
+    const knownUTXOs = this.validateUTXOList(
+      await this.storage.findKnownUTXOs(validatedResponse.since, MAX_SYNC_PAGE_SIZE),
+      MAX_SYNC_PAGE_SIZE
+    )
+    const remoteOutpoints = new Set(
+      validatedResponse.UTXOList.map(item => `${item.txid.toLowerCase()}.${item.outputIndex}`)
+    )
     const filteredUTXOs = knownUTXOs.filter(
-      x => !response.UTXOList.some(y => y.txid === x.txid && y.outputIndex === x.outputIndex)
+      item => !remoteOutpoints.has(`${item.txid.toLowerCase()}.${item.outputIndex}`)
     )
     const reply = {
       UTXOList: filteredUTXOs
@@ -529,11 +718,18 @@ export class GASP implements GASPRemote {
     outputIndex: number,
     metadata: boolean
   ): Promise<GASPNode> {
+    this.deconstruct36ByteStructure(graphID)
+    assertIdentifier(txid, 'GASP requested txid')
+    assertOutputIndex(outputIndex, 'GASP requested output index')
+    if (typeof metadata !== 'boolean') throw new TypeError('GASP metadata flag is invalid')
     this.infoLog(
       `Remote is requesting node with graphID: ${graphID}, txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
     )
-    const node = await this.storage.hydrateGASPNode(graphID, txid, outputIndex, metadata)
-    this.debugLog(`Returning node: ${JSON.stringify(node)}`)
+    const node = this.validateNode(
+      await this.storage.hydrateGASPNode(graphID, txid, outputIndex, metadata),
+      { graphID, txid, outputIndex }
+    )
+    this.debugLog(`Returning node ${node.graphID}`)
     return node
   }
 
@@ -542,12 +738,16 @@ export class GASP implements GASPRemote {
    * Also finalizes or discards a graph if no additional data is requested from the foreign instance.
    */
   async submitNode(node: GASPNode): Promise<GASPNodeResponse | void> {
-    this.infoLog(`Remote party is submitting node: ${JSON.stringify(node)}`)
-    await this.storage.appendToGraph(node)
-    const requestedInputs = await this.storage.findNeededInputs(node)
+    const validatedNode = this.validateNode(node)
+    this.infoLog(`Remote party is submitting node: ${validatedNode.graphID}`)
+    await this.storage.appendToGraph(validatedNode)
+    const response = await this.storage.findNeededInputs(validatedNode)
+    const requestedInputs = response === undefined ? undefined : this.validateNodeResponse(response)
     this.debugLog(`Requested inputs: ${JSON.stringify(requestedInputs)}`)
     if (!requestedInputs) {
-      await this.completeGraph(node.graphID)
+      if (!(await this.completeGraph(validatedNode.graphID))) {
+        throw new Error(`GASP graph ${validatedNode.graphID} failed validation`)
+      }
     }
     return requestedInputs
   }
@@ -556,18 +756,21 @@ export class GASP implements GASPRemote {
    * Handles the completion of a newly-synced graph
    * @param {string} graphID The ID of the newly-synced graph
    */
-  async completeGraph(graphID: string): Promise<void> {
+  async completeGraph(graphID: string): Promise<boolean> {
+    this.deconstruct36ByteStructure(graphID)
     this.infoLog(`Completing newly-synced graph: ${graphID}`)
     try {
       await this.storage.validateGraphAnchor(graphID)
       this.debugLog(`Graph validated for node: ${graphID}`)
       await this.storage.finalizeGraph(graphID)
       this.infoLog(`Graph finalized for node: ${graphID}`)
+      return true
     } catch (e) {
       this.warnLog(
         `Error validating graph: ${(e as Error).message}. Discarding graph for node: ${graphID}`
       )
       await this.storage.discardGraph(graphID)
+      return false
     }
   }
 
@@ -579,17 +782,20 @@ export class GASP implements GASPRemote {
   private async processIncomingNode(
     node: GASPNode,
     spentBy?: string,
-    seenNodes = new Set()
+    seenNodes = new Set<string>()
   ): Promise<void> {
-    const nodeId = `${this.computeTXID(node.rawTx)}.${node.outputIndex}`
-    this.debugLog(`Processing incoming node: ${JSON.stringify(node)}, spentBy: ${spentBy}`)
+    const validatedNode = this.validateNode(node)
+    const nodeId = `${this.computeTXID(validatedNode.rawTx)}.${validatedNode.outputIndex}`
+    this.debugLog(`Processing incoming node ${nodeId}, spentBy: ${spentBy ?? 'root'}`)
     if (seenNodes.has(nodeId)) {
       this.debugLog(`Node ${nodeId} already processed, skipping.`)
       return // Prevent infinite recursion
     }
+    if (seenNodes.size >= MAX_GRAPH_NODES) throw new Error('GASP graph exceeds the node limit')
     seenNodes.add(nodeId)
-    await this.storage.appendToGraph(node, spentBy)
-    const neededInputs = await this.storage.findNeededInputs(node)
+    await this.storage.appendToGraph(validatedNode, spentBy)
+    const response = await this.storage.findNeededInputs(validatedNode)
+    const neededInputs = response === undefined ? undefined : this.validateNodeResponse(response)
     this.debugLog(`Needed inputs for node ${nodeId}: ${JSON.stringify(neededInputs)}`)
     if (neededInputs) {
       await this.runConcurrently(
@@ -599,11 +805,17 @@ export class GASP implements GASPRemote {
           this.infoLog(
             `Requesting new node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
           )
-          const newNode = await this.remote.requestNode(node.graphID, txid, outputIndex, metadata)
-          this.debugLog(`Received new node: ${JSON.stringify(newNode)}`)
+          const newNode = this.validateNode(
+            await this.remote.requestNode(validatedNode.graphID, txid, outputIndex, metadata),
+            { graphID: validatedNode.graphID, txid, outputIndex }
+          )
+          this.debugLog(`Received new node for ${txid}.${outputIndex}`)
           await this.processIncomingNode(
             newNode,
-            this.compute36ByteStructure(this.computeTXID(node.rawTx), node.outputIndex),
+            this.compute36ByteStructure(
+              this.computeTXID(validatedNode.rawTx),
+              validatedNode.outputIndex
+            ),
             seenNodes
           )
         }
@@ -615,24 +827,27 @@ export class GASP implements GASPRemote {
    * Processes an outgoing node to the remote participant.
    * @param node The outgoing GASP node.
    */
-  private async processOutgoingNode(node: GASPNode, seenNodes = new Set()): Promise<void> {
+  private async processOutgoingNode(node: GASPNode, seenNodes = new Set<string>()): Promise<void> {
     if (this.unidirectional) {
       this.debugLog(`Skipping outgoing node processing in unidirectional mode.`)
       return
     }
 
-    const nodeId = `${this.computeTXID(node.rawTx)}.${node.outputIndex}`
-    this.debugLog(`Processing outgoing node: ${JSON.stringify(node)}`)
+    const validatedNode = this.validateNode(node)
+    const nodeId = `${this.computeTXID(validatedNode.rawTx)}.${validatedNode.outputIndex}`
+    this.debugLog(`Processing outgoing node ${nodeId}`)
     if (seenNodes.has(nodeId)) {
       this.debugLog(`Node ${nodeId} already processed, skipping.`)
       return // Prevent infinite recursion
     }
+    if (seenNodes.size >= MAX_GRAPH_NODES) throw new Error('GASP graph exceeds the node limit')
     seenNodes.add(nodeId)
 
     // Attempt to submit the node to the remote
-    const response = await this.remote.submitNode(node)
-    this.debugLog(`Received response for submitted node: ${JSON.stringify(response)}`)
-    if (response) {
+    const rawResponse = await this.remote.submitNode(validatedNode)
+    const response = rawResponse === undefined ? undefined : this.validateNodeResponse(rawResponse)
+    this.debugLog(`Received response for submitted node ${nodeId}`)
+    if (response !== undefined) {
       await this.runConcurrently(
         Object.entries(response.requestedInputs),
         async ([outpoint, { metadata }]) => {
@@ -642,13 +857,18 @@ export class GASP implements GASPRemote {
               `Hydrating node for txid: ${txid}, outputIndex: ${outputIndex}, metadata: ${metadata}`
             )
             const hydratedNode = await this.storage.hydrateGASPNode(
-              node.graphID,
+              validatedNode.graphID,
               txid,
               outputIndex,
               metadata
             )
-            this.debugLog(`Hydrated node: ${JSON.stringify(hydratedNode)}`)
-            await this.processOutgoingNode(hydratedNode, seenNodes)
+            const validatedHydratedNode = this.validateNode(hydratedNode, {
+              graphID: validatedNode.graphID,
+              txid,
+              outputIndex
+            })
+            this.debugLog(`Hydrated node ${txid}.${outputIndex}`)
+            await this.processOutgoingNode(validatedHydratedNode, seenNodes)
           } catch (e) {
             this.errorLog(`Error hydrating node: ${(e as Error).message}`)
             // If we can't send the outgoing node, we just stop. The remote won't validate the anchor, and their temporary graph will be discarded.

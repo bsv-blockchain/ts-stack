@@ -1,17 +1,26 @@
 import { LookupDiscovery, LookupDiscoveryUpdate } from './LookupDiscovery.js'
 import { LookupHostQueue } from './LookupHostQueue.js'
 import { readLookupResponseBytes } from './LookupResponseReader.js'
-import { DEFAULT_LOOKUP_LIMITS, LookupLimits, LookupResourceLimitError, lookupLimits, normalizeLookupHost, lookupAbortError, withLookupAbort } from './LookupResources.js'
+import {
+  DEFAULT_LOOKUP_LIMITS,
+  LookupLimits,
+  LookupResourceLimitError,
+  lookupLimits,
+  normalizeLookupHost,
+  lookupAbortError,
+  withLookupAbort
+} from './LookupResources.js'
 export type { LookupLimits } from './LookupResources.js'
 export { DEFAULT_LOOKUP_LIMITS, LookupResourceLimitError } from './LookupResources.js'
-import { Transaction } from '../transaction/index.js'
+import Transaction from '../transaction/Transaction.js'
 import { Beef } from '../transaction/Beef.js'
-import OverlayAdminTokenTemplate from './OverlayAdminTokenTemplate.js'
-import * as Utils from '../primitives/utils.js'
-import { sha256 } from '../primitives/Hash.js'
+import { decodeAndVerifyOverlayAdvertisement } from './OverlayAdminTokenTemplate.js'
+import { Reader, toHex, toSafeString } from '../primitives/utils.js'
 import { getOverlayHostReputationTracker, HostReputationTracker } from './HostReputationTracker.js'
 import { Telemetry, TelemetryConfig } from '../telemetry/Telemetry.js'
 import { normalizeBRC100ByteFields, stringifyBRC100 } from '../wallet/BRC100ByteEncoding.js'
+import { createPublicNetworkFetch } from '../storage/PublicHTTPSFetch.js'
+import { utf8ByteLength } from '../primitives/UTF8.js'
 
 const defaultFetch: typeof fetch =
   typeof globalThis !== 'undefined' && typeof globalThis.fetch === 'function'
@@ -139,8 +148,7 @@ export interface LookupQueryOptions {
 
 /** Additive evidence intake, independent of the legacy aggregated answer. */
 export type LookupEvidenceEvent =
-  | { type: 'output'; host: string; output: LookupAnswer['outputs'][number] }
-  | { type: 'limit' }
+  { type: 'output'; host: string; output: LookupAnswer['outputs'][number] } | { type: 'limit' }
 
 /** Info supplied to onUnreachableHost callbacks. */
 export interface UnreachableHostInfo {
@@ -205,7 +213,7 @@ export interface LookupResolution {
 }
 
 /** Default SLAP trackers */
-export const DEFAULT_SLAP_TRACKERS: string[] = [
+export const DEFAULT_SLAP_TRACKERS: string[] = Object.freeze([
   // BSVA clusters
   'https://overlay-us-1.bsvb.tech',
   'https://overlay-eu-1.bsvb.tech',
@@ -220,19 +228,19 @@ export const DEFAULT_SLAP_TRACKERS: string[] = [
 
   // DISCLAIMER:
   // Trackers known to host invalid or illegal records will be removed at the discretion of the BSV Association.
-]
+] as string[]) as unknown as string[]
 
 /** Default testnet SLAP trackers */
-export const DEFAULT_TESTNET_SLAP_TRACKERS: string[] = [
+export const DEFAULT_TESTNET_SLAP_TRACKERS: string[] = Object.freeze([
   // Babbage primary testnet overlay service
   'https://testnet-users.bapp.dev'
-]
+] as string[]) as unknown as string[]
 
 /** Default TerraTestNet SLAP trackers. */
-export const DEFAULT_TTN_SLAP_TRACKERS: string[] = [
+export const DEFAULT_TTN_SLAP_TRACKERS: string[] = Object.freeze([
   // Canonical staging root; kept separate from testnet to prevent cross-chain discovery.
   'https://staging-overlay.babbage.systems'
-]
+] as string[]) as unknown as string[]
 
 /** Public overlay network presets understood by lookup and SHIP routing. */
 export type LookupNetworkPreset = 'mainnet' | 'testnet' | 'teratestnet' | 'local'
@@ -241,6 +249,14 @@ const MAX_TRACKER_WAIT_TIME = 5000
 const DEFAULT_LOOKUP_TIMEOUT = 2000
 const DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS = 60_000
 const MAX_NOTIFICATION_DEDUP_ENTRIES = 512
+const MAX_LOOKUP_RESPONSE_BYTES = 32 * 1024 * 1024
+const MAX_LOOKUP_REQUEST_BYTES = 1024 * 1024
+const MAX_LOOKUP_OUTPUTS = DEFAULT_LOOKUP_LIMITS.maxOutputs
+const MAX_LOOKUP_CONTEXT_BYTES = 1024 * 1024
+const MAX_LOOKUP_BEEF_BYTES = MAX_LOOKUP_RESPONSE_BYTES
+const MAX_AGGREGATED_BEEF_BYTES = 64 * 1024 * 1024
+const MAX_QUERY_HOSTS = 32
+const MAX_LOOKUP_TIMEOUT_MS = 60_000
 
 export type LookupHTTPErrorKind = 'semantic' | 'availability'
 
@@ -270,48 +286,177 @@ function lookupErrorMessage(error: unknown): string {
 }
 
 function isByteArray(value: unknown): value is number[] {
-  return (
-    Array.isArray(value) && value.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
-  )
+  if (!Array.isArray(value)) return false
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (
+      descriptor == null ||
+      !('value' in descriptor) ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      return false
+    }
+  }
+  return true
 }
 
-function isLookupOutput(value: unknown): value is LookupAnswer['outputs'][number] {
-  if (typeof value !== 'object' || value === null) return false
-  const output = value as Record<string, unknown>
-  if (!isByteArray(output.beef) || output.beef.length === 0) return false
-  if (!Number.isInteger(output.outputIndex) || (output.outputIndex as number) < 0) return false
-  if (output.context !== undefined && !isByteArray(output.context)) return false
+function dataRecord(value: unknown): Record<string, unknown> | undefined {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return undefined
+  const result = Object.create(null) as Record<string, unknown>
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (typeof key !== 'string' || descriptor == null || !('value' in descriptor)) return undefined
+    Object.defineProperty(result, key, {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      writable: true,
+      value: descriptor.value
+    })
+  }
+  return result
+}
+
+function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
+  return dataRecord(value) != null
+}
+
+function normalizeLookupOutput(value: unknown): LookupAnswer['outputs'][number] | undefined {
+  const output = dataRecord(value)
+  if (output == null) return undefined
+  if (
+    !isByteArray(output.beef) ||
+    output.beef.length === 0 ||
+    output.beef.length > MAX_LOOKUP_BEEF_BYTES
+  )
+    return undefined
+  if (
+    !Number.isInteger(output.outputIndex) ||
+    (output.outputIndex as number) < 0 ||
+    (output.outputIndex as number) > 0xffffffff
+  )
+    return undefined
+  if (
+    output.context !== undefined &&
+    (!isByteArray(output.context) || output.context.length > MAX_LOOKUP_CONTEXT_BYTES)
+  )
+    return undefined
   if (
     output.txid !== undefined &&
     (typeof output.txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(output.txid))
   )
-    return false
-  return true
+    return undefined
+  const normalized = Object.assign(Object.create(null) as LookupAnswer['outputs'][number], output)
+  normalized.beef = output.beef.slice()
+  normalized.outputIndex = output.outputIndex as number
+  if (output.context !== undefined) normalized.context = output.context.slice()
+  if (output.txid !== undefined) normalized.txid = output.txid
+  return normalized
 }
 
-function isOutputListAnswer(value: unknown): value is LookupAnswer {
-  if (typeof value !== 'object' || value === null) return false
-  const answer = value as Record<string, unknown>
+function isLookupOutput(value: unknown): value is LookupAnswer['outputs'][number] {
+  const output = dataRecord(value)
+  if (output == null) return false
+  if (
+    !isByteArray(output.beef) ||
+    output.beef.length === 0 ||
+    output.beef.length > MAX_LOOKUP_BEEF_BYTES
+  ) {
+    return false
+  }
+  if (
+    !Number.isInteger(output.outputIndex) ||
+    (output.outputIndex as number) < 0 ||
+    (output.outputIndex as number) > 0xffffffff
+  ) {
+    return false
+  }
+  if (
+    output.context !== undefined &&
+    (!isByteArray(output.context) || output.context.length > MAX_LOOKUP_CONTEXT_BYTES)
+  ) {
+    return false
+  }
   return (
-    answer.type === 'output-list' &&
-    Array.isArray(answer.outputs) &&
-    answer.outputs.every(isLookupOutput)
+    output.txid === undefined ||
+    (typeof output.txid === 'string' && /^[0-9a-fA-F]{64}$/.test(output.txid))
   )
 }
 
+function normalizeOutputListAnswer(value: unknown): LookupAnswer | undefined {
+  const answer = dataRecord(value)
+  if (answer == null) return undefined
+  if (
+    answer.type !== 'output-list' ||
+    !Array.isArray(answer.outputs) ||
+    answer.outputs.length > MAX_LOOKUP_OUTPUTS
+  )
+    return undefined
+  const outputs: LookupAnswer['outputs'] = []
+  for (let index = 0; index < answer.outputs.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(answer.outputs, index)
+    if (descriptor == null || !('value' in descriptor)) return undefined
+    const output = normalizeLookupOutput(descriptor.value)
+    if (output == null) return undefined
+    outputs.push(output)
+  }
+  return Object.assign(Object.create(null) as LookupAnswer, answer, {
+    type: 'output-list' as const,
+    outputs
+  })
+}
+
+function isOutputListAnswer(value: unknown): value is LookupAnswer {
+  const answer = dataRecord(value)
+  if (
+    answer?.type !== 'output-list' ||
+    !Array.isArray(answer.outputs) ||
+    answer.outputs.length > MAX_LOOKUP_OUTPUTS
+  ) {
+    return false
+  }
+  for (let index = 0; index < answer.outputs.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(answer.outputs, index)
+    if (descriptor == null || !('value' in descriptor) || !isLookupOutput(descriptor.value)) {
+      return false
+    }
+  }
+  return true
+}
+
+function normalizeFreeformAnswer(value: unknown): LookupFreeformAnswer | undefined {
+  const answer = dataRecord(value)
+  if (answer == null || answer.type !== 'freeform' || !Object.hasOwn(answer, 'result')) {
+    return undefined
+  }
+  return Object.assign(Object.create(null) as LookupFreeformAnswer, answer, {
+    type: 'freeform' as const,
+    result: answer.result
+  })
+}
+
 function isFreeformAnswer(value: unknown): value is LookupFreeformAnswer {
-  if (typeof value !== 'object' || value === null) return false
-  const answer = value as Record<string, unknown>
-  return answer.type === 'freeform' && Object.hasOwn(answer, 'result')
+  const answer = dataRecord(value)
+  return answer?.type === 'freeform' && Object.hasOwn(answer, 'result')
+}
+
+function normalizeLookupAnswer(value: unknown): LookupFacilitatorAnswer | undefined {
+  return normalizeOutputListAnswer(value) ?? normalizeFreeformAnswer(value)
 }
 
 function lookupAnswerRetainedBytes(answer: LookupAnswer): number {
   let retained = 0
-  for (const output of answer.outputs) retained += output.beef.length + (output.context?.length ?? 0)
+  for (const output of answer.outputs)
+    retained += output.beef.length + (output.context?.length ?? 0)
   return retained
 }
 
-function copyLookupOutput(output: LookupAnswer['outputs'][number]): LookupAnswer['outputs'][number] {
+function copyLookupOutput(
+  output: LookupAnswer['outputs'][number]
+): LookupAnswer['outputs'][number] {
   return {
     ...output,
     beef: output.beef.slice(),
@@ -356,7 +501,7 @@ function normalizeLookupError(err: unknown, timedOut: boolean): Error {
   if (timedOut) return new Error('Request timed out')
   if ((err as { name?: string })?.name === 'AbortError') return new Error('Request timed out')
   if (err instanceof Error) return err
-  return new Error(Utils.toSafeString(err, 'Unknown error'))
+  return new Error(toSafeString(err, 'Unknown error'))
 }
 
 /**
@@ -368,6 +513,75 @@ function isOctetStream(contentType: string | null): boolean {
   if (typeof contentType !== 'string') return false
   const baseType = contentType.split(';', 1)[0].trim().toLowerCase()
   return baseType === 'application/octet-stream'
+}
+
+function canonicalOverlayEndpoint(
+  base: string,
+  path: 'lookup' | 'submit',
+  allowHTTP: boolean
+): URL {
+  const httpEnabled = allowHTTP === true
+  if (typeof base !== 'string' || base.length === 0 || base.length > 2048) {
+    throw new TypeError('Overlay host must be a bounded absolute URL.')
+  }
+  let url: URL
+  try {
+    url = new URL(base)
+  } catch {
+    throw new TypeError('Overlay host must be a valid absolute URL.')
+  }
+  if (
+    (url.protocol !== 'https:' && !(httpEnabled && url.protocol === 'http:')) ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== '' ||
+    (url.pathname !== '' && url.pathname !== '/')
+  ) {
+    throw new Error(
+      httpEnabled
+        ? 'Overlay host must be a credential-free HTTP(S) origin.'
+        : 'HTTPS facilitator can only use URLs that start with "https:" and contain a credential-free origin.'
+    )
+  }
+  url.pathname = `/${path}`
+  return url
+}
+
+function configuredHosts(value: unknown, label: string, allowHTTP: boolean): string[] {
+  if (!Array.isArray(value) || value.length > MAX_QUERY_HOSTS) {
+    throw new TypeError(`${label} must be an array of at most ${MAX_QUERY_HOSTS} hosts.`)
+  }
+  const hosts: string[] = []
+  const seen = new Set<string>()
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    const host = descriptor != null && 'value' in descriptor ? descriptor.value : undefined
+    if (typeof host !== 'string') throw new TypeError(`${label} contains an invalid host.`)
+    const canonical = canonicalOverlayEndpoint(host, 'lookup', allowHTTP).origin
+    if (seen.has(canonical)) throw new TypeError(`${label} contains a duplicate host.`)
+    seen.add(canonical)
+    hosts.push(canonical)
+  }
+  return hosts
+}
+
+function configuredHostMap(
+  value: unknown,
+  label: string,
+  allowHTTP: boolean
+): Record<string, string[]> {
+  if (!isPlainDataRecord(value)) throw new TypeError(`${label} must be a plain object.`)
+  const entries = Object.entries(value)
+  if (entries.length > 256) throw new TypeError(`${label} contains too many services.`)
+  const result: Record<string, string[]> = Object.create(null)
+  for (const [service, hosts] of entries) {
+    if (!/^ls_[A-Za-z0-9_-]{1,124}$/.test(service)) {
+      throw new TypeError(`${label} service names must be bounded ls_ identifiers: ${service}`)
+    }
+    result[service] = configuredHosts(hosts, `${label} for ${service}`, allowHTTP)
+  }
+  return result
 }
 
 /** Internal cache options. Kept optional to preserve drop-in compatibility. */
@@ -454,7 +668,12 @@ export interface LookupResolverConfig {
   networkPreset?: LookupNetworkPreset
   /** The facilitator used to make requests to Overlay Services hosts. */
   facilitator?: OverlayLookupFacilitator
-  /** The list of SLAP trackers queried to resolve Overlay Services hosts for a given lookup service. */
+  /**
+   * The list of SLAP trackers queried to resolve Overlay Services hosts for a
+   * given lookup service. Signed advertisement fields are authenticated
+   * locally, but these trackers remain authoritative for current/unspent
+   * advertisement state and must be selected accordingly.
+   */
   slapTrackers?: string[]
   /** Map of lookup service names to arrays of hosts to use in place of resolving via SLAP. */
   hostOverrides?: Record<string, string[]>
@@ -499,15 +718,23 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
   fetchClient: typeof fetch
   allowHTTP: boolean
 
-  constructor(httpClient = defaultFetch, allowHTTP: boolean = false) {
-    if (typeof httpClient !== 'function') {
+  constructor(httpClient?: typeof fetch, allowHTTP: boolean = false) {
+    if (httpClient === null) {
       throw new TypeError(
         'HTTPSOverlayLookupFacilitator requires a fetch implementation. ' +
           'In environments without fetch, provide a polyfill or custom implementation.'
       )
     }
-    this.fetchClient = httpClient
-    this.allowHTTP = allowHTTP
+    const httpEnabled = allowHTTP === true
+    const selectedClient = httpClient ?? (httpEnabled ? defaultFetch : createPublicNetworkFetch())
+    if (typeof selectedClient !== 'function') {
+      throw new TypeError(
+        'HTTPSOverlayLookupFacilitator requires a fetch implementation. ' +
+          'In environments without fetch, provide a polyfill or custom implementation.'
+      )
+    }
+    this.fetchClient = selectedClient
+    this.allowHTTP = httpEnabled
   }
 
   async lookup(
@@ -517,8 +744,9 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     signal?: AbortSignal,
     options?: LookupRequestOptions
   ): Promise<LookupFacilitatorAnswer> {
-    if (!url.startsWith('https:') && !this.allowHTTP) {
-      throw new Error('HTTPS facilitator can only use URLs that start with "https:"')
+    const endpoint = canonicalOverlayEndpoint(url, 'lookup', this.allowHTTP)
+    if (!Number.isFinite(timeout) || timeout < 0 || timeout > MAX_LOOKUP_TIMEOUT_MS) {
+      throw new RangeError('Overlay lookup timeout is outside the permitted range.')
     }
 
     const controller = typeof AbortController === 'undefined' ? undefined : new AbortController()
@@ -532,7 +760,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     // AbortController signal alone is insufficient to make the returned promise
     // resolve or reject. Race the fetch against a setTimeout-backed reject so
     // the consumer-facing promise always settles within `timeout` ms.
-    const fetchPromise = this.performLookupRequest(url, question, controller?.signal, options)
+    const fetchPromise = this.performLookupRequest(endpoint, question, controller?.signal, options)
     // Swallow background rejection if the deadline wins first.
     fetchPromise.catch(() => {
       /* noop */
@@ -551,11 +779,15 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
   }
 
   private async performLookupRequest(
-    url: string,
+    endpoint: URL,
     question: LookupQuestion,
     signal: AbortSignal | undefined,
     options?: LookupRequestOptions
   ): Promise<LookupFacilitatorAnswer> {
+    const body = stringifyBRC100({ service: question.service, query: question.query })
+    if (utf8ByteLength(body) > MAX_LOOKUP_REQUEST_BYTES) {
+      throw new RangeError('Overlay lookup request exceeds the maximum permitted size.')
+    }
     const fco: RequestInit = {
       method: 'POST',
       headers: {
@@ -573,9 +805,13 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       redirect: 'error',
       signal
     }
-    const response: Response = await this.fetchClient(`${url}/lookup`, fco)
+    const response: Response = await this.fetchClient(endpoint.toString(), fco)
     if (signal?.aborted === true || !response.ok) {
-      try { void response.body?.cancel().catch(() => {}) } catch { /* best-effort body cleanup */ }
+      try {
+        void response.body?.cancel().catch(() => {})
+      } catch {
+        /* best-effort body cleanup */
+      }
       if (signal?.aborted === true) throw lookupAbortError()
       // 408/429 are availability/backpressure signals. Other 4xx responses
       // reject this request but do not prove that the host is unavailable, so
@@ -590,40 +826,70 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
           : 'semantic'
       throw new LookupHTTPError(response.status, kind, response.statusText)
     }
-    const payload = await readLookupResponseBytes(response, {
-      signal,
-      maxResponseBytes: options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes,
-      consumeBytes: options?.consumeBytes
-    })
-    if (isOctetStream(response.headers.get('content-type'))) {
-      return await this.parseOctetStreamLookup(payload, signal, options)
+    const maxResponseBytes = options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes
+    let answer: unknown
+    if (response.body == null && typeof response.json === 'function') {
+      // Compatibility for injected fetch clients without a WHATWG body stream.
+      // Native fetch responses always use the incrementally bounded path below.
+      const encoded = stringifyBRC100(await response.json())
+      const encodedBytes = utf8ByteLength(encoded)
+      if (encodedBytes > maxResponseBytes) throw new LookupResourceLimitError('maxResponseBytes')
+      options?.consumeBytes?.(encodedBytes)
+      answer = JSON.parse(encoded)
+    } else {
+      const payload = await readLookupResponseBytes(response, {
+        signal,
+        maxResponseBytes,
+        consumeBytes: options?.consumeBytes
+      })
+      if (isOctetStream(response.headers.get('content-type'))) {
+        return await this.parseOctetStreamLookup(payload, signal, options)
+      }
+      let text: string
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(payload)
+      } catch {
+        throw new Error('Overlay response is not valid UTF-8.')
+      }
+      answer = JSON.parse(text)
     }
-    const answer = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(payload))
-    if (
-      answer != null &&
-      typeof answer === 'object' &&
-      !Array.isArray(answer) &&
-      answer.type === 'output-list' &&
-      Array.isArray(answer.outputs)
-    ) {
-      if (answer.outputs.length > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs)) throw new LookupResourceLimitError('maxOutputs')
-      for (const output of answer.outputs) {
+    const answerRecord = dataRecord(answer)
+    if (answerRecord?.type === 'output-list' && Array.isArray(answerRecord.outputs)) {
+      const outputs = answerRecord.outputs
+      if (outputs.length > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs))
+        throw new LookupResourceLimitError('maxOutputs')
+      for (const output of outputs) {
         normalizeBRC100ByteFields(output, ['beef', 'context'])
       }
     }
-    return answer
+    const normalizedAnswer = normalizeLookupAnswer(answer)
+    if (normalizedAnswer == null) throw new Error('Malformed lookup response')
+    return normalizedAnswer
   }
 
   /** Parse the aggregated octet-stream lookup response into an output-list LookupAnswer. */
-  private async parseOctetStreamLookup(payload: Uint8Array, signal?: AbortSignal, options?: LookupRequestOptions): Promise<LookupAnswer> {
-    const r = new Utils.Reader(Array.from(payload))
+  private async parseOctetStreamLookup(
+    payload: Uint8Array,
+    signal?: AbortSignal,
+    options?: LookupRequestOptions
+  ): Promise<LookupAnswer> {
+    const r = new Reader(Array.from(payload))
     const nOutpoints = r.readVarIntNum()
-    if (!Number.isSafeInteger(nOutpoints) || nOutpoints < 0 || nOutpoints > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs)) throw new LookupResourceLimitError('maxOutputs')
+    if (
+      !Number.isSafeInteger(nOutpoints) ||
+      nOutpoints < 0 ||
+      nOutpoints > (options?.maxOutputs ?? DEFAULT_LOOKUP_LIMITS.maxOutputs)
+    )
+      throw new LookupResourceLimitError('maxOutputs')
     const outpoints: Array<{ txid: string; outputIndex: number; context?: number[] }> = []
     for (let i = 0; i < nOutpoints; i++) {
-      const txid = Utils.toHex(r.read(32))
-      const outputIndex = r.readVarIntNum()
-      const contextLength = r.readVarIntNum()
+      const txid = toHex(r.read(32))
+      const outputIndex = r.readVarIntNumStrict(false)
+      if (outputIndex > 0xffffffff) throw new Error('Overlay output index is out of range.')
+      const contextLength = r.readVarIntNumStrict(false)
+      if (contextLength > MAX_LOOKUP_CONTEXT_BYTES) {
+        throw new Error('Overlay output context exceeds the maximum permitted size.')
+      }
       const context = contextLength > 0 ? r.read(contextLength) : undefined
       outpoints.push({ txid, outputIndex, context })
     }
@@ -641,6 +907,7 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
     options?: LookupRequestOptions
   ): Promise<Array<{ outputIndex: number; context?: number[]; beef: number[]; txid: string }>> {
     const beefByTxid = new Map<string, number[]>()
+    let generatedBeefBytes = 0
     const outputs: Array<{
       outputIndex: number
       context?: number[]
@@ -654,10 +921,15 @@ export class HTTPSOverlayLookupFacilitator implements OverlayLookupFacilitator {
       let beefBytes = beefByTxid.get(x.txid)
       if (beefBytes === undefined) {
         beefBytes = beefObj.toBinaryAtomic(x.txid)
+        generatedBeefBytes += beefBytes.length
+        if (generatedBeefBytes > MAX_AGGREGATED_BEEF_BYTES) {
+          throw new Error('Aggregated overlay BEEF exceeds the maximum permitted size.')
+        }
         beefByTxid.set(x.txid, beefBytes)
       }
       extractedBytes += beefBytes.length + (x.context?.length ?? 0)
-      if (extractedBytes > (options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes)) throw new LookupResourceLimitError('maxResponseBytes')
+      if (extractedBytes > (options?.maxResponseBytes ?? DEFAULT_LOOKUP_LIMITS.maxResponseBytes))
+        throw new LookupResourceLimitError('maxResponseBytes')
       outputs[idx] = {
         outputIndex: x.outputIndex,
         context: x.context,
@@ -738,54 +1010,93 @@ class LookupQuerySession {
     this.limitsHit.add(name)
     if (!this.limitNotificationSent && this.accepting) {
       this.limitNotificationSent = true
-      try { void Promise.resolve(this.options.onEvidence?.({ type: 'limit' })).catch(() => {}) } catch { /* consumer isolation */ }
+      try {
+        void Promise.resolve(this.options.onEvidence?.({ type: 'limit' })).catch(() => {})
+      } catch {
+        /* consumer isolation */
+      }
     }
     if (this.terminalReason === 'settled') this.terminalReason = 'resource-limit'
     this.wake()
   }
 
-  receiveEvidence(host: string, answer: LookupAnswer, callback: LookupQueryOptions['onEvidence']): void {
+  receiveEvidence(
+    host: string,
+    answer: LookupAnswer,
+    callback: LookupQueryOptions['onEvidence']
+  ): void {
     if (callback === undefined || this.closed || !this.accepting || this.evidenceLimited) return
     const deliver = (event: LookupEvidenceEvent): void => {
-      try { void Promise.resolve(callback(event)).catch(() => {}) } catch { /* consumer isolation */ }
+      try {
+        void Promise.resolve(callback(event)).catch(() => {})
+      } catch {
+        /* consumer isolation */
+      }
     }
     for (const output of answer.outputs) {
       if (!this.accepting || this.closed) break
       const bytes = output.beef.length + (output.context?.length ?? 0)
-      if (this.evidenceOutputs >= this.options.limits.maxEvidenceOutputs ||
-          bytes > this.options.limits.maxEvidenceBytes - this.evidenceBytes) {
+      if (
+        this.evidenceOutputs >= this.options.limits.maxEvidenceOutputs ||
+        bytes > this.options.limits.maxEvidenceBytes - this.evidenceBytes
+      ) {
         this.evidenceLimited = true
-        this.limit(this.evidenceOutputs >= this.options.limits.maxEvidenceOutputs ? 'maxEvidenceOutputs' : 'maxEvidenceBytes')
+        this.limit(
+          this.evidenceOutputs >= this.options.limits.maxEvidenceOutputs
+            ? 'maxEvidenceOutputs'
+            : 'maxEvidenceBytes'
+        )
         break
       }
       this.evidenceOutputs++
       this.evidenceBytes += bytes
-      deliver({ type: 'output', host, output: {
-        ...output, beef: output.beef.slice(),
-        ...(output.context === undefined ? {} : { context: output.context.slice() })
-      } })
+      deliver({
+        type: 'output',
+        host,
+        output: {
+          ...output,
+          beef: output.beef.slice(),
+          ...(output.context === undefined ? {} : { context: output.context.slice() })
+        }
+      })
     }
   }
 
   recordOutputAnswer(answer: LookupAnswer): void {
     if (this.closed || !this.accepting) return
     this.successfulHosts++
-    if (answer.outputs.length === 0) { this.emptyHosts++; return }
+    if (answer.outputs.length === 0) {
+      this.emptyHosts++
+      return
+    }
     this.mergeAnswer(answer)
     if (this.firstResponseAt === null) {
       this.firstResponseAt = Date.now()
-      if (this.options.graceMs > 0) this.graceTimer = setTimeout(() => {
-        this.graceFired = true; this.wake()
-      }, this.options.graceMs)
+      if (this.options.graceMs > 0)
+        this.graceTimer = setTimeout(() => {
+          this.graceFired = true
+          this.wake()
+        }, this.options.graceMs)
       else this.graceFired = true
     }
     this.wake()
   }
 
-  recordFreeformAnswer(): void { if (!this.closed) this.freeformHosts++ }
-  recordRejection(): void { if (!this.closed) this.rejectedHosts++ }
-  recordAvailabilityFailure(): void { if (!this.closed) this.failedHosts++ }
-  recordDone(): void { if (!this.closed) { this.completedHosts++; this.wake() } }
+  recordFreeformAnswer(): void {
+    if (!this.closed) this.freeformHosts++
+  }
+  recordRejection(): void {
+    if (!this.closed) this.rejectedHosts++
+  }
+  recordAvailabilityFailure(): void {
+    if (!this.closed) this.failedHosts++
+  }
+  recordDone(): void {
+    if (!this.closed) {
+      this.completedHosts++
+      this.wake()
+    }
+  }
 
   private mergeAnswer(answer: LookupAnswer): void {
     const now = Date.now()
@@ -794,25 +1105,44 @@ class LookupQuerySession {
       if (txId === null) continue
       const key = `${txId}.${output.outputIndex}`
       if (this.outputsMap.has(key)) continue
-      if (this.outputsMap.size >= this.options.limits.maxOutputs) { this.limit('maxOutputs'); break }
+      if (this.outputsMap.size >= this.options.limits.maxOutputs) {
+        this.limit('maxOutputs')
+        break
+      }
       this.outputsMap.set(key, output)
       this.txIds.push(txId)
     }
   }
 
-  finish(error?: unknown): void { this.failure = error; this.finished = true; this.wake() }
+  finish(error?: unknown): void {
+    this.failure = error
+    this.finished = true
+    this.wake()
+  }
 
   snapshot(isFinal: boolean): LookupAnswerProgress {
     return {
-      type: 'output-list', outputs: Array.from(this.outputsMap.values()), txIds: this.txIds.slice(),
-      isFinal, hostCount: this.hostCount, completedHosts: this.completedHosts,
-      successfulHosts: this.successfulHosts, emptyHosts: this.emptyHosts, failedHosts: this.failedHosts,
-      rejectedHosts: this.rejectedHosts, freeformHosts: this.freeformHosts,
+      type: 'output-list',
+      outputs: Array.from(this.outputsMap.values()),
+      txIds: this.txIds.slice(),
+      isFinal,
+      hostCount: this.hostCount,
+      completedHosts: this.completedHosts,
+      successfulHosts: this.successfulHosts,
+      emptyHosts: this.emptyHosts,
+      failedHosts: this.failedHosts,
+      rejectedHosts: this.rejectedHosts,
+      freeformHosts: this.freeformHosts,
       discoveryComplete: this.discoveryComplete,
       ...(isFinal ? { terminalReason: this.terminalReason } : {}),
-      discoveredHosts: this.discoveredHosts, skippedHosts: this.skippedHosts,
-      receivedBytes: this.receivedBytes, retainedBytes: this.retainedBytes, evidenceBytes: this.evidenceBytes, trackersTotal: this.trackersTotal,
-      trackersCompleted: this.trackersCompleted, trackersFailed: this.trackersFailed,
+      discoveredHosts: this.discoveredHosts,
+      skippedHosts: this.skippedHosts,
+      receivedBytes: this.receivedBytes,
+      retainedBytes: this.retainedBytes,
+      evidenceBytes: this.evidenceBytes,
+      trackersTotal: this.trackersTotal,
+      trackersCompleted: this.trackersCompleted,
+      trackersFailed: this.trackersFailed,
       limitsHit: Array.from(this.limitsHit),
       ...(this.correlationId !== undefined ? { correlationId: this.correlationId } : {})
     }
@@ -828,7 +1158,10 @@ class LookupQuerySession {
 
   async *progress(): AsyncIterable<LookupAnswerProgress> {
     if (typeof this.options.softTimeoutMs === 'number' && this.options.softTimeoutMs >= 0) {
-      this.softTimer = setTimeout(() => { this.softFired = true; this.wake() }, this.options.softTimeoutMs)
+      this.softTimer = setTimeout(() => {
+        this.softFired = true
+        this.wake()
+      }, this.options.softTimeoutMs)
     }
     try {
       while (!this.closed) {
@@ -843,10 +1176,14 @@ class LookupQuerySession {
           yield this.snapshot(false)
         } else {
           this.dirty = false
-          await new Promise<void>(resolve => { this.waiter = resolve })
+          await new Promise<void>(resolve => {
+            this.waiter = resolve
+          })
         }
       }
-    } finally { this.close() }
+    } finally {
+      this.close()
+    }
   }
 }
 
@@ -913,7 +1250,7 @@ export default class LookupResolver {
   private readonly hostsTtlMs: number
   private readonly hostsMaxEntries: number
 
-  private readonly txMemo: Map<string, { txId: string; expiresAt: number }>
+  private readonly txMemo: WeakMap<number[], { txId: string; expiresAt: number }>
   private readonly txMemoTtlMs: number
 
   /**
@@ -926,15 +1263,27 @@ export default class LookupResolver {
 
   constructor(config: LookupResolverConfig = {}) {
     this.limits = lookupLimits(config.limits)
-    this.networkPreset = config.networkPreset ?? 'mainnet'
-    this.facilitator =
-      config.facilitator ??
-      new HTTPSOverlayLookupFacilitator(undefined, this.networkPreset === 'local')
-    this.slapTrackers = config.slapTrackers ?? this.defaultSlapTrackers()
-    const hostOverrides = config.hostOverrides ?? {}
-    this.assertValidOverrideServices(hostOverrides)
-    this.hostOverrides = hostOverrides
-    this.additionalHosts = config.additionalHosts ?? {}
+    const networkPreset = config.networkPreset ?? 'mainnet'
+    if (!['mainnet', 'testnet', 'teratestnet', 'local'].includes(networkPreset)) {
+      throw new TypeError('Lookup network preset is invalid.')
+    }
+    this.networkPreset = networkPreset
+    const allowHTTP = this.networkPreset === 'local'
+    if (config.facilitator !== undefined && typeof config.facilitator?.lookup !== 'function') {
+      throw new TypeError('Lookup facilitator must provide a lookup function.')
+    }
+    this.facilitator = config.facilitator ?? new HTTPSOverlayLookupFacilitator(undefined, allowHTTP)
+    this.slapTrackers = configuredHosts(
+      config.slapTrackers ?? this.defaultSlapTrackers(),
+      'SLAP trackers',
+      allowHTTP
+    )
+    this.hostOverrides = configuredHostMap(config.hostOverrides ?? {}, 'Host overrides', allowHTTP)
+    this.additionalHosts = configuredHostMap(
+      config.additionalHosts ?? {},
+      'Additional hosts',
+      allowHTTP
+    )
     this.telemetry = new Telemetry(config.telemetry)
 
     const rs = config.reputationStorage
@@ -952,13 +1301,30 @@ export default class LookupResolver {
     }
 
     // cache tuning
-    this.hostsTtlMs = config.cache?.hostsTtlMs ?? 5 * 60 * 1000 // 5 min
-    this.hostsMaxEntries = config.cache?.hostsMaxEntries ?? 128
-    this.txMemoTtlMs = config.cache?.txMemoTtlMs ?? 10 * 60 * 1000 // 10 min
+    this.hostsTtlMs = this.validCacheInteger(
+      config.cache?.hostsTtlMs,
+      5 * 60 * 1000,
+      7 * 24 * 60 * 60 * 1000,
+      'hostsTtlMs',
+      true
+    )
+    this.hostsMaxEntries = this.validCacheInteger(
+      config.cache?.hostsMaxEntries,
+      128,
+      1024,
+      'hostsMaxEntries'
+    )
+    this.txMemoTtlMs = this.validCacheInteger(
+      config.cache?.txMemoTtlMs,
+      10 * 60 * 1000,
+      7 * 24 * 60 * 60 * 1000,
+      'txMemoTtlMs',
+      true
+    )
 
     this.hostsCache = new Map()
     this.hostsInFlight = new Map()
-    this.txMemo = new Map()
+    this.txMemo = new WeakMap()
     this.advertisedBy = new Map()
     this.lastUnreachableNotificationAt = new Map()
   }
@@ -974,6 +1340,20 @@ export default class LookupResolver {
       case 'local':
         return []
     }
+  }
+
+  private validCacheInteger(
+    value: number | undefined,
+    fallback: number,
+    maximum: number,
+    name: string,
+    allowZero: boolean = false
+  ): number {
+    if (value === undefined) return fallback
+    if (!Number.isSafeInteger(value) || value < (allowZero ? 0 : 1) || value > maximum) {
+      throw new RangeError(`Lookup cache ${name} is outside the permitted range.`)
+    }
+    return value
   }
 
   /**
@@ -1071,13 +1451,9 @@ export default class LookupResolver {
     }
   }
 
-  private unreachableNotificationCooldown(
-    options: LookupQueryOptions | undefined
-  ): number {
+  private unreachableNotificationCooldown(options: LookupQueryOptions | undefined): number {
     const requested = options?.unreachableHostNotificationCooldownMs
-    return typeof requested === 'number' &&
-      Number.isFinite(requested) &&
-      requested >= 0
+    return typeof requested === 'number' && Number.isFinite(requested) && requested >= 0
       ? requested
       : DEFAULT_UNREACHABLE_NOTIFICATION_COOLDOWN_MS
   }
@@ -1093,13 +1469,9 @@ export default class LookupResolver {
     const notificationKey = `${service}\u0000${host}`
     const now = Date.now()
     const lastNotificationAt =
-      this.lastUnreachableNotificationAt.get(notificationKey) ??
-      Number.NEGATIVE_INFINITY
+      this.lastUnreachableNotificationAt.get(notificationKey) ?? Number.NEGATIVE_INFINITY
     if (now - lastNotificationAt < cooldownMs) return
-    if (
-      this.lastUnreachableNotificationAt.size >=
-      MAX_NOTIFICATION_DEDUP_ENTRIES
-    ) {
+    if (this.lastUnreachableNotificationAt.size >= MAX_NOTIFICATION_DEDUP_ENTRIES) {
       this.evictOldest(this.lastUnreachableNotificationAt)
     }
     this.lastUnreachableNotificationAt.set(notificationKey, now)
@@ -1138,19 +1510,10 @@ export default class LookupResolver {
       return
     }
     session.recordFreeformAnswer()
-    this.captureHostTelemetry(
-      service,
-      host,
-      'freeform',
-      Date.now() - hostStartedAt,
-      correlationId
-    )
+    this.captureHostTelemetry(service, host, 'freeform', Date.now() - hostStartedAt, correlationId)
   }
 
-  private recordLookupHostFailure(
-    context: LookupHostFailureContext,
-    error: unknown
-  ): void {
+  private recordLookupHostFailure(context: LookupHostFailureContext, error: unknown): void {
     const {
       session,
       service,
@@ -1172,13 +1535,7 @@ export default class LookupResolver {
       error
     )
     if (!semanticRejection) {
-      this.notifyUnreachableHost(
-        host,
-        service,
-        error,
-        onUnreachableHost,
-        notificationCooldownMs
-      )
+      this.notifyUnreachableHost(host, service, error, onUnreachableHost, notificationCooldownMs)
     }
   }
 
@@ -1187,15 +1544,21 @@ export default class LookupResolver {
    * settle; each new host enters the bounded queue immediately. Caller abort,
    * deadline and iterator close release this query's ownership.
    */
-  query$(question: LookupQuestion, timeout?: number, options?: LookupQueryOptions): AsyncIterable<LookupAnswerProgress> {
+  query$(
+    question: LookupQuestion,
+    timeout?: number,
+    options?: LookupQueryOptions
+  ): AsyncIterable<LookupAnswerProgress> {
     const cancellation = new AbortController()
-    const iterator = this.queryProgress(question, timeout, options, cancellation.signal)[Symbol.asyncIterator]()
+    const iterator = this.queryProgress(question, timeout, options, cancellation.signal)[
+      Symbol.asyncIterator
+    ]()
     return {
       [Symbol.asyncIterator]: () => ({
         next: async () => await iterator.next(),
         return: async () => {
           cancellation.abort()
-          return await iterator.return?.() ?? { done: true, value: undefined }
+          return (await iterator.return?.()) ?? { done: true, value: undefined }
         },
         throw: async (error?: unknown) => {
           cancellation.abort()
@@ -1218,7 +1581,11 @@ export default class LookupResolver {
   }
 
   private lookupQueryLimits(options: LookupQueryOptions | undefined): LookupLimits {
-    return lookupLimits(this.limits, options?.limits, this.evidenceLimitOverrides(options?.evidenceLimits))
+    return lookupLimits(
+      this.limits,
+      options?.limits,
+      this.evidenceLimitOverrides(options?.evidenceLimits)
+    )
   }
 
   /**
@@ -1325,7 +1692,9 @@ export default class LookupResolver {
       graceMs: options?.graceMs ?? 80,
       softTimeoutMs: options?.softTimeoutMs,
       waitForAllHosts: options?.waitForAllHosts ?? options?.holdForUnknownHosts ?? false,
-      correlationId: options?.correlationId ?? (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined),
+      correlationId:
+        options?.correlationId ??
+        (this.telemetry.enabled ? this.telemetry.createCorrelationId() : undefined),
       limits,
       onEvidence: options?.onEvidence,
       resolveTxId: (output, now) => this.resolveTxIdForOutput(output, now)
@@ -1373,10 +1742,14 @@ export default class LookupResolver {
       throw new LookupResourceLimitError('maxTotalBytes')
     }
     run.session.retainedBytes += retained
-    const ownedAnswer: LookupAnswer = {
-      type: 'output-list',
-      outputs: answer.outputs.map(copyLookupOutput)
-    }
+    const now = Date.now()
+    const outputs = answer.outputs.map(output => {
+      const txId = this.resolveTxIdForOutput(output, now)
+      const owned = copyLookupOutput(output)
+      if (txId !== null) this.txMemo.set(owned.beef, { txId, expiresAt: now + this.txMemoTtlMs })
+      return owned
+    })
+    const ownedAnswer: LookupAnswer = { type: 'output-list', outputs }
     run.session.receiveEvidence(host, ownedAnswer, run.options?.onEvidence)
     return ownedAnswer
   }
@@ -1392,23 +1765,36 @@ export default class LookupResolver {
       run.session.limit(error.limit)
       return
     }
-    this.recordLookupHostFailure({
-      session: run.session,
-      service: run.question.service,
-      host,
-      hostStartedAt: startedAt,
-      correlationId: run.session.correlationId,
-      onUnreachableHost: run.options?.onUnreachableHost,
-      notificationCooldownMs: this.unreachableNotificationCooldown(run.options)
-    }, error)
+    this.recordLookupHostFailure(
+      {
+        session: run.session,
+        service: run.question.service,
+        host,
+        hostStartedAt: startedAt,
+        correlationId: run.session.correlationId,
+        onUnreachableHost: run.options?.onUnreachableHost,
+        notificationCooldownMs: this.unreachableNotificationCooldown(run.options)
+      },
+      error
+    )
   }
 
-  private async settleQueuedLookupHost(run: LookupQueryRun, host: string, startedAt: number): Promise<void> {
-    const answer = await this.lookupHostWithTracking(host, run.question, run.timeout, run.controller.signal, {
-      maxResponseBytes: run.limits.maxResponseBytes,
-      maxOutputs: run.limits.maxOutputs,
-      consumeBytes: bytes => this.consumeLookupQueryBytes(run, bytes)
-    })
+  private async settleQueuedLookupHost(
+    run: LookupQueryRun,
+    host: string,
+    startedAt: number
+  ): Promise<void> {
+    const answer = await this.lookupHostWithTracking(
+      host,
+      run.question,
+      run.timeout,
+      run.controller.signal,
+      {
+        maxResponseBytes: run.limits.maxResponseBytes,
+        maxOutputs: run.limits.maxOutputs,
+        consumeBytes: bytes => this.consumeLookupQueryBytes(run, bytes)
+      }
+    )
     if (this.lookupQueryStopped(run)) return
     const ownedAnswer = this.retainLookupHostAnswer(run, host, answer)
     if (this.lookupQueryStopped(run)) return
@@ -1435,7 +1821,11 @@ export default class LookupResolver {
     }
   }
 
-  private collectAdmittedLookupHosts(run: LookupQueryRun, source: string, candidates: string[]): string[] {
+  private collectAdmittedLookupHosts(
+    run: LookupQueryRun,
+    source: string,
+    candidates: string[]
+  ): string[] {
     const hosts: string[] = []
     const scanLimit = Math.min(candidates.length, run.limits.maxHosts * 4)
     if (candidates.length > scanLimit) {
@@ -1507,7 +1897,9 @@ export default class LookupResolver {
 
   private lookupCacheHasAvailableHost(cached: LookupHostsCacheEntry | undefined): boolean {
     if (cached === undefined) return false
-    return cached.hosts.some(host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now())
+    return cached.hosts.some(
+      host => (this.hostReputation.snapshot(host)?.backoffUntil ?? 0) <= Date.now()
+    )
   }
 
   private planLookupDiscovery(run: LookupQueryRun): LookupDiscoveryPlan {
@@ -1525,7 +1917,8 @@ export default class LookupResolver {
       !cacheFresh ||
       !cacheHasAvailableHost
     const initialSources =
-      Number(cached !== undefined && cacheHasAvailableHost) + Number(configuredAdditional.length > 0)
+      Number(cached !== undefined && cacheHasAvailableHost) +
+      Number(configuredAdditional.length > 0)
     const trackerShare = Math.max(1, Math.min(this.slapTrackers.length, run.limits.maxTrackers))
     const initialQuota = refresh
       ? Math.max(1, Math.floor(run.limits.maxHosts / (initialSources + trackerShare)))
@@ -1533,24 +1926,37 @@ export default class LookupResolver {
     return { key, cached, configuredAdditional, cacheHasAvailableHost, refresh, initialQuota }
   }
 
-  private reuseCachedLookupDiscovery(run: LookupQueryRun, cached: LookupHostsCacheEntry | undefined): void {
+  private reuseCachedLookupDiscovery(
+    run: LookupQueryRun,
+    cached: LookupHostsCacheEntry | undefined
+  ): void {
     run.session.discoveryComplete = cached?.discoveryComplete ?? true
     run.session.trackersFailed = cached?.trackersFailed ?? 0
     for (const name of cached?.limitsHit ?? []) run.session.limit(name)
     this.finishLookupSources(run)
   }
 
-  private selectSlapTrackers(run: LookupQueryRun): { trackers: string[], normalized: string[] } {
+  private selectSlapTrackers(run: LookupQueryRun): { trackers: string[]; normalized: string[] } {
     const scan = Math.min(this.slapTrackers.length, run.limits.maxTrackers)
     const selected = Array.from(
       { length: scan },
-      (_unused, offset) => this.slapTrackers[(this.trackerCursor + offset) % this.slapTrackers.length]
+      (_unused, offset) =>
+        this.slapTrackers[(this.trackerCursor + offset) % this.slapTrackers.length]
     )
     this.trackerCursor = (this.trackerCursor + scan) % Math.max(1, this.slapTrackers.length)
-    const normalized = Array.from(new Set(selected.map(host => normalizeLookupHost(host)).filter((host): host is string => host !== null)))
+    const normalized = Array.from(
+      new Set(
+        selected
+          .map(host => normalizeLookupHost(host))
+          .filter((host): host is string => host !== null)
+      )
+    )
     try {
       return {
-        trackers: this.prepareHostsForQuery(normalized.slice(0, run.limits.maxTrackers), 'SLAP trackers'),
+        trackers: this.prepareHostsForQuery(
+          normalized.slice(0, run.limits.maxTrackers),
+          'SLAP trackers'
+        ),
         normalized
       }
     } catch (error) {
@@ -1576,9 +1982,12 @@ export default class LookupResolver {
         consumeBytes: charge
       }
     )
-    const hosts = isOutputListAnswer(answer) ? this.extractHostsFromAnswer(answer, run.question.service) : []
+    const hosts = isOutputListAnswer(answer)
+      ? await this.extractHostsFromAnswer(answer, run.question.service)
+      : []
     for (const host of hosts) {
-      if (this.advertisedBy.size >= this.hostsMaxEntries * run.limits.maxHosts) this.evictOldest(this.advertisedBy)
+      if (this.advertisedBy.size >= this.hostsMaxEntries * run.limits.maxHosts)
+        this.evictOldest(this.advertisedBy)
       this.advertisedBy.set(host, tracker)
     }
     return hosts
@@ -1594,7 +2003,10 @@ export default class LookupResolver {
     if (this.hostsInFlight.get(key) !== discovery) return
     this.hostsInFlight.delete(key)
     if (abandoned) return
-    const hosts = Array.from(new Set(Array.from(state.sources.values()).flat())).slice(0, run.limits.maxHosts)
+    const hosts = Array.from(new Set(Array.from(state.sources.values()).flat())).slice(
+      0,
+      run.limits.maxHosts
+    )
     this.rememberDiscoveredHosts(run.question.service, hosts, run.limits, state)
   }
 
@@ -1604,10 +2016,13 @@ export default class LookupResolver {
     discovery = new LookupDiscovery(
       selected.trackers,
       run.limits,
-      async (tracker, signal, charge) => await this.lookupSlapTrackerHosts(run, tracker, signal, charge),
-      (state, abandoned) => this.completeLookupDiscoveryRefresh(run, key, discovery, state, abandoned)
+      async (tracker, signal, charge) =>
+        await this.lookupSlapTrackerHosts(run, tracker, signal, charge),
+      (state, abandoned) =>
+        this.completeLookupDiscoveryRefresh(run, key, discovery, state, abandoned)
     )
-    if (this.slapTrackers.length > run.limits.maxTrackers) discovery.state.limitsHit.add('maxTrackers')
+    if (this.slapTrackers.length > run.limits.maxTrackers)
+      discovery.state.limitsHit.add('maxTrackers')
     if (
       selected.normalized.length !== this.slapTrackers.length ||
       selected.trackers.length < Math.min(selected.normalized.length, run.limits.maxTrackers)
@@ -1637,10 +2052,22 @@ export default class LookupResolver {
   private admitDiscoveredLookupSources(run: LookupQueryRun): void {
     const plan = this.planLookupDiscovery(run)
     if (plan.cached !== undefined && plan.cacheHasAvailableHost) {
-      this.admitQuotaLimitedLookupHosts(run, 'cache', plan.cached.hosts, plan.initialQuota, 'maxHosts')
+      this.admitQuotaLimitedLookupHosts(
+        run,
+        'cache',
+        plan.cached.hosts,
+        plan.initialQuota,
+        'maxHosts'
+      )
     }
     if (plan.configuredAdditional.length > 0) {
-      this.admitQuotaLimitedLookupHosts(run, 'additional', plan.configuredAdditional, plan.initialQuota, 'maxHosts')
+      this.admitQuotaLimitedLookupHosts(
+        run,
+        'additional',
+        plan.configuredAdditional,
+        plan.initialQuota,
+        'maxHosts'
+      )
     }
     if (plan.refresh) this.refreshLookupDiscovery(run, plan)
     else this.reuseCachedLookupDiscovery(run, plan.cached)
@@ -1735,12 +2162,23 @@ export default class LookupResolver {
     this.assertLookupDeadline(deadlineMs)
     if (this.activeQueries >= 128) throw new LookupResourceLimitError('activeQueries')
     this.activeQueries++
-    const run = this.createLookupQueryRun(question, timeout, options, limits, iteratorSignal, deadlineMs)
+    const run = this.createLookupQueryRun(
+      question,
+      timeout,
+      options,
+      limits,
+      iteratorSignal,
+      deadlineMs
+    )
     try {
       this.beginLookupQueryRun(run)
       for await (const progress of run.session.progress()) {
         if (progress.isFinal) {
-          this.captureLookupCompletedTelemetry(question.service, progress, Date.now() - run.session.startedAt)
+          this.captureLookupCompletedTelemetry(
+            question.service,
+            progress,
+            Date.now() - run.session.startedAt
+          )
           this.cleanupLookupQueryRun(run)
         }
         yield progress
@@ -1753,16 +2191,20 @@ export default class LookupResolver {
   /**
    * Extracts competent host domains from a SLAP tracker response.
    */
-  private extractHostsFromAnswer(answer: LookupAnswer, service: string): string[] {
+  private async extractHostsFromAnswer(answer: LookupAnswer, service: string): Promise<string[]> {
     const hosts: string[] = []
     if (answer.type !== 'output-list') return hosts
     for (const output of answer.outputs) {
       try {
         const tx = Transaction.fromBEEF(output.beef)
-        const script = tx.outputs[output.outputIndex]?.lockingScript
+        const txid = tx.id('hex')
+        if (output.txid !== undefined && output.txid.toLowerCase() !== txid) continue
+        const selectedOutput = tx.outputs[output.outputIndex]
+        if (selectedOutput == null || selectedOutput.satoshis !== 1) continue
+        const script = selectedOutput.lockingScript
         if (typeof script !== 'object' || script === null) continue
-        const parsed = OverlayAdminTokenTemplate.decode(script)
-        if (parsed.topicOrService !== service || parsed.protocol !== 'SLAP') continue
+        const parsed = await decodeAndVerifyOverlayAdvertisement(script, 'SLAP')
+        if (parsed.topicOrService !== service) continue
         if (typeof parsed.domain === 'string' && parsed.domain.length > 0) {
           hosts.push(parsed.domain)
         }
@@ -1776,24 +2218,22 @@ export default class LookupResolver {
   /**
    * Resolve a txid for an aggregated lookup output. Uses the threaded-through `output.txid`
    * fast path when present; otherwise memoizes Transaction.fromBEEF(beef).id('hex') keyed by
-   * the BEEF byte sequence. Returns null when the BEEF is unparseable.
+   * the resolver-owned BEEF copy. Returns null when the BEEF is unparseable.
    */
   private resolveTxIdForOutput(
     output: { txid?: string; beef: number[]; outputIndex: number; context?: number[] },
     now: number
   ): string | null {
-    if (typeof output.txid === 'string' && output.txid.length > 0) {
-      return output.txid
-    }
-    const keyForBeef = Utils.toHex(sha256(output.beef))
-    const memo = this.txMemo.get(keyForBeef)
+    const memo = this.txMemo.get(output.beef)
     if (typeof memo === 'object' && memo !== null && memo.expiresAt > now) {
+      if (output.txid !== undefined && output.txid.toLowerCase() !== memo.txId) return null
       return memo.txId
     }
     try {
-      const txId = Transaction.fromBEEF(output.beef).id('hex')
-      if (this.txMemo.size > 4096) this.evictOldest(this.txMemo)
-      this.txMemo.set(keyForBeef, { txId, expiresAt: now + this.txMemoTtlMs })
+      const tx = Transaction.fromBEEF(output.beef)
+      const txId = tx.id('hex')
+      if (output.txid !== undefined && output.txid.toLowerCase() !== txId) return null
+      this.txMemo.set(output.beef, { txId, expiresAt: now + this.txMemoTtlMs })
       return txId
     } catch {
       return null
@@ -1841,18 +2281,29 @@ export default class LookupResolver {
     })
   }
 
-  private assertValidOverrideServices(overrides: Record<string, string[]>): void {
-    for (const service of Object.keys(overrides)) {
-      if (!service.startsWith('ls_')) {
-        throw new Error(`Host override service names must start with "ls_": ${service}`)
-      }
-    }
-  }
-
   private prepareHostsForQuery(hosts: string[], context: string): string[] {
     if (hosts.length === 0) return []
+    const normalized: string[] = []
+    const seen = new Set<string>()
+    for (const host of hosts) {
+      try {
+        const canonical = canonicalOverlayEndpoint(
+          host,
+          'lookup',
+          this.networkPreset === 'local'
+        ).origin
+        if (!seen.has(canonical)) {
+          seen.add(canonical)
+          normalized.push(canonical)
+        }
+      } catch {
+        // An invalid advertised host must not poison otherwise valid discovery.
+      }
+      if (normalized.length >= MAX_QUERY_HOSTS) break
+    }
+    if (normalized.length === 0) return []
     const now = Date.now()
-    const ranked = this.hostReputation.rankHosts(hosts, now)
+    const ranked = this.hostReputation.rankHosts(normalized, now)
     const available = ranked.filter(h => h.backoffUntil <= now).map(h => h.host)
     if (available.length > 0) return available
 
@@ -1934,15 +2385,21 @@ export default class LookupResolver {
     signal: AbortSignal | undefined
   ): LookupFacilitatorAnswer {
     if (signal?.aborted === true) throw lookupAbortError()
-    this.assertTrackedLookupAnswer(answer, options, reportedBytes)
-    if (isOutputListAnswer(answer)) {
+    const normalizedAnswer = normalizeLookupAnswer(answer)
+    if (normalizedAnswer == null) {
+      const malformed = new Error('Malformed lookup response')
+      this.hostReputation.recordFailure(host, malformed)
+      throw malformed
+    }
+    this.assertTrackedLookupAnswer(normalizedAnswer, options, reportedBytes)
+    if (isOutputListAnswer(normalizedAnswer)) {
       this.hostReputation.recordSuccess(host, Date.now() - startedAt)
-      return answer
+      return normalizedAnswer
     }
     // A valid freeform response is neutral: it proves this request reached the
     // service, but it must not erase an availability backoff established by a
     // concurrent failing request and cannot contribute to output aggregation.
-    if (isFreeformAnswer(answer)) return answer
+    if (isFreeformAnswer(normalizedAnswer)) return normalizedAnswer
     const malformed = new Error('Malformed lookup response')
     this.hostReputation.recordFailure(host, malformed)
     throw malformed

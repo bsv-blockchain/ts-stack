@@ -56,7 +56,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Desktop-Token']
   })
 )
-app.use(express.json())
+app.use(express.json({ limit: '64kb', strict: true }))
 
 const server = http.createServer(app)
 

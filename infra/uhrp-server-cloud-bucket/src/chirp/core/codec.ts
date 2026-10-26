@@ -1,7 +1,7 @@
 import {
-  CHIRP_MAGIC,
   CHIRP_MAJOR_VERSION,
   CHIRP_MAX_EXTENSION_BYTES,
+  CHIRP_MAX_EXTENSIONS,
   CHIRP_MAX_NODE_BYTES,
   CHIRP_MEDIA_TYPE_EXTENSION,
   CHIRP_MINOR_VERSION,
@@ -26,6 +26,12 @@ import type {
 const textDecoder = new TextDecoder('utf-8', { fatal: true })
 const textEncoder = new TextEncoder()
 const MEDIA_TYPE = /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/
+const MAX_UINT64 = 0xffffffffffffffffn
+const CANONICAL_CHIRP_MAGIC = Uint8Array.from([0x43, 0x48, 0x49, 0x52, 0x50])
+const EMPTY_SHA256 = Uint8Array.from([
+  0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9, 0x24,
+  0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52, 0xb8, 0x55
+])
 
 export function encodeRootNode(
   node: Omit<CHIRPRootNode, 'majorVersion' | 'minorVersion' | 'nodeKind'>
@@ -33,6 +39,7 @@ export function encodeRootNode(
   validateProfileNumber(node.chunkingProfile)
   validateHash(node.contentHash)
   validateChildren(node.children, true)
+  validateRootShape(node.logicalLength, node.children, node.contentHash)
   if (sumLogicalLength(node.children) !== node.logicalLength) {
     throw new CHIRPError('ERR_CHIRP_LENGTH', 'Root child lengths do not equal logicalLength.')
   }
@@ -68,8 +75,8 @@ export function encodeBranchNode(
 export function decodeCHIRPNode(bytes: Uint8Array): CHIRPNode {
   enforceNodeSize(bytes)
   const reader = new Reader(bytes)
-  const magic = reader.bytes(CHIRP_MAGIC.byteLength)
-  if (!equal(magic, CHIRP_MAGIC)) {
+  const magic = reader.bytes(CANONICAL_CHIRP_MAGIC.byteLength)
+  if (!equal(magic, CANONICAL_CHIRP_MAGIC)) {
     throw new CHIRPError('ERR_CHIRP_MAGIC', 'Object does not begin with CHIRP magic.')
   }
   const majorVersion = reader.uint8()
@@ -91,6 +98,7 @@ export function decodeCHIRPNode(bytes: Uint8Array): CHIRPNode {
     reader.finish()
     validateProfileNumber(chunkingProfile)
     validateChildren(children, true)
+    validateRootShape(logicalLength, children, contentHash)
     if (sumLogicalLength(children) !== logicalLength) {
       throw new CHIRPError('ERR_CHIRP_LENGTH', 'Root child lengths do not equal logicalLength.')
     }
@@ -131,6 +139,9 @@ export function mediaTypeFromRoot(root: CHIRPRootNode): string | null {
 }
 
 export function mediaTypeExtension(mediaType: string): CHIRPExtension {
+  if (typeof mediaType !== 'string') {
+    throw new CHIRPError('ERR_CHIRP_MEDIA_TYPE', 'mediaType must be a string.')
+  }
   const normalized = mediaType.toLowerCase()
   const value = textEncoder.encode(normalized)
   decodeMediaType(value)
@@ -138,11 +149,21 @@ export function mediaTypeExtension(mediaType: string): CHIRPExtension {
 }
 
 export function sumLogicalLength(children: CHIRPChildReference[]): bigint {
-  return children.reduce((total, child) => total + child.logicalLength, 0n)
+  let total = 0n
+  for (const child of children) {
+    total += child.logicalLength
+    if (total > MAX_UINT64) {
+      throw new CHIRPError('ERR_CHIRP_INTEGER_RANGE', 'Child lengths exceed uint64.')
+    }
+  }
+  return total
 }
 
 function commonPrefix(nodeKind: 0 | 1): Uint8Array {
-  return concat(CHIRP_MAGIC, Uint8Array.of(CHIRP_MAJOR_VERSION, CHIRP_MINOR_VERSION, nodeKind))
+  return concat(
+    CANONICAL_CHIRP_MAGIC,
+    Uint8Array.of(CHIRP_MAJOR_VERSION, CHIRP_MINOR_VERSION, nodeKind)
+  )
 }
 
 function encodeChildren(children: CHIRPChildReference[]): Uint8Array {
@@ -177,14 +198,32 @@ function encodeExtensions(extensions: CHIRPExtension[], nodeKind: 0 | 1): Uint8A
 }
 
 function validateChildren(children: CHIRPChildReference[], root: boolean): void {
+  if (!Array.isArray(children)) {
+    throw new CHIRPError('ERR_CHIRP_FANOUT', 'CHIRP children must be an array.')
+  }
   if (children.length > CHIRP_V1_MAX_CHILDREN || (!root && children.length === 0)) {
     throw new CHIRPError(
       'ERR_CHIRP_FANOUT',
       `CHIRP v1 nodes support at most ${CHIRP_V1_MAX_CHILDREN} children.`
     )
   }
-  for (const child of children) {
-    if (child.logicalLength < 0n || child.logicalLength > 0xffffffffffffffffn) {
+  for (let index = 0; index < children.length; index++) {
+    if (!Object.hasOwn(children, index)) {
+      throw new CHIRPError('ERR_CHIRP_FANOUT', 'CHIRP children must be dense.')
+    }
+    const child = children[index]
+    if (
+      child === null ||
+      typeof child !== 'object' ||
+      (child.childKind !== 0 && child.childKind !== 1)
+    ) {
+      throw new CHIRPError('ERR_CHIRP_CHILD_KIND', 'Unsupported CHIRP child kind.')
+    }
+    if (
+      typeof child.logicalLength !== 'bigint' ||
+      child.logicalLength < 0n ||
+      child.logicalLength > MAX_UINT64
+    ) {
       throw new CHIRPError('ERR_CHIRP_INTEGER_RANGE', 'Child length is outside uint64.')
     }
     validateHash(child.objectHash)
@@ -192,9 +231,28 @@ function validateChildren(children: CHIRPChildReference[], root: boolean): void 
 }
 
 function validateExtensions(extensions: CHIRPExtension[], nodeKind: 0 | 1): void {
+  if (!Array.isArray(extensions)) {
+    throw new CHIRPError('ERR_CHIRP_EXTENSION_COUNT', 'CHIRP extensions must be an array.')
+  }
+  if (extensions.length > CHIRP_MAX_EXTENSIONS) {
+    throw new CHIRPError('ERR_CHIRP_EXTENSION_COUNT', 'CHIRP extension count exceeds local limits.')
+  }
   let previous = 0n
   let totalBytes = 0
-  for (const extension of extensions) {
+  for (let index = 0; index < extensions.length; index++) {
+    if (!Object.hasOwn(extensions, index)) {
+      throw new CHIRPError('ERR_CHIRP_EXTENSION_COUNT', 'CHIRP extensions must be dense.')
+    }
+    const extension = extensions[index]
+    if (
+      extension === null ||
+      typeof extension !== 'object' ||
+      typeof extension.type !== 'bigint' ||
+      extension.type > MAX_UINT64 ||
+      !(extension.value instanceof Uint8Array)
+    ) {
+      throw new CHIRPError('ERR_CHIRP_EXTENSION_SIZE', 'Invalid CHIRP extension.')
+    }
     if (extension.type <= previous || extension.type === 0n) {
       throw new CHIRPError(
         'ERR_CHIRP_EXTENSION_ORDER',
@@ -260,8 +318,27 @@ function validateProfileNumber(profile: number): void {
 }
 
 function enforceNodeSize(bytes: Uint8Array): void {
+  if (!(bytes instanceof Uint8Array)) {
+    throw new TypeError('CHIRP node bytes must be a Uint8Array.')
+  }
   if (bytes.byteLength > CHIRP_MAX_NODE_BYTES) {
     throw new CHIRPError('ERR_CHIRP_NODE_SIZE', 'CHIRP node exceeds 65,536 bytes.')
+  }
+}
+
+function validateRootShape(
+  logicalLength: bigint,
+  children: CHIRPChildReference[],
+  contentHash: Uint8Array
+): void {
+  if (
+    (logicalLength === 0n && children.length !== 0) ||
+    (logicalLength > 0n && children.length === 0)
+  ) {
+    throw new CHIRPError('ERR_CHIRP_EMPTY', 'CHIRP root has an invalid empty-stream shape.')
+  }
+  if (logicalLength === 0n && !equal(contentHash, EMPTY_SHA256)) {
+    throw new CHIRPError('ERR_CHIRP_CONTENT_HASH', 'Empty CHIRP root has an invalid content hash.')
   }
 }
 
@@ -333,7 +410,7 @@ class Reader {
 
   extensions(nodeKind: 0 | 1): CHIRPExtension[] {
     const count = this.compactSize()
-    if (count > 1024n) {
+    if (count > BigInt(CHIRP_MAX_EXTENSIONS)) {
       throw new CHIRPError(
         'ERR_CHIRP_EXTENSION_COUNT',
         'CHIRP extension count exceeds local limits.'

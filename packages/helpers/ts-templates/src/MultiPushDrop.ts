@@ -1,25 +1,107 @@
-import {
-  ScriptTemplate,
-  LockingScript,
-  UnlockingScript,
-  OP,
-  ScriptTemplateUnlock,
-  Utils,
-  Hash,
-  TransactionSignature,
-  Signature,
-  WalletInterface,
+import { hash256 } from '@bsv/sdk/primitives/Hash'
+import { PublicKey, Signature, TransactionSignature } from '@bsv/sdk/primitives'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP, UnlockingScript } from '@bsv/sdk/script'
+import type ScriptChunk from '@bsv/sdk/script/ScriptChunk'
+import type ScriptTemplate from '@bsv/sdk/script/ScriptTemplate'
+import type ScriptTemplateUnlock from '@bsv/sdk/script/ScriptTemplateUnlock'
+import type Transaction from '@bsv/sdk/transaction/Transaction'
+import type {
+  PubKeyHex,
   SecurityLevel,
   WalletCounterparty,
-  Transaction,
-  PubKeyHex
-} from '@bsv/sdk'
-import { createMinimallyEncodedScriptChunk } from './mandala-encoding.js'
+  WalletInterface
+} from '@bsv/sdk/wallet/Wallet.interfaces'
+import { createMinimallyEncodedScriptChunk, decodeScriptNumChunk } from './mandala-encoding.js'
+import { boundPreimage, resolveBoundSource, signatureScope } from './signing-context.js'
 
-// Helper to ensure a value is not null or undefined
-function verifyTruthy<T>(v: T | undefined | null, err?: string): T {
-  if (v === null || v === undefined) throw new Error(err || 'Value must not be null or undefined')
-  return v
+const MAX_LOCKING_KEYS = 120
+
+function requireDenseBytes(value: unknown, name: string): number[] {
+  if (!Array.isArray(value)) throw new TypeError(`${name} must be a dense byte array`)
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+    if (
+      descriptor == null ||
+      !('value' in descriptor) ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 0xff
+    ) {
+      throw new TypeError(`${name} must be a dense byte array`)
+    }
+  }
+  return value as number[]
+}
+
+function requireCanonicalPush(chunk: ScriptChunk | undefined, name: string): number[] {
+  if (chunk == null) throw new Error(`Invalid MultiPushDrop script: missing ${name}`)
+  let data: number[]
+  if (chunk.op === OP.OP_0) data = []
+  else if (chunk.op === OP.OP_1NEGATE) data = [0x81]
+  else if (chunk.op >= OP.OP_1 && chunk.op <= OP.OP_16) data = [chunk.op - OP.OP_1 + 1]
+  else if (chunk.data != null) data = requireDenseBytes(chunk.data, name)
+  else throw new Error(`Invalid MultiPushDrop script: ${name} is not a data push`)
+
+  const canonical = createMinimallyEncodedScriptChunk(data)
+  if (
+    canonical.op !== chunk.op ||
+    (canonical.data === undefined) !== (chunk.data === undefined) ||
+    canonical.data?.some((byte, index) => byte !== chunk.data?.[index]) === true
+  ) {
+    throw new Error(`Invalid MultiPushDrop script: ${name} is not minimally encoded`)
+  }
+  return data
+}
+
+function requireCompressedPublicKey(value: unknown, name: string): PubKeyHex {
+  if (typeof value !== 'string' || !/^(?:02|03)[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`${name} must be a compressed public key`)
+  }
+  const normalized = value.toLowerCase()
+  const key = PublicKey.fromString(normalized)
+  if (!key.validate() || toHex(key.toDER() as number[]) !== normalized) {
+    throw new Error(`${name} must be a valid compressed public key`)
+  }
+  return normalized as PubKeyHex
+}
+
+function requireProtocolID(value: unknown): [SecurityLevel, string] {
+  if (
+    !Array.isArray(value) ||
+    value.length !== 2 ||
+    !Number.isInteger(value[0]) ||
+    value[0] < 0 ||
+    value[0] > 2 ||
+    typeof value[1] !== 'string' ||
+    value[1].length < 5 ||
+    value[1].length > 400
+  ) {
+    throw new Error(
+      'protocolID must contain a security level from 0 to 2 and a 5-400 character name'
+    )
+  }
+  return value as [SecurityLevel, string]
+}
+
+function requireKeyID(value: unknown): string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > 800) {
+    throw new Error('keyID must be a 1-800 character string')
+  }
+  return value
+}
+
+function requireCounterparty(value: unknown, name: string): WalletCounterparty {
+  if (value === 'self' || value === 'anyone') return value
+  return requireCompressedPublicKey(value, name)
+}
+
+function expectOpcode(chunks: ScriptChunk[], cursor: number, opcode: number, name: string): number {
+  const chunk = chunks[cursor]
+  if (chunk == null || chunk.op !== opcode || chunk.data !== undefined) {
+    throw new Error(`Invalid MultiPushDrop script: expected ${name}`)
+  }
+  return cursor + 1
 }
 
 /**
@@ -57,49 +139,65 @@ export class MultiPushDrop implements ScriptTemplate {
    * @throws {Error} If the script structure is not a valid MultiPushDrop script.
    */
   static decode(script: LockingScript): MultiPushDropDecoded {
+    if (!(script instanceof LockingScript)) {
+      throw new TypeError('MultiPushDrop script must be a LockingScript')
+    }
     const chunks = script.chunks
     let cursor = 0
 
-    // Decode keys until they stop being 33 bytes long
     const lockingPublicKeys: PubKeyHex[] = []
-    while (chunks[cursor].data?.length === 33) {
-      const keyChunk = verifyTruthy(chunks[cursor], `Missing public key chunk ${cursor}`)
-      const keyData = verifyTruthy(keyChunk.data, `Public key chunk ${cursor} has no data`)
-      lockingPublicKeys.push(Utils.toHex(keyData))
+    while (chunks[cursor]?.data?.length === 33) {
+      if (lockingPublicKeys.length >= MAX_LOCKING_KEYS) {
+        throw new Error(`MultiPushDrop supports at most ${MAX_LOCKING_KEYS} locking keys`)
+      }
+      const keyData = requireCanonicalPush(chunks[cursor], `public key chunk ${cursor}`)
+      lockingPublicKeys.push(
+        requireCompressedPublicKey(toHex(keyData), `public key chunk ${cursor}`)
+      )
+      cursor++
+    }
+    if (lockingPublicKeys.length === 0) {
+      throw new Error('Invalid MultiPushDrop script: at least one locking key is required')
+    }
+    if (new Set(lockingPublicKeys).size !== lockingPublicKeys.length) {
+      throw new Error('Invalid MultiPushDrop script: locking keys must be distinct')
+    }
+
+    const keyCountChunk = chunks[cursor]
+    const encodedKeyCount = decodeScriptNumChunk(keyCountChunk ?? { op: -1 })
+    requireCanonicalPush(keyCountChunk, 'locking key count')
+    if (encodedKeyCount !== lockingPublicKeys.length) {
+      throw new Error('Invalid MultiPushDrop script: locking key count does not match key pushes')
+    }
+    cursor++
+    cursor = expectOpcode(chunks, cursor, OP.OP_PICK, 'OP_PICK')
+    cursor = expectOpcode(chunks, cursor, OP.OP_PICK, 'OP_PICK')
+    cursor = expectOpcode(chunks, cursor, OP.OP_DEPTH, 'OP_DEPTH')
+    cursor = expectOpcode(chunks, cursor, OP.OP_1SUB, 'OP_1SUB')
+    cursor = expectOpcode(chunks, cursor, OP.OP_PICK, 'OP_PICK')
+    cursor = expectOpcode(chunks, cursor, OP.OP_SWAP, 'OP_SWAP')
+    cursor = expectOpcode(chunks, cursor, OP.OP_CHECKSIGVERIFY, 'OP_CHECKSIGVERIFY')
+
+    const fields: number[][] = []
+    while (chunks[cursor]?.op !== OP.OP_DROP && chunks[cursor]?.op !== OP.OP_2DROP) {
+      if (cursor >= chunks.length) {
+        throw new Error('Invalid MultiPushDrop script: missing cleanup and final OP_TRUE')
+      }
+      fields.push(requireCanonicalPush(chunks[cursor], `field ${fields.length}`))
       cursor++
     }
 
-    // Skip the nPublicKeys chunk and opcodes.
-    // This amounts to 8 items to skip.
-    cursor += 8
-
-    // Decode Data Fields
-    const fields: number[][] = []
-    for (let i = cursor; i < chunks.length; i++) {
-      const nextOpcode = chunks[i + 1]?.op
-      const chunkData = chunks[i].data ?? [] // Use OP code for OP_0-OP_16 etc. if data is null
-
-      let currentField: number[] = []
-      if (chunkData.length > 0) {
-        currentField = chunkData
-      } else if (chunks[i].op >= OP.OP_1 && chunks[i].op <= OP.OP_16) {
-        currentField = [chunks[i].op - OP.OP_1 + 1]
-      } else if (chunks[i].op === OP.OP_0) {
-        currentField = [] // Represent OP_0 as empty array
-      } else if (chunks[i].op === OP.OP_1NEGATE) {
-        currentField = [0x81]
-      } else if (chunks[i].op === OP.OP_DROP || chunks[i].op === OP.OP_2DROP) {
-        // Stop before the drops
-        break
-      } else {
-        // Assume it's a data push even if data is empty for some reason
-        currentField = chunkData
-      }
-      fields.push(currentField)
-      // If the next opcode is a DROP, we've found the last field
-      if (nextOpcode === OP.OP_DROP || nextOpcode === OP.OP_2DROP) {
-        break
-      }
+    let itemsToDrop = fields.length + lockingPublicKeys.length + 2
+    while (itemsToDrop > 1) {
+      cursor = expectOpcode(chunks, cursor, OP.OP_2DROP, 'OP_2DROP')
+      itemsToDrop -= 2
+    }
+    if (itemsToDrop === 1) {
+      cursor = expectOpcode(chunks, cursor, OP.OP_DROP, 'OP_DROP')
+    }
+    cursor = expectOpcode(chunks, cursor, OP.OP_TRUE, 'final OP_TRUE')
+    if (cursor !== chunks.length) {
+      throw new Error('Invalid MultiPushDrop script: trailing script operations are not allowed')
     }
 
     return {
@@ -135,12 +233,20 @@ export class MultiPushDrop implements ScriptTemplate {
     keyID: string,
     counterparties: WalletCounterparty[]
   ): Promise<LockingScript> {
+    if (!Array.isArray(fields)) throw new TypeError('fields must be an array of byte arrays')
+    fields.forEach((field, index) => requireDenseBytes(field, `fields[${index}]`))
+    requireProtocolID(protocolID)
+    requireKeyID(keyID)
     if (!Array.isArray(counterparties) || counterparties.length === 0) {
       throw new Error('MultiPushDrop requires at least one counterparty.')
     }
+    if (counterparties.length > MAX_LOCKING_KEYS) {
+      throw new Error(`MultiPushDrop supports at most ${MAX_LOCKING_KEYS} counterparties`)
+    }
 
     const publicKeys: string[] = []
-    for (const counterparty of counterparties) {
+    for (let index = 0; index < counterparties.length; index++) {
+      const counterparty = requireCounterparty(counterparties[index], `counterparties[${index}]`)
       const { publicKey } = await this.wallet.getPublicKey(
         {
           protocolID,
@@ -149,7 +255,10 @@ export class MultiPushDrop implements ScriptTemplate {
         },
         this.originator
       )
-      publicKeys.push(publicKey)
+      publicKeys.push(requireCompressedPublicKey(publicKey, `derived public key ${index}`))
+    }
+    if (new Set(publicKeys).size !== publicKeys.length) {
+      throw new Error('MultiPushDrop locking keys must be distinct')
     }
 
     const nPublicKeys = publicKeys.length
@@ -159,7 +268,7 @@ export class MultiPushDrop implements ScriptTemplate {
     for (const publicKeyHex of publicKeys) {
       lockPart.push({
         op: publicKeyHex.length / 2, // Length of compressed pubkey is 33 bytes (66 hex)
-        data: Utils.toArray(publicKeyHex, 'hex')
+        data: toArray(publicKeyHex, 'hex')
       })
     }
 
@@ -220,28 +329,15 @@ export class MultiPushDrop implements ScriptTemplate {
     signOutputs: 'all' | 'none' | 'single' = 'all',
     anyoneCanPay = false
   ): ScriptTemplateUnlock {
+    requireProtocolID(protocolID)
+    requireKeyID(keyID)
+    const validatedCreator = requireCounterparty(creator, 'creator')
     return {
       sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
+        const resolvedScope = signatureScope(tx, inputIndex, signOutputs, anyoneCanPay)
         // Prepare for signing
-        let signatureScope = TransactionSignature.SIGHASH_FORKID
-        if (signOutputs === 'all') signatureScope |= TransactionSignature.SIGHASH_ALL
-        else if (signOutputs === 'none') signatureScope |= TransactionSignature.SIGHASH_NONE
-        else if (signOutputs === 'single') signatureScope |= TransactionSignature.SIGHASH_SINGLE
-        if (anyoneCanPay) signatureScope |= TransactionSignature.SIGHASH_ANYONECANPAY
-        const input = tx.inputs[inputIndex]
-        const currentSourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-        const currentSourceSatoshis =
-          input.sourceTransaction?.outputs[input.sourceOutputIndex].satoshis
-        const currentLockingScript =
-          input.sourceTransaction?.outputs[input.sourceOutputIndex]?.lockingScript
-        if (typeof currentSourceTXID !== 'string')
-          throw new Error('Input sourceTXID or sourceTransaction required for signing.')
-        if (currentSourceSatoshis === undefined)
-          throw new Error('Input sourceSatoshis or sourceTransaction required for signing.')
-        if (currentLockingScript == null)
-          throw new Error('Input lockingScript or sourceTransaction required for signing.')
-        const otherInputs = tx.inputs.filter((_, index) => index !== inputIndex)
-        const decoded = MultiPushDrop.decode(currentLockingScript)
+        const source = resolveBoundSource(tx, inputIndex)
+        const decoded = MultiPushDrop.decode(source.lockingScript as LockingScript)
 
         // Find the index of the unlocker's public key
         let unlockerIndex = -1
@@ -249,7 +345,7 @@ export class MultiPushDrop implements ScriptTemplate {
           {
             protocolID,
             keyID,
-            counterparty: creator,
+            counterparty: validatedCreator,
             forSelf: true
           },
           this.originator
@@ -262,39 +358,27 @@ export class MultiPushDrop implements ScriptTemplate {
         }
         if (unlockerIndex === -1) {
           throw new Error(
-            `Unlocker key derived for counterparty (creator) "${creator}" not found in the list of locking keys.`
+            `Unlocker key derived for counterparty (creator) "${validatedCreator}" not found in the list of locking keys.`
           )
         }
         unlockerIndex = decoded.lockingPublicKeys.length - 1 - unlockerIndex
 
         // Calculate Preimage
-        const preimage = TransactionSignature.format({
-          sourceTXID: currentSourceTXID,
-          sourceOutputIndex: verifyTruthy(input.sourceOutputIndex),
-          sourceSatoshis: currentSourceSatoshis,
-          transactionVersion: tx.version,
-          otherInputs,
-          inputIndex,
-          outputs: tx.outputs,
-          inputSequence: input.sequence ?? 0xffffffff,
-          subscript: currentLockingScript,
-          lockTime: tx.lockTime,
-          scope: signatureScope
-        })
+        const preimage = boundPreimage(tx, inputIndex, source, resolvedScope)
 
         // Create Signature
-        const preimageHash = Hash.hash256(preimage)
+        const preimageHash = hash256(preimage)
         const { signature: bareSignature } = await this.wallet.createSignature(
           {
             hashToDirectlySign: preimageHash,
             protocolID,
             keyID,
-            counterparty: creator
+            counterparty: validatedCreator
           },
           this.originator
         )
         const signature = Signature.fromDER([...bareSignature])
-        const txSignature = new TransactionSignature(signature.r, signature.s, signatureScope)
+        const txSignature = new TransactionSignature(signature.r, signature.s, resolvedScope)
         const sigForScript = txSignature.toChecksigFormat()
 
         // Create Unlocking Script Chunks: <Signature> <Index>
@@ -307,9 +391,9 @@ export class MultiPushDrop implements ScriptTemplate {
       },
       // Estimate length: Signature (~71-73 bytes) + Index push (1 byte for 0-15, potentially more)
       estimateLength: async (): Promise<number> => {
-        // A conservative estimate, usually 73 + 1 = 74
-        // Could potentially be larger if index > 15, but that's rare.
-        return 74
+        // 73-byte checksig-format signature plus its push opcode, and a
+        // minimally encoded key index up to 119 plus its push opcode.
+        return 76
       }
     }
   }

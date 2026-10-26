@@ -284,6 +284,16 @@ export interface ChaintracksStorageBulkFileApi {
   deleteBulkFile(fileId: number): Promise<number>
   getBulkFiles(): Promise<BulkHeaderFileInfo[]>
   getBulkFileData(fileId: number, offset?: number, length?: number): Promise<Uint8Array | undefined>
+
+  /**
+   * Atomically replace the complete bulk-file metadata set and return the
+   * committed records, including identities allocated to new records.
+   *
+   * Implementations must preserve existing stored data when a record with a
+   * `fileId` omits `data`, and must leave the prior set unchanged on failure.
+   * Managers require this capability for updates that affect multiple records.
+   */
+  replaceBulkFiles?(files: BulkHeaderFileInfo[]): Promise<BulkHeaderFileInfo[]>
 }
 
 export interface ChaintracksStorageIngestApi {

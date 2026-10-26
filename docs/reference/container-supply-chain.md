@@ -2,9 +2,9 @@
 id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
-version: '1.2.1'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+version: '1.3.0'
+last_updated: '2026-10-02'
+last_verified: '2026-10-02'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
@@ -15,14 +15,14 @@ tags: [reference, infrastructure, containers, security, releases]
 The infrastructure images are deployable artifacts, so their build inputs,
 review gates, provenance, and rollback identity are part of the public release
 contract. The controls here do not create another service. They make the
-existing seven images auditable and ensure the artifact reviewed by CI is the
+existing eight images auditable and ensure the artifact reviewed by CI is the
 artifact that reaches a registry.
 
 ## Sources of truth
 
 `governance/container-images.json` is the complete release inventory. It owns:
 
-- the seven Docker build contexts and their `linux/amd64` platform;
+- the eight Docker build contexts and their `linux/amd64` platform;
 - the exact digest-pinned Node base and its human-readable expected version;
 - the reviewed runtime-package pins needed to remediate vulnerabilities still
   present in that immutable base;
@@ -93,19 +93,34 @@ GitHub code scanning.
 ## GHCR release
 
 `.github/workflows/infra-release.yaml` accepts an `infra/v*` tag reachable from
-`main`, or a manual dispatch from `main`. For every version not already present
-in GHCR it:
+`main`, a manual dispatch from `main`, or a `workflow_call` from the cascade
+npm release in `release.yaml`. A standalone run qualifies its own exact source
+with the full mutation campaign. A `release.yaml` call reuses that run's
+campaign for `github.sha` and builds from either `github.sha` or the single
+generated infra-sync commit whose parent is `github.sha`; that commit may change
+only `infra/*/package.json`, `infra/*/package-lock.json`,
+`packages/*/package.json`, `pnpm-lock.yaml`, and the generated stack facts.
+Images built from it carry that commit as their OCI revision. For every version
+not already present in GHCR it:
 
 1. resolves the component from the checked-in registry;
 2. builds the image once with commit-derived metadata;
 3. rejects high and critical vulnerabilities;
 4. creates and retains an SPDX JSON SBOM;
-5. pushes that exact reviewed image under both version and source-commit tags;
+5. after the source is qualified, pushes that exact reviewed image under both
+   version and source-commit tags;
 6. publishes GitHub-signed SLSA provenance and SBOM attestations to GitHub and
    GHCR;
 7. keylessly signs the digest and attaches the reviewed SPDX SBOM with Cosign;
 8. verifies the digest, signature, provenance, and both SBOM attestations before
    declaring the release successful.
+
+Steps 2–4 run in a `build-image` job without publishing permissions while the
+mutation campaign qualifies the source. It hands the saved image, its tags,
+image ID and SBOM to the `release` job as a same-run artifact; `release` starts
+only after qualification, loads the image, refuses to publish unless every tag
+resolves to the reviewed image ID, and then performs steps 5–8. A component
+whose build or scan fails has no image to publish and blocks only itself.
 
 Concurrent releases are serialized and never cancelled midway. Existing
 version tags are treated as immutable and skipped rather than overwritten.
@@ -118,7 +133,7 @@ image_ref='ghcr.io/bsv-blockchain/overlay-server@sha256:<digest>'
 docker buildx imagetools inspect "$image_ref"
 cosign verify \
   --certificate-identity-regexp \
-  '^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/infra/v.+|heads/main)$' \
+  '^https://github\.com/bsv-blockchain/ts-stack/\.github/workflows/infra-release\.yaml@refs/(tags/(infra/v.+|release/v.+|v.+)|heads/main)$' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   "$image_ref"
 gh attestation verify "oci://$image_ref" \

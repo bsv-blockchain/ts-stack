@@ -1,11 +1,11 @@
+import { type ValidListActionsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
   Transaction as BsvTransaction,
   ActionStatus,
   ListActionsResult,
   WalletAction,
   WalletActionOutput,
-  WalletActionInput,
-  Validation
+  WalletActionInput
 } from '@bsv/sdk'
 import { StorageIdb } from '../StorageIdb'
 import { partitionActionLabels } from './ListActionsSpecOp'
@@ -16,9 +16,9 @@ import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 
-async function enrichIdbActionLabels (
+async function enrichIdbActionLabels(
   storage: StorageIdb,
-  tx: { transactionId: number, created_at?: any, reference?: string },
+  tx: { transactionId: number; created_at?: any; reference?: string },
   action: WalletAction,
   timeFilterRequested: boolean
 ): Promise<void> {
@@ -35,7 +35,7 @@ async function enrichIdbActionLabels (
   }
 }
 
-async function enrichIdbActionOutputs (
+async function enrichIdbActionOutputs(
   storage: StorageIdb,
   transactionId: number,
   action: WalletAction,
@@ -61,9 +61,9 @@ async function enrichIdbActionOutputs (
   }
 }
 
-async function enrichIdbActionInputs (
+async function enrichIdbActionInputs(
   storage: StorageIdb,
-  tx: { transactionId: number, txid?: string },
+  tx: { transactionId: number; txid?: string },
   action: WalletAction,
   includeSourceLockingScripts: boolean,
   includeUnlockingScripts: boolean
@@ -92,10 +92,10 @@ async function enrichIdbActionInputs (
   }
 }
 
-export async function listActionsIdb (
+export async function listActionsIdb(
   storage: StorageIdb,
   auth: AuthId,
-  vargs: Validation.ValidListActionsArgs
+  vargs: ValidListActionsArgs
 ): Promise<ListActionsResult> {
   const offset = vargs.offset
 
@@ -128,15 +128,20 @@ export async function listActionsIdb (
   const isQueryModeAll = vargs.labelQueryMode === 'all'
   if (isQueryModeAll && labelIds.length < labels.length)
   // all the required labels don't exist, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
   if (!isQueryModeAll && labelIds.length === 0 && labels.length > 0)
   // any and only non-existing labels, impossible to satisfy.
-  { return r }
+  {
+    return r
+  }
 
-  const stati: TransactionStatus[] = (specOp?.setStatusFilter == null)
-    ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
-    : specOp.setStatusFilter()
+  const stati: TransactionStatus[] =
+    specOp?.setStatusFilter == null
+      ? ['completed', 'unprocessed', 'sending', 'unproven', 'unsigned', 'nosend', 'nonfinal']
+      : specOp.setStatusFilter()
 
   const txs = await storage.findTransactions(
     {
@@ -160,7 +165,7 @@ export async function listActionsIdb (
     r.totalActions = (offset || 0) + txs.length
   }
 
-  if ((specOp?.postProcess) != null) {
+  if (specOp?.postProcess != null) {
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)
   }
 
@@ -181,9 +186,16 @@ export async function listActionsIdb (
       txs.map(async (tx, i) => {
         const action = r.actions[i]
         if (vargs.includeLabels) await enrichIdbActionLabels(storage, tx, action, timeFilterRequested)
-        if (vargs.includeOutputs) await enrichIdbActionOutputs(storage, tx.transactionId, action, !!vargs.includeOutputLockingScripts)
+        if (vargs.includeOutputs)
+          await enrichIdbActionOutputs(storage, tx.transactionId, action, !!vargs.includeOutputLockingScripts)
         if (vargs.includeInputs) {
-          await enrichIdbActionInputs(storage, tx, action, !!vargs.includeInputSourceLockingScripts, !!vargs.includeInputUnlockingScripts)
+          await enrichIdbActionInputs(
+            storage,
+            tx,
+            action,
+            !!vargs.includeInputSourceLockingScripts,
+            !!vargs.includeInputUnlockingScripts
+          )
         }
       })
     )

@@ -116,15 +116,17 @@ export async function getBeefForTransactions(
 
 function mergeTarget(options: StorageGetBeefOptions): Beef {
   if (options.mergeToBeef instanceof Beef) return options.mergeToBeef
-  if (options.mergeToBeef != null) return Beef.fromBinary(options.mergeToBeef)
+  if (options.mergeToBeef != null) return Beef.fromBinaryStrict(options.mergeToBeef)
   return new Beef()
 }
 
 function requiresSingleRootPolicy(options: StorageGetBeefOptions): boolean {
-  return options.ignoreStorage === true ||
+  return (
+    options.ignoreStorage === true ||
     options.minProofLevel !== undefined ||
     options.chainTracker != null ||
     options.skipInvalidProofs === true
+  )
 }
 
 async function mergeSingleRootFragments(
@@ -167,9 +169,9 @@ function decodeProvenEntries(
 ): ProvenBeefEntry[] {
   const span = storage.telemetry.enabled
     ? storage.telemetry.startSpan('wallet.storage.beef.decode_proven_batch', {
-      component: 'wallet-storage',
-      attributes: { 'beef.proven_tx_count': unresolved.length }
-    })
+        component: 'wallet-storage',
+        attributes: { 'beef.proven_tx_count': unresolved.length }
+      })
     : undefined
   try {
     const entries = unresolved.map(item => {
@@ -197,9 +199,9 @@ function mergeAllProven(
   const entries = decodeProvenEntries(storage, unresolved, stored)
   const span = storage.telemetry.enabled
     ? storage.telemetry.startSpan('wallet.storage.beef.merge_proven_batch', {
-      component: 'wallet-storage',
-      attributes: { 'beef.proven_tx_count': entries.length }
-    })
+        component: 'wallet-storage',
+        attributes: { 'beef.proven_tx_count': entries.length }
+      })
     : undefined
   try {
     mergeProvenEntries(beef, entries, unresolved, stored)
@@ -303,11 +305,7 @@ function appendNewDependencies(
   }
 }
 
-function needsResolution(
-  beef: Beef,
-  txid: string,
-  hasKnownTxid: (txid: string) => boolean
-): boolean {
+function needsResolution(beef: Beef, txid: string, hasKnownTxid: (txid: string) => boolean): boolean {
   const entry = beef.findTxid(txid)
   return entry == null || (entry.isTxidOnly && !hasKnownTxid(txid))
 }
@@ -325,16 +323,17 @@ async function mergeMissingFragments(
   const fragments = await mapWithConcurrency(
     missing,
     normalizeConcurrency(options.maxConcurrency),
-    async item => await getBeefForTransaction(storage, item.txid, {
-      ...options,
-      ignoreStorage: true,
-      mergeToBeef: undefined
-    })
+    async item =>
+      await getBeefForTransaction(storage, item.txid, {
+        ...options,
+        ignoreStorage: true,
+        mergeToBeef: undefined
+      })
   )
   for (const fragment of fragments) beef.mergeBeef(fragment)
 }
 
-function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
+function makeKnownTxidLookup(knownTxids: string[]): (txid: string) => boolean {
   let lookups = 0
   let indexed: Set<string> | undefined
   return txid => {
@@ -349,9 +348,7 @@ function makeKnownTxidLookup (knownTxids: string[]): (txid: string) => boolean {
 }
 
 function normalizeConcurrency(value: number | undefined = 8): number {
-  return Number.isFinite(value)
-    ? Math.max(1, Math.min(32, Math.floor(value)))
-    : 8
+  return Number.isFinite(value) ? Math.max(1, Math.min(32, Math.floor(value))) : 8
 }
 
 async function mapWithConcurrency<T, R>(
@@ -423,7 +420,7 @@ async function mergeUsableProvenTransaction(
   if (options.chainTracker != null) {
     const root = merklePath.computeRoot()
     const isValid = await options.chainTracker.isValidRootForHeight(root, proven.height)
-    if (!isValid) {
+    if (isValid !== true) {
       if (!options.skipInvalidProofs) {
         throw new WERR_INVALID_MERKLE_ROOT(proven.blockHash, proven.height, root, txid)
       }

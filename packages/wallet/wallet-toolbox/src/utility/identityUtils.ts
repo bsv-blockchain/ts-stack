@@ -2,7 +2,6 @@ import {
   LookupAnswer,
   PushDrop,
   VerifiableCertificate,
-  Utils,
   ProtoWallet,
   LookupResolver,
   DiscoverCertificatesResult,
@@ -16,8 +15,121 @@ import {
   VerifiedTransactionOutput,
   defaultTransactionEvidenceLimits
 } from '@bsv/sdk'
-import { Certifier, TrustSettings } from '../WalletSettingsManager'
+import { toArray, toUTF8Strict } from '@bsv/sdk/primitives/utils'
+import { TrustSettings, validateTrustSettings } from '../WalletSettingsManager'
 import { OverlayOutputEvidence } from './verifyOverlayOutput'
+
+const MAX_IDENTITY_RESULTS = 256
+const MAX_IDENTITY_CERTIFICATE_BYTES = 256 * 1024
+const MAX_IDENTITY_FIELDS = 100
+const IDENTITY_PROTOCOL: [1, 'identity'] = [1, 'identity']
+const IDENTITY_KEY_ID = '1'
+// BRC-100 bounds a discovered certificate's certifierInfo.description to 5-50
+// UTF-8 bytes. Trust settings accept up to 500 so stored settings stay
+// readable, so the bound is applied where the result is built.
+const MIN_CERTIFIER_DESCRIPTION_BYTES = 5
+const MAX_CERTIFIER_DESCRIPTION_BYTES = 50
+const FALLBACK_CERTIFIER_DESCRIPTION = 'Trusted certifier'
+
+/** Cut a long description at a code point boundary; replace one too short to keep. */
+function certifierDescription(description: string): string {
+  let kept = ''
+  let bytes = 0
+  for (const char of description) {
+    const size = toArray(char, 'utf8').length
+    if (bytes + size > MAX_CERTIFIER_DESCRIPTION_BYTES) break
+    kept += char
+    bytes += size
+  }
+  kept = kept.trimEnd()
+  return toArray(kept, 'utf8').length >= MIN_CERTIFIER_DESCRIPTION_BYTES ? kept : FALLBACK_CERTIFIER_DESCRIPTION
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+function ownData(value: Record<string, unknown>, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key)
+  if (descriptor == null || !('value' in descriptor)) {
+    throw new Error(`Identity certificate ${key} must be an own data property`)
+  }
+  return descriptor.value
+}
+
+function boundedBytes(value: unknown, field: string, minimum: number, maximum: number): number[] {
+  const normalized = value instanceof Uint8Array ? Array.from(value) : value
+  if (!Array.isArray(normalized) || normalized.length < minimum || normalized.length > maximum) {
+    throw new Error(`${field} must contain ${minimum}-${maximum} bytes`)
+  }
+  for (let index = 0; index < normalized.length; index++) {
+    if (
+      !Object.prototype.hasOwnProperty.call(normalized, index) ||
+      !Number.isInteger(normalized[index]) ||
+      normalized[index] < 0 ||
+      normalized[index] > 255
+    ) {
+      throw new Error(`${field} must be a dense byte array`)
+    }
+  }
+  return Array.from(normalized)
+}
+
+function pushOpcode(value: number[]): number {
+  if (value.length <= 75) return value.length
+  if (value.length <= 0xff) return 0x4c
+  if (value.length <= 0xffff) return 0x4d
+  return 0x4e
+}
+
+function certificateRecord(encoded: number[]): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(toUTF8Strict(encoded))
+  if (!isPlainRecord(parsed)) throw new Error('Identity certificate must be a plain object')
+  const allowed = new Set([
+    'type',
+    'serialNumber',
+    'subject',
+    'certifier',
+    'revocationOutpoint',
+    'fields',
+    'keyring',
+    'signature'
+  ])
+  for (const key of Reflect.ownKeys(parsed)) {
+    if (typeof key !== 'string' || !allowed.has(key)) {
+      throw new Error('Identity certificate contains an unexpected field')
+    }
+    ownData(parsed, key)
+  }
+  for (const key of allowed) ownData(parsed, key)
+  const fields = ownData(parsed, 'fields')
+  const keyring = ownData(parsed, 'keyring')
+  if (!isPlainRecord(fields) || !isPlainRecord(keyring)) {
+    throw new Error('Identity certificate fields and keyring must be plain objects')
+  }
+  const fieldNames = Object.keys(fields)
+  const keyringNames = Object.keys(keyring)
+  if (
+    fieldNames.length < 1 ||
+    fieldNames.length > MAX_IDENTITY_FIELDS ||
+    keyringNames.length < 1 ||
+    keyringNames.length > MAX_IDENTITY_FIELDS
+  ) {
+    throw new Error('Identity certificate fields or keyring have invalid cardinality')
+  }
+  for (const fieldName of keyringNames) {
+    if (!Object.prototype.hasOwnProperty.call(fields, fieldName)) {
+      throw new Error('Identity keyring refers to an absent certificate field')
+    }
+    const key = ownData(keyring, fieldName)
+    if (typeof key !== 'string' || key.length > 2048) {
+      throw new Error('Identity keyring value is missing or oversized')
+    }
+  }
+  return parsed
+}
 
 // Our extended certificate includes certifierInfo.
 export interface ExtendedVerifiableCertificate extends IdentityCertificate {
@@ -25,11 +137,168 @@ export interface ExtendedVerifiableCertificate extends IdentityCertificate {
   publiclyRevealedKeyring: Record<string, Base64String>
 }
 
+function normalizeIdentitySearch(input: string): string {
+  return input.trim().replaceAll(/\s+/g, ' ')
+}
+
+/** Match literal tokens in order, without a combinatorial wildcard expression. */
+function identityFuzzyMatches(actual: string, expected: string): boolean {
+  const tokens = normalizeIdentitySearch(expected).split(' ')
+  const lines = actual.split(/\r\n?|\n|\u2028|\u2029/)
+  for (const line of lines) {
+    let cursor = 0
+    let tokenIndex = 0
+    while (tokenIndex < tokens.length) {
+      const literal = new RegExp(tokens[tokenIndex].replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`), 'gi')
+      literal.lastIndex = cursor
+      const found = literal.exec(line)
+      if (found == null) break
+      cursor = found.index + found[0].length
+      tokenIndex++
+    }
+    if (tokenIndex === tokens.length) return true
+  }
+  return false
+}
+
+// The default English text index omits these words before matching. Apostrophes
+// inside English words are retained; punctuation otherwise separates terms.
+const IDENTITY_STOP_WORDS =
+  " a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves "
+
+function identityTextTokens(text: string): string[] {
+  // ASCII apostrophes are part of English names such as O'Neil.
+  const tokens =
+    text.match(/(?:[^\p{Dash}\p{Pattern_Syntax}\p{Quotation_Mark}\p{Terminal_Punctuation}\p{White_Space}]|')+/gu) ?? []
+  return tokens.filter(token => !IDENTITY_STOP_WORDS.includes(` ${token} `))
+}
+
+/** -1 rejects the result; 1 records a positive indexed term; 0 is neutral. */
+function identityQueryPartMatch(tokens: string[], text: string, raw: string, phrase: string | undefined): -1 | 0 | 1 {
+  const negative = raw.startsWith('-') && raw.length > 1
+  if (phrase !== undefined) {
+    const present = containsText(text, phrase)
+    if (negative ? present : !present) return -1
+    if (negative) return 0
+  }
+  const terms = identityTextTokens(phrase ?? (negative ? raw.slice(1) : raw))
+  const matched = terms.some(term => tokens.includes(term))
+  if (!matched) return 0
+  return negative ? -1 : 1
+}
+
+/**
+ * Bind the overlay's English text search using complete tokens, stopwords and
+ * exact phrases. Language-specific stemming remains unsupported; a stem-only
+ * overlay result may be conservatively dropped rather than treated as a substring.
+ */
+function identityTextMatches(searchable: string, search: string): boolean {
+  const text = foldIdentityText(searchable)
+  const query = foldIdentityText(search)
+  const tokens = identityTextTokens(text)
+  const parts = /-?"([^"]*)"|[^\s"]+/g
+  let positiveMatch = false
+  let match = parts.exec(query)
+  while (match != null) {
+    const result = identityQueryPartMatch(tokens, text, match[0], match[1])
+    if (result === -1) return false
+    if (result === 1) positiveMatch = true
+    match = parts.exec(query)
+  }
+  return positiveMatch
+}
+
+/** The overlay matches userName exactly and other named fields fuzzily. */
+function identityAttributeMatches(fieldName: string, actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false
+  if (fieldName === 'userName') return actual === normalizeIdentitySearch(expected)
+  return identityFuzzyMatches(actual, expected)
+}
+
+function foldIdentityText(input: string): string {
+  return input
+    .normalize('NFD')
+    .replaceAll(/\p{Mn}/gu, '')
+    .toLowerCase()
+}
+
+function containsText(haystack: string, needle: string): boolean {
+  return haystack.includes(needle)
+}
+
+const UNSEARCHABLE_IDENTITY_FIELDS = new Set(['profilePhoto', 'icon'])
+
+/**
+ * `any` is the overlay's all-fields search, not a field name. Accept a certificate
+ * when its searchable fields satisfy the same search the overlay ran.
+ */
+function identityAnyMatches(fields: Record<string, unknown>, expected: string): boolean {
+  const normalized = normalizeIdentitySearch(expected)
+  if (normalized.length < 2) return false
+  const searchable = Object.entries(fields)
+    .filter(([key, value]) => !UNSEARCHABLE_IDENTITY_FIELDS.has(key) && typeof value === 'string')
+    .map(([, value]) => value as string)
+    .join(' ')
+  if (normalized.length === 2) return identityFuzzyMatches(searchable, normalized)
+  return identityTextMatches(searchable, normalized)
+}
+
+/** Re-bind authenticated certificates to the identity lookup they answered. */
+export function filterCertificatesByIdentityKey(
+  certificates: VerifiableCertificate[],
+  identityKey: string
+): VerifiableCertificate[] {
+  const expected = identityKey.toLowerCase()
+  return certificates.filter(
+    certificate => typeof certificate.subject === 'string' && certificate.subject.toLowerCase() === expected
+  )
+}
+
+function usableIdentityAttributes(attributes: Record<string, string>): Array<[string, string]> | undefined {
+  const expected: Array<[string, string]> = []
+  for (const key of Object.keys(attributes)) {
+    const descriptor = Object.getOwnPropertyDescriptor(attributes, key)
+    if (descriptor == null || !('value' in descriptor) || typeof descriptor.value !== 'string') return undefined
+    if (normalizeIdentitySearch(descriptor.value).length > 0) expected.push([key, descriptor.value])
+  }
+  return expected
+}
+
+function certificateMatchesAttributes(
+  certificate: VerifiableCertificate,
+  anySearch: string | undefined,
+  expected: Array<[string, string]>
+): boolean {
+  const fields = certificate.decryptedFields
+  if (fields == null || typeof fields !== 'object' || Array.isArray(fields)) return false
+  const record = fields as Record<string, unknown>
+  if (anySearch !== undefined) return identityAnyMatches(record, anySearch)
+  return expected.every(([fieldName, value]) => {
+    const descriptor = Object.getOwnPropertyDescriptor(record, fieldName)
+    return descriptor != null && 'value' in descriptor && identityAttributeMatches(fieldName, descriptor.value, value)
+  })
+}
+
+/** Re-bind authenticated certificates to the attribute lookup they answered. */
+export function filterCertificatesByAttributes(
+  certificates: VerifiableCertificate[],
+  attributes: Record<string, string>
+): VerifiableCertificate[] {
+  if (attributes == null || typeof attributes !== 'object' || Array.isArray(attributes)) return []
+  const any = Object.getOwnPropertyDescriptor(attributes, 'any')
+  if (any != null && (!('value' in any) || typeof any.value !== 'string')) return []
+  const expected = any == null ? usableIdentityAttributes(attributes) : []
+  if (expected == null || (any == null && expected.length === 0)) return []
+  return certificates.filter(certificate => certificateMatchesAttributes(certificate, any?.value, expected))
+}
+
 // --- Helper Types for Grouping ---
 
 interface IdentityGroup {
   totalTrust: number
   members: ExtendedVerifiableCertificate[]
+  certifiers: Set<string>
+  certificates: Set<string>
 }
 
 /**
@@ -45,50 +314,63 @@ export const transformVerifiableCertificatesWithTrust = (
   trustSettings: TrustSettings,
   certificates: VerifiableCertificate[]
 ): DiscoverCertificatesResult => {
+  const validatedTrust = validateTrustSettings(trustSettings)
   // Group certificates by subject while accumulating trust.
-  const identityGroups: Record<string, IdentityGroup> = {}
+  const identityGroups = new Map<string, IdentityGroup>()
   // Cache certifier lookups.
-  const certifierCache: Record<string, Certifier> = {}
+  const certifierCache = new Map(
+    validatedTrust.trustedCertifiers.map(certifier => [certifier.identityKey, certifier] as const)
+  )
 
-  certificates.forEach(cert => {
+  certificates.slice(0, MAX_IDENTITY_RESULTS).forEach(cert => {
     const { subject, certifier } = cert
     if (subject === '' || certifier === '') return
 
-    // Lookup and cache certifier details from trustSettings.
-    if (certifierCache[certifier] == null) {
-      const found = trustSettings.trustedCertifiers.find(x => x.identityKey === certifier)
-      if (found == null) return // Skip this certificate if its certifier is not trusted.
-      certifierCache[certifier] = found
-    }
+    const trustedCertifier = certifierCache.get(certifier)
+    if (trustedCertifier == null) return
 
     // Create the IdentityCertifier object that we want to attach.
     const certifierInfo: IdentityCertifier = {
-      name: certifierCache[certifier].name,
-      iconUrl: certifierCache[certifier].iconUrl ?? '',
-      description: certifierCache[certifier].description,
-      trust: certifierCache[certifier].trust
+      name: trustedCertifier.name,
+      iconUrl: trustedCertifier.iconUrl ?? 'https://bsvblockchain.org/favicon.ico',
+      description: certifierDescription(trustedCertifier.description),
+      trust: trustedCertifier.trust
     }
 
     // Create an extended certificate that includes certifierInfo.
-    // Note: We use object spread to copy over all properties from the original certificate.
     const extendedCert: IdentityCertificate = {
-      ...cert,
+      type: cert.type,
+      serialNumber: cert.serialNumber,
+      subject: cert.subject,
+      certifier: cert.certifier,
+      revocationOutpoint: cert.revocationOutpoint,
       signature: cert.signature as string, // We know it exists at this point
-      decryptedFields: cert.decryptedFields as Record<string, string>,
-      publiclyRevealedKeyring: cert.keyring,
+      fields: { ...cert.fields },
+      decryptedFields: { ...cert.decryptedFields } as Record<string, string>,
+      publiclyRevealedKeyring: { ...cert.keyring },
       certifierInfo
     }
 
     // Group certificates by subject.
-    identityGroups[subject] ??= { totalTrust: 0, members: [] }
-    identityGroups[subject].totalTrust += certifierInfo.trust
-    identityGroups[subject].members.push(extendedCert)
+    let group = identityGroups.get(subject)
+    if (group == null) {
+      group = { totalTrust: 0, members: [], certifiers: new Set(), certificates: new Set() }
+      identityGroups.set(subject, group)
+    }
+    const certificateID = `${cert.type}\0${cert.serialNumber}\0${certifier}`
+    if (group.certificates.has(certificateID)) return
+    group.certificates.add(certificateID)
+    if (!group.certifiers.has(certifier)) {
+      group.certifiers.add(certifier)
+      group.totalTrust += certifierInfo.trust
+    }
+    group.members.push(extendedCert)
   })
 
   // Filter out groups that do not meet the trust threshold and flatten the results.
   const finalResults: ExtendedVerifiableCertificate[] = []
-  Object.values(identityGroups).forEach(group => {
-    if (group.totalTrust >= trustSettings.trustLevel) {
+  identityGroups.forEach(group => {
+    if (group.totalTrust >= validatedTrust.trustLevel) {
       finalResults.push(...group.members)
     }
   })
@@ -217,30 +499,54 @@ const decodeIdentityOutput = async (
 ): Promise<VerifiableCertificate | null> => {
   try {
     const decodedOutput = PushDrop.decode(verifiedOutput.lockingScript)
-    const certificate: VerifiableCertificate = JSON.parse(Utils.toUTF8(decodedOutput.fields[0]))
-    const verifiableCert = new VerifiableCertificate(
-      certificate.type,
-      certificate.serialNumber,
-      certificate.subject,
-      certificate.certifier,
-      certificate.revocationOutpoint,
-      certificate.fields,
-      certificate.keyring,
-      certificate.signature
+    if (decodedOutput.fields.length !== 2) return null
+    const certificateBytes = boundedBytes(
+      decodedOutput.fields[0],
+      'Identity certificate',
+      1,
+      MAX_IDENTITY_CERTIFICATE_BYTES
     )
-    // IdentityClient.publiclyRevealAttributes and tm_identity use the subject's
-    // BRC-42 identity key to sign the certificate/keyring fields in this output.
+    const fieldSignature = boundedBytes(decodedOutput.fields[1], 'Identity field signature', 8, 80)
+    const chunks = verifiedOutput.lockingScript.chunks
+    if (
+      chunks.length !== 5 ||
+      chunks[0].op !== 33 ||
+      chunks[0].data?.length !== 33 ||
+      chunks[1].op !== 0xac ||
+      chunks[2].op !== pushOpcode(certificateBytes) ||
+      chunks[3].op !== pushOpcode(fieldSignature) ||
+      chunks[4].op !== 0x6d
+    ) {
+      return null
+    }
+    const certificate = certificateRecord(certificateBytes)
+    const subject = ownData(certificate, 'subject')
+    if (typeof subject !== 'string') return null
     const anyoneWallet = new ProtoWallet('anyone')
-    const signature = decodedOutput.fields.pop()
-    if (decodedOutput.fields.length === 0 || signature == null) return null
+    const { publicKey: expectedLockingKey } = await anyoneWallet.getPublicKey({
+      protocolID: IDENTITY_PROTOCOL,
+      keyID: IDENTITY_KEY_ID,
+      counterparty: subject
+    })
+    if (decodedOutput.lockingPublicKey.toString() !== expectedLockingKey) return null
     const { valid } = await anyoneWallet.verifySignature({
-      data: decodedOutput.fields.flat(),
-      signature,
-      counterparty: verifiableCert.subject,
-      protocolID: [1, 'identity'],
-      keyID: '1'
+      data: certificateBytes,
+      signature: fieldSignature,
+      counterparty: subject,
+      protocolID: IDENTITY_PROTOCOL,
+      keyID: IDENTITY_KEY_ID
     })
     if (valid !== true) return null
+    const verifiableCert = new VerifiableCertificate(
+      ownData(certificate, 'type') as string,
+      ownData(certificate, 'serialNumber') as string,
+      subject,
+      ownData(certificate, 'certifier') as string,
+      ownData(certificate, 'revocationOutpoint') as string,
+      ownData(certificate, 'fields') as Record<string, string>,
+      ownData(certificate, 'keyring') as Record<string, string>,
+      ownData(certificate, 'signature') as string
+    )
     if ((await verifiableCert.verify()) !== true) return null
     const decryptedFields = await verifiableCert.decryptFields(anyoneWallet)
     if (Object.keys(decryptedFields).length === 0) return null

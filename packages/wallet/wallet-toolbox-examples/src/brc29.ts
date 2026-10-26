@@ -1,7 +1,13 @@
-import { Beef, SignActionArgs } from '@bsv/sdk'
+import { Beef, SignActionArgs, Transaction } from '@bsv/sdk'
 
 import { randomBytesBase64, ScriptTemplateBRC29, Setup, SetupWallet } from '@bsv/wallet-toolbox'
 import { runArgv2Function } from './runArgv2Function'
+import {
+  assertSameSignedTransaction,
+  assertSatoshis,
+  findRequestedInputIndex,
+  findRequestedOutputIndex
+} from './transactionSafety'
 
 /**
  * Example of moving satoshis from one wallet to another using the BRC29 script template.
@@ -27,12 +33,12 @@ export async function brc29() {
     env,
     rootKeyHex: env.devKeys[env.identityKey2]
   })
-
-  // create a new transaction with an output for setup2 in the amount of 42000 satoshis.
-  const o = await outputBRC29(setup1, setup2.identityKey, 42000)
-
-  // use setup2 to consume the new output to demonstrate unlocking the output and adding it to the wallet's "change" outputs.
-  await inputBRC29(setup2, o)
+  try {
+    const o = await outputBRC29(setup1, setup2.identityKey, 42000)
+    await inputBRC29(setup2, o)
+  } finally {
+    await Promise.allSettled([setup1.wallet.destroy(), setup2.wallet.destroy()])
+  }
 }
 
 /**
@@ -72,6 +78,7 @@ export async function outputBRC29(
   derivationPrefix: string
   derivationSuffix: string
 }> {
+  assertSatoshis(satoshis)
   const derivationPrefix = randomBytesBase64(8)
   const derivationSuffix = randomBytesBase64(8)
   const { keyDeriver } = setup
@@ -81,6 +88,7 @@ export async function outputBRC29(
     derivationSuffix,
     keyDeriver
   })
+  const lockingScript = t.lock(setup.rootKey.toString(), toIdentityKey).toHex()
 
   // Use this label the new transaction can be found by `listActions` and as a "description" value.
   const label = 'outputBRC29'
@@ -94,7 +102,7 @@ export async function outputBRC29(
       // Typically, at least one "change" input will automatically be added to fund the transaction,
       // and at least one output will be added to recapture excess funding.
       {
-        lockingScript: t.lock(setup.rootKey.toString(), toIdentityKey).toHex(),
+        lockingScript,
         satoshis,
         outputDescription: label,
         tags: ['relinquish'],
@@ -121,9 +129,14 @@ export async function outputBRC29(
   // and when the "signAndProcess" option is allowed to default to true.
 
   // The `Beef` class is used here to decode the AtomicBEEF binary format of the new transaction.
-  const beef = Beef.fromBinary(car.tx!)
-  // The outpoint string is constructed from the new transaction's txid and the output index: zero.
-  const outpoint = `${car.txid!}.0`
+  if (car.tx == null || car.txid == null) throw new Error('Wallet did not return the BRC29 payment')
+  const transaction = Transaction.fromAtomicBEEF(car.tx)
+  if (car.txid.toLowerCase() !== transaction.id('hex')) {
+    throw new Error('Wallet BRC29 transaction ID does not match its transaction')
+  }
+  const outputIndex = findRequestedOutputIndex(transaction, lockingScript, satoshis)
+  const beef = Beef.fromBinary(transaction.toAtomicBEEF())
+  const outpoint = `${transaction.id('hex')}.${outputIndex}`
 
   console.log(`
 outputBRC29
@@ -255,36 +268,38 @@ export async function inputBRC29(
    *
    * Once signed, capture the now valid `unlockingScript` valoue for the input and convert it to a hex string.
    */
-  const st = car.signableTransaction!
-  const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.at(-1)!.txid)!
-  tx.inputs[0].unlockingScriptTemplate = unlock
-  await tx.sign()
-  const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
-
-  /**
-   * Note that the `signArgs` use the `reference` property of the `signableTransaction` result to
-   * identify the `createAction` result to finish processing and optionally broadcasting.
-   */
-  const signArgs: SignActionArgs = {
-    reference: st.reference,
-    spends: { 0: { unlockingScript } },
-    options: {
-      // Force an immediate broadcast of the signed transaction.
-      acceptDelayedBroadcast: false
+  const st = car.signableTransaction
+  if (st == null) throw new Error('Wallet did not return a signable BRC29 transaction')
+  let signed: Transaction
+  try {
+    const tx = Transaction.fromAtomicBEEF(st.tx)
+    const inputIndex = findRequestedInputIndex(tx, outpoint)
+    tx.inputs[inputIndex].unlockingScriptTemplate = unlock
+    await tx.sign()
+    const unlockingScript = tx.inputs[inputIndex].unlockingScript
+    if (unlockingScript == null) throw new Error('BRC29 signer produced no unlocking script')
+    const signArgs: SignActionArgs = {
+      reference: st.reference,
+      spends: { [inputIndex]: { unlockingScript: unlockingScript.toHex() } },
+      options: { acceptDelayedBroadcast: false }
     }
+    const sar = await setup.wallet.signAction(signArgs)
+    if (sar.tx == null) throw new Error('Wallet did not return the signed BRC29 transaction')
+    signed = Transaction.fromAtomicBEEF(sar.tx)
+    assertSameSignedTransaction(tx, signed)
+  } catch (error) {
+    try {
+      await setup.wallet.abortAction({ reference: st.reference })
+    } catch {
+      // Preserve the signing failure rather than replacing it with cleanup failure.
+    }
+    throw error
   }
-
-  /**
-   * Calling `signAction` completes the action creation process when inputs must be signed
-   * using specific script templates.
-   */
-  const sar = await setup.wallet.signAction(signArgs)
 
   // This completes the example by logging evidence of what was created.
   {
-    const beef = Beef.fromBinary(sar.tx!)
-    const txid = sar.txid!
+    const beef = Beef.fromBinary(signed.toAtomicBEEF())
+    const txid = signed.id('hex')
 
     console.log(`
 inputP2PKH to ${setup.identityKey}
@@ -298,4 +313,4 @@ ${beef.toLogString()}
   }
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

@@ -4,9 +4,9 @@ title: '@bsv/lch'
 kind: package
 domain: content
 npm: '@bsv/lch'
-version: '0.1.0'
-last_updated: '2026-08-30'
-last_verified: '2026-08-30'
+version: '0.2.2'
+last_updated: '2026-09-18'
+last_verified: '2026-09-18'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/content/lch'
 status: experimental
@@ -14,6 +14,10 @@ tags: ['content', 'licensing', 'brc-170', 'odrl', 'c2pa', 'chirp', 'uhrp']
 ---
 
 # @bsv/lch
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Browser- and Node-compatible reference implementation of published BRC-170
 > Licensed Content Header protocol.
@@ -55,7 +59,10 @@ the returned signed License and key grants. Recovery is available for the
 Offer's exact declared recovery period.
 
 ```typescript
-const buyer = await LCHMultipayBuyer.create(wallet, { endpointPolicy })
+const buyer = await LCHMultipayBuyer.create(wallet, {
+  endpointPolicy,
+  agreementEvaluator: evaluateAcceptedAgreement
+})
 const request = await buyer.createRequest({
   offerId,
   assetId,
@@ -64,7 +71,7 @@ const request = await buyer.createRequest({
   acceptedPolicyDigest,
   createdAt: BigInt(Math.floor(Date.now() / 1000))
 })
-const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity, {
+const plan = await buyer.quote(selectedOffer, request, sellerIdentity, {
   type: 'segmented',
   encryption: inspected.representation.encryption,
   delivery: selectedOffer.keyDelivery.mechanism
@@ -112,6 +119,40 @@ Offer's chosen delivery mechanism. Use `{ type: 'none' }` only for a profile
 that genuinely returns no key grants; it is not a shortcut around encrypted
 Asset validation.
 
+The returned License Agreement is a distinct ODRL document rather than the
+accepted Offer Policy bytes. Applications must supply a profile-aware
+`agreementEvaluator` when constructing
+`LCHMultipayBuyer`. The buyer retains the verified signed Offer in the payment
+plan and invokes the evaluator before completion or recovery returns a License.
+The callback receives the Offer, License Request, Quote, License, pinned Offer
+Policy reference, and pinned Agreement reference. It must affirm that the
+Agreement grants the requested action and Selection while preserving every
+accepted constraint, Prohibition, and Duty; an issuer signature alone never
+authorizes substituted post-payment terms. Signed encryption descriptors,
+ciphertext lengths, and optional Quote segment ranges are validated before the
+wallet boundary. Duplicate Demand IDs and intrinsically ambiguous destinations
+fail before `createAction`.
+
+`validateOffer` requires the signed payment endpoint to be absolute HTTPS and
+rejects literal private or loopback destinations. A creator using a local
+loopback fixture must opt into that exact origin explicitly when creating and
+validating the Offer; never derive that allowance from a remotely supplied
+Offer.
+
+All versioned signed-object validators require version 1 and reject unknown
+top-level `critical` identifiers. Applications that implement a registered
+extension pass the same exact `supportedCriticalIdentifiers` set through every
+buyer, issuer, Payee, settlement, and recovery validator; retaining or
+recognizing an unknown field is not sufficient to accept its semantics.
+`LCHReader` enforces the same policy for Header and Asset critical identifiers,
+and extension-map keys must be absolute identifiers.
+
+Endpoint policy applies a finite default deadline to DNS, connection, and
+response work in addition to public-address validation, connection pinning,
+redirect limits, and cross-origin credential stripping. Custom connectors must
+honor the supplied abort signal; the client also races non-returning connector
+and resolver promises against that deadline.
+
 On the receiving side, `WalletPaymentReceiver` independently derives and
 validates the Payee's BRC-29 output, atomically claims the Demand through a
 `PaymentLedger`, calls that Payee wallet's BRC-100 `internalizeAction`, and
@@ -122,6 +163,20 @@ finalized transaction, insufficient retention, or an unknown evidence policy
 never satisfies a Demand. The executable reference
 application also ships a Node server, creator wizard, player, wallet-module
 contract, and collapsed, federated, container, and durable deployment examples.
+
+Treat durable settlement stores as untrusted persistence boundaries. Every
+cached Receipt or Authorization is reverified and rebound to the current
+Demand, transaction, identities, output, amount, and validity window before a
+retry returns it; storage lookup success alone is never settlement evidence.
+
+`LCHMultipayBuyer.recover(payment, receipts, authorizedOutputs)` requires the
+complete persisted funded acquisition and settlement proofs and applies the
+same License and Agreement-policy validation as completion. The lower-level
+`recoverUnverified(endpoint, requestId)` APIs return an explicit
+`UnverifiedLicenseResponse` for transport integration only. A Request ID alone
+does not establish the expected issuer or bind the Asset, Offer, subject,
+Agreement, Selection, settlement, or key grants. Never unwrap the low-level
+response for key storage, content access, or authorization.
 
 The issuer is a coordinator, not an implicit payment custodian. Every Demand
 names the Payee identity, amount, BRC-29 derivation, settlement profile, and
@@ -157,6 +212,19 @@ but a progressive LCH player additionally needs a segment-aware adapter that
 authenticates complete encryption records and enforces the licensed Selection;
 raw CHIRP chunks are ciphertext, not authenticated playable plaintext.
 
+Range adapters are exact contracts: CHIRP must return precisely the requested
+byte count, while HTTPS must return the exact `206 Content-Range`, declared
+length, and body length. Ignored, shifted, expanded, truncated, or unsolicited
+partial responses fail closed. Deterministic CBOR enforces its aggregate
+100,000-item and 16 MiB limits during encoding and at direct decode entry, so
+callers cannot bypass the wire budget by nesting individually legal
+containers.
+
+Retain one `LCHPublisher` for its publication lifetime. It keeps bounded
+Encryption-ID and Key-ID duplicate detectors and refuses cross-Asset reuse from
+a broken or injected random source; constructing a new instance per Asset
+discards that defense-in-depth history.
+
 ## Composition boundary
 
 The core profile supports repeated whole-placement ingredients. Each placement
@@ -175,6 +243,16 @@ unsupported depth, or an excessive flattened traversal. Applications still
 evaluate and aggregate ODRL Duties by their UIDs and policy rules; matching a
 Payee or provenance node alone does not deduplicate payment obligations.
 
+`validateC2PAComposition` compares the C2PA and Composition Record ingredient
+sets in both directions, including relationship, source Asset, hashed URI, and
+hash. Graph loaders must return the exact requested Asset ID and normalized
+Selection; extra C2PA inputs and substituted nodes fail closed.
+
+The small `permits()` helper returns `true` only for a bare, unconditional ODRL
+rule with exactly `action` and `target`. Constraints, Duties, assignee/assigner
+scope, and extension fields require a profile-aware evaluator and return
+`false`; they must never be ignored to obtain an authorization decision.
+
 Integer time windows are half-open: `notBefore` is inclusive and `notAfter` is
 exclusive. Fractional edit values such as playback rates use exact integer
 ratios because deterministic LCH CBOR prohibits floats.
@@ -191,7 +269,8 @@ future profiles.
 - Permit local HTTP endpoints only through an explicit development override.
 - Resolve DNS again for redirects and connections, and use the endpoint
   policy's address-pinning connector to prevent rebinding; do not forward
-  credentials across origins. Test the URL parser's canonical hexadecimal
+  credentials across origins. Public redirects cannot enter an allowlisted
+  local-development origin; local access must be selected explicitly. Test the URL parser's canonical hexadecimal
   spelling of IPv4-mapped and transition IPv6 literals, not only dotted input
   spellings, and fail closed for non-global IANA special-purpose ranges.
 - Authenticate every segment before exposing plaintext. Whole-asset grants

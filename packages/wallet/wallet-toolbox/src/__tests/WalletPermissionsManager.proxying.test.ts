@@ -5,7 +5,7 @@ import {
   MockedBSV_SDK,
   MockTransaction
 } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager, PermissionsManagerConfig } from '../WalletPermissionsManager'
+import { WalletPermissionsManager, PermissionsManagerConfig, withBrc205Capabilities } from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -93,9 +93,10 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
       // We'll define exactly one input we consider "originator-provided" with 500 sat
       mockTx.inputs = [
         {
-          sourceTXID: 'aaa',
+          sourceTXID: 'aa'.repeat(32),
           sourceOutputIndex: 0,
           sourceTransaction: {
+            id: () => 'aa'.repeat(32),
             outputs: [{ satoshis: 500 }]
           }
         }
@@ -116,7 +117,7 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
           description: 'User purchase',
           inputs: [
             {
-              outpoint: 'aaa.0',
+              outpoint: `${'aa'.repeat(32)}.0`,
               unlockingScriptLength: 73,
               inputDescription: 'My input'
             }
@@ -185,9 +186,10 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     mockTx.fee = 100
     mockTx.inputs = [
       {
-        sourceTXID: 'bbb',
+        sourceTXID: 'bb'.repeat(32),
         sourceOutputIndex: 0,
         sourceTransaction: {
+          id: () => 'bb'.repeat(32),
           outputs: [{ satoshis: 0 }]
         }
       }
@@ -224,6 +226,27 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     })
   })
 
+  it('binds and aborts a partial action when storage returns malformed Atomic BEEF', async () => {
+    underlying.createAction.mockResolvedValueOnce({
+      signableTransaction: {
+        tx: [1, 2, 3],
+        reference: 'malformed-beef-reference'
+      }
+    })
+    ;(MockedBSV_SDK.Transaction.fromAtomicBEEF as jest.Mock).mockImplementationOnce(() => {
+      throw new Error('Invalid Atomic BEEF')
+    })
+
+    await expect(
+      manager.createAction({ description: 'Malformed storage response' }, 'user.example.com')
+    ).rejects.toThrow(/Invalid Atomic BEEF/)
+
+    expect(underlying.abortAction).toHaveBeenCalledWith({ reference: 'malformed-beef-reference' })
+    await expect(
+      manager.signAction({ reference: 'malformed-beef-reference', spends: {} }, 'user.example.com')
+    ).rejects.toThrow(/not issued by this permissions manager/)
+  })
+
   it('should throw an error if a non-admin tries signAndProcess=true', async () => {
     // Non-admin tries signAndProcess=true => manager throws
     await expect(
@@ -247,41 +270,116 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     ).rejects.toThrow(/Only the admin originator can set signAndProcess=true/)
   })
 
-  it('should proxy signAction calls directly if invoked by the user', async () => {
-    // Typically, signAction is used after createAction returns a partial signableTransaction
-    // We'll confirm it passes arguments verbatim to underlying
-    const result = await manager.signAction(
-      {
-        reference: 'my-ref',
-        spends: {
-          0: {
-            unlockingScript: 'my-script'
-          }
-        }
-      },
-      'nonadmin.com'
-    )
-    expect(underlying.signAction).toHaveBeenCalledTimes(1)
-    expect(underlying.signAction).toHaveBeenCalledWith(
-      {
-        reference: 'my-ref',
-        spends: {
-          0: {
-            unlockingScript: 'my-script'
-          }
-        }
-      },
-      'nonadmin.com'
-    )
-    // returns the underlying result
-    expect(result.txid).toBe('fake-txid')
+  it('rejects signAction references not issued by this manager', async () => {
+    await expect(
+      manager.signAction(
+        {
+          reference: 'my-ref',
+          spends: { 0: { unlockingScript: 'my-script' } }
+        },
+        'nonadmin.com'
+      )
+    ).rejects.toThrow(/not issued by this permissions manager/)
+    expect(underlying.signAction).not.toHaveBeenCalled()
   })
 
-  it('should proxy abortAction calls directly', async () => {
-    const result = await manager.abortAction({ reference: 'abort-me' }, 'someuser.com')
-    expect(underlying.abortAction).toHaveBeenCalledTimes(1)
-    expect(underlying.abortAction).toHaveBeenCalledWith({ reference: 'abort-me' }, 'someuser.com')
-    expect(result).toEqual({ aborted: true })
+  it('binds issued partial-action references to their creating originator', async () => {
+    const mockTx = new MockTransaction()
+    mockTx.inputs = [
+      {
+        sourceTXID: 'ab'.repeat(32),
+        sourceOutputIndex: 0,
+        sourceTransaction: { id: () => 'ab'.repeat(32), outputs: [{ satoshis: 100 }] }
+      }
+    ]
+    underlying.createAction.mockResolvedValueOnce({
+      signableTransaction: {
+        tx: mockAtomicBEEF(mockTx),
+        reference: 'origin-bound-reference'
+      }
+    })
+    const created = await manager.createAction(
+      {
+        description: 'Origin-bound partial action',
+        inputs: [
+          {
+            outpoint: `${'ab'.repeat(32)}.0`,
+            unlockingScriptLength: 73,
+            inputDescription: 'External input'
+          }
+        ]
+      },
+      'creator.example.com'
+    )
+    expect(created.signableTransaction?.reference).toBe('origin-bound-reference')
+    underlying.signAction.mockClear()
+    const finalized = new MockTransaction()
+    finalized.inputs = [{ ...mockTx.inputs[0], unlockingScript: new MockLockingScript('00') }]
+    underlying.signAction.mockResolvedValueOnce({
+      txid: finalized.id('hex'),
+      tx: mockAtomicBEEF(finalized)
+    })
+
+    await expect(
+      manager.signAction(
+        { reference: 'origin-bound-reference', spends: { 0: { unlockingScript: '00' } } },
+        'attacker.example.com'
+      )
+    ).rejects.toThrow(/different originator/)
+    expect(underlying.signAction).not.toHaveBeenCalled()
+
+    await expect(
+      manager.signAction(
+        { reference: 'origin-bound-reference', spends: { 0: { unlockingScript: '00' } } },
+        'creator.example.com'
+      )
+    ).resolves.toMatchObject({ txid: finalized.id('hex') })
+  })
+
+  it('blocks signing after denied authorization when underlying abort refuses', async () => {
+    manager.unbindCallback('onSpendingAuthorizationRequested', 0)
+    manager.bindCallback('onSpendingAuthorizationRequested', async req => {
+      await manager.denyPermission(req.requestID)
+    })
+    const mockTx = new MockTransaction()
+    mockTx.fee = 1
+    mockTx.outputs = [{ lockingScript: new MockLockingScript('abcd'), satoshis: 1 }]
+    underlying.createAction.mockResolvedValueOnce({
+      signableTransaction: {
+        tx: mockAtomicBEEF(mockTx),
+        reference: 'blocked-reference'
+      }
+    })
+    underlying.abortAction.mockResolvedValueOnce({ aborted: false })
+
+    await expect(
+      manager.createAction(
+        {
+          description: 'Denied action',
+          outputs: [
+            {
+              lockingScript: 'abcd',
+              satoshis: 1,
+              outputDescription: 'Denied output'
+            }
+          ]
+        },
+        'denied.example.com'
+      )
+    ).rejects.toThrow(/Permission denied/)
+    underlying.signAction.mockClear()
+
+    await expect(
+      manager.signAction({ reference: 'blocked-reference', spends: {} }, 'denied.example.com')
+    ).rejects.toThrow(/blocked after a failed authorization/)
+    expect(underlying.signAction).not.toHaveBeenCalled()
+  })
+
+  it('rejects abortAction references not issued by this manager', async () => {
+    await expect(manager.abortAction({ reference: 'abort-me' }, 'someuser.com')).rejects.toThrow(
+      /not issued by this permissions manager/
+    )
+    expect(underlying.abortAction).not.toHaveBeenCalled()
   })
 
   /* -------------------------------------------------------------------------
@@ -393,16 +491,27 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
 
     const result = await manager.listOutputs({ basket: 'user-basket' }, 'app.example.com')
     // manager ephemeral-grants basket permission
-    expect(underlying.listOutputs).toHaveBeenCalledTimes(2)
+    expect(underlying.listOutputs).toHaveBeenCalledTimes(3)
     expect(underlying.listOutputs.mock.calls).toEqual([
       [
         {
           basket: 'admin basket-access',
           include: 'entire transactions',
+          limit: 10000,
           tagQueryMode: 'all',
           tags: ['originator app.example.com', 'basket user-basket']
         },
         'admin.test' // querying to see if we have permission
+      ],
+      [
+        {
+          basket: 'admin basket-access',
+          include: 'entire transactions',
+          limit: 10000,
+          tagQueryMode: 'all',
+          tags: ['basket user-basket']
+        },
+        'admin.test' // compatibility lookup for tokens minted with another port
       ],
       [
         {
@@ -447,7 +556,7 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
       },
       'user.example.com'
     )
-    expect(result.publicKey).toBe('029999...')
+    expect(result.publicKey).toBe(`02${'99'.repeat(32)}`)
   })
 
   it('should call revealCounterpartyKeyLinkage with permission check, pass result', async () => {
@@ -702,10 +811,51 @@ describe('WalletPermissionsManager - Regression & Integration with Underlying Wa
     expect(underlying.getNetwork).toHaveBeenCalledTimes(1)
   })
 
-  it('should proxy getVersion', async () => {
+  it('should proxy getVersion, advertising the built-in BRC-177 module per BRC-205', async () => {
     const result = await manager.getVersion({}, 'someone.com')
-    expect(result.version).toBe('vendor-1.0.0')
+    expect(result.version).toBe('vendor-1.0.0; brc177-nosend=2;')
     expect(underlying.getVersion).toHaveBeenCalledTimes(1)
+  })
+
+  it('getVersion lists every module capability by scheme id and key, without repeating a key', async () => {
+    const module = (capabilities: Record<string, string>) => ({
+      capabilities,
+      onRequest: async (req: { args: object }) => ({ args: req.args }),
+      onResponse: async (res: unknown) => res
+    })
+    const withModules = new WalletPermissionsManager(underlying, 'admin.com', {
+      permissionModules: {
+        zeta: module({ 'brc999-zeta': '1', 'brc177-nosend': '9' }),
+        color: module({ 'brc207-color': '5', 'brc207-color-attested': '1' })
+      }
+    })
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
+      'vendor-1.0.0; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
+    )
+    underlying.getVersion.mockResolvedValueOnce({ version: 'vendor-1.0.0; account-label=Pocket%20Photos;' })
+    expect((await withModules.getVersion({}, 'someone.com')).version).toBe(
+      'vendor-1.0.0; account-label=Pocket%20Photos; brc207-color=5; brc207-color-attested=1; brc177-nosend=2; brc999-zeta=1;'
+    )
+  })
+
+  it('withBrc205Capabilities skips invalid attributes and leaves a string without additions alone', () => {
+    const module = (capabilities: Record<string, string>) => ({
+      capabilities,
+      onRequest: async (req: { args: object }) => ({ args: req.args }),
+      onResponse: async (res: unknown) => res
+    })
+    expect(withBrc205Capabilities('vendor-1.0.0', {})).toBe('vendor-1.0.0')
+    expect(withBrc205Capabilities('vendor-1.0.0;', {})).toBe('vendor-1.0.0;')
+    expect(withBrc205Capabilities('vendor-1.0.0; a=b', {})).toBe('vendor-1.0.0; a=b')
+    expect(
+      withBrc205Capabilities('vendor-1.0.0', {
+        bad: module({ 'Brc1-upper': '1', 'brc1-space': 'a b', 'brc1-empty': '', 'brc1-pct': '%zz' })
+      })
+    ).toBe('vendor-1.0.0')
+    expect(
+      withBrc205Capabilities('vendor-1.0.0; brc1-x=1', { m: module({ 'brc1-x': '2', 'brc2-y': 'a~b.c_d-e%2F' }) })
+    ).toBe('vendor-1.0.0; brc1-x=1; brc2-y=a~b.c_d-e%2F;')
+    expect(withBrc205Capabilities('vendor-1.0.0;', { m: module({ 'brc2-y': '1' }) })).toBe('vendor-1.0.0; brc2-y=1;')
   })
 
   /* -------------------------------------------------------------------------

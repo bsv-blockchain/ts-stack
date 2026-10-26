@@ -2,12 +2,19 @@ import { LCH_LIMITS } from './constants.js'
 import { lchAssert } from './errors.js'
 import { objectId, toHex } from './hash.js'
 import { verifySignedObject } from './objects.js'
+import { isCompressedPublicKey } from './signatures.js'
 import type {
   LCHSignatureVerifier,
   LCHValue,
   RevocationObservation,
   RevocationSource
 } from './types.js'
+import {
+  ownDataValue,
+  requiredOwnDataValue,
+  snapshotBytes,
+  snapshotSignedObject
+} from './boundary.js'
 
 export interface AuthorityBody {
   version: 1
@@ -48,16 +55,27 @@ function isSubset(
   parent: readonly string[] | undefined
 ): boolean {
   if (parent === undefined) return true
-  return child !== undefined && child.every(value => parent.includes(value))
+  if (child === undefined) return false
+  const allowed = new Set(parent)
+  return child.every(value => allowed.has(value))
 }
 
 function validateAuthorityBody(body: AuthorityBody): void {
   lchAssert(
-    body.version === 1 &&
+    body !== null &&
+      typeof body === 'object' &&
+      body.version === 1 &&
+      body.assetId instanceof Uint8Array &&
       body.assetId.length === 32 &&
-      body.grantor.length === 33 &&
-      body.grantee.length === 33 &&
-      body.nonce.length === 16,
+      body.grantor instanceof Uint8Array &&
+      isCompressedPublicKey(body.grantor) &&
+      body.grantee instanceof Uint8Array &&
+      isCompressedPublicKey(body.grantee) &&
+      body.nonce instanceof Uint8Array &&
+      body.nonce.length === 16 &&
+      typeof body.mayDelegate === 'boolean' &&
+      Array.isArray(body.interests) &&
+      Array.isArray(body.capabilities),
     'ERR_LCH_AUTHORITY',
     'Authority body has invalid version or field lengths'
   )
@@ -67,31 +85,62 @@ function validateAuthorityBody(body: AuthorityBody): void {
     ['policyActions', body.policyActions],
     ['usageProfiles', body.usageProfiles]
   ] as const) {
-    if (values === undefined) continue
+    if (values === undefined) {
+      lchAssert(
+        name === 'policyActions' || name === 'usageProfiles',
+        'ERR_LCH_AUTHORITY',
+        `Authority ${name} is absent`
+      )
+      continue
+    }
     lchAssert(
-      values.length > 0 &&
-        values.every(value => value.length > 0) &&
+      Array.isArray(values) &&
+        values.length > 0 &&
+        values.length <= LCH_LIMITS.cborEntries &&
+        values.every(
+          value =>
+            typeof value === 'string' &&
+            value.length > 0 &&
+            value.length <= 4096 &&
+            !hasControlCharacter(value)
+        ) &&
         new Set(values).size === values.length,
       'ERR_LCH_AUTHORITY',
       `Authority ${name} must be nonempty and unique`
     )
   }
-  const notBefore = BigInt(body.notBefore)
+  const notBefore = authorityUint(body.notBefore, 'notBefore')
   if (body.notAfter !== undefined) {
     lchAssert(
-      BigInt(body.notAfter) >= notBefore,
+      authorityUint(body.notAfter, 'notAfter') > notBefore,
       'ERR_LCH_AUTHORITY',
       'Authority validity interval is inverted'
     )
   }
   if (body.remainingDepth !== undefined) {
-    const remainingDepth = BigInt(body.remainingDepth)
+    const remainingDepth = authorityUint(body.remainingDepth, 'remainingDepth')
     lchAssert(
       remainingDepth >= 0n && remainingDepth <= BigInt(LCH_LIMITS.authorityDepth - 1),
       'ERR_LCH_AUTHORITY',
       'Authority remaining depth is invalid'
     )
   }
+  lchAssert(
+    body.revocationOutpoint === undefined ||
+      (typeof body.revocationOutpoint === 'string' && body.revocationOutpoint.length <= 75),
+    'ERR_LCH_REVOCATION',
+    'Authority revocation outpoint is invalid'
+  )
+  if (body.revocationMaxAgeSeconds !== undefined)
+    authorityUint(body.revocationMaxAgeSeconds, 'revocationMaxAgeSeconds')
+}
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!
+    if (codePoint <= 0x1f || codePoint === 0x7f) return true
+  }
+  return false
 }
 
 function rejectDelegationWidening(parent: AuthorityBody, child: AuthorityBody): void {
@@ -104,23 +153,24 @@ function rejectDelegationWidening(parent: AuthorityBody, child: AuthorityBody): 
     'Delegated Authority widens a scope'
   )
   lchAssert(
-    BigInt(child.notBefore) >= BigInt(parent.notBefore),
+    authorityUint(child.notBefore, 'notBefore') >= authorityUint(parent.notBefore, 'notBefore'),
     'ERR_LCH_AUTHORITY',
     'Delegated Authority widens its start time'
   )
   if (parent.notAfter !== undefined) {
     lchAssert(
-      child.notAfter !== undefined && BigInt(child.notAfter) <= BigInt(parent.notAfter),
+      child.notAfter !== undefined &&
+        authorityUint(child.notAfter, 'notAfter') <= authorityUint(parent.notAfter, 'notAfter'),
       'ERR_LCH_AUTHORITY',
       'Delegated Authority widens its end time'
     )
   }
   if (parent.remainingDepth !== undefined && child.mayDelegate) {
-    const maximum = BigInt(parent.remainingDepth) - 1n
+    const maximum = authorityUint(parent.remainingDepth, 'remainingDepth') - 1n
     lchAssert(
       maximum >= 0n &&
         child.remainingDepth !== undefined &&
-        BigInt(child.remainingDepth) <= maximum,
+        authorityUint(child.remainingDepth, 'remainingDepth') <= maximum,
       'ERR_LCH_AUTHORITY',
       'Delegated Authority widens its remaining depth'
     )
@@ -145,7 +195,7 @@ async function verifyRevocation(
     body.revocationMaxAgeSeconds === undefined
   )
     return
-  const ageLimit = BigInt(body.revocationMaxAgeSeconds)
+  const ageLimit = authorityUint(body.revocationMaxAgeSeconds, 'revocationMaxAgeSeconds')
   lchAssert(
     ageLimit > 0n && ageLimit <= BigInt(LCH_LIMITS.maxRevocationAgeSeconds),
     'ERR_LCH_REVOCATION',
@@ -164,22 +214,31 @@ async function verifyRevocation(
   )
   lchAssert(source !== undefined, 'ERR_LCH_REVOCATION', 'No revocation-status source is configured')
   const observation = await source.status(body.revocationOutpoint)
-  lchAssert(
-    observation.network === requirement.network,
-    'ERR_LCH_REVOCATION',
-    'Revocation observation is for another network'
+  const status = requiredOwnDataValue(observation, 'status', 'Revocation observation')
+  const network = requiredOwnDataValue(observation, 'network', 'Revocation observation')
+  const observedAt = requiredOwnDataValue(observation, 'observedAt', 'Revocation observation')
+  const reorganizationAffected = ownDataValue(
+    observation,
+    'reorganizationAffected',
+    'Revocation observation'
   )
   lchAssert(
-    observation.reorganizationAffected !== true,
+    network === requirement.network &&
+      typeof status === 'string' &&
+      ['unspent', 'spent-mempool', 'spent-confirmed', 'unknown'].includes(status) &&
+      typeof observedAt === 'bigint' &&
+      observedAt >= 0n &&
+      (reorganizationAffected === undefined || typeof reorganizationAffected === 'boolean'),
+    'ERR_LCH_REVOCATION',
+    'Revocation observation is malformed or for another network'
+  )
+  lchAssert(
+    reorganizationAffected !== true,
     'ERR_LCH_REVOCATION',
     'Revocation observation was invalidated by reorganization'
   )
-  lchAssert(
-    observation.status === 'unspent',
-    'ERR_LCH_REVOCATION',
-    `Authority status is ${observation.status}`
-  )
-  const age = requirement.now - observation.observedAt
+  lchAssert(status === 'unspent', 'ERR_LCH_REVOCATION', `Authority status is ${status}`)
+  const age = requirement.now - observedAt
   lchAssert(age >= 0n && age <= ageLimit, 'ERR_LCH_REVOCATION', 'Revocation observation is stale')
 }
 
@@ -190,24 +249,24 @@ export async function validateAuthorityChain(
   revocationSource?: RevocationSource
 ): Promise<void> {
   lchAssert(
-    chain.length > 0 && chain.length <= LCH_LIMITS.authorityDepth,
+    Array.isArray(chain) && chain.length > 0 && chain.length <= LCH_LIMITS.authorityDepth,
     'ERR_LCH_AUTHORITY',
     'Authority chain length is invalid'
+  )
+  requirement = snapshotAuthorityRequirement(requirement)
+  validateAuthorityRequirement(requirement)
+  const ownedChain = chain.map((entry, index) =>
+    snapshotSignedObject(entry, `Authority grant ${index}`)
   )
   const seen = new Set<string>()
   const seenActors = new Set<string>([toHex(requirement.controller)])
   let expectedGrantor = requirement.controller
   let parent: AuthorityBody | undefined
-  for (let index = 0; index < chain.length; index += 1) {
-    const body = chain[index].body
+  for (let index = 0; index < ownedChain.length; index += 1) {
+    const body = ownedChain[index].body as unknown as AuthorityBody
     validateAuthorityBody(body)
     if (parent !== undefined) rejectDelegationWidening(parent, body)
-    await verifySignedObject(
-      'authority',
-      chain[index] as unknown as { body: Record<string, LCHValue>; signatures: Uint8Array[] },
-      signatureVerifier,
-      body.grantor
-    )
+    await verifySignedObject('authority', ownedChain[index], signatureVerifier, body.grantor)
     const authorityId = toHex(
       await objectId('authority', body as unknown as Record<string, LCHValue>)
     )
@@ -241,19 +300,20 @@ export async function validateAuthorityChain(
       'ERR_LCH_AUTHORITY',
       'Authority action or profile is out of scope'
     )
-    const notBefore = BigInt(body.notBefore)
+    const notBefore = authorityUint(body.notBefore, 'notBefore')
     lchAssert(
       requirement.now >= notBefore &&
-        (body.notAfter === undefined || requirement.now <= BigInt(body.notAfter)),
+        (body.notAfter === undefined || requirement.now < authorityUint(body.notAfter, 'notAfter')),
       'ERR_LCH_AUTHORITY',
       'Authority grant is outside its validity interval'
     )
-    const isFinal = index === chain.length - 1
+    const isFinal = index === ownedChain.length - 1
     if (!isFinal) {
       lchAssert(body.mayDelegate, 'ERR_LCH_AUTHORITY', 'Authority grant does not permit delegation')
       if (body.remainingDepth !== undefined)
         lchAssert(
-          BigInt(body.remainingDepth) >= BigInt(chain.length - index - 1),
+          authorityUint(body.remainingDepth, 'remainingDepth') >=
+            BigInt(ownedChain.length - index - 1),
           'ERR_LCH_AUTHORITY',
           'Authority delegation depth exceeded'
         )
@@ -267,4 +327,76 @@ export async function validateAuthorityChain(
     'ERR_LCH_AUTHORITY',
     'Authority chain does not end at the required actor'
   )
+}
+
+function authorityUint(value: unknown, field: string): bigint {
+  lchAssert(
+    typeof value === 'bigint' || (typeof value === 'number' && Number.isSafeInteger(value)),
+    'ERR_LCH_AUTHORITY',
+    `Authority ${field} must be an exact integer`
+  )
+  const result = BigInt(value)
+  lchAssert(
+    result >= 0n && result <= 0xffffffffffffffffn,
+    'ERR_LCH_AUTHORITY',
+    `Authority ${field} is outside uint64`
+  )
+  return result
+}
+
+function validateAuthorityRequirement(requirement: AuthorityRequirement): void {
+  lchAssert(
+    requirement !== null &&
+      typeof requirement === 'object' &&
+      requirement.controller instanceof Uint8Array &&
+      isCompressedPublicKey(requirement.controller) &&
+      requirement.actor instanceof Uint8Array &&
+      isCompressedPublicKey(requirement.actor) &&
+      requirement.assetId instanceof Uint8Array &&
+      requirement.assetId.length === 32 &&
+      typeof requirement.interest === 'string' &&
+      requirement.interest.length > 0 &&
+      typeof requirement.capability === 'string' &&
+      requirement.capability.length > 0 &&
+      (requirement.policyAction === undefined ||
+        (typeof requirement.policyAction === 'string' && requirement.policyAction.length > 0)) &&
+      (requirement.usageProfile === undefined ||
+        (typeof requirement.usageProfile === 'string' && requirement.usageProfile.length > 0)) &&
+      typeof requirement.now === 'bigint' &&
+      requirement.now >= 0n &&
+      (requirement.network === 'mainnet' || requirement.network === 'testnet'),
+    'ERR_LCH_AUTHORITY',
+    'Authority requirement is invalid'
+  )
+}
+
+function snapshotAuthorityRequirement(value: unknown): AuthorityRequirement {
+  const name = 'Authority requirement'
+  const controller = requiredOwnDataValue(value, 'controller', name)
+  const actor = requiredOwnDataValue(value, 'actor', name)
+  const assetId = requiredOwnDataValue(value, 'assetId', name)
+  const interest = requiredOwnDataValue(value, 'interest', name)
+  const capability = requiredOwnDataValue(value, 'capability', name)
+  const now = requiredOwnDataValue(value, 'now', name)
+  const network = requiredOwnDataValue(value, 'network', name)
+  const policyAction = ownDataValue(value, 'policyAction', name)
+  const usageProfile = ownDataValue(value, 'usageProfile', name)
+  return {
+    controller:
+      controller instanceof Uint8Array
+        ? snapshotBytes(controller, `${name}.controller`)
+        : (controller as Uint8Array),
+    actor:
+      actor instanceof Uint8Array ? snapshotBytes(actor, `${name}.actor`) : (actor as Uint8Array),
+    assetId:
+      assetId instanceof Uint8Array
+        ? snapshotBytes(assetId, `${name}.assetId`)
+        : (assetId as Uint8Array),
+    interest: interest as string,
+    capability: capability as string,
+    ...(policyAction === undefined ? {} : { policyAction: policyAction as string }),
+    ...(usageProfile === undefined ? {} : { usageProfile: usageProfile as string }),
+    now: now as bigint,
+    network: network as AuthorityRequirement['network']
+  }
 }

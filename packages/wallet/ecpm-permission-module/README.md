@@ -73,6 +73,12 @@ const wallet = new WalletPermissionsManager(setup.wallet, adminOriginator, {
 Call `ecpm.dispose()` when the host tears down the wallet. The method clears
 cached and pending authorization state.
 
+Successful grants are capped at 1,024 entries with oldest-grant eviction, and
+at most 64 distinct authorization prompts may remain in flight. Requests that
+would exceed the pending limit fail closed until an existing prompt settles.
+These receiver-local bounds prevent a hostile application from turning a
+permanently pending authorization UI into unbounded wallet memory.
+
 Security level 0 primary-key requests do not prompt. Levels 1 and 2 require
 the authorization callback, with level 2 grants scoped to the counterparty.
 Every privileged request requires authorization regardless of security level,

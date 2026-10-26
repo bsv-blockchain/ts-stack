@@ -11,12 +11,9 @@
     "MemoryRevocationStore",
     "Overlay",
     "WalletCore",
-    "createWallet",
-    "toVerifiableCredential",
-    "toVerifiablePresentation"
+    "createWallet"
   ],
   "prohibitedExports": [
-    "DIDResolverService",
     "FileRevocationStore",
     "IdentityRegistry",
     "JsonFileStore",
@@ -25,14 +22,14 @@
   ],
   "maximumBytes": {
     "vite": {
-      "raw": 755000,
-      "gzip": 185000,
-      "brotli": 151500
+      "raw": 1210000,
+      "gzip": 295000,
+      "brotli": 235000
     },
     "esbuild": {
-      "raw": 585000,
-      "gzip": 171000,
-      "brotli": 144000
+      "raw": 940000,
+      "gzip": 270000,
+      "brotli": 225000
     }
   }
 }

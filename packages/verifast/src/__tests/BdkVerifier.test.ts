@@ -9,6 +9,9 @@ import BdkVerifier, {
   type BdkVerificationResult,
   type BdkWasmModule
 } from '../BdkVerifier.js'
+import BdkVerifierCore from '../BdkVerifierCore.js'
+import type BdkWorkerScheduler from '../workers/BdkWorkerScheduler.js'
+import type { BdkWorkerRequestWithoutId } from '../workers/BdkWorkerProtocol.js'
 
 interface TestBackendGlobal {
   __bsvSdkAsyncCryptoBackendV1?: object
@@ -141,8 +144,21 @@ describe('BdkVerifier', () => {
 
     expect(verifier.isReady()).toBe(false)
     await Promise.all([verifier.preload(), verifier.preload()])
+    await verifier.preloadBatch()
     expect(verifier.isReady()).toBe(true)
     expect(factoryCalls).toBe(1)
+  })
+
+  it('completes the deferred auto-mode preload after a cold eligible selection', async () => {
+    const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+      registerAsDefault: false
+    })
+
+    expect(
+      verifier.shouldVerifyScripts({ tx: await buildTx(), blockHeight: 1, consensus: true })
+    ).toBe(false)
+    await new Promise(resolve => setTimeout(resolve, 5))
+    expect(verifier.isReady()).toBe(true)
   })
 
   it('retries after a transient main-module load failure', async () => {
@@ -276,6 +292,55 @@ describe('BdkVerifier', () => {
   it('rejects invalid adaptive routing options', () => {
     expect(() => new BdkVerifier({ scriptByteThreshold: -1 })).toThrow(RangeError)
     expect(() => new BdkVerifier({ scriptByteThreshold: 1.5 })).toThrow(RangeError)
+    expect(
+      () =>
+        new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+          mode: 'sometimes' as never
+        })
+    ).toThrow("mode must be either 'auto' or 'always'")
+  })
+
+  it('rejects disposal while the module is loading and keeps disposal idempotent', async () => {
+    let resolveModule: (module: BdkWasmModule) => void = () => {}
+    const pendingModule = new Promise<BdkWasmModule>(resolve => {
+      resolveModule = resolve
+    })
+    const verifier = new BdkVerifier(async () => await pendingModule, {
+      registerAsDefault: false
+    })
+
+    const preload = verifier.preload()
+    await Promise.resolve()
+    verifier.dispose()
+    verifier.dispose()
+    resolveModule(makeMockModule({ domain: 0, code: 0 }, []))
+
+    await expect(preload).rejects.toThrow('BDK verifier has been disposed')
+  })
+
+  it('rejects runtime-invalid network and default consensus context options', () => {
+    const factory = async (): Promise<BdkWasmModule> => makeMockModule({ domain: 0, code: 0 }, [])
+    for (const network of ['unknown', '__proto__']) {
+      expect(() => new BdkVerifier(factory, { network: network as never })).toThrow(
+        'network is not supported'
+      )
+    }
+    for (const [option, value] of [
+      ['defaultUtxoHeight', -1],
+      ['defaultUtxoHeight', 1.5],
+      ['defaultBlockHeight', Number.POSITIVE_INFINITY],
+      ['defaultBlockHeight', 0x80000000]
+    ] as const) {
+      expect(() => new BdkVerifier(factory, { [option]: value })).toThrow(
+        'must be a non-negative int32 integer'
+      )
+    }
+    expect(
+      () => new BdkVerifier(factory, { defaultConsensus: 'false' as unknown as boolean })
+    ).toThrow('defaultConsensus must be a boolean')
+    expect(() => new BdkVerifier(factory, { registerAsDefault: 1 as unknown as boolean })).toThrow(
+      'registerAsDefault must be a boolean'
+    )
   })
 
   it('applies the same cold-fallback and warm-selection policy to Spend.validateWith', async () => {
@@ -436,6 +501,70 @@ describe('BdkVerifier', () => {
     expect(calls).toEqual([ef])
   })
 
+  it('rejects ambiguous EF consensus context instead of coercing it through typed arrays', async () => {
+    const verifier = new BdkVerifier(async () => {
+      const module = makeMockModule({ domain: 0, code: 0 }, [])
+      module.VerifyScriptArrayNetwork = () => ({ domain: 0, code: 0 })
+      return module
+    })
+    const valid = {
+      extendedTransaction: Uint8Array.of(1),
+      utxoHeights: [1],
+      blockHeight: 1,
+      consensus: true
+    }
+
+    for (const height of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 0x80000000]) {
+      await expect(
+        verifier.verifyScriptsFromEFDetailed({ ...valid, utxoHeights: [height] })
+      ).rejects.toThrow('utxoHeights[0] must be a non-negative int32 integer')
+      await expect(
+        verifier.verifyScriptsBatchFromEFDetailed([{ ...valid, blockHeight: height }])
+      ).rejects.toThrow('blockHeight must be a non-negative int32 integer')
+    }
+    await expect(
+      verifier.verifyScriptsFromEFDetailed({
+        ...valid,
+        extendedTransaction: [1] as unknown as Uint8Array
+      })
+    ).rejects.toThrow('extendedTransaction must be a Uint8Array')
+    await expect(
+      verifier.verifyScriptsFromEFDetailed({
+        ...valid,
+        consensus: 'false' as unknown as boolean
+      })
+    ).rejects.toThrow('consensus must be a boolean')
+    await expect(
+      verifier.verifyScriptsBatchFromEFDetailed([{ ...valid, customFlags: [0x100000000] }])
+    ).rejects.toThrow('must be a uint32 integer')
+    await expect(
+      verifier.verifyScriptsFromEFDetailed({
+        ...valid,
+        utxoHeights: new Uint32Array([1]) as unknown as Int32Array
+      })
+    ).rejects.toThrow('utxoHeights must be an array or Int32Array')
+
+    await expect(
+      verifier.verifyScriptsFromEFDetailed({ ...valid, utxoHeights: new Int32Array([1]) })
+    ).resolves.toEqual({ domain: 0, code: 0 })
+  })
+
+  it('requires an explicit-network ABI for non-main networks', async () => {
+    const verifier = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+      network: 'test',
+      registerAsDefault: false
+    })
+
+    await expect(
+      verifier.verifyScriptsFromEF({
+        extendedTransaction: Uint8Array.of(1),
+        utxoHeights: [1],
+        blockHeight: 1,
+        consensus: true
+      })
+    ).rejects.toThrow('does not support explicit networks')
+  })
+
   it.each(['ttn', 'teratestnet', 'terratestnet'] as const)(
     'maps the %s alias to TeraTestNet',
     async network => {
@@ -569,13 +698,88 @@ describe('BdkVerifier', () => {
     await expect(
       verifier.verifyDigestBatch([
         {
-          publicKey: Uint8Array.of(2, 3),
+          publicKey: Uint8Array.from([2, ...new Uint8Array(32)]),
           digest: new Uint8Array(32),
-          signature: Uint8Array.of(4, 5)
+          signature: Uint8Array.of(0x30, 6, 2, 1, 1, 2, 1, 1)
         }
       ])
     ).resolves.toEqual([true])
     expect(calls).toEqual(['script', 'spend', 'digest'])
+  })
+
+  it('splits digest work at the configured item limit and validates result cardinality', async () => {
+    const item = {
+      publicKey: Uint8Array.from([2, ...new Uint8Array(32)]),
+      digest: new Uint8Array(32),
+      signature: Uint8Array.of(0x30, 6, 2, 1, 1, 2, 1, 1)
+    }
+    const module: BdkWasmModule = {}
+    let calls = 0
+    module.VerifyDigestBatchArray = () => {
+      calls++
+      return Uint8Array.of(1)
+    }
+    const verifier = new BdkVerifier(async () => module, {
+      maxBatchItems: 1,
+      registerAsDefault: false
+    })
+
+    await expect(verifier.verifyDigestBatch([item, item])).resolves.toEqual([true, true])
+    expect(calls).toBe(2)
+
+    module.VerifyDigestBatchArray = () => new Uint8Array()
+    await expect(verifier.verifyDigestBatch([item])).rejects.toThrow(
+      'BDK returned an invalid digest batch result'
+    )
+    module.VerifyDigestBatchArray = () => [1] as unknown as Uint8Array
+    await expect(verifier.verifyDigestBatch([item])).rejects.toThrow(
+      'BDK returned an invalid digest batch result'
+    )
+  })
+
+  it('preloads and dispatches multi-chunk batches through an injected worker scheduler', async () => {
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    const preload = jest.fn(async () => undefined)
+    const execute = jest.fn(async (requests: readonly BdkWorkerRequestWithoutId[]) =>
+      requests.map(request =>
+        request.operation === 'verifyDigests' ? Uint8Array.of(1) : Int32Array.of(0, 0)
+      )
+    )
+    const scheduler = {
+      preload,
+      shouldUse: () => true,
+      parallelChunks: <T>(items: readonly T[]) => items.map(item => [item]),
+      execute,
+      terminate: () => {}
+    } as unknown as BdkWorkerScheduler
+    const verifier = new BdkVerifierCore(
+      async () => module,
+      { registerAsDefault: false },
+      scheduler
+    )
+    const ef = {
+      extendedTransaction: Uint8Array.of(1),
+      utxoHeights: [1],
+      blockHeight: 1,
+      consensus: true
+    }
+    const spend = spendForInput(await buildTx())
+    const digest = {
+      publicKey: Uint8Array.from([2, ...new Uint8Array(32)]),
+      digest: new Uint8Array(32),
+      signature: Uint8Array.of(0x30, 6, 2, 1, 1, 2, 1, 1)
+    }
+
+    await verifier.preloadBatch()
+    expect(preload).toHaveBeenCalledWith(module)
+    await expect(verifier.verifyScriptsBatchFromEF([ef, ef])).resolves.toEqual([true, true])
+    await expect(verifier.verifySpendsBatch([{ spend }, { spend }])).resolves.toEqual([true, true])
+    await expect(verifier.verifyDigestBatch([digest, digest])).resolves.toEqual([true, true])
+    expect(execute.mock.calls.map(([requests]) => requests[0].operation)).toEqual([
+      'verifyScripts',
+      'verifySpends',
+      'verifyDigests'
+    ])
   })
 
   it('serializes a shared transaction once for a multi-input Spend batch', async () => {
@@ -635,6 +839,37 @@ describe('BdkVerifier', () => {
     expect(consensusValues).toEqual([false, true])
   })
 
+  it('covers strict Spend routing, synchronous verification, and the scalar batch fallback', async () => {
+    const spend = spendForInput(await buildTx())
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    let spendCalls = 0
+    module.VerifySpendArray = () => {
+      spendCalls++
+      return { domain: 0, code: 0 }
+    }
+    const verifier = new BdkVerifier(async () => module, {
+      mode: 'always',
+      registerAsDefault: false
+    })
+
+    expect(verifier.shouldVerifySpend(spend)).toBe(true)
+    expect(() => verifier.verifySpendSync(spend)).toThrow('requires a preloaded BDK module')
+    await verifier.preload()
+    expect(verifier.verifySpendSync(spend)).toBe(true)
+    await expect(verifier.verifySpendsBatch([{ spend }, { spend }])).resolves.toEqual([true, true])
+    expect(spendCalls).toBe(3)
+
+    const unsupported = new BdkVerifier(async () => makeMockModule({ domain: 0, code: 0 }, []), {
+      registerAsDefault: false
+    })
+    await unsupported.preload()
+    expect(unsupported.shouldVerifySpend(spend)).toBe(false)
+
+    const detachedSpend = spendForInput(await buildTx())
+    detachedSpend.allInputs = undefined
+    await expect(verifier.verifySpend(detachedSpend)).resolves.toBe(true)
+  })
+
   it('rejects unsafe source satoshi values consistently before packing', async () => {
     const spend = spendForInput(await buildTx())
     spend.sourceSatoshis = 1.5
@@ -647,5 +882,87 @@ describe('BdkVerifier', () => {
     await expect(verifier.verifySpendsBatch([{ spend }])).rejects.toThrow(
       'non-negative safe integer'
     )
+  })
+
+  it('rejects ambiguous Spend consensus context instead of coercing it in batch packing', async () => {
+    const spend = spendForInput(await buildTx())
+    const module = makeMockModule({ domain: 0, code: 0 }, [])
+    module.VerifySpendArray = () => ({ domain: 0, code: 0 })
+    module.VerifySpendBatchArray = () => Int32Array.of(0, 0)
+    const verifier = new BdkVerifier(async () => module)
+
+    await expect(verifier.verifySpend(spend, { utxoHeight: -1 })).rejects.toThrow(
+      'utxoHeight must be a non-negative int32 integer'
+    )
+    await expect(
+      verifier.verifySpendsBatch([
+        { spend, blockHeight: 0x80000000, consensus: 'false' as unknown as boolean }
+      ])
+    ).rejects.toThrow('blockHeight must be a non-negative int32 integer')
+    await expect(
+      verifier.verifySpendsBatch([{ spend, consensus: 'false' as unknown as boolean }])
+    ).rejects.toThrow('consensus must be a boolean')
+    spend.inputIndex = -1
+    await expect(verifier.verifySpend(spend)).rejects.toThrow('inputIndex must be a uint32 integer')
+
+    spend.inputIndex = 1
+    await expect(verifier.verifySpend(spend)).rejects.toThrow(
+      'inputIndex is outside the transaction'
+    )
+  })
+
+  it('validates crypto inputs and untrusted optional-backend results', async () => {
+    const validPublicKey = Uint8Array.from([2, ...new Uint8Array(32)])
+    const validDigest = new Uint8Array(32)
+    const validSignature = Uint8Array.of(0x30, 6, 2, 1, 1, 2, 1, 1)
+    const module: BdkWasmModule = {
+      SignDigest: () => validSignature,
+      VerifyDigest: () => true,
+      VerifyDigestBatchArray: (_publicKeys, offsets) =>
+        new Uint8Array(Math.max(0, offsets.length - 1)).fill(1),
+      PublicKeyFromPrivate: () => validPublicKey,
+      MultiplyPublicKey: () => validPublicKey,
+      TweakPublicKeyAdd: () => validPublicKey,
+      TweakPrivateKeyAdd: () => new Uint8Array(32)
+    }
+    const verifier = new BdkVerifier(async () => module)
+
+    await expect(verifier.signDigest(new Uint8Array(31), validDigest)).rejects.toThrow(
+      'privateKey must contain exactly 32 bytes'
+    )
+    await expect(
+      verifier.verifyDigest(validPublicKey, new Uint8Array(31), validSignature)
+    ).rejects.toThrow('digest must contain exactly 32 bytes')
+    await expect(
+      verifier.verifyDigest(new Uint8Array(34), validDigest, validSignature)
+    ).rejects.toThrow('33-byte compressed or 65-byte uncompressed')
+    await expect(
+      verifier.verifyDigestBatch([
+        { publicKey: validPublicKey, digest: validDigest, signature: new Uint8Array(73) }
+      ])
+    ).rejects.toThrow('8-to-72-byte DER signature')
+
+    module.VerifyDigest = () => 1 as unknown as boolean
+    await expect(
+      verifier.verifyDigest(validPublicKey, validDigest, validSignature)
+    ).rejects.toThrow('non-boolean result')
+    module.VerifyDigestBatchArray = () => Uint8Array.of(2)
+    await expect(
+      verifier.verifyDigestBatch([
+        { publicKey: validPublicKey, digest: validDigest, signature: validSignature }
+      ])
+    ).rejects.toThrow('invalid digest verdict 2')
+    module.SignDigest = () => new Uint8Array(7)
+    await expect(verifier.signDigest(new Uint8Array(32), validDigest)).rejects.toThrow(
+      '8-to-72-byte DER signature'
+    )
+    module.PublicKeyFromPrivate = () => new Uint8Array(65)
+    await expect(verifier.publicKeyFromPrivate(new Uint8Array(32))).rejects.toThrow(
+      'non-compressed key'
+    )
+    module.TweakPrivateKeyAdd = () => new Uint8Array(31)
+    await expect(
+      verifier.tweakPrivateKeyAdd(new Uint8Array(32), new Uint8Array(32))
+    ).rejects.toThrow('exactly 32 bytes')
   })
 })

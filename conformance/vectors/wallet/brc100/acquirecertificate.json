@@ -14,7 +14,7 @@
       "description": "acquireCertificate direct acquisition",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -32,7 +32,7 @@
         }
       },
       "expected": {
-        "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -57,7 +57,7 @@
       "description": "acquireCertificate issuance acquisition",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "issuance",
           "fields": {
@@ -67,7 +67,7 @@
         }
       },
       "expected": {
-        "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -91,7 +91,7 @@
       "description": "acquireCertificate privileged=true",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -111,7 +111,7 @@
         }
       },
       "expected": {
-        "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -135,7 +135,7 @@
       "description": "acquireCertificate invalid signature",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -168,7 +168,7 @@
       "description": "acquireCertificate certifier not trusted",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "031111111111111111111111111111111111111111111111111111111111111111",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -200,7 +200,7 @@
       "description": "acquireCertificate missing serialNumber for direct",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -231,7 +231,7 @@
       "description": "acquireCertificate result is WalletCertificate",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -250,7 +250,7 @@
         "_schema_note": "WalletCertificate: type, subject, serialNumber, certifier, revocationOutpoint, signature, fields"
       },
       "expected": {
-        "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -274,7 +274,7 @@
       "description": "acquireCertificate with originator",
       "input": {
         "args": {
-          "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+          "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "acquisitionProtocol": "direct",
           "fields": {
@@ -293,7 +293,7 @@
         "originator": "app.example.com"
       },
       "expected": {
-        "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+        "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "subject": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",

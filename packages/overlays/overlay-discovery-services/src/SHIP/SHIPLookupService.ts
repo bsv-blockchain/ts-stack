@@ -1,3 +1,4 @@
+import { toHex, toUTF8Strict } from '@bsv/sdk/primitives/utils'
 import {
   LookupService,
   LookupQuestion,
@@ -9,14 +10,34 @@ import {
 } from '@bsv/overlay'
 
 import { SHIPStorage } from './SHIPStorage.js'
-import { PushDrop, Utils } from '@bsv/sdk'
+import { decodeCanonicalPushDrop } from '@bsv/sdk'
 import { SHIPQuery } from '../types.js'
 import SHIPLookupDocs from './SHIPLookup.docs.js'
+import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
+import { isValidTopicOrServiceName } from '../utils/isValidTopicOrServiceName.js'
 import {
+  MAX_DISCOVERY_LOOKUP_RESULTS,
+  requireLookupQuery,
+  validateOptionalBoolean,
+  validateOptionalPublicKey,
   validateOptionalString,
   validateOptionalStringArray,
   validatePaginationQuery
 } from '../utils/lookupQueryValidation.js'
+
+function validateCallbackOutpoint(txid: unknown, outputIndex: unknown): [string, number] {
+  if (typeof txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(txid)) {
+    throw new Error('Invalid callback transaction ID')
+  }
+  if (
+    !Number.isSafeInteger(outputIndex) ||
+    (outputIndex as number) < 0 ||
+    (outputIndex as number) > 0xffffffff
+  ) {
+    throw new Error('Invalid callback output index')
+  }
+  return [txid.toLowerCase(), outputIndex as number]
+}
 
 /**
  * Implements the SHIP lookup service
@@ -31,13 +52,19 @@ export class SHIPLookupService implements LookupService {
 
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
-    const { topic, lockingScript, txid, outputIndex } = payload
+    const { topic, lockingScript } = payload
     if (topic !== 'tm_ship') return
-    const result = PushDrop.decode(lockingScript)
-    const shipIdentifier = Utils.toUTF8(result.fields[0])
-    const identityKey = Utils.toHex(result.fields[1])
-    const domain = Utils.toUTF8(result.fields[2])
-    const topicSupported = Utils.toUTF8(result.fields[3])
+    const [txid, outputIndex] = validateCallbackOutpoint(payload.txid, payload.outputIndex)
+    if (!(await isAdmissibleDiscoveryOutput(lockingScript, 'SHIP'))) return
+    const result = decodeCanonicalPushDrop(lockingScript, {
+      fieldCount: 5,
+      maximumFieldBytes: 4096,
+      maximumPayloadBytes: 8192
+    })
+    const shipIdentifier = toUTF8Strict(result.fields[0])
+    const identityKey = toHex(result.fields[1])
+    const domain = toUTF8Strict(result.fields[2])
+    const topicSupported = toUTF8Strict(result.fields[3])
     if (shipIdentifier !== 'SHIP') return
 
     await this.storage.storeSHIPRecord(txid, outputIndex, identityKey, domain, topicSupported)
@@ -45,42 +72,45 @@ export class SHIPLookupService implements LookupService {
 
   async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
-    const { topic, txid, outputIndex } = payload
+    const { topic } = payload
     if (topic !== 'tm_ship') return
+    const [txid, outputIndex] = validateCallbackOutpoint(payload.txid, payload.outputIndex)
     await this.storage.deleteSHIPRecord(txid, outputIndex)
   }
 
   async outputEvicted(txid: string, outputIndex: number): Promise<void> {
-    await this.storage.deleteSHIPRecord(txid, outputIndex)
+    const [validatedTxid, validatedOutputIndex] = validateCallbackOutpoint(txid, outputIndex)
+    await this.storage.deleteSHIPRecord(validatedTxid, validatedOutputIndex)
   }
 
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) {
-      throw new Error('A valid query must be provided!')
+    const query = requireLookupQuery(question, 'ls_ship', [
+      'findAll',
+      'domain',
+      'topics',
+      'identityKey',
+      'limit',
+      'skip',
+      'sortOrder'
+    ])
+    if (query === 'findAll') {
+      return await this.storage.findAll(MAX_DISCOVERY_LOOKUP_RESULTS, 0, 'desc')
     }
-    if (question.service !== 'ls_ship') {
-      throw new Error('Lookup service not supported!')
-    }
-
-    if (question.query === 'findAll') return await this.storage.findAll()
-    if (typeof question.query !== 'object') {
-      // Keep the historical concrete Error class: consumers may branch on it.
-      throw new Error( // NOSONAR -- compatibility requires Error rather than TypeError
-        'Invalid query format. Query must be "findAll" string or an object with valid parameters.'
-      )
-    }
-    return await this.lookupObject(question.query as SHIPQuery)
+    return await this.lookupObject(query as SHIPQuery)
   }
 
   private async lookupObject(query: SHIPQuery): Promise<LookupFormula> {
-    validatePaginationQuery(query)
-    const { limit, skip, sortOrder } = query
-    if (query.findAll) return await this.storage.findAll(limit, skip, sortOrder)
+    const { limit, skip, sortOrder } = validatePaginationQuery(query)
+    const findAll = validateOptionalBoolean(query.findAll, 'query.findAll')
+    if (limit === 0) return []
+    if (findAll) return await this.storage.findAll(limit, skip, sortOrder)
 
-    validateOptionalString(query.domain, 'query.domain')
-    validateOptionalStringArray(query.topics, 'query.topics')
-    validateOptionalString(query.identityKey, 'query.identityKey')
-    const { domain, topics, identityKey } = query
+    const domain = validateOptionalString(query.domain, 'query.domain')
+    const topics = validateOptionalStringArray(query.topics, 'query.topics')
+    if (topics?.some(topic => !isValidTopicOrServiceName(topic) || !topic.startsWith('tm_'))) {
+      throw new Error('query.topics must contain only valid tm_ topic names')
+    }
+    const identityKey = validateOptionalPublicKey(query.identityKey, 'query.identityKey')
     return await this.storage.findRecord({ domain, topics, identityKey, limit, skip, sortOrder })
   }
 

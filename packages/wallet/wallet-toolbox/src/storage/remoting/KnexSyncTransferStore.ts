@@ -6,6 +6,7 @@ import {
   type SyncTransferPart,
   syncTransferDigest
 } from './SyncTransfer'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
 const TTL_MS = 15 * 60 * 1000
 interface TransferRow {
@@ -53,27 +54,25 @@ export class KnexSyncTransferStore {
     if (!/^[a-f0-9]{64}$/.test(transferId)) throw new TypeError('Invalid sync transfer identifier')
     const row = await trx<TransferRow>('sync_transfers').where({ identityKey, transferId }).first()
     if (row == null || Number(row.expiresAt) <= Date.now())
-      throw new Error('Wallet sync transfer expired; resume from the saved wallet checkpoint')
+      throw new WERR_INVALID_OPERATION('Wallet sync transfer expired; resume from the saved wallet checkpoint')
     return row
   }
 
   private async clear(trx: Knex.Transaction, slot: number): Promise<void> {
     await trx('sync_transfer_parts').where({ slot }).delete()
-    await trx('sync_transfers')
-      .where({ slot })
-      .update({
-        transferId: null,
-        identityKey: null,
-        context: null,
-        direction: null,
-        digest: null,
-        totalBytes: null,
-        partBytes: null,
-        receivedBytes: 0,
-        expiresAt: 0,
-        state: null,
-        result: null
-      })
+    await trx('sync_transfers').where({ slot }).update({
+      transferId: null,
+      identityKey: null,
+      context: null,
+      direction: null,
+      digest: null,
+      totalBytes: null,
+      partBytes: null,
+      receivedBytes: 0,
+      expiresAt: 0,
+      state: null,
+      result: null
+    })
   }
 
   private async allocate(

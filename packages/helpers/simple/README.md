@@ -26,8 +26,8 @@ Use the browser-safe default entry point in frontend applications and
 | **Inscriptions**              | Write text, JSON, or file hashes permanently to the blockchain                      |
 | **MessageBox P2P**            | Send and receive payments and tokens peer-to-peer via MessageBox                    |
 | **Certification**             | Issue and manage BSV certificates with a standalone Certifier                       |
-| **Verifiable Credentials**    | W3C-compatible VCs backed by BSV certificates, with on-chain revocation             |
-| **DIDs**                      | Generate and resolve `did:bsv:` Decentralized Identifiers                           |
+| **Verifiable Credentials**    | Proposed BRC-203 envelopes preserving original BRC-52 signatures and ciphertext     |
+| **DIDs**                      | Encode and resolve BRC-202 identity-key `did:key` identifiers                       |
 | **Overlay Networks**          | Broadcast to and query SHIP/SLAP overlay services                                   |
 | **Server Wallet**             | Run a backend wallet for automated operations and funding flows                     |
 
@@ -49,7 +49,67 @@ to request and response bodies before the host framework's JSON boundary.
 The packaged Message Box Client dependency now starts at 2.5.0. Existing helper
 calls retain the default HTTP and live-socket behavior; no migration is required.
 
+The bundled Simple identity registry is a legacy unauthenticated directory: its
+register/revoke wire format does not prove control of the supplied public key.
+Treat its mappings only as discovery hints, confirm recipient keys independently,
+and do not expose its mutation handler publicly without application authorization.
+It is not a certificate or a payment-recipient trust source.
+
+Remote certificate and credential acquisition accepts a credential-free HTTPS
+service URL, pins the advertised public origin through the SDK's restricted
+transport, authenticates the returned certificate signature, and binds its
+certifier, subject, and type before changing wallet state. The optional `fetch`
+override is an explicitly trusted escape hatch for controlled tests or local
+development; applications must provide equivalent origin and network controls.
+
+Certificate and persisted credential field names retain their historical UTF-16
+code-unit order, independent of the host locale. The shared internal comparator
+in the unpublished 0.6.0 candidate does not change signed bytes or require a
+consumer migration.
+
+Identity-key DIDs resolve deterministically offline. They establish a public-key encoding, not live key control or trust. BRC-203 credential export verifies the original certificate signature and preserves its binary/ciphertext. Its proposed custom mechanism and status extensions are unregistered; generic W3C conformance and deployed interoperability are not claimed. Disclosure authorization, issuer trust, status, and holder authentication remain separate decisions. See the [breaking migration guide](docs/guides/identity-credential-migration.md).
+
+The generated server-wallet handler defaults every action closed. Applications
+must provide an authorization callback bound to their authenticated session and
+must authorize the specific status, create, request, receive, balance, outputs,
+or reset action. Persisted local wallet/issuer/revocation state is bounded,
+owner-only, atomically replaced, and fails closed on corruption or symlinks.
+
+Version 0.6 changes the generated server-wallet route from implicit access to
+explicit application authorization. A previously deployed route such as:
+
+```ts
+const handler = createServerWalletHandler()
+```
+
+must be configured with authenticated, action-level policy:
+
+```ts
+const handler = createServerWalletHandler({
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
+})
+```
+
+Until that callback returns literal `true`, every status, create, request,
+receive, balance, outputs, and reset request returns HTTP 403. Roll out the
+authentication layer and callback with the package upgrade, update probes or
+automation that called these routes anonymously, and verify every replica uses
+the same policy before exposing the route. Do not restore the old deployment
+behavior with an unconditional public `authorize: () => true` callback.
+
+Token custom-input spends locate the requested outpoint rather than
+assuming input zero, sign only that input, and require the wallet's final
+transaction to preserve every inspected input and output. Incoming MessageBox
+tokens are bounded and rebound to a fresh authenticated envelope before
+internalization; body or caller metadata cannot replace the authenticated
+sender or transaction.
+
 ## A taste of the API
+
+The proposed BRC-203 HTTP verifier requires `{ credential: originalEnvelopeJson }`, with the original envelope JSON text as a string. Parsed credential objects are rejected. Preserve received text for strict duplicate-member verification; inspect `verification.verified` and apply trust/status policy separately. Web requests receive strict UTF-8 and duplicate-member checks; custom parsed-body adapters must provide their own strict decoding. See the [credential migration guide](docs/guides/identity-credential-migration.md).
 
 ```typescript
 import { createWallet } from '@bsv/simple/browser'
@@ -68,7 +128,7 @@ await wallet.inscribeText('Hello BSV!')
 
 // Get your DID
 const did = wallet.getDID()
-// { id: 'did:bsv:02abc...', ... }
+// { id: 'did:key:zQ3sh...', verificationMethod: [...], ... }
 ```
 
 ## Next Steps

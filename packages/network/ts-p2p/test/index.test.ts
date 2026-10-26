@@ -101,7 +101,7 @@ describe('TeranodeListener', () => {
       {
         bootstrapPeers: ['/dns4/bootstrap.example/tcp/1'],
         staticPeers: [],
-        sharedKey: 'abcd',
+        sharedKey: 'ab'.repeat(32),
         dhtProtocolID: '/custom',
         listenAddresses: ['/ip4/127.0.0.1/tcp/1']
       }
@@ -151,6 +151,249 @@ describe('TeranodeListener', () => {
     expect(listener.getNode()).toBeNull()
     expect(listener.getConnectedPeerCount()).toBe(0)
     expect(process.listenerCount('SIGINT')).toBe(initialSigintListeners)
+    await listener.stop()
+  })
+
+  it('rejects malformed PNET key material before constructing a node', async () => {
+    expect(() => new TeranodeListener({ [topic]: jest.fn() }, { sharedKey: 'abcd' })).toThrow(
+      'sharedKey must encode exactly 32 bytes'
+    )
+    expect(createLibp2p).not.toHaveBeenCalled()
+  })
+
+  it('requires exact own runtime configuration without invoking accessors', () => {
+    expect(
+      () =>
+        new TeranodeListener(
+          { [topic]: jest.fn() },
+          { decodeMessages: 'false' as unknown as boolean }
+        )
+    ).toThrow('decodeMessages must be a boolean')
+    expect(
+      () =>
+        new TeranodeListener(
+          { [topic]: jest.fn() },
+          { usePrivateDHT: 'false' as unknown as boolean }
+        )
+    ).toThrow('usePrivateDHT must be a boolean')
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, { dhtProtocolID: '/../unsafe' })
+    ).toThrow('canonical protocol prefix')
+    expect(() => new TeranodeListener({ ['__proto__' as typeof topic]: jest.fn() })).toThrow(
+      'Unsupported Teranode topic'
+    )
+
+    const getter = jest.fn(() => false)
+    const config = Object.defineProperty({}, 'decodeMessages', { get: getter })
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, config as { decodeMessages: boolean })
+    ).toThrow('listener config cannot use accessors')
+    expect(getter).not.toHaveBeenCalled()
+
+    const addressGetter = jest.fn(() => '/dns4/attacker.example/tcp/1')
+    const accessorAddresses = [] as string[]
+    Object.defineProperty(accessorAddresses, '0', { get: addressGetter })
+    accessorAddresses.length = 1
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: accessorAddresses })
+    ).toThrow('bounded strings')
+    expect(addressGetter).not.toHaveBeenCalled()
+  })
+
+  it('rejects hostile callback and listener configuration containers', () => {
+    class NonPlainConfig {}
+
+    for (const callbacks of [null, [], new NonPlainConfig()]) {
+      expect(() => new TeranodeListener(callbacks as never)).toThrow(
+        'topicCallbacks must be a plain object'
+      )
+    }
+    const symbolCallbacks = { [Symbol('topic')]: jest.fn() }
+    expect(() => new TeranodeListener(symbolCallbacks as never)).toThrow(
+      'topicCallbacks cannot contain symbols'
+    )
+    const callbackGetter = jest.fn(() => jest.fn())
+    const accessorCallbacks = Object.defineProperty({}, topic, { get: callbackGetter })
+    expect(() => new TeranodeListener(accessorCallbacks)).toThrow(
+      'topic callback must be an own data function'
+    )
+    expect(callbackGetter).not.toHaveBeenCalled()
+
+    for (const config of [null, [], new NonPlainConfig()]) {
+      expect(() => new TeranodeListener({ [topic]: jest.fn() }, config as never)).toThrow(
+        'listener config must be a plain object'
+      )
+    }
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, { unsupported: true } as never)
+    ).toThrow('unsupported property')
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, { [Symbol('option')]: true } as never)
+    ).toThrow('unsupported property')
+    expect(() => new TeranodeListener({ [topic]: jest.fn() }, { sharedKey: 1 as never })).toThrow(
+      'sharedKey must be a string'
+    )
+  })
+
+  it('rejects unbounded, duplicate, and control-bearing address arrays', () => {
+    expect(
+      () => new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: 'peer' as never })
+    ).toThrow('at most 64 bounded strings')
+    expect(
+      () =>
+        new TeranodeListener(
+          { [topic]: jest.fn() },
+          { staticPeers: Array.from({ length: 65 }, () => '/ip4/127.0.0.1/tcp/1') }
+        )
+    ).toThrow('at most 64 bounded strings')
+    expect(
+      () =>
+        new TeranodeListener(
+          { [topic]: jest.fn() },
+          { staticPeers: ['/ip4/127.0.0.1/tcp/1', '/ip4/127.0.0.1/tcp/1'] }
+        )
+    ).toThrow('must not contain duplicates')
+    expect(
+      () =>
+        new TeranodeListener(
+          { [topic]: jest.fn() },
+          { staticPeers: ['/dns4/peer.example/tcp/1\u0000'] }
+        )
+    ).toThrow('bounded strings')
+  })
+
+  it('rejects a non-callable callback added after construction', () => {
+    const listener = new TeranodeListener({ [topic]: jest.fn() })
+    expect(() => listener.addTopicCallback(topic, 'callback' as never)).toThrow(
+      'topic callback must be a function'
+    )
+  })
+
+  it('snapshots caller-owned callbacks and address arrays before start', async () => {
+    const { messageHandlers, node } = mockNode()
+    createLibp2p.mockResolvedValue(node)
+    const originalCallback = jest.fn()
+    const replacementCallback = jest.fn()
+    const callbacks = { [topic]: originalCallback }
+    const bootstrapPeers = ['/dns4/original.example/tcp/1']
+    const listenAddresses = ['/ip4/127.0.0.1/tcp/1']
+    const listener = new TeranodeListener(callbacks, {
+      bootstrapPeers,
+      listenAddresses,
+      staticPeers: []
+    })
+
+    callbacks[topic] = replacementCallback
+    bootstrapPeers[0] = '/dns4/attacker.example/tcp/1'
+    listenAddresses[0] = '/ip4/0.0.0.0/tcp/1'
+    await listener.start()
+    messageHandlers['gossipsub:message']({
+      detail: {
+        msg: { topic, data: Uint8Array.from([1]) },
+        propagationSource: { toString: () => 'remote-peer' }
+      }
+    })
+
+    expect(bootstrap).toHaveBeenCalledWith({ list: ['/dns4/original.example/tcp/1'] })
+    expect(createLibp2p).toHaveBeenCalledWith(
+      expect.objectContaining({ addresses: { listen: ['/ip4/127.0.0.1/tcp/1'] } })
+    )
+    expect(originalCallback).toHaveBeenCalledTimes(1)
+    expect(replacementCallback).not.toHaveBeenCalled()
+    await listener.stop()
+  })
+
+  it('coalesces concurrent starts and stops', async () => {
+    const { node } = mockNode()
+    let releaseStart: (() => void) | undefined
+    node.start.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          releaseStart = resolve
+        })
+    )
+    createLibp2p.mockResolvedValue(node)
+    const listener = new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: [] })
+
+    const firstStart = listener.start()
+    const secondStart = listener.start()
+    while (releaseStart === undefined) await Promise.resolve()
+    releaseStart()
+    await Promise.all([firstStart, secondStart])
+    await Promise.all([listener.stop(), listener.stop()])
+
+    expect(createLibp2p).toHaveBeenCalledTimes(1)
+    expect(node.start).toHaveBeenCalledTimes(1)
+    expect(node.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('cleans up failed starts and permits a safe retry', async () => {
+    const failed = mockNode().node
+    failed.start.mockRejectedValueOnce(new Error('start failed'))
+    const recovered = mockNode().node
+    createLibp2p.mockResolvedValueOnce(failed).mockResolvedValueOnce(recovered)
+    const listener = new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: [] })
+
+    await expect(listener.start()).rejects.toThrow('start failed')
+    expect(failed.stop).toHaveBeenCalledTimes(1)
+    expect(listener.getNode()).toBeNull()
+
+    await listener.start()
+    expect(listener.getNode()).toBe(recovered)
+    await listener.stop()
+  })
+
+  it('contains cleanup failures from a partially started node', async () => {
+    const failed = mockNode().node
+    failed.start.mockRejectedValueOnce(new Error('start failed'))
+    failed.stop.mockRejectedValueOnce(new Error('cleanup failed'))
+    createLibp2p.mockResolvedValue(failed)
+    const listener = new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: [] })
+    const error = jest.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(listener.start()).rejects.toThrow('start failed')
+
+    expect(error).toHaveBeenCalledWith(
+      'Failed to clean up a partially started TeranodeListener:',
+      expect.objectContaining({ message: 'cleanup failed' })
+    )
+    error.mockRestore()
+  })
+
+  it('waits for an in-flight start before stopping the resulting node', async () => {
+    const { node } = mockNode()
+    let releaseStart: (() => void) | undefined
+    node.start.mockImplementation(
+      () =>
+        new Promise<void>(resolve => {
+          releaseStart = resolve
+        })
+    )
+    createLibp2p.mockResolvedValue(node)
+    const listener = new TeranodeListener({ [topic]: jest.fn() }, { staticPeers: [] })
+
+    const starting = listener.start()
+    while (releaseStart === undefined) await Promise.resolve()
+    const stopping = listener.stop()
+    releaseStart()
+    await Promise.all([starting, stopping])
+
+    expect(node.stop).toHaveBeenCalledTimes(1)
+    expect(listener.getNode()).toBeNull()
+  })
+
+  it('does not start the DHT service when usePrivateDHT is false', async () => {
+    const { node } = mockNode()
+    createLibp2p.mockResolvedValue(node)
+    const listener = new TeranodeListener(
+      { [topic]: jest.fn() },
+      { usePrivateDHT: false, staticPeers: [] }
+    )
+    await listener.start()
+    expect(kadDHT).not.toHaveBeenCalled()
+    expect(createLibp2p).toHaveBeenCalledWith(
+      expect.objectContaining({ services: expect.not.objectContaining({ dht: expect.anything() }) })
+    )
     await listener.stop()
   })
 
@@ -248,5 +491,44 @@ describe('startSubscriber', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(node.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects accessor-backed, duplicate, sparse, and unsupported topics', async () => {
+    const getter = jest.fn(() => [topic])
+    const accessorConfig = Object.defineProperty({}, 'topics', { get: getter })
+    await expect(startSubscriber(accessorConfig as { topics: [typeof topic] })).rejects.toThrow(
+      'subscriber config cannot use accessors'
+    )
+    expect(getter).not.toHaveBeenCalled()
+    await expect(startSubscriber({ topics: [topic, topic] })).rejects.toThrow('unique')
+    await expect(
+      startSubscriber({ topics: ['bitcoin/mainnet-unknown' as typeof topic] })
+    ).rejects.toThrow('supported')
+    const sparse = Array(1) as (typeof topic)[]
+    await expect(startSubscriber({ topics: sparse })).rejects.toThrow('supported')
+    const topicGetter = jest.fn(() => topic)
+    const accessorTopics = [] as (typeof topic)[]
+    Object.defineProperty(accessorTopics, '0', { get: topicGetter })
+    accessorTopics.length = 1
+    await expect(startSubscriber({ topics: accessorTopics })).rejects.toThrow('supported')
+    expect(topicGetter).not.toHaveBeenCalled()
+  })
+
+  it('rejects hostile subscriber containers and oversized topic lists', async () => {
+    class NonPlainSubscriberConfig {}
+    for (const config of [null, [], new NonPlainSubscriberConfig()]) {
+      await expect(startSubscriber(config as never)).rejects.toThrow(
+        'subscriber config must be a plain object'
+      )
+    }
+    await expect(startSubscriber({ [Symbol('option')]: true } as never)).rejects.toThrow(
+      'subscriber config cannot contain symbols'
+    )
+    await expect(startSubscriber({ topics: 'topic' as never })).rejects.toThrow(
+      'topics must contain only supported unique Teranode topics'
+    )
+    await expect(
+      startSubscriber({ topics: Array.from({ length: 13 }, () => topic) })
+    ).rejects.toThrow('topics must contain only supported unique Teranode topics')
   })
 })

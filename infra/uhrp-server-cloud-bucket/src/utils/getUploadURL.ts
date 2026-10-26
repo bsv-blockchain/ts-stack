@@ -1,4 +1,5 @@
 import { Storage } from '@google-cloud/storage'
+import { PublicKey } from '@bsv/sdk'
 import { log } from '../logger'
 
 const { NODE_ENV, GCP_BUCKET_NAME, GCP_PROJECT_ID, GCP_STORAGE_CREDS } = process.env
@@ -32,7 +33,7 @@ const devUploadFunction = (): Promise<UploadResponse> => {
  * be present on the request. There is no way to force these headers solely via the URL.
  */
 const prodUploadFunction = async ({
-  size: _size,
+  size,
   expiryTime,
   objectIdentifier,
   uploaderIdentityKey
@@ -40,10 +41,25 @@ const prodUploadFunction = async ({
   if (!GCP_BUCKET_NAME || !GCP_PROJECT_ID) {
     throw new Error('Missing required Google Cloud Storage environment variables.')
   }
+  if (!Number.isSafeInteger(size) || size < 1) throw new Error('Invalid upload size')
+  if (!Number.isSafeInteger(expiryTime) || expiryTime < 1) throw new Error('Invalid upload expiry')
+  if (!/^[1-9A-HJ-NP-Za-km-z]{1,128}$/.test(objectIdentifier)) {
+    throw new Error('Invalid upload object identifier')
+  }
+  if (!/^(?:02|03)[0-9a-f]{64}$/i.test(uploaderIdentityKey)) {
+    throw new Error('Invalid uploader identity key')
+  }
+  const canonicalUploader = PublicKey.fromString(uploaderIdentityKey).toString().toLowerCase()
+  if (canonicalUploader !== uploaderIdentityKey.toLowerCase()) throw new Error('Invalid uploader identity key')
+  const now = Date.now()
+  const remainingMs = (expiryTime * 1000) - now
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) throw new Error('Upload expiry is in the past')
   
   const storage = new Storage({
     projectId: GCP_PROJECT_ID,
-    credentials: JSON.parse(GCP_STORAGE_CREDS as string)
+    credentials: GCP_STORAGE_CREDS == null || GCP_STORAGE_CREDS === ''
+      ? undefined
+      : JSON.parse(GCP_STORAGE_CREDS)
   })
 
   const bucket = storage.bucket(GCP_BUCKET_NAME)
@@ -57,9 +73,15 @@ const prodUploadFunction = async ({
   const [uploadURL] = await bucketFile.getSignedUrl({
     version: 'v4',
     action: 'write',
-    expires: Date.now() + 604000 * 1000, // 1 week
+    // Keep the write capability short-lived and never valid beyond the paid
+    // retention window. A generation precondition makes it single-use.
+    expires: now + Math.min(15 * 60 * 1000, remainingMs),
     extensionHeaders: {
-      'x-goog-meta-uploaderidentitykey': uploaderIdentityKey,
+      'content-length': String(size),
+      'content-type': 'application/octet-stream',
+      'content-disposition': 'attachment',
+      'x-goog-if-generation-match': '0',
+      'x-goog-meta-uploaderidentitykey': canonicalUploader,
       'x-goog-custom-time': customTime
     }
   })
@@ -67,7 +89,11 @@ const prodUploadFunction = async ({
   return {
     uploadURL,
     requiredHeaders: {
-      'x-goog-meta-uploaderidentitykey': uploaderIdentityKey,
+      'content-length': String(size),
+      'content-type': 'application/octet-stream',
+      'content-disposition': 'attachment',
+      'x-goog-if-generation-match': '0',
+      'x-goog-meta-uploaderidentitykey': canonicalUploader,
       'x-goog-custom-time': customTime
     }
   }

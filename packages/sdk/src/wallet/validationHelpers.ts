@@ -1,3 +1,4 @@
+import { existingCertificateTypeBytes } from './CertificateType.js'
 /* eslint-disable @typescript-eslint/strict-boolean-expressions */
 import {
   AbortActionArgs,
@@ -11,11 +12,14 @@ import {
   BooleanDefaultFalse,
   BooleanDefaultTrue,
   CertificateFieldNameUnder50Bytes,
+  CreateHmacArgs,
   CreateActionArgs,
   CreateActionInput,
   CreateActionOptions,
   CreateActionOutput,
   DescriptionString5to50Bytes,
+  GetHeaderArgs,
+  GetPublicKeyArgs,
   DiscoverByAttributesArgs,
   DiscoverByIdentityKeyArgs,
   HexString,
@@ -33,6 +37,8 @@ import {
   PositiveIntegerOrZero,
   ProveCertificateArgs,
   PubKeyHex,
+  RevealCounterpartyKeyLinkageArgs,
+  RevealSpecificKeyLinkageArgs,
   RelinquishCertificateArgs,
   RelinquishOutputArgs,
   SatoshiValue,
@@ -41,40 +47,204 @@ import {
   SignActionSpend,
   TrustSelf,
   TXIDHexString,
-  WalletPayment
+  VerifyHmacArgs,
+  VerifySignatureArgs,
+  WalletDecryptArgs,
+  WalletEncryptArgs,
+  WalletPayment,
+  WalletProtocol,
+  CreateSignatureArgs
 } from './Wallet.interfaces.js'
-import * as Utils from '../primitives/utils.js'
 import WERR_INVALID_PARAMETER from './WERR_INVALID_PARAMETER.js'
-import Beef from '../transaction/Beef.js'
 import { WalletLoggerInterface } from './WalletLoggerInterface.js'
+import { MAX_WALLET_WIRE_FRAME_BYTES } from './substrates/WalletWire.js'
+import ExactByteCache from './ExactByteCache.js'
+import { parseWalletResultAtomicBEEF, parseWalletResultBEEF } from './WalletResultBEEF.js'
+import { isCanonicalDERSignature, isValidCompressedPublicKey } from './Secp256k1Validation.js'
+import { hexToBytes, utf8Bytes } from './WalletByteEncoding.js'
+import { isUnsafeRecordKey } from '../primitives/SafeRecord.js'
+
+const MAX_UINT32 = 0xffffffff
+const MAXIMUM_WALLET_COLLECTION_ITEMS = 100_000
+/** Maximum number of transaction IDs that may be submitted as one atomic broadcast set. */
+export const MAXIMUM_SEND_WITH_TRANSACTIONS = 1000
+export const MAXIMUM_CERTIFICATE_REVEAL_FIELDS = 100
+export const MAXIMUM_DISCOVERY_ATTRIBUTES = 32
+const validatedBeef = new ExactByteCache<true>()
+const validatedAtomicBeef = new ExactByteCache<true>()
+
+type UnknownRecord = Record<string, unknown>
+
+function invalid(name: string, expectation: string): never {
+  throw new WERR_INVALID_PARAMETER(name, expectation)
+}
+
+function validateRecord(value: unknown, name: string): UnknownRecord {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return invalid(name, 'a plain object')
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== null && prototype !== Object.prototype) {
+    return invalid(name, 'a plain object')
+  }
+  const keys = Reflect.ownKeys(value)
+  if (keys.length > MAXIMUM_WALLET_COLLECTION_ITEMS) {
+    return invalid(name, `an object with at most ${MAXIMUM_WALLET_COLLECTION_ITEMS} properties`)
+  }
+  for (const key of keys) {
+    if (typeof key !== 'string' || isUnsafeRecordKey(key)) {
+      return invalid(name, 'an object with safe string keys')
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (descriptor == null || !('value' in descriptor)) {
+      return invalid(`${name}.${key}`, 'a data property')
+    }
+  }
+  return value as UnknownRecord
+}
+
+function validateArray<T>(
+  value: T[] | undefined,
+  name: string,
+  maximum = MAXIMUM_WALLET_COLLECTION_ITEMS
+): T[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) return invalid(name, 'an array')
+  if (maximum !== undefined && value.length > maximum) {
+    return invalid(name, `an array of at most ${maximum} items`)
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  const expectedKeys = new Set([
+    'length',
+    ...Array.from({ length: value.length }, (_, index) => String(index))
+  ])
+  if (
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.keys(descriptors).length !== expectedKeys.size ||
+    Object.keys(descriptors).some(key => !expectedKeys.has(key)) ||
+    Object.values(descriptors).some(descriptor => descriptor.get != null || descriptor.set != null)
+  ) {
+    return invalid(name, 'an accessor-free dense array without extra properties')
+  }
+  for (let i = 0; i < value.length; i++) {
+    if (!Object.prototype.hasOwnProperty.call(value, i)) {
+      return invalid(name, 'a dense array')
+    }
+  }
+  return value
+}
+
+function validateSendWith(value: TXIDHexString[] | undefined): TXIDHexString[] {
+  const sendWith = validateArray(value, 'sendWith', MAXIMUM_SEND_WITH_TRANSACTIONS).map(
+    (txid, index) => validateHexString(txid, `sendWith[${index}]`, 64, 64)
+  )
+  if (new Set(sendWith).size !== sendWith.length) {
+    return invalid('sendWith', 'unique transaction IDs')
+  }
+  return sendWith
+}
+
+function validateByteArray(
+  value: unknown,
+  name: string,
+  exactLength?: number,
+  maximumLength = MAX_WALLET_WIRE_FRAME_BYTES
+): number[] | Uint8Array {
+  if (value instanceof Uint8Array) {
+    if (value.length > maximumLength) {
+      return invalid(name, `at most ${maximumLength} bytes`)
+    }
+    if (exactLength !== undefined && value.length !== exactLength) {
+      return invalid(name, `exactly ${exactLength} bytes`)
+    }
+    return value
+  }
+  if (!Array.isArray(value)) return invalid(name, 'an array of bytes')
+  if (value.length > maximumLength) return invalid(name, `at most ${maximumLength} bytes`)
+  for (let i = 0; i < value.length; i++) {
+    if (
+      !Object.prototype.hasOwnProperty.call(value, i) ||
+      !Number.isInteger(value[i]) ||
+      value[i] < 0 ||
+      value[i] > 255
+    ) {
+      return invalid(name, 'a dense array of bytes')
+    }
+  }
+  if (exactLength !== undefined && value.length !== exactLength) {
+    return invalid(name, `exactly ${exactLength} bytes`)
+  }
+  return value
+}
+
+function validateBoolean(value: unknown, name: string, defaultValue: boolean): boolean {
+  if (value === undefined) return defaultValue
+  if (typeof value !== 'boolean') return invalid(name, 'a boolean')
+  return value
+}
+
+function validatePublicKey(value: unknown, name: string): PubKeyHex {
+  const encoded = validateHexString(value as string, name, 66, 66)
+  if (!isValidCompressedPublicKey(encoded)) {
+    return invalid(name, 'a valid compressed secp256k1 public key')
+  }
+  return encoded
+}
+
+function validateCounterparty(value: unknown, name: string): PubKeyHex {
+  if (value === 'self' || value === 'anyone') return value
+  return validatePublicKey(value, name)
+}
+
+function validateProtocol(value: unknown, name = 'protocolID'): WalletProtocol {
+  if (!Array.isArray(value) || value.length !== 2) {
+    return invalid(name, 'a [securityLevel, protocolName] tuple')
+  }
+  const securityLevel = validateInteger(value[0], `${name}[0]`, undefined, 0, 2)
+  const protocolName = validateStringLength(value[1], `${name}[1]`, 5, 400)
+  return [securityLevel as 0 | 1 | 2, protocolName]
+}
+
+function validatePrivilege(
+  value: { privileged?: unknown; privilegedReason?: unknown; seekPermission?: unknown },
+  includeSeekPermission = true
+): void {
+  const privileged = validateBoolean(value.privileged, 'privileged', false)
+  const reason = validateOptionalStringLength(
+    value.privilegedReason as string | undefined,
+    'privilegedReason',
+    5,
+    50
+  )
+  if (privileged && reason === undefined) {
+    invalid('privilegedReason', "a value when 'privileged' is true")
+  }
+  if (includeSeekPermission) validateBoolean(value.seekPermission, 'seekPermission', true)
+}
+
+function validateEncryptionArgs(args: unknown, name = 'args'): void {
+  const value = validateRecord(args, name)
+  validateProtocol(value.protocolID)
+  validateStringLength(value.keyID as string, 'keyID', 1, 800)
+  if (value.counterparty !== undefined) validateCounterparty(value.counterparty, 'counterparty')
+  validatePrivilege(value)
+}
 
 export function parseWalletOutpoint(outpoint: string): {
   txid: string
   vout: number
 } {
-  const [txid, vout] = outpoint.split('.')
+  const normalized = validateOutpointString(outpoint, 'outpoint')
+  const [txid, vout] = normalized.split('.')
   return { txid, vout: Number(vout) }
 }
 
-function defaultTrue(v?: boolean): boolean {
-  return v ?? true
+function defaultTrue(v?: boolean, name = 'value'): boolean {
+  return validateBoolean(v, name, true)
 }
-function defaultFalse(v?: boolean): boolean {
-  return v ?? false
+function defaultFalse(v?: boolean, name = 'value'): boolean {
+  return validateBoolean(v, name, false)
 }
-function defaultZero(v?: number): number {
-  return v ?? 0
-}
-function default0xffffffff(v?: number): number {
-  return v ?? 0xffffffff
-}
-function defaultOne(v?: number): number {
-  return v ?? 1
-}
-function defaultEmpty<T>(v?: T[]): T[] {
-  return v ?? []
-}
-
 function validateOptionalStringLength(
   s: string | undefined,
   name: string,
@@ -95,7 +265,7 @@ function validateOptionalStringLength(
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateSatoshis(v: number | undefined, name: string, min?: number): number {
-  if (v === undefined || !Number.isInteger(v) || v < 0 || v > 21e14) {
+  if (v === undefined || !Number.isSafeInteger(v) || v < 0 || v > 21e14) {
     throw new WERR_INVALID_PARAMETER(name, 'a valid number of satoshis')
   }
   if (min !== undefined && v < min)
@@ -145,7 +315,7 @@ export function validateInteger(
     if (defaultValue !== undefined) return defaultValue
     throw new WERR_INVALID_PARAMETER(name, 'a valid integer')
   }
-  if (!Number.isInteger(v)) throw new WERR_INVALID_PARAMETER(name, 'an integer')
+  if (!Number.isSafeInteger(v)) throw new WERR_INVALID_PARAMETER(name, 'a safe integer')
   v = Number(v)
   if (min !== undefined && v < min)
     throw new WERR_INVALID_PARAMETER(name, `at least ${min} length.`)
@@ -177,7 +347,8 @@ export function validatePositiveIntegerOrZero(v: number, name: string): number {
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateStringLength(s: string, name: string, min?: number, max?: number): string {
-  const bytes = Utils.toArray(s, 'utf8').length
+  if (typeof s !== 'string') throw new WERR_INVALID_PARAMETER(name, 'a string')
+  const bytes = utf8Bytes(s).length
   if (min !== undefined && bytes < min)
     throw new WERR_INVALID_PARAMETER(name, `at least ${min} length.`)
   if (max !== undefined && bytes > max)
@@ -237,8 +408,9 @@ function validateTag(s: string): string {
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 function validateIdentifier(s: string, name: string, min?: number, max?: number): string {
+  if (typeof s !== 'string') throw new WERR_INVALID_PARAMETER(name, 'a string')
   s = s.trim().toLowerCase()
-  const bytes = Utils.toArray(s, 'utf8').length
+  const bytes = utf8Bytes(s).length
   if (min !== undefined && bytes < min)
     throw new WERR_INVALID_PARAMETER(name, `at least ${min} length.`)
   if (max !== undefined && bytes > max)
@@ -304,6 +476,18 @@ function validateDecodedBase64Length(
   }
 }
 
+/** Validate an existing certificate reference without weakening new issuance. */
+export function validateExistingCertificateType(value: string, name: string): string {
+  try {
+    // Preserve reference-argument normalization without rewriting signed types.
+    if (typeof value === 'string') value = value.trim()
+    existingCertificateTypeBytes(value)
+    return value
+  } catch {
+    throw new WERR_INVALID_PARAMETER(name, 'canonical base64 encoding 1 to 128 bytes')
+  }
+}
+
 /**
  * Validate a Base64 string (structure and decoded size).
  *
@@ -315,6 +499,7 @@ function validateDecodedBase64Length(
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateBase64String(s: string, name: string, min?: number, max?: number): string {
+  if (typeof s !== 'string') invalidBase64(name)
   s = s.trim()
   if (s.length === 0) invalidBase64(name)
   const paddingCount = countBase64Padding(s, name)
@@ -348,6 +533,7 @@ const hexRegex = /^[0-9A-Fa-f]+$/
  * @returns
  */
 function validateHexString(s: string, name: string, min?: number, max?: number): string {
+  if (typeof s !== 'string') throw new WERR_INVALID_PARAMETER(name, 'a hexadecimal string')
   s = s.trim()
   if (s.length % 2 === 1) throw new WERR_INVALID_PARAMETER(name, `even length, not ${s.length}.`)
   const isNormalized = normalizedHexRegex.test(s)
@@ -360,6 +546,14 @@ function validateHexString(s: string, name: string, min?: number, max?: number):
   return isNormalized ? s : s.toLowerCase()
 }
 
+function validateSignatureHex(s: string, name: string): HexString {
+  const encoded = validateHexString(s, name)
+  if (!isCanonicalDERSignature(hexToBytes(encoded))) {
+    return invalid(name, 'a canonical DER-encoded ECDSA signature')
+  }
+  return encoded
+}
+
 /**
  * Check whether a string is a valid hex string (even length and hex characters).
  *
@@ -367,6 +561,7 @@ function validateHexString(s: string, name: string, min?: number, max?: number):
  * @returns true when s is a valid hex string
  */
 export function isHexString(s: string): boolean {
+  if (typeof s !== 'string') return false
   s = s.trim()
   if (s.length % 2 === 1) return false
   if (!hexRegex.test(s)) return false
@@ -403,6 +598,7 @@ export interface ValidCreateActionInput {
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateCreateActionInput(i: CreateActionInput): ValidCreateActionInput {
+  validateRecord(i, 'input')
   if (i.unlockingScript === undefined && i.unlockingScriptLength === undefined) {
     throw new WERR_INVALID_PARAMETER(
       'unlockingScript, unlockingScriptLength',
@@ -412,6 +608,7 @@ export function validateCreateActionInput(i: CreateActionInput): ValidCreateActi
   const unlockingScript = validateOptionalHexString(i.unlockingScript, 'unlockingScript')
   const unlockingScriptLength =
     i.unlockingScriptLength ?? (unlockingScript == null ? 0 : unlockingScript.length / 2)
+  validateInteger(unlockingScriptLength, 'unlockingScriptLength', undefined, 0)
   if (unlockingScript && unlockingScriptLength !== unlockingScript.length / 2) {
     throw new WERR_INVALID_PARAMETER(
       'unlockingScriptLength',
@@ -423,7 +620,7 @@ export function validateCreateActionInput(i: CreateActionInput): ValidCreateActi
     inputDescription: validateStringLength(i.inputDescription, 'inputDescription', 5, 2000),
     unlockingScript,
     unlockingScriptLength,
-    sequenceNumber: default0xffffffff(i.sequenceNumber)
+    sequenceNumber: validateInteger(i.sequenceNumber, 'sequenceNumber', MAX_UINT32, 0, MAX_UINT32)
   }
   return vi
 }
@@ -445,13 +642,14 @@ export interface ValidCreateActionOutput {
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateCreateActionOutput(o: CreateActionOutput): ValidCreateActionOutput {
+  validateRecord(o, 'output')
   const vo: ValidCreateActionOutput = {
     lockingScript: validateHexString(o.lockingScript, 'lockingScript'),
     satoshis: validateSatoshis(o.satoshis, 'satoshis'),
     outputDescription: validateStringLength(o.outputDescription, 'outputDescription', 5, 2000),
     basket: validateOptionalBasket(o.basket),
-    customInstructions: o.customInstructions,
-    tags: defaultEmpty(o.tags).map(t => validateTag(t))
+    customInstructions: validateOptionalStringLength(o.customInstructions, 'customInstructions'),
+    tags: validateArray(o.tags, 'tags').map(t => validateTag(t))
   }
   return vo
 }
@@ -465,17 +663,25 @@ export function validateCreateActionOutput(o: CreateActionOutput): ValidCreateAc
 export function validateCreateActionOptions(
   options?: CreateActionOptions
 ): ValidCreateActionOptions {
+  if (options !== undefined) validateRecord(options, 'options')
   const o = options ?? {}
+  if (o.trustSelf !== undefined && o.trustSelf !== 'known') {
+    invalid('trustSelf', "undefined or 'known'")
+  }
   const vo: ValidCreateActionOptions = {
-    signAndProcess: defaultTrue(o.signAndProcess),
-    acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast),
+    signAndProcess: defaultTrue(o.signAndProcess, 'signAndProcess'),
+    acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast, 'acceptDelayedBroadcast'),
     trustSelf: o.trustSelf,
-    knownTxids: defaultEmpty(o.knownTxids),
-    returnTXIDOnly: defaultFalse(o.returnTXIDOnly),
-    noSend: defaultFalse(o.noSend),
-    noSendChange: defaultEmpty(o.noSendChange).map(nsc => parseWalletOutpoint(nsc)),
-    sendWith: defaultEmpty(o.sendWith),
-    randomizeOutputs: defaultTrue(o.randomizeOutputs)
+    knownTxids: validateArray(o.knownTxids, 'knownTxids').map(txid =>
+      validateHexString(txid, 'knownTxids', 64, 64)
+    ),
+    returnTXIDOnly: defaultFalse(o.returnTXIDOnly, 'returnTXIDOnly'),
+    noSend: defaultFalse(o.noSend, 'noSend'),
+    noSendChange: validateArray(o.noSendChange, 'noSendChange').map(nsc =>
+      parseWalletOutpoint(nsc)
+    ),
+    sendWith: validateSendWith(o.sendWith),
+    randomizeOutputs: defaultTrue(o.randomizeOutputs, 'randomizeOutputs')
   }
   return vo
 }
@@ -557,14 +763,16 @@ export function validateCreateActionArgs(
   args: CreateActionArgs,
   logger?: WalletLoggerInterface
 ): ValidCreateActionArgs {
+  validateRecord(args, 'args')
   const vargs: ValidCreateActionArgs = {
     description: validateStringLength(args.description, 'description', 5, 2000),
-    inputBEEF: args.inputBEEF,
-    inputs: defaultEmpty(args.inputs).map(i => validateCreateActionInput(i)),
-    outputs: defaultEmpty(args.outputs).map(o => validateCreateActionOutput(o)),
-    lockTime: defaultZero(args.lockTime),
-    version: defaultOne(args.version),
-    labels: defaultEmpty(args.labels?.map(l => validateLabel(l))),
+    inputBEEF:
+      args.inputBEEF === undefined ? undefined : validateByteArray(args.inputBEEF, 'inputBEEF'),
+    inputs: validateArray(args.inputs, 'inputs').map(i => validateCreateActionInput(i)),
+    outputs: validateArray(args.outputs, 'outputs').map(o => validateCreateActionOutput(o)),
+    lockTime: validateInteger(args.lockTime, 'lockTime', 0, 0, MAX_UINT32),
+    version: validateInteger(args.version, 'version', 1, 0, MAX_UINT32),
+    labels: validateArray(args.labels, 'labels').map(l => validateLabel(l)),
     options: validateCreateActionOptions(args.options),
     logger,
     isSendWith: false,
@@ -577,10 +785,32 @@ export function validateCreateActionArgs(
     includeAllSourceTransactions: false,
     isTestWerrReviewActions: false
   }
+  if (vargs.inputBEEF !== undefined && validatedBeef.get(vargs.inputBEEF) !== true) {
+    try {
+      parseWalletResultBEEF(vargs.inputBEEF)
+      validatedBeef.set(vargs.inputBEEF, true)
+    } catch {
+      throw new WERR_INVALID_PARAMETER('inputBEEF', 'a complete, exactly framed BEEF envelope')
+    }
+  }
+  const requestedInputOutpoints = new Set<string>()
+  for (const input of vargs.inputs) {
+    const outpoint = `${input.outpoint.txid.toLowerCase()}.${input.outpoint.vout}`
+    if (requestedInputOutpoints.has(outpoint)) {
+      invalid('inputs', 'unique input outpoints')
+    }
+    requestedInputOutpoints.add(outpoint)
+  }
   vargs.isTestWerrReviewActions = vargs.labels.includes(specOpThrowReviewActions)
   vargs.isSendWith = vargs.options.sendWith.length > 0
   vargs.isRemixChange = !vargs.isSendWith && vargs.inputs.length === 0 && vargs.outputs.length === 0
   vargs.isNewTx = vargs.isRemixChange || vargs.inputs.length > 0 || vargs.outputs.length > 0
+  if (vargs.isNewTx && vargs.options.sendWith.length >= MAXIMUM_SEND_WITH_TRANSACTIONS) {
+    invalid(
+      'sendWith',
+      `at most ${MAXIMUM_SEND_WITH_TRANSACTIONS - 1} transaction IDs when the new transaction joins the broadcast set`
+    )
+  }
   vargs.isSignAction =
     vargs.isNewTx &&
     (!vargs.options.signAndProcess || vargs.inputs.some(i => i.unlockingScript === undefined))
@@ -597,12 +827,13 @@ export function validateCreateActionArgs(
  * Convert string outpoints to `{ txid: string, vout: number }`
  */
 export function validateSignActionOptions(options?: SignActionOptions): ValidSignActionOptions {
+  if (options !== undefined) validateRecord(options, 'options')
   const o = options ?? {}
   const vo: ValidSignActionOptions = {
-    acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast),
-    returnTXIDOnly: defaultFalse(o.returnTXIDOnly),
-    noSend: defaultFalse(o.noSend),
-    sendWith: defaultEmpty(o.sendWith)
+    acceptDelayedBroadcast: defaultTrue(o.acceptDelayedBroadcast, 'acceptDelayedBroadcast'),
+    returnTXIDOnly: defaultFalse(o.returnTXIDOnly, 'returnTXIDOnly'),
+    noSend: defaultFalse(o.noSend, 'noSend'),
+    sendWith: validateSendWith(o.sendWith)
   }
   return vo
 }
@@ -614,9 +845,33 @@ export function validateSignActionOptions(options?: SignActionOptions): ValidSig
  * @returns ValidSignActionArgs
  */
 export function validateSignActionArgs(args: SignActionArgs): ValidSignActionArgs {
+  validateRecord(args, 'args')
+  const spends = validateRecord(args.spends, 'spends')
+  const validSpends: Record<number, SignActionSpend> = Object.create(null)
+  for (const [index, value] of Object.entries(spends)) {
+    if (!/^(?:0|[1-9]\d*)$/.test(index)) invalid('spends key', 'a canonical input index')
+    const inputIndex = validateInteger(Number(index), 'spends key', undefined, 0, MAX_UINT32)
+    const spend = validateRecord(value, `spends.${index}`)
+    validSpends[inputIndex] = {
+      unlockingScript: validateHexString(
+        spend.unlockingScript as string,
+        `spends.${index}.unlockingScript`
+      ),
+      sequenceNumber:
+        spend.sequenceNumber === undefined
+          ? undefined
+          : validateInteger(
+              spend.sequenceNumber as number,
+              `spends.${index}.sequenceNumber`,
+              undefined,
+              0,
+              MAX_UINT32
+            )
+    }
+  }
   const vargs: ValidSignActionArgs = {
-    spends: args.spends,
-    reference: args.reference,
+    spends: validSpends,
+    reference: validateBase64String(args.reference, 'reference'),
     options: validateSignActionOptions(args.options),
     isSendWith: false,
     isDelayed: false,
@@ -626,6 +881,12 @@ export function validateSignActionArgs(args: SignActionArgs): ValidSignActionArg
     isTestWerrReviewActions: false
   }
   vargs.isSendWith = vargs.options.sendWith.length > 0
+  if (vargs.options.sendWith.length >= MAXIMUM_SEND_WITH_TRANSACTIONS) {
+    invalid(
+      'sendWith',
+      `at most ${MAXIMUM_SEND_WITH_TRANSACTIONS - 1} transaction IDs when the signed transaction joins the broadcast set`
+    )
+  }
   vargs.isDelayed = vargs.options.acceptDelayedBroadcast
   vargs.isNoSend = vargs.options.noSend
 
@@ -643,6 +904,7 @@ export interface ValidAbortActionArgs extends ValidWalletSignerArgs {
  * @returns ValidAbortActionArgs
  */
 export function validateAbortActionArgs(args: AbortActionArgs): ValidAbortActionArgs {
+  validateRecord(args, 'args')
   const vargs: ValidAbortActionArgs = {
     reference: validateBase64String(args.reference, 'reference')
   }
@@ -664,10 +926,11 @@ export interface ValidWalletPayment {
  */
 export function validateWalletPayment(args?: WalletPayment): ValidWalletPayment | undefined {
   if (args === undefined) return undefined
+  validateRecord(args, 'paymentRemittance')
   const v: ValidWalletPayment = {
     derivationPrefix: validateBase64String(args.derivationPrefix, 'derivationPrefix'),
     derivationSuffix: validateBase64String(args.derivationSuffix, 'derivationSuffix'),
-    senderIdentityKey: validateHexString(args.senderIdentityKey, 'senderIdentityKey')
+    senderIdentityKey: validatePublicKey(args.senderIdentityKey, 'senderIdentityKey')
   }
   return v
 }
@@ -686,6 +949,7 @@ export interface ValidBasketInsertion {
  */
 export function validateBasketInsertion(args?: BasketInsertion): ValidBasketInsertion | undefined {
   if (args === undefined) return undefined
+  validateRecord(args, 'insertionRemittance')
   const v: ValidBasketInsertion = {
     basket: validateBasket(args.basket),
     customInstructions: validateOptionalStringLength(
@@ -694,7 +958,7 @@ export function validateBasketInsertion(args?: BasketInsertion): ValidBasketInse
       0,
       1000
     ),
-    tags: defaultEmpty(args.tags).map(t => validateTag(t))
+    tags: validateArray(args.tags, 'tags').map(t => validateTag(t))
   }
   return v
 }
@@ -713,8 +977,16 @@ export interface ValidInternalizeOutput {
  * @returns ValidInternalizeOutput
  */
 export function validateInternalizeOutput(args: InternalizeOutput): ValidInternalizeOutput {
+  validateRecord(args, 'output')
   if (args.protocol !== 'basket insertion' && args.protocol !== 'wallet payment') {
     throw new WERR_INVALID_PARAMETER('protocol', "'basket insertion' or 'wallet payment'")
+  }
+  if (args.protocol === 'wallet payment') {
+    if (args.paymentRemittance === undefined || args.insertionRemittance !== undefined) {
+      invalid('output remittance', 'only paymentRemittance for wallet payment')
+    }
+  } else if (args.insertionRemittance === undefined || args.paymentRemittance !== undefined) {
+    invalid('output remittance', 'only insertionRemittance for basket insertion')
   }
   const v: ValidInternalizeOutput = {
     outputIndex: validatePositiveIntegerOrZero(args.outputIndex, 'outputIndex'),
@@ -734,7 +1006,9 @@ export interface ValidInternalizeActionArgs extends ValidWalletSignerArgs {
 }
 
 /**
- * Validate originator string (trim/lowercase and part length checks).
+ * Validate an originator hostname with an optional port. Ports are accepted
+ * for compatibility but omitted from the normalized result: BRC-100 wallet
+ * permissions are scoped to the hostname, not to an individual TCP port.
  *
  * @param s - originator string or undefined
  * @returns normalized originator or undefined
@@ -743,11 +1017,36 @@ export function validateOriginator(s?: string): string | undefined {
   if (s === undefined) return undefined
   s = s.trim().toLowerCase()
   validateStringLength(s, 'originator', 1, 250)
-  const sps = s.split('.')
+  const separator = s.lastIndexOf(':')
+  let hostname = s
+  if (separator !== -1) {
+    if (s.indexOf(':') !== separator) {
+      throw new WERR_INVALID_PARAMETER(
+        'originator',
+        'a canonical DNS hostname with an optional port'
+      )
+    }
+    const port = s.slice(separator + 1)
+    if (!/^\d{1,5}$/.test(port) || Number(port) > 65535) {
+      throw new WERR_INVALID_PARAMETER(
+        'originator',
+        'a canonical DNS hostname with an optional port'
+      )
+    }
+    hostname = s.slice(0, separator)
+  }
+  validateStringLength(hostname, 'originator hostname', 1, 250)
+  const sps = hostname.split('.')
   for (const sp of sps) {
     validateStringLength(sp, 'originator part', 1, 63)
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(sp)) {
+      throw new WERR_INVALID_PARAMETER(
+        'originator',
+        'a canonical DNS hostname with an optional port'
+      )
+    }
   }
-  return s
+  return hostname
 }
 
 /**
@@ -760,27 +1059,22 @@ export function validateOriginator(s?: string): string | undefined {
 export function validateInternalizeActionArgs(
   args: InternalizeActionArgs
 ): ValidInternalizeActionArgs {
+  validateRecord(args, 'args')
   const vargs: ValidInternalizeActionArgs = {
-    tx: args.tx,
-    outputs: args.outputs.map(o => validateInternalizeOutput(o)),
+    tx: validateByteArray(args.tx, 'tx'),
+    outputs: validateArray(args.outputs, 'outputs').map(o => validateInternalizeOutput(o)),
     description: validateStringLength(args.description, 'description', 5, 2000),
-    labels: (args.labels ?? []).map(t => validateLabel(t)),
-    seekPermission: defaultTrue(args.seekPermission)
+    labels: validateArray(args.labels, 'labels').map(t => validateLabel(t)),
+    seekPermission: defaultTrue(args.seekPermission, 'seekPermission')
   }
 
-  try {
-    const beef = Beef.fromBinary(vargs.tx)
-    if (beef.txs.length < 1) {
-      throw new WERR_INVALID_PARAMETER(
-        'tx',
-        'at least one transaction to internalize an output from'
-      )
+  if (validatedAtomicBeef.get(vargs.tx) !== true) {
+    try {
+      parseWalletResultAtomicBEEF(vargs.tx)
+      validatedAtomicBeef.set(vargs.tx, true)
+    } catch {
+      throw new WERR_INVALID_PARAMETER('tx', 'a complete, exactly framed Atomic BEEF transaction')
     }
-  } catch {
-    throw new WERR_INVALID_PARAMETER(
-      'tx',
-      'valid with at least one transaction to internalize an output from'
-    )
   }
   if (vargs.outputs.length < 1) {
     throw new WERR_INVALID_PARAMETER(
@@ -816,15 +1110,21 @@ export function validateOptionalOutpointString(
  * @throws WERR_INVALID_PARAMETER when invalid
  */
 export function validateOutpointString(outpoint: string, name: string): string {
-  const s = outpoint.split('.')
-  if (s.length !== 2 || !Number.isInteger(Number(s[1]))) {
+  if (typeof outpoint !== 'string') {
     throw new WERR_INVALID_PARAMETER(
       name,
       "txid as hex string and numeric output index joined with '.'"
     )
   }
-  const txid = validateHexString(s[0], `${name} txid`, undefined, 64)
-  const vout = validatePositiveIntegerOrZero(Number(s[1]), `${name} vout`)
+  const match = /^([0-9A-Fa-f]{64})\.(0|[1-9]\d*)$/.exec(outpoint)
+  if (match === null) {
+    throw new WERR_INVALID_PARAMETER(
+      name,
+      "a 32-byte txid and canonical numeric output index joined with '.'"
+    )
+  }
+  const txid = validateHexString(match[1], `${name} txid`, 64, 64)
+  const vout = validateInteger(Number(match[2]), `${name} vout`, undefined, 0, MAX_UINT32)
   return `${txid}.${vout}`
 }
 
@@ -842,6 +1142,7 @@ export interface ValidRelinquishOutputArgs extends ValidWalletSignerArgs {
 export function validateRelinquishOutputArgs(
   args: RelinquishOutputArgs
 ): ValidRelinquishOutputArgs {
+  validateRecord(args, 'args')
   const vargs: ValidRelinquishOutputArgs = {
     basket: validateBasket(args.basket),
     output: validateOutpointString(args.output, 'output')
@@ -865,10 +1166,11 @@ export interface ValidRelinquishCertificateArgs extends ValidWalletSignerArgs {
 export function validateRelinquishCertificateArgs(
   args: RelinquishCertificateArgs
 ): ValidRelinquishCertificateArgs {
+  validateRecord(args, 'args')
   const vargs: ValidRelinquishCertificateArgs = {
-    type: validateBase64String(args.type, 'type'),
-    serialNumber: validateBase64String(args.serialNumber, 'serialNumber'),
-    certifier: validateHexString(args.certifier, 'certifier')
+    type: validateExistingCertificateType(args.type, 'type'),
+    serialNumber: validateBase64String(args.serialNumber, 'serialNumber', 32, 32),
+    certifier: validatePublicKey(args.certifier, 'certifier')
   }
 
   return vargs
@@ -900,12 +1202,16 @@ export interface ValidListCertificatesArgs extends ValidWalletSignerArgs {
 export function validateListCertificatesArgs(
   args: ListCertificatesArgs
 ): ValidListCertificatesArgs {
+  validateRecord(args, 'args')
+  validatePrivilege(args, false)
   const vargs: ValidListCertificatesArgs = {
-    certifiers: defaultEmpty(args.certifiers.map(c => validateHexString(c.trim(), 'certifiers'))),
-    types: defaultEmpty(args.types.map(t => validateBase64String(t.trim(), 'types'))),
+    certifiers: validateArray(args.certifiers, 'certifiers').map(c =>
+      validatePublicKey(c, 'certifiers')
+    ),
+    types: validateArray(args.types, 'types').map(t => validateExistingCertificateType(t, 'types')),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
-    offset: validatePositiveIntegerOrZero(defaultZero(args.offset), 'offset'),
-    privileged: defaultFalse(args.privileged),
+    offset: validateInteger(args.offset, 'offset', 0, 0),
+    privileged: defaultFalse(args.privileged, 'privileged'),
     privilegedReason: validateOptionalStringLength(
       args.privilegedReason,
       'privilegedReason',
@@ -939,24 +1245,27 @@ export interface ValidAcquireCertificateArgs extends ValidWalletSignerArgs {
 function validateCertificateFields(
   fields: Record<CertificateFieldNameUnder50Bytes, string>
 ): Record<CertificateFieldNameUnder50Bytes, string> {
-  for (const fieldName of Object.keys(fields)) {
+  const values = validateRecord(fields, 'fields')
+  for (const fieldName of Object.keys(values)) {
     validateStringLength(fieldName, 'field name', 1, 50)
+    validateStringLength(values[fieldName] as string, `fields.${fieldName}`)
   }
   return fields
 }
 
 function validateKeyringRevealer(kr: KeyringRevealer, name: string): KeyringRevealer {
   if (kr === 'certifier') return kr
-  return validateHexString(kr, name)
+  return validatePublicKey(kr, name)
 }
 
 function validateKeyringForSubject(
   kr: Record<CertificateFieldNameUnder50Bytes, Base64String>,
   name: string
 ): Record<CertificateFieldNameUnder50Bytes, Base64String> {
-  for (const fn of Object.keys(kr)) {
+  const values = validateRecord(kr, name)
+  for (const fn of Object.keys(values)) {
     validateStringLength(fn, `${name} field name`, 1, 50)
-    validateBase64String(kr[fn], `${name} field value`)
+    validateBase64String(values[fn] as string, `${name} field value`)
   }
   return kr
 }
@@ -1008,6 +1317,8 @@ export interface ValidAcquireIssuanceCertificateArgs extends ValidWalletSignerAr
 export function validateAcquireIssuanceCertificateArgs(
   args: AcquireCertificateArgs
 ): ValidAcquireIssuanceCertificateArgs {
+  validateRecord(args, 'args')
+  validatePrivilege(args, false)
   if (args.acquisitionProtocol !== 'issuance') {
     throw new Error('Only acquire certificate via issuance requests allowed here.')
   }
@@ -1036,16 +1347,12 @@ export function validateAcquireIssuanceCertificateArgs(
   if (!args.certifierUrl) {
     throw new WERR_INVALID_PARAMETER('certifierUrl', 'valid when acquisitionProtocol is "issuance"')
   }
-  if (args.privileged && !args.privilegedReason) {
-    throw new WERR_INVALID_PARAMETER('privilegedReason', "valid when 'privileged' is true ")
-  }
-
   const vargs: ValidAcquireIssuanceCertificateArgs = {
-    type: validateBase64String(args.type, 'type'),
-    certifier: validateHexString(args.certifier, 'certifier'),
-    certifierUrl: args.certifierUrl,
+    type: validateBase64String(args.type, 'type', 32, 32),
+    certifier: validatePublicKey(args.certifier, 'certifier'),
+    certifierUrl: validateCertificateIssuerUrl(args.certifierUrl),
     fields: validateCertificateFields(args.fields),
-    privileged: defaultFalse(args.privileged),
+    privileged: defaultFalse(args.privileged, 'privileged'),
     privilegedReason: validateOptionalStringLength(
       args.privilegedReason,
       'privilegedReason',
@@ -1055,6 +1362,46 @@ export function validateAcquireIssuanceCertificateArgs(
     subject: ''
   }
   return vargs
+}
+
+function validateCertificateIssuerUrl(value: string): string {
+  const encoded = validateStringLength(value, 'certifierUrl', 1, 2048)
+  if (encoded !== encoded.trim()) {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'an exact HTTPS URL without whitespace')
+  }
+  let target: URL
+  try {
+    target = new URL(encoded)
+  } catch {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'an absolute HTTPS URL')
+  }
+  if (target.protocol !== 'https:') {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'an HTTPS URL')
+  }
+  if (target.username !== '' || target.password !== '') {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'a URL without credentials')
+  }
+  if (target.search !== '' || target.hash !== '') {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'a URL without a query or fragment')
+  }
+  const hostname = target.hostname.toLowerCase()
+  if (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '[::1]' ||
+    /^\d+(?:\.\d+){0,3}$/.test(hostname) ||
+    hostname.includes(':')
+  ) {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'a public DNS hostname')
+  }
+  const labels = hostname.split('.')
+  if (
+    labels.length < 2 ||
+    labels.some(label => !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
+  ) {
+    throw new WERR_INVALID_PARAMETER('certifierUrl', 'a public DNS hostname')
+  }
+  return encoded.replace(/\/+$/, '')
 }
 
 /**
@@ -1067,6 +1414,8 @@ export function validateAcquireIssuanceCertificateArgs(
 export function validateAcquireDirectCertificateArgs(
   args: AcquireCertificateArgs
 ): ValidAcquireDirectCertificateArgs {
+  validateRecord(args, 'args')
+  validatePrivilege(args, false)
   if (args.acquisitionProtocol !== 'direct') {
     throw new Error('Only acquire direct certificate requests allowed here.')
   }
@@ -1092,20 +1441,16 @@ export function validateAcquireDirectCertificateArgs(
       'valid when acquisitionProtocol is "direct"'
     )
   }
-  if (args.privileged && !args.privilegedReason) {
-    throw new WERR_INVALID_PARAMETER('privilegedReason', "valid when 'privileged' is true ")
-  }
-
   const vargs: ValidAcquireDirectCertificateArgs = {
-    type: validateBase64String(args.type, 'type'),
-    serialNumber: validateBase64String(args.serialNumber, 'serialNumber'),
-    certifier: validateHexString(args.certifier, 'certifier'),
+    type: validateBase64String(args.type, 'type', 32, 32),
+    serialNumber: validateBase64String(args.serialNumber, 'serialNumber', 32, 32),
+    certifier: validatePublicKey(args.certifier, 'certifier'),
     revocationOutpoint: validateOutpointString(args.revocationOutpoint, 'revocationOutpoint'),
     fields: validateCertificateFields(args.fields),
-    signature: validateHexString(args.signature, 'signature'),
+    signature: validateSignatureHex(args.signature, 'signature'),
     keyringRevealer: validateKeyringRevealer(args.keyringRevealer, 'keyringRevealer'),
     keyringForSubject: validateKeyringForSubject(args.keyringForSubject, 'keyringForSubject'),
-    privileged: defaultFalse(args.privileged),
+    privileged: defaultFalse(args.privileged, 'privileged'),
     privilegedReason: validateOptionalStringLength(
       args.privilegedReason,
       'privilegedReason',
@@ -1140,29 +1485,52 @@ export interface ValidProveCertificateArgs extends ValidWalletSignerArgs {
 export function validateProveCertificateArgs(
   args: ProveCertificateArgs
 ): ValidProveCertificateArgs {
-  if (args.privileged && !args.privilegedReason) {
-    throw new WERR_INVALID_PARAMETER('privilegedReason', "valid when 'privileged' is true ")
+  validateRecord(args, 'args')
+  validateRecord(args.certificate, 'certificate')
+  validatePrivilege(args, false)
+  if (args.certificate.fields !== undefined) {
+    validateCertificateFields(args.certificate.fields)
   }
 
   const vargs: ValidProveCertificateArgs = {
-    type: validateOptionalBase64String(args.certificate.type, 'certificate.type'),
+    type:
+      args.certificate.type === undefined
+        ? undefined
+        : validateExistingCertificateType(args.certificate.type, 'certificate.type'),
     serialNumber: validateOptionalBase64String(
       args.certificate.serialNumber,
-      'certificate.serialNumber'
+      'certificate.serialNumber',
+      32,
+      32
     ),
-    certifier: validateOptionalHexString(args.certificate.certifier, 'certificate.certifier'),
-    subject: validateOptionalHexString(args.certificate.subject, 'certificate.subject'),
+    certifier:
+      args.certificate.certifier === undefined
+        ? undefined
+        : validatePublicKey(args.certificate.certifier, 'certificate.certifier'),
+    subject:
+      args.certificate.subject === undefined
+        ? undefined
+        : validatePublicKey(args.certificate.subject, 'certificate.subject'),
     revocationOutpoint: validateOptionalOutpointString(
       args.certificate.revocationOutpoint,
       'certificate.revocationOutpoint'
     ),
-    signature: validateOptionalHexString(args.certificate.signature, 'certificate.signature'),
-    fieldsToReveal: defaultEmpty(args.fieldsToReveal).map(fieldName =>
+    signature:
+      args.certificate.signature === undefined
+        ? undefined
+        : validateSignatureHex(args.certificate.signature, 'certificate.signature'),
+    fieldsToReveal: validateArray(args.fieldsToReveal, 'fieldsToReveal').map(fieldName =>
       validateStringLength(fieldName, `fieldsToReveal ${fieldName}`, 1, 50)
     ),
-    verifier: validateHexString(args.verifier, 'verifier'),
-    privileged: defaultFalse(args.privileged),
+    verifier: validatePublicKey(args.verifier, 'verifier'),
+    privileged: defaultFalse(args.privileged, 'privileged'),
     privilegedReason: validateOptionalStringLength(args.privilegedReason, 'privilegedReason', 5, 50)
+  }
+  if (vargs.fieldsToReveal.length > MAXIMUM_CERTIFICATE_REVEAL_FIELDS) {
+    invalid('fieldsToReveal', `at most ${MAXIMUM_CERTIFICATE_REVEAL_FIELDS} fields`)
+  }
+  if (new Set(vargs.fieldsToReveal).size !== vargs.fieldsToReveal.length) {
+    invalid('fieldsToReveal', 'unique field names')
   }
   return vargs
 }
@@ -1183,11 +1551,12 @@ export interface ValidDiscoverByIdentityKeyArgs extends ValidWalletSignerArgs {
 export function validateDiscoverByIdentityKeyArgs(
   args: DiscoverByIdentityKeyArgs
 ): ValidDiscoverByIdentityKeyArgs {
+  validateRecord(args, 'args')
   const vargs: ValidDiscoverByIdentityKeyArgs = {
-    identityKey: validateHexString(args.identityKey, 'identityKey', 66, 66),
+    identityKey: validatePublicKey(args.identityKey, 'identityKey'),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
-    offset: validatePositiveIntegerOrZero(defaultZero(args.offset), 'offset'),
-    seekPermission: defaultFalse(args.seekPermission)
+    offset: validateInteger(args.offset, 'offset', 0, 0),
+    seekPermission: defaultTrue(args.seekPermission, 'seekPermission')
   }
   return vargs
 }
@@ -1202,8 +1571,14 @@ export interface ValidDiscoverByAttributesArgs extends ValidWalletSignerArgs {
 function validateAttributes(
   attributes: Record<CertificateFieldNameUnder50Bytes, string>
 ): Record<CertificateFieldNameUnder50Bytes, string> {
-  for (const fieldName of Object.keys(attributes)) {
+  const values = validateRecord(attributes, 'attributes')
+  const fieldNames = Object.keys(values)
+  if (fieldNames.length < 1 || fieldNames.length > MAXIMUM_DISCOVERY_ATTRIBUTES) {
+    invalid('attributes', `an object containing 1-${MAXIMUM_DISCOVERY_ATTRIBUTES} fields`)
+  }
+  for (const fieldName of fieldNames) {
     validateStringLength(fieldName, `field name ${fieldName}`, 1, 50)
+    validateStringLength(values[fieldName] as string, `attributes.${fieldName}`, 1, 500)
   }
   return attributes
 }
@@ -1217,11 +1592,12 @@ function validateAttributes(
 export function validateDiscoverByAttributesArgs(
   args: DiscoverByAttributesArgs
 ): ValidDiscoverByAttributesArgs {
+  validateRecord(args, 'args')
   const vargs: ValidDiscoverByAttributesArgs = {
     attributes: validateAttributes(args.attributes),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
-    offset: validatePositiveIntegerOrZero(defaultZero(args.offset), 'offset'),
-    seekPermission: defaultFalse(args.seekPermission)
+    offset: validateInteger(args.offset, 'offset', 0, 0),
+    seekPermission: defaultTrue(args.seekPermission, 'seekPermission')
   }
   return vargs
 }
@@ -1258,23 +1634,35 @@ export interface ValidListOutputsArgs extends ValidWalletSignerArgs {
  * @param {BooleanDefaultTrue} [args.seekPermission] — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
  */
 export function validateListOutputsArgs(args: ListOutputsArgs): ValidListOutputsArgs {
+  validateRecord(args, 'args')
   let tagQueryMode: 'any' | 'all'
   if (args.tagQueryMode === undefined || args.tagQueryMode === 'any') tagQueryMode = 'any'
   else if (args.tagQueryMode === 'all') tagQueryMode = 'all'
   else throw new WERR_INVALID_PARAMETER('tagQueryMode', "undefined, 'any', or 'all'")
 
+  if (
+    args.include !== undefined &&
+    args.include !== 'locking scripts' &&
+    args.include !== 'entire transactions'
+  ) {
+    invalid('include', "undefined, 'locking scripts', or 'entire transactions'")
+  }
+
   const vargs: ValidListOutputsArgs = {
     basket: validateBasket(args.basket),
-    tags: (args.tags ?? []).map(t => validateTag(t)),
+    tags: validateArray(args.tags, 'tags').map(t => validateTag(t)),
     tagQueryMode,
     includeLockingScripts: args.include === 'locking scripts',
     includeTransactions: args.include === 'entire transactions',
-    includeCustomInstructions: defaultFalse(args.includeCustomInstructions),
-    includeTags: defaultFalse(args.includeTags),
-    includeLabels: defaultFalse(args.includeLabels),
+    includeCustomInstructions: defaultFalse(
+      args.includeCustomInstructions,
+      'includeCustomInstructions'
+    ),
+    includeTags: defaultFalse(args.includeTags, 'includeTags'),
+    includeLabels: defaultFalse(args.includeLabels, 'includeLabels'),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
     offset: validateInteger(args.offset, 'offset', 0),
-    seekPermission: defaultTrue(args.seekPermission),
+    seekPermission: defaultTrue(args.seekPermission, 'seekPermission'),
     knownTxids: []
   }
 
@@ -1309,26 +1697,135 @@ export interface ValidListActionsArgs extends ValidWalletSignerArgs {
  * @param {BooleanDefaultTrue} [args.seekPermission] — Optional. Whether to seek permission from the user for this operation if required. Default true, will return an error rather than proceed if set to false.
  */
 export function validateListActionsArgs(args: ListActionsArgs): ValidListActionsArgs {
+  validateRecord(args, 'args')
   let labelQueryMode: 'any' | 'all'
   if (args.labelQueryMode === undefined || args.labelQueryMode === 'any') labelQueryMode = 'any'
   else if (args.labelQueryMode === 'all') labelQueryMode = 'all'
   else throw new WERR_INVALID_PARAMETER('labelQueryMode', "undefined, 'any', or 'all'")
 
   const vargs: ValidListActionsArgs = {
-    labels: (args.labels ?? []).map(t => validateLabel(t)),
+    labels: validateArray(args.labels, 'labels').map(t => validateLabel(t)),
     labelQueryMode,
-    includeLabels: defaultFalse(args.includeLabels),
-    includeInputs: defaultFalse(args.includeInputs),
-    includeInputSourceLockingScripts: defaultFalse(args.includeInputSourceLockingScripts),
-    includeInputUnlockingScripts: defaultFalse(args.includeInputUnlockingScripts),
-    includeOutputs: defaultFalse(args.includeOutputs),
-    includeOutputLockingScripts: defaultFalse(args.includeOutputLockingScripts),
+    includeLabels: defaultFalse(args.includeLabels, 'includeLabels'),
+    includeInputs: defaultFalse(args.includeInputs, 'includeInputs'),
+    includeInputSourceLockingScripts: defaultFalse(
+      args.includeInputSourceLockingScripts,
+      'includeInputSourceLockingScripts'
+    ),
+    includeInputUnlockingScripts: defaultFalse(
+      args.includeInputUnlockingScripts,
+      'includeInputUnlockingScripts'
+    ),
+    includeOutputs: defaultFalse(args.includeOutputs, 'includeOutputs'),
+    includeOutputLockingScripts: defaultFalse(
+      args.includeOutputLockingScripts,
+      'includeOutputLockingScripts'
+    ),
     limit: validateInteger(args.limit, 'limit', 10, 1, 10000),
     offset: validateInteger(args.offset, 'offset', 0, 0),
-    seekPermission: defaultTrue(args.seekPermission)
+    seekPermission: defaultTrue(args.seekPermission, 'seekPermission')
   }
 
   return vargs
+}
+
+/** Validate arguments shared by key-derivation and symmetric-crypto calls. */
+export function validateGetPublicKeyArgs(args: GetPublicKeyArgs): void {
+  const value = validateRecord(args, 'args')
+  if (value.identityKey !== undefined && value.identityKey !== true) {
+    invalid('identityKey', 'true or undefined')
+  }
+  if (value.forSelf !== undefined) validateBoolean(value.forSelf, 'forSelf', false)
+
+  if (value.identityKey === true) {
+    if (value.protocolID !== undefined) validateProtocol(value.protocolID)
+    if (value.keyID !== undefined) validateStringLength(value.keyID as string, 'keyID', 1, 800)
+    if (value.counterparty !== undefined) validateCounterparty(value.counterparty, 'counterparty')
+    validatePrivilege(value)
+    return
+  }
+  validateEncryptionArgs(args, 'args')
+}
+
+export function validateRevealCounterpartyKeyLinkageArgs(
+  args: RevealCounterpartyKeyLinkageArgs
+): void {
+  const value = validateRecord(args, 'args')
+  validatePublicKey(value.counterparty, 'counterparty')
+  validatePublicKey(value.verifier, 'verifier')
+  validatePrivilege(value, false)
+}
+
+export function validateRevealSpecificKeyLinkageArgs(args: RevealSpecificKeyLinkageArgs): void {
+  const value = validateRecord(args, 'args')
+  validateCounterparty(value.counterparty, 'counterparty')
+  validatePublicKey(value.verifier, 'verifier')
+  validateProtocol(value.protocolID)
+  validateStringLength(value.keyID as string, 'keyID', 1, 800)
+  validatePrivilege(value, false)
+}
+
+export function validateWalletEncryptArgs(args: WalletEncryptArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateByteArray(value.plaintext, 'plaintext')
+}
+
+export function validateWalletDecryptArgs(args: WalletDecryptArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateByteArray(value.ciphertext, 'ciphertext')
+}
+
+export function validateCreateHmacArgs(args: CreateHmacArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateByteArray(value.data, 'data')
+}
+
+export function validateVerifyHmacArgs(args: VerifyHmacArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateByteArray(value.data, 'data')
+  validateByteArray(value.hmac, 'hmac', 32)
+}
+
+function validateExclusiveDataAndHash(
+  value: UnknownRecord,
+  dataField: 'data',
+  hashField: 'hashToDirectlySign' | 'hashToDirectlyVerify'
+): void {
+  const hasData = value[dataField] !== undefined
+  const hasHash = value[hashField] !== undefined
+  if (hasData === hasHash) invalid(`${dataField}, ${hashField}`, 'exactly one value')
+  if (hasData) validateByteArray(value[dataField], dataField)
+  if (hasHash) validateByteArray(value[hashField], hashField, 32)
+}
+
+export function validateCreateSignatureArgs(args: CreateSignatureArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateExclusiveDataAndHash(value, 'data', 'hashToDirectlySign')
+}
+
+export function validateVerifySignatureArgs(args: VerifySignatureArgs): void {
+  const value = validateRecord(args, 'args')
+  validateEncryptionArgs(args)
+  validateExclusiveDataAndHash(value, 'data', 'hashToDirectlyVerify')
+  const signature = validateByteArray(value.signature, 'signature', undefined, 72)
+  if (!isCanonicalDERSignature(signature)) {
+    invalid('signature', 'a canonical DER-encoded ECDSA signature')
+  }
+  if (value.forSelf !== undefined) validateBoolean(value.forSelf, 'forSelf', false)
+}
+
+export function validateGetHeaderArgs(args: GetHeaderArgs): void {
+  const value = validateRecord(args, 'args')
+  validateInteger(value.height as number, 'height', undefined, 1, MAX_UINT32)
+}
+
+export function validateNoArgs(args: object, name = 'args'): void {
+  validateRecord(args, name)
 }
 
 /**

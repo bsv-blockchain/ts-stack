@@ -1,10 +1,63 @@
 import LockingScript from '../script/LockingScript.js'
 import PushDrop from '../script/templates/PushDrop.js'
-import * as Utils from '../primitives/utils.js'
-import { WalletInterface, OutpointString, CreateActionInput, SignActionSpend, WalletProtocol, ListOutputsResult, WalletOutput, AtomicBEEF } from '../wallet/Wallet.interfaces.js'
+import { decodeCanonicalPushDrop } from '../script/templates/PushDropValidation.js'
+import { toArray, toUTF8Strict } from '../primitives/utils.js'
+import {
+  WalletInterface,
+  OutpointString,
+  CreateActionInput,
+  WalletProtocol,
+  ListOutputsResult,
+  WalletOutput
+} from '../wallet/Wallet.interfaces.js'
 import WalletClient from '../wallet/WalletClient.js'
 import Transaction from '../transaction/Transaction.js'
 import { Beef } from '../transaction/Beef.js'
+import PublicKey from '../primitives/PublicKey.js'
+import { completeBoundAction } from '../wallet/completeBoundAction.js'
+import { assertSafeWalletValue } from '../wallet/WalletResultValidation.js'
+import { validateKVStoreKey, validateKVStoreValue } from './kvStoreTokenValidation.js'
+
+const MAX_LOCAL_TOKEN_BYTES = 2 * 1024 * 1024
+const MAX_LOCAL_BEEF_BYTES = 256 * 1024 * 1024
+const MAX_LOCAL_OUTPUTS = 10000
+
+interface AuthenticatedLocalOutput {
+  outpoint: OutpointString
+  output: WalletOutput
+  lockingScript: LockingScript
+  valueField: number[]
+}
+
+function canonicalOutpoint(value: unknown): OutpointString {
+  if (typeof value !== 'string') throw new Error('Wallet output has an invalid outpoint')
+  const match = /^([0-9a-f]{64})\.(0|[1-9]\d*)$/i.exec(value)
+  if (match == null || Number(match[2]) > 0xffffffff) {
+    throw new Error('Wallet output has an invalid outpoint')
+  }
+  return `${match[1].toLowerCase()}.${Number(match[2])}` as OutpointString
+}
+
+function boundedBytes(value: unknown, label: string, maximum: number): number[] | Uint8Array {
+  if (value instanceof Uint8Array) {
+    if (value.length === 0 || value.length > maximum) throw new Error(`${label} is invalid`)
+    return value
+  }
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximum) {
+    throw new Error(`${label} is invalid`)
+  }
+  for (let index = 0; index < value.length; index++) {
+    if (
+      !Object.prototype.hasOwnProperty.call(value, index) ||
+      !Number.isInteger(value[index]) ||
+      value[index] < 0 ||
+      value[index] > 255
+    ) {
+      throw new Error(`${label} is invalid`)
+    }
+  }
+  return value as number[]
+}
 
 /**
  * Implements a key-value storage system backed by transaction outputs managed by a wallet.
@@ -44,7 +97,8 @@ export default class LocalKVStore {
    * A map to store locks for each key to ensure atomic updates.
    * @private
    */
-  private readonly keyLocks: Map<string, Array<(value: void | PromiseLike<void>) => void>> = new Map()
+  private readonly keyLocks: Map<string, Array<(value: void | PromiseLike<void>) => void>> =
+    new Map()
 
   /**
    * Creates an instance of the localKVStore.
@@ -55,15 +109,16 @@ export default class LocalKVStore {
    * @param {string} [originator] — An originator to use with PushDrop and the wallet, if provided.
    * @throws {Error} If the context is missing or empty.
    */
-  constructor (
+  constructor(
     wallet: WalletInterface = new WalletClient(),
     context = 'kvstore default',
     encrypt = true,
     originator?: string,
     acceptDelayedBroadcast = false
   ) {
-    if (typeof context !== 'string' || context.length < 1) {
-      throw new Error('A context in which to operate is required.')
+    const contextBytes = typeof context === 'string' ? toArray(context, 'utf8').length : 0
+    if (typeof context !== 'string' || contextBytes < 5 || contextBytes > 300) {
+      throw new Error('A context of 5–300 UTF-8 bytes is required.')
     }
     this.wallet = wallet
     this.context = context
@@ -72,7 +127,9 @@ export default class LocalKVStore {
     this.acceptDelayedBroadcast = acceptDelayedBroadcast
   }
 
-  private async queueOperationOnKey (key: string): Promise<Array<(value: void | PromiseLike<void>) => void>> {
+  private async queueOperationOnKey(
+    key: string
+  ): Promise<Array<(value: void | PromiseLike<void>) => void>> {
     // Check if a lock exists for this key and wait for it to resolve
     let lockQueue = this.keyLocks.get(key)
     if (lockQueue == null) {
@@ -80,10 +137,12 @@ export default class LocalKVStore {
       this.keyLocks.set(key, lockQueue)
     }
 
-    let resolveNewLock: () => void = () => { }
-    const newLock = new Promise<void>((resolve) => {
+    let resolveNewLock: () => void = () => {}
+    const newLock = new Promise<void>(resolve => {
       resolveNewLock = resolve
-      if (lockQueue != null) { lockQueue.push(resolve) }
+      if (lockQueue != null) {
+        lockQueue.push(resolve)
+      }
     })
 
     // If we are the only request, resolve the lock immediately, queue remains at 1 item until request ends.
@@ -96,27 +155,54 @@ export default class LocalKVStore {
     return lockQueue
   }
 
-  private finishOperationOnKey (key: string, lockQueue: Array<(value: void | PromiseLike<void>) => void>): void {
+  private finishOperationOnKey(
+    key: string,
+    lockQueue: Array<(value: void | PromiseLike<void>) => void>
+  ): void {
     lockQueue.shift() // Remove the current lock from the queue
     if (lockQueue.length > 0) {
       // If there are more locks waiting, resolve the next one
       lockQueue[0]()
+    } else {
+      this.keyLocks.delete(key)
     }
   }
 
-  private getProtocol (key: string): { protocolID: WalletProtocol, keyID: string } {
+  private getProtocol(key: string): { protocolID: WalletProtocol; keyID: string } {
     return { protocolID: [2, this.context], keyID: key }
   }
 
-  private async getOutputs (key: string, limit?: number): Promise<ListOutputsResult> {
-    const results = await this.wallet.listOutputs({
-      basket: this.context,
-      tags: [key],
-      tagQueryMode: 'all',
-      include: 'entire transactions',
-      limit
-    }, this.originator)
-    return results
+  private async getOutputs(key: string, limit?: number): Promise<ListOutputsResult & { totalOutputs: number }> {
+    validateKVStoreKey(key)
+    const results = assertSafeWalletValue(
+      await this.wallet.listOutputs(
+        {
+          basket: this.context,
+          tags: [key],
+          tagQueryMode: 'all',
+          include: 'entire transactions',
+          limit
+        },
+        this.originator
+      ),
+      'listOutputs'
+    )
+    const totalOutputs = results?.totalOutputs
+    if (
+      results == null ||
+      !Array.isArray(results.outputs) ||
+      typeof totalOutputs !== 'number' ||
+      !Number.isSafeInteger(totalOutputs) ||
+      totalOutputs < results.outputs.length ||
+      totalOutputs > MAX_LOCAL_OUTPUTS ||
+      results.outputs.length > MAX_LOCAL_OUTPUTS
+    ) {
+      throw new Error('Wallet returned an invalid KVStore output list')
+    }
+    if (results.outputs.length > 0) {
+      boundedBytes(results.BEEF, 'Wallet KVStore BEEF', MAX_LOCAL_BEEF_BYTES)
+    }
+    return { ...results, totalOutputs }
   }
 
   /**
@@ -129,60 +215,164 @@ export default class LocalKVStore {
    * @throws {Error} If too many outputs are found for the key (ambiguous state).
    * @throws {Error} If the found output's locking script cannot be decoded or represents an invalid token format.
    */
-  async get (key: string, defaultValue: string | undefined = undefined): Promise<string | undefined> {
+  async get(
+    key: string,
+    defaultValue: string | undefined = undefined
+  ): Promise<string | undefined> {
+    validateKVStoreKey(key)
     const lockQueue = await this.queueOperationOnKey(key)
 
     try {
-      const r = await this.lookupValue(key, defaultValue, 5)
+      const r = await this.lookupValue(key, defaultValue, 5, false)
       return r.value
     } finally {
       this.finishOperationOnKey(key, lockQueue)
     }
   }
 
-  private getLockingScript (output: WalletOutput, beef: Beef): LockingScript {
-    const [txid, vout] = output.outpoint.split('.')
-    const tx = beef.findTxid(txid)?.tx
-    if (tx == null) { throw new Error(`beef must contain txid ${txid}`) }
-    const lockingScript = tx.outputs[Number(vout)].lockingScript
-    return lockingScript
+  private async authenticateOutputs(
+    key: string,
+    result: ListOutputsResult
+  ): Promise<AuthenticatedLocalOutput[]> {
+    if (result.outputs.length === 0) return []
+    const encodedBEEF = boundedBytes(result.BEEF, 'Wallet KVStore BEEF', MAX_LOCAL_BEEF_BYTES)
+    const beef = Beef.fromBinaryStrict(encodedBEEF)
+    const protocol = this.getProtocol(key)
+    const keyResult = assertSafeWalletValue(
+      await this.wallet.getPublicKey({ ...protocol, counterparty: 'self' }, this.originator),
+      'getPublicKey'
+    )
+    if (keyResult == null || typeof keyResult.publicKey !== 'string') {
+      throw new Error('Wallet returned an invalid KVStore locking key')
+    }
+    const expectedLockingKey = PublicKey.fromString(keyResult.publicKey).toString()
+    const seen = new Set<string>()
+    const authenticated: AuthenticatedLocalOutput[] = []
+
+    for (const output of result.outputs) {
+      const outpoint = canonicalOutpoint(output?.outpoint)
+      if (seen.has(outpoint)) throw new Error('Wallet returned a duplicate KVStore output')
+      seen.add(outpoint)
+      if (
+        typeof output.spendable !== 'boolean' ||
+        output.spendable !== true ||
+        !Number.isSafeInteger(output.satoshis) ||
+        output.satoshis < 0 ||
+        output.satoshis > 21e14
+      ) {
+        throw new Error('Wallet returned invalid KVStore output metadata')
+      }
+      const [txid, outputIndexText] = outpoint.split('.')
+      const transaction = beef.findTxid(txid)?.tx
+      const outputIndex = Number(outputIndexText)
+      if (transaction == null || transaction.id('hex').toLowerCase() !== txid) {
+        throw new Error('KVStore BEEF does not contain the exact listed transaction')
+      }
+      const sourceOutput = transaction.outputs[outputIndex]
+      if (
+        sourceOutput?.lockingScript == null ||
+        sourceOutput.satoshis !== output.satoshis ||
+        (output.lockingScript !== undefined &&
+          sourceOutput.lockingScript.toHex().toLowerCase() !== output.lockingScript.toLowerCase())
+      ) {
+        throw new Error('KVStore BEEF does not match the listed output')
+      }
+      const decoded = decodeCanonicalPushDrop(sourceOutput.lockingScript, {
+        fieldCount: 2,
+        maximumFieldBytes: MAX_LOCAL_TOKEN_BYTES,
+        maximumPayloadBytes: MAX_LOCAL_TOKEN_BYTES + 1024
+      })
+      if (decoded.lockingPublicKey.toString() !== expectedLockingKey) {
+        throw new Error('KVStore token locking key does not belong to the wallet')
+      }
+      const signatureResult = assertSafeWalletValue(
+        await this.wallet.verifySignature(
+          {
+            data: decoded.fields[0],
+            signature: decoded.fields[1],
+            ...protocol,
+            counterparty: 'self'
+          },
+          this.originator
+        ),
+        'verifySignature'
+      )
+      if (signatureResult?.valid !== true) throw new Error('KVStore token signature is invalid')
+      authenticated.push({
+        outpoint,
+        output,
+        lockingScript: sourceOutput.lockingScript,
+        valueField: decoded.fields[0]
+      })
+    }
+    return authenticated
   }
 
-  private async lookupValue (key: string, defaultValue: string | undefined, limit?: number): Promise<LookupValueResult> {
-    const lor = await this.getOutputs(key, limit)
-    const r: LookupValueResult = { value: defaultValue, outpoint: undefined, lor }
-    const { outputs } = lor
-    if (outputs.length === 0) {
+  private async lookupValue(
+    key: string,
+    defaultValue: string | undefined,
+    limit?: number,
+    allowMultiple = false
+  ): Promise<LookupValueResult> {
+    let lor: ListOutputsResult
+    try {
+      lor = await this.getOutputs(key, limit)
+    } catch (error) {
+      throw new Error(
+        `Invalid value found. Relinquish the corrupted output from the ${this.context} basket before using this key again. Original error: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    const r: LookupValueResult = {
+      value: defaultValue,
+      outpoint: undefined,
+      lor,
+      authenticated: []
+    }
+    if (lor.outputs.length === 0) {
       return r
     }
-    const output = outputs.at(-1)
-    if (output == null) return r
-    r.outpoint = output.outpoint
-    let field: number[]
-    try {
-      if (lor.BEEF === undefined) { throw new Error('entire transactions listOutputs option must return valid BEEF') }
-      const lockingScript = this.getLockingScript(output, Beef.fromBinary(lor.BEEF))
-      const decoded = PushDrop.decode(lockingScript)
-      if (decoded.fields.length < 1 || decoded.fields.length > 2) {
-        throw new Error('Invalid token.')
-      }
-      field = decoded.fields[0]
-    } catch (error) {
-      throw new Error(`Invalid value found. You need to call set to collapse the corrupted state (or relinquish the corrupted ${outputs[0].outpoint} output from the ${this.context} basket) before you can get this value again. Original error: ${error instanceof Error ? error.message : String(error)}`)
+    if (!allowMultiple && (lor.outputs.length !== 1 || lor.totalOutputs !== 1)) {
+      throw new Error(
+        'Multiple KVStore outputs make the current value ambiguous; call set to collapse them'
+      )
     }
+    if (allowMultiple && lor.outputs.length !== lor.totalOutputs) {
+      throw new Error('Wallet did not return every KVStore output needed for an atomic collapse')
+    }
+    try {
+      r.authenticated = await this.authenticateOutputs(key, lor)
+    } catch (error) {
+      throw new Error(
+        `Invalid value found. Relinquish the corrupted output from the ${this.context} basket before using this key again. Original error: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    const selected = r.authenticated.at(-1)
+    if (selected == null) return r
+    r.outpoint = selected.outpoint
     if (this.encrypt) {
-      const { plaintext } = await this.wallet.decrypt({
-        ...this.getProtocol(key),
-        ciphertext: field
-      }, this.originator)
-      r.value = Utils.toUTF8(plaintext)
+      const decryptResult = assertSafeWalletValue(
+        await this.wallet.decrypt(
+          {
+            ...this.getProtocol(key),
+            ciphertext: selected.valueField
+          },
+          this.originator
+        ),
+        'decrypt'
+      )
+      const plaintext = boundedBytes(
+        decryptResult?.plaintext,
+        'Wallet KVStore plaintext',
+        MAX_LOCAL_TOKEN_BYTES
+      )
+      r.value = validateKVStoreValue(toUTF8Strict(plaintext))
     } else {
-      r.value = Utils.toUTF8(field)
+      r.value = validateKVStoreValue(toUTF8Strict(selected.valueField))
     }
     return r
   }
 
-  private getInputs (outputs: WalletOutput[]): CreateActionInput[] {
+  #getInputs(outputs: AuthenticatedLocalOutput[]): CreateActionInput[] {
     const inputs: CreateActionInput[] = []
     for (const output of outputs) {
       inputs.push({
@@ -194,30 +384,36 @@ export default class LocalKVStore {
     return inputs
   }
 
-  private async getSpends (key: string, outputs: WalletOutput[], pushdrop: PushDrop, atomicBEEF: AtomicBEEF): Promise<Record<number, SignActionSpend>> {
-    const p = this.getProtocol(key)
-    const tx = Transaction.fromAtomicBEEF(atomicBEEF)
-    const spends: Record<number, SignActionSpend> = {}
-    for (const [i] of outputs.entries()) {
-      const unlocker = pushdrop.unlock(p.protocolID, p.keyID, 'self')
-      const unlockingScript = await unlocker.sign(tx, i)
-      spends[i] = {
-        unlockingScript: unlockingScript.toHex()
-      }
-    }
-    return spends
-  }
-
-  private async removeOutputs(
+  async #removeOutputs(
     key: string,
-    outputs: WalletOutput[],
+    outputs: AuthenticatedLocalOutput[],
     inputBEEF: number[] | Uint8Array | undefined,
     totalOutputs: number
   ): Promise<string> {
     const pushdrop = new PushDrop(this.wallet, this.originator)
     try {
-      const inputs = this.getInputs(outputs)
-      const { signableTransaction } = await this.wallet.createAction(
+      const inputs = this.#getInputs(outputs)
+      const protocol = this.getProtocol(key)
+      const inputSigners = Object.fromEntries(
+        outputs.map(output => {
+          const unlocker = pushdrop.unlock(
+            protocol.protocolID,
+            protocol.keyID,
+            'self',
+            'all',
+            false,
+            output.output.satoshis,
+            output.lockingScript
+          )
+          return [
+            output.outpoint,
+            async (transaction: Transaction, inputIndex: number) =>
+              await unlocker.sign(transaction, inputIndex)
+          ]
+        })
+      )
+      const transaction = await completeBoundAction(
+        this.wallet,
         {
           description: `Remove ${key} in ${this.context}`,
           inputBEEF,
@@ -226,21 +422,10 @@ export default class LocalKVStore {
             acceptDelayedBroadcast: this.acceptDelayedBroadcast
           }
         },
+        { inputSigners },
         this.originator
       )
-      if (typeof signableTransaction !== 'object') {
-        throw new TypeError('Wallet did not return a signable transaction when expected.')
-      }
-      const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
-      const { txid } = await this.wallet.signAction(
-        {
-          reference: signableTransaction.reference,
-          spends
-        },
-        this.originator
-      )
-      if (txid === undefined) throw new Error('signAction must return a valid txid')
-      return txid
+      return transaction.id('hex')
     } catch (error) {
       throw new Error(
         `There are ${totalOutputs} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`
@@ -263,12 +448,14 @@ export default class LocalKVStore {
    * @param {string} value - The value to associate with the key.
    * @returns {Promise<OutpointString>} A promise that resolves to the outpoint string (txid.vout) of the new or updated token output.
    */
-  async set (key: string, value: string): Promise<OutpointString> {
+  async set(key: string, value: string): Promise<OutpointString> {
+    validateKVStoreKey(key)
+    validateKVStoreValue(value)
     const lockQueue = await this.queueOperationOnKey(key)
 
     try {
-      const current = await this.lookupValue(key, undefined, 10)
-      if (current.value === value) {
+      const current = await this.lookupValue(key, undefined, MAX_LOCAL_OUTPUTS, true)
+      if (current.value === value && current.authenticated.length === 1) {
         if (current.outpoint === undefined) {
           throw new Error('outpoint must be valid when value is valid and unchanged')
         }
@@ -277,13 +464,25 @@ export default class LocalKVStore {
       }
 
       const protocol = this.getProtocol(key)
-      let valueAsArray = Utils.toArray(value, 'utf8')
+      let valueAsArray = toArray(value, 'utf8')
       if (this.encrypt) {
-        const { ciphertext } = await this.wallet.encrypt({
-          ...protocol,
-          plaintext: valueAsArray
-        }, this.originator)
-        valueAsArray = ciphertext
+        const encryptResult = assertSafeWalletValue(
+          await this.wallet.encrypt(
+            {
+              ...protocol,
+              plaintext: valueAsArray
+            },
+            this.originator
+          ),
+          'encrypt'
+        )
+        valueAsArray = Array.from(
+          boundedBytes(
+            encryptResult?.ciphertext,
+            'Wallet KVStore ciphertext',
+            MAX_LOCAL_TOKEN_BYTES
+          )
+        )
       }
 
       const pushdrop = new PushDrop(this.wallet, this.originator)
@@ -294,46 +493,64 @@ export default class LocalKVStore {
         'self'
       )
 
-      const { outputs, BEEF: inputBEEF } = current.lor
-      let outpoint: OutpointString
+      const { BEEF: inputBEEF } = current.lor
       try {
-        const inputs = this.getInputs(outputs)
-        const { txid, signableTransaction } = await this.wallet.createAction({
-          description: `Update ${key} in ${this.context}`,
-          inputBEEF,
-          inputs,
-          outputs: [{
-            basket: this.context,
-            tags: [key],
-            lockingScript: lockingScript.toHex(),
-            satoshis: 1,
-            outputDescription: 'Key-value token'
-          }],
-          options: {
-            acceptDelayedBroadcast: this.acceptDelayedBroadcast,
-            randomizeOutputs: false
-          }
-        }, this.originator)
-
-        if (outputs.length > 0 && typeof signableTransaction !== 'object') {
-          throw new Error('Wallet did not return a signable transaction when expected.')
+        const inputs = this.#getInputs(current.authenticated)
+        const inputSigners = Object.fromEntries(
+          current.authenticated.map(output => {
+            const unlocker = pushdrop.unlock(
+              protocol.protocolID,
+              protocol.keyID,
+              'self',
+              'all',
+              false,
+              output.output.satoshis,
+              output.lockingScript
+            )
+            return [
+              output.outpoint,
+              async (transaction: Transaction, inputIndex: number) =>
+                await unlocker.sign(transaction, inputIndex)
+            ]
+          })
+        )
+        const transaction = await completeBoundAction(
+          this.wallet,
+          {
+            description: `Update ${key} in ${this.context}`,
+            inputBEEF,
+            inputs,
+            outputs: [
+              {
+                basket: this.context,
+                tags: [key],
+                lockingScript: lockingScript.toHex(),
+                satoshis: 1,
+                outputDescription: 'Key-value token'
+              }
+            ],
+            options: {
+              acceptDelayedBroadcast: this.acceptDelayedBroadcast,
+              randomizeOutputs: false
+            }
+          },
+          { inputSigners },
+          this.originator
+        )
+        const indexes = transaction.outputs.flatMap((output, index) =>
+          output.satoshis === 1 && output.lockingScript.toHex() === lockingScript.toHex()
+            ? [index]
+            : []
+        )
+        if (indexes.length !== 1) {
+          throw new Error('Final transaction does not contain one unique KVStore token')
         }
-
-        if (signableTransaction == null) {
-          outpoint = `${txid as string}.0`
-        } else {
-          const spends = await this.getSpends(key, outputs, pushdrop, signableTransaction.tx)
-          const { txid } = await this.wallet.signAction({
-            reference: signableTransaction.reference,
-            spends
-          }, this.originator)
-          outpoint = `${txid as string}.0`
-        }
+        return `${transaction.id('hex')}.${indexes[0]}` as OutpointString
       } catch (error) {
-        throw new Error(`There are ${outputs.length} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`)
+        throw new Error(
+          `There are ${current.authenticated.length} outputs with tag ${key} that cannot be unlocked. Original error: ${error instanceof Error ? error.message : String(error)}`
+        )
       }
-
-      return outpoint
     } finally {
       this.finishOperationOnKey(key, lockQueue)
     }
@@ -349,17 +566,29 @@ export default class LocalKVStore {
    * @param {string} key - The key to remove.
    * @returns {Promise<string[]>} A promise that resolves to the txids of the removal transactions if successful.
    */
-  async remove (key: string): Promise<string[]> {
+  async remove(key: string): Promise<string[]> {
+    validateKVStoreKey(key)
     const lockQueue = await this.queueOperationOnKey(key)
 
     try {
       const txids: string[] = []
-      for (; ;) {
-        const { outputs, BEEF: inputBEEF, totalOutputs } = await this.getOutputs(key)
+      const consumed = new Set<string>()
+      for (;;) {
+        const result = await this.getOutputs(key, MAX_LOCAL_OUTPUTS)
+        const { outputs, BEEF: inputBEEF, totalOutputs } = result
         if (outputs.length > 0) {
-          txids.push(await this.removeOutputs(key, outputs, inputBEEF, totalOutputs))
+          const authenticated = await this.authenticateOutputs(key, result)
+          for (const output of authenticated) {
+            if (consumed.has(output.outpoint)) {
+              throw new Error('Wallet repeated a KVStore output after it was removed')
+            }
+            consumed.add(output.outpoint)
+          }
+          txids.push(await this.#removeOutputs(key, authenticated, inputBEEF, totalOutputs))
         }
-        if (outputs.length === totalOutputs) { break }
+        if (outputs.length === totalOutputs) {
+          break
+        }
       }
       return txids
     } finally {
@@ -372,4 +601,5 @@ interface LookupValueResult {
   value: string | undefined
   outpoint: OutpointString | undefined
   lor: ListOutputsResult
+  authenticated: AuthenticatedLocalOutput[]
 }

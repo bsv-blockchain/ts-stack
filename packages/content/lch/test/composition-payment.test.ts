@@ -67,6 +67,21 @@ describe('composition and payment invariants', () => {
     expect(recoveryUntil(1_000n, 86_400n)).toBe(87_400n)
   })
 
+  it('rejects two matched records that resolve to the same output index', () => {
+    expect(() =>
+      matchFinalizedOutputs(
+        [
+          { demandId: id(1), satoshis: 1n, lockingScript: Uint8Array.of(1) },
+          { demandId: id(2), satoshis: 2n, lockingScript: Uint8Array.of(2) }
+        ],
+        [
+          { satoshis: 1n, lockingScript: Uint8Array.of(1), outputIndex: 1 },
+          { satoshis: 2n, lockingScript: Uint8Array.of(2) }
+        ]
+      )
+    ).toThrow(expect.objectContaining({ code: 'ERR_LCH_PAYMENT' }))
+  })
+
   it('rejects composition cycles even when the repeated Asset uses another selection', async () => {
     const ingredient = (sourceAssetId: Uint8Array, value: number) => ({
       sourceAssetId,
@@ -96,9 +111,9 @@ describe('composition and payment invariants', () => {
     await expect(
       walkComposition(
         { assetId: assetA, selection: { type: 'all' }, record: recordA },
-        async sourceAssetId => ({
+        async (sourceAssetId, selection) => ({
           assetId: sourceAssetId,
-          selection: { type: 'all' },
+          selection,
           record: sourceAssetId[0] === assetA[0] ? recordA : recordB
         })
       )

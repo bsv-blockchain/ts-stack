@@ -46,7 +46,9 @@ export interface WalletInstrumentationOptions {
   kind?: TelemetrySpanKind
   /**
    * Optional privacy policy and enrichment hook. The raw arguments are supplied
-   * only to consumer code and are never emitted automatically.
+   * only to consumer code and are never emitted automatically. Hook failure,
+   * accessors, non-scalar values, and attempts to replace core attributes are
+   * contained and cannot prevent or alter the wallet call.
    */
   attributes?: (
     method: keyof WalletInterface,
@@ -60,6 +62,8 @@ export interface WalletInstrumentationOptions {
  * The first argument object acts as an explicit context carrier. This keeps
  * concurrent browser and React Native calls correlated without global async
  * state and lets downstream Wallet Toolbox layers attach child spans.
+ * Optional telemetry adapters cannot suppress, duplicate, or replace a wallet
+ * invocation or result.
  */
 export function instrumentWallet(
   wallet: WalletInterface,
@@ -67,7 +71,14 @@ export function instrumentWallet(
   options: WalletInstrumentationOptions = {}
 ): WalletInterface {
   const telemetry = config instanceof Telemetry ? config : new Telemetry(config)
-  if (!telemetry.enabled) return wallet
+  let dynamicallyEnabled = false
+  try {
+    dynamicallyEnabled =
+      !(config instanceof Telemetry) && typeof config.enabled === 'function' && config.sink != null
+  } catch {
+    // A malformed optional telemetry configuration disables instrumentation.
+  }
+  if (!telemetry.enabled && !dynamicallyEnabled) return wallet
 
   const component = options.component ?? 'wallet'
   const prefix = options.spanNamePrefix ?? 'wallet.call'
@@ -90,23 +101,55 @@ export function instrumentWallet(
       const wrapped = (
         args: object,
         originator?: OriginatorDomainNameStringUnder250Bytes
-      ): unknown =>
-        telemetry.withSpan(
+      ): unknown => {
+        const attributes: Record<string, TelemetryAttributeValue> = Object.create(null)
+        attributes['wallet.method'] = String(method)
+        let attributeCount = 1
+        try {
+          const supplied = options.attributes?.(method, originator)
+          if (supplied != null && typeof supplied === 'object' && !Array.isArray(supplied)) {
+            let inspected = 0
+            for (const key of Reflect.ownKeys(supplied)) {
+              if (inspected >= 64) break
+              inspected += 1
+              if (typeof key !== 'string') continue
+              const descriptor = Object.getOwnPropertyDescriptor(supplied, key)
+              const value = descriptor?.value
+              if (
+                descriptor != null &&
+                Object.prototype.hasOwnProperty.call(descriptor, 'value') &&
+                (typeof value === 'string' ||
+                  typeof value === 'number' ||
+                  typeof value === 'boolean')
+              ) {
+                if (Object.prototype.hasOwnProperty.call(attributes, key)) continue
+                if (attributeCount >= 64) continue
+                attributeCount += 1
+                attributes[key] = value
+              }
+            }
+          }
+        } catch {
+          // Instrumentation enrichment must never prevent the wallet call.
+        }
+        const carrier =
+          args != null && (typeof args === 'object' || typeof args === 'function')
+            ? args
+            : undefined
+        return telemetry.withSpan(
           `${prefix}.${String(method)}`,
           {
             component,
             kind,
-            carrier: args,
-            attributes: {
-              'wallet.method': String(method),
-              ...options.attributes?.(method, originator)
-            }
+            carrier,
+            attributes
           },
           span => {
-            span.bind(args)
+            if (carrier !== undefined) span.bind(carrier)
             return original.call(target, args, originator)
           }
         )
+      }
       methods.set(property, wrapped)
       return wrapped
     }

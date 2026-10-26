@@ -9,6 +9,7 @@ import {
   type TransactionInput,
   type TransactionOutput
 } from '@bsv/sdk'
+import { requestWocTransaction, requestWocUtxos } from './wocClient.js'
 const DOMAIN = process.env.DOMAIN ?? 'localhost'
 
 interface AvailableOutput {
@@ -18,19 +19,24 @@ interface AvailableOutput {
   unlockingScriptTemplate: NonNullable<TransactionInput['unlockingScriptTemplate']>
 }
 
-interface WocUtxo {
-  tx_hash: string
-  tx_pos: number
-  value: number
+export interface MockUserServices {
+  requestUtxos: typeof requestWocUtxos
+  requestTransaction: typeof requestWocTransaction
+  broadcastTransaction?: (tx: Transaction, apiKey: string) => Promise<void>
 }
 
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]
+const defaultServices: MockUserServices = {
+  requestUtxos: requestWocUtxos,
+  requestTransaction: requestWocTransaction
+}
+
+function requiredEnvironment(name: string, environment: NodeJS.ProcessEnv): string {
+  const value = environment[name]
   if (!value) throw new Error(`${name} is required to run the Paymail example`)
   return value
 }
 
-class MockUser {
+export class MockUser {
   private static readonly IDENTITY_KEY_PATH = 'm/0'
   private static readonly IDENTITY_KEY_INDEX = 0
   private static readonly P2P_PATH = 'm/1'
@@ -44,6 +50,8 @@ class MockUser {
   private readonly secret: string
   private availableOutputs: AvailableOutput[]
   private readonly rawTransactionMap: Map<string, Transaction> = new Map()
+  private readonly rawTransactionRequests: Map<string, Promise<Transaction>> = new Map()
+  private readonly services: MockUserServices
   private p2pIndex = 0
   private changeIndex = 0
 
@@ -52,12 +60,17 @@ class MockUser {
     domain: string,
     avatarUrl: string,
     extendedPrivateKey: string,
-    jwtSecret: string
+    jwtSecret: string,
+    services: MockUserServices = defaultServices
   ) {
+    if (Buffer.byteLength(jwtSecret, 'utf8') < 32) {
+      throw new Error('PAYMAIL_EXAMPLE_JWT_SECRET must contain at least 32 UTF-8 bytes')
+    }
     this.alias = alias
     this.avatarUrl = avatarUrl
     this.extendedPrivateKey = extendedPrivateKey
     this.secret = jwtSecret
+    this.services = services
     this.availableOutputs = []
     this.rawTransactionMap = new Map()
     this.domain = domain
@@ -101,22 +114,38 @@ class MockUser {
     }
   }
 
-  processTransaction(tx: Transaction, reference: string) {
-    console.log('Processing transaction', tx.id('hex'))
+  processTransaction(tx: Transaction, reference: string): number {
+    const transactionId = tx.id('hex')
+    console.log('Processing transaction', transactionId)
     const privateKey = this.getPrivateKeyFromReference(this.getDecodedReferenceToken(reference))
     const lockingScript = this.getLockingScriptFromPrivateKey(privateKey)
+    let matchingOutputs = 0
     tx.outputs.forEach((output, index) => {
       if (output.lockingScript.toHex() === lockingScript.toHex()) {
-        this.rawTransactionMap.set(tx.id('hex') as string, tx)
-        this.availableOutputs.push({
-          reference,
-          sourceTransactionId: tx.id('hex'),
-          sourceOutputIndex: index,
-          unlockingScriptTemplate: new P2PKH().unlock(privateKey)
-        })
+        matchingOutputs += 1
+        const alreadyRecorded = this.availableOutputs.some(
+          candidate =>
+            candidate.sourceTransactionId === transactionId && candidate.sourceOutputIndex === index
+        )
+        if (!alreadyRecorded) {
+          this.availableOutputs.push({
+            reference,
+            sourceTransactionId: transactionId,
+            sourceOutputIndex: index,
+            unlockingScriptTemplate: new P2PKH().unlock(privateKey)
+          })
+        }
       }
     })
-    console.log('Transaction processed', tx.id('hex'))
+    if (matchingOutputs > 0) this.rawTransactionMap.set(transactionId, tx)
+    console.log('Transaction processed', transactionId)
+    return matchingOutputs
+  }
+
+  transactionPaysReference(tx: Transaction, reference: string): boolean {
+    const privateKey = this.getPrivateKeyFromReference(this.getDecodedReferenceToken(reference))
+    const lockingScript = this.getLockingScriptFromPrivateKey(privateKey).toHex()
+    return tx.outputs.some(output => output.lockingScript.toHex() === lockingScript)
   }
 
   getPrivateKeyFromReference(reference: string): PrivateKey {
@@ -211,6 +240,10 @@ class MockUser {
   async broadcastTransaction(tx: Transaction) {
     const arcApiKey = process.env.ARC_API_KEY
     if (!arcApiKey) throw new Error('ARC_API_KEY is required to broadcast the example transaction')
+    if (this.services.broadcastTransaction) {
+      await this.services.broadcastTransaction(tx, arcApiKey)
+      return
+    }
     await tx.broadcast(new ARC('https://api.taal.com/arc', arcApiKey))
   }
 
@@ -231,7 +264,8 @@ class MockUser {
       const input = {
         sourceTransaction: sourceTx,
         sourceOutputIndex: output.sourceOutputIndex,
-        unlockingScriptTemplate: output.unlockingScriptTemplate
+        unlockingScriptTemplate: output.unlockingScriptTemplate,
+        sequence: 0xffffffff
       }
       inputs.push(input)
     })
@@ -246,8 +280,14 @@ class MockUser {
   getReferenceToken = (path: string): string => jwt.encode(path, this.secret, 'HS512')
 
   getDecodedReferenceToken = (jwtToken: string): string => {
-    const decoded = jwt.decode(jwtToken, this.secret)
-    if (typeof decoded !== 'string') throw new Error('Invalid Paymail reference token')
+    const decoded = jwt.decode(jwtToken, this.secret, false, 'HS512')
+    if (
+      typeof decoded !== 'string' ||
+      !/^(?:p2p|change|start)-(?:0|[1-9]\d*)$/.test(decoded) ||
+      !Number.isSafeInteger(Number(decoded.slice(decoded.lastIndexOf('-') + 1)))
+    ) {
+      throw new Error('Invalid Paymail reference token')
+    }
     return decoded
   }
 
@@ -282,36 +322,43 @@ class MockUser {
 
   async syncReference(reference: string): Promise<void> {
     const privateKey = this.getPrivateKeyFromReference(reference)
-    const url = `https://api.whatsonchain.com/v1/bsv/main/address/${privateKey.toAddress().toString()}/unspent`
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`WhatsOnChain UTXO request failed: ${response.status}`)
-    const utxos = (await response.json()) as WocUtxo[]
+    const expectedLockingScript = this.getLockingScriptFromPrivateKey(privateKey).toHex()
+    const utxos = await this.services.requestUtxos(privateKey.toAddress().toString())
     if (utxos.length === 0) return
     for (const utxo of utxos) {
-      if (!this.rawTransactionMap.get(utxo.tx_hash)) {
-        // convert to beef when WOC api allows it
-        const rawTxResponse = await fetch(
-          `https://api.whatsonchain.com/v1/bsv/main/tx/${utxo.tx_hash}/hex`
-        )
-        if (!rawTxResponse.ok) {
-          throw new Error(`WhatsOnChain transaction request failed: ${rawTxResponse.status}`)
+      let transactionRequest = this.rawTransactionRequests.get(utxo.tx_hash)
+      if (transactionRequest === undefined) {
+        transactionRequest = this.services.requestTransaction(utxo.tx_hash)
+        this.rawTransactionRequests.set(utxo.tx_hash, transactionRequest)
+      }
+      let tx: Transaction
+      try {
+        tx = await transactionRequest
+      } catch (error) {
+        if (this.rawTransactionRequests.get(utxo.tx_hash) === transactionRequest) {
+          this.rawTransactionRequests.delete(utxo.tx_hash)
         }
-        const rawTx = await rawTxResponse.text()
-        const tx = Transaction.fromHex(rawTx)
-        // call arc GET v1/tx/<hash>
-        // this will return 404 or get merkle proof
-        this.rawTransactionMap.set(utxo.tx_hash, tx)
-        tx.outputs.forEach((output, index) => {
-          if (
-            output.lockingScript.toHex() === this.getLockingScriptFromPrivateKey(privateKey).toHex()
-          ) {
-            this.availableOutputs.push({
-              reference: this.getReferenceToken(reference),
-              sourceTransactionId: utxo.tx_hash,
-              sourceOutputIndex: index,
-              unlockingScriptTemplate: new P2PKH().unlock(privateKey)
-            })
-          }
+        throw error
+      }
+      this.rawTransactionMap.set(utxo.tx_hash, tx)
+      const output = tx.outputs[utxo.tx_pos]
+      if (
+        output?.satoshis !== utxo.value ||
+        output.lockingScript.toHex() !== expectedLockingScript
+      ) {
+        throw new Error('WhatsOnChain UTXO does not match the referenced transaction output')
+      }
+      const alreadyRecorded = this.availableOutputs.some(
+        candidate =>
+          candidate.sourceTransactionId === utxo.tx_hash &&
+          candidate.sourceOutputIndex === utxo.tx_pos
+      )
+      if (!alreadyRecorded) {
+        this.availableOutputs.push({
+          reference: this.getReferenceToken(reference),
+          sourceTransactionId: utxo.tx_hash,
+          sourceOutputIndex: utxo.tx_pos,
+          unlockingScriptTemplate: new P2PKH().unlock(privateKey)
         })
       }
     }
@@ -326,29 +373,64 @@ class MockUser {
   }
 }
 
-const mockUser1 = new MockUser(
-  'satoshi',
-  DOMAIN,
-  'https://cdns-images.dzcdn.net/images/artist/0cd4444701460a1ccf94d150e37476d9/500x500.jpg',
-  requiredEnvironment('PAYMAIL_EXAMPLE_SATOSHI_XPRV'),
-  requiredEnvironment('PAYMAIL_EXAMPLE_JWT_SECRET')
-)
+export interface ExampleUsers {
+  mockUser1: MockUser
+  mockUser2: MockUser
+}
 
-const mockUser2 = new MockUser(
-  'halfinney',
-  DOMAIN,
-  'https://upload.wikimedia.org/wikipedia/en/5/52/Hal_Finney_%28computer_scientist%29.jpg',
-  requiredEnvironment('PAYMAIL_EXAMPLE_HAL_XPRV'),
-  requiredEnvironment('PAYMAIL_EXAMPLE_JWT_SECRET')
-)
+export function createExampleUsers(
+  environment: NodeJS.ProcessEnv = process.env,
+  services: MockUserServices = defaultServices
+): ExampleUsers {
+  const secret = requiredEnvironment('PAYMAIL_EXAMPLE_JWT_SECRET', environment)
+  return {
+    mockUser1: new MockUser(
+      'satoshi',
+      environment.DOMAIN ?? 'localhost',
+      'https://cdns-images.dzcdn.net/images/artist/0cd4444701460a1ccf94d150e37476d9/500x500.jpg',
+      requiredEnvironment('PAYMAIL_EXAMPLE_SATOSHI_XPRV', environment),
+      secret,
+      services
+    ),
+    mockUser2: new MockUser(
+      'halfinney',
+      environment.DOMAIN ?? 'localhost',
+      'https://upload.wikimedia.org/wikipedia/en/5/52/Hal_Finney_%28computer_scientist%29.jpg',
+      requiredEnvironment('PAYMAIL_EXAMPLE_HAL_XPRV', environment),
+      secret,
+      services
+    )
+  }
+}
+
+let configuredUsers: ExampleUsers | undefined
+
+function getConfiguredUsers(): ExampleUsers {
+  configuredUsers ??= createExampleUsers()
+  return configuredUsers
+}
+
+function lazyUser(name: keyof ExampleUsers): MockUser {
+  return new Proxy({} as MockUser, {
+    get(_target, property) {
+      const user = getConfiguredUsers()[name]
+      const value = Reflect.get(user, property, user) as unknown
+      return typeof value === 'function' ? value.bind(user) : value
+    }
+  })
+}
+
+const mockUser1 = lazyUser('mockUser1')
+const mockUser2 = lazyUser('mockUser2')
 
 const fetchUser = async (name: string, domain: string): Promise<MockUser> => {
   if (domain !== DOMAIN) throw new Error(`Unsupported Paymail domain: ${domain}`)
-  if (name === mockUser1.getAlias()) {
-    return mockUser1
+  const users = getConfiguredUsers()
+  if (name === users.mockUser1.getAlias()) {
+    return users.mockUser1
   }
-  if (name === mockUser2.getAlias()) {
-    return mockUser2
+  if (name === users.mockUser2.getAlias()) {
+    return users.mockUser2
   }
   throw new Error('User not found')
 }

@@ -41,4 +41,52 @@ describe('#Paymail Server - Capability discovery', () => {
     )
     expect(response.body.capabilities['6745385c3fc0']).toEqual(true)
   })
+
+  it('keeps mounted routes and discovery bound to construction-time configuration', async () => {
+    const mutableRoute = new PublicProfileRoute({
+      domainLogicHandler: () => ({
+        name: 'Alice',
+        avatar: 'https://avatar.example/alice.png'
+      })
+    })
+    const router = new PaymailRouter({
+      basePath: '/original',
+      baseUrl: 'https://paymail.example',
+      routes: [mutableRoute],
+      requestSenderValidation: false
+    })
+    router.basePath = '/rewritten'
+    router.baseUrl = 'https://attacker.example'
+    router.requestSenderValidation = true
+    router.routes.length = 0
+    jest.spyOn(mutableRoute, 'getCode').mockReturnValue('__proto__')
+    jest.spyOn(mutableRoute, 'getEndpoint').mockReturnValue('/rewritten/:paymail')
+
+    const isolatedApp = express()
+    isolatedApp.use(router.getRouter())
+    const discovery = await request(isolatedApp).get('/.well-known/bsvalias')
+    const mounted = await request(isolatedApp).get('/original/public-profile/alice@example.test')
+
+    expect(discovery.statusCode).toBe(200)
+    expect(discovery.body.capabilities.f12f968c92d6).toBe(
+      'https://paymail.example/original/public-profile/{alias}@{domain.tld}'
+    )
+    expect(discovery.body.capabilities['6745385c3fc0']).toBe(false)
+    expect(Object.hasOwn(discovery.body.capabilities, '__proto__')).toBe(false)
+    expect(mounted.statusCode).toBe(200)
+  })
+
+  it('rejects duplicate capability codes that would make discovery ambiguous', () => {
+    const first = new PublicProfileRoute({ domainLogicHandler: () => ({}) })
+    const second = new PublicProfileRoute({ domainLogicHandler: () => ({}) })
+    jest.spyOn(second, 'getEndpoint').mockReturnValue('/secondary-profile/:paymail')
+
+    expect(
+      () =>
+        new PaymailRouter({
+          baseUrl: 'https://paymail.example',
+          routes: [first, second]
+        })
+    ).toThrow('Duplicate Paymail capability: f12f968c92d6')
+  })
 })

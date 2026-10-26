@@ -13,8 +13,10 @@ info:
       3. The client constructs a BRC-29 P2PKH payment transaction
          (Atomic BEEF / BRC-95), then re-sends the original request with
          five additional `x-bsv-*` request headers.
-      4. The server calls `internalizeAction`, checks `isMerge`, and either
-         serves the resource (200) or rejects with 402.
+      4. The server calls `internalizeAction`, then atomically claims the
+         transaction ID in an independent replay store before serving the
+         resource. An exact wallet `isMerge` detail is additional defense, not
+         the public replay contract.
 
     ## Key derivation
 
@@ -29,11 +31,14 @@ info:
 
     ## Replay protection
 
-    Two independent mechanisms prevent replay:
+    Three complementary mechanisms prevent replay:
     - **Timestamp freshness**: `x-bsv-time` must be within ±30 seconds of
       the server's current time.
-    - **isMerge check**: the server's wallet rejects transactions already
-      seen (isMerge === true → 402).
+    - **Wallet validation**: the server wallet validates the BRC-29 remittance;
+      an exact `isMerge` detail, when available, rejects a known merge.
+    - **Atomic transaction claim**: an independent replay store permits one
+      successful claim for the payment transaction ID. Multi-process services
+      require shared durable claim state.
 
     ## Reference implementation
 
@@ -99,6 +104,8 @@ paths:
           $ref: "#/components/responses/PaymentRequired"
         "500":
           $ref: "#/components/responses/InternalServerError"
+        "503":
+          $ref: "#/components/responses/PaymentStateUnavailable"
 
 # ---------------------------------------------------------------------------
 # Components
@@ -232,6 +239,13 @@ components:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
 
+    PaymentStateUnavailable:
+      description: |
+        Payment processing failed after wallet work began, so acceptance state
+        may be ambiguous. No fresh payment challenge headers are sent. The
+        client MUST NOT create another payment until the transaction is
+        reconciled.
+
   # -----------------------------------------------------------------------
   # Schemas
   # -----------------------------------------------------------------------
@@ -303,6 +317,8 @@ components:
            a. All 5 headers present  → else 402
            b. |now - x-bsv-time| ≤ 30 s  → else 402
            c. internalizeAction(beef, remittance)
-           d. isMerge === false  → else 402 (replay)
+           d. Exact accepted verdict and optional isMerge !== true
+           e. Atomically claim txid in replay store → false means 402 (replay)
+           f. Ambiguous wallet/store failure → 503 without a fresh challenge
 
       6. Server → Client:  200  (resource body)

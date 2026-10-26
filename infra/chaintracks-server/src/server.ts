@@ -657,6 +657,20 @@ async function main() {
     'CHAINTRACKS_HISTORICAL',
     profileValue(resourceProfile, { small: 2, standard: 8, highThroughput: 32 })
   )
+  const headerSubmissionLimit = rateLimit(
+    rateLimitOptions(
+      'CHAINTRACKS_HEADER_SUBMISSION_RATE_LIMIT',
+      {
+        windowMs: 60_000,
+        limit: profileValue(resourceProfile, {
+          small: 120,
+          standard: 600,
+          highThroughput: 3_000
+        })
+      },
+      { keyGenerator: () => 'global-header-submission' }
+    )
+  )
   apiRouter.use(
     ['/findHeaderHexForHeight', '/getHeaders'],
     historicalConcurrencyLimit,
@@ -667,6 +681,7 @@ async function main() {
     historicalConcurrencyLimit,
     historicalQueryLimit
   )
+  apiRouter.use('/addHeaderHex', headerSubmissionLimit)
 
   // Root endpoint
   apiRouter.get('/', (_req: express.Request, res: express.Response) => {

@@ -12,6 +12,8 @@ tags: [mandala, brc-92, templates, plan]
 
 # Mandala Token Script Templates — Implementation Plan (Plan 1 of 2)
 
+> **Superseded (2026-10):** Mandala moved to BRC-162 binary tokens — see @bsv/templates 2.0.0 Bsv21Binary and @bsv/overlay-topics 2.0.0.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add two BRC-92 Mandala script templates — `MandalaToken` (fungible-token transfer output) and `MandalaAdmin` (authorization-outpoint chain) — to the `@bsv/templates` package.

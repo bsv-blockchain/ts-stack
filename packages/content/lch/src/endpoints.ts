@@ -1,5 +1,6 @@
 import { LCH_LIMITS } from './constants.js'
 import { LCHError, lchAssert } from './errors.js'
+import { ownDataValue, snapshotStringArray } from './boundary.js'
 
 export type EndpointClass = 'identity' | 'content'
 
@@ -12,6 +13,24 @@ export interface EndpointPolicy {
     validatedAddresses: readonly string[]
   ) => Promise<Response>
   maximumRedirects?: number
+  /** Overall DNS/connection/response deadline. Defaults to 30 seconds. */
+  timeoutMs?: number
+}
+
+const DEFAULT_TIMEOUT_MS = 30_000
+const MAX_TIMEOUT_MS = 120_000
+
+function validateResolvedAddresses(value: unknown): readonly string[] {
+  const addresses = snapshotStringArray(value, 'Endpoint DNS result')
+  lchAssert(
+    addresses !== undefined &&
+      addresses.length > 0 &&
+      addresses.length <= LCH_LIMITS.cborEntries &&
+      addresses.every(address => isPublicAddress(address)),
+    'ERR_LCH_ENDPOINT',
+    'Endpoint DNS result is empty, oversized, malformed, or non-public'
+  )
+  return addresses
 }
 
 function ipv4Value(address: string): number | undefined {
@@ -149,7 +168,12 @@ export function isPublicAddress(address: string): boolean {
   return !isDocumentationIPv6(words)
 }
 
-export async function validateEndpoint(value: string, policy: EndpointPolicy = {}): Promise<URL> {
+export async function validateEndpoint(
+  value: string,
+  policy: EndpointPolicy = {},
+  signal?: AbortSignal
+): Promise<URL> {
+  policy = snapshotEndpointPolicy(policy)
   let url: URL
   try {
     url = new URL(value)
@@ -176,16 +200,15 @@ export async function validateEndpoint(value: string, policy: EndpointPolicy = {
     'ERR_LCH_ENDPOINT',
     'No DNS validation resolver is configured'
   )
-  const addresses = await policy.resolve(url.hostname)
-  lchAssert(
-    addresses.length > 0 && addresses.every(isPublicAddress),
-    'ERR_LCH_ENDPOINT',
-    'Endpoint DNS result is empty or non-public'
-  )
+  validateResolvedAddresses(await waitForEndpoint(policy.resolve(url.hostname), signal))
   return url
 }
 
-async function validatedAddresses(url: URL, policy: EndpointPolicy): Promise<readonly string[]> {
+async function validatedAddresses(
+  url: URL,
+  policy: EndpointPolicy,
+  signal: AbortSignal
+): Promise<readonly string[]> {
   if (policy.allowLocalOrigins?.includes(url.origin) === true) return []
   if (isPublicAddress(url.hostname)) return [url.hostname]
   lchAssert(
@@ -193,11 +216,8 @@ async function validatedAddresses(url: URL, policy: EndpointPolicy): Promise<rea
     'ERR_LCH_ENDPOINT',
     'No DNS validation resolver is configured'
   )
-  const addresses = await policy.resolve(url.hostname)
-  lchAssert(
-    addresses.length > 0 && addresses.every(isPublicAddress),
-    'ERR_LCH_ENDPOINT',
-    'Endpoint DNS result is empty or non-public'
+  const addresses = validateResolvedAddresses(
+    await waitForEndpoint(policy.resolve(url.hostname), signal)
   )
   return addresses
 }
@@ -208,13 +228,27 @@ export async function fetchLCH(
   endpointClass: EndpointClass = 'content',
   policy: EndpointPolicy = {}
 ): Promise<Response> {
-  let url = await validateEndpoint(input, policy)
+  policy = snapshotEndpointPolicy(policy)
+  const timeout = policy.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  lchAssert(
+    Number.isSafeInteger(timeout) && timeout > 0 && timeout <= MAX_TIMEOUT_MS,
+    'ERR_LCH_ENDPOINT',
+    'Endpoint timeout is invalid'
+  )
+  const timeoutSignal = AbortSignal.timeout(timeout)
+  const signal = init.signal == null ? timeoutSignal : AbortSignal.any([init.signal, timeoutSignal])
+  let url = await validateEndpoint(input, policy, signal)
   const origin = url.origin
   const maximum =
     endpointClass === 'identity' ? 1 : (policy.maximumRedirects ?? LCH_LIMITS.redirects)
+  lchAssert(
+    Number.isSafeInteger(maximum) && maximum >= 0 && maximum <= LCH_LIMITS.redirects,
+    'ERR_LCH_ENDPOINT',
+    'Endpoint redirect limit is invalid'
+  )
   for (let redirect = 0; ; redirect += 1) {
-    const addresses = await validatedAddresses(url, policy)
-    const request = { ...init, redirect: 'manual' as const }
+    const addresses = await validatedAddresses(url, policy, signal)
+    const request = { ...init, redirect: 'manual' as const, signal }
     const localOrigin = policy.allowLocalOrigins?.includes(url.origin) === true
     lchAssert(
       policy.connect !== undefined ||
@@ -223,15 +257,25 @@ export async function fetchLCH(
       'ERR_LCH_ENDPOINT',
       'DNS endpoints require an address-pinning connector'
     )
-    const response =
+    const response = await waitForEndpoint(
       policy.connect === undefined
-        ? await fetch(url, request)
-        : await policy.connect(url, request, addresses)
+        ? fetch(url, request)
+        : policy.connect(new URL(url.href), request, [...addresses]),
+      signal
+    )
+    lchAssert(response instanceof Response, 'ERR_LCH_ENDPOINT', 'Endpoint returned no response')
     if (![301, 302, 303, 307, 308].includes(response.status)) return response
-    lchAssert(redirect < maximum, 'ERR_LCH_ENDPOINT', 'Endpoint redirect limit exceeded')
     const location = response.headers.get('location')
+    await response.body?.cancel().catch(() => undefined)
+    lchAssert(redirect < maximum, 'ERR_LCH_ENDPOINT', 'Endpoint redirect limit exceeded')
     lchAssert(location !== null, 'ERR_LCH_ENDPOINT', 'Redirect omitted Location')
-    const next = await validateEndpoint(new URL(location, url).href, policy)
+    const next = await validateEndpoint(new URL(location, url).href, policy, signal)
+    const nextIsLocal = policy.allowLocalOrigins?.includes(next.origin) === true
+    lchAssert(
+      !nextIsLocal || (localOrigin && next.origin === url.origin),
+      'ERR_LCH_ENDPOINT',
+      'Endpoint redirect cannot enter a local trust boundary'
+    )
     if (endpointClass === 'identity') {
       lchAssert(
         (response.status === 307 || response.status === 308) && next.origin === origin,
@@ -245,9 +289,83 @@ export async function fetchLCH(
   }
 }
 
+function snapshotEndpointPolicy(value: EndpointPolicy): EndpointPolicy {
+  const name = 'Endpoint policy'
+  const resolve = ownDataValue(value, 'resolve', name)
+  const connect = ownDataValue(value, 'connect', name)
+  const maximumRedirects = ownDataValue(value, 'maximumRedirects', name)
+  const timeoutMs = ownDataValue(value, 'timeoutMs', name)
+  lchAssert(
+    resolve === undefined || typeof resolve === 'function',
+    'ERR_LCH_ENDPOINT',
+    'Endpoint resolver is invalid'
+  )
+  lchAssert(
+    connect === undefined || typeof connect === 'function',
+    'ERR_LCH_ENDPOINT',
+    'Endpoint connector is invalid'
+  )
+  return {
+    allowLocalOrigins: snapshotStringArray(
+      ownDataValue(value, 'allowLocalOrigins', name),
+      'Endpoint policy allowLocalOrigins'
+    ),
+    ...(resolve === undefined
+      ? {}
+      : { resolve: (resolve as NonNullable<EndpointPolicy['resolve']>).bind(value) }),
+    ...(connect === undefined
+      ? {}
+      : { connect: (connect as NonNullable<EndpointPolicy['connect']>).bind(value) }),
+    ...(maximumRedirects === undefined ? {} : { maximumRedirects: maximumRedirects as number }),
+    ...(timeoutMs === undefined ? {} : { timeoutMs: timeoutMs as number })
+  }
+}
+
+function waitFor<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return promise
+  if (signal.aborted) return Promise.reject(signal.reason)
+  return new Promise<T>((resolve, reject) => {
+    const aborted = (): void => reject(signal.reason)
+    signal.addEventListener('abort', aborted, { once: true })
+    promise.then(
+      value => {
+        signal.removeEventListener('abort', aborted)
+        resolve(value)
+      },
+      error => {
+        signal.removeEventListener('abort', aborted)
+        reject(error)
+      }
+    )
+  })
+}
+
+async function waitForEndpoint<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined
+): Promise<T> {
+  try {
+    return await waitFor(promise, signal)
+  } catch (error) {
+    if (signal?.aborted === true)
+      throw new LCHError('ERR_LCH_ENDPOINT', 'Endpoint request timed out or was aborted', {
+        cause: error
+      })
+    throw error
+  }
+}
+
 function stripSensitiveHeaders(input: HeadersInit | undefined): Headers {
   const headers = new Headers(input)
-  for (const name of ['authorization', 'cookie', 'x-bsv-auth', 'x-bsv-payment'])
+  for (const name of [
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'cookie2',
+    'x-api-key',
+    'x-bsv-auth',
+    'x-bsv-payment'
+  ])
     headers.delete(name)
   return headers
 }

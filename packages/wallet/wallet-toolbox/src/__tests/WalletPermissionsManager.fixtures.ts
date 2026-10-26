@@ -1,4 +1,4 @@
-const { Telemetry, Validation } = jest.requireActual('@bsv/sdk')
+const { Telemetry, Validation, WERR_REVIEW_ACTIONS } = jest.requireActual('@bsv/sdk')
 
 const existingFetch = (globalThis as any).fetch
 if (existingFetch?._isMockFunction == null) {
@@ -27,9 +27,12 @@ if (existingFetch?._isMockFunction == null) {
  * We override the static methods so they do not do real parsing/validation.
  */
 export class MockTransaction {
-  public inputs: any[] = [{}]
+  public version: number = 1
+  public lockTime: number = 0
+  public inputs: any[] = []
   public outputs: any[] = []
   public fee: number = 0
+  private readonly txid = 'ab'.repeat(32)
 
   static fromAtomicBEEF(): void {
     // Mocked below
@@ -47,6 +50,10 @@ export class MockTransaction {
   toBEEF(): number[] {
     // Return an empty array for the BEEF representation
     return []
+  }
+
+  id(_encoding: 'hex'): string {
+    return this.txid
   }
 }
 
@@ -93,11 +100,57 @@ export function mockAtomicBEEF(tx: MockTransaction): number[] {
 /** Builds the transaction an underlying wallet would return for createAction. */
 function mockCreateActionTransaction(args: any): MockTransaction {
   const tx = new MockTransaction()
+  tx.inputs = (args.inputs ?? []).map((input: any) => {
+    const match = /^([0-9a-f]{64})\.(\d+)$/i.exec(input.outpoint ?? '')
+    return {
+      sourceTXID: match?.[1]?.toLowerCase(),
+      sourceOutputIndex: Number(match?.[2]),
+      sourceTransaction:
+        match == null
+          ? undefined
+          : {
+              id: () => match[1].toLowerCase(),
+              outputs: Array.from({ length: Number(match[2]) + 1 }, () => ({ satoshis: 1 }))
+            },
+      sequence: input.sequenceNumber ?? 0xffffffff,
+      unlockingScript:
+        input.unlockingScript == null ? new MockLockingScript('') : new MockLockingScript(input.unlockingScript)
+    }
+  })
   tx.outputs = (args.outputs ?? []).map((output: any) => ({
     lockingScript: new MockLockingScript(output.lockingScript),
     satoshis: output.satoshis
   }))
   return tx
+}
+
+async function mockCompleteBoundAction(
+  wallet: any,
+  args: any,
+  options: { inputSigners?: Record<string, (tx: MockTransaction, index: number) => Promise<MockLockingScript>> } = {},
+  originator?: string
+): Promise<MockTransaction> {
+  const created = await wallet.createAction(
+    {
+      ...args,
+      options: { ...args.options, signAndProcess: false, returnTXIDOnly: false }
+    },
+    originator
+  )
+  const signable = created.signableTransaction
+  const partial = (MockTransaction as any).fromAtomicBEEF(signable.tx) as MockTransaction
+  const spends: Record<number, { unlockingScript: string }> = {}
+  for (const [outpoint, signer] of Object.entries(options.inputSigners ?? {})) {
+    const [txid, indexText] = outpoint.split('.')
+    const inputIndex = partial.inputs.findIndex(
+      input => input.sourceTXID === txid.toLowerCase() && input.sourceOutputIndex === Number(indexText)
+    )
+    if (inputIndex === -1) throw new Error('Mock wallet omitted requested input')
+    const script = await signer(partial, inputIndex)
+    spends[inputIndex] = { unlockingScript: script.toHex() }
+  }
+  const signed = await wallet.signAction({ reference: signable.reference, spends }, originator)
+  return (MockTransaction as any).fromAtomicBEEF(signed.tx) as MockTransaction
 }
 
 /**
@@ -155,7 +208,7 @@ export class MockPushDrop {
     return {
       sign: async (_tx: MockTransaction, _vin: number) => {
         // produce a minimal unlocking script
-        return new MockLockingScript('mockUnlockingScript')
+        return new MockLockingScript('00')
       }
     }
   }
@@ -194,6 +247,8 @@ export const MockUtils = {
     return String.fromCodePoint(...arr)
   },
 
+  toUTF8Strict: (arr: number[]) => String.fromCodePoint(...arr),
+
   toBase64: (arr: number[]) => {
     // Converts an array of numbers to a Base64 string.
     const binaryStr = String.fromCodePoint(...arr)
@@ -209,6 +264,24 @@ export const MockRandom = (size: number): number[] => {
   return [...require('node:crypto').randomBytes(size)]
 }
 
+const MOCK_PERMISSION_LOCKING_KEY = `02${'99'.repeat(32)}`
+
+function mockDecodeCanonicalPushDrop(script: MockLockingScript, limits: { fieldCount: number }): any {
+  const decoded = MockPushDrop.decode(script)
+  if (decoded == null) throw new Error('Invalid mock PushDrop script')
+  const fields = [...decoded.fields]
+  if (fields.length === limits.fieldCount - 1) fields.push([0x30, 0x00])
+  if (fields.length !== limits.fieldCount) throw new Error('Unexpected mock PushDrop field count')
+  return {
+    fields,
+    lockingPublicKey: { toString: () => MOCK_PERMISSION_LOCKING_KEY }
+  }
+}
+
+const MockSignature = {
+  fromDER: jest.fn(() => ({ verify: () => true }))
+}
+
 /**
  * Overriding the real classes with our mocks.
  */
@@ -220,7 +293,12 @@ export const MockedBsvSdk = {
   Random: MockRandom,
   Certificate: null,
   Telemetry,
-  Validation
+  Validation,
+  WERR_REVIEW_ACTIONS,
+  completeBoundAction: mockCompleteBoundAction,
+  createPublicHTTPSFetch: jest.fn(() => globalThis.fetch),
+  decodeCanonicalPushDrop: mockDecodeCanonicalPushDrop,
+  Signature: MockSignature
 }
 
 // Backward-compatible alias for consumers that have not yet been renamed
@@ -242,8 +320,10 @@ export { MockedBsvSdk as MockedBSV_SDK }
  *   if you want more specific behavior in certain test steps.
  */
 export function mockUnderlyingWallet(): jest.Mocked<any> {
-  return {
-    getPublicKey: jest.fn().mockResolvedValue({ publicKey: '029999...' }),
+  const pending = new Map<string, MockTransaction>()
+  let referenceCounter = 0
+  const wallet = {
+    getPublicKey: jest.fn().mockResolvedValue({ publicKey: MOCK_PERMISSION_LOCKING_KEY }),
     revealCounterpartyKeyLinkage: jest.fn().mockResolvedValue({
       encryptedLinkage: [1, 2, 3],
       encryptedLinkageProof: [4, 5, 6],
@@ -270,24 +350,38 @@ export function mockUnderlyingWallet(): jest.Mocked<any> {
     verifySignature: jest.fn().mockResolvedValue({ valid: true }),
 
     createAction: jest.fn(async x => {
-      const tx = mockAtomicBEEF(mockCreateActionTransaction(x))
+      const transaction = mockCreateActionTransaction(x)
+      const tx = mockAtomicBEEF(transaction)
       if (x.options?.signAndProcess === true) {
         return {
           tx
         }
       }
+      referenceCounter++
+      const reference = referenceCounter === 1 ? 'mockReference' : `mockReference-${referenceCounter}`
+      pending.set(reference, transaction)
       return {
         signableTransaction: {
           tx,
-          reference: 'mockReference'
+          reference
         }
       }
     }),
-    signAction: jest.fn().mockResolvedValue({
-      txid: 'fake-txid',
-      tx: []
+    signAction: jest.fn(async args => {
+      const transaction = pending.get(args.reference)
+      if (transaction == null) throw new Error('Unknown mock action reference')
+      for (const [indexText, spend] of Object.entries(args.spends ?? {}) as Array<
+        [string, { unlockingScript: string }]
+      >) {
+        transaction.inputs[Number(indexText)].unlockingScript = new MockLockingScript(spend.unlockingScript)
+      }
+      pending.delete(args.reference)
+      return { txid: transaction.id('hex'), tx: mockAtomicBEEF(transaction) }
     }),
-    abortAction: jest.fn().mockResolvedValue({ aborted: true }),
+    abortAction: jest.fn(async args => {
+      pending.delete(args.reference)
+      return { aborted: true }
+    }),
     listActions: jest.fn().mockResolvedValue({
       totalActions: 0,
       actions: []
@@ -335,4 +429,5 @@ export function mockUnderlyingWallet(): jest.Mocked<any> {
     getNetwork: jest.fn().mockResolvedValue({ network: 'testnet' }),
     getVersion: jest.fn().mockResolvedValue({ version: 'vendor-1.0.0' })
   }
+  return wallet
 }

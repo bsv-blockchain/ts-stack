@@ -312,7 +312,7 @@ describe('MultiPushDrop', () => {
     } as unknown as Transaction
 
     await expect(template.sign(transaction, 0)).rejects.toThrow(
-      'sourceTXID or sourceTransaction required'
+      'sourceTXID or sourceTransaction is required'
     )
   })
 
@@ -326,7 +326,7 @@ describe('MultiPushDrop', () => {
     } as unknown as Transaction
 
     await expect(template.sign(transaction, 0)).rejects.toThrow(
-      'sourceSatoshis or sourceTransaction required'
+      'sourceSatoshis or input sourceTransaction is required'
     )
   })
 
@@ -337,7 +337,7 @@ describe('MultiPushDrop', () => {
         {
           sourceTXID: '00'.repeat(32),
           sourceOutputIndex: 0,
-          sourceTransaction: { outputs: [{ satoshis: 1 }] }
+          sourceTransaction: { id: () => '00'.repeat(32), outputs: [{ satoshis: 1 }] }
         }
       ],
       outputs: [],
@@ -346,7 +346,91 @@ describe('MultiPushDrop', () => {
     } as unknown as Transaction
 
     await expect(template.sign(transaction, 0)).rejects.toThrow(
-      'lockingScript or sourceTransaction required'
+      'lockingScript or input sourceTransaction is required'
     )
+  })
+
+  it('rejects an inert local-key push instead of using it as a signing oracle', async () => {
+    const { publicKey } = await wallet.getPublicKey({
+      protocolID,
+      keyID,
+      counterparty: 'self',
+      forSelf: true
+    })
+    const attackerScript = new LockingScript()
+      .writeBin(Utils.toArray(publicKey, 'hex'))
+      .writeOpCode(OP.OP_TRUE) as LockingScript
+    const sourceTx = new Transaction(1, [], [{ lockingScript: attackerScript, satoshis: 1 }], 0)
+    const spendTx = new Transaction(
+      1,
+      [{ sourceTransaction: sourceTx, sourceOutputIndex: 0 }],
+      [],
+      0
+    )
+    const signatureSpy = jest.spyOn(wallet, 'createSignature')
+
+    await expect(multiPushDrop.unlock(protocolID, keyID, 'self').sign(spendTx, 0)).rejects.toThrow(
+      'Invalid MultiPushDrop script'
+    )
+    expect(signatureSpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects scripts whose encoded key count does not match the key pushes', async () => {
+    const script = await multiPushDrop.lock([[1]], protocolID, keyID, ['self'])
+    const chunks = script.chunks.map(chunk => ({ ...chunk, data: chunk.data?.slice() }))
+    chunks[1] = { op: OP.OP_2, data: undefined }
+
+    expect(() => MultiPushDrop.decode(new LockingScript(chunks))).toThrow(
+      'locking key count does not match'
+    )
+  })
+
+  it.each([
+    ['control opcode', (chunks: typeof Script.prototype.chunks) => (chunks[2] = { op: OP.OP_DUP })],
+    ['cleanup count', (chunks: typeof Script.prototype.chunks) => chunks.splice(-2, 1)],
+    [
+      'trailing opcode',
+      (chunks: typeof Script.prototype.chunks) => chunks.push({ op: OP.OP_FALSE })
+    ]
+  ])('rejects a noncanonical %s', async (_name, mutate) => {
+    const script = await multiPushDrop.lock([[1]], protocolID, keyID, ['self'])
+    const chunks = script.chunks.map(chunk => ({ ...chunk, data: chunk.data?.slice() }))
+    mutate(chunks)
+
+    expect(() => MultiPushDrop.decode(new LockingScript(chunks))).toThrow(
+      'Invalid MultiPushDrop script'
+    )
+  })
+
+  it('rejects malformed compressed public keys in a purported template', async () => {
+    const script = await multiPushDrop.lock([], protocolID, keyID, ['self'])
+    const chunks = script.chunks.map(chunk => ({ ...chunk, data: chunk.data?.slice() }))
+    chunks[0] = { op: 33, data: [2, ...Array.from({ length: 32 }, () => 0xff)] }
+
+    expect(() => MultiPushDrop.decode(new LockingScript(chunks))).toThrow(/public key/)
+  })
+
+  it('rejects sparse and out-of-range data fields before wallet calls', async () => {
+    const sparse = Array<number>(2)
+    const getPublicKeySpy = jest.spyOn(wallet, 'getPublicKey')
+
+    await expect(multiPushDrop.lock([sparse], protocolID, keyID, ['self'])).rejects.toThrow(
+      'dense byte array'
+    )
+    await expect(multiPushDrop.lock([[0, 256]], protocolID, keyID, ['self'])).rejects.toThrow(
+      'dense byte array'
+    )
+    expect(getPublicKeySpy).not.toHaveBeenCalled()
+  })
+
+  it('rejects key counts beyond the supported executable range', async () => {
+    await expect(
+      multiPushDrop.lock(
+        [],
+        protocolID,
+        keyID,
+        Array.from({ length: 121 }, () => 'self')
+      )
+    ).rejects.toThrow('at most 120 counterparties')
   })
 })

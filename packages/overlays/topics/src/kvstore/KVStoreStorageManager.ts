@@ -10,19 +10,24 @@ export class KVStoreStorageManager {
     { label: 'key_1', collection: this.records, keys: { key: 1 } },
     { label: 'protocolID_1', collection: this.records, keys: { protocolID: 1 } },
     { label: 'controller_1', collection: this.records, keys: { controller: 1 } },
-    { label: 'txid_1_outputIndex_1', collection: this.records, keys: { txid: 1, outputIndex: 1 }, options: { unique: true } },
+    {
+      label: 'txid_1_outputIndex_1',
+      collection: this.records,
+      keys: { txid: 1, outputIndex: 1 },
+      options: { unique: true }
+    },
     { label: 'tags_1', collection: this.records, keys: { tags: 1 } }
   ])
 
-  constructor (private readonly db: Db) {
+  constructor(private readonly db: Db) {
     this.records = db.collection<KVStoreRecord>('kvstoreRecords')
   }
 
-  private async ensureIndexes (): Promise<void> {
+  private async ensureIndexes(): Promise<void> {
     return await this.indexes.ensure()
   }
 
-  async storeRecord (
+  async storeRecord(
     txid: string,
     outputIndex: number,
     key: string,
@@ -43,12 +48,12 @@ export class KVStoreStorageManager {
     await this.records.updateOne({ txid, outputIndex }, { $set: record }, { upsert: true })
   }
 
-  async deleteRecord (txid: string, outputIndex: number): Promise<void> {
+  async deleteRecord(txid: string, outputIndex: number): Promise<void> {
     await this.ensureIndexes()
     await this.records.deleteOne({ txid, outputIndex })
   }
 
-  async findWithFilters (
+  async findWithFilters(
     filters: {
       key?: string
       protocolID?: WalletProtocol
@@ -78,12 +83,16 @@ export class KVStoreStorageManager {
     return await this.findRecordWithQuery(query, limit, skip, sortOrder)
   }
 
-  async findAllRecords (limit: number = 50, skip: number = 0, sortOrder: 'asc' | 'desc' = 'desc'): Promise<KVStoreRecord[]> {
+  async findAllRecords(
+    limit: number = 50,
+    skip: number = 0,
+    sortOrder: 'asc' | 'desc' = 'desc'
+  ): Promise<KVStoreRecord[]> {
     await this.ensureIndexes()
     return await this.findRecordWithQuery({}, limit, skip, sortOrder)
   }
 
-  private async findRecordWithQuery (
+  private async findRecordWithQuery(
     query: object,
     limit: number = 50,
     skip: number = 0,

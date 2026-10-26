@@ -7,6 +7,7 @@
  */
 
 import { QRSessionManager } from '../src/server/QRSessionManager.js'
+import { secureTokenEqual } from '../src/server/secureTokenEqual.js'
 import { compileOriginMatcher } from '../src/shared/originMatcher.js'
 
 // ── QRSessionManager — desktop token ─────────────────────────────────────────
@@ -34,6 +35,63 @@ describe('QRSessionManager — desktopToken', () => {
     expect(retrieved?.desktopToken).toBe(created.desktopToken)
     mgr.stop()
   })
+
+  it('records the backend identity key only on a known session', () => {
+    const mgr = new QRSessionManager()
+    const created = mgr.createSession()
+    mgr.setBackendIdentityKey('unknown-session', '02' + 'a'.repeat(64))
+    expect(mgr.getSession('unknown-session')).toBeNull()
+    expect(mgr.getSession(created.id)?.backendIdentityKey).toBeUndefined()
+
+    mgr.setBackendIdentityKey(created.id, '02' + 'b'.repeat(64))
+    expect(mgr.getSession(created.id)?.backendIdentityKey).toBe('02' + 'b'.repeat(64))
+    mgr.stop()
+  })
+
+  it('does not let repeated unauthenticated connects extend the pairing grace window', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000)
+    const mgr = new QRSessionManager()
+    const session = mgr.createSession()
+    now.mockReturnValue(2_000)
+    mgr.setPairingStarted(session.id)
+    now.mockReturnValue(3_000)
+    mgr.setPairingStarted(session.id)
+    expect(mgr.getSession(session.id)?.pairingStartedAt).toBe(2_000)
+    mgr.stop()
+    now.mockRestore()
+  })
+
+  it('uses an absolute first-pairing TTL that reconnects cannot renew', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000)
+    const onExpired = jest.fn()
+    const mgr = new QRSessionManager()
+    mgr.onSessionExpired(onExpired)
+    const session = mgr.createSession()
+    mgr.setStatus(session.id, 'connected')
+    const firstExpiry = session.expiresAt
+
+    now.mockReturnValue(10_000)
+    mgr.setStatus(session.id, 'disconnected')
+    mgr.setStatus(session.id, 'connected')
+    expect(session.expiresAt).toBe(firstExpiry)
+    expect(session.connectedAt).toBe(1_000)
+
+    now.mockReturnValue(firstExpiry + 1)
+    expect(mgr.getSession(session.id)?.status).toBe('expired')
+    expect(onExpired).toHaveBeenCalledTimes(1)
+    mgr.stop()
+    now.mockRestore()
+  })
+
+  it('reclaims elapsed sessions before enforcing the capacity ceiling', () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000)
+    const mgr = new QRSessionManager({ maxSessions: 1 })
+    const first = mgr.createSession()
+    now.mockReturnValue(first.expiresAt + 1)
+    expect(() => mgr.createSession()).not.toThrow()
+    mgr.stop()
+    now.mockRestore()
+  })
 })
 
 // ── WebSocketRelay — desktop token validation ─────────────────────────────────
@@ -44,7 +102,7 @@ describe('desktop token validator logic', () => {
   it('accepts correct token', () => {
     const sessions = new Map([['topic-1', { desktopToken: 'secret-abc' }]])
     const validator = (topic: string, token: string | null) =>
-      sessions.has(topic) && token !== null && token === sessions.get(topic)!.desktopToken
+      sessions.has(topic) && secureTokenEqual(sessions.get(topic)!.desktopToken, token)
 
     expect(validator('topic-1', 'secret-abc')).toBe(true)
   })
@@ -52,7 +110,7 @@ describe('desktop token validator logic', () => {
   it('rejects wrong token', () => {
     const sessions = new Map([['topic-1', { desktopToken: 'secret-abc' }]])
     const validator = (topic: string, token: string | null) =>
-      sessions.has(topic) && token !== null && token === sessions.get(topic)!.desktopToken
+      sessions.has(topic) && secureTokenEqual(sessions.get(topic)!.desktopToken, token)
 
     expect(validator('topic-1', 'wrong-token')).toBe(false)
   })
@@ -60,7 +118,7 @@ describe('desktop token validator logic', () => {
   it('rejects null token (no token provided)', () => {
     const sessions = new Map([['topic-1', { desktopToken: 'secret-abc' }]])
     const validator = (topic: string, token: string | null) =>
-      sessions.has(topic) && token !== null && token === sessions.get(topic)!.desktopToken
+      sessions.has(topic) && secureTokenEqual(sessions.get(topic)!.desktopToken, token)
 
     expect(validator('topic-1', null)).toBe(false)
   })
@@ -68,10 +126,17 @@ describe('desktop token validator logic', () => {
   it('rejects unknown topic', () => {
     const sessions = new Map([['topic-1', { desktopToken: 'secret-abc' }]])
     const validator = (topic: string, token: string | null) =>
-      sessions.has(topic) && token !== null && token === sessions.get(topic)!.desktopToken
+      sessions.has(topic) && secureTokenEqual(sessions.get(topic)!.desktopToken, token)
 
     expect(validator('unknown-topic', 'any-token')).toBe(false)
   })
+
+  it.each(['xecret-abc', 'secret-abd', 'secret-abc-extra', ''])(
+    'rejects mismatched token %j through the secure comparator',
+    token => {
+      expect(secureTokenEqual('secret-abc', token)).toBe(false)
+    }
+  )
 })
 
 // ── Origin enforcement logic ──────────────────────────────────────────────────
@@ -155,6 +220,14 @@ describe('compileOriginMatcher', () => {
       const m = compileOriginMatcher([])!
       expect(m('https://app.example.com')).toBe(false)
     })
+
+    it('snapshots the allowlist and rejects invalid runtime entries', () => {
+      const origins = ['https://app.example.com']
+      const m = compileOriginMatcher(origins)!
+      origins.push('https://evil.example.com')
+      expect(m('https://evil.example.com')).toBe(false)
+      expect(() => compileOriginMatcher([true] as never)).toThrow(/only strings/)
+    })
   })
 
   describe('RegExp', () => {
@@ -170,6 +243,18 @@ describe('compileOriginMatcher', () => {
       expect(m('http://app.example.com')).toBe(false) // wrong scheme
       expect(m('https://app.example.com.evil.com')).toBe(false) // trailing
     })
+
+    it('does not inherit mutable lastIndex state from global or sticky expressions', () => {
+      for (const expression of [
+        /^https:\/\/app\.example\.com$/g,
+        /^https:\/\/app\.example\.com$/y
+      ]) {
+        const m = compileOriginMatcher(expression)!
+        expect(m('https://app.example.com')).toBe(true)
+        expect(m('https://app.example.com')).toBe(true)
+        expect(expression.lastIndex).toBe(0)
+      }
+    })
   })
 
   describe('predicate function', () => {
@@ -183,6 +268,19 @@ describe('compileOriginMatcher', () => {
       expect(m('https://evil.com')).toBe(false)
       expect(calls).toEqual(['https://app.trusted.com', 'https://evil.com'])
     })
+
+    it('fails closed when a predicate throws or returns a non-boolean value at runtime', () => {
+      expect(
+        compileOriginMatcher(() => {
+          throw new Error('parser failed')
+        })!('https://app')
+      ).toBe(false)
+      expect(compileOriginMatcher((() => 'yes') as never)!('https://app')).toBe(false)
+    })
+  })
+
+  it('rejects an invalid runtime matcher instead of silently disabling the allowlist', () => {
+    expect(() => compileOriginMatcher(42 as never)).toThrow(/allowedOrigins/)
   })
 })
 

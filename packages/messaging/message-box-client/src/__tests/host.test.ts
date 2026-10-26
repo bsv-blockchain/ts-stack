@@ -8,7 +8,9 @@ describe('Message Box host validation', () => {
   it.each([
     ['https://message.example.org/', 'https://message.example.org'],
     ['http://localhost:8080/api/', 'http://localhost:8080/api'],
-    [' https://message.example.org/prefix/// ', 'https://message.example.org/prefix']
+    ['http://127.9.8.7:8080/api/', 'http://127.9.8.7:8080/api'],
+    ['http://[::1]:8080/api/', 'http://[::1]:8080/api'],
+    ['https://message.example.org/prefix///', 'https://message.example.org/prefix']
   ])('normalizes explicitly configured host %s', (input, expected) => {
     expect(normalizeMessageBoxHost(input)).toBe(expected)
   })
@@ -19,6 +21,10 @@ describe('Message Box host validation', () => {
     'https://user:secret@message.example.org',
     'https://message.example.org?redirect=https://attacker.example',
     'https://message.example.org/#fragment',
+    'http://message.example.org',
+    ' http://localhost:8080',
+    'https://message.example.org ',
+    'https://message.example.org/\u0000',
     ''
   ])('rejects unsafe or ambiguous configured host %s', input => {
     expect(() => normalizeMessageBoxHost(input)).toThrow()
@@ -28,11 +34,35 @@ describe('Message Box host validation', () => {
     expect(() => normalizeMessageBoxHost(42 as unknown as string)).toThrow(TypeError)
   })
 
+  it('enforces exact host-length and C0/C1 control-character boundaries', () => {
+    const prefix = 'https://message.example.org/'
+    const atLimit = `${prefix}${'a'.repeat(2048 - prefix.length)}`
+    expect(normalizeMessageBoxHost(atLimit)).toBe(atLimit)
+    expect(() => normalizeMessageBoxHost(`${atLimit}a`)).toThrow('at most 2048 characters')
+
+    for (const code of [0x1f, 0x7f, 0x80, 0x9f]) {
+      expect(() => normalizeMessageBoxHost(`${prefix}${String.fromCharCode(code)}`)).toThrow(
+        'non-empty URL'
+      )
+    }
+    expect(normalizeMessageBoxHost(`${prefix}\u00a1`)).toBe(`${prefix}%C2%A1`)
+  })
+
   it('preserves an operator-controlled route prefix when building endpoints', () => {
     expect(messageBoxEndpoint('https://message.example.org/api/', '/sendMessage')).toBe(
       'https://message.example.org/api/sendMessage'
     )
+    expect(messageBoxEndpoint('https://message.example.org/api/', '///sendMessage')).toBe(
+      'https://message.example.org/api/sendMessage'
+    )
   })
+
+  it.each(['https://user@message.example.org', 'https://:secret@message.example.org'])(
+    'rejects either credential component in %s',
+    input => {
+      expect(() => normalizeMessageBoxHost(input)).toThrow('must not contain credentials')
+    }
+  )
 
   it.each([
     'http://message.example.org',

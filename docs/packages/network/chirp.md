@@ -4,9 +4,9 @@ title: '@bsv/chirp'
 kind: package
 domain: network
 npm: '@bsv/chirp'
-version: '0.1.1'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+version: '0.1.5'
+last_updated: '2026-09-27'
+last_verified: '2026-09-27'
 review_cadence_days: 30
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/network/chirp'
 status: experimental
@@ -14,6 +14,10 @@ tags: ['network', 'storage', 'uhrp', 'merkle', 'brc-167']
 ---
 
 # @bsv/chirp
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Browser- and Node-compatible BRC-167 reference implementation for progressively publishing and resiliently resolving large UHRP-addressed byte streams.
 
@@ -67,6 +71,10 @@ after validating the complete transitive closure.
 The package reports `profileCanonical: false` when it safely resolves a future
 chunking profile whose profile-specific construction it cannot yet validate.
 Unknown critical extensions and unsupported node or child kinds fail closed.
+
+Authenticated uploads send `Content-Type: application/octet-stream`; the HTTP
+transport supplies content length and an absent content encoding means identity.
+This keeps SDK `AuthFetch` signing within its supported header contract.
 
 ## Operational and security notes
 

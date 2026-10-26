@@ -1,5 +1,5 @@
-# Base version 24.18.0-alpine3.24; the digest is the authoritative build input.
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS build
+# Base version 24.22.1-alpine3.24; the digest is the authoritative build input.
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS build
 
 WORKDIR /app
 
@@ -11,7 +11,7 @@ COPY src ./src
 RUN npm run build \
  && npm prune --omit=dev
 
-FROM node@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
+FROM node@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53
 
 WORKDIR /app
 
@@ -26,9 +26,9 @@ RUN chmod -R a=rX /usr/share/licenses/ts-stack
 LABEL org.bsvblockchain.license.notice="/usr/share/licenses/ts-stack/THIRD_PARTY_NOTICES.md"
 
 # The service starts directly with Node, so the runtime image does not retain
-# npm or its unrelated dependency graph. The pinned base contains OpenSSL
-# 3.5.7-r0; retain the reviewed 3.5.8-r0 fix for CVE-2026-14456.
-RUN apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \
+# npm or its unrelated dependency graph. Install the reviewed Alpine
+# libcrypto3/libssl3 3.5.9-r0 pin for CVE-2026-84782.
+RUN apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 
 USER node

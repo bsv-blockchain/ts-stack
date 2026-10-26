@@ -76,6 +76,12 @@ describe('PhoneChangeService', () => {
       'TwilioPhone',
       '+15555550102'
     )
+    await db('payments').insert({
+      userId: target.id,
+      amount: 1000,
+      outputIndex: 0,
+      status: 'ready'
+    })
     const token = await PhoneChangeService.createAuthorization(
       target.id,
       'TwilioPhone',
@@ -84,23 +90,47 @@ describe('PhoneChangeService', () => {
 
     const changeId = await PhoneChangeService.commit(token, target.presentationKey, '5'.repeat(64))
     await PhoneChangeService.finalize(changeId, target.presentationKey, '5'.repeat(64))
-    await expect(db('auth_methods').where({ id: claimedPhone.id }).first()).resolves.toMatchObject({
-      userId: target.id
-    })
-    await expect(
-      db('auth_methods').where({ id: targetOldPhone.id }).first()
-    ).resolves.toMatchObject({
-      userId: null
-    })
+    const transferredPhone = await db('auth_methods').where({ id: claimedPhone.id }).first()
+    expect(transferredPhone.userId).toBe(target.id)
+    expect(Boolean(transferredPhone.receivedFaucet)).toBe(true)
+    const replacedPhone = await db('auth_methods').where({ id: targetOldPhone.id }).first()
+    expect(replacedPhone.userId).toBeNull()
+    expect(Boolean(replacedPhone.receivedFaucet)).toBe(true)
 
     await PhoneChangeService.restore(changeId)
     await expect(db('auth_methods').where({ id: claimedPhone.id }).first()).resolves.toMatchObject({
       userId: oldOwner.id
     })
-    await expect(
-      db('auth_methods').where({ id: targetOldPhone.id }).first()
-    ).resolves.toMatchObject({
-      userId: target.id
+    const restoredTargetPhone = await db('auth_methods').where({ id: targetOldPhone.id }).first()
+    expect(restoredTargetPhone.userId).toBe(target.id)
+    expect(Boolean(restoredTargetPhone.receivedFaucet)).toBe(true)
+  })
+
+  it("preserves the prior owner's faucet claim on a transferred identity", async () => {
+    const oldOwner = await UserService.createUser('6'.repeat(64))
+    const target = await UserService.createUser('7'.repeat(64))
+    await UserService.linkAuthMethod(target.id, 'TwilioPhone', '+15555550103')
+    const claimedPhone = await UserService.linkAuthMethod(
+      oldOwner.id,
+      'TwilioPhone',
+      '+15555550104'
+    )
+    await db('payments').insert({
+      userId: oldOwner.id,
+      amount: 1000,
+      outputIndex: 0,
+      status: 'ready'
     })
+    const token = await PhoneChangeService.createAuthorization(
+      target.id,
+      'TwilioPhone',
+      '+15555550104'
+    )
+
+    await PhoneChangeService.commit(token, target.presentationKey, '8'.repeat(64))
+
+    const transferredPhone = await db('auth_methods').where({ id: claimedPhone.id }).first()
+    expect(transferredPhone.userId).toBe(target.id)
+    expect(Boolean(transferredPhone.receivedFaucet)).toBe(true)
   })
 })

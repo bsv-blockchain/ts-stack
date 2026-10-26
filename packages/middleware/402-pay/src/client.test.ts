@@ -17,8 +17,15 @@ const FAKE_TX_BYTES = [1, 2, 3, 4, 5]
 const FAKE_TX_BASE64 = Utils.toBase64(FAKE_TX_BYTES)
 
 /** A Response factory — easier than constructing Response objects inline */
-function makeResponse(status: number, body = '', headers: Record<string, string> = {}): Response {
-  return new Response(body, { status, headers: new Headers(headers) })
+function makeResponse(
+  status: number,
+  body: BodyInit = '',
+  headers: Record<string, string> = {},
+  url?: string
+): Response {
+  const response = new Response(body, { status, headers: new Headers(headers) })
+  if (url !== undefined) Object.defineProperty(response, 'url', { value: url })
+  return response
 }
 
 /** A 402 response with valid BSV payment headers */
@@ -79,6 +86,17 @@ describe('constructPaymentHeaders', () => {
         constructPaymentHeaders(makeWallet(), TEST_URL, satoshis, SERVER_KEY)
       ).rejects.toThrow('positive safe integer')
     }
+  })
+
+  it('rejects remote cleartext URLs and malformed server identities before wallet use', async () => {
+    const wallet = makeWallet()
+    await expect(
+      constructPaymentHeaders(wallet, 'http://example.com/paid', 1, SERVER_KEY)
+    ).rejects.toThrow('HTTPS')
+    await expect(constructPaymentHeaders(wallet, TEST_URL, 1, 'not-a-key')).rejects.toThrow(
+      'identity'
+    )
+    expect(wallet.getPublicKey).not.toHaveBeenCalled()
   })
 
   it('returns all five payment headers', async () => {
@@ -382,6 +400,38 @@ describe('create402Fetch', () => {
       expect(headers.get(HEADERS.NONCE)).toBeTruthy()
       expect(headers.get(HEADERS.TIME)).toBeTruthy()
       expect(headers.get(HEADERS.VOUT)).toBe('0')
+      expect(retransmitInit.redirect).toBe('manual')
+    })
+
+    it('does not pay a cross-origin redirect challenge', async () => {
+      const wallet = makeWallet()
+      fetchMock.mockResolvedValueOnce(
+        makeResponse(
+          402,
+          '',
+          { [HEADERS.SATS]: '100', [HEADERS.SERVER]: SERVER_KEY },
+          'https://attacker.example/paid'
+        )
+      )
+      const fetch402 = create402Fetch({ wallet })
+
+      expect(await fetch402(TEST_URL)).toHaveProperty('status', 402)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(wallet.createAction).not.toHaveBeenCalled()
+    })
+
+    it('pays the final same-origin challenge URL directly', async () => {
+      const finalUrl = 'https://example.com/final-paid-route'
+      fetchMock
+        .mockResolvedValueOnce(
+          makeResponse(402, '', { [HEADERS.SATS]: '100', [HEADERS.SERVER]: SERVER_KEY }, finalUrl)
+        )
+        .mockResolvedValueOnce(makeResponse(200, 'paid'))
+      const fetch402 = create402Fetch({ wallet: makeWallet() })
+
+      await fetch402(TEST_URL)
+
+      expect(fetchMock.mock.calls[1][0]).toBe(finalUrl)
     })
 
     it('preserves existing init headers on the retransmit', async () => {
@@ -409,7 +459,7 @@ describe('create402Fetch', () => {
       expect(new Headers(retransmitInit.headers).get('x-request-id')).toBe('request-1')
     })
 
-    it('includes the URL pathname in the createAction description', async () => {
+    it('uses a fixed bounded wallet description instead of the requested path', async () => {
       const wallet = makeWallet()
       fetchMock
         .mockResolvedValueOnce(make402Response(100))
@@ -417,7 +467,7 @@ describe('create402Fetch', () => {
       const fetch402 = create402Fetch({ wallet })
       await fetch402('https://example.com/articles/my-post')
       expect(wallet.createAction).toHaveBeenCalledWith(
-        expect.objectContaining({ description: 'Paid Content: /articles/my-post' }),
+        expect.objectContaining({ description: 'BRC-121 web payment' }),
         expect.any(String)
       )
     })
@@ -468,12 +518,26 @@ describe('create402Fetch', () => {
   // ---------------------------------------------------------------------------
 
   describe('cache', () => {
+    it('does not cache paid content unless the caller explicitly opts in', async () => {
+      const wallet = makeWallet()
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'first'))
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'second'))
+      const fetch402 = create402Fetch({ wallet })
+
+      expect(await (await fetch402(TEST_URL)).text()).toBe('first')
+      expect(await (await fetch402(TEST_URL)).text()).toBe('second')
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    })
+
     it('serves subsequent requests from cache without calling fetch again', async () => {
       const wallet = makeWallet()
       fetchMock
         .mockResolvedValueOnce(make402Response(100))
         .mockResolvedValueOnce(makeResponse(200, 'cached body'))
-      const fetch402 = create402Fetch({ wallet })
+      const fetch402 = create402Fetch({ wallet, cacheTimeoutMs: 30 * 60 * 1000 })
       await fetch402(TEST_URL) // populates cache
       const cached = await fetch402(TEST_URL) // should hit cache
       expect(fetchMock).toHaveBeenCalledTimes(2) // only the 2 calls from the first request
@@ -485,7 +549,7 @@ describe('create402Fetch', () => {
       fetchMock
         .mockResolvedValueOnce(make402Response(100))
         .mockResolvedValueOnce(makeResponse(200, 'body'))
-      const fetch402 = create402Fetch({ wallet })
+      const fetch402 = create402Fetch({ wallet, cacheTimeoutMs: 30 * 60 * 1000 })
       await fetch402(TEST_URL)
       const cached = await fetch402(TEST_URL)
       expect(cached.status).toBe(200)
@@ -515,7 +579,7 @@ describe('create402Fetch', () => {
         .mockResolvedValueOnce(makeResponse(200, 'first'))
         .mockResolvedValueOnce(make402Response(100))
         .mockResolvedValueOnce(makeResponse(200, 'second'))
-      const fetch402 = create402Fetch({ wallet })
+      const fetch402 = create402Fetch({ wallet, cacheTimeoutMs: 30 * 60 * 1000 })
       await fetch402(TEST_URL)
       fetch402.clearCache()
       await fetch402(TEST_URL) // cache was cleared — must re-fetch
@@ -545,12 +609,62 @@ describe('create402Fetch', () => {
         .mockResolvedValueOnce(makeResponse(200, 'foo content'))
         .mockResolvedValueOnce(make402Response(100))
         .mockResolvedValueOnce(makeResponse(200, 'bar content'))
-      const fetch402 = create402Fetch({ wallet })
+      const fetch402 = create402Fetch({ wallet, cacheTimeoutMs: 30 * 60 * 1000 })
       const r1 = await fetch402(TEST_URL)
       const r2 = await fetch402(URL2)
       expect(await r1.text()).toBe('foo content')
       expect(await r2.text()).toBe('bar content')
       expect(fetchMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('separates opt-in cache entries by request headers', async () => {
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'alice'))
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'bob'))
+      const fetch402 = create402Fetch({
+        wallet: makeWallet(),
+        cacheTimeoutMs: 30 * 60 * 1000
+      })
+
+      expect(
+        await (await fetch402(TEST_URL, { headers: { authorization: 'Bearer alice' } })).text()
+      ).toBe('alice')
+      expect(
+        await (await fetch402(TEST_URL, { headers: { authorization: 'Bearer bob' } })).text()
+      ).toBe('bob')
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    })
+
+    it('preserves binary paid responses in the opt-in cache', async () => {
+      const bytes = new Uint8Array([0, 255, 1, 128])
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, bytes.buffer))
+      const fetch402 = create402Fetch({ wallet: makeWallet(), cacheTimeoutMs: 1_000 })
+
+      await fetch402(TEST_URL)
+      const cached = await fetch402(TEST_URL)
+
+      expect(new Uint8Array(await cached.arrayBuffer())).toEqual(bytes)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not retain a paid response beyond the configured byte budget', async () => {
+      fetchMock
+        .mockResolvedValueOnce(make402Response(100))
+        .mockResolvedValueOnce(makeResponse(200, 'too large'))
+        .mockResolvedValueOnce(makeResponse(200, 'network'))
+      const fetch402 = create402Fetch({
+        wallet: makeWallet(),
+        cacheTimeoutMs: 1_000,
+        maxCachedResponseBytes: 4
+      })
+
+      await fetch402(TEST_URL)
+      expect(await (await fetch402(TEST_URL)).text()).toBe('network')
+      expect(fetchMock).toHaveBeenCalledTimes(3)
     })
 
     it('does not cache successful non-GET payment responses', async () => {

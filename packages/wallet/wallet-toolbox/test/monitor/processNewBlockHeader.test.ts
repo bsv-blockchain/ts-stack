@@ -3,6 +3,7 @@ import { Monitor } from '../../src/monitor/Monitor'
 import { TaskCheckForProofs } from '../../src/monitor/tasks/TaskCheckForProofs'
 import { TaskCheckNoSends } from '../../src/monitor/tasks/TaskCheckNoSends'
 import { BlockHeader } from '../../src/sdk/WalletServices.interfaces'
+import { genesisHeader } from '../../src/services/chaintracker/chaintracks/util/blockHeaderUtilities'
 
 /**
  * Regression coverage for the nosend-lifecycle defense — Fix 2 of 4.
@@ -57,16 +58,7 @@ describe('Monitor.processNewBlockHeader nudges TaskCheckNoSends.checkNow', () =>
   })
 
   test('sets TaskCheckNoSends.checkNow = true alongside TaskCheckForProofs.checkNow = true', () => {
-    const header: BlockHeader = {
-      version: 1,
-      previousHash: 'a'.repeat(64),
-      merkleRoot: 'b'.repeat(64),
-      time: Math.floor(Date.now() / 1000),
-      bits: 0x1d00ffff,
-      nonce: 0,
-      height: 800000,
-      hash: 'c'.repeat(64)
-    }
+    const header: BlockHeader = genesisHeader('main')
 
     expect(TaskCheckForProofs.checkNow).toBe(false)
     expect(TaskCheckNoSends.checkNow).toBe(false)
@@ -75,20 +67,12 @@ describe('Monitor.processNewBlockHeader nudges TaskCheckNoSends.checkNow', () =>
 
     expect(TaskCheckForProofs.checkNow).toBe(true)
     expect(TaskCheckNoSends.checkNow).toBe(true)
-    expect(monitor.lastNewHeader).toBe(header)
+    expect(monitor.lastNewHeader).toEqual(header)
+    expect(monitor.lastNewHeader).not.toBe(header)
   })
 
   test('multiple consecutive new-header notifications keep TaskCheckNoSends.checkNow asserted', () => {
-    const baseHeader: BlockHeader = {
-      version: 1,
-      previousHash: 'a'.repeat(64),
-      merkleRoot: 'b'.repeat(64),
-      time: Math.floor(Date.now() / 1000),
-      bits: 0x1d00ffff,
-      nonce: 0,
-      height: 800001,
-      hash: 'd'.repeat(64)
-    }
+    const baseHeader: BlockHeader = genesisHeader('main')
     monitor.processNewBlockHeader(baseHeader)
     expect(TaskCheckNoSends.checkNow).toBe(true)
 
@@ -96,9 +80,10 @@ describe('Monitor.processNewBlockHeader nudges TaskCheckNoSends.checkNow', () =>
     // next new-header should re-assert it. Simulate clearing.
     TaskCheckNoSends.checkNow = false
 
-    const nextHeader: BlockHeader = { ...baseHeader, height: 800002, hash: 'e'.repeat(64) }
+    const nextHeader: BlockHeader = { ...baseHeader }
     monitor.processNewBlockHeader(nextHeader)
     expect(TaskCheckNoSends.checkNow).toBe(true)
-    expect(monitor.lastNewHeader).toBe(nextHeader)
+    expect(monitor.lastNewHeader).toEqual(nextHeader)
+    expect(monitor.lastNewHeader).not.toBe(nextHeader)
   })
 })

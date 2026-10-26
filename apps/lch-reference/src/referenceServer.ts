@@ -267,7 +267,11 @@ export class ReferenceLCHServer {
       issuerSigner.identityKey,
       new LCHIssuer(issuerSigner),
       new LCHPublisher(issuerSigner),
-      new LCHQuoteIssuer(issuerSigner),
+      new LCHQuoteIssuer(issuerSigner, undefined, {
+        allowInsecureLocalOrigins: isLocalHttp(options.publicBaseUrl)
+          ? [new URL(options.publicBaseUrl).origin]
+          : []
+      }),
       new WalletBRC78KeyDelivery(options.issuerWallet),
       new LCHSettlementService(issuerSigner),
       payees
@@ -344,6 +348,7 @@ export class ReferenceLCHServer {
         class: 'https://bsv.brc.dev/apps/0170#conformingApplication',
         connectivity: 'https://bsv.brc.dev/apps/0170#either'
       },
+      allowInsecureLocalPaymentEndpoint: isLocalHttp(this.acquisitionEndpoint),
       notBefore: now,
       nonce: crypto.getRandomValues(new Uint8Array(16))
     })

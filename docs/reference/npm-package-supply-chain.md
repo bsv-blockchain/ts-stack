@@ -2,9 +2,9 @@
 id: npm-package-supply-chain
 title: 'npm Package Supply Chain'
 kind: reference
-version: '1.0.0'
-last_updated: '2026-07-27'
-last_verified: '2026-08-26'
+version: '1.1.0'
+last_updated: '2026-10-03'
+last_verified: '2026-10-03'
 review_cadence_days: 30
 status: stable
 tags: [reference, packages, npm, security, releases]
@@ -76,7 +76,10 @@ build or lifecycle code, and:
 No build, pack, code-generation, or version-rewrite step may run between
 attestation and publication. Published npm versions are immutable. A partial
 retry skips an already-published version only when its registry digest exactly
-matches the staged artifact.
+matches the staged artifact. Registry reconciliation polls for up to ten minutes
+per newly published package; the publication job has a 90-minute overall bound.
+If propagation exceeds that bound, inspect registry bytes before resuming the
+same candidate. A timeout does not prove that npm rejected publication.
 
 The machine-readable contract is
 `governance/npm-package-supply-chain.json`. Repository health tests ratchet the
@@ -152,7 +155,11 @@ Do not replace an immutable version after a failed release.
 - After partial publication, rerun the failed `publish` job within the
   candidate artifact's one-day retention window. It reuses the original
   candidate bytes; exact matching versions are verified and skipped, and
-  remaining packages continue in dependency order. If the candidate has
+  remaining packages continue in dependency order. Publication proceeds in
+  dependency waves: up to eight packages of one wave publish concurrently, and
+  the next wave starts only after every package in the current wave has
+  settled with registry-verified bytes, so no dependent becomes installable
+  before its first-party dependencies. If the candidate has
   expired, review the published subset and prepare a deliberate recovery
   release rather than assuming newly packed bytes are identical.
 - If published content is defective, deprecate the affected version and

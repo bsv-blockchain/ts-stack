@@ -5,12 +5,74 @@ import type {
   HexString,
   OutpointString,
   WalletCertificate,
-  OriginatorDomainNameStringUnder250Bytes,
+  OriginatorDomainNameStringUnder250Bytes
 } from '../../wallet/Wallet.interfaces.js'
 import SymmetricKey from '../../primitives/SymmetricKey.js'
-import * as Utils from '../../primitives/utils.js'
-import ProtoWallet from '../../wallet/ProtoWallet.js'
+import { toArray, toUTF8Strict } from '../../primitives/utils.js'
+import type ProtoWallet from '../../wallet/ProtoWallet.js'
 import Certificate from './Certificate.js'
+import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
+import { base64ToBytes } from '../../wallet/WalletByteEncoding.js'
+
+const MAX_REVEALED_FIELDS = 100
+const MAX_KEYRING_VALUE_BYTES = 2048
+const MAX_ENCRYPTED_FIELD_BYTES = 1024 * 1024
+const MAX_DECRYPTED_FIELD_BYTES = 64 * 1024
+
+function plainRecord(value: unknown, field: string): Record<string, unknown> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${field} must be a plain object`)
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(`${field} must be a plain object`)
+  }
+  return value as Record<string, unknown>
+}
+
+function ownString(record: Record<string, unknown>, key: string, field: string): string {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key)
+  if (descriptor == null || !('value' in descriptor) || typeof descriptor.value !== 'string') {
+    throw new Error(`${field} must be an own string data property`)
+  }
+  return descriptor.value
+}
+
+function canonicalBase64(value: string, field: string, maximumBytes: number): number[] {
+  let decoded: number[]
+  try {
+    decoded = base64ToBytes(value)
+  } catch {
+    throw new Error(`${field} must use canonical base64 encoding`)
+  }
+  if (decoded.length < 1 || decoded.length > maximumBytes) {
+    throw new Error(`${field} is empty, oversized, or non-canonical`)
+  }
+  return decoded
+}
+
+function denseBytes(value: unknown, field: string, exactLength?: number): number[] {
+  const normalized = value instanceof Uint8Array ? Array.from(value) : value
+  if (
+    !Array.isArray(normalized) ||
+    (exactLength !== undefined && normalized.length !== exactLength)
+  ) {
+    throw new Error(
+      `${field} must be a${exactLength === undefined ? '' : ` ${exactLength}-`}byte array`
+    )
+  }
+  for (let index = 0; index < normalized.length; index++) {
+    if (
+      !Object.prototype.hasOwnProperty.call(normalized, index) ||
+      !Number.isInteger(normalized[index]) ||
+      normalized[index] < 0 ||
+      normalized[index] > 255
+    ) {
+      throw new Error(`${field} must be a dense byte array`)
+    }
+  }
+  return Array.from(normalized)
+}
 
 /**
  * VerifiableCertificate extends the Certificate class, adding functionality to manage a verifier-specific keyring.
@@ -51,15 +113,7 @@ export class VerifiableCertificate extends Certificate {
       decryptedFields?: Record<CertificateFieldNameUnder50Bytes, Base64String>
     ]
   ) {
-    super(
-      type,
-      serialNumber,
-      subject,
-      certifier,
-      revocationOutpoint,
-      fields,
-      signature
-    )
+    super(type, serialNumber, subject, certifier, revocationOutpoint, fields, signature)
     this.keyring = keyring
     this.decryptedFields = decryptedFields
   }
@@ -101,31 +155,60 @@ export class VerifiableCertificate extends Certificate {
     privilegedReason?: string,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<Record<CertificateFieldNameUnder50Bytes, string>> {
-    if (this.keyring == null || Object.keys(this.keyring).length === 0) {
-      throw new Error(
-        'A keyring is required to decrypt certificate fields for the verifier.'
-      )
+    const keyring = plainRecord(this.keyring, 'Certificate keyring')
+    const fields = plainRecord(this.fields, 'Certificate fields')
+    const fieldNames = Reflect.ownKeys(keyring)
+    if (fieldNames.length === 0) {
+      throw new Error('A keyring is required to decrypt certificate fields for the verifier.')
+    }
+    if (fieldNames.length > MAX_REVEALED_FIELDS) {
+      throw new Error(`Certificate keyring cannot contain more than ${MAX_REVEALED_FIELDS} fields`)
     }
 
     try {
-      const decryptedFields: Record<CertificateFieldNameUnder50Bytes, string> =
-        {}
-      for (const fieldName in this.keyring) {
-        const { plaintext: fieldRevelationKey } = await verifierWallet.decrypt({
-          ciphertext: Utils.toArray(this.keyring[fieldName], 'base64'),
-          ...Certificate.getCertificateFieldEncryptionDetails(
-            fieldName,
-            this.serialNumber
-          ),
-          counterparty: this.subject,
-          privileged,
-          privilegedReason
-        }, originator)
-
-        const fieldValue = new SymmetricKey(fieldRevelationKey).decrypt(
-          Utils.toArray(this.fields[fieldName], 'base64')
+      const decryptedFields = Object.create(null) as Record<
+        CertificateFieldNameUnder50Bytes,
+        string
+      >
+      for (const fieldName of fieldNames) {
+        if (
+          typeof fieldName !== 'string' ||
+          isUnsafeRecordKey(fieldName) ||
+          toArray(fieldName, 'utf8').length < 1 ||
+          toArray(fieldName, 'utf8').length > 50
+        ) {
+          throw new Error('Certificate keyring contains an unsafe field name')
+        }
+        const encryptedKey = canonicalBase64(
+          ownString(keyring, fieldName, `Certificate keyring field ${fieldName}`),
+          `Certificate keyring field ${fieldName}`,
+          MAX_KEYRING_VALUE_BYTES
         )
-        decryptedFields[fieldName] = Utils.toUTF8(fieldValue as number[])
+        const encryptedField = canonicalBase64(
+          ownString(fields, fieldName, `Certificate field ${fieldName}`),
+          `Certificate field ${fieldName}`,
+          MAX_ENCRYPTED_FIELD_BYTES
+        )
+        const { plaintext: fieldRevelationKey } = await verifierWallet.decrypt(
+          {
+            ciphertext: encryptedKey,
+            ...Certificate.getCertificateFieldEncryptionDetails(fieldName, this.serialNumber),
+            counterparty: this.subject,
+            privileged,
+            privilegedReason
+          },
+          originator
+        )
+
+        const revelationKey = denseBytes(fieldRevelationKey, 'Certificate field revelation key', 32)
+        const fieldValue = denseBytes(
+          new SymmetricKey(revelationKey).decrypt(encryptedField),
+          'Decrypted certificate field'
+        )
+        if (fieldValue.length > MAX_DECRYPTED_FIELD_BYTES) {
+          throw new Error('Decrypted certificate field is oversized')
+        }
+        decryptedFields[fieldName] = toUTF8Strict(fieldValue)
       }
       return decryptedFields
     } catch (error) {

@@ -1,10 +1,12 @@
 import { GetMerklePathResult } from '../../sdk'
 import { EntityProvenTx, EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
+import { ProvenTxReqStatus } from '../../sdk/types'
 import { doubleSha256BE } from '../../utility/utilityHelpers'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
 import { Monitor } from '../Monitor'
+import { MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -39,6 +41,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
     public triggerMsecs = 0
   ) {
     super(monitor, TaskCheckForProofs.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
   }
 
   /**
@@ -75,7 +78,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
       const r = await getProofs(this, reqs, maxAcceptableHeight, 2, countsAsAttempt, false)
       log += `${r.log}\n`
       if (reqs.length < limit) break
-      offset += limit
+      offset += r.processed.filter(req => PROVABLE_STATUSES.has(req.status)).length
     }
     return log
   }
@@ -83,6 +86,7 @@ export class TaskCheckForProofs extends WalletMonitorTask {
 
 interface ProofRequestResult {
   log: string
+  status: ProvenTxReqStatus
   proven?: TableProvenTxReq
   invalid?: TableProvenTxReq
 }
@@ -107,7 +111,7 @@ async function completeLinkedRequest(
   req.notified = false
   req.status = 'completed'
   await req.updateStorageDynamicProperties(task.storage)
-  return { log, proven: reqApi }
+  return { log, status: req.status, proven: reqApi }
 }
 
 async function invalidateMalformedRequest(
@@ -120,7 +124,7 @@ async function invalidateMalformedRequest(
   req.notified = false
   req.status = 'invalid'
   await req.updateStorageDynamicProperties(task.storage)
-  return { log, invalid: reqApi }
+  return { log, status: req.status, invalid: reqApi }
 }
 
 async function applyProofTimeout(
@@ -143,14 +147,14 @@ async function applyProofTimeout(
   if (timeout.action === 'rebroadcast') {
     log += ` too many failed attempts ${timedOutAttempts}, resetting to unsent for rebroadcast (cycle ${timeout.rebroadcastAttempts})\n`
     await req.updateStorageDynamicProperties(task.storage)
-    return { log }
+    return { log, status: req.status }
   }
 
   log += wasBroadcast
     ? ` too many failed attempts ${timedOutAttempts} and rebroadcast limit ${maxRebroadcast} reached, marking invalid\n`
     : ` too many failed attempts ${timedOutAttempts} and tx was never broadcast, marking invalid\n`
   await req.updateStorageDynamicProperties(task.storage)
-  return { log, invalid: reqApi }
+  return { log, status: req.status, invalid: reqApi }
 }
 
 async function applyProvenTransaction(
@@ -202,7 +206,7 @@ async function processProofRequest(
 ): Promise<ProofRequestResult> {
   let log = `${' '.repeat(indent)}reqId ${reqApi.provenTxReqId} txid ${reqApi.txid}: `
   if (!requestIsReadyForProof(reqApi, ignoreStatus)) {
-    return { log: `${log}status of '${reqApi.status}' is not ready to be proven.\n` }
+    return { log: `${log}status of '${reqApi.status}' is not ready to be proven.\n`, status: reqApi.status }
   }
 
   const req = new EntityProvenTxReq(reqApi)
@@ -226,25 +230,32 @@ async function processProofRequest(
   )
   if (merklePathResult.header != null && merklePathResult.header.height > maxAcceptableHeight) {
     log += ` ignoring possible proof from very new block at height ${merklePathResult.header.height} ${merklePathResult.header.hash}\n`
-    return { log }
+    return { log, status: req.status }
   }
 
+  const attemptsBefore = req.attempts
   const provenTx = await EntityProvenTx.fromReq(
     req,
     merklePathResult,
     countsAsAttempt && req.status !== 'nosend',
-    task.monitor.options.maxRebroadcastAttempts ?? 0
+    task.monitor.options.maxRebroadcastAttempts ?? 0,
+    task.monitor.chaintracks
   )
   if (provenTx != null) {
     await applyProvenTransaction(task, req, provenTx)
-  } else if (countsAsAttempt && ['callback', 'unmined', 'unknown', 'unconfirmed', 'sending'].includes(req.status)) {
-    req.attempts++
+  } else if (
+    countsAsAttempt &&
+    req.attempts === attemptsBefore &&
+    ['callback', 'unmined', 'unknown', 'unconfirmed', 'sending'].includes(req.status)
+  ) {
+    req.attempts = Math.min(Number.MAX_SAFE_INTEGER, req.attempts + 1)
   }
   await req.updateStorageDynamicProperties(task.storage)
   await req.refreshFromStorage(task.storage)
   log += req.historyPretty(since, indent + 2) + '\n'
   return {
     log,
+    status: req.status,
     ...(req.status === 'completed' ? { proven: req.api } : {}),
     ...(req.status === 'invalid' ? { invalid: req.api } : {})
   }
@@ -275,10 +286,12 @@ export async function getProofs(
 ): Promise<{
   proven: TableProvenTxReq[]
   invalid: TableProvenTxReq[]
+  processed: Array<{ provenTxReqId: number; status: ProvenTxReqStatus }>
   log: string
 }> {
   const proven: TableProvenTxReq[] = []
   const invalid: TableProvenTxReq[] = []
+  const processed: Array<{ provenTxReqId: number; status: ProvenTxReqStatus }> = []
 
   let log = ''
   for (const reqApi of reqs) {
@@ -286,7 +299,8 @@ export async function getProofs(
     log += result.log
     if (result.proven != null) proven.push(result.proven)
     if (result.invalid != null) invalid.push(result.invalid)
+    processed.push({ provenTxReqId: reqApi.provenTxReqId, status: result.status })
   }
 
-  return { proven, invalid, log }
+  return { proven, invalid, processed, log }
 }

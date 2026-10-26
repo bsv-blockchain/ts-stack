@@ -111,5 +111,7 @@ export const MAX_PENDING_PARTS = 1024
  * dozens; only a sender whose parts cannot peel — hostile or badly broken —
  * approaches either pending budget, and rejecting its mixes loses nothing
  * because systematic and degree-1 parts are always accepted.
+ * An individual fountain part whose derived degree exceeds this same budget
+ * is rejected before its block-index set is materialized.
  */
 export const MAX_PENDING_INDICES = 4096

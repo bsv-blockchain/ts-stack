@@ -1,4 +1,4 @@
-import { toOriginHeader } from '../utils/toOriginHeader'
+import { normalizeWalletHttpBaseUrl, toOriginHeader } from '../utils/toOriginHeader'
 
 afterEach(() => jest.resetAllMocks())
 
@@ -29,5 +29,30 @@ describe('toOriginHeader()', () => {
 
   it('throws on clearly malformed input', () => {
     expect(() => toOriginHeader('bad url^%', 'http')).toThrow()
+  })
+})
+
+describe('normalizeWalletHttpBaseUrl()', () => {
+  it.each([
+    ['http://localhost:3301/', 'http://localhost:3301'],
+    ['http://wallet.localhost:3301', 'http://wallet.localhost:3301'],
+    ['http://127.0.0.1:3301', 'http://127.0.0.1:3301'],
+    ['http://[::1]:3301', 'http://[::1]:3301'],
+    ['https://wallet.example:443/', 'https://wallet.example']
+  ])('normalizes %s to %s', (input, expected) => {
+    expect(normalizeWalletHttpBaseUrl(input)).toBe(expected)
+  })
+
+  it.each([
+    'http://wallet.example',
+    'https://user:password@wallet.example',
+    'https://wallet.example/rpc',
+    'https://wallet.example?tenant=alice',
+    'https://wallet.example#rpc',
+    'file:///tmp/wallet.sock',
+    'wallet.example',
+    ' https://wallet.example'
+  ])('rejects unsafe endpoint %s', input => {
+    expect(() => normalizeWalletHttpBaseUrl(input)).toThrow()
   })
 })

@@ -6,6 +6,11 @@ const { Readable } = require('node:stream')
 
 const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'chirp-store-'))
 process.env.CHIRP_DATA_DIR = dataRoot
+process.env.CHIRP_GC_MAX_ENTRIES = '2'
+process.env.CHIRP_MAX_ACTIVE_SESSIONS = '8'
+process.env.CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY = '2'
+process.env.CHIRP_MAX_STAGED_OBJECTS_PER_SESSION = '2'
+process.env.CHIRP_MIN_FREE_BYTES = '0'
 
 const { encodeRootNode } = require('../out/src/chirp/core/codec.js')
 const {
@@ -18,6 +23,11 @@ const routes = require('../out/src/routes/index.js').default
 afterAll(() => {
   fs.rmSync(dataRoot, { recursive: true, force: true })
   delete process.env.CHIRP_DATA_DIR
+  delete process.env.CHIRP_GC_MAX_ENTRIES
+  delete process.env.CHIRP_MAX_ACTIVE_SESSIONS
+  delete process.env.CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY
+  delete process.env.CHIRP_MAX_STAGED_OBJECTS_PER_SESSION
+  delete process.env.CHIRP_MIN_FREE_BYTES
 })
 
 test('stages, validates, leases, and serves a complete filesystem closure', async () => {
@@ -114,3 +124,101 @@ test('keeps legacy UHRP routes while adding the CHIRP capability', () => {
     '/chirp/v1/uploads/:uploadId/commit'
   ]))
 })
+
+test('bounds active sessions per authenticated identity', async () => {
+  const store = getChirpStore()
+  await expect(store.createSession('test-identity', '3600', null)).resolves.toBeDefined()
+  await expect(store.createSession('test-identity', '3600', null)).rejects.toMatchObject({
+    code: 'ERR_CHIRP_SESSION_QUOTA'
+  })
+})
+
+test('bounds staged objects per session without consuming a rejected body', async () => {
+  const store = getChirpStore()
+  const session = await store.createSession('quota-identity', '3600', null)
+  for (const value of ['quota-one', 'quota-two']) {
+    const bytes = Buffer.from(value)
+    await expect(
+      store.stageObject(
+        session.uploadId,
+        'quota-identity',
+        objectIdentifierForBytes(bytes),
+        Readable.from([bytes]),
+        bytes.length,
+        4_194_304
+      )
+    ).resolves.toBe('created')
+  }
+  const rejected = Buffer.from('quota-three')
+  await expect(
+    store.stageObject(
+      session.uploadId,
+      'quota-identity',
+      objectIdentifierForBytes(rejected),
+      Readable.from([rejected]),
+      rejected.length,
+      4_194_304
+    )
+  ).resolves.toBe('quota_exceeded')
+})
+
+test('continues bounded garbage collection after the entry threshold is crossed', async () => {
+  const store = getChirpStore()
+  const identifiers = Array.from({ length: 5 }, (_, index) => {
+    const bytes = Buffer.from(`unreferenced-${index}`)
+    const identifier = objectIdentifierForBytes(bytes)
+    fs.writeFileSync(path.join(dataRoot, 'objects', identifier), bytes)
+    return identifier
+  })
+
+  for (let pass = 0; pass < 3; pass += 1) await store.collectGarbage()
+
+  for (const identifier of identifiers) {
+    expect(fs.existsSync(path.join(dataRoot, 'objects', identifier))).toBe(false)
+  }
+})
+
+test('serializes commits for the same root across independent upload sessions', async () => {
+  const store = getChirpStore()
+  const firstSession = await store.createSession('root-lock-one', '3600', null)
+  const secondSession = await store.createSession('root-lock-two', '3600', null)
+  const rootIdentifier = objectIdentifierForBytes(Buffer.from('shared-root-lock'))
+  let active = 0
+  let maximumActive = 0
+  const operation = async () => {
+    active += 1
+    maximumActive = Math.max(maximumActive, active)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    active -= 1
+  }
+
+  await Promise.all([
+    store.withCommitLock(firstSession.uploadId, rootIdentifier, operation),
+    store.withCommitLock(secondSession.uploadId, rootIdentifier, operation)
+  ])
+
+  expect(maximumActive).toBe(1)
+})
+
+test('preserves a stale canonical lock instead of deleting a successor-prone path', async () => {
+  const store = getChirpStore()
+  const session = await store.createSession('stale-lock-fail-closed', '3600', null)
+  const rootIdentifier = objectIdentifierForBytes(Buffer.from('stale-lock-root'))
+  const lockDirectory = path.join(dataRoot, 'roots', '.locks')
+  fs.mkdirSync(lockDirectory, { recursive: true })
+  const lockPath = path.join(lockDirectory, `${rootIdentifier}.lock`)
+  fs.writeFileSync(lockPath, 'orphaned-owner\n', { mode: 0o600 })
+  const staleTime = new Date(Date.now() - 10 * 60 * 1000)
+  fs.utimesSync(lockPath, staleTime, staleTime)
+
+  let operationStarted = false
+  await expect(
+    store.withCommitLock(session.uploadId, rootIdentifier, async () => {
+      operationStarted = true
+    })
+  ).rejects.toMatchObject({ code: 'ERR_CHIRP_COMMIT_BUSY' })
+
+  expect(operationStarted).toBe(false)
+  expect(fs.readFileSync(lockPath, 'utf8')).toBe('orphaned-owner\n')
+  fs.rmSync(lockPath)
+}, 10_000)

@@ -1,4 +1,4 @@
-import { describe, expect, test } from '@jest/globals'
+import { describe, expect, jest, test } from '@jest/globals'
 import {
   CHIRPBuilder,
   CHIRP_CHUNK_SIZE,
@@ -87,7 +87,20 @@ describe('closure validation limits and shape', () => {
 
     const empty = new Uint8Array()
     put(objects, empty)
-    const invalidEmpty = root(objects, [reference(empty, 0)], empty)
+    const validEmpty = encodeRootNode({
+      chunkingProfile: 2,
+      logicalLength: 0n,
+      contentHash: sha256(empty),
+      children: [],
+      extensions: []
+    })
+    const invalidEmptyBytes = new Uint8Array(validEmpty.byteLength + 41)
+    invalidEmptyBytes.set(validEmpty.subarray(0, 50))
+    invalidEmptyBytes[50] = 1
+    invalidEmptyBytes[51] = 0
+    invalidEmptyBytes.set(sha256(empty), 60)
+    invalidEmptyBytes[92] = 0
+    const invalidEmpty = put(objects, invalidEmptyBytes)
     await expect(validateCHIRPClosure(invalidEmpty, loader(objects))).rejects.toMatchObject({
       code: 'ERR_CHIRP_EMPTY'
     })
@@ -119,6 +132,82 @@ describe('closure validation limits and shape', () => {
     await expect(
       validateCHIRPClosure(identifier, async () => Uint8Array.of(9))
     ).rejects.toMatchObject({ code: 'ERR_CHIRP_OBJECT_HASH' })
+    await expect(
+      validateCHIRPClosure(identifier, loader(objects), { maxDepth: 17 })
+    ).rejects.toThrow(RangeError)
+
+    let accesses = 0
+    const options = Object.defineProperty({}, 'maxDepth', {
+      enumerable: true,
+      get() {
+        accesses += 1
+        return 16
+      }
+    })
+    await expect(validateCHIRPClosure(identifier, loader(objects), options)).rejects.toThrow(
+      'accessors'
+    )
+    expect(accesses).toBe(0)
+  })
+
+  test('rejects hostile validation option snapshots before traversing the closure', async () => {
+    const objects = new Map<string, Uint8Array>()
+    const blob = Uint8Array.of(2)
+    put(objects, blob)
+    const identifier = root(objects, [reference(blob, 0)], blob)
+    const load = jest.fn(loader(objects))
+    const invalidOptions = [
+      [null, 'plain object'],
+      [[], 'plain object'],
+      [Object.create({ inherited: true }), 'plain object'],
+      [{ unsupported: true }, 'unsupported property'],
+      [{ maxLogicalLength: 1 }, 'uint64 range'],
+      [{ signal: {} }, 'AbortSignal']
+    ] as const
+
+    for (const [options, message] of invalidOptions) {
+      await expect(validateCHIRPClosure(identifier, load, options as never)).rejects.toThrow(
+        message
+      )
+    }
+    expect(load).not.toHaveBeenCalled()
+  })
+
+  test.each([new Error('validation stopped'), 'validation stopped'])(
+    'honors an already-aborted validation signal without normalizing its reason: %#',
+    async reason => {
+      const objects = new Map<string, Uint8Array>()
+      const blob = Uint8Array.of(2)
+      put(objects, blob)
+      const identifier = root(objects, [reference(blob, 0)], blob)
+      const controller = new AbortController()
+      controller.abort(reason)
+
+      const pending = validateCHIRPClosure(identifier, loader(objects), {
+        signal: controller.signal
+      })
+      if (reason instanceof Error) await expect(pending).rejects.toBe(reason)
+      else await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    }
+  )
+
+  test('aborts a non-cooperative object loader', async () => {
+    const controller = new AbortController()
+    let loadStarted: (() => void) | undefined
+    const started = new Promise<void>(resolve => {
+      loadStarted = resolve
+    })
+    const pending = validateCHIRPClosure(
+      objectIdentifierForBytes(Uint8Array.of(1)),
+      async () => {
+        loadStarted?.()
+        return await new Promise<Uint8Array>(() => {})
+      },
+      { signal: controller.signal }
+    )
+    await started
+    controller.abort(new Error('validation stopped'))
+    await expect(pending).rejects.toThrow('validation stopped')
   })
 
   test('detects blob length, content hash, and profile-one chunk-boundary failures', async () => {
@@ -223,6 +312,26 @@ describe('closure validation limits and shape', () => {
       profileCanonical: false
     })
 
+    const mixedProfileOne = root(
+      objects,
+      [reference(first, 0), shallow.reference],
+      Uint8Array.of(5, 5),
+      1
+    )
+    await expect(validateCHIRPClosure(mixedProfileOne, loader(objects))).rejects.toMatchObject({
+      code: 'ERR_CHIRP_MIXED_ROOT'
+    })
+
+    const unequalProfileOne = root(
+      objects,
+      [shallow.reference, deep.reference],
+      Uint8Array.of(5, 6),
+      1
+    )
+    await expect(validateCHIRPClosure(unequalProfileOne, loader(objects))).rejects.toMatchObject({
+      code: 'ERR_CHIRP_TREE_SHAPE'
+    })
+
     const nonCanonical = root(objects, [shallow.reference], first, 1)
     await expect(validateCHIRPClosure(nonCanonical, loader(objects))).rejects.toMatchObject({
       code: 'ERR_CHIRP_TREE_SHAPE'
@@ -254,5 +363,12 @@ describe('closure validation limits and shape', () => {
     })
     const validated = await validateCHIRPClosure(built.chirpURL, loader(objects))
     expect(validated).toMatchObject({ logicalLength: 0n, profileCanonical: true })
+    const storedRoot = objects.get(built.rootIdentifier) as Uint8Array
+    const storedCopy = storedRoot.slice()
+    const decodedHash = validated.root.contentHash.slice()
+    validated.rootBytes.fill(9)
+    validated.contentHash.fill(9)
+    expect(storedRoot).toEqual(storedCopy)
+    expect(validated.root.contentHash).toEqual(decodedHash)
   })
 })

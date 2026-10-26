@@ -64,7 +64,7 @@ async function argon2idWithBackends(options: HashWasmArgon2idOptions): Promise<s
   }
 }
 
-export const argon2id = argon2idWithBackends as typeof argon2Api.argon2id
+export const argon2id = argon2idWithBackends as typeof import('hash-wasm').argon2id
 
 export const pbkdf2 = pbkdf2Api.pbkdf2
 export const createSHA256 = sha256Api.createSHA256

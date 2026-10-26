@@ -191,12 +191,17 @@ bounds (RECOMMENDED values; implementations MAY tune them but MUST bound):
 - `MAX_PENDING_PARTS = 1 024` — buffered unsolved mixes; a mix arriving with
   the buffer full is rejected.
 - `MAX_PENDING_INDICES = 4 096` — total unresolved block references across
-  the buffer; a mix that would exceed it is rejected.
+  the buffer; a mix that would exceed it is rejected. A fountain part whose
+  derived degree alone exceeds this budget SHOULD be rejected before its
+  block-index set is materialized.
 
 Systematic and degree-1 parts are never buffered, so both rejections preserve
 liveness: a looping sender always completes the session through its
-systematic prefix. Per-part work is O(K) (index pool) plus O(degree) XOR of
-one block; the peeling cascade is bounded by the indices budget.
+systematic prefix. The deterministic partial shuffle can be represented with
+sparse swaps and MUST NOT require an O(K) index-pool allocation on untrusted
+input. Receiver mapping state and work are O(degree), capped before allocation
+by the per-part degree gate above; the peeling cascade is bounded by the
+indices budget.
 
 ## 8. Security considerations
 
@@ -211,8 +216,9 @@ one block; the peeling cascade is bounded by the indices budget.
   attacker can do to _availability_ (they already control the channel); it
   cannot provide authenticity.
 - **Resource exhaustion.** The §7 bounds cap decoder memory at a few MB and
-  per-frame work at O(K) against a hostile sender; the pre-decode length gate
-  caps allocation for non-part garbage at zero.
+  prevent attacker-chosen `K` from causing O(K) allocation per frame or
+  session switch; the pre-decode length gate caps allocation for non-part
+  garbage at zero.
 - **Confidentiality.** Anyone who can see the screen has the message. Encrypt
   inside the payload when that matters.
 

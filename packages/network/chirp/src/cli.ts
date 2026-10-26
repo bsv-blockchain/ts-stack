@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 
-import { createReadStream, createWriteStream, promises as fs } from 'node:fs'
+import {
+  constants as fsConstants,
+  createReadStream,
+  createWriteStream,
+  promises as fs
+} from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { basename, dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
@@ -8,19 +15,22 @@ import { CHIRPDownloader, type CHIRPDownloaderConfig } from './resolver.js'
 import { CHIRPUploader, type CHIRPUploadCheckpoint, type CHIRPUploaderConfig } from './uploader.js'
 import { hashHex } from './hash.js'
 import type { CHIRPByteSource } from './types.js'
-import type { WalletInterface } from '@bsv/sdk'
+import { isPublicNetworkAddress } from '@bsv/sdk/storage/PublicHTTPSFetch'
+import type { WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 
-interface CHIRPCLIWriter {
+export interface CHIRPCLIWriter {
   write(bytes: Uint8Array): boolean
   once(event: 'drain', listener: () => void): unknown
   once(event: 'error', listener: (error: Error) => void): unknown
   end(listener: () => void): unknown
   destroy(): unknown
+  commit?(): Promise<void>
+  discard?(): Promise<void>
 }
 
 export interface CHIRPCLIRuntime {
   stat(path: string): Promise<{ size: number }>
-  readFile(path: string): Promise<string>
+  readFile(path: string, maximumBytes?: number): Promise<string>
   writeFile(path: string, data: string, options: { mode: number }): Promise<void>
   rm(path: string): Promise<void>
   createInput(path: string): CHIRPByteSource
@@ -31,6 +41,9 @@ export interface CHIRPCLIRuntime {
   stdout(text: string): void
   stderr(text: string): void
 }
+
+const MAX_CHECKPOINT_BYTES = 1024 * 1024
+const strictUTF8 = new TextDecoder('utf-8', { fatal: true })
 
 export async function runCHIRPCLI(
   arguments_: string[],
@@ -70,7 +83,8 @@ async function publish(argv: string[], runtime: CHIRPCLIRuntime): Promise<void> 
     wallet,
     storageURLs: hosts,
     resilienceLevel: Number(option(argv, '--resilience') ?? '1'),
-    allowInsecureHTTP: flag(argv, '--allow-insecure-http')
+    allowInsecureHTTP: flag(argv, '--allow-insecure-http'),
+    allowPrivateHosts: flag(argv, '--allow-private-hosts')
   })
   const result = await uploader.publish({
     source: runtime.createInput(input),
@@ -110,22 +124,35 @@ async function retrieve(argv: string[], runtime: CHIRPCLIRuntime): Promise<void>
     networkPreset: network(argv),
     concurrency: Number(option(argv, '--concurrency') ?? '4'),
     allowInsecureHTTP: flag(argv, '--allow-insecure-http'),
-    urlPolicy: flag(argv, '--allow-private-hosts') ? allowAnyHost : requirePublicHost
+    allowPrivateHosts: flag(argv, '--allow-private-hosts')
   })
   const stream = runtime.createOutput(output)
+  let streamError: Error | undefined
+  const streamFailed = new Promise<void>(resolve => {
+    stream.once('error', error => {
+      streamError = error
+      resolve()
+    })
+  })
   try {
     for await (const chunk of downloader.stream(chirpURL, { range })) {
+      if (streamError != null) throw streamError
       if (!stream.write(chunk.data)) {
-        await new Promise<void>(resolve => stream.once('drain', () => resolve()))
+        await Promise.race([
+          new Promise<void>(resolve => stream.once('drain', () => resolve())),
+          streamFailed
+        ])
+        if (streamError != null) throw streamError
       }
     }
-    await new Promise<void>((resolve, reject) => {
-      stream.once('error', reject)
-      stream.end(resolve)
-    })
+    if (streamError != null) throw streamError
+    await Promise.race([new Promise<void>(resolve => stream.end(resolve)), streamFailed])
+    if (streamError != null) throw streamError
+    await stream.commit?.()
   } catch (error) {
     stream.destroy()
-    await runtime.rm(output)
+    if (stream.discard == null) await runtime.rm(output)
+    else await stream.discard()
     throw error
   }
 }
@@ -135,7 +162,7 @@ async function verify(argv: string[], runtime: CHIRPCLIRuntime): Promise<void> {
   const downloader = runtime.createDownloader({
     networkPreset: network(argv),
     allowInsecureHTTP: flag(argv, '--allow-insecure-http'),
-    urlPolicy: flag(argv, '--allow-private-hosts') ? allowAnyHost : requirePublicHost
+    allowPrivateHosts: flag(argv, '--allow-private-hosts')
   })
   let bytes = 0n
   for await (const chunk of downloader.stream(chirpURL)) bytes += BigInt(chunk.data.byteLength)
@@ -169,7 +196,7 @@ async function readCheckpoint(
   runtime: CHIRPCLIRuntime
 ): Promise<CHIRPUploadCheckpoint | undefined> {
   try {
-    return JSON.parse(await runtime.readFile(path)) as CHIRPUploadCheckpoint
+    return JSON.parse(await runtime.readFile(path, MAX_CHECKPOINT_BYTES)) as CHIRPUploadCheckpoint
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
     throw error
@@ -180,9 +207,14 @@ export function parseRange(
   value: string | undefined
 ): { start: bigint; endExclusive: bigint } | undefined {
   if (value == null) return undefined
-  const match = /^(0|[1-9]\d*):(0|[1-9]\d*)$/.exec(value)
+  const match = /^(0|[1-9]\d{0,19}):(0|[1-9]\d{0,19})$/.exec(value)
   if (match == null) throw new Error('--range must use start:endExclusive decimal syntax.')
-  return { start: BigInt(match[1]), endExclusive: BigInt(match[2]) }
+  const start = BigInt(match[1])
+  const endExclusive = BigInt(match[2])
+  if (start > 0xffffffffffffffffn || endExclusive > 0xffffffffffffffffn) {
+    throw new Error('--range boundaries must fit unsigned 64-bit integers.')
+  }
+  return { start, endExclusive }
 }
 
 export function network(argv: string[]): 'mainnet' | 'testnet' | 'teratestnet' {
@@ -245,33 +277,16 @@ export function allowAnyHost(): void {
 }
 
 export function isPublicIPv4(address: string): boolean {
-  const parts = address.split('.').map(Number)
-  if (parts.length !== 4 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 255))
-    return false
-  const [a, b, c] = parts
-  return !(
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    a >= 224 ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
-    (a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100))) ||
-    (a === 203 && b === 0 && c === 113)
-  )
+  return isIP(address) === 4 && isPublicNetworkAddress(address)
 }
 
 export function isPublicIPv6(address: string): boolean {
-  const normalized = address.toLowerCase()
-  return /^[23][0-9a-f]{3}:/.test(normalized) && !normalized.startsWith('2001:db8:')
+  return isIP(address) === 6 && isPublicNetworkAddress(address)
 }
 
 function help(runtime: CHIRPCLIRuntime): void {
   runtime.stdout(`Usage:
-  chirp publish <file> --host <url> [--host <url>] --wallet-module <path> --retention-seconds <seconds> [--resilience <n>] [--media-type <type>] [--resume-file <path>] [--allow-insecure-http]
+  chirp publish <file> --host <url> [--host <url>] --wallet-module <path> --retention-seconds <seconds> [--resilience <n>] [--media-type <type>] [--resume-file <path>] [--allow-private-hosts] [--allow-insecure-http]
   chirp retrieve <chirp-url> --output <path> [--range <start:endExclusive>] [--network <preset>] [--concurrency <n>] [--allow-private-hosts] [--allow-insecure-http]
   chirp verify <chirp-url> [--network <preset>] [--allow-private-hosts] [--allow-insecure-http]
 `)
@@ -279,11 +294,12 @@ function help(runtime: CHIRPCLIRuntime): void {
 
 const DEFAULT_RUNTIME: CHIRPCLIRuntime = {
   stat: async path => await fs.stat(path),
-  readFile: async path => await fs.readFile(path, 'utf8'),
-  writeFile: async (path, data, options) => await fs.writeFile(path, data, options),
+  readFile: async (path, maximumBytes = MAX_CHECKPOINT_BYTES) =>
+    await readPrivateFileBounded(path, maximumBytes),
+  writeFile: async (path, data, options) => await writePrivateFileAtomic(path, data, options.mode),
   rm: async path => await fs.rm(path, { force: true }),
   createInput: path => createReadStream(path),
-  createOutput: path => createWriteStream(path, { flags: 'wx' }),
+  createOutput: createPrivateOutput,
   loadWallet,
   createUploader: config => new CHIRPUploader(config),
   createDownloader: config => new CHIRPDownloader(config),
@@ -293,6 +309,75 @@ const DEFAULT_RUNTIME: CHIRPCLIRuntime = {
   stderr: text => {
     process.stderr.write(text)
   }
+}
+
+export async function readPrivateFileBounded(path: string, maximumBytes: number): Promise<string> {
+  if (
+    !Number.isSafeInteger(maximumBytes) ||
+    maximumBytes < 0 ||
+    maximumBytes > MAX_CHECKPOINT_BYTES
+  ) {
+    throw new RangeError(`maximumBytes must be from 0 through ${MAX_CHECKPOINT_BYTES}.`)
+  }
+  const handle = await fs.open(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW)
+  try {
+    const stats = await handle.stat()
+    if (!stats.isFile() || stats.size > maximumBytes) {
+      throw new Error('CHIRP resume file exceeds its byte limit or is not a regular file.')
+    }
+    const bytes = new Uint8Array(maximumBytes + 1)
+    let length = 0
+    while (length < bytes.byteLength) {
+      const { bytesRead } = await handle.read(bytes, length, bytes.byteLength - length, length)
+      if (bytesRead === 0) break
+      length += bytesRead
+    }
+    if (length > maximumBytes) throw new Error('CHIRP resume file exceeds its byte limit.')
+    return strictUTF8.decode(bytes.subarray(0, length))
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function writePrivateFileAtomic(
+  path: string,
+  data: string,
+  mode: number
+): Promise<void> {
+  const directory = dirname(path)
+  const temporary = join(directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  try {
+    handle = await fs.open(
+      temporary,
+      fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
+      mode
+    )
+    await handle.writeFile(data, { encoding: 'utf8' })
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    await fs.rename(temporary, path)
+  } finally {
+    await handle?.close().catch(() => {})
+    await fs.rm(temporary, { force: true }).catch(() => {})
+  }
+}
+
+export function createPrivateOutput(path: string): CHIRPCLIWriter {
+  const temporary = join(
+    dirname(path),
+    `.${basename(path)}.${process.pid}.${randomUUID()}.download`
+  )
+  const stream = createWriteStream(temporary, { flags: 'wx', mode: 0o600 }) as CHIRPCLIWriter
+  stream.commit = async () => {
+    await fs.link(temporary, path)
+    await fs.rm(temporary, { force: true }).catch(() => {})
+  }
+  stream.discard = async () => {
+    await fs.rm(temporary, { force: true })
+  }
+  return stream
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

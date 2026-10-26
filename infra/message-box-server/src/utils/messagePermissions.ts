@@ -2,6 +2,24 @@ import { Logger } from './logger.js'
 import { PubKeyHex } from '@bsv/sdk'
 import { runtimeDeps } from '../runtimeDeps.js'
 
+export const MAX_MESSAGE_PERMISSION_FEE = 2_147_483_647
+
+function storedMessageFee(value: unknown, field: string, allowBlocked: boolean): number {
+  const minimum = allowBlocked ? -1 : 0
+  if (
+    !Number.isSafeInteger(value) ||
+    (value as number) < minimum ||
+    (value as number) > MAX_MESSAGE_PERMISSION_FEE
+  ) {
+    throw new TypeError(`Persisted ${field} is outside the supported fee range.`)
+  }
+  return value as number
+}
+
+export function readStoredRecipientFee(value: unknown): number {
+  return storedMessageFee(value, 'recipient fee', true)
+}
+
 /**
  * Fee calculation result structure
  */
@@ -24,7 +42,7 @@ export async function getServerDeliveryFee(messageBox: string): Promise<number> 
     .select('delivery_fee')
     .first()
 
-  return serverFee?.delivery_fee ?? 0
+  return storedMessageFee(serverFee?.delivery_fee ?? 0, 'delivery fee', false)
 }
 
 /**
@@ -49,7 +67,7 @@ export async function getRecipientFee(
         .first()
 
       if (senderSpecific != null) {
-        return senderSpecific.recipient_fee
+        return readStoredRecipientFee(senderSpecific.recipient_fee)
       }
     }
 
@@ -65,7 +83,7 @@ export async function getRecipientFee(
       .first()
 
     if (boxWideDefault != null) {
-      return boxWideDefault.recipient_fee
+      return readStoredRecipientFee(boxWideDefault.recipient_fee)
     }
 
     // Defaults are policy, not stored user preferences. Avoid inserting
@@ -73,8 +91,8 @@ export async function getRecipientFee(
     // box-wide NULL-sender rows in SQL databases).
     const defaultFee = getSmartDefaultFee(String(messageBox))
     return defaultFee
-  } catch (error) {
-    Logger.error('[ERROR] Error getting recipient fee:', error)
+  } catch {
+    Logger.error('[ERROR] Unable to read a valid recipient fee.')
     throw new Error('Unable to determine recipient permission')
   }
 }
@@ -102,6 +120,7 @@ export async function setMessagePermission(
   recipientFee: number
 ): Promise<boolean> {
   try {
+    readStoredRecipientFee(recipientFee)
     const now = new Date()
 
     // Use upsert (insert or update)
@@ -123,8 +142,8 @@ export async function setMessagePermission(
       })
 
     return true
-  } catch (error) {
-    Logger.error('[ERROR] Error setting message permission:', error)
+  } catch {
+    Logger.error('[ERROR] Unable to persist the recipient permission.')
     return false
   }
 }

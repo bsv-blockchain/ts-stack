@@ -1,6 +1,5 @@
-import { LockingScript, Utils } from '@bsv/sdk'
-
-/**
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import { LockingScript } from '@bsv/sdk' /**
  * Checks if a string is a valid hexadecimal string.
  *
  * @param str - The string to check
@@ -21,7 +20,7 @@ const isHex = (str: string): boolean => {
 const toHexField = (field: string | number[]): string => {
   if (Array.isArray(field)) {
     // Convert byte array to hex
-    return Utils.toHex(field)
+    return toHex(field)
   }
 
   // Check if it's already a hex string
@@ -31,7 +30,7 @@ const toHexField = (field: string | number[]): string => {
   }
 
   // Convert UTF-8 string to hex
-  return Utils.toHex(Utils.toArray(field))
+  return toHex(toArray(field))
 }
 
 const validateScript = (script: LockingScript): void => {
@@ -53,12 +52,11 @@ const validateField = (field: unknown, index: number): void => {
     )
   }
 
-  const sampleSize = Math.min(field.length, 100)
-  for (let sampleIndex = 0; sampleIndex < sampleSize; sampleIndex++) {
-    const fieldIndex = Math.floor((sampleIndex / sampleSize) * field.length)
-    if (typeof field[fieldIndex] !== 'number') {
+  for (let fieldIndex = 0; fieldIndex < field.length; fieldIndex++) {
+    const byte = field[fieldIndex]
+    if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
       throw new TypeError(
-        `Invalid field at index ${index}: array contains non-number at position ${fieldIndex}`
+        `Invalid field at index ${index}: array contains a non-byte at position ${fieldIndex}`
       )
     }
   }

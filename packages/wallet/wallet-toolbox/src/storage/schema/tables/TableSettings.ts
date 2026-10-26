@@ -1,4 +1,4 @@
-import * as sdk from '../../../sdk'
+import type * as sdk from '../../../sdk'
 
 export interface TableSettings extends sdk.StorageIdentity, sdk.EntityTimeStamp {
   created_at: Date
@@ -12,6 +12,6 @@ export interface TableSettings extends sdk.StorageIdentity, sdk.EntityTimeStamp 
    */
   storageName: string
   chain: sdk.Chain
-  dbtype: 'SQLite' | 'MySQL' | 'IndexedDB'
+  dbtype: 'SQLite' | 'MySQL' | 'Postgres' | 'IndexedDB'
   maxOutputScript: number
 }

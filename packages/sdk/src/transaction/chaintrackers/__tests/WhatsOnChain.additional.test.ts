@@ -7,6 +7,7 @@ import { FetchHttpClient } from '../../../transaction/http/FetchHttpClient'
 //   Line 97     — getHttpHeaders() sets Authorization header when apiKey is non-empty
 
 describe('WhatsOnChain — additional coverage', () => {
+  const merkleRoot = 'a'.repeat(64)
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -23,11 +24,11 @@ describe('WhatsOnChain — additional coverage', () => {
     })
 
     await expect(tracker.currentHeight()).rejects.toThrow(
-      /Failed to get current height because of an error:/
+      "Failed to get current height from What's On Chain."
     )
   })
 
-  it('includes the serialised response data in the thrown message for non-ok currentHeight', async () => {
+  it('does not include provider response data in currentHeight errors', async () => {
     const mockFetch = mockedFetch({ status: 429, data: { code: 'RATE_LIMITED' } })
 
     const tracker = new WhatsOnChain('main', {
@@ -35,7 +36,7 @@ describe('WhatsOnChain — additional coverage', () => {
     })
 
     await expect(tracker.currentHeight()).rejects.toThrow(
-      /RATE_LIMITED/
+      "Failed to get current height from What's On Chain."
     )
   })
 
@@ -53,7 +54,7 @@ describe('WhatsOnChain — additional coverage', () => {
     })
 
     await expect(tracker.currentHeight()).rejects.toThrow(
-      'Failed to get current height because of an error: connection refused'
+      "Failed to get current height from What's On Chain."
     )
   })
 
@@ -65,7 +66,7 @@ describe('WhatsOnChain — additional coverage', () => {
     const tracker = new WhatsOnChain('main', { httpClient: mockHttpClient })
 
     await expect(tracker.currentHeight()).rejects.toThrow(
-      'Failed to get current height because of an error: raw string rejection'
+      "Failed to get current height from What's On Chain."
     )
   })
 
@@ -75,14 +76,14 @@ describe('WhatsOnChain — additional coverage', () => {
 
   it('includes Authorization header in requests when apiKey is provided', async () => {
     const apiKey = 'my-test-api-key'
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'root123' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('main', {
       apiKey,
       httpClient: new FetchHttpClient(mockFetch)
     })
 
-    await tracker.isValidRootForHeight('root123', 100)
+    await tracker.isValidRootForHeight(merkleRoot, 100)
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
     const [, fetchOptions] = mockFetch.mock.calls[0]
@@ -90,41 +91,41 @@ describe('WhatsOnChain — additional coverage', () => {
   })
 
   it('does NOT include Authorization header when apiKey is an empty string', async () => {
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'root456' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('main', {
       apiKey: '',
       httpClient: new FetchHttpClient(mockFetch)
     })
 
-    await tracker.isValidRootForHeight('root456', 200)
+    await tracker.isValidRootForHeight(merkleRoot, 200)
 
     const [, fetchOptions] = mockFetch.mock.calls[0]
     expect(fetchOptions.headers?.Authorization).toBeUndefined()
   })
 
   it('does NOT include Authorization header when apiKey is only whitespace', async () => {
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'root789' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('main', {
       apiKey: '   ',
       httpClient: new FetchHttpClient(mockFetch)
     })
 
-    await tracker.isValidRootForHeight('root789', 300)
+    await tracker.isValidRootForHeight(merkleRoot, 300)
 
     const [, fetchOptions] = mockFetch.mock.calls[0]
     expect(fetchOptions.headers?.Authorization).toBeUndefined()
   })
 
   it('always includes Accept: application/json regardless of apiKey', async () => {
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'rAny' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('main', {
       httpClient: new FetchHttpClient(mockFetch)
     })
 
-    await tracker.isValidRootForHeight('rAny', 1)
+    await tracker.isValidRootForHeight(merkleRoot, 1)
 
     const [, fetchOptions] = mockFetch.mock.calls[0]
     expect(fetchOptions.headers?.Accept).toBe('application/json')
@@ -153,20 +154,20 @@ describe('WhatsOnChain — additional coverage', () => {
   // -------------------------------------------------------------------------
 
   it('builds the correct URL for the "test" network', async () => {
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'testroot' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('test', { httpClient: new FetchHttpClient(mockFetch) })
-    await tracker.isValidRootForHeight('testroot', 10)
+    await tracker.isValidRootForHeight(merkleRoot, 10)
 
     const [calledUrl] = mockFetch.mock.calls[0]
     expect(calledUrl).toContain('bsv/test')
   })
 
   it('builds the correct URL for the "stn" network', async () => {
-    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: 'stnroot' } })
+    const mockFetch = mockedFetch({ status: 200, data: { merkleroot: merkleRoot } })
 
     const tracker = new WhatsOnChain('stn', { httpClient: new FetchHttpClient(mockFetch) })
-    await tracker.isValidRootForHeight('stnroot', 20)
+    await tracker.isValidRootForHeight(merkleRoot, 20)
 
     const [calledUrl] = mockFetch.mock.calls[0]
     expect(calledUrl).toContain('bsv/stn')
@@ -176,13 +177,13 @@ describe('WhatsOnChain — additional coverage', () => {
   // Helper
   // -------------------------------------------------------------------------
 
-  function mockedFetch (response: { status: number, data: any }): jest.Mock {
+  function mockedFetch(response: { status: number; data: any }): jest.Mock {
     return jest.fn().mockResolvedValue({
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
       statusText: response.status === 200 ? 'OK' : 'Error',
       headers: {
-        get (key: string): string | undefined {
+        get(key: string): string | undefined {
           if (key === 'Content-Type') return 'application/json'
           return undefined
         }

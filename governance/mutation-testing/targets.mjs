@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker, endMarker) {
   const lines = readFileSync(resolve(repositoryRoot, packageDirectory, filePath), 'utf8').split(
@@ -17,6 +18,11 @@ function sourceLineRange(repositoryRoot, packageDirectory, filePath, startMarker
   return `${filePath}:${startIndex + 1}-${endIndex}`
 }
 
+// Restores Stryker's first-failure bail for Jest; see the module's header.
+const STOP_ON_KILL_ENVIRONMENT = fileURLToPath(
+  new URL('./stop-on-kill-environment.cjs', import.meta.url)
+)
+
 function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelated = false } = {}) {
   return {
     testRunner: 'jest',
@@ -25,14 +31,11 @@ function jestTarget(configFile, testMatch, { esm = false, config = {}, findRelat
         projectType: 'custom',
         configFile,
         enableFindRelatedTests: findRelated,
-        ...(testMatch === undefined
-          ? {}
-          : {
-              config: {
-                ...config,
-                testMatch
-              }
-            })
+        config: {
+          ...config,
+          testEnvironment: STOP_ON_KILL_ENVIRONMENT,
+          ...(testMatch === undefined ? {} : { testMatch })
+        }
       },
       ...(esm ? { testRunnerNodeArgs: ['--experimental-vm-modules'] } : {})
     }
@@ -112,14 +115,46 @@ export function buildMutationTargets(repositoryRoot) {
       propertyTest: 'packages/sdk/src/auth/clients/__tests__/AuthFetch.property.test.ts',
       mutate: [
         [
+          'src/auth/AuthMessageValidation.ts',
+          'const separatePayload =',
+          'const lengthDescriptor ='
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'if (!separatePayload) bytes +=',
+          'if (snapshot) retain('
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'export function assertGeneralPayloadByteLimit(',
+          '/** Validate and own an untrusted BRC-103 message'
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'export function snapshotAuthMessage(',
+          'return snapshot'
+        ],
+        [
+          'src/auth/Peer.ts',
+          'const maxGeneralPayloadBytes = messageValidation.maxGeneralPayloadBytes',
+          'this.#wallet = wallet'
+        ],
+        ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
+        ['src/auth/Peer.ts', 'const outbound =', '} catch (error: unknown)'],
+        [
+          'src/auth/Peer.ts',
+          'message = snapshotAuthMessage(message,',
+          'this.#restoreOwnedCertificates(message)'
+        ],
+        [
           'src/auth/Peer.ts',
           '// Register before sending:',
           'Waits for the initial response from the peer'
         ],
         [
           'src/auth/Peer.ts',
-          'private stopListeningForInitialResponsesByNonce (',
-          'private propagateTransportError ('
+          'private stopListeningForInitialResponsesByNonce(',
+          'private propagateTransportError('
         ],
         [
           'src/auth/clients/AuthFetch.ts',
@@ -148,18 +183,18 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',
-          'private async sendAuthMessage(message: AuthMessage): Promise<void> {',
-          'private encodeRequestBody('
+          'async #sendAuthMessage(message: AuthMessage): Promise<void> {',
+          '#encodeRequestBody('
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',
-          'this.validateResponseAuthentication(url, response, body)',
+          'this.#validateResponseAuthentication(url, response, body)',
           'Registers a callback to handle incoming messages.'
         ],
         [
           'src/auth/transports/SimplifiedFetchTransport.ts',
           'async onData(callback:',
-          'private createNetworkError('
+          '#createNetworkError('
         ]
       ].map(([filePath, startMarker, endMarker]) =>
         sourceLineRange(repositoryRoot, 'packages/sdk', filePath, startMarker, endMarker)
@@ -168,6 +203,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/src/auth/__tests/Peer.boundary.test.ts',
+          '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
           '<rootDir>/src/auth/transports/__tests__/SimplifiedFetchTransport*.test.ts'
@@ -201,10 +237,21 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/overlays/topics',
       manifest: 'packages/overlays/topics/package.json',
       propertyTest: 'packages/overlays/topics/src/mandala/__tests/types.property.test.ts',
-      mutate: ['src/mandala/types.ts:72-97', 'src/admission/issuerPolicy.ts:36-39'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/mandala/__tests/types*.test.ts'], {
-        esm: true
-      })
+      mutate: [
+        'src/mandala/types.ts',
+        'src/mandala/details.ts',
+        'src/admission/issuerPolicy.ts:36-39'
+      ],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/src/mandala/__tests/types*.test.ts',
+          '<rootDir>/src/mandala/__tests/details*.test.ts'
+        ],
+        {
+          esm: true
+        }
+      )
     },
     'did-codecs': {
       packageDirectory: 'packages/helpers/did',
@@ -213,7 +260,72 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: ['src/utils/base64url.ts', 'src/utils/multibase.ts'],
       ...jestTarget(
         'jest.config.js',
-        ['<rootDir>/tests/codec.property.test.ts', '<rootDir>/tests/did.test.ts'],
+        [
+          '<rootDir>/tests/codec.property.test.ts',
+          '<rootDir>/tests/codec-boundaries.test.ts',
+          '<rootDir>/tests/did.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/brc202.property.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc202-resolution': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc202.property.test.ts',
+      mutate: ['src/did/BsvDid.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc202.property.test.ts',
+          '<rootDir>/tests/brc202.test.ts',
+          '<rootDir>/tests/did.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-envelope': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-envelope.property.test.ts',
+      mutate: ['src/brc52/envelope.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-envelope.property.test.ts',
+          '<rootDir>/tests/brc52-envelope.test.ts',
+          '<rootDir>/tests/brc52-envelope-boundaries.test.ts',
+          '<rootDir>/tests/brc52-status.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
+        { esm: true }
+      )
+    },
+    'brc52-status': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-status.property.test.ts',
+      mutate: ['src/brc52/status.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        ['<rootDir>/tests/brc52-status.property.test.ts', '<rootDir>/tests/brc52-status.test.ts'],
+        { esm: true }
+      )
+    },
+    'brc52-disclosure': {
+      packageDirectory: 'packages/helpers/did',
+      manifest: 'packages/helpers/did/package.json',
+      propertyTest: 'packages/helpers/did/tests/brc52-disclosure.property.test.ts',
+      mutate: ['src/brc52/disclosure.ts'],
+      ...jestTarget(
+        'jest.config.js',
+        [
+          '<rootDir>/tests/brc52-disclosure.property.test.ts',
+          '<rootDir>/tests/brc52-disclosure.test.ts',
+          '<rootDir>/tests/brc52-auth-interoperability.test.ts'
+        ],
         { esm: true }
       )
     },
@@ -221,8 +333,12 @@ export function buildMutationTargets(repositoryRoot) {
       packageDirectory: 'packages/helpers/ts-templates',
       manifest: 'packages/helpers/ts-templates/package.json',
       propertyTest: 'packages/helpers/ts-templates/src/__tests/mandala-encoding.property.test.ts',
-      mutate: ['src/mandala-encoding.ts'],
-      ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/mandala-encoding*.test.ts'])
+      mutate: ['src/mandala-encoding.ts', 'src/strictCbor.ts', 'src/Bsv21Binary.ts'],
+      ...jestTarget('jest.config.js', [
+        '<rootDir>/src/__tests/mandala-encoding*.test.ts',
+        '<rootDir>/src/__tests/strictCbor*.test.ts',
+        '<rootDir>/src/__tests/Bsv21Binary*.test.ts'
+      ])
     },
     'paymail-address': {
       packageDirectory: 'packages/messaging/ts-paymail',
@@ -423,7 +539,12 @@ export function buildMutationTargets(repositoryRoot) {
       manifest: 'packages/middleware/auth-express-middleware/package.json',
       propertyTest:
         'packages/middleware/auth-express-middleware/src/__tests/authMiddlewareHelpers.property.test.ts',
-      mutate: ['src/authMiddlewareHelpers.ts:96-103', 'src/authMiddlewareHelpers.ts:186-213'],
+      mutate: [
+        'src/authMiddlewareHelpers.ts:96-103',
+        'src/authMiddlewareHelpers.ts:154-163',
+        'src/authMiddlewareHelpers.ts:180-184',
+        'src/authMiddlewareHelpers.ts:206-233'
+      ],
       ...jestTarget('jest.config.js', ['<rootDir>/src/__tests/authMiddlewareHelpers*.test.ts'])
     },
     'payment-replay': {
@@ -506,6 +627,20 @@ export function buildMutationTargets(repositoryRoot) {
         esm: true
       })
     },
+    'color-permission': {
+      packageDirectory: 'packages/wallet/color-permission-module',
+      manifest: 'packages/wallet/color-permission-module/package.json',
+      propertyTest:
+        'packages/wallet/color-permission-module/src/__tests__/ColorPlan.property.test.ts',
+      mutate: [
+        'src/ColorPlan.ts',
+        'src/strictJson.ts',
+        'src/identifiers.ts',
+        'src/tokenOutputs.ts',
+        'src/overlay.ts'
+      ],
+      ...jestTarget('jest.config.cjs', ['<rootDir>/src/__tests__/*.test.ts'], { esm: true })
+    },
     'ecpm-permission': {
       packageDirectory: 'packages/wallet/ecpm-permission-module',
       manifest: 'packages/wallet/ecpm-permission-module/package.json',
@@ -579,6 +714,42 @@ export function buildMutationTargets(repositoryRoot) {
         ['<rootDir>/test/cbor.property.test.ts', '<rootDir>/test/cbor.test.ts'],
         { esm: true }
       )
+    },
+    'webrtpay-codes': {
+      packageDirectory: 'packages/messaging/webrtpay',
+      manifest: 'packages/messaging/webrtpay/package.json',
+      propertyTest: 'packages/messaging/webrtpay/test/codec.property.test.ts',
+      mutate: ['src/codec/codes.ts', 'src/codec/sdp.ts'],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/codec*.test.ts'], { esm: true })
+    },
+    'webrtpay-frames': {
+      packageDirectory: 'packages/messaging/webrtpay',
+      manifest: 'packages/messaging/webrtpay/package.json',
+      propertyTest: 'packages/messaging/webrtpay/test/frames.property.test.ts',
+      // All of frames.ts but parseMessage's object check after JSON.parse, which cannot
+      // fail: assertBoundedObject has already required the text to open with `{`, so its
+      // mutants are only no-coverage or equivalent. The two block mutants that span a range
+      // end (the bodies of parseMessage and of append, the file's last method) drop out too.
+      // The helper needs an end marker, so the second range stops at append's last statement:
+      // code added after it, or a method added after append, is outside this target until the
+      // marker moves.
+      mutate: [
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/webrtpay',
+          'src/channel/frames.ts',
+          'export const FRAME_HEADER_BYTES',
+          "if (typeof value !== 'object'"
+        ),
+        sourceLineRange(
+          repositoryRoot,
+          'packages/messaging/webrtpay',
+          'src/channel/frames.ts',
+          '  return value',
+          'this.length = needed'
+        )
+      ],
+      ...jestTarget('jest.config.js', ['<rootDir>/test/frames*.test.ts'], { esm: true })
     }
   }
 }

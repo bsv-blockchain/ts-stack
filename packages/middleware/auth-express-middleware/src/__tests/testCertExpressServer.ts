@@ -86,9 +86,10 @@ export const startCertServer = (
       certs: VerifiableCertificate[],
       _req: Request,
       _res: Response,
-      _next: NextFunction
+      approve: NextFunction
     ) => {
       certsreceived = certs
+      approve()
     },
     certificatesToRequest
   })

@@ -29,6 +29,7 @@ describe('ChaintracksClientApi deterministic contract', () => {
   let localService: ChaintracksService
   let localChaintracks: Chaintracks
   let firstTip: BlockHeader
+  let localServiceBaseUrl: string
   let logSpy: jest.SpyInstance
 
   beforeAll(async () => {
@@ -82,7 +83,8 @@ describe('ChaintracksClientApi deterministic contract', () => {
     // Each Jest worker has a separate process ID, avoiding collisions when
     // package tests execute in parallel.
     await localService.startJsonRpcServer(30000 + (process.pid % 10000))
-    const localServiceClient = new ChaintracksServiceClient(chain, `http://localhost:${localService.port}`, {})
+    localServiceBaseUrl = `http://localhost:${localService.port}`
+    const localServiceClient = new ChaintracksServiceClient(chain, localServiceBaseUrl, {})
 
     clients.push({ client: localServiceClient, chain }, { client: localChaintracks, chain })
     firstTip = await clients[0].client.findChainTipHeader()
@@ -207,6 +209,32 @@ describe('ChaintracksClientApi deterministic contract', () => {
     }
   })
 
+  test('validates, copies, deduplicates, and bounds submitted headers before queueing', async () => {
+    const options = Chaintracks.createOptions('main')
+    options.storage = {} as never
+    options.bulkIngestors = [{} as never]
+    options.liveIngestors = [{} as never]
+    options.maxQueuedBaseHeaders = 1
+    const isolated = new Chaintracks(options)
+    const first = deserializeBaseBlockHeaders(genesisBuffer('main'))[0]!
+    const duplicate = { ...first }
+
+    await isolated.addHeader(first)
+    first.merkleRoot = 'ff'.repeat(32)
+    await expect(isolated.addHeader(duplicate)).resolves.toBeUndefined()
+
+    const queued = (isolated as unknown as { baseHeaders: BaseBlockHeader[] }).baseHeaders
+    expect(queued).toHaveLength(1)
+    expect(queued[0]?.merkleRoot).toBe(duplicate.merkleRoot)
+
+    await expect(isolated.addHeader({ ...duplicate, nonce: duplicate.nonce + 1 })).rejects.toThrow(
+      'queue is at capacity'
+    )
+    await expect(isolated.addHeader({ ...duplicate, constructor: 'unexpected' } as never)).rejects.toThrow(
+      'exactly the required data properties'
+    )
+  })
+
   test('rejects a live header whose hash exceeds its declared proof-of-work target', async () => {
     const invalidProof: BlockHeader = {
       version: firstTip.version,
@@ -225,6 +253,53 @@ describe('ChaintracksClientApi deterministic contract', () => {
         invalidProof
       )
     ).rejects.toThrow('Block hash is not less than specified target.')
+  })
+
+  test('rejects ambiguous or resource-amplifying public API parameters before storage work', async () => {
+    const paths = [
+      '/getInfo?wait=1001',
+      '/getHeaders?height=0&count=10001',
+      '/getHeaders?height=1e2&count=1',
+      '/getHeaders?height=2147483647&count=2',
+      '/findHeaderHexForHeight?height=-1',
+      '/findHeaderHexForBlockHash?hash=bad'
+    ]
+
+    for (const path of paths) {
+      const response = await fetch(localServiceBaseUrl + path)
+      expect(response.status).toBe(400)
+      await expect(response.json()).resolves.toEqual({
+        status: 'error',
+        code: 'ERR_INVALID_PARAMETER',
+        description: 'The request parameters are invalid.'
+      })
+    }
+  })
+
+  test('rejects malformed submitted-header bodies as generic client errors', async () => {
+    const response = await fetch(localServiceBaseUrl + '/addHeaderHex', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ previousHash: 'attacker-controlled-detail' })
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toEqual({
+      status: 'error',
+      code: 'ERR_INVALID_PARAMETER',
+      description: 'The request parameters are invalid.'
+    })
+  })
+
+  test('validates direct Chaintracks query arguments before making the service available', async () => {
+    await expect(localChaintracks.findHeaderForHeight(-1)).rejects.toThrow('height')
+    await expect(localChaintracks.findHeaderForHeight(1.5)).rejects.toThrow('height')
+    await expect(localChaintracks.findHeaderForBlockHash('00')).rejects.toThrow('hash')
+    await expect(localChaintracks.findLiveHeaderForBlockHash('gg'.repeat(32))).rejects.toThrow('hash')
+    await expect(localChaintracks.isValidRootForHeight('00', 0)).rejects.toThrow('hash')
+    await expect(localChaintracks.getHeaders(0, 0)).rejects.toThrow('count')
+    await expect(localChaintracks.getHeaders(0, 100001)).rejects.toThrow('count')
+    await expect(localChaintracks.getHeaders(0x7fffffff, 2)).rejects.toThrow('count')
   })
 })
 

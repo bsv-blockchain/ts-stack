@@ -1,3 +1,4 @@
+import { toUTF8 } from '@bsv/sdk/primitives/utils'
 import {
   LookupService,
   LookupFormula,
@@ -8,7 +9,7 @@ import {
   LookupServiceMetaData,
   serializeLogValue
 } from '@bsv/overlay'
-import { PushDrop, Utils, LookupQuestion } from '@bsv/sdk'
+import { PushDrop, LookupQuestion } from '@bsv/sdk'
 import { BanService } from './BanService.js'
 
 /**
@@ -22,7 +23,7 @@ export class BanAwareLookupWrapper implements LookupService {
   readonly admissionMode: AdmissionMode
   readonly spendNotificationMode: SpendNotificationMode
 
-  constructor (
+  constructor(
     private readonly wrapped: LookupService,
     private readonly banService: BanService,
     private readonly protocol: 'SHIP' | 'SLAP',
@@ -36,13 +37,15 @@ export class BanAwareLookupWrapper implements LookupService {
    * Intercepts admission to check the ban list before delegating to the wrapped service.
    * If the output's domain or outpoint is banned, the admission is silently blocked.
    */
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode === 'locking-script') {
       const { txid, outputIndex, lockingScript } = payload
 
       // Check if the specific outpoint is banned
       if (await this.banService.isOutpointBanned(txid, outputIndex)) {
-        this.logger.log(`[BAN] Blocked banned outpoint from lookup admission: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)} protocol=${serializeLogValue(this.protocol)}`)
+        this.logger.log(
+          `[BAN] Blocked banned outpoint from lookup admission: txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)} protocol=${serializeLogValue(this.protocol)}`
+        )
         return
       }
 
@@ -50,9 +53,11 @@ export class BanAwareLookupWrapper implements LookupService {
       try {
         const result = PushDrop.decode(lockingScript)
         if (result.fields.length >= 3) {
-          const domain = Utils.toUTF8(result.fields[2])
+          const domain = toUTF8(result.fields[2])
           if (await this.banService.isDomainBanned(domain)) {
-            this.logger.log(`[BAN] Blocked banned domain from lookup admission: domain=${serializeLogValue(domain)} protocol=${serializeLogValue(this.protocol)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`)
+            this.logger.log(
+              `[BAN] Blocked banned domain from lookup admission: domain=${serializeLogValue(domain)} protocol=${serializeLogValue(this.protocol)} txid=${serializeLogValue(txid)} outputIndex=${serializeLogValue(outputIndex)}`
+            )
             return
           }
         }
@@ -66,31 +71,35 @@ export class BanAwareLookupWrapper implements LookupService {
     return await this.wrapped.outputAdmittedByTopic(payload)
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (typeof this.wrapped.outputSpent === 'function') {
       return await this.wrapped.outputSpent(payload)
     }
   }
 
-  async outputNoLongerRetainedInHistory (txid: string, outputIndex: number, topic: string): Promise<void> {
+  async outputNoLongerRetainedInHistory(
+    txid: string,
+    outputIndex: number,
+    topic: string
+  ): Promise<void> {
     if (typeof this.wrapped.outputNoLongerRetainedInHistory === 'function') {
       return await this.wrapped.outputNoLongerRetainedInHistory(txid, outputIndex, topic)
     }
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     return await this.wrapped.outputEvicted(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
     return await this.wrapped.lookup(question)
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return await this.wrapped.getDocumentation()
   }
 
-  async getMetaData (): Promise<LookupServiceMetaData> {
+  async getMetaData(): Promise<LookupServiceMetaData> {
     return await this.wrapped.getMetaData()
   }
 }

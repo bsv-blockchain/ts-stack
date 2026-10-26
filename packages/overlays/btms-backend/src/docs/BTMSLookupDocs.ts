@@ -6,11 +6,13 @@ The BTMS Lookup Service enables efficient querying of on-chain BTMS (Basic Token
 
 BTMS tokens use PushDrop locking scripts with the following field structure:
 - Field 0: assetId ("ISSUE" for new tokens, or "txid.outputIndex" for existing assets)
-- Field 1: amount (numeric string representing token quantity)
+- Field 1: amount (canonical positive base-10 integer, at most 9007199254740991)
 - Field 2: metadata (optional, UTF-8 string for token metadata)
 - Field 3: signature (optional PushDrop signature when script was created with signing enabled)
 
 The locking public key in the PushDrop script represents the token owner.
+Non-canonical, non-positive, or inexact amount fields are rejected rather than
+rounded during indexing.
 
 ## Token Lifecycle
 
@@ -32,16 +34,21 @@ The asset identifier in "txid.outputIndex" format. Returns all UTXOs for this as
 Hex-encoded public key of the token owner. Returns all tokens owned by this key.
 
 ### limit (number, default: 50)
-Maximum number of results to return.
+Maximum number of results to return. Must be an integer from 1 through 100.
 
 ### skip (number, default: 0)
-Number of results to skip for pagination.
+Number of results to skip for pagination. Must be an integer from 0 through 100000.
 
 ### sortOrder ('asc' | 'desc', default: 'desc')
 Sort direction based on creation time. 'desc' returns newest first.
 
 ### history (boolean, optional)
 Whether to include historical chain of spends for each token returned in the results.
+
+Queries are accessor-free plain JSON objects. Only the documented fields are
+accepted; selector objects, unknown/prototype-sensitive keys, coercible
+booleans/numbers, invalid public keys, and unbounded pagination are rejected
+before a MongoDB query is constructed.
 
 ## Query Behavior
 

@@ -9,15 +9,17 @@ import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { createCommandRunner } from './lib/command-runner.mjs'
+import { assertMetroWatcherContract } from './lib/metro-watcher-contract.mjs'
 
 const COMMAND_TIMEOUT_MS = 240_000
 const MAX_BUFFER_BYTES = 30 * 1024 * 1024
 const MAX_ERROR_OUTPUT_CHARACTERS = 16_000
 
 const profile = process.argv[2]
+const measureOnly = process.argv[3] === '--measure'
 
-if (!['browser', 'mobile'].includes(profile) || process.argv.length !== 3) {
-  throw new Error('Usage: check-wallet-toolbox-platform.mjs <browser|mobile>')
+if (!['browser', 'mobile'].includes(profile) || process.argv.length !== (measureOnly ? 4 : 3)) {
+  throw new Error('Usage: check-wallet-toolbox-platform.mjs <browser|mobile> [--measure]')
 }
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -267,7 +269,7 @@ function validateBudget(actual, maximum, label) {
     if (!Number.isSafeInteger(maximum?.[dimension]) || maximum[dimension] <= 0) {
       throw new Error(`${label} budget ${dimension} must be a positive safe integer`)
     }
-    if (actual[dimension] > maximum[dimension]) {
+    if (!measureOnly && actual[dimension] > maximum[dimension]) {
       throw new Error(
         `${label} ${dimension} size ${actual[dimension]} exceeds budget ${maximum[dimension]}`
       )
@@ -409,6 +411,10 @@ function hermesCompilerPath() {
 }
 
 async function checkMobile(consumerDirectory, budget) {
+  console.log(
+    'Verified Metro watcher contract:',
+    assertMetroWatcherContract(toolResolver('metro/package.json'))
+  )
   const entryPath = path.join(consumerDirectory, 'index.js')
   await fs.writeFile(entryPath, consumerEntry(expectedPackage))
   await fs.writeFile(
@@ -519,10 +525,13 @@ async function main() {
       profile === 'browser'
         ? await checkBrowser(consumerDirectory, budget.maximumBytes)
         : await checkMobile(consumerDirectory, budget.maximumBytes)
-    if (profile === 'browser' && process.env.BROWSER_COMPOSITION_DIRECTORY) {
+    if (process.env.BROWSER_COMPOSITION_DIRECTORY) {
       await fs.mkdir(process.env.BROWSER_COMPOSITION_DIRECTORY, { recursive: true })
       await fs.writeFile(
-        path.join(process.env.BROWSER_COMPOSITION_DIRECTORY, 'bsv-wallet-toolbox-client.json'),
+        path.join(
+          process.env.BROWSER_COMPOSITION_DIRECTORY,
+          `bsv-wallet-toolbox-${profile === 'browser' ? 'client' : 'mobile'}.json`
+        ),
         `${JSON.stringify(
           {
             schemaVersion: 1,
@@ -537,7 +546,8 @@ async function main() {
       )
     }
     console.log(
-      `Verified ${manifest.name}@${manifest.version} ${profile} platform contract: ` +
+      `${measureOnly ? 'Measured' : 'Verified'} ${manifest.name}@${manifest.version} ` +
+        `${profile} platform contract: ` +
         `${JSON.stringify(measurements)}`
     )
   } finally {

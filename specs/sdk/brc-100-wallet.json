@@ -54,6 +54,11 @@
       "minimum": 0,
       "maximum": 4294967295
     },
+    "DecimalString": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)$",
+      "description": "A canonical nonnegative decimal integer with no upper bound."
+    },
     "PositiveIntegerDefault10Max10000": {
       "type": "integer",
       "minimum": 1,
@@ -207,7 +212,7 @@
         "sourceSatoshis":     { "$ref": "#/$defs/SatoshiValue" },
         "sourceLockingScript":{ "$ref": "#/$defs/HexString" },
         "unlockingScript":    { "$ref": "#/$defs/HexString" },
-        "inputDescription":   { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "inputDescription":   { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
         "sequenceNumber":     { "$ref": "#/$defs/PositiveIntegerOrZero" }
       }
     },
@@ -222,7 +227,7 @@
         "customInstructions":{ "type": "string" },
         "tags":              { "type": "array", "items": { "$ref": "#/$defs/OutputTagStringUnder300Bytes" } },
         "outputIndex":       { "$ref": "#/$defs/PositiveIntegerOrZero" },
-        "outputDescription": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "outputDescription": { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
         "basket":            { "$ref": "#/$defs/BasketStringUnder300Bytes" }
       }
     },
@@ -249,7 +254,7 @@
         "satoshis":    { "$ref": "#/$defs/SatoshiValue" },
         "status":      { "$ref": "#/$defs/ActionStatus" },
         "isOutgoing":  { "type": "boolean" },
-        "description": { "$ref": "#/$defs/DescriptionString5to50Bytes" },
+        "description": { "anyOf": [{ "const": "" }, { "$ref": "#/$defs/DescriptionString5to50Bytes" }], "description": "Stored history can omit display metadata using an empty string; new action request requirements are unchanged." },
         "labels":      { "type": "array", "items": { "$ref": "#/$defs/LabelStringUnder300Bytes" } },
         "version":     { "$ref": "#/$defs/PositiveIntegerOrZero" },
         "lockTime":    { "$ref": "#/$defs/PositiveIntegerOrZero" },
@@ -565,7 +570,10 @@
         "type": "object",
         "required": ["totalOutputs", "outputs"],
         "properties": {
-          "totalOutputs": { "$ref": "#/$defs/PositiveIntegerOrZero" },
+          "totalOutputs": {
+            "oneOf": [{ "$ref": "#/$defs/PositiveIntegerOrZero" }, { "$ref": "#/$defs/DecimalString" }],
+            "description": "The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as a DecimalString with no outputs and no BEEF."
+          },
           "BEEF":         { "$ref": "#/$defs/ByteArray" },
           "outputs":      { "type": "array", "items": { "$ref": "#/$defs/WalletOutput" } }
         }

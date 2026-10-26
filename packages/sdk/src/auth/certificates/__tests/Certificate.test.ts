@@ -128,7 +128,7 @@ describe('Certificate', () => {
     certificate.fields.email = 'attacker@example.com'
 
     // Verify the signature
-    await expect(certificate.verify()).rejects.toThrow()
+    await expect(certificate.verify()).resolves.toBe(false)
   })
 
   it('should fail verification if the signature is missing', async () => {
@@ -143,7 +143,7 @@ describe('Certificate', () => {
     )
 
     // Verify the signature
-    await expect(certificate.verify()).rejects.toThrow()
+    await expect(certificate.verify()).resolves.toBe(false)
   })
 
   it('should fail verification if the signature is incorrect', async () => {
@@ -158,9 +158,7 @@ describe('Certificate', () => {
     )
 
     // Verify the signature
-    await expect(certificate.verify()).rejects.toThrowErrorMatchingInlineSnapshot(
-      '"Signature is not valid"'
-    )
+    await expect(certificate.verify()).resolves.toBe(false)
   })
 
   it('should handle certificates with empty fields', async () => {
@@ -208,7 +206,7 @@ describe('Certificate', () => {
     expect(deserializedCertificate.fields).toEqual(sampleFields)
   })
 
-  it('should correctly handle certificates with long field names and values', async () => {
+  it('rejects certificate field names beyond the declared 50-byte maximum', () => {
     const longFieldName = 'longFieldName_'.repeat(10) // ✅ Removed `as any`
     const longFieldValue = 'longFieldValue_'.repeat(20)
 
@@ -227,19 +225,7 @@ describe('Certificate', () => {
       undefined // No signature
     )
 
-    // Sign the certificate
-    const certifierWallet = new CompletedProtoWallet(sampleCertifierPrivateKey)
-    await certificate.sign(certifierWallet)
-
-    // Serialize and deserialize
-    const serialized = certificate.toBinary(true)
-    const deserializedCertificate = Certificate.fromBinary(serialized)
-
-    expect(deserializedCertificate.fields).toEqual(fields)
-
-    // Verify the signature
-    const isValid = await deserializedCertificate.verify()
-    expect(isValid).toBe(true)
+    expect(() => certificate.toBinary(true)).toThrow('field name length')
   })
 
   it('should correctly serialize and deserialize the revocationOutpoint', () => {

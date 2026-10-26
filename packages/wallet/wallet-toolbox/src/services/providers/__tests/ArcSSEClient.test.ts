@@ -1,5 +1,10 @@
 import { ArcSSEClient, ArcSSEClientOptions, ArcSSEEvent } from '../ArcSSEClient'
 
+const TXID_A = 'aa'.repeat(32)
+const TXID_B = 'bb'.repeat(32)
+const TXID_C = 'cc'.repeat(32)
+const TXID_D = 'dd'.repeat(32)
+
 /** Minimal fake EventSource that records listener registrations and lets tests fire them */
 class FakeEventSource {
   static instances: FakeEventSource[] = []
@@ -98,6 +103,30 @@ describe('ArcSSEClient', () => {
       expect(() => makeClient({ baseUrl: 'http://localhost:8080' })).not.toThrow()
       expect(() => makeClient({ baseUrl: 'http://127.0.0.1:8080' })).not.toThrow()
       expect(() => makeClient({ baseUrl: 'http://[::1]:8080' })).not.toThrow()
+      expect(() => makeClient({ baseUrl: 'http://wallet.localhost:8080' })).not.toThrow()
+    })
+
+    test('rejects non-plain options and malformed callback surfaces', () => {
+      expect(() => new ArcSSEClient(null as never)).toThrow('plain data object')
+      expect(() => new ArcSSEClient([] as never)).toThrow('plain data object')
+      const inherited = Object.assign(Object.create({ inherited: true }), {
+        baseUrl: 'https://arcade.example.com',
+        callbackToken: 'token',
+        onEvent: () => {},
+        EventSourceClass: FakeEventSource
+      })
+      expect(() => new ArcSSEClient(inherited)).toThrow('plain data object')
+      expect(() => makeClient({ onEvent: null as never })).toThrow('onEvent')
+      expect(() => makeClient({ onError: 1 as never })).toThrow('onError')
+      expect(() => makeClient({ onLastEventIdChanged: 'callback' as never })).toThrow('onLastEventIdChanged')
+      expect(() => makeClient({ log: {} as never })).toThrow('log')
+      expect(() => makeClient({ EventSourceClass: {} })).toThrow('EventSourceClass')
+    })
+
+    test('rejects empty, relative, control-bearing, and overlong base URLs', () => {
+      for (const baseUrl of ['', '/events', 'https://arcade.example.com\nforged', `https://${'a'.repeat(2050)}.com`]) {
+        expect(() => makeClient({ baseUrl })).toThrow(/base URL|absolute/)
+      }
     })
 
     test('rejects credentials, query parameters, and fragments in the base URL', () => {
@@ -108,6 +137,43 @@ describe('ArcSSEClient', () => {
         'cannot include credentials'
       )
       expect(() => makeClient({ baseUrl: 'https://arcade.example.com#events' })).toThrow('cannot include credentials')
+    })
+
+    test('snapshots validated credentials and cursors without invoking accessors', () => {
+      const options: ArcSSEClientOptions = {
+        baseUrl: 'https://arcade.example.com',
+        callbackToken: 'original-token',
+        arcApiKey: 'original-key',
+        lastEventId: 'original-cursor',
+        onEvent: () => {},
+        EventSourceClass: FakeEventSource
+      }
+      const client = new ArcSSEClient(options)
+      options.callbackToken = 'mutated-token'
+      options.arcApiKey = 'mutated-key'
+      options.lastEventId = 'mutated-cursor'
+      client.connect()
+
+      expect(FakeEventSource.instances[0].url).toContain('original-token')
+      expect(FakeEventSource.instances[0].opts.headers.Authorization).toBe('Bearer original-key')
+      expect(FakeEventSource.instances[0].opts.headers['Last-Event-ID']).toBe('original-cursor')
+
+      const accessorOptions = {
+        baseUrl: 'https://arcade.example.com',
+        onEvent: () => {},
+        EventSourceClass: FakeEventSource
+      } as ArcSSEClientOptions
+      Object.defineProperty(accessorOptions, 'callbackToken', { get: () => 'hidden-token', enumerable: true })
+      expect(() => new ArcSSEClient(accessorOptions)).toThrow('data property')
+    })
+
+    test('rejects control-bearing credentials and unsafe resource limits', () => {
+      expect(() => makeClient({ callbackToken: 'token\nforged' })).toThrow('control-free')
+      expect(() => makeClient({ arcApiKey: 'key\rforged' })).toThrow('control-free')
+      expect(() => makeClient({ lastEventId: 'cursor\nforged' })).toThrow('control-free')
+      expect(() => makeClient({ maxEventBytes: 0 })).toThrow('maxEventBytes')
+      expect(() => makeClient({ maxPendingEvents: 5000 })).toThrow('maxPendingEvents')
+      expect(() => makeClient({ maxPendingBytes: 100_000_000 })).toThrow('maxPendingBytes')
     })
   })
 
@@ -135,12 +201,12 @@ describe('ArcSSEClient', () => {
       expect(FakeEventSource.instances).toHaveLength(1)
     })
 
-    test('does not log callbackToken while connecting', () => {
+    test('is silent by default and never logs the callback token', () => {
       const logSpy = jest.spyOn(console, 'log')
       const { client } = makeClient()
       client.connect()
       const logged = logSpy.mock.calls.map(call => call.join(' ')).join('\n')
-      expect(logged).toContain('callbackToken=<redacted>')
+      expect(logged).toBe('')
       expect(logged).not.toContain('tok-abc123')
     })
 
@@ -149,6 +215,21 @@ describe('ArcSSEClient', () => {
       client.connect()
       const es = FakeEventSource.instances[0]
       expect(() => es.emit('open')).not.toThrow()
+    })
+
+    test('contains malformed EventSource instances and hostile close methods', () => {
+      class InvalidEventSource {}
+      const invalid = makeClient({ EventSourceClass: InvalidEventSource })
+      expect(() => invalid.client.connect()).toThrow('Unable to initialize')
+
+      class HostileEventSource {
+        close(): void {
+          throw new Error('hostile close')
+        }
+      }
+      const hostile = makeClient({ EventSourceClass: HostileEventSource })
+      expect(() => hostile.client.connect()).toThrow('Unable to initialize')
+      expect(() => hostile.client.connect()).toThrow('Unable to initialize')
     })
   })
 
@@ -159,7 +240,7 @@ describe('ArcSSEClient', () => {
       const { client, events } = makeClient()
       client.connect()
       const es = FakeEventSource.instances[0]
-      const payload: ArcSSEEvent = { txid: 'aaaa', txStatus: 'MINED', timestamp: '2025-01-01T00:00:00Z' }
+      const payload: ArcSSEEvent = { txid: TXID_A, txStatus: 'MINED', timestamp: '2025-01-01T00:00:00Z' }
       es.emit('status', { data: JSON.stringify(payload) })
       expect(events).toHaveLength(1)
       expect(events[0]).toEqual(payload)
@@ -170,7 +251,7 @@ describe('ArcSSEClient', () => {
       client.connect()
       const es = FakeEventSource.instances[0]
       es.emit('status', {
-        data: JSON.stringify({ txid: 'bbbb', txStatus: 'SEEN_ON_NETWORK', timestamp: '' }),
+        data: JSON.stringify({ txid: TXID_B, txStatus: 'SEEN_ON_NETWORK', timestamp: '' }),
         lastEventId: '99'
       })
       expect(client.lastEventId).toBeUndefined()
@@ -186,7 +267,7 @@ describe('ArcSSEClient', () => {
       })
       client.connect()
       FakeEventSource.instances[0].emit('status', {
-        data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+        data: JSON.stringify({ txid: TXID_B, txStatus: 'REJECTED', timestamp: '' }),
         lastEventId: '100'
       })
       await new Promise(resolve => setTimeout(resolve, 0))
@@ -206,7 +287,7 @@ describe('ArcSSEClient', () => {
 
       expect(() =>
         FakeEventSource.instances[0].emit('status', {
-          data: JSON.stringify({ txid: 'bbbb', txStatus: 'REJECTED', timestamp: '' }),
+          data: JSON.stringify({ txid: TXID_B, txStatus: 'REJECTED', timestamp: '' }),
           lastEventId: '101'
         })
       ).not.toThrow()
@@ -221,25 +302,209 @@ describe('ArcSSEClient', () => {
       client.connect()
       const es = FakeEventSource.instances[0]
       es.emit('status', {
-        data: JSON.stringify({ txid: 'cccc', txStatus: 'MINED', timestamp: '' })
+        data: JSON.stringify({ txid: TXID_C, txStatus: 'MINED', timestamp: '' })
         // no lastEventId field
       })
       expect(client.lastEventId).toBe('initial')
     })
 
-    test('ignores malformed JSON without throwing', () => {
-      const { client, events } = makeClient()
+    test('fails the stream closed on malformed event JSON', () => {
+      const { client, events, errors } = makeClient()
       client.connect()
       const es = FakeEventSource.instances[0]
       expect(() => es.emit('status', { data: 'not-json' })).not.toThrow()
       expect(events).toHaveLength(0)
+      expect(errors[0].message).toBe('Arcade SSE supplied an invalid or excessive status event.')
+      expect(es.closed).toBe(true)
+    })
+
+    test('serializes event processing and cursor commits in exact arrival order', async () => {
+      let releaseFirst!: () => void
+      const firstPending = new Promise<void>(resolve => {
+        releaseFirst = resolve
+      })
+      const order: string[] = []
+      const { client, lastEventIds } = makeClient({
+        onEvent: async event => {
+          order.push(`start:${event.txid}`)
+          if (event.txid === TXID_A) await firstPending
+          order.push(`end:${event.txid}`)
+        }
+      })
+      client.connect()
+      const es = FakeEventSource.instances[0]
+      es.emit('status', {
+        data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }),
+        lastEventId: '1'
+      })
+      es.emit('status', {
+        data: JSON.stringify({ txid: TXID_B, txStatus: 'MINED', timestamp: '' }),
+        lastEventId: '2'
+      })
+
+      expect(order).toEqual([`start:${TXID_A}`])
+      expect(client.lastEventId).toBeUndefined()
+      releaseFirst()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      expect(order).toEqual([`start:${TXID_A}`, `end:${TXID_A}`, `start:${TXID_B}`, `end:${TXID_B}`])
+      expect(lastEventIds).toEqual(['1', '2'])
+      expect(client.lastEventId).toBe('2')
+    })
+
+    test('does not dispatch or checkpoint later queued events after an earlier failure', async () => {
+      let rejectFirst!: (error: Error) => void
+      const firstPending = new Promise<void>((_resolve, reject) => {
+        rejectFirst = reject
+      })
+      const seen: string[] = []
+      const failure = new Error('durable write failed')
+      const { client, errors, lastEventIds } = makeClient({
+        onEvent: async event => {
+          seen.push(event.txid)
+          if (event.txid === TXID_A) await firstPending
+        }
+      })
+      client.connect()
+      const es = FakeEventSource.instances[0]
+      es.emit('status', {
+        data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }),
+        lastEventId: '1'
+      })
+      es.emit('status', {
+        data: JSON.stringify({ txid: TXID_B, txStatus: 'MINED', timestamp: '' }),
+        lastEventId: '2'
+      })
+      rejectFirst(failure)
+      await new Promise(resolve => setTimeout(resolve, 0))
+
+      expect(seen).toEqual([TXID_A])
+      expect(lastEventIds).toEqual([])
+      expect(client.lastEventId).toBeUndefined()
+      expect(errors).toEqual([failure])
+      expect(es.closed).toBe(true)
+    })
+
+    test('enforces aggregate pending-event capacity while durable work is blocked', async () => {
+      let release!: () => void
+      const pending = new Promise<void>(resolve => {
+        release = resolve
+      })
+      const { client, errors } = makeClient({
+        maxPendingEvents: 1,
+        onEvent: async () => await pending
+      })
+      client.connect()
+      const es = FakeEventSource.instances[0]
+      es.emit('status', { data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }) })
+      es.emit('status', { data: JSON.stringify({ txid: TXID_B, txStatus: 'MINED', timestamp: '' }) })
+
+      expect(es.closed).toBe(true)
+      expect(errors[0].message).toBe('Arcade SSE supplied an invalid or excessive status event.')
+      release()
+      await new Promise(resolve => setTimeout(resolve, 0))
+    })
+
+    test('rejects oversized and noncanonical event fields without retaining their content', () => {
+      const { client, events, errors } = makeClient({ maxEventBytes: 128 })
+      client.connect()
+      const es = FakeEventSource.instances[0]
+      es.emit('status', {
+        data: JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '', extra: 'x'.repeat(500) })
+      })
+      expect(events).toEqual([])
+      expect(errors[0].message).not.toContain('x'.repeat(20))
+      expect(es.closed).toBe(true)
+    })
+
+    test('normalizes all optional event fields and lowercases cryptographic identifiers', () => {
+      const { client, events } = makeClient()
+      client.connect()
+      FakeEventSource.instances[0].emit('status', {
+        data: JSON.stringify({
+          txid: TXID_A.toUpperCase(),
+          txStatus: 'REJECTED',
+          timestamp: '',
+          status: 465,
+          extraInfo: 'script rejected',
+          blockHash: TXID_B.toUpperCase(),
+          blockHeight: 0,
+          merklePath: ''
+        }),
+        lastEventId: 'cursor-1'
+      })
+      expect(events).toEqual([
+        {
+          txid: TXID_A,
+          txStatus: 'REJECTED',
+          timestamp: '',
+          eventId: 'cursor-1',
+          status: 465,
+          extraInfo: 'script rejected',
+          blockHash: TXID_B,
+          blockHeight: 0,
+          merklePath: ''
+        }
+      ])
+    })
+
+    test.each([
+      ['txid', { txid: 'bad', txStatus: 'MINED', timestamp: '' }],
+      ['status token', { txid: TXID_A, txStatus: 'mined', timestamp: '' }],
+      ['status code', { txid: TXID_A, txStatus: 'REJECTED', timestamp: '', status: -1 }],
+      ['block hash', { txid: TXID_A, txStatus: 'MINED', timestamp: '', blockHash: 'bad' }],
+      ['block height', { txid: TXID_A, txStatus: 'MINED', timestamp: '', blockHeight: 0x100000000 }]
+    ])('fails the stream closed for an invalid %s', (_name, payload) => {
+      const { client, errors } = makeClient()
+      client.connect()
+      FakeEventSource.instances[0].emit('status', { data: JSON.stringify(payload) })
+      expect(errors).toHaveLength(1)
+      expect(FakeEventSource.instances[0].closed).toBe(true)
+    })
+
+    test('does not invoke accessor-backed event data and enforces UTF-8 byte limits', () => {
+      const getter = jest.fn(() => JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' }))
+      const first = makeClient()
+      first.client.connect()
+      const event = {}
+      Object.defineProperty(event, 'data', { enumerable: true, get: getter })
+      FakeEventSource.instances[0].emit('status', event)
+      expect(getter).not.toHaveBeenCalled()
+      expect(first.errors).toHaveLength(1)
+
+      const raw = JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: 'é'.repeat(20) })
+      const second = makeClient({ maxEventBytes: raw.length })
+      second.client.connect()
+      FakeEventSource.instances[0].emit('status', { data: raw })
+      expect(second.events).toEqual([])
+      expect(second.errors).toHaveLength(1)
+    })
+
+    test('enforces aggregate pending-byte capacity independently of event count', async () => {
+      let release!: () => void
+      const blocked = new Promise<void>(resolve => {
+        release = resolve
+      })
+      const raw = JSON.stringify({ txid: TXID_A, txStatus: 'MINED', timestamp: '' })
+      const { client, errors } = makeClient({
+        maxPendingEvents: 10,
+        maxPendingBytes: new TextEncoder().encode(raw).length,
+        onEvent: async () => await blocked
+      })
+      client.connect()
+      const es = FakeEventSource.instances[0]
+      es.emit('status', { data: raw })
+      es.emit('status', { data: raw })
+      expect(errors).toHaveLength(1)
+      expect(es.closed).toBe(true)
+      release()
+      await new Promise(resolve => setTimeout(resolve, 0))
     })
   })
 
   // ── error event handling ──────────────────────────────────────────────────
 
   describe('error events', () => {
-    test('calls onError with message from event', () => {
+    test('reports a generic error without forwarding credential-bearing event fields', () => {
       const { client, errors } = makeClient()
       client.connect()
       const logSpy = jest.spyOn(console, 'log')
@@ -249,9 +514,9 @@ describe('ArcSSEClient', () => {
         headers: { Authorization: 'Bearer arc-secret' }
       })
       expect(errors).toHaveLength(1)
-      expect(errors[0].message).toBe('connection refused')
+      expect(errors[0].message).toBe('Arcade SSE connection error.')
       const logged = logSpy.mock.calls.map(call => call.join(' ')).join('\n')
-      expect(logged).toContain('connection error')
+      expect(logged).toBe('')
       expect(logged).not.toContain('tok-abc123')
       expect(logged).not.toContain('arc-secret')
     })
@@ -260,7 +525,7 @@ describe('ArcSSEClient', () => {
       const { client, errors } = makeClient()
       client.connect()
       FakeEventSource.instances[0].emit('error', {})
-      expect(errors[0].message).toBe('SSE error')
+      expect(errors[0].message).toBe('Arcade SSE connection error.')
     })
 
     test('does not throw when onError is not provided', () => {
@@ -272,6 +537,21 @@ describe('ArcSSEClient', () => {
       })
       client.connect()
       expect(() => FakeEventSource.instances[0].emit('error', {})).not.toThrow()
+    })
+
+    test('contains synchronous and asynchronous onError callback failures', async () => {
+      const sync = makeClient({
+        onError: () => {
+          throw new Error('host callback failed')
+        }
+      })
+      sync.client.connect()
+      expect(() => FakeEventSource.instances[0].emit('error', {})).not.toThrow()
+
+      const asyncFailure = makeClient({ onError: async () => await Promise.reject(new Error('async callback failed')) })
+      asyncFailure.client.connect()
+      expect(() => FakeEventSource.instances[0].emit('error', {})).not.toThrow()
+      await new Promise(resolve => setTimeout(resolve, 0))
     })
   })
 
@@ -363,11 +643,11 @@ describe('ArcSSEClient', () => {
       client.connect()
       const es = FakeEventSource.instances[0]
       es.emit('status', {
-        data: JSON.stringify({ txid: 'x', txStatus: 'MINED', timestamp: '' }),
+        data: JSON.stringify({ txid: TXID_C, txStatus: 'MINED', timestamp: '' }),
         lastEventId: '1'
       })
       es.emit('status', {
-        data: JSON.stringify({ txid: 'y', txStatus: 'MINED', timestamp: '' }),
+        data: JSON.stringify({ txid: TXID_D, txStatus: 'MINED', timestamp: '' }),
         lastEventId: '2'
       })
       await new Promise(resolve => setTimeout(resolve, 0))

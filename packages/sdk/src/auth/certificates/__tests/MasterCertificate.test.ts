@@ -13,9 +13,7 @@ const subjectKey2 = new PrivateKey(71)
 const verifierKey2 = new PrivateKey(81)
 
 // A mock revocation outpoint for testing
-const mockRevocationOutpoint =
-  'deadbeefdeadbeefdeadbeefdeadbeef00000001'
-
+const mockRevocationOutpoint = `${'deadbeef'.repeat(8)}.1`
 
 // Arbitrary certificate data (in plaintext)
 const plaintextFields = {
@@ -23,6 +21,7 @@ const plaintextFields = {
   email: 'alice@example.com',
   department: 'Engineering'
 }
+const certificateType = Utils.toBase64(Array(32).fill(1))
 
 const subjectWallet = new CompletedProtoWallet(subjectPrivateKey)
 const certifierWallet = new CompletedProtoWallet(certifierPrivateKey)
@@ -32,12 +31,8 @@ describe('MasterCertificate', () => {
   let certifierIdentityKey: string
 
   beforeAll(async () => {
-    subjectIdentityKey = (
-      await subjectWallet.getPublicKey({ identityKey: true })
-    ).publicKey
-    certifierIdentityKey = (
-      await certifierWallet.getPublicKey({ identityKey: true })
-    ).publicKey
+    subjectIdentityKey = (await subjectWallet.getPublicKey({ identityKey: true })).publicKey
+    certifierIdentityKey = (await certifierWallet.getPublicKey({ identityKey: true })).publicKey
   })
 
   describe('constructor', () => {
@@ -74,17 +69,18 @@ describe('MasterCertificate', () => {
       const fields = { name: 'encrypted_value' }
       const masterKeyring = {} // intentionally empty
 
-      expect(() => (
-        new MasterCertificate(
-          Utils.toBase64(Random(16)), // type
-          Utils.toBase64(Random(16)), // serialNumber
-          subjectIdentityKey,
-          certifierIdentityKey,
-          mockRevocationOutpoint,
-          fields,
-          masterKeyring
-        )
-      )).toThrow(/Master keyring must contain a value for every field/)
+      expect(
+        () =>
+          new MasterCertificate(
+            Utils.toBase64(Random(16)), // type
+            Utils.toBase64(Random(16)), // serialNumber
+            subjectIdentityKey,
+            certifierIdentityKey,
+            mockRevocationOutpoint,
+            fields,
+            masterKeyring
+          )
+      ).toThrow(/Master keyring must contain a value for every field/)
     })
   })
 
@@ -95,7 +91,7 @@ describe('MasterCertificate', () => {
         certifierWallet,
         subjectIdentityKey,
         plaintextFields,
-        'TEST_CERT'
+        certificateType
       )
 
       // Now subject should be able to decrypt all fields via static method
@@ -136,11 +132,7 @@ describe('MasterCertificate', () => {
         certifierIdentityKey,
         mockRevocationOutpoint,
         {
-          name: Utils.toBase64(
-            fieldSymWrong.encrypt(
-              Utils.toArray('Alice', 'utf8')
-            ) as number[]
-          )
+          name: Utils.toBase64(fieldSymWrong.encrypt(Utils.toArray('Alice', 'utf8')) as number[])
         },
         { name: badKeyMasterKeyring }
       )
@@ -164,15 +156,13 @@ describe('MasterCertificate', () => {
     let issuedCert: MasterCertificate
 
     beforeAll(async () => {
-      verifierIdentityKey = (
-        await verifierWallet.getPublicKey({ identityKey: true })
-      ).publicKey
+      verifierIdentityKey = (await verifierWallet.getPublicKey({ identityKey: true })).publicKey
       // Issue a certificate to reuse in tests
       issuedCert = await MasterCertificate.issueCertificateForSubject(
         certifierWallet,
         subjectIdentityKey,
         plaintextFields,
-        'TEST_CERT'
+        certificateType
       )
     })
 
@@ -180,16 +170,15 @@ describe('MasterCertificate', () => {
       // We only want to share "name" with the verifier
       const fieldsToReveal = ['name']
 
-      const keyringForVerifier =
-        await MasterCertificate.createKeyringForVerifier(
-          subjectWallet,
-          issuedCert.certifier, // the original certifier
-          verifierIdentityKey, // the new verifier
-          issuedCert.fields, // encrypted fields
-          fieldsToReveal,
-          issuedCert.masterKeyring,
-          issuedCert.serialNumber
-        )
+      const keyringForVerifier = await MasterCertificate.createKeyringForVerifier(
+        subjectWallet,
+        issuedCert.certifier, // the original certifier
+        verifierIdentityKey, // the new verifier
+        issuedCert.fields, // encrypted fields
+        fieldsToReveal,
+        issuedCert.masterKeyring,
+        issuedCert.serialNumber
+      )
 
       // The new keyring should only contain "name"
       expect(Object.keys(keyringForVerifier)).toHaveLength(1)
@@ -261,16 +250,15 @@ describe('MasterCertificate', () => {
 
     it('should support optional originator parameter', async () => {
       const fieldsToReveal = ['name']
-      const keyringForVerifier =
-        await MasterCertificate.createKeyringForVerifier(
-          subjectWallet,
-          issuedCert.certifier,
-          verifierIdentityKey,
-          issuedCert.fields,
-          fieldsToReveal,
-          issuedCert.masterKeyring,
-          issuedCert.serialNumber
-        )
+      const keyringForVerifier = await MasterCertificate.createKeyringForVerifier(
+        subjectWallet,
+        issuedCert.certifier,
+        verifierIdentityKey,
+        issuedCert.fields,
+        fieldsToReveal,
+        issuedCert.masterKeyring,
+        issuedCert.serialNumber
+      )
       expect(keyringForVerifier).toHaveProperty('name')
     })
 
@@ -316,7 +304,7 @@ describe('MasterCertificate', () => {
         certifierWallet,
         subjectIdentityKey,
         newPlaintextFields,
-        'TEST_CERT',
+        certificateType,
         revocationFn
       )
 
@@ -344,7 +332,7 @@ describe('MasterCertificate', () => {
         certifierWallet,
         subjectIdentityKey,
         newPlaintextFields,
-        'TEST_CERT',
+        certificateType,
         undefined, // No custom revocation function
         customSerialNumber // Pass our custom serial number
       )
@@ -366,16 +354,14 @@ describe('MasterCertificate', () => {
         organization: 'SelfCo'
       }
 
-      const subjectIdentityKey = (
-        await subjectWallet.getPublicKey({ identityKey: true })
-      ).publicKey
+      const subjectIdentityKey = (await subjectWallet.getPublicKey({ identityKey: true })).publicKey
 
       // Issue the certificate: subject = actual identity key (valid hex)
       const selfSignedCert = await MasterCertificate.issueCertificateForSubject(
-        subjectWallet,        // acts as certifier
-        subjectIdentityKey,   // <-- was 'self', now real hex
+        subjectWallet, // acts as certifier
+        subjectIdentityKey, // <-- was 'self', now real hex
         selfSignedFields,
-        'SELF_SIGNED_TEST'
+        certificateType
       )
 
       // Decrypt with the same wallet
@@ -392,15 +378,14 @@ describe('MasterCertificate', () => {
     it('resolves subject === "self" to the certifier wallet identity key', async () => {
       const certifierWallet = new CompletedProtoWallet(new PrivateKey(99))
 
-      const certifierIdentityKey = (
-        await certifierWallet.getPublicKey({ identityKey: true })
-      ).publicKey
+      const certifierIdentityKey = (await certifierWallet.getPublicKey({ identityKey: true }))
+        .publicKey
 
       const cert = await MasterCertificate.issueCertificateForSubject(
         certifierWallet,
         'self',
         { name: 'Alice' },
-        'TEST_CERT'
+        certificateType
       )
 
       expect(cert.subject).toBe(certifierIdentityKey)
@@ -409,14 +394,13 @@ describe('MasterCertificate', () => {
     it('uses provided subjectIdentityKey when subject is a valid hex string', async () => {
       const certifierWallet = new CompletedProtoWallet(new PrivateKey(42))
 
-      const validPubkey =
-        '0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798'
+      const validPubkey = '0279BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798'
 
       const cert = await MasterCertificate.issueCertificateForSubject(
         certifierWallet,
         validPubkey,
         { name: 'Alice' },
-        'TEST_CERT'
+        certificateType
       )
 
       expect(cert.subject).toBe(validPubkey)

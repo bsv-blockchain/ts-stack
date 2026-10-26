@@ -37,27 +37,315 @@ import {
 } from '../Wallet.interfaces.js'
 import { WERR_REVIEW_ACTIONS } from '../WERR_REVIEW_ACTIONS.js'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER.js'
-import { toOriginHeader } from './utils/toOriginHeader.js'
-import { normalizeBRC100WalletByteFields, stringifyBRC100 } from '../BRC100ByteEncoding.js'
+import { normalizeWalletHttpBaseUrl, toOriginHeader } from './utils/toOriginHeader.js'
+import {
+  normalizeBRC100ByteArray,
+  normalizeBRC100WalletByteFields,
+  stringifyBRC100
+} from '../BRC100ByteEncoding.js'
 import WERR_INSUFFICIENT_FUNDS from '../WERR_INSUFFICIENT_FUNDS.js'
+import { MAXIMUM_SEND_WITH_TRANSACTIONS, validateOriginator } from '../validationHelpers.js'
+import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import {
+  assertSafeWalletJSONValue,
+  assertSafeWalletValue,
+  snapshotWalletResultRequest,
+  validateWalletResult
+} from '../WalletResultValidation.js'
+import { toArray, toUTF8Strict, toUint8Array } from '../../primitives/utils.js'
+import { CallType } from './WalletWireCalls.js'
+import Beef from '../../transaction/Beef.js'
 
-function deserializeWalletError(data: any): Error | undefined {
-  switch (data.code) {
-    case 5:
-      return new WERR_REVIEW_ACTIONS(
-        data.reviewActionResults,
-        data.sendWithResults,
-        data.txid,
-        data.tx,
-        data.noSendChange
+const MAX_WALLET_JSON_RESPONSE_BYTES = 256 * 1024 * 1024
+const MAX_WALLET_JSON_REQUEST_BYTES = 256 * 1024 * 1024
+
+async function readBoundedJSON(response: Response): Promise<unknown> {
+  const declaredLength = response.headers?.get('content-length')
+  if (declaredLength != null) {
+    if (!/^\d+$/.test(declaredLength)) {
+      throw new Error('HTTPWalletJSON response has an invalid Content-Length')
+    }
+    const length = Number(declaredLength)
+    if (!Number.isSafeInteger(length) || length > MAX_WALLET_JSON_RESPONSE_BYTES) {
+      throw new Error('HTTPWalletJSON response exceeds the maximum permitted size')
+    }
+  }
+
+  let encoded: Uint8Array | undefined
+  if (response.body != null && typeof response.body.getReader === 'function') {
+    const reader = response.body.getReader()
+    const chunks: Uint8Array[] = []
+    let totalLength = 0
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      if (value == null) continue
+      totalLength += value.byteLength
+      if (totalLength > MAX_WALLET_JSON_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => {})
+        throw new Error('HTTPWalletJSON response exceeds the maximum permitted size')
+      }
+      chunks.push(value)
+    }
+    encoded = new Uint8Array(totalLength)
+    let offset = 0
+    for (const chunk of chunks) {
+      encoded.set(chunk, offset)
+      offset += chunk.byteLength
+    }
+  } else if (typeof response.arrayBuffer === 'function') {
+    const buffer = await response.arrayBuffer()
+    if (buffer.byteLength > MAX_WALLET_JSON_RESPONSE_BYTES) {
+      throw new Error('HTTPWalletJSON response exceeds the maximum permitted size')
+    }
+    encoded = new Uint8Array(buffer)
+  }
+
+  if (encoded !== undefined) {
+    return JSON.parse(toUTF8Strict(encoded))
+  }
+  // Retain compatibility with Response-like custom fetch adapters. Native
+  // Response objects always take one of the bounded byte paths above.
+  return await response.json()
+}
+
+function requireErrorString(value: unknown, name: string, min = 0, max = 4096): string {
+  if (typeof value !== 'string') throw new Error(`Invalid wallet error ${name}`)
+  const length = toArray(value, 'utf8').length
+  if (length < min || length > max) throw new Error(`Invalid wallet error ${name}`)
+  return value
+}
+
+function requireErrorSatoshis(value: unknown, name: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > 21e14) {
+    throw new Error(`Invalid wallet error ${name}`)
+  }
+  return value as number
+}
+
+function requireReviewTxid(
+  value: unknown,
+  index: number,
+  preConstruction: boolean,
+  allowed: Set<string>,
+  reviewed: Set<string>
+): string {
+  if (!preConstruction && (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value))) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
+  }
+  const txid = (value as string).toLowerCase()
+  if (reviewed.has(txid) || (!preConstruction && !allowed.has(txid))) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].txid`)
+  }
+  reviewed.add(txid)
+  return txid
+}
+
+function validateReviewStatus(
+  result: Record<string, unknown>,
+  index: number,
+  preConstruction: boolean
+): void {
+  const statuses = new Set(['success', 'doubleSpend', 'serviceError', 'invalidTx'])
+  if (
+    !statuses.has(result.status as string) ||
+    (preConstruction && result.status !== 'doubleSpend')
+  ) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].status`)
+  }
+  if (
+    result.status !== 'doubleSpend' &&
+    (result.competingTxs !== undefined || result.competingBeef !== undefined)
+  ) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+  }
+}
+
+function normalizeCompetingTxids(
+  value: unknown,
+  reviewedTxid: string,
+  index: number
+): string[] | undefined {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || value.length > MAXIMUM_SEND_WITH_TRANSACTIONS) {
+    throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+  }
+  const unique = new Set<string>()
+  const txids: string[] = []
+  for (const [competingIndex, competing] of value.entries()) {
+    if (typeof competing !== 'string' || !/^[0-9a-fA-F]{64}$/.test(competing)) {
+      throw new Error(
+        `Invalid wallet error reviewActionResults[${index}].competingTxs[${competingIndex}]`
       )
+    }
+    const normalized = competing.toLowerCase()
+    if (normalized === reviewedTxid || unique.has(normalized)) {
+      throw new Error(`Invalid wallet error reviewActionResults[${index}].competingTxs`)
+    }
+    unique.add(normalized)
+    txids.push(normalized)
+  }
+  return txids
+}
+
+function validateCompetingTransactions(
+  parsed: Beef,
+  txids: string[],
+  requestedInputs?: Set<string>
+): void {
+  for (const txid of txids) {
+    const competing = parsed.findTxid(txid)
+    if (competing == null) throw new Error('Missing competing transaction')
+    if (requestedInputs === undefined) continue
+    // No attempted TXID exists yet. Bind each full competing transaction to an
+    // explicit input of the original request instead.
+    const tx = competing.tx
+    if (tx?.id('hex') !== txid) throw new Error('Invalid competing transaction')
+    const spendsRequestedInput = tx.inputs.some(input => {
+      const source = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      return requestedInputs.has(`${source?.toLowerCase()}.${input.sourceOutputIndex}`)
+    })
+    if (!spendsRequestedInput) throw new Error('Unrelated competing transaction')
+  }
+}
+
+function validateReviewBeef(
+  value: unknown,
+  competingTxs: string[] | undefined,
+  index: number,
+  requestedInputs?: Set<string>
+): void {
+  const invalid = `Invalid wallet error reviewActionResults[${index}].competingBeef`
+  if (value === undefined) {
+    if (requestedInputs !== undefined) throw new Error(invalid)
+    return
+  }
+  if (competingTxs == null || competingTxs.length === 0) throw new Error(invalid)
+  const bytes = normalizeBRC100ByteArray(value)
+  if (bytes == null || (requestedInputs !== undefined && bytes.length > 32 * 1024 * 1024)) {
+    throw new Error(invalid)
+  }
+  try {
+    validateCompetingTransactions(Beef.fromBinaryStrict(bytes), competingTxs, requestedInputs)
+  } catch {
+    throw new Error(invalid)
+  }
+}
+
+function validateReviewActionResults(
+  value: unknown,
+  allowedTxids: Set<string>,
+  preConstructionInputs?: Set<string>
+): void {
+  if (!Array.isArray(value) || value.length > MAXIMUM_SEND_WITH_TRANSACTIONS + 1) {
+    throw new Error('Invalid wallet error reviewActionResults')
+  }
+  const reviewedTxids = new Set<string>()
+  for (const [index, item] of value.entries()) {
+    if (item == null || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error(`Invalid wallet error reviewActionResults[${index}]`)
+    }
+    const result = item as Record<string, unknown>
+    const preConstruction = preConstructionInputs !== undefined && result.txid === ''
+    const txid = requireReviewTxid(result.txid, index, preConstruction, allowedTxids, reviewedTxids)
+    validateReviewStatus(result, index, preConstruction)
+    const competingTxs = normalizeCompetingTxids(result.competingTxs, txid, index)
+    validateReviewBeef(
+      result.competingBeef,
+      competingTxs,
+      index,
+      preConstruction ? preConstructionInputs : undefined
+    )
+  }
+}
+
+function deserializeWalletError(
+  data: Record<string, unknown>,
+  call: CallType,
+  args: object
+): Error | undefined {
+  if (data.isError !== true || !Number.isSafeInteger(data.code)) {
+    throw new Error('Invalid wallet error envelope')
+  }
+  if (data.message !== undefined) requireErrorString(data.message, 'message')
+  switch (data.code) {
+    case 5: {
+      if (call !== 'createAction' && call !== 'signAction') {
+        throw new Error(`Invalid ${call} wallet error code`)
+      }
+      if (!Array.isArray(data.sendWithResults)) {
+        throw new Error('Invalid wallet error sendWithResults')
+      }
+      // A review error is not a successful completed-action result. It may
+      // identify the rejected transaction without returning its full envelope,
+      // while any envelope it does carry must still be parsed and bound.
+      const reviewRequest = {
+        ...args,
+        options: {
+          ...(args as { options?: object }).options,
+          returnTXIDOnly: true
+        }
+      }
+      const preConstruction =
+        Array.isArray(data.reviewActionResults) &&
+        data.reviewActionResults.length === 1 &&
+        data.reviewActionResults[0]?.txid === ''
+      let preConstructionInputs: Set<string> | undefined
+      if (preConstruction) {
+        const inputs = (args as CreateActionArgs).inputs
+        if (
+          call !== 'createAction' ||
+          data.txid !== undefined ||
+          data.tx !== undefined ||
+          data.noSendChange !== undefined ||
+          data.signableTransaction !== undefined ||
+          data.sendWithResults.length !== 0 ||
+          inputs === undefined ||
+          inputs.length === 0
+        ) {
+          throw new Error('Invalid wallet error pre-construction review')
+        }
+        preConstructionInputs = new Set(inputs.map(input => input.outpoint.toLowerCase()))
+      } else {
+        validateWalletResult(
+          call,
+          {
+            txid: data.txid,
+            tx: data.tx,
+            noSendChange: data.noSendChange,
+            sendWithResults: data.sendWithResults
+          },
+          reviewRequest
+        )
+      }
+      const allowedTxids = new Set<string>()
+      if (typeof data.txid === 'string') allowedTxids.add(data.txid.toLowerCase())
+      const requestOptions = (args as { options?: { sendWith?: unknown } }).options
+      if (Array.isArray(requestOptions?.sendWith)) {
+        for (const txid of requestOptions.sendWith) allowedTxids.add(String(txid).toLowerCase())
+      }
+      validateReviewActionResults(data.reviewActionResults, allowedTxids, preConstructionInputs)
+      return new WERR_REVIEW_ACTIONS(
+        data.reviewActionResults as never,
+        data.sendWithResults as never,
+        data.txid as never,
+        data.tx as never,
+        data.noSendChange as never
+      )
+    }
     case 6: {
-      const error = new WERR_INVALID_PARAMETER(data.parameter)
-      error.message = data.message
+      const parameter = requireErrorString(data.parameter, 'parameter', 1, 200)
+      const message = requireErrorString(data.message, 'message')
+      const error = new WERR_INVALID_PARAMETER(parameter)
+      error.message = message
       return error
     }
-    case 7:
-      return new WERR_INSUFFICIENT_FUNDS(data.totalSatoshisNeeded, data.moreSatoshisNeeded)
+    case 7: {
+      const total = requireErrorSatoshis(data.totalSatoshisNeeded, 'totalSatoshisNeeded')
+      const more = requireErrorSatoshis(data.moreSatoshisNeeded, 'moreSatoshisNeeded')
+      if (more > total) throw new Error('Invalid wallet error moreSatoshisNeeded')
+      return new WERR_INSUFFICIENT_FUNDS(total, more)
+    }
     default:
       return undefined
   }
@@ -67,15 +355,15 @@ export default class HTTPWalletJSON implements WalletInterface {
   baseUrl: string
   httpClient: typeof fetch
   originator: OriginatorDomainNameStringUnder250Bytes | undefined
-  api: (call: string, args: object) => Promise<unknown> // Fixed `any` types
+  api: (call: CallType, args: object) => Promise<unknown> // Fixed `any` types
 
   constructor(
     originator: OriginatorDomainNameStringUnder250Bytes | undefined,
     baseUrl: string = 'http://localhost:3321',
-    httpClient = fetch
+    httpClient = globalThis.fetch.bind(globalThis)
   ) {
-    this.baseUrl = baseUrl
-    this.originator = originator
+    this.baseUrl = normalizeWalletHttpBaseUrl(baseUrl)
+    this.originator = validateOriginator(originator)
     this.httpClient = httpClient
 
     // Detect if we're in a browser environment
@@ -84,7 +372,10 @@ export default class HTTPWalletJSON implements WalletInterface {
       typeof document !== 'undefined' &&
       window.origin !== 'file://'
 
-    this.api = async (call: string, args: object) => {
+    this.api = async (call: CallType, args: object) => {
+      validateWalletArgs(call, args)
+      const bindingRequest = snapshotWalletResultRequest(call, args) as object
+      const baseUrl = normalizeWalletHttpBaseUrl(this.baseUrl)
       // In browser environments, let the browser handle Origin header automatically
       // In Node.js environments, we need to set it manually if originator is provided
       if (!isBrowser && !this.originator) {
@@ -94,33 +385,46 @@ export default class HTTPWalletJSON implements WalletInterface {
         )
       }
       const origin = isBrowser ? undefined : toOriginHeader(this.originator!, 'http')
+      const requestBody = stringifyBRC100(args)
+      if (toUint8Array(requestBody, 'utf8').length > MAX_WALLET_JSON_REQUEST_BYTES) {
+        throw new Error('HTTPWalletJSON request exceeds the maximum permitted size')
+      }
 
-      const res = await httpClient(`${this.baseUrl}/${call}`, {
+      const res = await this.httpClient(`${baseUrl}/${call}`, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
           ...(origin ? { Origin: origin, Originator: origin } : {})
         },
-        body: stringifyBRC100(args)
+        body: requestBody
       })
 
-      const data = normalizeBRC100WalletByteFields(await res.json())
+      const rawData = assertSafeWalletJSONValue(
+        await readBoundedJSON(res),
+        `HTTPWalletJSON ${call} raw response`
+      )
+      // Response-like compatibility adapters can return arbitrary JavaScript
+      // values rather than native JSON.parse output. Reject accessors, exotic
+      // prototypes, and oversized graphs before normalization enumerates them.
+      const data = assertSafeWalletValue(
+        normalizeBRC100WalletByteFields(rawData) as Record<string, unknown>,
+        `HTTPWalletJSON ${call} response`
+      )
+      if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error(`Invalid HTTPWalletJSON ${call} response: expected an object`)
+      }
 
       // Check the HTTP status on the original response
       if (!res.ok) {
-        if (res.status === 400 && data.isError) {
-          const walletError = deserializeWalletError(data)
+        if (res.status === 400 && Object.prototype.hasOwnProperty.call(data, 'isError')) {
+          const walletError = deserializeWalletError(data, call, bindingRequest)
           if (walletError !== undefined) throw walletError
         }
-        const err = {
-          call,
-          args,
-          message: data.message ?? `HTTP Client error ${res.status}`
-        }
-        throw new Error(stringifyBRC100(err))
+        throw new Error(`HTTPWalletJSON ${call} failed with HTTP status ${res.status}`)
       }
-      return data
+      return validateWalletResult(call, data, bindingRequest)
     }
   }
 

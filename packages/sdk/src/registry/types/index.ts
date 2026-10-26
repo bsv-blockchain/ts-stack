@@ -1,4 +1,4 @@
-import { BEEF, PubKeyHex, WalletProtocol } from '../../wallet/index.js'
+import type { BEEF, PubKeyHex, WalletProtocol } from '../../wallet/Wallet.interfaces.js'
 
 /**
  * We unify the registry “type” to these three strings everywhere:
@@ -60,9 +60,7 @@ export interface CertificateDefinitionData {
  * Union of all possible definition data objects.
  */
 export type DefinitionData =
-  | BasketDefinitionData
-  | ProtocolDefinitionData
-  | CertificateDefinitionData
+  BasketDefinitionData | ProtocolDefinitionData | CertificateDefinitionData
 
 /**
  * Common info for the on-chain token/UTXO that points to a registry entry.
@@ -71,7 +69,7 @@ export interface TokenData {
   txid: string
   outputIndex: number
   satoshis: number
-  lockingScript: string,
+  lockingScript: string
   beef: BEEF
 }
 

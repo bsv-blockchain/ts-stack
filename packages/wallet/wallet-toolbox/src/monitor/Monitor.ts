@@ -30,6 +30,8 @@ import { WalletError } from '../sdk/WalletError'
 import { BlockHeader, WalletServices } from '../sdk/WalletServices.interfaces'
 import { Services } from '../services/Services'
 import { ChaintracksClientApi } from '../services/chaintracker/chaintracks/Api/ChaintracksClientApi'
+import { safeDiagnostic } from '../services/chaintracker/chaintracks/util/safeDiagnostic'
+import { copyValidatedMonitorHeader, validateMonitorOptions } from './monitorValidation'
 
 export type MonitorStorage = WalletStorageManager
 export type MonitorStartupTaskMode = 'none' | 'default' | 'multiuser' | 'alltoother'
@@ -44,6 +46,12 @@ export interface MonitorOptions {
   chaintracks: ChaintracksClientApi
 
   chaintracksWithEvents?: ChaintracksClientApi
+
+  /** Maximum deactivated block headers retained for reproof. Default: 4096. */
+  maxQueuedDeactivatedHeaders?: number
+
+  /** Optional bounded operational logger. Monitor library code is silent by default. */
+  logging?: (...args: unknown[]) => void
 
   startupTaskMode?: MonitorStartupTaskMode
 
@@ -119,6 +127,7 @@ export class Monitor {
       maxRebroadcastAttempts: 0,
       chaintracks: services.options.chaintracks,
       chaintracksWithEvents: chaintracks,
+      maxQueuedDeactivatedHeaders: 4096,
       startupTaskMode
     }
     return o
@@ -141,18 +150,51 @@ export class Monitor {
    * Resolves once the optional Chaintracks subscriptions have been registered.
    * Await this before calling `startTasks()` if `chaintracksWithEvents` is provided
    * and you need subscriptions to be active before the first task loop runs.
+   *
+   * `runOnce`/`startTasks` do not await this directly — they call it through
+   * `ensureEventSubscriptions`, which treats a rejection as best-effort and
+   * always lets the scheduler proceed. A rejection here is not itself a
+   * disaster: on failure `_readyInit` is reset below so the next access
+   * retries `_init()`.
    */
   get ready(): Promise<void> {
-    this._readyInit ??= this._init()
+    this._readyInit ??= this._init().catch(error => {
+      this._readyInit = undefined
+      throw error
+    })
     return this._readyInit
   }
 
   private _readyInit?: Promise<void>
+  private readonly maxQueuedDeactivatedHeaders: number
+  private readonly deactivatedHeaderHashes = new Set<string>()
+  private reorgInvalidationPending = false
+  private readonly logging?: (...args: unknown[]) => void
 
   constructor(options: MonitorOptions) {
+    validateMonitorOptions(options)
     this.options = { ...options }
     this.services = options.services
     this.chain = this.services.chain
+    const configuredTrackerChain = (options.chaintracks as ChaintracksClientApi & { chain?: unknown })?.chain
+    if (
+      options.chain !== this.chain ||
+      (configuredTrackerChain !== undefined && configuredTrackerChain !== this.chain)
+    ) {
+      throw new WERR_INVALID_PARAMETER('chain', 'the same supported network across monitor, services, and ChainTracks')
+    }
+    this.maxQueuedDeactivatedHeaders = options.maxQueuedDeactivatedHeaders ?? 4096
+    if (
+      !Number.isSafeInteger(this.maxQueuedDeactivatedHeaders) ||
+      this.maxQueuedDeactivatedHeaders < 1 ||
+      this.maxQueuedDeactivatedHeaders > 100_000
+    ) {
+      throw new WERR_INVALID_PARAMETER('maxQueuedDeactivatedHeaders', 'an integer from 1 through 100000')
+    }
+    if (options.logging != null && typeof options.logging !== 'function') {
+      throw new WERR_INVALID_PARAMETER('logging', 'a function')
+    }
+    this.logging = options.logging
     this.storage = options.storage
     this.chaintracks = options.chaintracks
     this.chaintracksWithEvents = options.chaintracksWithEvents
@@ -165,9 +207,33 @@ export class Monitor {
 
   private async _init(): Promise<void> {
     if (this.chaintracksWithEvents != null) {
-      this.reorgSubscriptionPromise = this.chaintracksWithEvents.subscribeReorgs(this.processReorg.bind(this))
-      this.headersSubscriptionPromise = this.chaintracksWithEvents.subscribeHeaders(this.processHeader.bind(this))
-      await Promise.all([this.reorgSubscriptionPromise, this.headersSubscriptionPromise])
+      const eventSource = this.chaintracksWithEvents
+      // Method presence is not capability (see ChaintracksClientApi's own doc
+      // comment on `supportsReorgEvents`): `false` means subscribeHeaders /
+      // subscribeReorgs are unsupported stubs that must not be called, e.g.
+      // ChaintracksServiceClient, an HTTP-polling client. TaskNewHeader polls
+      // the tip. TaskReorg checks recent proofs and journals unresolved heights
+      // and observed tip gaps for retries in bounded batches, independent of
+      // push events. TaskReviewProvenTxs bootstraps its separate lagged audit
+      // from a safe proof-height lower bound. Skip push registration without
+      // touching the network.
+      if (eventSource.supportsReorgEvents === false) return
+      const actualChain = await eventSource.getChain()
+      if (actualChain !== this.chain) {
+        throw new WERR_INVALID_PARAMETER('chaintracksWithEvents', `a ChainTracks source on ${this.chain}`)
+      }
+      let reorgSubscriptionId: string | undefined
+      try {
+        this.reorgSubscriptionPromise = eventSource.subscribeReorgs(this.processReorg.bind(this))
+        reorgSubscriptionId = await this.reorgSubscriptionPromise
+        this.headersSubscriptionPromise = eventSource.subscribeHeaders(this.processHeader.bind(this))
+        await this.headersSubscriptionPromise
+      } catch (error) {
+        if (reorgSubscriptionId != null) await eventSource.unsubscribe(reorgSubscriptionId).catch(() => {})
+        this.reorgSubscriptionPromise = undefined
+        this.headersSubscriptionPromise = undefined
+        throw error
+      }
     }
   }
 
@@ -190,11 +256,23 @@ export class Monitor {
   }
 
   async destroy(): Promise<void> {
+    for (const task of new Set([...this._tasks, ...this._otherTasks])) {
+      if (task instanceof TaskArcadeSSE) task.close()
+    }
     if (this.chaintracksWithEvents != null) {
       const c = this.chaintracksWithEvents
-      if (this.reorgSubscriptionPromise != null) await c.unsubscribe(await this.reorgSubscriptionPromise)
-      if (this.headersSubscriptionPromise != null) await c.unsubscribe(await this.headersSubscriptionPromise)
+      const subscriptions = await Promise.allSettled(
+        [this.reorgSubscriptionPromise, this.headersSubscriptionPromise].filter(
+          (promise): promise is Promise<string> => promise != null
+        )
+      )
+      await Promise.all(
+        subscriptions
+          .filter((result): result is PromiseFulfilledResult<string> => result.status === 'fulfilled')
+          .map(async result => await c.unsubscribe(result.value).catch(() => false))
+      )
     }
+    await this.reorgInvalidationPromise
   }
 
   static readonly oneSecond = 1000
@@ -304,13 +382,20 @@ export class Monitor {
   }
 
   addTask(task: WalletMonitorTask): void {
+    if (task == null || typeof task.name !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(task.name)) {
+      throw new WERR_INVALID_PARAMETER('task.name', 'a bounded control-free monitor task name')
+    }
     if (this._tasks.some(t => t.name === task.name)) {
       throw new WERR_BAD_REQUEST(`task ${task.name} has already been added.`)
     }
     this._tasks.push(task)
+    this._runAsyncSetup = true
   }
 
   removeTask(name: string): void {
+    for (const task of this._tasks) {
+      if (task.name === name && task instanceof TaskArcadeSSE) task.close()
+    }
     this._tasks = this._tasks.filter(t => t.name !== name)
   }
 
@@ -326,6 +411,7 @@ export class Monitor {
   }
 
   async runOnce(): Promise<void> {
+    await this.ensureEventSubscriptions()
     await this.setupTasksOnce()
     if (!this.storage.getActive().isStorageProvider()) return
     for (const task of await this.tasksReadyToRun()) {
@@ -333,17 +419,64 @@ export class Monitor {
     }
   }
 
+  /**
+   * Best-effort attempt to (re)register the optional Chaintracks header/reorg
+   * push subscriptions ahead of this scheduler tick.
+   *
+   * TaskNewHeader polls the tip. TaskReorg handles deactivated-header events,
+   * checks a recent proof window at each processed tip and retries journaled
+   * heights and observed tip gaps even without another event. TaskReviewProvenTxs
+   * supplies the separate lagged proof audit. A failed, unsupported or offline
+   * event source must not stop these tasks or the rest of the scheduler.
+   *
+   * A failure here is swallowed and logged once per outage; the `ready`
+   * getter's own `.catch` resets `_readyInit` first, so the *next* call to
+   * this method (i.e. the next scheduler tick) retries `_init()` from
+   * scratch. A genuine configured-chain mismatch (see
+   * `_init`) still fails `ready` every time it is retried, so the event
+   * source never transitions to a subscribed state on mismatched data —
+   * only this outer scheduling loop is decoupled from that failure.
+   *
+   * A caller that specifically needs subscriptions active before its own
+   * first task loop can still `await monitor.ready` directly and handle the
+   * rejection itself; that public contract is unchanged.
+   */
+  private async ensureEventSubscriptions(): Promise<void> {
+    try {
+      await this.ready
+      this._chaintracksEventsErrorLogged = false
+    } catch (error_: unknown) {
+      // Record the first failure of each outage only: the scheduler retries
+      // every tick, and a persistent failure must not grow monitor events.
+      if (this._chaintracksEventsErrorLogged) return
+      this._chaintracksEventsErrorLogged = true
+      await this.logChaintracksEventsError(error_)
+    }
+  }
+
+  private _chaintracksEventsErrorLogged = false
+
+  private async logChaintracksEventsError(error_: unknown): Promise<void> {
+    const error = WalletError.fromUnknown(error_)
+    const details = `monitor chaintracksWithEvents subscription unavailable ${safeDiagnostic(error.code, 64)} ${safeDiagnostic(error.description)}`
+    this.emitLog(details)
+    await this.logEvent('chaintracksEventsError', details)
+  }
+
   private async setupTasksOnce(): Promise<void> {
     if (!this._runAsyncSetup) return
+    const stopSensitive = this._tasksRunning
     for (const task of this._tasks) {
+      if (this.setupTasksComplete.has(task)) continue
       try {
         await task.asyncSetup()
+        this.setupTasksComplete.add(task)
       } catch (error_: unknown) {
         await this.logTaskError(task, 'asyncSetup', 'error0', error_)
       }
-      if (!this._tasksRunning) break
+      if (stopSensitive && !this._tasksRunning) break
     }
-    this._runAsyncSetup = false
+    this._runAsyncSetup = this._tasks.some(task => !this.setupTasksComplete.has(task))
   }
 
   private async tasksReadyToRun(): Promise<WalletMonitorTask[]> {
@@ -364,9 +497,9 @@ export class Monitor {
       if (!this.storage.getActive().isStorageProvider()) return
       const log = await task.runTask()
       if (log.length === 0) return
-      const details = task.name === 'MonitorCallHistory' ? '...' : log.slice(0, 1024)
-      console.log(`Task${task.name} ${details}`)
-      await this.logEvent(task.name, log)
+      const details = task.name === 'MonitorCallHistory' ? '...' : safeDiagnostic(log, 1024)
+      this.emitLog(`Task${task.name} ${details}`)
+      await this.logEvent(task.name, safeDiagnostic(log, 8192))
     } catch (error_: unknown) {
       await this.logTaskError(task, 'runTask', 'error1', error_, true)
     } finally {
@@ -382,13 +515,14 @@ export class Monitor {
     includeStack = false
   ): Promise<void> {
     const error = WalletError.fromUnknown(error_)
-    const stack = includeStack ? `\n${error.stack ?? ''}` : ''
-    const details = `monitor task ${task.name} ${operation} error ${error.code} ${error.description}${stack}`
-    console.log(details)
+    const stack = includeStack && error.stack != null ? ` ${safeDiagnostic(error.stack, 1024)}` : ''
+    const details = `monitor task ${safeDiagnostic(task.name, 128)} ${operation} error ${safeDiagnostic(error.code, 64)} ${safeDiagnostic(error.description)}${stack}`
+    this.emitLog(details)
     await this.logEvent(event, details)
   }
 
   _runAsyncSetup: boolean = true
+  private readonly setupTasksComplete = new WeakSet<WalletMonitorTask>()
   _tasksRunningPromise?: PromiseLike<void>
   resolveCompletion: ((value: void | PromiseLike<void>) => void) | undefined = undefined
 
@@ -400,33 +534,47 @@ export class Monitor {
       this.resolveCompletion = resolve
     })
 
-    while (this._tasksRunning) {
-      await this.runOnce()
-
-      // console.log(`${new Date().toISOString()} tasks run, waiting...`)
-      await wait(this.options.taskRunWaitMsecs)
-    }
-
-    if (this.resolveCompletion != null) {
-      this.resolveCompletion()
-      this.resolveCompletion = undefined
+    try {
+      while (this._tasksRunning) {
+        await this.runOnce()
+        await wait(this.options.taskRunWaitMsecs)
+      }
+    } finally {
+      this._tasksRunning = false
+      if (this.resolveCompletion != null) {
+        this.resolveCompletion()
+        this.resolveCompletion = undefined
+      }
     }
   }
 
   async logEvent(event: string, details?: string): Promise<void> {
+    if (typeof event !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/.test(event)) {
+      throw new WERR_INVALID_PARAMETER('event', 'a bounded control-free monitor event name')
+    }
+    const boundedDetails = details == null ? undefined : safeDiagnostic(details, 8192)
     await this.storage.runAsStorageProvider(async sp => {
       await sp.insertMonitorEvent({
         created_at: new Date(),
         updated_at: new Date(),
         id: 0,
         event,
-        details
+        details: boundedDetails
       })
     })
   }
 
   stopTasks(): void {
     this._tasksRunning = false
+  }
+
+  private emitLog(message: string): void {
+    if (this.logging == null) return
+    try {
+      this.logging(message)
+    } catch {
+      // Observability hooks do not control monitor work.
+    }
   }
 
   lastNewHeader: BlockHeader | undefined
@@ -440,7 +588,7 @@ export class Monitor {
    * @param reqs
    */
   processNewBlockHeader(header: BlockHeader): void {
-    const h = header
+    const h = this.copyValidatedHeader(header, 'new block header')
     this.lastNewHeader = h
     this.lastNewHeaderWhen = new Date()
     // console.log(`WalletMonitor notified of new block header ${h.height}`)
@@ -470,7 +618,7 @@ export class Monitor {
    */
   callOnBroadcastedTransaction(broadcastResult: ReviewActionResult): void {
     if (this.onTransactionBroadcasted != null) {
-      void this.onTransactionBroadcasted(broadcastResult)
+      this.invokeCallback('onTransactionBroadcasted', async () => await this.onTransactionBroadcasted!(broadcastResult))
     }
   }
 
@@ -483,7 +631,7 @@ export class Monitor {
    */
   callOnProvenTransaction(txStatus: ProvenTransactionStatus): void {
     if (this.onTransactionProven != null) {
-      void this.onTransactionProven(txStatus)
+      this.invokeCallback('onTransactionProven', async () => await this.onTransactionProven!({ ...txStatus }))
     }
   }
 
@@ -492,8 +640,19 @@ export class Monitor {
    */
   callOnTransactionStatusChanged(txid: string, newStatus: string): void {
     if (this.onTransactionStatusChanged != null) {
-      void this.onTransactionStatusChanged(txid, newStatus)
+      this.invokeCallback(
+        'onTransactionStatusChanged',
+        async () => await this.onTransactionStatusChanged!(txid, newStatus)
+      )
     }
+  }
+
+  private invokeCallback(name: string, callback: () => Promise<void>): void {
+    void Promise.resolve()
+      .then(callback)
+      .catch(async error => {
+        await this.logEvent('error1', `monitor ${name} callback error ${safeDiagnostic(error)}`).catch(() => {})
+      })
   }
 
   /**
@@ -519,28 +678,116 @@ export class Monitor {
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   processReorg(depth: number, oldTip: BlockHeader, newTip: BlockHeader, deactivatedHeaders?: BlockHeader[]): void {
+    const event = this.validateReorgEvent(depth, oldTip, newTip, deactivatedHeaders)
     // Close prepared reads synchronously, then invalidate the shared epoch in
     // the background. Replacement-proof discovery remains aged because it may
     // require slow/unavailable network services; cache safety does not.
-    const invalidation = this.storage.invalidatePreparedBeefsForReorg()
-    this.reorgInvalidationPromise = invalidation
-    void invalidation.catch(async error_ => {
-      const error = WalletError.fromUnknown(error_)
-      const details = `monitor reorg prepared-BEEF invalidation error ${error.code} ${error.description}`
-      console.log(details)
-      // Never turn diagnostic persistence failure into an unhandled rejection
-      // from the chain-event callback.
-      await this.logEvent('error1', details).catch(() => {})
-    })
-    if (deactivatedHeaders != null) {
-      for (const header of deactivatedHeaders) {
-        this.deactivatedHeaders.push({
-          whenMsecs: Date.now(),
-          tries: 0,
-          header
-        })
-      }
+    this.requestPreparedBeefInvalidation()
+    const whenMsecs = Date.now()
+    for (const header of event.deactivatedHeaders) {
+      this.enqueueDeactivatedHeader({ whenMsecs, tries: 0, header })
     }
+  }
+
+  enqueueDeactivatedHeader(item: DeactivedHeader): void {
+    const header = this.copyValidatedHeader(item.header, 'deactivated header')
+    if (!Number.isSafeInteger(item.whenMsecs) || item.whenMsecs < 0 || item.whenMsecs > Date.now() + Monitor.oneDay) {
+      throw new WERR_INVALID_PARAMETER('whenMsecs', 'a non-negative timestamp no more than one day in the future')
+    }
+    if (!Number.isSafeInteger(item.tries) || item.tries < 0 || item.tries > 1000) {
+      throw new WERR_INVALID_PARAMETER('tries', 'an integer from 0 through 1000')
+    }
+    if (this.deactivatedHeaderHashes.has(header.hash)) return
+    if (this.deactivatedHeaders.length >= this.maxQueuedDeactivatedHeaders) {
+      const evicted = this.deactivatedHeaders.shift()
+      if (evicted != null) this.deactivatedHeaderHashes.delete(evicted.header.hash)
+      void this.logEvent('error1', 'monitor reorg queue reached capacity; evicted its oldest header').catch(() => {})
+    }
+    this.deactivatedHeaders.push({ ...item, header })
+    this.deactivatedHeaderHashes.add(header.hash)
+  }
+
+  shiftDeactivatedHeader(): DeactivedHeader | undefined {
+    const item = this.deactivatedHeaders.shift()
+    if (item != null) this.deactivatedHeaderHashes.delete(item.header.hash)
+    return item
+  }
+
+  private preparedBeefInvalidation(): unknown {
+    return this.storage.invalidatePreparedBeefsForReorg()
+  }
+
+  private requestPreparedBeefInvalidation(): void {
+    if (this.reorgInvalidationPending) return
+    this.reorgInvalidationPending = true
+    let invalidation: Promise<void>
+    try {
+      invalidation = this.preparedBeefInvalidation() as Promise<void>
+    } catch (error) {
+      invalidation = Promise.reject(error)
+    }
+    this.reorgInvalidationPromise = invalidation
+      .catch(async error_ => {
+        const error = WalletError.fromUnknown(error_)
+        const details = `monitor reorg prepared-BEEF invalidation error ${safeDiagnostic(error.code, 64)} ${safeDiagnostic(error.description)}`
+        await this.logEvent('error1', details).catch(() => {})
+      })
+      .finally(() => {
+        this.reorgInvalidationPending = false
+      })
+  }
+
+  private validateReorgEvent(
+    depth: unknown,
+    oldTip: unknown,
+    newTip: unknown,
+    deactivatedHeaders: unknown
+  ): { oldTip: BlockHeader; newTip: BlockHeader; deactivatedHeaders: BlockHeader[] } {
+    if (!Number.isSafeInteger(depth) || (depth as number) < 1 || (depth as number) > 100_000) {
+      throw new WERR_INVALID_PARAMETER('depth', 'an integer from 1 through 100000')
+    }
+    const oldHeader = this.copyValidatedHeader(oldTip, 'old tip')
+    const newHeader = this.copyValidatedHeader(newTip, 'new tip')
+    if (deactivatedHeaders === undefined) {
+      return { oldTip: oldHeader, newTip: newHeader, deactivatedHeaders: [] }
+    }
+    if (
+      !Array.isArray(deactivatedHeaders) ||
+      deactivatedHeaders.length > (depth as number) ||
+      deactivatedHeaders.length > this.maxQueuedDeactivatedHeaders
+    ) {
+      throw new WERR_INVALID_PARAMETER(
+        'deactivatedHeaders',
+        'a bounded dense array no longer than the reorganization depth'
+      )
+    }
+    const headers: BlockHeader[] = []
+    const hashes = new Set<string>()
+    for (let index = 0; index < deactivatedHeaders.length; index++) {
+      if (!Object.hasOwn(deactivatedHeaders, index)) {
+        throw new WERR_INVALID_PARAMETER('deactivatedHeaders', 'a dense array')
+      }
+      const header = this.copyValidatedHeader(deactivatedHeaders[index], `deactivated header ${index}`)
+      if (hashes.has(header.hash)) throw new WERR_INVALID_PARAMETER('deactivatedHeaders', 'unique header hashes')
+      hashes.add(header.hash)
+      const child = headers.at(-1)
+      if (child != null && (child.height !== header.height + 1 || child.previousHash !== header.hash)) {
+        throw new WERR_INVALID_PARAMETER('deactivatedHeaders', 'one descending linked header chain')
+      }
+      headers.push(header)
+    }
+    if (headers.length > 0 && headers[0].hash !== oldHeader.hash) {
+      throw new WERR_INVALID_PARAMETER('deactivatedHeaders', 'a list beginning at the old tip')
+    }
+    return { oldTip: oldHeader, newTip: newHeader, deactivatedHeaders: headers }
+  }
+
+  private copyValidatedHeader(value: unknown, name: string): BlockHeader {
+    // The in-memory mock chain deliberately uses a regtest-style target that
+    // is outside Bitcoin's production proof-of-work limit. Still bind every
+    // field to the computed header hash, but require consensus PoW everywhere
+    // a remotely sourced production/test network header can enter.
+    return copyValidatedMonitorHeader(value, name, this.chain !== 'mock', this.chain)
   }
 
   /**

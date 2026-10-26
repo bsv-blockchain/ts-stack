@@ -1,7 +1,30 @@
 import { GASPInitialReply, GASPInitialRequest, GASPInitialResponse, GASPNode, GASPNodeResponse, GASPRemote } from '@bsv/gasp'
+import {
+  assertGASPInitialResponse,
+  assertGASPNode,
+  assertHash,
+  assertNonnegativeInteger,
+  assertOutpoint,
+  assertOutputIndex,
+  assertTopic,
+  MAX_GASP_NODE_JSON_BYTES,
+  MAX_GASP_PAGE_SIZE,
+  readPeerJSON,
+  securePeerFetch
+} from '../RemoteSecurity.js'
 
 export class OverlayGASPRemote implements GASPRemote {
-  constructor (public endpointURL: string, public topic: string) { }
+  public readonly endpointURL: string
+  public readonly topic: string
+  private readonly fetchImpl: typeof fetch
+
+  constructor (endpointURL: string, topic: string, fetchImpl?: typeof fetch) {
+    assertTopic(topic)
+    const secured = securePeerFetch(endpointURL, fetchImpl)
+    this.endpointURL = secured.endpoint
+    this.topic = topic
+    this.fetchImpl = secured.fetchImpl
+  }
 
   /**
    * Given an outgoing initial request, sends the request to the foreign instance and obtains their initial response.
@@ -9,11 +32,13 @@ export class OverlayGASPRemote implements GASPRemote {
    * @returns
    */
   async getInitialResponse (request: GASPInitialRequest): Promise<GASPInitialResponse> {
-    // Send out an HTTP request to the URL (current host for topic)
-    // Include the topic in the request
-    // Parse out response and return correct format
+    assertNonnegativeInteger(request.since, 'GASP request since')
+    const pageLimit = request.limit ?? MAX_GASP_PAGE_SIZE
+    if (!Number.isSafeInteger(pageLimit) || pageLimit < 1 || pageLimit > MAX_GASP_PAGE_SIZE) {
+      throw new TypeError(`GASP request limit must be between 1 and ${MAX_GASP_PAGE_SIZE}`)
+    }
     const url = `${this.endpointURL}/requestSyncResponse`
-    const response = await fetch(url, {
+    const response = await this.fetchImpl(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -22,25 +47,9 @@ export class OverlayGASPRemote implements GASPRemote {
       body: JSON.stringify(request)
     })
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`)
-    }
-
-    const result: GASPInitialResponse = await response.json()
-
-    // Validate and return the response in the correct format
-    if (!Array.isArray(result.UTXOList) || typeof result.since !== 'number') {
-      throw new TypeError('Invalid response format')
-    }
-
-    return {
-      UTXOList: result.UTXOList.map((utxo: any) => ({
-        txid: utxo.txid,
-        outputIndex: utxo.outputIndex,
-        score: utxo.score ?? 0
-      })),
-      since: result.since
-    }
+    const result = await readPeerJSON(response)
+    assertGASPInitialResponse(result, pageLimit)
+    return result
   }
 
   /**
@@ -52,7 +61,10 @@ export class OverlayGASPRemote implements GASPRemote {
    * @returns
    */
   async requestNode (graphID: string, txid: string, outputIndex: number, metadata: boolean): Promise<GASPNode> {
-    // Send an HTTP request with the provided info and get back a gaspNode
+    assertOutpoint(graphID, 'GASP request graphID')
+    assertHash(txid, 'GASP request txid')
+    assertOutputIndex(outputIndex, 'GASP request outputIndex')
+    if (typeof metadata !== 'boolean') throw new TypeError('GASP request metadata flag is invalid')
     const url = `${this.endpointURL}/requestForeignGASPNode`
     const body = {
       graphID,
@@ -61,36 +73,18 @@ export class OverlayGASPRemote implements GASPRemote {
       metadata
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchImpl(url, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-BSV-Topic': this.topic
       },
       body: JSON.stringify(body)
     })
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`)
-    }
-
-    const result = await response.json()
-
-    // Validate and return the response in the correct format
-    if (typeof result.graphID !== 'string' || typeof result.rawTx !== 'string' || typeof result.outputIndex !== 'number') {
-      throw new TypeError('Invalid response format')
-    }
-
-    const gaspNode: GASPNode = {
-      graphID: result.graphID,
-      rawTx: result.rawTx,
-      outputIndex: result.outputIndex,
-      proof: result.proof,
-      txMetadata: result.txMetadata,
-      outputMetadata: result.outputMetadata,
-      inputs: result.inputs
-    }
-
-    return gaspNode
+    const result = await readPeerJSON(response, MAX_GASP_NODE_JSON_BYTES)
+    assertGASPNode(result, { graphID, txid, outputIndex })
+    return result
   }
 
   // ---- Now optional methods ----

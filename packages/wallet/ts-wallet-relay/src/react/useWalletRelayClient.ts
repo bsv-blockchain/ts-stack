@@ -53,11 +53,13 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
   function ensureClient(): WalletRelayClient {
     clientRef.current ??= new WalletRelayClient({
       apiUrl: options?.apiUrl,
+      allowLocalNetworkHttp: options?.allowLocalNetworkHttp,
       pollInterval: options?.pollInterval,
       connectedPollInterval: options?.connectedPollInterval,
       persistSession: options?.persistSession,
       sessionStorageKey: options?.sessionStorageKey,
       sessionStorageTtl: options?.sessionStorageTtl,
+      maxLogEntries: options?.maxLogEntries,
       onSessionChange: setSession,
       onLogChange: setLog,
       onError: setError
@@ -113,9 +115,14 @@ export function useWalletRelayClient(options?: UseWalletRelayClientOptions) {
     if (!wantCreate && !wantResumeOnly) return
     // setTimeout(0) prevents React strictmode double calls
     const timer = setTimeout(() => {
-      void resumeSession().then(resumed => {
-        if (!resumed && wantCreate) void createSession()
-      })
+      void resumeSession()
+        .then(async resumed => {
+          if (!resumed && wantCreate) await createSession()
+        })
+        .catch(() => {
+          // WalletRelayClient already reported actionable errors. Cancellation
+          // during unmount is expected and must not become an unhandled rejection.
+        })
     }, 0)
     return () => {
       clearTimeout(timer)

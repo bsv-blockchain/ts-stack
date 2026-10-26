@@ -1,14 +1,14 @@
+import { toBase64 } from '@bsv/sdk/primitives/utils'
 import { brc29ProtocolID } from '@bsv/wallet-toolbox-client'
-import { Random, Utils, WalletInterface, PublicKey, WalletProtocol } from '@bsv/sdk'
-
+import { Random, WalletInterface, PublicKey, WalletProtocol } from '@bsv/sdk'
 export interface Derivation {
   protocolID: WalletProtocol
   keyID: string
 }
 
 export function getDerivation(): Derivation {
-  const derivationPrefix = Utils.toBase64(Random(8))
-  const derivationSuffix = Utils.toBase64(Random(8))
+  const derivationPrefix = toBase64(Random(8))
+  const derivationSuffix = toBase64(Random(8))
   return {
     protocolID: brc29ProtocolID,
     keyID: derivationPrefix + ' ' + derivationSuffix
@@ -24,6 +24,8 @@ export interface AddressWithParams {
   }
 }
 
+const MAX_ADDRESS_BATCH = 1000
+
 export async function getAddress(
   wallet: WalletInterface,
   amount: number = 1,
@@ -32,8 +34,16 @@ export async function getAddress(
   if (!wallet) {
     throw new Error('Wallet is required')
   }
-  if (amount < 1) {
-    throw new Error('Amount must be greater than 0')
+  if (!Number.isSafeInteger(amount) || amount < 1 || amount > MAX_ADDRESS_BATCH) {
+    throw new Error(`Amount must be a safe integer between 1 and ${MAX_ADDRESS_BATCH}`)
+  }
+  if (counterparty !== 'self' && counterparty !== 'anyone') {
+    try {
+      if (counterparty.length !== 66) throw new Error('not compressed')
+      PublicKey.fromString(counterparty)
+    } catch {
+      throw new Error('counterparty must be "self", "anyone", or a compressed public key')
+    }
   }
 
   try {
@@ -43,7 +53,8 @@ export async function getAddress(
       const { publicKey } = await wallet.getPublicKey({
         protocolID: derivation.protocolID,
         keyID: derivation.keyID,
-        counterparty
+        counterparty,
+        forSelf: true
       })
       const address = PublicKey.fromString(publicKey).toAddress()
       return {

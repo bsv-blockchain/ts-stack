@@ -1,5 +1,6 @@
+import { toHex } from '@bsv/sdk/primitives/utils'
 import { AdmittanceInstructions, TopicAdmittanceContext, TopicManager } from '@bsv/overlay'
-import { Transaction, PushDrop, Utils } from '@bsv/sdk'
+import { Transaction, PushDrop } from '@bsv/sdk'
 import type { Db } from 'mongodb'
 import {
   InMemoryUMPIdentityStore,
@@ -96,8 +97,8 @@ export default class UMPTopicManager implements TopicManager {
             await this.identityStore.reserve(
               {
                 outpoint: `${txid}.${i}`,
-                presentationHash: Utils.toHex(protocolFields[6]),
-                recoveryHash: Utils.toHex(protocolFields[7])
+                presentationHash: toHex(protocolFields[6]),
+                recoveryHash: toHex(protocolFields[7])
               },
               consumedOutpoints
             )

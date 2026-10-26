@@ -1,4 +1,5 @@
 import { describe, expect, test } from '@jest/globals'
+import ts from 'typescript'
 import { walletConnect } from '../wallet-connect'
 import { newBuilder } from '../../scaffold/base-app'
 
@@ -46,6 +47,47 @@ describe('wallet-connect', () => {
     expect(helper).toBeDefined()
     expect(helper?.content).toContain('export async function getServerIdentity')
     expect(helper?.content).toContain('/api/identity')
+    expect(helper?.content).toContain('PublicKey.fromString')
+    expect(helper?.content).toContain('endpoint/TLS trust')
+    expect(helper?.content).toContain('Object.keys(descriptors).length !== 1')
+  })
+  test('generated API client fixes origin, redirect, deadline, byte, and UTF-8 boundaries', () => {
+    const client = walletConnect.files(ctx).client ?? []
+    const apiClient = client.find(f => f.path === 'apiClient.ts')
+    const config = client.find(f => f.path === 'config.ts')
+    expect(apiClient?.content).toContain("redirect: 'error'")
+    expect(apiClient?.content).toContain("credentials: 'omit'")
+    expect(apiClient?.content).toContain('API_TIMEOUT_MS = 10_000')
+    expect(apiClient?.content).toContain('MAX_API_RESPONSE_BYTES')
+    expect(apiClient?.content).toContain("response.headers.get('content-encoding')")
+    expect(apiClient?.content).toContain('API request body must be a string')
+    expect(apiClient?.content).toContain("new TextDecoder('utf-8', { fatal: true })")
+    expect(config?.content).toContain('VITE_API_URL is required in production')
+    expect(config?.content).toContain("parsedApiUrl.protocol !== 'https:'")
+    expect(config?.content).toContain('VITE_BSV_NETWORK must be main, test, or ttn')
+  })
+  test('generated wallet-connect TypeScript is syntactically valid', () => {
+    const files = walletConnect.files(ctx)
+    const generated = [
+      ...(files.shared ?? []),
+      ...(files.client ?? []),
+      ...(files.server ?? [])
+    ].filter(file => /\.tsx?$/.test(file.path))
+    for (const file of generated) {
+      const result = ts.transpileModule(file.content, {
+        fileName: file.path,
+        reportDiagnostics: true,
+        compilerOptions: {
+          target: ts.ScriptTarget.ES2022,
+          module: ts.ModuleKind.ESNext,
+          jsx: ts.JsxEmit.ReactJSX
+        }
+      })
+      const messages = (result.diagnostics ?? []).map(diagnostic =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+      )
+      expect(messages).toEqual([])
+    }
   })
   test('server ships bounded nonce replay protection shared by auth routes', () => {
     const nonceStore = (walletConnect.files(ctx).server ?? []).find(f => f.path === 'nonceStore.ts')
@@ -101,7 +143,12 @@ describe('wallet-connect', () => {
     }
     const client = (walletConnect.files(ctx2).client ?? []).map(f => f.path)
     expect(client).toEqual(
-      expect.arrayContaining(['ConnectWallet.tsx', 'config.ts', 'WalletContext.tsx'])
+      expect.arrayContaining([
+        'ConnectWallet.tsx',
+        'apiClient.ts',
+        'config.ts',
+        'WalletContext.tsx'
+      ])
     )
     expect(client).not.toContain('Home.tsx') // Home is assembled from HOME_TEMPLATE, not a capability file
     const b = newBuilder()

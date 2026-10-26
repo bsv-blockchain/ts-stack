@@ -3,8 +3,8 @@ id: spec-message-box-http
 title: MessageBox Server HTTP API
 kind: spec
 version: '1.0.0'
-last_updated: '2026-07-26'
-last_verified: '2026-07-26'
+last_updated: '2026-09-18'
+last_verified: '2026-09-18'
 status: stable
 tags: ['spec', 'messaging', 'brc-103']
 ---
@@ -46,6 +46,13 @@ acknowledgment, device, and permission operations.
 | GET    | `/docs`               | Public         | Swagger UI                                       |
 | GET    | `/openapi.json`       | Public         | Runtime OpenAPI document                         |
 
+The client requires mutual authentication on responses as well as requests.
+An ordinary unauthenticated HTTP fallback is not a successful Message Box
+response. The response identity must be a canonical compressed public key and
+must remain stable for the origin during the client lifetime; deployments may
+add an independently validated `serverIdentityKeysByHost` pin. Public hosts
+require HTTPS, while HTTP is limited to loopback development.
+
 `ROUTING_PREFIX` may prefix every route in a deployment.
 
 ## Send, retrieve, acknowledge
@@ -75,6 +82,15 @@ The client encrypts message bodies by default. The server persists the opaque
 payload together with routing metadata. Acknowledgment deletes only rows owned
 by the authenticated recipient.
 
+Client send inputs are captured before any asynchronous wallet, lookup, or
+network operation. A recipient is a canonical compressed public key;
+message-box names are exact, control-free strings of at most 128 UTF-8 bytes;
+message IDs are exact, control-free strings of at most 256 UTF-8 bytes; and the
+portable serialized body is at
+most 4 MiB. Deployments may impose the smaller resource-profile limit described
+by their runtime configuration. Successful responses are used only when any
+returned result binds the submitted recipient and message ID.
+
 ## Live transport
 
 Authenticated Socket.IO connections use the same BRC-103 peer identity.
@@ -82,7 +98,18 @@ Connections may join only rooms owned by that identity. Live sends reuse the
 HTTP handler's validation, permission, payment, deduplication, and persistence
 logic; delivery notifications go only to connections authenticated as the
 recipient. The client falls back to HTTP if the WebSocket does not acknowledge
-a send.
+a send. Live message IDs, recipients, room names, and message-box suffixes are
+canonical and byte-bounded. The service bounds total and per-identity
+connections, rooms per connection, join/leave events, concurrent and per-minute
+sends, and recipient notification fan-out; explicit `-1`/`unlimited` resource
+overrides remain operator trust decisions. Rejected unauthenticated sends and
+join/leave attempts consume the same per-connection event budgets, preventing
+error responses themselves from becoming unbounded work.
+
+Live sends use the same immutable client-side snapshot and validation as HTTP
+sends before any connection, wallet, lookup, or network work. Firebase push
+data retains the message ID for application retrieval, while visible fallback
+notification text is generic and never reflects a caller-selected identifier.
 
 ## Permissions and payments
 
@@ -90,11 +117,33 @@ Recipient permissions use:
 
 - `-1` — blocked
 - `0` — allowed without recipient payment
-- positive integer — required recipient fee in satoshis
+- positive integer through `2,147,483,647` — required recipient fee in satoshis
 
 The quote route caps a request at 100 recipients and executes permission
 lookups with bounded concurrency. Permission or fee storage failures fail
-closed with an internal error; they do not silently grant free delivery.
+closed with an internal error; they do not silently grant free delivery. A
+permission update is acknowledged only after the durable write succeeds.
+Quote and send recipients must be unique after public-key canonicalization;
+equivalent compressed and uncompressed encodings cannot create duplicate fee,
+message-ID, or output-allocation rows.
+Persisted recipient fees must remain safe integers from `-1` through
+`2,147,483,647`; legacy server delivery fees must remain safe integers from `0`
+through that maximum.
+
+For a multi-recipient send, the advertised server delivery fee applies to each
+allowed recipient. The client places the checked aggregate in the single
+server remittance output at index zero; the server recomputes and verifies that
+aggregate before accepting the payment or storing any message.
+
+Clients treat quote JSON as untrusted financial input. Each requested recipient
+and message-box name must be represented exactly once, status and
+blocked-recipient fields must agree with the bounded integer fee, and totals are
+recomputed with checked arithmetic. `maximumPayment` optionally applies a
+caller-owned ceiling before any wallet action. The server is authoritative for
+its advertised price, but the wallet is the spending authority. A payment is
+accepted for transport only after the returned Atomic BEEF independently proves
+that every requested script and amount remains at its remittance output index;
+wallet return bytes alone are not payment evidence.
 
 Message reads are deterministic pages of at most 1,000 records with a bounded
 offset and `hasMore` indicator. The client follows those pages with an explicit

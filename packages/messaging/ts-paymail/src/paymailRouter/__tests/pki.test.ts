@@ -58,4 +58,58 @@ describe('#Paymail Server - PKI', () => {
       match: true
     })
   })
+
+  it('binds identity responses to immutable wire parameters', async () => {
+    const mutationApp = express()
+    const route = new PublicKeyInfrastructureRoute({
+      domainLogicHandler: params => {
+        params.paymail = 'mallory@attacker.test'
+        return {
+          handle: params.paymail,
+          pubkey: userIdentityKey.toPublicKey().toString()
+        }
+      }
+    })
+    mutationApp.use(
+      new PaymailRouter({ baseUrl: 'https://example.test', routes: [route] }).getRouter()
+    )
+
+    const response = await request(mutationApp).get('/id/alice@example.test')
+
+    expect(response.statusCode).toBe(500)
+    expect(response.text).toBe('Internal server error')
+  })
+
+  it('rejects curve-invalid compressed keys before application identity decisions', async () => {
+    const invalidKey = `02${'ff'.repeat(32)}`
+    const verifyHandler = jest.fn(() => ({
+      handle: 'alice@example.test',
+      pubkey: invalidKey,
+      match: true
+    }))
+    const invalidApp = express()
+    invalidApp.use(
+      new PaymailRouter({
+        baseUrl: 'https://example.test',
+        routes: [
+          new PublicKeyInfrastructureRoute({
+            domainLogicHandler: () => ({
+              handle: 'alice@example.test',
+              pubkey: invalidKey
+            })
+          }),
+          new VerifyPublicKeyOwnerRoute({ domainLogicHandler: verifyHandler })
+        ]
+      }).getRouter()
+    )
+
+    const pki = await request(invalidApp).get('/id/alice@example.test')
+    const verification = await request(invalidApp).get(
+      `/verifypubkey/alice@example.test/${invalidKey}`
+    )
+
+    expect(pki.statusCode).toBe(500)
+    expect(verification.statusCode).toBe(400)
+    expect(verifyHandler).not.toHaveBeenCalled()
+  })
 })

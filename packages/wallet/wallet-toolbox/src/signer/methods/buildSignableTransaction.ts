@@ -1,4 +1,9 @@
-import { Beef, Script, Transaction, Validation } from '@bsv/sdk'
+import {
+  type ValidCreateActionArgs,
+  type ValidCreateActionInput,
+  validateSatoshis
+} from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, Script, Transaction } from '@bsv/sdk'
 import { Wallet, PendingStorageInput } from '../../Wallet'
 import {
   StorageCreateActionResult,
@@ -13,7 +18,7 @@ import { maxPossibleSatoshis } from '../../storage/methods/generateChange'
 
 export function buildSignableTransaction(
   dctr: StorageCreateActionResult,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   wallet: Wallet
 ): {
   tx: Transaction
@@ -23,7 +28,7 @@ export function buildSignableTransaction(
 } {
   const changeKeys = wallet.getClientChangeKeyPair()
 
-  const inputBeef = args.inputBEEF != null ? Beef.fromBinary(args.inputBEEF) : undefined
+  const inputBeef = args.inputBEEF != null ? Beef.fromBinaryStrict(args.inputBEEF) : undefined
 
   const { inputs: storageInputs, outputs: storageOutputs } = dctr
 
@@ -48,13 +53,7 @@ export function buildSignableTransaction(
   addPlannedOutputs(tx, storageOutputs, dctr, args, changeKeys, wallet)
 
   const pendingStorageInputs: PendingStorageInput[] = []
-  const totalChangeInputs = addPlannedInputs(
-    tx,
-    storageInputs,
-    args,
-    inputBeef,
-    pendingStorageInputs
-  )
+  const totalChangeInputs = addPlannedInputs(tx, storageInputs, args, inputBeef, pendingStorageInputs)
 
   // The amount is the total of non-foreign inputs minus change outputs
   // Note that the amount can be negative when we are redeeming more inputs than we are spending
@@ -85,7 +84,7 @@ function addPlannedOutputs(
   tx: Transaction,
   storageOutputs: StorageCreateTransactionSdkOutput[],
   dctr: StorageCreateActionResult,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   changeKeys: KeyPair,
   wallet: Wallet
 ): void {
@@ -94,10 +93,7 @@ function addPlannedOutputs(
   for (const [vout, index] of outputIndexByVout(storageOutputs).entries()) {
     const output = storageOutputs[index]
     if (vout !== output.vout) {
-      throw new WERR_INVALID_PARAMETER(
-        'output.vout',
-        `equal to array index. ${output.vout} !== ${vout}`
-      )
+      throw new WERR_INVALID_PARAMETER('output.vout', `equal to array index. ${output.vout} !== ${vout}`)
     }
     const change = output.providedBy === 'storage' && output.purpose === 'change'
     tx.addOutput({
@@ -119,28 +115,22 @@ function addPlannedOutputs(
 
 function addRequestedInput(
   tx: Transaction,
-  argsInput: Validation.ValidCreateActionInput,
-  args: Validation.ValidCreateActionArgs,
+  argsInput: ValidCreateActionInput,
+  args: ValidCreateActionArgs,
   inputBeef: Beef | undefined
 ): void {
   const unlockingScript =
-    typeof argsInput.unlockingScript === 'string'
-      ? asBsvSdkScript(argsInput.unlockingScript)
-      : new Script()
+    typeof argsInput.unlockingScript === 'string' ? asBsvSdkScript(argsInput.unlockingScript) : new Script()
   tx.addInput({
     sourceTXID: argsInput.outpoint.txid,
     sourceOutputIndex: argsInput.outpoint.vout,
-    sourceTransaction: args.isSignAction
-      ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx
-      : undefined,
+    sourceTransaction: args.isSignAction ? inputBeef?.findTxid(argsInput.outpoint.txid)?.tx : undefined,
     unlockingScript,
     sequence: argsInput.sequenceNumber
   })
 }
 
-function sourceTransactionForStorageInput(
-  storageInput: StorageCreateTransactionSdkInput
-): Transaction | undefined {
+function sourceTransactionForStorageInput(storageInput: StorageCreateTransactionSdkInput): Transaction | undefined {
   if (storageInput.sourceTransaction == null) return undefined
   return storageInput.sourceTransaction instanceof Uint8Array
     ? Transaction.fromBinaryView(storageInput.sourceTransaction)
@@ -173,26 +163,20 @@ function addStorageInput(
     unlockingScript: new Script(),
     sequence: 0xffffffff
   })
-  return Validation.validateSatoshis(
-    storageInput.sourceSatoshis,
-    'storageInput.sourceSatoshis'
-  )
+  return validateSatoshis(storageInput.sourceSatoshis, 'storageInput.sourceSatoshis')
 }
 
 function addPlannedInputs(
   tx: Transaction,
   storageInputs: StorageCreateTransactionSdkInput[],
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   inputBeef: Beef | undefined,
   pendingStorageInputs: PendingStorageInput[]
 ): number {
   const inputs = storageInputs
     .map(storageInput => ({
       storageInput,
-      argsInput:
-        storageInput.vin < args.inputs.length
-          ? args.inputs[storageInput.vin]
-          : undefined
+      argsInput: storageInput.vin < args.inputs.length ? args.inputs[storageInput.vin] : undefined
     }))
     .sort((left, right) => left.storageInput.vin - right.storageInput.vin)
 
@@ -228,7 +212,7 @@ function addPlannedInputs(
  */
 export function verifyRequestedOutputsUnchanged(
   storageOutputs: StorageCreateTransactionSdkOutput[],
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): void {
   for (let i = 0; i < args.outputs.length; i++) {
     const requested = args.outputs[i]
@@ -305,7 +289,7 @@ export const MAX_STORAGE_COMMISSION_SATOSHIS = 500000
  */
 export function verifyUnrequestedOutputsAreChangeOrCommission(
   storageOutputs: StorageCreateTransactionSdkOutput[],
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   maxCommission: number = MAX_STORAGE_COMMISSION_SATOSHIS
 ): void {
   let commissionCount = 0
@@ -349,7 +333,7 @@ export function verifyUnrequestedOutputsAreChangeOrCommission(
 export function makeChangeLock(
   out: StorageCreateTransactionSdkOutput,
   dctr: StorageCreateActionResult,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   changeKeys: KeyPair,
   wallet: Wallet
 ): Script {

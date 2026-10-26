@@ -1,4 +1,6 @@
 const mockSockets: Array<{
+  url?: string
+  options?: Record<string, unknown>
   send: jest.Mock
   close: jest.Mock
   onopen?: (event: unknown) => void
@@ -8,8 +10,10 @@ const mockSockets: Array<{
 
 jest.mock('ws', () => ({
   __esModule: true,
-  default: jest.fn().mockImplementation(() => {
+  default: jest.fn().mockImplementation((url: string, options?: Record<string, unknown>) => {
     const socket = {
+      url,
+      options,
       send: jest.fn(),
       close: jest.fn(),
       onopen: undefined,
@@ -28,6 +32,12 @@ import {
   WocHeadersBulkListener,
   WocHeadersLiveListener
 } from '../WhatsOnChainIngestorWs'
+import { genesisHeader } from '../../util/blockHeaderUtilities'
+import { LiveIngestorWhatsOnChainWs } from '../LiveIngestorWhatsOnChainWs'
+import { BulkIngestorWhatsOnChainWs } from '../BulkIngestorWhatsOnChainWs'
+import { HeightRange } from '../../util/HeightRange'
+import { deserializeBlockHeader } from '../../util/blockHeaderUtilities'
+import { readFileSync } from 'node:fs'
 
 describe('WhatsOnChain WebSocket listener stops', () => {
   afterEach(() => {
@@ -114,8 +124,15 @@ describe('WhatsOnChain WebSocket listener stops', () => {
     const error = jest.fn(() => false)
     const logger = jest.fn()
     const stop: StopListenerToken = { stop: undefined }
-    const listener = WocHeadersBulkListener(0, 10, enqueue, error, stop, 'main', logger, 1)
+    const listener = WocHeadersBulkListener(0, 0, enqueue, error, stop, 'main', logger, 1)
     const socket = mockSockets[0]
+
+    expect(socket.options).toMatchObject({
+      followRedirects: false,
+      handshakeTimeout: 30000,
+      maxPayload: 1024 * 1024,
+      perMessageDeflate: false
+    })
 
     socket.onopen?.({})
     socket.onmessage?.({ data: '' })
@@ -130,14 +147,7 @@ describe('WhatsOnChain WebSocket listener stops', () => {
       data: JSON.stringify({
         pub: {
           data: {
-            hash: 'hash',
-            height: 10,
-            version: 1,
-            merkleroot: 'merkle-root',
-            time: 1,
-            bits: '1d00ffff',
-            nonce: 1,
-            previousblockhash: 'previous-hash'
+            ...wocGenesisHeader()
           }
         }
       })
@@ -147,9 +157,9 @@ describe('WhatsOnChain WebSocket listener stops', () => {
     await jest.advanceTimersByTimeAsync(1)
     await expect(listener).resolves.toBe(true)
     expect(socket.send).toHaveBeenCalledWith('ping')
-    expect(logger).toHaveBeenCalledWith(JSON.stringify({ connect: true }))
-    expect(error).toHaveBeenCalledWith(42, `unknown data ${JSON.stringify({ unexpected: true })}`)
-    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ height: 10 }))
+    expect(logger).toHaveBeenCalledWith('WhatsOnChain WebSocket connected.')
+    expect(error).toHaveBeenCalledWith(42, 'unknown WhatsOnChain data frame')
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ height: 0 }))
 
     for (const frame of [{ type: 7, data: { code: 503 } }, { type: 9 }]) {
       const nextStop: StopListenerToken = { stop: undefined }
@@ -175,4 +185,103 @@ describe('WhatsOnChain WebSocket listener stops', () => {
     await expect(listener).resolves.toBe(false)
     expect(error).toHaveBeenCalledWith(-2, 'unexpectedly went idle')
   })
+
+  test('closes malformed and idle live connections without throwing from event handlers', async () => {
+    jest.useFakeTimers()
+    const malformedError = jest.fn(() => false)
+    const malformed = WocHeadersLiveListener(jest.fn(), malformedError, { stop: undefined }, 'main', jest.fn(), 5)
+    const malformedSocket = mockSockets[0]
+    expect(() => malformedSocket.onmessage?.({ data: '{' })).not.toThrow()
+    await jest.advanceTimersByTimeAsync(1000)
+    await expect(malformed).resolves.toBe(false)
+    expect(malformedError).toHaveBeenCalledWith(-3, expect.stringContaining('invalid WhatsOnChain WebSocket message'))
+
+    const idleError = jest.fn(() => false)
+    const idle = WocHeadersLiveListener(jest.fn(), idleError, { stop: undefined }, 'main', jest.fn(), 5)
+    const idleSocket = mockSockets[1]
+    idleSocket.onopen?.({})
+    await jest.advanceTimersByTimeAsync(1000)
+    await expect(idle).resolves.toBe(false)
+    expect(idleError).toHaveBeenCalledWith(-2, 'unexpectedly went idle')
+    expect(idleSocket.close).toHaveBeenCalled()
+  })
+
+  test('bounds the legacy live adapter queue and stops it during shutdown', async () => {
+    jest.useFakeTimers()
+    const options = LiveIngestorWhatsOnChainWs.createLiveIngestorWhatsOnChainOptions('main')
+    options.idleWait = 1000
+    options.maxQueuedHeaders = 1
+    const ingestor = new LiveIngestorWhatsOnChainWs(options)
+    const logs: string[] = []
+    ingestor.log = message => logs.push(String(message))
+    const liveHeaders: any[] = []
+    const listening = ingestor.startListening(liveHeaders)
+    const socket = mockSockets[0]
+    socket.onopen?.({})
+    socket.onmessage?.({ data: JSON.stringify({ pub: { data: wocGenesisHeader() } }) })
+    socket.onmessage?.({ data: JSON.stringify({ pub: { data: wocHeader(realHeader(1)) } }) })
+    await ingestor.shutdown()
+    await jest.advanceTimersByTimeAsync(1000)
+    await expect(listening).resolves.toBeUndefined()
+
+    expect(liveHeaders).toHaveLength(1)
+    expect(logs.some(log => log.includes('queue capacity 1 reached'))).toBe(true)
+    expect(socket.close).toHaveBeenCalled()
+  })
+
+  test('chunks legacy bulk history so no connection or admission batch grows without bound', async () => {
+    jest.useFakeTimers()
+    const options = BulkIngestorWhatsOnChainWs.createBulkIngestorWhatsOnChainOptions('main')
+    options.idleWait = 1
+    options.maxHeadersPerRequest = 1
+    const ingestor = new BulkIngestorWhatsOnChainWs(options)
+    const addBulkHeaders = jest.fn(async (headers: any[], _range: HeightRange, live: any[]) => [...live, ...headers])
+    await ingestor.setStorage({ addBulkHeaders } as any, jest.fn())
+
+    const result = ingestor.fetchHeaders(
+      { bulk: new HeightRange(0, -1), live: new HeightRange(0, -1) },
+      new HeightRange(0, 1),
+      new HeightRange(0, 1),
+      []
+    )
+    mockSockets[0].onopen?.({})
+    mockSockets[0].onmessage?.({ data: JSON.stringify({ pub: { data: wocGenesisHeader() } }) })
+    await jest.advanceTimersByTimeAsync(1)
+    expect(mockSockets).toHaveLength(2)
+    mockSockets[1].onopen?.({})
+    mockSockets[1].onmessage?.({ data: JSON.stringify({ pub: { data: wocHeader(realHeader(1)) } }) })
+    await jest.advanceTimersByTimeAsync(1)
+
+    await expect(result).resolves.toHaveLength(2)
+    expect(addBulkHeaders).toHaveBeenCalledTimes(2)
+    expect(mockSockets.map(socket => socket.url)).toEqual([
+      expect.stringContaining('from=0&to=0'),
+      expect.stringContaining('from=1&to=1')
+    ])
+  })
 })
+
+function wocGenesisHeader(): Record<string, unknown> {
+  return wocHeader(genesisHeader('main'))
+}
+
+const fixture = new Uint8Array(
+  readFileSync('src/services/chaintracker/chaintracks/__tests/data/cdnTest499/mainNet_0.headers')
+)
+
+function realHeader(height: number) {
+  return deserializeBlockHeader(fixture, height, height * 80)
+}
+
+function wocHeader(header: ReturnType<typeof genesisHeader>): Record<string, unknown> {
+  return {
+    hash: header.hash,
+    height: header.height,
+    version: header.version,
+    merkleroot: header.merkleRoot,
+    time: header.time,
+    bits: header.bits.toString(16).padStart(8, '0'),
+    nonce: header.nonce,
+    previousblockhash: header.previousHash
+  }
+}

@@ -1,4 +1,5 @@
-import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
+import { type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput } from '@bsv/sdk'
 import { getListOutputsSpecOp, type ListOutputsSpecOp } from './ListOutputsSpecOp'
 import { StorageIdb } from '../StorageIdb'
 import { AuthId, FindOutputsArgs } from '../../sdk/WalletStorage.interfaces'
@@ -7,6 +8,7 @@ import { TableOutput } from '../schema/tables/TableOutput'
 import { TransactionStatus } from '../../sdk/types'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { isManagedChangeOutput, managedChangeOutputFields } from './managedChange'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
 interface ResolvedListTags {
   tags: string[]
@@ -30,9 +32,7 @@ function normalizeListOffset(offset: number): {
   offset: number
   orderDescending: boolean
 } {
-  return offset < 0
-    ? { offset: -offset - 1, orderDescending: true }
-    : { offset, orderDescending: false }
+  return offset < 0 ? { offset: -offset - 1, orderDescending: true } : { offset, orderDescending: false }
 }
 
 async function resolveIdbBasketId(
@@ -61,10 +61,7 @@ function resolveListTags(
   if (specOp?.tagsToIntercept == null) return { tags, specOpTags, basketId }
   const remaining: string[] = []
   for (const tag of tags) {
-    if (
-      specOp.tagsToIntercept.length === 0 ||
-      specOp.tagsToIntercept.includes(tag)
-    ) {
+    if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.includes(tag)) {
       specOpTags.push(tag)
       if (tag === 'all') basketId = undefined
     } else {
@@ -74,46 +71,21 @@ function resolveListTags(
   return { tags: remaining, specOpTags, basketId }
 }
 
-async function findIdbTagIds(
-  storage: StorageIdb,
-  userId: number,
-  tags: string[]
-): Promise<number[]> {
+async function findIdbTagIds(storage: StorageIdb, userId: number, tags: string[]): Promise<number[]> {
   const tagIds: number[] = []
   if (tags.length === 0) return tagIds
-  await storage.filterOutputTags(
-    { partial: { userId, isDeleted: false } },
-    outputTag => {
-      if (tags.includes(outputTag.tag)) tagIds.push(outputTag.outputTagId)
-    }
-  )
+  await storage.filterOutputTags({ partial: { userId, isDeleted: false } }, outputTag => {
+    if (tags.includes(outputTag.tag)) tagIds.push(outputTag.outputTagId)
+  })
   return tagIds
 }
 
-function tagQueryCannotMatch(
-  tags: string[],
-  tagIds: number[],
-  queryModeAll: boolean
-): boolean {
-  return queryModeAll
-    ? tagIds.length < tags.length
-    : tags.length > 0 && tagIds.length === 0
+function tagQueryCannotMatch(tags: string[], tagIds: number[], queryModeAll: boolean): boolean {
+  return queryModeAll ? tagIds.length < tags.length : tags.length > 0 && tagIds.length === 0
 }
 
-async function loadIdbOutputs(
-  query: IdbOutputQuery
-): Promise<{ outputs: TableOutput[]; totalOutputs: number }> {
-  const {
-    storage,
-    userId,
-    basketId,
-    tagIds,
-    queryModeAll,
-    specOp,
-    limit,
-    offset,
-    orderDescending
-  } = query
+async function loadIdbOutputs(query: IdbOutputQuery): Promise<{ outputs: TableOutput[]; totalOutputs: number }> {
+  const { storage, userId, basketId, tagIds, queryModeAll, specOp, limit, offset, orderDescending } = query
   const args: FindOutputsArgs = {
     partial: {
       userId,
@@ -125,17 +97,21 @@ async function loadIdbOutputs(
     noScript: specOp?.includeOutputScripts !== true,
     orderDescending
   }
-  const pageManagedChange =
-    specOp?.managedChangeOnly === true && specOp.ignoreLimit !== true
+  const pageManagedChange = specOp?.managedChangeOnly === true && specOp.ignoreLimit !== true
   const applyPaging = !specOp?.ignoreLimit && !pageManagedChange
   if (applyPaging) {
     args.paged = { limit, offset }
+  } else if (specOp?.maximumCandidateCount != null) {
+    args.paged = { limit: specOp.maximumCandidateCount + 1, offset: 0 }
   }
   let outputs = await storage.findOutputs(args, tagIds, queryModeAll)
-  if (specOp?.managedChangeOnly) {
-    outputs = outputs.filter(
-      output => isManagedChangeOutput(output) && output.spentBy == null
+  if (specOp?.maximumCandidateCount != null && outputs.length > specOp.maximumCandidateCount) {
+    throw new WERR_INVALID_OPERATION(
+      `${specOp.name} is limited to ${specOp.maximumCandidateCount} candidates; use a bounded paged review.`
     )
+  }
+  if (specOp?.managedChangeOnly) {
+    outputs = outputs.filter(output => isManagedChangeOutput(output) && output.spentBy == null)
   }
   if (pageManagedChange) {
     const totalManagedOutputs = outputs.length
@@ -163,7 +139,7 @@ async function loadIdbOutputs(
 async function hydrateIdbWalletOutput(
   storage: StorageIdb,
   output: TableOutput,
-  vargs: Validation.ValidListOutputsArgs,
+  vargs: ValidListOutputsArgs,
   labelsByTxid: Record<string, string[]>,
   beef: Beef
 ): Promise<WalletOutput> {
@@ -176,15 +152,13 @@ async function hydrateIdbWalletOutput(
     walletOutput.customInstructions = output.customInstructions
   }
   if (vargs.includeLabels && output.txid) {
-    labelsByTxid[output.txid] ??= (
-      await storage.getLabelsForTransactionId(output.transactionId)
-    ).map(label => label.label)
+    labelsByTxid[output.txid] ??= (await storage.getLabelsForTransactionId(output.transactionId)).map(
+      label => label.label
+    )
     walletOutput.labels = labelsByTxid[output.txid]
   }
   if (vargs.includeTags) {
-    walletOutput.tags = (
-      await storage.getTagsForOutputId(output.outputId)
-    ).map(tag => tag.tag)
+    walletOutput.tags = (await storage.getTagsForOutputId(output.outputId)).map(tag => tag.tag)
   }
   if (vargs.includeLockingScripts) {
     await storage.validateOutputScript(output)
@@ -192,17 +166,8 @@ async function hydrateIdbWalletOutput(
       walletOutput.lockingScript = asString(output.lockingScript)
     }
   }
-  if (
-    vargs.includeTransactions &&
-    output.txid != null &&
-    beef.findTxid(output.txid) == null
-  ) {
-    await storage.getValidBeefForKnownTxid(
-      output.txid,
-      beef,
-      undefined,
-      vargs.knownTxids
-    )
+  if (vargs.includeTransactions && output.txid != null && beef.findTxid(output.txid) == null) {
+    await storage.getValidBeefForKnownTxid(output.txid, beef, undefined, vargs.knownTxids)
   }
   return walletOutput
 }
@@ -210,15 +175,13 @@ async function hydrateIdbWalletOutput(
 async function hydrateIdbOutputResult(
   storage: StorageIdb,
   outputs: TableOutput[],
-  vargs: Validation.ValidListOutputsArgs,
+  vargs: ValidListOutputsArgs,
   result: ListOutputsResult
 ): Promise<void> {
   const labelsByTxid: Record<string, string[]> = {}
   const beef = new Beef()
   for (const output of outputs) {
-    result.outputs.push(
-      await hydrateIdbWalletOutput(storage, output, vargs, labelsByTxid, beef)
-    )
+    result.outputs.push(await hydrateIdbWalletOutput(storage, output, vargs, labelsByTxid, beef))
   }
   if (vargs.includeTransactions) result.BEEF = beef.toBinary()
 }
@@ -226,24 +189,17 @@ async function hydrateIdbOutputResult(
 export async function listOutputsIdb(
   storage: StorageIdb,
   auth: AuthId,
-  vargs: Validation.ValidListOutputsArgs,
+  vargs: ValidListOutputsArgs,
   _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListOutputsResult> {
   const userId = verifyId(auth.userId)
   const limit = vargs.limit
   const { offset, orderDescending } = normalizeListOffset(vargs.offset)
   const result: ListOutputsResult = { totalOutputs: 0, outputs: [] }
-  const { specOp, basket, tags: sourceTags } = getListOutputsSpecOp(
-    vargs.basket,
-    vargs.tags
-  )
+  const { specOp, basket, tags: sourceTags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
   const resolvedBasketId = await resolveIdbBasketId(storage, userId, basket)
   if (resolvedBasketId === null) return result
-  const { tags, specOpTags, basketId } = resolveListTags(
-    specOp,
-    sourceTags,
-    resolvedBasketId
-  )
+  const { tags, specOpTags, basketId } = resolveListTags(specOp, sourceTags, resolvedBasketId)
   if (specOp?.resultFromTags != null) {
     return specOp.resultFromTags(storage, auth, vargs, specOpTags)
   }
@@ -264,13 +220,7 @@ export async function listOutputsIdb(
   result.totalOutputs = totalOutputs
   if (specOp != null) {
     if (specOp.filterOutputs != null) {
-      outputs = await specOp.filterOutputs(
-        storage,
-        auth,
-        vargs,
-        specOpTags,
-        outputs
-      )
+      outputs = await specOp.filterOutputs(storage, auth, vargs, specOpTags, outputs)
       result.totalOutputs = outputs.length
     }
     if (specOp.resultFromOutputs != null) {

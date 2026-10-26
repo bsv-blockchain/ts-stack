@@ -15,6 +15,7 @@ describe('WalletStorageManager tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('walletStorageManagerTestSource', 'legacy'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('walletStorageManagerTestSource', 'legacy'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('walletStorageManagerTestSource', 'legacy'))
   })
 
@@ -251,6 +252,15 @@ describe('WalletStorageManager tests', () => {
         isValidRootForHeight: async (_root: string, _height: number) => true
       }))
       fred.services.getChainTracker = getChainTracker
+      // Receiving an unproven no-send payment now broadcasts it. Keep this
+      // writer-batch fixture independent of public transaction processors too.
+      const postBeef = jest.spyOn(fred.services, 'postBeef').mockImplementation(async (_beef, txids) => [
+        {
+          name: 'writer-batch-fixture',
+          status: 'success' as const,
+          txidResults: txids.map(txid => ({ txid, status: 'success' as const }))
+        }
+      ])
       const promises: Array<Promise<number>> = []
       const result: Array<{ i: number; r: any }> = []
       const crs1: bsv.CreateActionResult[] = []
@@ -309,6 +319,8 @@ describe('WalletStorageManager tests', () => {
       for (let i = 0; i < maxI; i++) promises.push(makeWriter2(fred, crs1[j++], i, result))
       await Promise.all(promises)
       expect(result).toHaveLength(maxI)
+      expect(new Set(postBeef.mock.calls.flatMap(call => call[1]))).toEqual(new Set(crs1.map(cr => cr.txid)))
+      postBeef.mockRestore()
       expect(getChainTracker).toHaveBeenCalled()
       await fred.wallet.destroy()
     }
@@ -408,11 +420,13 @@ describe('WalletStorageManager tests', () => {
     try {
       const result = await ctx.wallet.createAction({
         description: 'prepare managed change with the real COOK worker',
-        outputs: [{
-          satoshis: 1,
-          lockingScript: '51',
-          outputDescription: 'prepared BEEF processAction test'
-        }],
+        outputs: [
+          {
+            satoshis: 1,
+            lockingScript: '51',
+            outputDescription: 'prepared BEEF processAction test'
+          }
+        ],
         options: {
           noSend: true,
           randomizeOutputs: false,
@@ -448,11 +462,13 @@ describe('WalletStorageManager tests', () => {
     try {
       const result = await ctx.wallet.createAction({
         description: 'process action without a prepared BEEF queue',
-        outputs: [{
-          satoshis: 1,
-          lockingScript: '51',
-          outputDescription: 'legacy prepared BEEF provider test'
-        }],
+        outputs: [
+          {
+            satoshis: 1,
+            lockingScript: '51',
+            outputDescription: 'legacy prepared BEEF provider test'
+          }
+        ],
         options: {
           noSend: true,
           randomizeOutputs: false,
@@ -511,8 +527,7 @@ describe('WalletStorageManager tests', () => {
     const ctx = await _tu.createLegacyWalletSQLiteCopy('preparedBeefFailedReorgEpoch', 'legacy')
     try {
       ctx.activeStorage.preparedBeefPolicy.readEnabled = true
-      jest.spyOn(ctx.activeStorage, 'invalidatePreparedBeefs')
-        .mockRejectedValueOnce(new Error('database unavailable'))
+      jest.spyOn(ctx.activeStorage, 'invalidatePreparedBeefs').mockRejectedValueOnce(new Error('database unavailable'))
 
       const invalidation = ctx.storage.invalidatePreparedBeefsForReorg()
 
@@ -590,14 +605,19 @@ describe('WalletStorageManager tests', () => {
       const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
       const replacementHash = ptx.blockHash === 'f'.repeat(64) ? 'e'.repeat(64) : 'f'.repeat(64)
       const replacementHeight = ptx.height + 1
-      const merklePath = new bsv.MerklePath(replacementHeight, [[{
-        offset: 0,
-        hash: ptx.txid,
-        txid: true
-      }]])
+      const merklePath = new bsv.MerklePath(replacementHeight, [
+        [
+          {
+            offset: 0,
+            hash: ptx.txid,
+            txid: true
+          }
+        ]
+      ])
       const services = ctx.storage.getServices()
+      const isValidRootForHeight = jest.fn(async () => 'true' as unknown as boolean)
       jest.spyOn(services, 'getChainTracker').mockResolvedValue({
-        isValidRootForHeight: async () => true
+        isValidRootForHeight
       } as bsv.ChainTracker)
       jest.spyOn(services, 'getMerklePath').mockResolvedValue({
         name: 'prepared BEEF reproof test',
@@ -614,6 +634,10 @@ describe('WalletStorageManager tests', () => {
         }
       })
 
+      const rejected = await ctx.storage.reproveProven(ptx)
+      expect(rejected).toMatchObject({ unavailable: true, updated: undefined })
+
+      isValidRootForHeight.mockResolvedValue(true)
       const result = await ctx.storage.reproveProven(ptx)
 
       expect(result.updated?.update).toMatchObject({
@@ -622,11 +646,11 @@ describe('WalletStorageManager tests', () => {
       })
       expect(result.log).toContain('proof data updated')
       await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
-      await expect(ctx.activeStorage.findProvenTxs({
-        partial: { provenTxId: ptx.provenTxId }
-      })).resolves.toEqual([
-        expect.objectContaining({ height: replacementHeight, blockHash: replacementHash })
-      ])
+      await expect(
+        ctx.activeStorage.findProvenTxs({
+          partial: { provenTxId: ptx.provenTxId }
+        })
+      ).resolves.toEqual([expect.objectContaining({ height: replacementHeight, blockHash: replacementHash })])
     } finally {
       await ctx.wallet.destroy()
     }

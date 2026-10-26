@@ -1,4 +1,5 @@
 import { ExpressTransport } from '../index'
+import { Utils } from '@bsv/sdk'
 
 describe('ExpressTransport configuration', () => {
   it('exposes allowUnauthenticated and preserves the legacy alias', () => {
@@ -99,13 +100,15 @@ describe('ExpressTransport configuration', () => {
       }
     } as any
     const req = {
+      method: 'POST',
       body: {
         messageType: 'initialRequest',
-        version: '1',
+        version: '0.1',
         identityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
-        initialNonce: 'initial-nonce'
+        initialNonce: Utils.toBase64(Array(48).fill(1))
       },
       headers: {
+        'content-type': 'application/json',
         'x-bsv-auth-request-id': '__proto__'
       }
     }
@@ -146,14 +149,14 @@ describe('ExpressTransport configuration', () => {
     expect(transport.openNonGeneralHandles.has('peer-nonce')).toBe(false)
   })
 
-  it('cleans up the waiting handler and timer after certificates arrive', () => {
+  it('cleans up the waiting handler and timer after certificates arrive', async () => {
     const transport = new ExpressTransport()
     const next = jest.fn()
     const timeout = setTimeout(() => {}, 60_000)
     transport.openNextHandlers.set('identity-key', next)
     transport.openNextHandlerTimeouts.set('identity-key', timeout)
 
-    ;(transport as any).handleCertificatesForPeer(
+    await (transport as any).handleCertificatesForPeer(
       'identity-key',
       [{}],
       { headers: {} },
@@ -165,6 +168,97 @@ describe('ExpressTransport configuration', () => {
     expect(next).toHaveBeenCalledTimes(1)
     expect(transport.openNextHandlers.has('identity-key')).toBe(false)
     expect(transport.openNextHandlerTimeouts.has('identity-key')).toBe(false)
+  })
+
+  it('does not authorize a protected request when the certificate policy callback declines it', async () => {
+    const transport = new ExpressTransport()
+    const protectedNext = jest.fn()
+    const policy = jest.fn(async () => {})
+    transport.openNextHandlers.set('identity-key', protectedNext)
+
+    await (transport as any).handleCertificatesForPeer(
+      'identity-key',
+      [{}],
+      { headers: {} },
+      {},
+      jest.fn(),
+      { identityKey: 'identity-key' },
+      policy
+    )
+
+    expect(policy).toHaveBeenCalledTimes(1)
+    expect(protectedNext).not.toHaveBeenCalled()
+  })
+
+  it('releases every concurrent request for an identity after explicit certificate approval', async () => {
+    const transport = new ExpressTransport()
+    ;(transport as any).requireApplicationCertificateApproval = true
+    transport.peer = {
+      sessionManager: { hasSession: jest.fn().mockResolvedValue(false) },
+      certificatesToRequest: { certifiers: ['certifier'] }
+    } as any
+    const firstNext = jest.fn()
+    const secondNext = jest.fn()
+    const wrapper = { status: jest.fn().mockReturnThis(), json: jest.fn() }
+    const send = jest.fn().mockResolvedValue(undefined)
+
+    await (transport as any).scheduleNextOrCertificateWait(
+      firstNext,
+      'identity-key',
+      wrapper,
+      send,
+      'request-one'
+    )
+    await (transport as any).scheduleNextOrCertificateWait(
+      secondNext,
+      'identity-key',
+      wrapper,
+      send,
+      'request-two'
+    )
+    await (transport as any).handleCertificatesForPeer(
+      'identity-key',
+      [{}],
+      { headers: {} },
+      {},
+      jest.fn(),
+      { identityKey: 'identity-key' },
+      async (_sender: string, _certs: unknown[], _req: unknown, _res: unknown, approve: Function) =>
+        approve()
+    )
+
+    expect(firstNext).toHaveBeenCalledTimes(1)
+    expect(secondNext).toHaveBeenCalledTimes(1)
+    expect(transport.openNextHandlers.size).toBe(0)
+    expect(transport.openNextHandlerTimeouts.size).toBe(0)
+  })
+
+  it('does not treat a truthy non-boolean approval-store verdict as authorization', async () => {
+    const transport = new ExpressTransport(false, undefined, undefined, {}, {
+      approve: jest.fn(),
+      isApproved: jest.fn().mockResolvedValue('true')
+    } as any)
+    ;(transport as any).requireApplicationCertificateApproval = true
+    transport.peer = {
+      certificatesToRequest: { certifiers: ['certifier'] }
+    } as any
+    const next = jest.fn()
+    const wrapper = { status: jest.fn().mockReturnThis(), json: jest.fn() }
+
+    await (transport as any).scheduleNextOrCertificateWait(
+      next,
+      'identity-key',
+      wrapper,
+      jest.fn().mockResolvedValue(undefined),
+      'malformed-session-verdict'
+    )
+
+    expect(next).not.toHaveBeenCalled()
+    expect(transport.openNextHandlers.has('malformed-session-verdict')).toBe(true)
+    const timeout = transport.openNextHandlerTimeouts.get('malformed-session-verdict')
+    if (timeout != null) clearTimeout(timeout)
+    transport.openNextHandlerTimeouts.delete('malformed-session-verdict')
+    transport.openNextHandlers.delete('malformed-session-verdict')
   })
 
   it('responds through the stored handle when a peer returns no certificates', () => {
@@ -225,6 +319,7 @@ describe('ExpressTransport configuration', () => {
     jest.useFakeTimers()
     try {
       const transport = new ExpressTransport()
+      ;(transport as any).requireApplicationCertificateApproval = true
       transport.peer = {
         sessionManager: {
           hasSession: jest.fn().mockResolvedValue(false)
@@ -275,5 +370,55 @@ describe('ExpressTransport configuration', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  it('retains approval that arrives before the exact protected session request', async () => {
+    const transport = new ExpressTransport()
+    ;(transport as any).requireApplicationCertificateApproval = true
+    transport.peer = {
+      certificatesToRequest: { certifiers: ['certifier'] }
+    } as any
+    const approve = async (
+      _sender: string,
+      _certs: unknown[],
+      _req: unknown,
+      _res: unknown,
+      next: Function
+    ): Promise<void> => next()
+
+    await (transport as any).handleCertificatesForPeer(
+      'identity-key',
+      [{}],
+      { headers: {} },
+      {},
+      jest.fn(),
+      { identityKey: 'identity-key' },
+      approve,
+      'exact-session'
+    )
+
+    const approvedNext = jest.fn()
+    await (transport as any).scheduleNextOrCertificateWait(
+      approvedNext,
+      'identity-key',
+      { status: jest.fn().mockReturnThis(), json: jest.fn() },
+      jest.fn(),
+      'approved-request',
+      'exact-session'
+    )
+    expect(approvedNext).toHaveBeenCalledTimes(1)
+
+    const otherNext = jest.fn()
+    await (transport as any).scheduleNextOrCertificateWait(
+      otherNext,
+      'identity-key',
+      { status: jest.fn().mockReturnThis(), json: jest.fn() },
+      jest.fn(),
+      'other-request',
+      'different-session'
+    )
+    expect(otherNext).not.toHaveBeenCalled()
+    const timeout = transport.openNextHandlerTimeouts.get('other-request')
+    if (timeout != null) clearTimeout(timeout)
   })
 })

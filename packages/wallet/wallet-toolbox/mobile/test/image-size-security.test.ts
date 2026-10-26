@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -6,29 +7,35 @@ import { describe, expect, it } from 'vitest'
 const requireFromMobile = createRequire(path.join(process.cwd(), 'mobile/package.json'))
 const metroManifest = requireFromMobile.resolve('metro/package.json')
 const requireFromMetro = createRequire(metroManifest)
-const imageSizeEntry = requireFromMetro.resolve('image-size')
-const imageSizeManifest = requireFromMetro.resolve('image-size/package.json')
-const imageSizeUtils = path.join(path.dirname(imageSizeManifest), 'dist/types/utils.js')
+const metroImageSize = path.join(path.dirname(metroManifest), 'src/lib/imageSize.js')
 
-describe('patched image-size parser', () => {
-  it('rejects zero-sized boxes and non-progressing ICNS entries', () => {
+describe('Metro image-size security boundary', () => {
+  it('no longer reaches the vulnerable image-size parser', () => {
+    const manifest = JSON.parse(readFileSync(metroManifest, 'utf8')) as {
+      dependencies?: Record<string, string>
+    }
+    expect(manifest.dependencies?.['image-size']).toBeUndefined()
+    expect(() => requireFromMetro.resolve('image-size')).toThrow()
+  })
+
+  it('terminates on zero-sized boxes and non-progressing ICNS entries', () => {
     const source = `
-      const { imageSize } = require(${JSON.stringify(imageSizeEntry)})
-      const { findBox } = require(${JSON.stringify(imageSizeUtils)})
+      const { getImageDimensions } = require(${JSON.stringify(metroImageSize)})
       const zeroBox = Buffer.alloc(8)
       zeroBox.write('meta', 4)
-      if (findBox(zeroBox, 'meta', 0) !== undefined) process.exit(4)
-      const input = Buffer.alloc(16)
-      input.write('icns', 0)
-      input.writeUInt32BE(16, 4)
-      input.write('ic07', 8)
-      input.writeUInt32BE(0, 12)
-      try {
-        imageSize(input)
-        process.exit(2)
-      } catch (error) {
-        if (!String(error).includes('Invalid ICNS image entry length')) process.exit(3)
+      const icns = Buffer.alloc(16)
+      icns.write('icns', 0)
+      icns.writeUInt32BE(16, 4)
+      icns.write('ic07', 8)
+      icns.writeUInt32BE(0, 12)
+      for (const [type, input] of [['heic', zeroBox], ['icns', icns], ['png', icns]]) {
+        try {
+          getImageDimensions(type, input, 'malformed.' + type)
+        } catch {
+          // Rejection is acceptable; termination is the contract.
+        }
       }
+      process.exit(0)
     `
     const result = spawnSync(process.execPath, ['-e', source], {
       encoding: 'utf8',

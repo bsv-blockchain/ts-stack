@@ -1,8 +1,5 @@
-import { Validation } from '@bsv/sdk'
-import type {
-  BeginActionBatchArgs,
-  StorageCapabilities
-} from '../../sdk/ActionBatch.interfaces'
+import { type ValidCreateActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import type { BeginActionBatchArgs, StorageCapabilities } from '../../sdk/ActionBatch.interfaces'
 
 type ActionBatchBootstrap = Omit<BeginActionBatchArgs, 'batchId'>
 
@@ -11,27 +8,22 @@ type ActionBatchBootstrap = Omit<BeginActionBatchArgs, 'batchId'>
  * path later. Older version-1 providers receive the original request unless
  * they explicitly advertise compact bootstrap support.
  */
-export function actionBatchBootstrap (
-  args: Validation.ValidCreateActionArgs,
+export function actionBatchBootstrap(
+  args: ValidCreateActionArgs,
   capabilities: NonNullable<StorageCapabilities['actionBatch']>
 ): ActionBatchBootstrap {
   const firstAction = { ...args, logger: undefined }
   if (capabilities.compactBegin !== true) return { firstAction }
 
-  const scriptBytes = args.outputs.reduce(
-    (sum, output) => sum + output.lockingScript.length / 2,
-    0
-  ) + args.inputs.reduce(
-    (sum, input) => sum + (input.unlockingScript?.length ?? 0) / 2,
-    0
-  )
+  const scriptBytes =
+    args.outputs.reduce((sum, output) => sum + output.lockingScript.length / 2, 0) +
+    args.inputs.reduce((sum, input) => sum + (input.unlockingScript?.length ?? 0) / 2, 0)
   const totalBytes = scriptBytes + (args.inputBEEF?.length ?? 0)
   // Format 2 never needs these bytes remotely: the server reserves from exact
   // lengths and derives scripts from the signed transaction at commit. Omit
   // them even when small so a near-limit hexadecimal script cannot become a
   // request roughly twice the advertised binary target.
-  if (capabilities.manifestVersion !== 2 &&
-    totalBytes <= capabilities.maxInlineBytes) return { firstAction }
+  if (capabilities.manifestVersion !== 2 && totalBytes <= capabilities.maxInlineBytes) return { firstAction }
 
   return {
     firstAction: {
@@ -46,8 +38,6 @@ export function actionBatchBootstrap (
         lockingScript: ''
       }))
     },
-    firstActionOutputScriptLengths: firstAction.outputs.map(
-      output => output.lockingScript.length / 2
-    )
+    firstActionOutputScriptLengths: firstAction.outputs.map(output => output.lockingScript.length / 2)
   }
 }

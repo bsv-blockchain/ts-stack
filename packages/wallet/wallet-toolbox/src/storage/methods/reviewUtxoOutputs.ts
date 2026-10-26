@@ -12,6 +12,8 @@ import { TableOutput } from '../schema/tables/TableOutput'
 
 const MAX_AUDIT_PROVIDERS = 8
 const MAX_PROVIDER_NAME_LENGTH = 128
+const MAX_MONEY_SATOSHIS = 21e14
+export const MAX_UTXO_REVIEW_CANDIDATES = 10_000
 export const UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS = 5_000
 
 export type UtxoReviewReleaseMode = 'none' | 'atomic' | 'conclusive'
@@ -41,6 +43,47 @@ export interface ReviewUtxoOutputsResult {
   diagnostics: UtxoReviewDiagnostics
 }
 
+function requireSatoshis(value: unknown, name: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0 || (value as number) > MAX_MONEY_SATOSHIS) {
+    throw new WERR_INVALID_PARAMETER(name, `an integer from 0 through ${MAX_MONEY_SATOSHIS}`)
+  }
+  return value as number
+}
+
+function sumSatoshis(outputs: TableOutput[], name: string): number {
+  let total = 0
+  for (const [index, output] of outputs.entries()) {
+    const value = requireSatoshis(output.satoshis, `${name}[${index}].satoshis`)
+    total += value
+    if (!Number.isSafeInteger(total) || total > MAX_MONEY_SATOSHIS) {
+      throw new WERR_INVALID_PARAMETER(name, `a total no greater than ${MAX_MONEY_SATOSHIS} satoshis`)
+    }
+  }
+  return total
+}
+
+function validateCandidates(auth: AuthId, outputs: TableOutput[]): void {
+  if (!Array.isArray(outputs) || outputs.length > MAX_UTXO_REVIEW_CANDIDATES) {
+    throw new WERR_INVALID_PARAMETER(
+      'outputs',
+      `a bounded array of at most ${MAX_UTXO_REVIEW_CANDIDATES} UTXO candidates`
+    )
+  }
+  const ids = new Set<number>()
+  for (const [index, output] of outputs.entries()) {
+    if (output == null || typeof output !== 'object') {
+      throw new WERR_INVALID_PARAMETER(`outputs[${index}]`, 'an owned wallet output')
+    }
+    const outputId = verifyId(output.outputId)
+    if (ids.has(outputId)) throw new WERR_INVALID_PARAMETER('outputs', 'unique output identifiers')
+    ids.add(outputId)
+    if (output.userId !== auth.userId) {
+      throw new WERR_INVALID_PARAMETER(`outputs[${index}].userId`, `owned by user ${auth.userId}`)
+    }
+    requireSatoshis(output.satoshis, `outputs[${index}].satoshis`)
+  }
+}
+
 function diagnosticsFor(
   classifications: UtxoReviewClassification[],
   releasedOutputIds: Set<number>
@@ -56,9 +99,15 @@ function diagnosticsFor(
     confirmedUnspent: classifications.filter(result => result.status.verdict === 'unspent').length,
     confirmedSpent: confirmedSpent.length,
     unknown: classifications.filter(result => result.status.verdict === 'unknown').length,
-    confirmedSpentSatoshis: confirmedSpent.reduce((sum, result) => sum + result.output.satoshis, 0),
+    confirmedSpentSatoshis: sumSatoshis(
+      confirmedSpent.map(result => result.output),
+      'confirmedSpentOutputs'
+    ),
     released: released.length,
-    releasedSatoshis: released.reduce((sum, result) => sum + result.output.satoshis, 0),
+    releasedSatoshis: sumSatoshis(
+      released.map(result => result.output),
+      'releasedOutputs'
+    ),
     providers,
     providerCount: allProviders.length,
     providersTruncated: allProviders.length > providers.length
@@ -138,7 +187,18 @@ async function releaseConfirmedSpent(
       if (current == null || current.userId !== auth.userId) {
         throw new WERR_INVALID_PARAMETER('outputId', `owned by user ${auth.userId}`)
       }
-      if (current.spendable !== true || current.spentBy != null) {
+      const sameOutpoint =
+        typeof current.txid === 'string' &&
+        typeof output.txid === 'string' &&
+        current.txid.toLowerCase() === output.txid.toLowerCase() &&
+        current.vout === output.vout
+      if (
+        current.spendable !== true ||
+        current.spentBy != null ||
+        !sameOutpoint ||
+        current.satoshis !== output.satoshis ||
+        current.basketId !== output.basketId
+      ) {
         throw new WERR_INVALID_OPERATION(
           `Output ${output.outputId} changed state during UTXO review; no outputs were changed.`
         )
@@ -178,6 +238,7 @@ export async function reviewUtxoOutputs(
   outputs: TableOutput[],
   releaseMode: UtxoReviewReleaseMode = 'none'
 ): Promise<ReviewUtxoOutputsResult> {
+  validateCandidates(auth, outputs)
   const classifications = await classifyCandidates(storage, outputs)
   const confirmedSpentOutputs = classifications
     .filter(result => result.status.verdict === 'spent')

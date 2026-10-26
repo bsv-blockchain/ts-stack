@@ -9,6 +9,56 @@ import {
 } from '../types'
 import { Services, WalletSettingsManager } from '@bsv/wallet-toolbox-client'
 const DEFAULT_REFRESH_INTERVAL = 5 * 60 * 1000
+const MAX_TIMER_INTERVAL = 2_147_483_647
+const MAX_SATOSHIS = 21_000_000 * 100_000_000
+const AMOUNT_PATTERN = /^([+-]?(?:(?:\d{1,3}(?:[,_]\d{3})+|\d+)(?:\.\d+)?|\.\d+))\s*([A-Za-z]+)?$/
+
+function requireFiniteNumber(value: unknown, name: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`)
+  }
+  return value
+}
+
+function requirePositiveRate(value: unknown, name: string): number {
+  const rate = requireFiniteNumber(value, name)
+  if (rate <= 0) throw new Error(`Exchange rate not available: ${name}`)
+  return rate
+}
+
+function normalizeCurrencyArgument(value: unknown, name: string): SupportedCurrencyCode {
+  if (typeof value !== 'string') throw new TypeError(`${name} must be a supported currency code`)
+  const code = value.trim().toUpperCase()
+  if (code === 'BSV' || code === 'SATS') return code
+  if ((SUPPORTED_FIAT_CURRENCY_CODES as readonly string[]).includes(code)) {
+    return code as FiatCurrencyCode
+  }
+  throw new Error('Currency not supported!')
+}
+
+function parseAmountInput(amount: number | string): {
+  amount: number
+  currency: SupportedCurrencyCode
+} {
+  if (typeof amount === 'number') {
+    const parsed = requireFiniteNumber(amount, 'amount')
+    return { amount: parsed, currency: Number.isInteger(parsed) ? 'SATS' : 'BSV' }
+  }
+  if (typeof amount !== 'string')
+    throw new TypeError('amount must be a finite number or amount string')
+
+  const match = amount.trim().match(AMOUNT_PATTERN)
+  if (match == null)
+    throw new Error('Amount must use a valid number followed by an optional currency code')
+  const parsed = requireFiniteNumber(Number(match[1].replace(/[,_]/g, '')), 'amount')
+  const currency =
+    match[2] == null
+      ? match[1].includes('.')
+        ? 'BSV'
+        : 'SATS'
+      : normalizeCurrencyArgument(match[2], 'currency')
+  return { amount: parsed, currency }
+}
 
 /**
  * Converts currency amounts to user's preferred currency, and supports converting all supported currency types to satoshis.
@@ -34,7 +84,16 @@ export class CurrencyConverter {
     refreshInterval: number = DEFAULT_REFRESH_INTERVAL,
     settingsManager: WalletSettingsManager | undefined = undefined
   ) {
-    this.refreshInterval = Math.max(0, refreshInterval)
+    if (
+      !Number.isSafeInteger(refreshInterval) ||
+      refreshInterval < 0 ||
+      refreshInterval > MAX_TIMER_INTERVAL
+    ) {
+      throw new RangeError(
+        `refreshInterval must be a safe integer from 0 through ${MAX_TIMER_INTERVAL}`
+      )
+    }
+    this.refreshInterval = refreshInterval
     this.services = new Services('main')
     this.exchangeRates = {
       usdPerBsv: 0,
@@ -57,13 +116,21 @@ export class CurrencyConverter {
     await Promise.all([this.fetchExchangeRates(), this.refreshPreferredCurrency()])
 
     // only start timer when refreshInterval > 0
+    this.stopRefreshTimer()
     if (this.refreshInterval > 0) {
-      this.refreshTimer = setInterval(() => this.fetchExchangeRates(true), this.refreshInterval)
+      this.refreshTimer = setInterval(() => {
+        void this.fetchExchangeRates(true).catch(() => undefined)
+      }, this.refreshInterval)
     }
   }
 
-  dispose() {
-    if (this.refreshTimer) clearInterval(this.refreshTimer)
+  private stopRefreshTimer(): void {
+    if (this.refreshTimer !== undefined) clearInterval(this.refreshTimer)
+    this.refreshTimer = undefined
+  }
+
+  dispose(): void {
+    this.stopRefreshTimer()
   }
 
   /**
@@ -97,63 +164,73 @@ export class CurrencyConverter {
    * @returns {Promise<ExchangeRates>}
    */
   async fetchExchangeRates(force = false): Promise<ExchangeRates> {
+    const now = Date.now()
+    if (!force && this.lastRateFetch > 0 && now - this.lastRateFetch < this.refreshInterval) {
+      return this.exchangeRates
+    }
+    if (this.ratePromise !== null) return this.ratePromise
+
+    const pending = (async (): Promise<ExchangeRates> => {
+      const usdPerBsv = requirePositiveRate(await this.services.getBsvExchangeRate(), 'usdPerBsv')
+
+      const fiatTargets = SUPPORTED_FIAT_CURRENCY_CODES.filter(
+        (c): c is FiatCurrencyCode => c !== 'USD'
+      )
+      const fiatRates = await this.services.getFiatExchangeRates(fiatTargets)
+
+      const fiatPerUsd = Object.fromEntries(
+        SUPPORTED_FIAT_CURRENCY_CODES.map(code => [
+          code,
+          code === 'USD' ? 1 : requirePositiveRate(fiatRates.rates?.[code], `${code} per USD`)
+        ])
+      ) as Record<FiatCurrencyCode, number>
+
+      const rates = { usdPerBsv, fiatPerUsd }
+      this.exchangeRates = rates
+      this.lastRateFetch = Date.now()
+      return rates
+    })()
+    this.ratePromise = pending
+
     try {
-      const now = Date.now()
-      if (!force && now - this.lastRateFetch < this.refreshInterval) {
-        return this.exchangeRates
-      }
-      if (this.ratePromise) return this.ratePromise
-
-      this.ratePromise = (async () => {
-        const usdPerBsv = await this.services.getBsvExchangeRate()
-
-        const fiatTargets = SUPPORTED_FIAT_CURRENCY_CODES.filter(
-          (c): c is FiatCurrencyCode => c !== 'USD'
-        )
-        const fiatRates = await this.services.getFiatExchangeRates(fiatTargets)
-
-        const fiatPerUsd: Record<FiatCurrencyCode, number> = Object.fromEntries(
-          SUPPORTED_FIAT_CURRENCY_CODES.map(c => {
-            if (c === 'USD') return ['USD', 1]
-            const v = fiatRates.rates?.[c]
-            return [c, typeof v === 'number' ? v : 0]
-          })
-        ) as Record<FiatCurrencyCode, number>
-
-        this.exchangeRates = { usdPerBsv, fiatPerUsd }
-        this.lastRateFetch = Date.now()
-        this.ratePromise = null
-        return this.exchangeRates
-      })()
-      return this.ratePromise
-    } catch (err) {
-      console.error(err)
+      return await pending
+    } catch {
       throw new Error('Failed to fetch exchange rates.')
+    } finally {
+      if (this.ratePromise === pending) this.ratePromise = null
     }
   }
 
-  private async refreshPreferredCurrency(): Promise<SupportedCurrencyCode> {
+  private refreshPreferredCurrency(): Promise<SupportedCurrencyCode> {
     const now = Date.now()
-    if (now - this.lastCurrencyFetch < this.refreshInterval) {
-      return this.preferredCurrency
+    if (this.lastCurrencyFetch > 0 && now - this.lastCurrencyFetch < this.refreshInterval) {
+      return Promise.resolve(this.preferredCurrency)
     }
-    if (this.currencyPromise) return this.currencyPromise
+    if (this.currencyPromise !== null) return this.currencyPromise
 
-    this.currencyPromise = (async () => {
-      const settingsManager = this.settingsManager
-
-      const newCurrencyRaw = (await settingsManager.get()).currency ?? 'SATS'
+    const pending = Promise.resolve(this.settingsManager.get()).then(settings => {
+      const newCurrencyRaw = settings.currency ?? 'SATS'
       const newCurrency = this.normalizeSupportedCurrencyCode(newCurrencyRaw)
       if (newCurrency !== this.preferredCurrency) this.preferredCurrency = newCurrency
       this.lastCurrencyFetch = Date.now()
-      this.currencyPromise = null
       return this.preferredCurrency
-    })()
-
-    return this.currencyPromise
+    })
+    const tracked = pending.then(
+      currency => {
+        if (this.currencyPromise === tracked) this.currencyPromise = null
+        return currency
+      },
+      error => {
+        if (this.currencyPromise === tracked) this.currencyPromise = null
+        throw error
+      }
+    )
+    this.currencyPromise = tracked
+    return tracked
   }
 
-  private normalizeSupportedCurrencyCode(currency: string): SupportedCurrencyCode {
+  private normalizeSupportedCurrencyCode(currency: unknown): SupportedCurrencyCode {
+    if (typeof currency !== 'string') return 'SATS'
     const upper = currency.toUpperCase()
     if (upper === 'BSV' || upper === 'SATS') return upper
     if ((SUPPORTED_FIAT_CURRENCY_CODES as readonly string[]).includes(upper)) {
@@ -170,13 +247,10 @@ export class CurrencyConverter {
    */
   async convertAmount(amount: number | string, formatOptions?: FormatOptions) {
     await this.refreshPreferredCurrency()
-    const amountAsString = amount.toString()
-    let parsedAmount = Number.parseFloat(amountAsString.replace(/[^0-9.-]+/g, ''))
-    let inputCurrency = amountAsString.replace(/[\d.,\s]+/g, '').trim()
-    inputCurrency ||= amountAsString.includes('.') ? 'BSV' : 'SATS'
+    const parsed = parseAmountInput(amount)
 
     // Use convertCurrency to directly convert from the input currency to the preferred currency
-    let finalAmount = this.convertCurrency(parsedAmount, inputCurrency, this.preferredCurrency)
+    const finalAmount = this.convertCurrency(parsed.amount, parsed.currency, this.preferredCurrency)
     if (finalAmount === null) {
       throw new Error('Unsupported currency or conversion error')
     }
@@ -191,11 +265,14 @@ export class CurrencyConverter {
   async convertToSatoshis(amount: number): Promise<number | null> {
     // Directly convert the amount from the preferred currency to SATS
     const satoshis = this.convertCurrency(amount, this.preferredCurrency, 'SATS')
-    if (satoshis === null) {
-      console.error('Unsupported currency or conversion error:', this.preferredCurrency)
-      return null
+    if (satoshis === null) return null
+    if (satoshis < 0 || satoshis > MAX_SATOSHIS) {
+      throw new RangeError(`Satoshi amount must be between 0 and ${MAX_SATOSHIS}`)
     }
-    return Math.ceil(satoshis)
+    const rounded = Math.ceil(satoshis)
+    if (!Number.isSafeInteger(rounded))
+      throw new RangeError('Satoshi amount must be a safe integer')
+    return rounded
   }
 
   /**
@@ -206,24 +283,21 @@ export class CurrencyConverter {
    * @returns {number | null} - The converted amount or null if the conversion cannot be performed.
    */
   convertCurrency(amount: number, fromCurrency: string, toCurrency: string): number | null {
-    const from = fromCurrency.toUpperCase()
-    const to = toCurrency.toUpperCase()
+    requireFiniteNumber(amount, 'amount')
+    const from = normalizeCurrencyArgument(fromCurrency, 'fromCurrency')
+    const to = normalizeCurrencyArgument(toCurrency, 'toCurrency')
     if (from === to) return amount
 
-    const usdPerBsv = this.exchangeRates.usdPerBsv
-    if (typeof usdPerBsv !== 'number' || usdPerBsv <= 0) {
-      throw new Error('Exchange rate not available: usdPerBsv')
-    }
+    const usdPerBsv = requirePositiveRate(this.exchangeRates.usdPerBsv, 'usdPerBsv')
 
     const getFiatPerUsd = (code: string): number => {
       if (!(SUPPORTED_FIAT_CURRENCY_CODES as readonly string[]).includes(code)) {
         throw new Error('Currency not supported!')
       }
-      const v = this.exchangeRates.fiatPerUsd[code as FiatCurrencyCode]
-      if (typeof v !== 'number' || v <= 0) {
-        throw new Error(`Exchange rate not available: ${code} per USD`)
-      }
-      return v
+      return requirePositiveRate(
+        this.exchangeRates.fiatPerUsd[code as FiatCurrencyCode],
+        `${code} per USD`
+      )
     }
 
     // Convert from the original currency to USD
@@ -246,17 +320,22 @@ export class CurrencyConverter {
     }
 
     // Convert from USD to the target currency
+    let converted: number
     switch (to) {
       case 'SATS':
-        return (amountInUsd / usdPerBsv) * 100_000_000
+        converted = (amountInUsd / usdPerBsv) * 100_000_000
+        break
       case 'BSV':
-        return amountInUsd / usdPerBsv
+        converted = amountInUsd / usdPerBsv
+        break
       case 'USD':
-        return amountInUsd
+        converted = amountInUsd
+        break
       default: {
         const fiatPerUsd = getFiatPerUsd(to)
-        return amountInUsd * fiatPerUsd
+        converted = amountInUsd * fiatPerUsd
       }
     }
+    return requireFiniteNumber(converted, 'converted amount')
   }
 }

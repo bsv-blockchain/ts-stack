@@ -85,7 +85,7 @@ describe('Transaction – additional coverage', () => {
           lockingScript: new LockingScript(),
           satoshis: -1
         })
-      ).toThrow('satoshis must be a positive integer or zero')
+      ).toThrow('non-negative safe integer')
     })
 
     it('throws when lockingScript is null', () => {

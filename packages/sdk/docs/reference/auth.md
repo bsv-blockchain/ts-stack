@@ -11,6 +11,8 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 | [PeerSession](#interface-peersession) |
 | [RequestedCertificateSet](#interface-requestedcertificateset) |
 | [RequestedCertificateTypeIDAndFieldList](#interface-requestedcertificatetypeidandfieldlist) |
+| [SessionManagerOptions](#interface-sessionmanageroptions) |
+| [SimplifiedFetchTransportOptions](#interface-simplifiedfetchtransportoptions) |
 | [Transport](#interface-transport) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -26,10 +28,34 @@ export interface AsyncSessionManager {
     getSession: (identifier: string) => Promise<PeerSession | undefined>;
     removeSession: (session: PeerSession) => Promise<void>;
     hasSession: (identifier: string) => Promise<boolean>;
+    claimMessageNonce?: (sessionNonce: string, messageNonce: string) => Promise<boolean>;
+    claimInitialRequestNonce?: (identityKey: string, initialNonce: string) => Promise<boolean>;
 }
 ```
 
-See also: [PeerSession](./auth.md#interface-peersession)
+See also: [PeerSession](./auth.md#interface-peersession), [string](./remittance.md#function-string)
+
+#### Property claimInitialRequestNonce
+
+Atomically claim an unsigned initial request nonce for one claimed identity.
+
+```ts
+claimInitialRequestNonce?: (identityKey: string, initialNonce: string) => Promise<boolean>
+```
+See also: [string](./remittance.md#function-string)
+
+#### Property claimMessageNonce
+
+Atomically claim a signed BRC-103 message nonce for one session.
+
+Shared stores must implement this operation with a uniqueness constraint
+or equivalent compare-and-set. Return `false` when the nonce was already
+consumed. Peer fails closed when an asynchronous store omits this method.
+
+```ts
+claimMessageNonce?: (sessionNonce: string, messageNonce: string) => Promise<boolean>
+```
+See also: [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -51,7 +77,18 @@ export interface AuthMessage {
 }
 ```
 
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate)
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [string](./remittance.md#function-string)
+
+#### Property requestedCertificates
+
+Requested disclosure allowlist. Initial-exchange copies are not signed and
+can be altered in transit. Authorization must depend on the certificates
+and fields actually received and validated, never on this request alone.
+
+```ts
+requestedCertificates?: RequestedCertificateSet
+```
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -67,13 +104,66 @@ export interface PeerSession {
     lastUpdate: number;
     certificatesRequired?: boolean;
     certificatesValidated?: boolean;
+    certificatePolicy?: RequestedCertificateSet;
+    pendingCertificateRequests?: Record<string, RequestedCertificateSet>;
 }
 ```
+
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [string](./remittance.md#function-string)
+
+#### Property certificatePolicy
+
+Local handshake policy snapshot. Session stores must retain this field; never sent on the wire.
+
+```ts
+certificatePolicy?: RequestedCertificateSet
+```
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
+
+#### Property certificatesValidated
+
+True when supplied certificates fit the legacy v0.1 request allowlist.
+
+```ts
+certificatesValidated?: boolean
+```
+
+#### Property isAuthenticated
+
+True after the peer has proved control of the session identity key. This is
+transport authentication, not application authorization or proof that all
+configured certificate attributes were supplied.
+
+```ts
+isAuthenticated: boolean
+```
+
+#### Property pendingCertificateRequests
+
+Locally issued standalone requests, keyed by their nonce. Not a wire correlation field.
+
+```ts
+pendingCertificateRequests?: Record<string, RequestedCertificateSet>
+```
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 ### Interface: RequestedCertificateSet
+
+BRC-103 v0.1 certificate request/allowlist.
+
+The current wire/API contract does not express all-of, any-of, threshold, or
+optional-field semantics. For compatibility, validation establishes only
+that every supplied certificate and disclosed field belongs to this set; it
+does not establish that every listed type or field was supplied. Each party
+remains free to choose what to request, what to provide, and how much to
+disclose. The library standardizes selective revelation; it never declares
+the actual disclosures sufficient for an application's decision. An
+application must inspect the received certificates and decrypted fields and
+terminate or constrain the session, access, or operation whenever those
+actual disclosures do not satisfy its own policy.
 
 ```ts
 export interface RequestedCertificateSet {
@@ -82,7 +172,7 @@ export interface RequestedCertificateSet {
 }
 ```
 
-See also: [RequestedCertificateTypeIDAndFieldList](./auth.md#interface-requestedcertificatetypeidandfieldlist)
+See also: [RequestedCertificateTypeIDAndFieldList](./auth.md#interface-requestedcertificatetypeidandfieldlist), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -93,6 +183,109 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export interface RequestedCertificateTypeIDAndFieldList {
     [certificateTypeID: string]: string[];
 }
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: SessionManagerOptions
+
+```ts
+export interface SessionManagerOptions {
+    maxSessions?: number;
+    maxSessionIdleMs?: number;
+    maxMessageNoncesPerSession?: number;
+    maxInitialRequestNonces?: number;
+    maxInitialRequestNoncesPerIdentity?: number;
+    now?: () => number;
+}
+```
+
+#### Property maxInitialRequestNonces
+
+Maximum initial-request replay claims retained in process. Defaults to 100,000.
+
+```ts
+maxInitialRequestNonces?: number
+```
+
+#### Property maxInitialRequestNoncesPerIdentity
+
+Maximum initial-request replay claims retained for one claimed identity. Defaults to 256.
+
+```ts
+maxInitialRequestNoncesPerIdentity?: number
+```
+
+#### Property maxMessageNoncesPerSession
+
+Maximum one-time signed message nonces retained per session. Defaults to 100,000.
+
+```ts
+maxMessageNoncesPerSession?: number
+```
+
+#### Property maxSessionIdleMs
+
+Idle lifetime for a session. Defaults to 30 minutes.
+
+```ts
+maxSessionIdleMs?: number
+```
+
+#### Property maxSessions
+
+Maximum sessions retained in process. Defaults to 10,000.
+
+```ts
+maxSessions?: number
+```
+
+#### Property now
+
+Testable clock source. Defaults to `Date.now`.
+
+```ts
+now?: () => number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Interface: SimplifiedFetchTransportOptions
+
+```ts
+export interface SimplifiedFetchTransportOptions {
+    maxResponseBytes?: number;
+    maxHandshakeResponseBytes?: number;
+    requestTimeoutMs?: number;
+}
+```
+
+#### Property maxHandshakeResponseBytes
+
+Maximum buffered `/.well-known/auth` response body size.
+
+```ts
+maxHandshakeResponseBytes?: number
+```
+
+#### Property maxResponseBytes
+
+Maximum buffered authenticated application-response body size.
+
+```ts
+maxResponseBytes?: number
+```
+
+#### Property requestTimeoutMs
+
+Wall-clock deadline covering fetch and response-body consumption.
+
+```ts
+requestTimeoutMs?: number
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -136,7 +329,9 @@ over a simplified HTTP transport mechanism. It integrates session management, pe
 and certificate handling to enable secure and mutually-authenticated requests.
 
 Additionally, it automatically handles 402 Payment Required responses by creating
-and sending BSV payment transactions when necessary.
+and sending BSV payment transactions when necessary. The configured wallet's
+`createAction` policy is the spending-authorization boundary: applications
+should use a wallet that requires the intended user/policy approval.
 Recipients may advertise already-validated ancestors through the optional
 `x-bsv-payment-known-txids` response header. Up to 256 unique, valid lowercase
 transaction IDs are forwarded to wallet `createAction` options, including
@@ -144,40 +339,76 @@ newly created payments after repricing. An absent or invalid-only header
 preserves existing payment creation behavior.
 The header is an optional SDK extension, not a standardized BRC-105 header.
 
+Payment diagnostics retain only the URL origin, header names (and
+`Content-Type`), amount, identity keys, retry counts, and bounded error
+metadata. URL credentials/path/query, authorization values, transaction
+bytes, and payment derivation material are not included.
+
 ```ts
 export class AuthFetch {
+    readonly #transportOptions: SimplifiedFetchTransportOptions;
     peers: Record<string, AuthPeer> = {};
-    constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes) 
-    async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> 
-    async sendCertificateRequest(baseUrl: string, certificatesToRequest: RequestedCertificateSet): Promise<VerifiableCertificate[]> 
-    public consumeReceivedCertificates(): VerifiableCertificate[] 
+    constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: SimplifiedFetchTransportOptions = {}, fetchClient?: typeof fetch)
+    async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response>
+    async #getOrCreatePeer(baseURL: string): Promise<AuthPeer>
+    async sendCertificateRequest(baseUrl: string, certificatesToRequest: RequestedCertificateSet): Promise<VerifiableCertificate[]>
+    public consumeReceivedCertificates(): VerifiableCertificate[]
+    #createTransport(baseURL: string): SimplifiedFetchTransport
+    #writeOptionalText(writer: Writer, value: string): void
+    #includedRequestHeaders(headers: Record<string, string>): Array<[
+        string,
+        string
+    ]>
+    #writeRequestHeaders(writer: Writer, headers: Array<[
+        string,
+        string
+    ]>): void
+    #defaultRequestBody(method: string, body: any, headers: Array<[
+        string,
+        string
+    ]>): any
+    async #writeRequestBody(writer: Writer, body: any): Promise<void>
+    #base64NonceToLabelHex(base64Nonce: string): string
+    #describeSimpleRequestBody(body: any): RequestBodySummary | undefined
+    #describePlatformRequestBody(body: any): RequestBodySummary | undefined
+    #describeSerializableRequestBody(body: any): RequestBodySummary
+    #safeLogUrl(url: string): string
 }
 ```
 
-See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [SimplifiedFetchTransport](./auth.md#class-simplifiedfetchtransport), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [Writer](./primitives.md#class-writer), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs a new AuthFetch instance.
 
 ```ts
-constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes) 
+constructor(wallet: WalletInterface, requestedCertificates?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, originator?: OriginatorDomainNameStringUnder250Bytes, transportOptions: SimplifiedFetchTransportOptions = {}, fetchClient?: typeof fetch)
 ```
-See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [WalletInterface](./wallet.md#interface-walletinterface)
 
 Argument Details
 
 + **wallet**
   + The wallet instance for signing and authentication.
 + **requestedCertificates**
-  + Optional set of certificates to request from peers.
+  + Optional v0.1 certificate allowlist/request. AuthFetch does not interpret allowlist validation as application authorization.
+
+#### Method
+
+Hex-encode a base64 BRC-105 nonce for case-stable wallet labels.
+
+```ts
+#base64NonceToLabelHex(base64Nonce: string): string
+```
+See also: [string](./remittance.md#function-string)
 
 #### Method consumeReceivedCertificates
 
 Return any certificates we've collected thus far, then clear them out.
 
 ```ts
-public consumeReceivedCertificates(): VerifiableCertificate[] 
+public consumeReceivedCertificates(): VerifiableCertificate[]
 ```
 See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate)
 
@@ -186,12 +417,13 @@ See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate)
 Mutually authenticates and sends a HTTP request to a server.
 
 1) Attempt the request.
-2) If 402 Payment Required, automatically create and send payment.
+2) If 402 Payment Required, ask the wallet to authorize, create, and send payment.
 3) Return the final response.
 
 ```ts
-async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response> 
+async fetch(url: string, config: SimplifiedFetchRequestOptions = {}): Promise<Response>
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -214,9 +446,9 @@ Will throw an error if unsupported headers are used or other validation fails.
 Request Certificates from a Peer
 
 ```ts
-async sendCertificateRequest(baseUrl: string, certificatesToRequest: RequestedCertificateSet): Promise<VerifiableCertificate[]> 
+async sendCertificateRequest(baseUrl: string, certificatesToRequest: RequestedCertificateSet): Promise<VerifiableCertificate[]>
 ```
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate)
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -236,15 +468,15 @@ export default class Certificate {
     revocationOutpoint: OutpointString;
     fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
     signature?: HexString;
-    constructor(type: Base64String, serialNumber: Base64String, subject: PubKeyHex, certifier: PubKeyHex, revocationOutpoint: OutpointString, fields: Record<CertificateFieldNameUnder50Bytes, string>, signature?: HexString) 
-    toBinary(includeSignature: boolean = true): number[] 
-    static fromBinary(bin: number[] | Uint8Array): Certificate 
-    async verify(): Promise<boolean> 
-    async sign(certifierWallet: ProtoWallet): Promise<void> 
+    constructor(type: Base64String, serialNumber: Base64String, subject: PubKeyHex, certifier: PubKeyHex, revocationOutpoint: OutpointString, fields: Record<CertificateFieldNameUnder50Bytes, string>, signature?: HexString)
+    toBinary(includeSignature: boolean = true): number[]
+    static fromBinary(bin: number[] | Uint8Array): Certificate
+    async verify(): Promise<boolean>
+    async sign(certifierWallet: ProtoWallet): Promise<void>
     static getCertificateFieldEncryptionDetails(fieldName: string, serialNumber?: string): {
         protocolID: WalletProtocol;
         keyID: string;
-    } 
+    }
     static fromObject(obj: {
         type: Base64String;
         serialNumber: Base64String;
@@ -253,20 +485,20 @@ export default class Certificate {
         revocationOutpoint: OutpointString;
         fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
         signature?: HexString;
-    }): Certificate 
+    }): Certificate
 }
 ```
 
-See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign), [verify](./compat.md#variable-verify)
+See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletProtocol](./wallet.md#type-walletprotocol), [sign](./compat.md#variable-sign), [string](./remittance.md#function-string), [verify](./compat.md#variable-verify)
 
 #### Constructor
 
 Constructs a new Certificate.
 
 ```ts
-constructor(type: Base64String, serialNumber: Base64String, subject: PubKeyHex, certifier: PubKeyHex, revocationOutpoint: OutpointString, fields: Record<CertificateFieldNameUnder50Bytes, string>, signature?: HexString) 
+constructor(type: Base64String, serialNumber: Base64String, subject: PubKeyHex, certifier: PubKeyHex, revocationOutpoint: OutpointString, fields: Record<CertificateFieldNameUnder50Bytes, string>, signature?: HexString)
 ```
-See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [PubKeyHex](./wallet.md#type-pubkeyhex)
+See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [PubKeyHex](./wallet.md#type-pubkeyhex), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -353,7 +585,7 @@ See also: [Base64String](./wallet.md#type-base64string)
 Deserializes a certificate from binary format.
 
 ```ts
-static fromBinary(bin: number[] | Uint8Array): Certificate 
+static fromBinary(bin: number[] | Uint8Array): Certificate
 ```
 See also: [Certificate](./auth.md#class-certificate)
 
@@ -379,7 +611,7 @@ static fromObject(obj: {
     revocationOutpoint: OutpointString;
     fields: Record<CertificateFieldNameUnder50Bytes, Base64String>;
     signature?: HexString;
-}): Certificate 
+}): Certificate
 ```
 See also: [Base64String](./wallet.md#type-base64string), [Certificate](./auth.md#class-certificate), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [PubKeyHex](./wallet.md#type-pubkeyhex)
 
@@ -406,9 +638,9 @@ so the `keyID` is formed by concatenating the `serialNumber` and `fieldName`.
 static getCertificateFieldEncryptionDetails(fieldName: string, serialNumber?: string): {
     protocolID: WalletProtocol;
     keyID: string;
-} 
+}
 ```
-See also: [WalletProtocol](./wallet.md#type-walletprotocol)
+See also: [WalletProtocol](./wallet.md#type-walletprotocol), [string](./remittance.md#function-string)
 
 Returns
 
@@ -429,7 +661,7 @@ Argument Details
 Signs the certificate using the provided certifier wallet.
 
 ```ts
-async sign(certifierWallet: ProtoWallet): Promise<void> 
+async sign(certifierWallet: ProtoWallet): Promise<void>
 ```
 See also: [ProtoWallet](./wallet.md#class-protowallet)
 
@@ -442,8 +674,16 @@ Argument Details
 
 Serializes the certificate into binary format, with or without a signature.
 
+Certificate field presentation order is part of the historical signed
+representation: this implementation orders field names with the host's
+default `localeCompare` behavior. Reordering fields differently from the
+representation used when the certificate was serialized or signed is not
+equivalent and will make signature verification fail. Issuers and
+verifiers must therefore preserve the original representation and use
+compatible ordering environments.
+
 ```ts
-toBinary(includeSignature: boolean = true): number[] 
+toBinary(includeSignature: boolean = true): number[]
 ```
 
 Returns
@@ -457,15 +697,14 @@ Argument Details
 
 #### Method verify
 
-Verifies the certificate's signature.
-
 ```ts
-async verify(): Promise<boolean> 
+async verify(): Promise<boolean>
 ```
 
 Returns
 
-- A promise that resolves to true if the signature is valid.
+- A promise that resolves to true if the signature is valid;
+it makes no revocation-status assertion.
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -475,29 +714,29 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export class CompletedProtoWallet extends ProtoWallet implements WalletInterface {
     keyDeriver: KeyDeriver;
-    constructor(rootKeyOrKeyDeriver: PrivateKey | "anyone" | KeyDeriverApi) 
-    async isAuthenticated(): Promise<AuthenticatedResult> 
-    async waitForAuthentication(): Promise<AuthenticatedResult> 
-    async getNetwork(): Promise<GetNetworkResult> 
-    async getVersion(): Promise<GetVersionResult> 
+    constructor(rootKeyOrKeyDeriver: PrivateKey | "anyone" | KeyDeriverApi)
+    async isAuthenticated(): Promise<AuthenticatedResult>
+    async waitForAuthentication(): Promise<AuthenticatedResult>
+    async getNetwork(): Promise<GetNetworkResult>
+    async getVersion(): Promise<GetVersionResult>
     async getPublicKey(args: GetPublicKeyArgs): Promise<{
         publicKey: PubKeyHex;
-    }> 
-    async createAction(): Promise<CreateActionResult> 
-    async signAction(): Promise<SignActionResult> 
-    async abortAction(): Promise<AbortActionResult> 
-    async listActions(): Promise<ListActionsResult> 
-    async internalizeAction(): Promise<InternalizeActionResult> 
-    async listOutputs(): Promise<ListOutputsResult> 
-    async relinquishOutput(): Promise<RelinquishOutputResult> 
-    async acquireCertificate(): Promise<AcquireCertificateResult> 
-    async listCertificates(): Promise<ListCertificatesResult> 
-    async proveCertificate(): Promise<ProveCertificateResult> 
-    async relinquishCertificate(): Promise<RelinquishCertificateResult> 
-    async discoverByIdentityKey(): Promise<DiscoverCertificatesResult> 
-    async discoverByAttributes(): Promise<DiscoverCertificatesResult> 
-    async getHeight(): Promise<GetHeightResult> 
-    async getHeaderForHeight(): Promise<GetHeaderResult> 
+    }>
+    async createAction(): Promise<CreateActionResult>
+    async signAction(): Promise<SignActionResult>
+    async abortAction(): Promise<AbortActionResult>
+    async listActions(): Promise<ListActionsResult>
+    async internalizeAction(): Promise<InternalizeActionResult>
+    async listOutputs(): Promise<ListOutputsResult>
+    async relinquishOutput(): Promise<RelinquishOutputResult>
+    async acquireCertificate(): Promise<AcquireCertificateResult>
+    async listCertificates(): Promise<ListCertificatesResult>
+    async proveCertificate(): Promise<ProveCertificateResult>
+    async relinquishCertificate(): Promise<RelinquishCertificateResult>
+    async discoverByIdentityKey(): Promise<DiscoverCertificatesResult>
+    async discoverByAttributes(): Promise<DiscoverCertificatesResult>
+    async getHeight(): Promise<GetHeightResult>
+    async getHeaderForHeight(): Promise<GetHeaderResult>
 }
 ```
 
@@ -513,6 +752,10 @@ MasterCertificate extends the base Certificate class to manage a master keyring,
 It allows for the selective disclosure of certificate fields by creating a `VerifiableCertificate` for a specific verifier.
 The `MasterCertificate` can securely decrypt each master key and re-encrypt it for a verifier, creating a customized
 keyring containing only the keys necessary for the verifier to access designated fields.
+
+Inputs are copied and bounded before wallet calls. New field-revelation keys
+are encoded as exactly 32 bytes; decryption also accepts the historical
+minimal big-endian 1–31-byte form and restores omitted leading zero bytes.
 
 ```ts
 export class MasterCertificate extends Certificate {
@@ -533,8 +776,8 @@ export class MasterCertificate extends Certificate {
         fields: Record<CertificateFieldNameUnder50Bytes, Base64String>,
         masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>,
         signature?: HexString
-    ]) 
-    static async createCertificateFields(creatorWallet: ProtoWallet, certifierOrSubject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, privileged?: boolean, privilegedReason?: string): Promise<CreateCertificateFieldsResult> 
+    ])
+    static async createCertificateFields(creatorWallet: ProtoWallet, certifierOrSubject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, privileged?: boolean, privilegedReason?: string): Promise<CreateCertificateFieldsResult>
     static async createKeyringForVerifier(...[subjectWallet, certifier, verifier, fields, fieldsToReveal, masterKeyring, serialNumber, privileged, privilegedReason]: [
         subjectWallet: ProtoWallet,
         certifier: WalletCounterparty,
@@ -545,17 +788,17 @@ export class MasterCertificate extends Certificate {
         serialNumber: Base64String,
         privileged?: boolean,
         privilegedReason?: string
-    ]): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
-    static async issueCertificateForSubject(certifierWallet: ProtoWallet, subject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, certificateType: string, getRevocationOutpoint = async (_serial: string): Promise<string> => "00".repeat(32), serialNumber?: string): Promise<MasterCertificate> 
-    static async decryptFields(subjectOrCertifierWallet: ProtoWallet, masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>, fields: Record<CertificateFieldNameUnder50Bytes, Base64String>, counterparty: WalletCounterparty, privileged?: boolean, privilegedReason?: string): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
+    ]): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
+    static async issueCertificateForSubject(certifierWallet: ProtoWallet, subject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, certificateType: Base64String, getRevocationOutpoint = async (_serial: string): Promise<string> => "00".repeat(32), serialNumber?: string): Promise<MasterCertificate>
+    static async decryptFields(subjectOrCertifierWallet: ProtoWallet, masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>, fields: Record<CertificateFieldNameUnder50Bytes, Base64String>, counterparty: WalletCounterparty, privileged?: boolean, privilegedReason?: string): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
     static async decryptField(subjectOrCertifierWallet: ProtoWallet, masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>, fieldName: Base64String, fieldValue: Base64String, counterparty: WalletCounterparty, privileged?: boolean, privilegedReason?: string): Promise<{
         fieldRevelationKey: number[];
         decryptedFieldValue: string;
-    }> 
+    }>
 }
 ```
 
-See also: [Base64String](./wallet.md#type-base64string), [Certificate](./auth.md#class-certificate), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletCounterparty](./wallet.md#type-walletcounterparty)
+See also: [Base64String](./wallet.md#type-base64string), [Certificate](./auth.md#class-certificate), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletCounterparty](./wallet.md#type-walletcounterparty), [string](./remittance.md#function-string)
 
 #### Method createCertificateFields
 
@@ -564,9 +807,9 @@ This method returns a master keyring tied to a specific certifier or subject who
 and sign off on the fields, along with the encrypted certificate fields.
 
 ```ts
-static async createCertificateFields(creatorWallet: ProtoWallet, certifierOrSubject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, privileged?: boolean, privilegedReason?: string): Promise<CreateCertificateFieldsResult> 
+static async createCertificateFields(creatorWallet: ProtoWallet, certifierOrSubject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, privileged?: boolean, privilegedReason?: string): Promise<CreateCertificateFieldsResult>
 ```
-See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty)
+See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty), [string](./remittance.md#function-string)
 
 Returns
 
@@ -607,9 +850,9 @@ static async createKeyringForVerifier(...[subjectWallet, certifier, verifier, fi
     serialNumber: Base64String,
     privileged?: boolean,
     privilegedReason?: string
-]): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
+]): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
 ```
-See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty)
+See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty), [string](./remittance.md#function-string)
 
 Returns
 
@@ -648,9 +891,9 @@ The counterparty used for decryption depends on how the certificate fields were 
 - Otherwise, the counterparty should always be the other party involved in the certificate issuance process (the subject or certifier).
 
 ```ts
-static async decryptFields(subjectOrCertifierWallet: ProtoWallet, masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>, fields: Record<CertificateFieldNameUnder50Bytes, Base64String>, counterparty: WalletCounterparty, privileged?: boolean, privilegedReason?: string): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
+static async decryptFields(subjectOrCertifierWallet: ProtoWallet, masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String>, fields: Record<CertificateFieldNameUnder50Bytes, Base64String>, counterparty: WalletCounterparty, privileged?: boolean, privilegedReason?: string): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
 ```
-See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty)
+See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty), [string](./remittance.md#function-string)
 
 Returns
 
@@ -685,9 +928,9 @@ generated symmetric key, which is then encrypted for the subject. The certificat
 can also includes a revocation outpoint to manage potential revocation.
 
 ```ts
-static async issueCertificateForSubject(certifierWallet: ProtoWallet, subject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, certificateType: string, getRevocationOutpoint = async (_serial: string): Promise<string> => "00".repeat(32), serialNumber?: string): Promise<MasterCertificate> 
+static async issueCertificateForSubject(certifierWallet: ProtoWallet, subject: WalletCounterparty, fields: Record<CertificateFieldNameUnder50Bytes, string>, certificateType: Base64String, getRevocationOutpoint = async (_serial: string): Promise<string> => "00".repeat(32), serialNumber?: string): Promise<MasterCertificate>
 ```
-See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [MasterCertificate](./auth.md#class-mastercertificate), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty)
+See also: [Base64String](./wallet.md#type-base64string), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [MasterCertificate](./auth.md#class-mastercertificate), [ProtoWallet](./wallet.md#class-protowallet), [WalletCounterparty](./wallet.md#type-walletcounterparty), [string](./remittance.md#function-string)
 
 Returns
 
@@ -702,7 +945,7 @@ Argument Details
 + **fields**
   + Unencrypted certificate fields to include, with their names and values.
 + **certificateType**
-  + The type of certificate being issued.
+  + The 32-byte Base64 certificate type being issued.
 + **getRevocationOutpoint**
   + -
 Optional function to obtain a revocation outpoint for the certificate. Defaults to a placeholder.
@@ -723,34 +966,60 @@ Manages sessions, handles authentication handshakes, certificate requests and re
 and sending and receiving general messages over a transport layer.
 
 This version supports multiple concurrent sessions per peer identityKey.
+Signed message nonces are accepted once per session and an unsigned initial
+request remains partially authenticated until a signed follow-up proves the
+claimed identity. BRC-103 does not encrypt the transport; callers must add
+confidentiality and authorize the authenticated identity separately.
 
 ```ts
 export class Peer {
     public sessionManager: SessionManager;
+    readonly #transport: Transport;
+    readonly #wallet: WalletInterface;
     certificatesToRequest: RequestedCertificateSet;
+    readonly #initialResponseTimeouts = new Map<number, ReturnType<typeof setTimeout>>();
+    #callbackIdCounter: number = 0;
+    readonly #autoPersistLastSession: boolean = true;
+    readonly #originator?: OriginatorDomainNameStringUnder250Bytes;
+    #identityPublicKey?: string;
     readonly ready: Promise<void>;
-    constructor(wallet: WalletInterface, transport: Transport, certificatesToRequest?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, autoPersistLastSession?: boolean, originator?: OriginatorDomainNameStringUnder250Bytes) 
-    async toPeer(message: number[], identityKey?: string): Promise<void> 
-    async requestCertificates(certificatesToRequest: RequestedCertificateSet, identityKey?: string): Promise<void> 
-    async getAuthenticatedSession(identityKey?: string): Promise<PeerSession> 
-    listenForGeneralMessages(callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>): number 
-    stopListeningForGeneralMessages(callbackID: number): void 
-    listenForCertificatesReceived(callback: (senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>): number 
-    stopListeningForCertificatesReceived(callbackID: number): void 
-    listenForCertificatesRequested(callback: (senderPublicKey: string, requestedCertificates: RequestedCertificateSet) => void | Promise<void>): number 
-    stopListeningForCertificatesRequested(callbackID: number): void 
-    async sendCertificateResponse(verifierIdentityKey: string, certificates: VerifiableCertificate[]): Promise<void> 
+    constructor(wallet: WalletInterface, transport: Transport, certificatesToRequest?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, autoPersistLastSession?: boolean, originator?: OriginatorDomainNameStringUnder250Bytes)
+    async toPeer(message: number[], identityKey?: string): Promise<void>
+    async #touchSession(sessionNonce: string): Promise<void>
+    async #markSessionAuthenticated(sessionNonce: string): Promise<void>
+    async #claimIncomingMessageNonce(sessionNonce: string, messageNonce: string, messageType: AuthMessage["messageType"]): Promise<void>
+    async #waitForCertificateValidation(sessionNonce: string, peerIdentityKey: string | undefined): Promise<void>
+    #snapshotCertificatePolicy(policy: RequestedCertificateSet): RequestedCertificateSet
+    #restoreOwnedCertificates(message: AuthMessage): void
+    #matchesCertificatePolicy(certificates: VerifiableCertificate[], policy: RequestedCertificateSet): boolean
+    async requestCertificates(certificatesToRequest: RequestedCertificateSet, identityKey?: string): Promise<void>
+    async getAuthenticatedSession(identityKey?: string): Promise<PeerSession>
+    listenForGeneralMessages(callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>): number
+    stopListeningForGeneralMessages(callbackID: number): void
+    listenForCertificatesReceived(callback: (senderPublicKey: string, certs: VerifiableCertificate[], sessionNonce: string, peerNonce?: string) => void | Promise<void>): number
+    stopListeningForCertificatesReceived(callbackID: number): void
+    listenForCertificatesRequested(callback: (senderPublicKey: string, requestedCertificates: RequestedCertificateSet) => void | Promise<void>): number
+    stopListeningForCertificatesRequested(callbackID: number): void
+    #requireMatchingSessionIdentity(peerSession: PeerSession, claimedIdentityKey: string, messageType: AuthMessage["messageType"]): string
+    async #handleIncomingMessage(message: AuthMessage): Promise<void>
+    #releaseInitialResponseWaiters(peerSession: PeerSession): void
+    async #answerInitialCertificateRequest(message: AuthMessage): Promise<void>
+    async #processInitialResponse(message: AuthMessage): Promise<void>
+    async sendCertificateResponse(verifierIdentityKey: string, certificates: VerifiableCertificate[]): Promise<void>
+    async #getIdentityPublicKey(): Promise<string>
+    static #utf8ToBytes(data: string): number[]
+    static #base64ToBytes(data: string): number[]
 }
 ```
 
-See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [PeerSession](./auth.md#interface-peersession), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [Transport](./auth.md#interface-transport), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [AuthMessage](./auth.md#interface-authmessage), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [PeerSession](./auth.md#interface-peersession), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [Transport](./auth.md#interface-transport), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [base64ToBytes](./wallet.md#function-base64tobytes), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Creates a new Peer instance
 
 ```ts
-constructor(wallet: WalletInterface, transport: Transport, certificatesToRequest?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, autoPersistLastSession?: boolean, originator?: OriginatorDomainNameStringUnder250Bytes) 
+constructor(wallet: WalletInterface, transport: Transport, certificatesToRequest?: RequestedCertificateSet, sessionManager?: SessionManager | AsyncSessionManager, autoPersistLastSession?: boolean, originator?: OriginatorDomainNameStringUnder250Bytes)
 ```
 See also: [AsyncSessionManager](./auth.md#interface-asyncsessionmanager), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SessionManager](./auth.md#class-sessionmanager), [Transport](./auth.md#interface-transport), [WalletInterface](./wallet.md#interface-walletinterface)
 
@@ -761,7 +1030,7 @@ Argument Details
 + **transport**
   + The transport mechanism used for sending and receiving messages.
 + **certificatesToRequest**
-  + Optional set of certificates to request from a peer during the initial handshake.
+  + Optional v0.1 certificate allowlist/request. Validation does not prove that every listed type or field was supplied; inspect received decrypted fields before authorization.
 + **autoPersistLastSession**
   + Whether to auto-persist the session with the last-interacted-with peer. Defaults to true.
 + **originator**
@@ -786,19 +1055,40 @@ await peer.ready
 await peer.toPeer(payload)
 ```
 
+#### Method
+
+Handles incoming messages from the transport.
+
+```ts
+async #handleIncomingMessage(message: AuthMessage): Promise<void>
+```
+See also: [AuthMessage](./auth.md#interface-authmessage)
+
+Argument Details
+
++ **message**
+  + The incoming message to process.
+
 #### Method getAuthenticatedSession
 
-Retrieves an authenticated session for a given peer identity. If no session exists
+Retrieves a transport-authenticated session for a given peer identity. If no session exists
 or the session is not authenticated, initiates a handshake to create or authenticate the session.
 
 - If `identityKey` is provided, we look up any existing session for that identity key.
 - If none is found or not authenticated, we do a new handshake.
-- If `identityKey` is not provided, but we have a `lastInteractedWithPeer`, we try that key.
+- If `identityKey` is not provided, only the peer selected by the most recent
+  successfully completed locally initiated handshake may be used. Inbound
+  messages never select this implicit destination.
+
+`isAuthenticated` proves control of the session identity key. It does not
+grant application authorization. When certificates are configured, also
+inspect `certificatesValidated` and the actual received/decrypted fields;
+v0.1 allowlist validation does not prove complete policy fulfillment.
 
 ```ts
-async getAuthenticatedSession(identityKey?: string): Promise<PeerSession> 
+async getAuthenticatedSession(identityKey?: string): Promise<PeerSession>
 ```
-See also: [PeerSession](./auth.md#interface-peersession)
+See also: [PeerSession](./auth.md#interface-peersession), [string](./remittance.md#function-string)
 
 Returns
 
@@ -811,12 +1101,16 @@ Argument Details
 
 #### Method listenForCertificatesReceived
 
-Registers a callback to listen for certificates received from peers.
+Registers an observer for certificates received from peers, not an acceptance hook.
+Local certificate validation is committed and its waiters are released before observers
+run. Throwing rejects message handling and stops subsequent observers; it does not
+roll back validation or revoke the session. Apply acceptance policy through the locally
+requested certificate set and explicit application authorization before protected work.
 
 ```ts
-listenForCertificatesReceived(callback: (senderPublicKey: string, certs: VerifiableCertificate[]) => void | Promise<void>): number 
+listenForCertificatesReceived(callback: (senderPublicKey: string, certs: VerifiableCertificate[], sessionNonce: string, peerNonce?: string) => void | Promise<void>): number
 ```
-See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate)
+See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate), [string](./remittance.md#function-string)
 
 Returns
 
@@ -825,16 +1119,23 @@ The ID of the callback listener.
 Argument Details
 
 + **callback**
-  + The function to call when certificates are received.
+  + The function to call when certificates are received. The local and peer session nonces identify the exact validated exchange; callbacks that do not need them remain compatible.
 
 #### Method listenForCertificatesRequested
 
 Registers a callback to listen for certificates requested from peers.
 
+This callback can run for an unsigned initial request, where
+`senderPublicKey` is only a claimed destination key. Do not treat the
+callback as an authentication/authorization event and do not disclose
+plaintext fields from it. Use wallet-backed certificate proving so revealed
+keys are encrypted to the claimed identity; later signed protocol messages
+establish whether the requester controls that key.
+
 ```ts
-listenForCertificatesRequested(callback: (senderPublicKey: string, requestedCertificates: RequestedCertificateSet) => void | Promise<void>): number 
+listenForCertificatesRequested(callback: (senderPublicKey: string, requestedCertificates: RequestedCertificateSet) => void | Promise<void>): number
 ```
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [string](./remittance.md#function-string)
 
 Returns
 
@@ -843,15 +1144,16 @@ The ID of the callback listener.
 Argument Details
 
 + **callback**
-  + The function to call when a certificate request is received
+  + The function to call when a certificate request is received.
 
 #### Method listenForGeneralMessages
 
 Registers a callback to listen for general messages from peers.
 
 ```ts
-listenForGeneralMessages(callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>): number 
+listenForGeneralMessages(callback: (senderPublicKey: string, payload: number[]) => void | Promise<void>): number
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -869,9 +1171,9 @@ This method allows a peer to dynamically request specific certificates after
 an initial handshake or message has been exchanged.
 
 ```ts
-async requestCertificates(certificatesToRequest: RequestedCertificateSet, identityKey?: string): Promise<void> 
+async requestCertificates(certificatesToRequest: RequestedCertificateSet, identityKey?: string): Promise<void>
 ```
-See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [string](./remittance.md#function-string)
 
 Returns
 
@@ -880,7 +1182,7 @@ Resolves if the certificate request message is successfully sent.
 Argument Details
 
 + **certificatesToRequest**
-  + Specifies the certifiers and types of certificates required from the peer.
+  + Specifies allowed certifiers, types, and fields to request. Under the legacy v0.1 contract, success does not prove that every listed type or field was supplied.
 + **identityKey**
   + The identity public key of the peer. If not provided, the current or last session identity is used.
 
@@ -893,9 +1195,9 @@ Will throw an error if the peer session is not authenticated or if sending the r
 Sends a certificate response message containing the specified certificates to a peer.
 
 ```ts
-async sendCertificateResponse(verifierIdentityKey: string, certificates: VerifiableCertificate[]): Promise<void> 
+async sendCertificateResponse(verifierIdentityKey: string, certificates: VerifiableCertificate[]): Promise<void>
 ```
-See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate)
+See also: [VerifiableCertificate](./auth.md#class-verifiablecertificate), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -913,7 +1215,7 @@ Will throw an error if the transport fails to send the message.
 Cancels and unsubscribes a certificatesReceived listener.
 
 ```ts
-stopListeningForCertificatesReceived(callbackID: number): void 
+stopListeningForCertificatesReceived(callbackID: number): void
 ```
 
 Argument Details
@@ -926,7 +1228,7 @@ Argument Details
 Cancels and unsubscribes a certificatesRequested listener.
 
 ```ts
-stopListeningForCertificatesRequested(callbackID: number): void 
+stopListeningForCertificatesRequested(callbackID: number): void
 ```
 
 Argument Details
@@ -939,7 +1241,7 @@ Argument Details
 Removes a general message listener.
 
 ```ts
-stopListeningForGeneralMessages(callbackID: number): void 
+stopListeningForGeneralMessages(callbackID: number): void
 ```
 
 Argument Details
@@ -952,15 +1254,16 @@ Argument Details
 Sends a general message to a peer, and initiates a handshake if necessary.
 
 ```ts
-async toPeer(message: number[], identityKey?: string): Promise<void> 
+async toPeer(message: number[], identityKey?: string): Promise<void>
 ```
+See also: [string](./remittance.md#function-string)
 
 Argument Details
 
 + **message**
   + The message payload to send.
 + **identityKey**
-  + The identity public key of the peer. If not provided, uses lastInteractedWithPeer (if any).
+  + The identity public key of the peer, or an exact session nonce for a transport response. If not provided, uses the peer from the most recent locally initiated handshake (if any). Inbound messages never select this implicit destination.
 
 Throws
 
@@ -972,20 +1275,63 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ### Class: SessionManager
 
 Manages sessions for peers, allowing multiple concurrent sessions
-per identity key. Primary lookup is always by `sessionNonce`.
+per identity key. Primary lookup is always by `sessionNonce`. Idle sessions,
+total sessions, and one-time message nonce claims are bounded by default.
+Capacity eviction removes only unauthenticated sessions. If every slot holds
+an authenticated session, a new handshake is rejected until one expires or
+is explicitly removed.
 
 ```ts
 export class SessionManager {
-    constructor() 
-    addSession(session: PeerSession): void 
-    updateSession(session: PeerSession): void 
-    getSession(identifier: string): PeerSession | undefined 
-    removeSession(session: PeerSession): void 
-    hasSession(identifier: string): boolean 
+    readonly #sessionNonceToSession: Map<string, PeerSession>;
+    readonly #identityKeyToNonces: Map<string, Set<string>>;
+    readonly #sessionNonceToIdentityKey: Map<string, string>;
+    readonly #consumedMessageNonces: Map<string, Set<string>>;
+    readonly #consumedInitialRequestNonces: Map<string, number>;
+    readonly #initialRequestNonceKeysByIdentity: Map<string, Set<string>>;
+    readonly #maxSessions: number;
+    readonly #maxSessionIdleMs: number;
+    readonly #maxMessageNoncesPerSession: number;
+    readonly #maxInitialRequestNonces: number;
+    readonly #maxInitialRequestNoncesPerIdentity: number;
+    readonly #now: () => number;
+    constructor(options: SessionManagerOptions = {})
+    addSession(session: PeerSession): void
+    updateSession(session: PeerSession): void
+    getSession(identifier: string): PeerSession | undefined
+    removeSession(session: PeerSession): void
+    hasSession(identifier: string): boolean
+    claimMessageNonce(sessionNonce: string, messageNonce: string): boolean
+    claimInitialRequestNonce(identityKey: string, initialNonce: string): boolean
+    pruneExpiredSessions(now = this.#currentTime()): number
+    #pruneExpiredInitialRequestNonces(now: number): void
+    #deleteInitialRequestNonce(identityKey: string, key: string): void
+    #isExpired(session: PeerSession, now: number): boolean
+    #removeSessionIndexes(session: PeerSession): void
+    #evictLeastRecentlyUsedSession(): void
+    #currentTime(): number
 }
 ```
 
-See also: [PeerSession](./auth.md#interface-peersession)
+See also: [PeerSession](./auth.md#interface-peersession), [SessionManagerOptions](./auth.md#interface-sessionmanageroptions), [string](./remittance.md#function-string)
+
+#### Property
+
+Maps sessionNonce -> PeerSession
+
+```ts
+readonly #sessionNonceToSession: Map<string, PeerSession>
+```
+See also: [PeerSession](./auth.md#interface-peersession), [string](./remittance.md#function-string)
+
+#### Property
+
+Maps identityKey -> Set of sessionNonces
+
+```ts
+readonly #identityKeyToNonces: Map<string, Set<string>>
+```
+See also: [string](./remittance.md#function-string)
 
 #### Method addSession
 
@@ -994,9 +1340,10 @@ and also with its peerIdentityKey (if any).
 
 This does NOT overwrite existing sessions for the same peerIdentityKey,
 allowing multiple concurrent sessions for the same peer.
+At capacity, only an unauthenticated session may be evicted.
 
 ```ts
-addSession(session: PeerSession): void 
+addSession(session: PeerSession): void
 ```
 See also: [PeerSession](./auth.md#interface-peersession)
 
@@ -1004,6 +1351,24 @@ Argument Details
 
 + **session**
   + The peer session to add.
+
+#### Method claimInitialRequestNonce
+
+Atomically reject a replayed unsigned initial request before wallet work.
+
+```ts
+claimInitialRequestNonce(identityKey: string, initialNonce: string): boolean
+```
+See also: [string](./remittance.md#function-string)
+
+#### Method claimMessageNonce
+
+Atomically claim a one-time signed message nonce for an active session.
+
+```ts
+claimMessageNonce(sessionNonce: string, messageNonce: string): boolean
+```
+See also: [string](./remittance.md#function-string)
 
 #### Method getSession
 
@@ -1016,9 +1381,9 @@ If it is a `peerIdentityKey`, returns the "best" (e.g. most recently updated,
 authenticated) session associated with that peer, if any.
 
 ```ts
-getSession(identifier: string): PeerSession | undefined 
+getSession(identifier: string): PeerSession | undefined
 ```
-See also: [PeerSession](./auth.md#interface-peersession)
+See also: [PeerSession](./auth.md#interface-peersession), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1034,8 +1399,9 @@ Argument Details
 Checks if a session exists for a given identifier (either sessionNonce or identityKey).
 
 ```ts
-hasSession(identifier: string): boolean 
+hasSession(identifier: string): boolean
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1046,12 +1412,20 @@ Argument Details
 + **identifier**
   + The identifier to check.
 
+#### Method pruneExpiredSessions
+
+Remove idle sessions and their identity/replay indexes.
+
+```ts
+pruneExpiredSessions(now = this.#currentTime()): number
+```
+
 #### Method removeSession
 
 Removes a session from the manager by clearing all associated identifiers.
 
 ```ts
-removeSession(session: PeerSession): void 
+removeSession(session: PeerSession): void
 ```
 See also: [PeerSession](./auth.md#interface-peersession)
 
@@ -1066,7 +1440,7 @@ Updates a session in the manager (primarily by re-adding it),
 ensuring we record the latest data (e.g., isAuthenticated, lastUpdate, etc.).
 
 ```ts
-updateSession(session: PeerSession): void 
+updateSession(session: PeerSession): void
 ```
 See also: [PeerSession](./auth.md#interface-peersession)
 
@@ -1082,33 +1456,60 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 Implements an HTTP-specific transport for handling Peer mutual authentication messages.
 This class integrates with fetch to send and receive authenticated messages between peers.
+It rejects redirects and applies fixed byte/count limits to buffered bodies,
+signed headers, request framing, signatures, request IDs, and certificate
+request headers before allocating or verifying attacker-controlled data.
 
 ```ts
 export class SimplifiedFetchTransport implements Transport {
     fetchClient: typeof fetch;
     baseUrl: string;
-    constructor(baseUrl: string, fetchClient = defaultFetch) 
-    async send(message: AuthMessage): Promise<void> 
-    async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> 
+    readonly #maxHandshakeResponseBytes: number;
+    readonly #requestTimeoutMs: number;
+    constructor(baseUrl: string, fetchClient: typeof fetch = defaultFetch, options: SimplifiedFetchTransportOptions = {})
+    async send(message: AuthMessage): Promise<void>
+    async #fetchAuthMessage(url: string, message: AuthMessage, signal: AbortSignal): Promise<Response>
+    async #sendAuthMessage(message: AuthMessage): Promise<void>
+    #encodeRequestBody(body: number[], contentType: string): string | Uint8Array
+    #prepareGeneralRequest(message: AuthMessage): any
+    async #fetchGeneralResponse(url: string, request: any, signal: AbortSignal): Promise<Response>
+    #validateResponseAuthentication(url: string, response: Response, body: number[]): void
+    #parseRequestedCertificates(url: string, response: Response): RequestedCertificateSet | undefined
+    #collectSignedResponseHeaders(response: Response): Array<[
+        string,
+        string
+    ]>
+    #writeGeneralResponsePayload(response: Response, body: number[]): number[]
+    #createGeneralResponseMessage(url: string, response: Response, body: number[]): AuthMessage
+    async #sendGeneralMessage(message: AuthMessage): Promise<void>
+    async #withDeadline<T>(url: string, work: (signal: AbortSignal) => Promise<T>): Promise<T>
+    async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void>
+    #createNetworkError(url: string, originalError: unknown): Error
+    #createUnauthenticatedResponseError(url: string, response: Response, bodyBytes: number[], missingHeaders: string[] = []): Error
+    #createMalformedHeaderError(url: string, headerName: string, headerValue: string, cause: unknown): Error
+    #getBodyPreview(bodyBytes: number[], contentType: string | null): string | undefined
+    #isTextualContent(contentType: string | null, sample: number[]): boolean
+    #formatBinaryPreview(bytes: number[], truncated: boolean): string
     deserializeRequestPayload(payload: number[]): {
         method: string;
         urlPostfix: string;
         headers: Record<string, string>;
         body: number[];
         requestId: string;
-    } 
+    }
 }
 ```
 
-See also: [AuthMessage](./auth.md#interface-authmessage), [Transport](./auth.md#interface-transport)
+See also: [AuthMessage](./auth.md#interface-authmessage), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [Transport](./auth.md#interface-transport), [string](./remittance.md#function-string)
 
 #### Constructor
 
 Constructs a new instance of SimplifiedFetchTransport.
 
 ```ts
-constructor(baseUrl: string, fetchClient = defaultFetch) 
+constructor(baseUrl: string, fetchClient: typeof fetch = defaultFetch, options: SimplifiedFetchTransportOptions = {})
 ```
+See also: [SimplifiedFetchTransportOptions](./auth.md#interface-simplifiedfetchtransportoptions), [string](./remittance.md#function-string)
 
 Argument Details
 
@@ -1128,8 +1529,9 @@ deserializeRequestPayload(payload: number[]): {
     headers: Record<string, string>;
     body: number[];
     requestId: string;
-} 
+}
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -1147,7 +1549,7 @@ Registers a callback to handle incoming messages.
 This must be called before sending any messages to ensure responses can be processed.
 
 ```ts
-async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> 
+async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void>
 ```
 See also: [AuthMessage](./auth.md#interface-authmessage)
 
@@ -1168,7 +1570,7 @@ the payload is deserialized and sent as an HTTP request. For other message types
 the message is sent as a POST request to the `/auth` endpoint.
 
 ```ts
-async send(message: AuthMessage): Promise<void> 
+async send(message: AuthMessage): Promise<void>
 ```
 See also: [AuthMessage](./auth.md#interface-authmessage)
 
@@ -1214,22 +1616,22 @@ export class VerifiableCertificate extends Certificate {
         keyring: Record<CertificateFieldNameUnder50Bytes, string>,
         signature?: HexString,
         decryptedFields?: Record<CertificateFieldNameUnder50Bytes, Base64String>
-    ]) 
-    static fromCertificate(certificate: WalletCertificate, keyring: Record<CertificateFieldNameUnder50Bytes, string>): VerifiableCertificate 
-    async decryptFields(verifierWallet: ProtoWallet, privileged?: boolean, privilegedReason?: string, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
+    ])
+    static fromCertificate(certificate: WalletCertificate, keyring: Record<CertificateFieldNameUnder50Bytes, string>): VerifiableCertificate
+    async decryptFields(verifierWallet: ProtoWallet, privileged?: boolean, privilegedReason?: string, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
 }
 ```
 
-See also: [Base64String](./wallet.md#type-base64string), [Certificate](./auth.md#class-certificate), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletCertificate](./wallet.md#interface-walletcertificate)
+See also: [Base64String](./wallet.md#type-base64string), [Certificate](./auth.md#class-certificate), [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [HexString](./wallet.md#type-hexstring), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [OutpointString](./wallet.md#type-outpointstring), [ProtoWallet](./wallet.md#class-protowallet), [PubKeyHex](./wallet.md#type-pubkeyhex), [WalletCertificate](./wallet.md#interface-walletcertificate), [string](./remittance.md#function-string)
 
 #### Method decryptFields
 
 Decrypts selectively revealed certificate fields using the provided keyring and verifier wallet
 
 ```ts
-async decryptFields(verifierWallet: ProtoWallet, privileged?: boolean, privilegedReason?: string, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Record<CertificateFieldNameUnder50Bytes, string>> 
+async decryptFields(verifierWallet: ProtoWallet, privileged?: boolean, privilegedReason?: string, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Record<CertificateFieldNameUnder50Bytes, string>>
 ```
-See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [ProtoWallet](./wallet.md#class-protowallet)
+See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [ProtoWallet](./wallet.md#class-protowallet), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1251,9 +1653,9 @@ Throws an error if any of the decryption operations fail, with a message indicat
 #### Method fromCertificate
 
 ```ts
-static fromCertificate(certificate: WalletCertificate, keyring: Record<CertificateFieldNameUnder50Bytes, string>): VerifiableCertificate 
+static fromCertificate(certificate: WalletCertificate, keyring: Record<CertificateFieldNameUnder50Bytes, string>): VerifiableCertificate
 ```
-See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletCertificate](./wallet.md#interface-walletcertificate)
+See also: [CertificateFieldNameUnder50Bytes](./wallet.md#type-certificatefieldnameunder50bytes), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletCertificate](./wallet.md#interface-walletcertificate), [string](./remittance.md#function-string)
 
 Returns
 
@@ -1274,14 +1676,102 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
+| [assertAuthByteArray](#function-assertauthbytearray) |
+| [assertAuthIdentityKey](#function-assertauthidentitykey) |
+| [assertAuthPeerTarget](#function-assertauthpeertarget) |
+| [assertBoundedAuthData](#function-assertboundedauthdata) |
+| [assertRequestedCertificateSet](#function-assertrequestedcertificateset) |
+| [assertValidAuthMessage](#function-assertvalidauthmessage) |
+| [copyAuthByteArray](#function-copyauthbytearray) |
 | [createNonce](#function-createnonce) |
 | [parseKnownTxidsHeader](#function-parseknowntxidsheader) |
+| [snapshotAuthMessage](#function-snapshotauthmessage) |
+| [snapshotBoundedAuthData](#function-snapshotboundedauthdata) |
 | [verifyNonce](#function-verifynonce) |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 
+### Function: assertAuthByteArray
+
+```ts
+export function assertAuthByteArray(value: unknown, name: string, maxBytes: number, allowEmpty = false): asserts value is number[]
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: assertAuthIdentityKey
+
+```ts
+export function assertAuthIdentityKey(value: unknown): asserts value is string
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: assertAuthPeerTarget
+
+```ts
+export function assertAuthPeerTarget(value: unknown): asserts value is string
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: assertBoundedAuthData
+
+```ts
+export function assertBoundedAuthData(value: unknown): void
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: assertRequestedCertificateSet
+
+```ts
+export function assertRequestedCertificateSet(value: unknown): asserts value is RequestedCertificateSet
+```
+
+See also: [RequestedCertificateSet](./auth.md#interface-requestedcertificateset)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: assertValidAuthMessage
+
+Validate an untrusted BRC-103 message before any wallet or session work.
+
+```ts
+export function assertValidAuthMessage(value: unknown): asserts value is AuthMessage
+```
+
+See also: [AuthMessage](./auth.md#interface-authmessage)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: copyAuthByteArray
+
+Validate and copy a byte array before retaining it across an asynchronous trust boundary.
+
+```ts
+export function copyAuthByteArray(value: unknown, name: string, maxBytes: number, allowEmpty = false): number[]
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: createNonce
 
 Creates a wallet-authenticated challenge token.
@@ -1292,7 +1782,7 @@ Authentication flows must bind the challenge to a signature and track
 freshness, as BRC-103 `Peer` does.
 
 ```ts
-export async function createNonce(wallet: WalletInterface, counterparty: WalletCounterparty = "self", originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Base64String> 
+export async function createNonce(wallet: WalletInterface, counterparty: WalletCounterparty = "self", originator?: OriginatorDomainNameStringUnder250Bytes): Promise<Base64String>
 ```
 
 See also: [Base64String](./wallet.md#type-base64string), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [WalletCounterparty](./wallet.md#type-walletcounterparty), [WalletInterface](./wallet.md#interface-walletinterface)
@@ -1318,7 +1808,34 @@ optimisation, and a bad entry should cost bytes, never a failed payment. Anythin
 a well-formed txid is dropped rather than throwing.
 
 ```ts
-export function parseKnownTxidsHeader(headerValue: string | null): string[] | undefined 
+export function parseKnownTxidsHeader(headerValue: string | null): string[] | undefined
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: snapshotAuthMessage
+
+Validate and own an untrusted BRC-103 message for asynchronous processing.
+
+```ts
+export function snapshotAuthMessage(value: unknown): AuthMessage
+```
+
+See also: [AuthMessage](./auth.md#interface-authmessage)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: snapshotBoundedAuthData
+
+Validate and copy authentication data into owned arrays and null-prototype records.
+Descriptor-driven copying ensures only values validated during this traversal are retained.
+
+```ts
+export function snapshotBoundedAuthData<T>(value: T): T
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
@@ -1333,14 +1850,14 @@ asymmetric proof of key ownership. Use the complete BRC-103 handshake or a
 signed, expiring payload for authentication.
 
 ```ts
-export async function verifyNonce(nonce: Base64String, wallet: WalletInterface, counterparty: WalletCounterparty = "self", originator?: OriginatorDomainNameStringUnder250Bytes): Promise<boolean> 
+export async function verifyNonce(nonce: Base64String, wallet: WalletInterface, counterparty: WalletCounterparty = "self", originator?: OriginatorDomainNameStringUnder250Bytes): Promise<boolean>
 ```
 
 See also: [Base64String](./wallet.md#type-base64string), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [WalletCounterparty](./wallet.md#type-walletcounterparty), [WalletInterface](./wallet.md#interface-walletinterface)
 
 Returns
 
-The status of the validation
+`true` when the wallet accepts the HMAC, otherwise `false`. An HMAC mismatch is a failed validation: wallets that reject with `ERR_INVALID_HMAC` or the message `HMAC is not valid` return `false` instead of propagating that rejection. Other wallet failures still reject.
 
 Argument Details
 
@@ -1358,35 +1875,151 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ## Variables
 
-| |
-| --- |
-| [getVerifiableCertificates](#variable-getverifiablecertificates) |
-| [validateCertificates](#variable-validatecertificates) |
+| | |
+| --- | --- |
+| [DEFAULT_AUTH_SESSION_IDLE_MS](#variable-default_auth_session_idle_ms) | [DEFAULT_SIMPLIFIED_FETCH_REQUEST_TIMEOUT_MS](#variable-default_simplified_fetch_request_timeout_ms) |
+| [DEFAULT_MAX_AUTH_SESSIONS](#variable-default_max_auth_sessions) | [MAX_AUTH_MESSAGE_BYTES](#variable-max_auth_message_bytes) |
+| [DEFAULT_MAX_INITIAL_REQUEST_NONCES](#variable-default_max_initial_request_nonces) | [MAX_AUTH_MESSAGE_DEPTH](#variable-max_auth_message_depth) |
+| [DEFAULT_MAX_INITIAL_REQUEST_NONCES_PER_IDENTITY](#variable-default_max_initial_request_nonces_per_identity) | [MAX_AUTH_MESSAGE_NODES](#variable-max_auth_message_nodes) |
+| [DEFAULT_MAX_MESSAGE_NONCES_PER_SESSION](#variable-default_max_message_nonces_per_session) | [getVerifiableCertificates](#variable-getverifiablecertificates) |
+| [DEFAULT_SIMPLIFIED_FETCH_MAX_HANDSHAKE_RESPONSE_BYTES](#variable-default_simplified_fetch_max_handshake_response_bytes) | [validateCertificates](#variable-validatecertificates) |
+| [DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES](#variable-default_simplified_fetch_max_response_bytes) |  |
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
 
+### Variable: DEFAULT_AUTH_SESSION_IDLE_MS
+
+```ts
+DEFAULT_AUTH_SESSION_IDLE_MS = 30 * 60 * 1000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_MAX_AUTH_SESSIONS
+
+```ts
+DEFAULT_MAX_AUTH_SESSIONS = 10000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_MAX_INITIAL_REQUEST_NONCES
+
+```ts
+DEFAULT_MAX_INITIAL_REQUEST_NONCES = 100000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_MAX_INITIAL_REQUEST_NONCES_PER_IDENTITY
+
+```ts
+DEFAULT_MAX_INITIAL_REQUEST_NONCES_PER_IDENTITY = 256
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_MAX_MESSAGE_NONCES_PER_SESSION
+
+```ts
+DEFAULT_MAX_MESSAGE_NONCES_PER_SESSION = 100000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_SIMPLIFIED_FETCH_MAX_HANDSHAKE_RESPONSE_BYTES
+
+```ts
+DEFAULT_SIMPLIFIED_FETCH_MAX_HANDSHAKE_RESPONSE_BYTES = 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES
+
+```ts
+DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES = 16 * 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: DEFAULT_SIMPLIFIED_FETCH_REQUEST_TIMEOUT_MS
+
+```ts
+DEFAULT_SIMPLIFIED_FETCH_REQUEST_TIMEOUT_MS = 30000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: MAX_AUTH_MESSAGE_BYTES
+
+```ts
+MAX_AUTH_MESSAGE_BYTES = 16 * 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: MAX_AUTH_MESSAGE_DEPTH
+
+```ts
+MAX_AUTH_MESSAGE_DEPTH = 64
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Variable: MAX_AUTH_MESSAGE_NODES
+
+```ts
+MAX_AUTH_MESSAGE_NODES = 100000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Variable: getVerifiableCertificates
 
 ```ts
 getVerifiableCertificates = async (wallet: WalletInterface, requestedCertificates: RequestedCertificateSet, verifierIdentityKey: string, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<VerifiableCertificate[]> => {
-    const matchingCertificates = await wallet.listCertificates({
+    requestedCertificates = snapshotBoundedAuthData(requestedCertificates);
+    const matchingCertificates = snapshotBoundedAuthData(await wallet.listCertificates({
         certifiers: requestedCertificates.certifiers,
         types: Object.keys(requestedCertificates.types)
-    }, originator);
+    }, originator));
+    if (matchingCertificates == null ||
+        !Array.isArray(matchingCertificates.certificates) ||
+        matchingCertificates.certificates.length > MAX_CERTIFICATES) {
+        throw new Error(`Wallet cannot return more than ${MAX_CERTIFICATES} matching certificates`);
+    }
     return await Promise.all(matchingCertificates.certificates.map(async (certificate) => {
-        const { keyringForVerifier } = await wallet.proveCertificate({
+        const requestedFields = requestedCertificates.types[certificate.type];
+        if (!requestedCertificates.certifiers.includes(certificate.certifier) ||
+            !Array.isArray(requestedFields)) {
+            throw new Error("Wallet returned a certificate outside the requested certifier/type set");
+        }
+        const proof = snapshotBoundedAuthData(await wallet.proveCertificate({
             certificate,
-            fieldsToReveal: requestedCertificates.types[certificate.type],
+            fieldsToReveal: requestedFields,
             verifier: verifierIdentityKey
-        }, originator);
+        }, originator));
+        const keyringForVerifier = snapshotRequestedKeyring(proof.keyringForVerifier, requestedFields);
         return new VerifiableCertificate(certificate.type, certificate.serialNumber, certificate.subject, certificate.certifier, certificate.revocationOutpoint, certificate.fields, keyringForVerifier, certificate.signature);
     }));
 }
 ```
 
-See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface)
+See also: [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [snapshotBoundedAuthData](./auth.md#function-snapshotboundedauthdata), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -1395,8 +2028,14 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 validateCertificates = async (verifierWallet: WalletInterface, message: AuthMessage, certificatesRequested?: RequestedCertificateSet, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<void> => {
-    if ((message.certificates == null) || message.certificates.length === 0) {
+    message = snapshotBoundedAuthData(message);
+    certificatesRequested =
+        certificatesRequested === undefined ? undefined : snapshotBoundedAuthData(certificatesRequested);
+    if (message.certificates == null || message.certificates.length === 0) {
         throw new Error("No certificates were provided in the AuthMessage.");
+    }
+    if (!Array.isArray(message.certificates) || message.certificates.length > MAX_CERTIFICATES) {
+        throw new Error(`AuthMessage cannot contain more than ${MAX_CERTIFICATES} certificates.`);
     }
     await Promise.all(message.certificates.map(async (incomingCert: VerifiableCertificate) => {
         if (incomingCert.subject !== message.identityKey) {
@@ -1404,25 +2043,29 @@ validateCertificates = async (verifierWallet: WalletInterface, message: AuthMess
         }
         const certToVerify = new VerifiableCertificate(incomingCert.type, incomingCert.serialNumber, incomingCert.subject, incomingCert.certifier, incomingCert.revocationOutpoint, incomingCert.fields, incomingCert.keyring, incomingCert.signature);
         const isValidCert = await certToVerify.verify();
-        if (!isValidCert) {
+        if (isValidCert !== true) {
             throw new Error(`The signature for the certificate with serial number ${certToVerify.serialNumber} is invalid!`);
         }
+        let requestedFields: string[] | undefined;
         if (certificatesRequested != null) {
             const { certifiers, types } = certificatesRequested;
             if (!certifiers.includes(certToVerify.certifier)) {
                 throw new Error(`Certificate with serial number ${certToVerify.serialNumber} has an unrequested certifier: ${certToVerify.certifier}`);
             }
-            const requestedFields = types[certToVerify.type];
+            requestedFields = types[certToVerify.type];
             if (requestedFields == null) {
                 throw new Error(`Certificate with type ${certToVerify.type} was not requested`);
             }
         }
-        await certToVerify.decryptFields(verifierWallet, undefined, undefined, originator);
+        const decryptedFields = await certToVerify.decryptFields(verifierWallet, undefined, undefined, originator);
+        if (requestedFields != null) {
+            assertRequestedDisclosedFields(decryptedFields, requestedFields, certToVerify.serialNumber);
+        }
     }));
 }
 ```
 
-See also: [AuthMessage](./auth.md#interface-authmessage), [Certificate](./auth.md#class-certificate), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [verify](./compat.md#variable-verify)
+See also: [AuthMessage](./auth.md#interface-authmessage), [Certificate](./auth.md#class-certificate), [OriginatorDomainNameStringUnder250Bytes](./wallet.md#type-originatordomainnamestringunder250bytes), [RequestedCertificateSet](./auth.md#interface-requestedcertificateset), [VerifiableCertificate](./auth.md#class-verifiablecertificate), [WalletInterface](./wallet.md#interface-walletinterface), [snapshotBoundedAuthData](./auth.md#function-snapshotboundedauthdata), [string](./remittance.md#function-string), [verify](./compat.md#variable-verify)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

@@ -6,7 +6,7 @@
   "requiredExports": ["EcpmPermissionModule", "createEcpmModule"],
   "prohibitedExports": [],
   "maximumBytes": {
-    "vite": { "raw": 110000, "gzip": 38000, "brotli": 32000 },
+    "vite": { "raw": 115000, "gzip": 40000, "brotli": 34000 },
     "esbuild": { "raw": 114000, "gzip": 43000, "brotli": 37000 }
   }
 }

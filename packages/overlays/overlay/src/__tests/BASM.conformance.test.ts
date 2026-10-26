@@ -127,7 +127,11 @@ describe('independent BRC-136 conformance vectors', () => {
   it.each(merkleVectors)('independently hashes the ordered admitted list for %s', vector => {
     const independent = independentBasmRoot(vector.txids, sha256d)
     expect(independent).toBe(vector.root)
-    expect(computeBasmRoot(vector.txids)).toBe(independent)
+    if (vector.admissionListValid) {
+      expect(computeBasmRoot(vector.txids)).toBe(independent)
+    } else {
+      expect(() => computeBasmRoot(vector.txids)).toThrow('unique txids')
+    }
     if (vector.txids.length >= 2 && opensslAvailable) {
       expect(independentBasmRoot(vector.txids, opensslSha256d)).toBe(independent)
     }

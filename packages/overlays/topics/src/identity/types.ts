@@ -12,9 +12,17 @@ export interface IdentityAttributes {
 export interface IdentityRecord {
   txid: string
   outputIndex: number
+  revelationId?: string
   certificate: Certificate
   createdAt: Date
   searchableAttributes?: string
+}
+
+export interface IdentityRevelationRevocation {
+  revelationId: string
+  txid: string
+  outputIndex: number
+  revokedAt: Date
 }
 
 export interface IdentityQuery {

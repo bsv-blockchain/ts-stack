@@ -1,135 +1,123 @@
-import { OverlayGASPRemote } from '../GASP/OverlayGASPRemote'
-import { GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/gasp'
+import type { GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/gasp'
+import { Transaction } from '@bsv/sdk'
+import { OverlayGASPRemote } from '../GASP/OverlayGASPRemote.js'
 
-global.fetch = jest.fn(async () => {
-  await Promise.resolve({
-    ok: true,
+const rawTx = '01000000000000000000'
+const txid = Transaction.fromHex(rawTx).id('hex')
+const graphID = `${txid}.0`
+
+function jsonResponse(value: unknown, init: ResponseInit = {}): Response {
+  return new Response(JSON.stringify(value), {
     status: 200,
-    json: async () => await Promise.resolve({})
+    headers: { 'content-type': 'application/json' },
+    ...init
   })
 }
-) as jest.Mock
 
 describe('OverlayGASPRemote', () => {
+  let fetchImpl: jest.MockedFunction<typeof fetch>
   let overlayRemote: OverlayGASPRemote
 
   beforeEach(() => {
-    overlayRemote = new OverlayGASPRemote('http://example.com', 'tm_test');
-    (fetch as jest.Mock).mockClear()
+    fetchImpl = jest.fn()
+    overlayRemote = new OverlayGASPRemote('https://peer.example', 'tm_test', fetchImpl)
+  })
+
+  it('requires credential-free HTTPS peer endpoints even with an injected transport', () => {
+    expect(() => new OverlayGASPRemote('http://127.0.0.1', 'tm_test', fetchImpl)).toThrow(
+      'credential-free HTTPS'
+    )
+    expect(() => new OverlayGASPRemote('https://user:pass@peer.example', 'tm_test', fetchImpl)).toThrow(
+      'credential-free HTTPS'
+    )
+    expect(() => new OverlayGASPRemote('https://peer.example?redirect=internal', 'tm_test', fetchImpl)).toThrow(
+      'credential-free HTTPS'
+    )
   })
 
   describe('getInitialResponse', () => {
-    it('should send a request and return a valid response', async () => {
-      const mockRequest: GASPInitialRequest = { version: 1, since: 0 }
-      const mockResponse: GASPInitialResponse = {
-        UTXOList: [{ txid: 'txid1', outputIndex: 0, score: 0 }],
-        since: 1234567890
-      };
+    const request: GASPInitialRequest = { version: 1, since: 0, limit: 10 }
+    const validResponse: GASPInitialResponse = {
+      UTXOList: [{ txid, outputIndex: 0, score: 1 }],
+      since: 1234567890
+    }
 
-      (fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: jest.fn().mockResolvedValue(mockResponse)
-      })
+    it('sends the bounded request and returns an exactly validated response', async () => {
+      fetchImpl.mockResolvedValue(jsonResponse(validResponse))
 
-      const response = await overlayRemote.getInitialResponse(mockRequest)
-
-      expect(fetch).toHaveBeenCalledWith('http://example.com/requestSyncResponse', {
+      await expect(overlayRemote.getInitialResponse(request)).resolves.toEqual(validResponse)
+      expect(fetchImpl).toHaveBeenCalledWith('https://peer.example/requestSyncResponse', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-BSV-Topic': 'tm_test'
         },
-        body: JSON.stringify(mockRequest)
+        body: JSON.stringify(request)
       })
-      expect(response).toEqual(mockResponse)
     })
 
-    it('should throw an error if the response status is not OK', async () => {
-      const mockRequest: GASPInitialRequest = { version: 1, since: 0 };
+    it('rejects HTTP failures without consuming unbounded diagnostic text', async () => {
+      fetchImpl.mockResolvedValue(jsonResponse({ error: 'failure' }, { status: 500 }))
 
-      (fetch as jest.Mock).mockResolvedValue({
-        ok: false,
-        status: 500
-      })
-
-      await expect(overlayRemote.getInitialResponse(mockRequest)).rejects.toThrow('HTTP error! Status: 500')
+      await expect(overlayRemote.getInitialResponse(request)).rejects.toThrow(
+        'Overlay peer returned HTTP 500'
+      )
     })
 
-    it('should throw an error if the response format is invalid', async () => {
-      const mockRequest: GASPInitialRequest = { version: 1, since: 0 }
-      const invalidResponse = { invalid: 'data' };
+    it.each([
+      [{ invalid: 'data' }, 'Invalid GASP initial response'],
+      [{ UTXOList: [{ txid, outputIndex: 0, score: -1 }], since: 0 }, 'score'],
+      [{ UTXOList: [{ txid, outputIndex: 0, score: 0 }, { txid, outputIndex: 0, score: 0 }], since: 0 }, 'duplicate'],
+      [{ UTXOList: Array.from({ length: 11 }, (_, outputIndex) => ({ txid: outputIndex.toString(16).padStart(64, '0'), outputIndex, score: 0 })), since: 0 }, 'Invalid GASP initial response']
+    ])('rejects malformed or over-limit initial responses', async (response, message) => {
+      fetchImpl.mockResolvedValue(jsonResponse(response))
 
-      (fetch as jest.Mock).mockResolvedValue({
+      await expect(overlayRemote.getInitialResponse(request)).rejects.toThrow(message)
+    })
+
+    it('rejects a declared oversized response before reading its body', async () => {
+      const cancel = jest.fn().mockResolvedValue(undefined)
+      const response = {
         ok: true,
         status: 200,
-        json: jest.fn().mockResolvedValue(invalidResponse)
-      })
+        headers: new Headers({ 'content-length': String(64 * 1024 * 1024 + 1) }),
+        body: { cancel }
+      } as unknown as Response
+      fetchImpl.mockResolvedValue(response)
 
-      await expect(overlayRemote.getInitialResponse(mockRequest)).rejects.toThrow('Invalid response format')
+      await expect(overlayRemote.getInitialResponse(request)).rejects.toThrow('exceeds')
+      expect(cancel).toHaveBeenCalled()
     })
   })
 
   describe('requestNode', () => {
-    it('should send a request and return a valid GASPNode', async () => {
-      const graphID = 'graphID1'
-      const txid = 'txid1'
-      const outputIndex = 0
-      const metadata = true
-      const mockResponse: GASPNode = {
-        graphID,
-        rawTx: 'rawTxData',
-        outputIndex,
-        proof: 'proofData',
-        txMetadata: 'txMetadata',
-        outputMetadata: 'outputMetadata',
-        inputs: {}
-      };
+    const validNode: GASPNode = {
+      graphID,
+      rawTx,
+      outputIndex: 0,
+      inputs: {}
+    }
 
-      (fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: jest.fn().mockResolvedValue(mockResponse)
-      })
+    it('returns a transaction-bound node', async () => {
+      fetchImpl.mockResolvedValue(jsonResponse(validNode))
 
-      const response = await overlayRemote.requestNode(graphID, txid, outputIndex, metadata)
-
-      expect(fetch).toHaveBeenCalledWith('http://example.com/requestForeignGASPNode', {
+      await expect(overlayRemote.requestNode(graphID, txid, 0, true)).resolves.toEqual(validNode)
+      expect(fetchImpl).toHaveBeenCalledWith('https://peer.example/requestForeignGASPNode', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ graphID, txid, outputIndex, metadata })
+        headers: { 'Content-Type': 'application/json', 'X-BSV-Topic': 'tm_test' },
+        body: JSON.stringify({ graphID, txid, outputIndex: 0, metadata: true })
       })
-      expect(response).toEqual(mockResponse)
     })
 
-    it('should throw an error if the response status is not OK', async () => {
-      const graphID = 'graphID1'
-      const txid = 'txid1'
-      const outputIndex = 0
-      const metadata = true;
+    it.each([
+      [{ ...validNode, graphID: `${'11'.repeat(32)}.0` }, 'graphID does not match'],
+      [{ ...validNode, outputIndex: 1 }, 'outputIndex does not match'],
+      [{ ...validNode, rawTx: '02000000000000000000' }, 'does not match the requested txid'],
+      [{ ...validNode, inputs: { '__proto__.0': { hash: '00'.repeat(32) } } }, 'input outpoint']
+    ])('rejects uncorrelated or malformed node responses', async (response, message) => {
+      fetchImpl.mockResolvedValue(jsonResponse(response))
 
-      (fetch as jest.Mock).mockResolvedValue({
-        ok: false,
-        status: 500
-      })
-
-      await expect(overlayRemote.requestNode(graphID, txid, outputIndex, metadata)).rejects.toThrow('HTTP error! Status: 500')
-    })
-
-    it('should throw an error if the response format is invalid', async () => {
-      const graphID = 'graphID1'
-      const txid = 'txid1'
-      const outputIndex = 0
-      const metadata = true
-      const invalidResponse = { invalid: 'data' };
-
-      (fetch as jest.Mock).mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: jest.fn().mockResolvedValue(invalidResponse)
-      })
-
-      await expect(overlayRemote.requestNode(graphID, txid, outputIndex, metadata)).rejects.toThrow('Invalid response format')
+      await expect(overlayRemote.requestNode(graphID, txid, 0, true)).rejects.toThrow(message)
     })
   })
 })

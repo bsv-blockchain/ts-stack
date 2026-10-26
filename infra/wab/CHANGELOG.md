@@ -26,6 +26,16 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Preserve detached authentication identity and faucet-payment evidence across
+  unlink, phone transfer, and account/share deletion so re-registration cannot
+  reclaim the one-time faucet. A fail-closed migration backfills linked claims
+  for every persisted payment state and stops on any orphaned payment for
+  operator reconciliation. Unknown or forward-version states remain pending
+  claims instead of reopening eligibility. Deletion
+  responses now disclose this limited anti-abuse retention; operators must
+  document its privacy/legal basis and retention period. This migration requires
+  a maintenance window with every old replica drained; running an old image
+  against the migrated database reopens the reclaim path and is not supported.
 - WAB 1.8.0 adds an optional, staged defense-in-depth vault for presentation-key bearer
   credentials and phone-change history. The additive schema, legacy fallback,
   dual-write backfill, and unchanged HTTP API support rolling upgrades from

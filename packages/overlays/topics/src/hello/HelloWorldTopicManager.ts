@@ -1,24 +1,27 @@
+import { toUTF8 } from '@bsv/sdk/primitives/utils'
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Signature, Transaction, PushDrop, Utils, type TransactionOutput } from '@bsv/sdk'
-
-function isAdmissibleHelloWorldOutput (output: TransactionOutput): boolean {
+import { Signature, Transaction, PushDrop, type TransactionOutput } from '@bsv/sdk'
+function isAdmissibleHelloWorldOutput(output: TransactionOutput): boolean {
   const result = PushDrop.decode(output.lockingScript)
   const signature = result.fields.pop()
 
   if (result.fields?.length !== 1) return false
 
-  const message = Utils.toUTF8(result.fields[0])
+  const message = toUTF8(result.fields[0])
   if (message.length < 2) return false
   if (!result.lockingPublicKey || !signature) return false
 
   const data = result.fields.flat()
   const hasValidSignature = result.lockingPublicKey.verify(data, Signature.fromDER(signature))
-  if (!hasValidSignature) throw new Error('Invalid signature!')
+  if (hasValidSignature !== true) throw new Error('Invalid signature!')
   return true
 }
 
 export default class HelloWorldTopicManager implements TopicManager {
-  async identifyAdmissibleOutputs (beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> {
+  async identifyAdmissibleOutputs(
+    beef: number[],
+    previousCoins: number[]
+  ): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
 
     try {
@@ -37,7 +40,8 @@ export default class HelloWorldTopicManager implements TopicManager {
         }
       }
 
-      if (outputsToAdmit.length === 0) throw new Error('HelloWorld topic manager: no outputs admitted!')
+      if (outputsToAdmit.length === 0)
+        throw new Error('HelloWorld topic manager: no outputs admitted!')
       console.log(`Admitted ${outputsToAdmit.length} HelloWorld output(s)!`)
     } catch (err) {
       if (outputsToAdmit.length === 0 && (!previousCoins || previousCoins.length === 0)) {
@@ -48,11 +52,11 @@ export default class HelloWorldTopicManager implements TopicManager {
     return { outputsToAdmit, coinsToRetain: [] }
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return "HelloWorld Topic Manager: what's your message to the world?"
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string

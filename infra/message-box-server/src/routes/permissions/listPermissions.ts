@@ -6,10 +6,11 @@ import {
   readMessageBoxResourceConfig,
   type MessageBoxResourceConfig
 } from '../../config/resources.js'
+import { readStoredRecipientFee } from '../../utils/messagePermissions.js'
+import { isCanonicalMessageBox, MAX_MESSAGE_BOX_BYTES } from '../../security/messageFields.js'
 
 export const MAX_PERMISSION_PAGE_SIZE = 100
 export const MAX_PERMISSION_OFFSET = 100_000
-const MAX_MESSAGE_BOX_BYTES = 128
 
 export interface ListPermissionsRequest extends AuthRequest {
   query: {
@@ -84,14 +85,13 @@ function normalizeMessageBoxFilter(messageBox: unknown): string | ValidationFail
       description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
     }
   }
-  const normalized = messageBox.trim()
-  if (normalized === '' || Buffer.byteLength(normalized, 'utf8') > MAX_MESSAGE_BOX_BYTES) {
+  if (!isCanonicalMessageBox(messageBox)) {
     return {
       code: 'ERR_INVALID_MESSAGE_BOX',
       description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
     }
   }
-  return normalized
+  return messageBox
 }
 
 function isValidationFailure(value: unknown): value is ValidationFailure {
@@ -112,7 +112,8 @@ function isValidationFailure(value: unknown): value is ValidationFailure {
  *         required: false
  *         schema:
  *           type: string
- *         description: Optional messageBox type filter (e.g., 'notifications', 'inbox')
+ *           maxLength: 128
+ *         description: Optional exact control-free messageBox type filter (e.g., 'notifications', 'inbox')
  *       - in: query
  *         name: limit
  *         required: false
@@ -227,9 +228,7 @@ export default {
       // Validate identity key format
       const recipientKey = req.auth.identityKey
 
-      Logger.log(
-        `[DEBUG] Listing permissions for recipient: ${recipientKey}, messageBox: ${normalizedMessageBox ?? 'all'}, limit: ${limit}, offset: ${offset}, createdAtOrder: ${sortOrder}`
-      )
+      Logger.log('[DEBUG] Listing permissions with validated pagination.')
 
       // Build base query
       let query = runtimeDeps
@@ -255,21 +254,21 @@ export default {
       // Apply pagination
       const permissions = await query.limit(limit).offset(offset)
 
-      Logger.log(`[DEBUG] Found ${permissions.length} permissions (${total} total)`)
+      Logger.log('[DEBUG] Permission query completed.')
 
       return res.status(200).json({
         status: 'success',
         permissions: permissions.map(p => ({
           sender: p.sender, // null for box-wide defaults
           messageBox: p.message_box,
-          recipientFee: p.recipient_fee,
+          recipientFee: readStoredRecipientFee(p.recipient_fee),
           createdAt: p.created_at,
           updatedAt: p.updated_at
         })),
         totalCount: total
       })
-    } catch (error) {
-      Logger.error('[ERROR] Error listing permissions:', error)
+    } catch {
+      Logger.error('[ERROR] Error listing permissions.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_LIST_PERMISSIONS_FAILED',

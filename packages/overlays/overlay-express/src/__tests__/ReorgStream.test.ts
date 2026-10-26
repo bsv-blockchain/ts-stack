@@ -60,7 +60,15 @@ describe('extractSseFrames', () => {
   it('concatenates multi-line data fields within one frame', () => {
     const buffer = 'data: {"a":\ndata: 1}\n\n'
     const { events, rest } = extractSseFrames(buffer)
-    expect(events).toEqual(['{"a":1}'])
+    expect(events).toEqual(['{"a":\n1}'])
     expect(rest).toBe('')
+  })
+
+  it('supports CRLF framing and rejects an oversized partial frame', () => {
+    expect(extractSseFrames('data: {"a":1}\r\n\r\n')).toEqual({
+      events: ['{"a":1}'],
+      rest: ''
+    })
+    expect(() => extractSseFrames(`data: ${'a'.repeat(1024 * 1024)}`)).toThrow(/exceeds/)
   })
 })

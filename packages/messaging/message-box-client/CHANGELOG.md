@@ -13,7 +13,122 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.5.1 candidate — payment acknowledgment ordering
+### 2.7.0 candidate — live socket reconnection, room restoration and reported status
+
+- **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
+  `connecting`, `live` with the rooms joined on it, `reconnecting` after a drop
+  something will recover from, or `closed` with nothing coming. A joined room is
+  one requested on the current socket and not refused by the server: it is
+  recorded when requested, and a refused join removes it from the status at
+  once. Returns an unsubscribe function and calls the listener once immediately
+  with the current status; `liveStatus` reads it without subscribing. A consumer previously had
+  to send a message to find out, which is why one downstream package kept a
+  self-addressed ping purely to manufacture that traffic. A listener that throws
+  is reported and does not stop the others. The status describes the socket
+  only: `listMessages` polling stays required for correctness whatever it says.
+
+- Keep a socket Socket.IO is still reconnecting. A transient `disconnect` used
+  to drop the client's reference without closing the socket, leaving an orphan
+  that kept reconnecting, re-sent `authenticated` down whichever socket had
+  replaced it, and cleared that healthy socket on its own next drop. Every
+  handler is now bound to the socket it belongs to.
+- Track rooms the consumer asked for separately from rooms joined on the
+  current socket, and re-emit them after each `authenticationSuccess` — not on
+  `connect`, because the server refuses joins from an unauthenticated socket.
+  Membership is cleared on a drop, since it belongs to the server-side socket
+  that joined.
+- Rebuild after `io server disconnect`, which Socket.IO never retries, so a
+  subscriber that makes no calls of its own recovers. Only a socket that
+  authenticated is rebuilt, so a server refusing authentication is not retried
+  in a loop. The first rebuild is immediate and each further one doubles from
+  one second to a thirty-second cap. The count resets once a socket holds its
+  authentication for as long as the next delay would have been, so a relay that
+  drops its sockets a little after that window still gets an immediate rebuild
+  each time; the backoff bites when drops come faster than the current delay.
+  `disconnectWebSocket` cancels a rebuild in flight.
+- Read `socketOptions.managerOptions.reconnection` and honour `false` by
+  disposing on a drop. Nothing rebuilds on its own under that setting, which is
+  the host's choice and is documented on the option.
+- `leaveRoom` releases its room before the connected guard, so leaving while
+  disconnected no longer leaves a claim that the next connection rejoins.
+  `disconnectWebSocket` clears rooms and handlers, as deliberate teardown.
+- `getJoinedRooms()` reports the rooms joined on the current socket, in the
+  sense above. Mutating the returned set no longer cancels a rejoin; use
+  `leaveRoom`.
+- Read the server's answer to a join. `joinedRoom` and `joinFailed` have always
+  been emitted and were never listened for, so a refused join left the client
+  certain it was subscribed to a room it had never been given. The record is
+  still made optimistically on emit, so a server that answers nothing behaves
+  exactly as before. **Correcting it needs a server that names the room on
+  `joinFailed`**, which is new alongside this release: without a room the event
+  cannot be attributed to any of the joins that may be in flight, and it is
+  logged and otherwise ignored.
+- One live-message listener per room per socket, reading its subscribers at
+  delivery time. `leaveRoom` followed by another `listenForLiveMessages` used
+  to attach a second listener — there is no `off` — and every message after
+  that arrived twice for the life of the socket. A message is decrypted once
+  however many subscribers a room has, and a subscriber that throws no longer
+  costs the rest of the room its message.
+- One acknowledgement listener per room, with sends queued behind it. Each
+  `sendLiveMessage` used to attach its own and rely on an `off` the socket
+  wrapper does not have, so they accumulated for the life of the socket and
+  every acknowledgement walked all of them. A refusal carries no `messageId`,
+  so the oldest send in flight still takes the acknowledgement, as before.
+- `sendLiveMessage` falls back to HTTP when the socket cannot be established,
+  authenticated or joined, instead of throwing. Right after a server restart the
+  reconnected socket can be closed again while the send waits on it, and the
+  send used to fail with `WebSocket disconnected` and store nothing; an
+  authentication timeout failed the same way. Invalid parameters still throw,
+  and so does a conflicting WebSocket identity pin, which is a misconfiguration
+  that falling back would hide.
+- Pace room joins: at most 16 await the server's answer per socket, and the rest
+  are sent as `joinedRoom` or `joinFailed` arrives for a room in flight, or after
+  five seconds without one, so a server that answers nothing still gets every
+  join. The server drops a socket with more than 32 signed messages in process,
+  so a client on more than 32 boxes, which re-sent every join at once after each
+  authentication, was dropped, rebuilt and dropped again without ever holding a
+  room. A drop clears the queue with the membership. The record stays
+  optimistic: a room is in `getJoinedRooms()` from the moment it is requested,
+  queued or sent, and `joinRoom` still resolves at once.
+- **A live message is delivered a tick after it arrives.** It already was for
+  an encrypted message; now it always is, because the body is read before any
+  subscriber is called. A consumer asserting synchronous delivery in a test
+  needs to let the microtask run.
+
+### 2.6.0 candidate — list APIs keep payments the wallet did not store (#503)
+
+- `listMessages()` and `listMessagesLite()` now report `paymentOutcome` on each
+  message that carried a payment (`'internalized'`, `'failed'`, `'skipped'` or
+  `'no-wallet-outputs'`), and keep that `payment` on the returned message unless
+  the wallet accepted it. Before, the payment envelope was always removed and a
+  failed internalization was only logged, so a caller that acknowledged the
+  message deleted the only copy of the payment. Both fields are optional and
+  absent on messages without a payment. `listMessagesLite()` never internalizes,
+  so it now returns payments as `'skipped'`. A payment missing its transaction
+  or outputs is reported as `'failed'` instead of being skipped silently.
+  Migration: none required; to avoid losing payments, store any returned
+  `payment` before acknowledging its message.
+
+### 2.5.4 candidate — require the BRC-29 acceptance fix
+
+- Raise the `@bsv/sdk` peer floor from `^2.8.0` to `^2.8.6`. SDK 2.8.0 through
+  2.8.5 derive the wrong recipient key in `Brc29RemittanceModule.acceptSettlement`,
+  so `PeerPayClient.acceptPayment()` and `rejectPayment()` fail for every valid
+  incoming payment. No source change; SDK 2.8.6 fixes acceptance.
+
+### 2.5.3 candidate — CommonJS SDK interop and send failure codes
+
+- Fix the CommonJS build so `new MessageBoxClient()` no longer fails with
+  `LookupResolver.default is not a constructor`; SDK classes are imported by
+  name from the SDK barrels.
+- `sendMessage()` HTTP failures now include the server's well-formed failure
+  code, for example `Message Box send failed with HTTP 400
+(ERR_DUPLICATE_MESSAGE).`, so callers can recognise an already-delivered
+  message. Free-text server descriptions are still never copied into errors.
+- Raise the `@bsv/sdk` peer floor to `^2.8.0`. The package already required
+  SDK modules that first shipped in 2.8.0, so earlier 2.x SDKs never loaded it.
+
+### 2.5.2 candidate — authenticated transport and payment hardening
 
 - Internalize notification payments with the configured originator before acknowledgment.
 - Require affirmative wallet acceptance in notification and PeerPay paths.
@@ -69,6 +184,20 @@ All notable changes to this project will be documented in this file. The format 
   before wallet or adapter dispatch; malformed bytes are never acknowledged.
 
 ### Security
+
+- Require every Message Box HTTP response to remain BRC-103 mutually
+  authenticated, pin one curve-valid server identity per origin, restrict
+  plaintext HTTP to loopback, and support independently provisioned durable
+  `serverIdentityKeysByHost` pins.
+- Validate and bound overlay advertisements, PushDrop envelopes, BEEF,
+  identities, room, box, message, device, permission, and token values before
+  wallet or application use.
+- Snapshot outgoing send authority, bind quote and send rows to exact
+  recipients and message IDs, enforce safe-integer fees and optional
+  `maximumPayment` ceilings, and verify that returned Atomic BEEF preserves
+  every requested script, amount, and remittance index.
+- Make client diagnostics opt-in and event-only so wallet, message, payment,
+  host, identity, token, transaction, and response data are not logged.
 
 ---
 

@@ -1,4 +1,14 @@
 import { Beef, Transaction } from '@bsv/sdk'
+import {
+  fetchWithDeadline,
+  isRecord,
+  readBoundedText,
+  secureServiceFetch
+} from './OutboundSecurity.js'
+
+const DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
+const DEFAULT_MAX_ANALYZED_OUTPUTS = 100
+const MAX_CONFIGURED_OUTPUTS = 10_000
 
 export interface OverlayMonitorLogger {
   log: (...args: any[]) => void
@@ -36,6 +46,8 @@ export interface OverlayMaintenanceConfig {
 export interface OverlayMonitorTarget {
   name: string
   baseUrl: string
+  /** Permit HTTP/private targets for isolated local development only. */
+  allowPrivateHosts?: boolean
   probes: OverlayLookupProbe[]
   anchorProbes?: OverlayAnchorProbe[]
   maintenance?: OverlayMaintenanceConfig
@@ -57,6 +69,10 @@ export interface OverlayMonitorConfig {
   intervalMs?: number
   /** Per-probe request timeout in milliseconds. Defaults to 30000. */
   timeoutMs?: number
+  /** Hard cap for each response body. Defaults to 64 MiB. */
+  maxResponseBytes?: number
+  /** Default cap for BEEF outputs analyzed per probe. Defaults to 100. */
+  maxAnalyzedOutputs?: number
   fetchImpl?: typeof fetch
   logger?: OverlayMonitorLogger
   onReport?: (report: OverlayMonitorReport) => Promise<void> | void
@@ -184,26 +200,37 @@ const defaultThresholds: Required<OverlayMonitorThresholds> = {
 export class OverlayMonitor {
   private readonly targets: OverlayMonitorTarget[]
   private readonly thresholds: Required<OverlayMonitorThresholds>
-  private readonly fetchImpl: typeof fetch
+  private readonly fetchers = new WeakMap<OverlayMonitorTarget, typeof fetch>()
   private readonly logger: OverlayMonitorLogger
   private readonly onReport?: (report: OverlayMonitorReport) => Promise<void> | void
   private readonly now: () => Date
   private readonly intervalMs?: number
   private readonly timeoutMs: number
+  private readonly maxResponseBytes: number
+  private readonly maxAnalyzedOutputs: number
   private timer?: ReturnType<typeof setInterval>
   private running = false
 
   constructor (config: OverlayMonitorConfig) {
-    this.targets = config.targets
+    validateMonitorConfig(config)
+    this.targets = config.targets.map(target => {
+      const transport = secureServiceFetch(
+        target.baseUrl,
+        config.fetchImpl,
+        target.allowPrivateHosts ?? false
+      )
+      const normalized = { ...target, baseUrl: transport.baseUrl }
+      this.fetchers.set(normalized, transport.fetchImpl)
+      return normalized
+    })
     this.thresholds = { ...defaultThresholds, ...config.thresholds }
-    // Bind to globalThis so calling through this.fetchImpl does not rebind `this`
-    // (browser fetch throws "Illegal invocation" when invoked as a method).
-    this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis)
     this.logger = config.logger ?? console
     this.onReport = config.onReport
     this.now = config.now ?? (() => new Date())
     this.intervalMs = config.intervalMs
     this.timeoutMs = config.timeoutMs ?? 30000
+    this.maxResponseBytes = config.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
+    this.maxAnalyzedOutputs = config.maxAnalyzedOutputs ?? DEFAULT_MAX_ANALYZED_OUTPUTS
   }
 
   async runOnce (): Promise<OverlayMonitorReport> {
@@ -266,37 +293,42 @@ export class OverlayMonitor {
   private async runProbe (target: OverlayMonitorTarget, probe: OverlayLookupProbe): Promise<OverlayLookupProbeResult> {
     const startedAt = this.now()
     const url = new URL('/lookup', target.baseUrl).toString()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
 
     try {
-      const response = await this.fetchImpl(url, {
+      const response = await fetchWithDeadline(this.fetchFor(target), url, {
         method: 'POST',
         headers: {
+          ...target.headers,
           Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...target.headers
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ service: probe.service, query: probe.query }),
-        signal: controller.signal
-      })
-      const text = await response.text()
+        body: JSON.stringify({ service: probe.service, query: probe.query })
+      }, this.timeoutMs)
+      const text = await readBoundedText(
+        response,
+        this.maxResponseBytes,
+        'Overlay lookup response',
+        this.timeoutMs
+      )
       const responseBytes = new TextEncoder().encode(text).length
       const completedAt = this.now()
 
       let body: unknown
       try {
         body = text.length === 0 ? {} : JSON.parse(text)
-      } catch (error) {
+        if (!isRecord(body) || !Array.isArray(body.outputs)) {
+          throw new TypeError('Lookup response must contain an outputs array')
+        }
+      } catch {
         return makeFailedResult({
           target,
           probe,
           url,
           status: response.status,
-          ok: response.ok,
+          ok: false,
           responseBytes,
           durationMs: completedAt.getTime() - startedAt.getTime(),
-          error: error instanceof Error ? error.message : 'Invalid JSON response'
+          error: 'Invalid Overlay lookup JSON response'
         })
       }
 
@@ -311,14 +343,10 @@ export class OverlayMonitor {
         responseBytes,
         durationMs: completedAt.getTime() - startedAt.getTime(),
         thresholds: this.thresholds,
-        maxOutputs: probe.maxOutputs
+        maxOutputs: probe.maxOutputs ?? this.maxAnalyzedOutputs
       })
     } catch (error) {
       const completedAt = this.now()
-      const fallbackMessage = error instanceof Error ? error.message : 'Lookup probe failed'
-      const message = controller.signal.aborted
-        ? `Lookup probe timed out after ${this.timeoutMs}ms`
-        : fallbackMessage
       return makeFailedResult({
         target,
         probe,
@@ -327,48 +355,50 @@ export class OverlayMonitor {
         ok: false,
         responseBytes: 0,
         durationMs: completedAt.getTime() - startedAt.getTime(),
-        error: message
+        error: boundedErrorMessage(error, 'Lookup probe failed')
       })
-    } finally {
-      clearTimeout(timeout)
     }
   }
 
   private async runAnchorProbe(target: OverlayMonitorTarget, probe: OverlayAnchorProbe): Promise<OverlayAnchorProbeResult> {
     const startedAt = this.now()
     const url = new URL('/requestTopicAnchorTip', target.baseUrl).toString()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
 
     try {
-      const response = await this.fetchImpl(url, {
+      const response = await fetchWithDeadline(this.fetchFor(target), url, {
         method: 'POST',
         headers: {
+          ...target.headers,
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'x-bsv-topic': probe.topic,
-          ...target.headers
+          'x-bsv-topic': probe.topic
         },
-        body: JSON.stringify({}),
-        signal: controller.signal
-      })
-      const text = await response.text()
+        body: JSON.stringify({})
+      }, this.timeoutMs)
+      const text = await readBoundedText(
+        response,
+        this.maxResponseBytes,
+        'Overlay anchor response',
+        this.timeoutMs
+      )
       const responseBytes = new TextEncoder().encode(text).length
       const completedAt = this.now()
       let body: Record<string, unknown>
 
       try {
-        body = text.length === 0 ? {} : JSON.parse(text)
-      } catch (error) {
+        const parsed: unknown = text.length === 0 ? {} : JSON.parse(text)
+        if (!isRecord(parsed)) throw new TypeError('Anchor response must be an object')
+        body = parsed
+      } catch {
         return makeFailedAnchorResult({
           target,
           probe,
           url,
           status: response.status,
-          ok: response.ok,
+          ok: false,
           responseBytes,
           durationMs: completedAt.getTime() - startedAt.getTime(),
-          error: error instanceof Error ? error.message : 'Invalid JSON response'
+          error: 'Invalid Overlay anchor JSON response'
         })
       }
 
@@ -390,10 +420,6 @@ export class OverlayMonitor {
       })
     } catch (error) {
       const completedAt = this.now()
-      const fallbackMessage = error instanceof Error ? error.message : 'Anchor probe failed'
-      const message = controller.signal.aborted
-        ? `Anchor probe timed out after ${this.timeoutMs}ms`
-        : fallbackMessage
       return makeFailedAnchorResult({
         target,
         probe,
@@ -402,10 +428,8 @@ export class OverlayMonitor {
         ok: false,
         responseBytes: 0,
         durationMs: completedAt.getTime() - startedAt.getTime(),
-        error: message
+        error: boundedErrorMessage(error, 'Anchor probe failed')
       })
-    } finally {
-      clearTimeout(timeout)
     }
   }
 
@@ -448,32 +472,34 @@ export class OverlayMonitor {
   ): Promise<OverlayMaintenanceResult> {
     const startedAt = this.now()
     const url = new URL(path, target.baseUrl).toString()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
 
     try {
       const headers: Record<string, string> = {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
         ...target.headers,
-        ...maintenance.headers
+        ...maintenance.headers,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
       }
       if (maintenance.adminToken !== undefined && maintenance.adminToken !== '') {
         headers.Authorization = `Bearer ${maintenance.adminToken}`
       }
-      const response = await this.fetchImpl(url, {
+      const response = await fetchWithDeadline(this.fetchFor(target), url, {
         method: 'POST',
         headers,
-        body: JSON.stringify(stripUndefined(body)),
-        signal: controller.signal
-      })
-      const text = await response.text()
+        body: JSON.stringify(stripUndefined(body))
+      }, this.timeoutMs)
+      const text = await readBoundedText(
+        response,
+        this.maxResponseBytes,
+        'Overlay maintenance response',
+        this.timeoutMs
+      )
       const responseBytes = new TextEncoder().encode(text).length
       const completedAt = this.now()
       let parsed: unknown
       try {
         parsed = text.length === 0 ? {} : JSON.parse(text)
-      } catch (error) {
+      } catch {
         return {
           target: target.name,
           url,
@@ -483,7 +509,7 @@ export class OverlayMonitor {
           ok: false,
           responseBytes,
           durationMs: completedAt.getTime() - startedAt.getTime(),
-          error: error instanceof Error ? error.message : 'Invalid JSON response'
+          error: 'Invalid Overlay maintenance JSON response'
         }
       }
       return {
@@ -500,10 +526,6 @@ export class OverlayMonitor {
       }
     } catch (error) {
       const completedAt = this.now()
-      const fallbackMessage = error instanceof Error ? error.message : 'Maintenance request failed'
-      const message = controller.signal.aborted
-        ? `Maintenance request timed out after ${this.timeoutMs}ms`
-        : fallbackMessage
       return {
         target: target.name,
         url,
@@ -513,12 +535,137 @@ export class OverlayMonitor {
         ok: false,
         responseBytes: 0,
         durationMs: completedAt.getTime() - startedAt.getTime(),
-        error: message
+        error: boundedErrorMessage(error, 'Maintenance request failed')
       }
-    } finally {
-      clearTimeout(timeout)
     }
   }
+
+  private fetchFor(target: OverlayMonitorTarget): typeof fetch {
+    const fetchImpl = this.fetchers.get(target)
+    if (fetchImpl === undefined) throw new Error('Overlay monitor transport is unavailable')
+    return fetchImpl
+  }
+}
+
+function validateMonitorConfig(config: OverlayMonitorConfig): void {
+  if (!Array.isArray(config.targets) || config.targets.length > 1000) {
+    throw new TypeError('OverlayMonitor targets must be an array with at most 1000 entries')
+  }
+  assertPositiveInteger(config.timeoutMs, 'timeoutMs', 300_000)
+  assertPositiveInteger(config.intervalMs, 'intervalMs', 2_147_483_647)
+  assertPositiveInteger(config.maxResponseBytes, 'maxResponseBytes', 1024 * 1024 * 1024)
+  assertPositiveInteger(config.maxAnalyzedOutputs, 'maxAnalyzedOutputs', MAX_CONFIGURED_OUTPUTS)
+
+  const numericThresholds = ['responseBytes', 'beefBytes', 'txsWithoutProof', 'anchorTipLagBlocks', 'expiredUnprovenCount'] as const
+  for (const name of numericThresholds) {
+    const value = config.thresholds?.[name]
+    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+      throw new TypeError(`thresholds.${name} must be a non-negative safe integer`)
+    }
+  }
+  if (
+    config.thresholds?.requireSubjectProof !== undefined &&
+    typeof config.thresholds.requireSubjectProof !== 'boolean'
+  ) {
+    throw new TypeError('thresholds.requireSubjectProof must be a boolean')
+  }
+
+  for (const target of config.targets) {
+    assertConfigString(target.name, 'target.name', 256)
+    assertConfigString(target.baseUrl, 'target.baseUrl', 4096)
+    if (target.allowPrivateHosts !== undefined && typeof target.allowPrivateHosts !== 'boolean') {
+      throw new TypeError('target.allowPrivateHosts must be a boolean')
+    }
+    validateHeaders(target.headers, 'target.headers')
+    if (!Array.isArray(target.probes) || target.probes.length > MAX_CONFIGURED_OUTPUTS) {
+      throw new TypeError(`target.probes must contain at most ${MAX_CONFIGURED_OUTPUTS} entries`)
+    }
+    for (const probe of target.probes) {
+      assertConfigString(probe.service, 'probe.service', 1024)
+      if (probe.name !== undefined) assertConfigString(probe.name, 'probe.name', 1024)
+      assertPositiveInteger(probe.maxOutputs, 'probe.maxOutputs', MAX_CONFIGURED_OUTPUTS, true)
+    }
+    if (target.anchorProbes !== undefined) {
+      if (!Array.isArray(target.anchorProbes) || target.anchorProbes.length > MAX_CONFIGURED_OUTPUTS) {
+        throw new TypeError(`target.anchorProbes must contain at most ${MAX_CONFIGURED_OUTPUTS} entries`)
+      }
+      for (const probe of target.anchorProbes) {
+        assertConfigString(probe.topic, 'anchorProbe.topic', 1024)
+        if (probe.name !== undefined) assertConfigString(probe.name, 'anchorProbe.name', 1024)
+      }
+    }
+    if (target.maintenance !== undefined) {
+      validateHeaders(target.maintenance.headers, 'maintenance.headers')
+      if (target.maintenance.adminToken !== undefined) {
+        assertConfigString(target.maintenance.adminToken, 'maintenance.adminToken', 16 * 1024, true)
+      }
+      const unproven = target.maintenance.maintainUnproven
+      if (typeof unproven === 'object' && unproven !== null) {
+        if (unproven.topics !== undefined) {
+          if (!Array.isArray(unproven.topics) || unproven.topics.length > MAX_CONFIGURED_OUTPUTS) {
+            throw new TypeError(`maintenance topics must contain at most ${MAX_CONFIGURED_OUTPUTS} entries`)
+          }
+          for (const topic of unproven.topics) assertConfigString(topic, 'maintenance topic', 1024)
+        }
+        if (
+          unproven.thresholdBlocks !== undefined &&
+          (!Number.isSafeInteger(unproven.thresholdBlocks) || unproven.thresholdBlocks < 0)
+        ) {
+          throw new TypeError('maintenance thresholdBlocks must be a non-negative safe integer')
+        }
+      }
+    }
+  }
+}
+
+function assertPositiveInteger(
+  value: unknown,
+  label: string,
+  maximum: number,
+  allowZero = false
+): void {
+  if (value === undefined) return
+  if (
+    !Number.isSafeInteger(value) ||
+    (allowZero ? (value as number) < 0 : (value as number) <= 0) ||
+    (value as number) > maximum
+  ) {
+    throw new TypeError(`${label} must be a ${allowZero ? 'non-negative' : 'positive'} safe integer no greater than ${maximum}`)
+  }
+}
+
+function assertConfigString(value: unknown, label: string, maxBytes: number, allowEmpty = false): void {
+  if (
+    typeof value !== 'string' ||
+    (!allowEmpty && value.length === 0) ||
+    [...value].some(character => {
+      const codePoint = character.codePointAt(0) ?? 0
+      return codePoint <= 31 || codePoint === 127
+    }) ||
+    new TextEncoder().encode(value).byteLength > maxBytes
+  ) {
+    throw new TypeError(`${label} must be a bounded string without control characters`)
+  }
+}
+
+function validateHeaders(headers: Record<string, string> | undefined, label: string): void {
+  if (headers === undefined) return
+  if (!isRecord(headers) || Object.keys(headers).length > 128) {
+    throw new TypeError(`${label} must be a record with at most 128 entries`)
+  }
+  for (const [name, value] of Object.entries(headers)) {
+    if (!/^[!#$%&'*+.^_\x60|~0-9A-Za-z-]{1,256}$/.test(name)) {
+      throw new TypeError(`${label} contains an invalid header name`)
+    }
+    assertConfigString(value, `${label}.${name}`, 16 * 1024, true)
+  }
+}
+
+function boundedErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback
+  return new TextEncoder().encode(message).byteLength <= 1024
+    ? message
+    : `${message.slice(0, 1024)}…`
 }
 
 export function analyzeOverlayAnchorTip(options: {
@@ -743,7 +890,7 @@ function analyzeOutput (output: Record<string, unknown>): OverlayLookupOutputSum
   try {
     const subjectTx = Transaction.fromBEEF(beef)
     const txid = subjectTx.id('hex')
-    const parsedBeef = Beef.fromBinary(beef)
+    const parsedBeef = Beef.fromBinaryStrict(beef)
     const subject = parsedBeef.findTxid(txid)
     const subjectRawTxBytes = subject?.rawTx?.length ?? subjectTx.toBinary().length
     const proofCount = parsedBeef.txs.filter(tx => tx.hasProof).length

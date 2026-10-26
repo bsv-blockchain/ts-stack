@@ -1,4 +1,59 @@
-import { WalletInterface, OriginatorDomainNameStringUnder250Bytes, GetPublicKeyArgs, GetPublicKeyResult, RevealCounterpartyKeyLinkageArgs, RevealCounterpartyKeyLinkageResult, RevealSpecificKeyLinkageArgs, RevealSpecificKeyLinkageResult, WalletEncryptArgs, WalletEncryptResult, WalletDecryptArgs, WalletDecryptResult, CreateHmacArgs, CreateHmacResult, VerifyHmacArgs, VerifyHmacResult, CreateSignatureArgs, CreateSignatureResult, VerifySignatureArgs, VerifySignatureResult, CreateActionArgs, CreateActionResult, SignActionArgs, SignActionResult, AbortActionArgs, AbortActionResult, ListActionsArgs, ListActionsResult, InternalizeActionArgs, InternalizeActionResult, ListOutputsArgs, ListOutputsResult, RelinquishOutputArgs, RelinquishOutputResult, AcquireCertificateArgs, AcquireCertificateResult, ListCertificatesArgs, ListCertificatesResult, ProveCertificateArgs, ProveCertificateResult, RelinquishCertificateArgs, RelinquishCertificateResult, DiscoverByIdentityKeyArgs, DiscoverByAttributesArgs, DiscoverCertificatesResult, AuthenticatedResult, GetHeightResult, GetHeaderArgs, GetHeaderResult, GetNetworkResult, GetVersionResult, Utils, Random, SymmetricKey } from '@bsv/sdk'
+import {
+  WalletInterface,
+  OriginatorDomainNameStringUnder250Bytes,
+  GetPublicKeyArgs,
+  GetPublicKeyResult,
+  RevealCounterpartyKeyLinkageArgs,
+  RevealCounterpartyKeyLinkageResult,
+  RevealSpecificKeyLinkageArgs,
+  RevealSpecificKeyLinkageResult,
+  WalletEncryptArgs,
+  WalletEncryptResult,
+  WalletDecryptArgs,
+  WalletDecryptResult,
+  CreateHmacArgs,
+  CreateHmacResult,
+  VerifyHmacArgs,
+  VerifyHmacResult,
+  CreateSignatureArgs,
+  CreateSignatureResult,
+  VerifySignatureArgs,
+  VerifySignatureResult,
+  CreateActionArgs,
+  CreateActionResult,
+  SignActionArgs,
+  SignActionResult,
+  AbortActionArgs,
+  AbortActionResult,
+  ListActionsArgs,
+  ListActionsResult,
+  InternalizeActionArgs,
+  InternalizeActionResult,
+  ListOutputsArgs,
+  ListOutputsResult,
+  RelinquishOutputArgs,
+  RelinquishOutputResult,
+  AcquireCertificateArgs,
+  AcquireCertificateResult,
+  ListCertificatesArgs,
+  ListCertificatesResult,
+  ProveCertificateArgs,
+  ProveCertificateResult,
+  RelinquishCertificateArgs,
+  RelinquishCertificateResult,
+  DiscoverByIdentityKeyArgs,
+  DiscoverByAttributesArgs,
+  DiscoverCertificatesResult,
+  AuthenticatedResult,
+  GetHeightResult,
+  GetHeaderArgs,
+  GetHeaderResult,
+  GetNetworkResult,
+  GetVersionResult,
+  Random,
+  SymmetricKey
+} from '@bsv/sdk'
+import { Reader, Writer } from '@bsv/sdk/primitives/utils'
 
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 
@@ -39,7 +94,7 @@ export class SimpleWalletManager implements WalletInterface {
    * When no snapshot is provided this resolves immediately.
    * Await `ready` before calling wallet methods after constructing with a snapshot.
    */
-  get ready (): Promise<void> {
+  get ready(): Promise<void> {
     this._readyInit ??= this._init()
     return this._readyInit
   }
@@ -58,7 +113,10 @@ export class SimpleWalletManager implements WalletInterface {
    * returns a new `WalletInterface` instance that handles the actual signing,
    * encryption, transaction building, etc.
    */
-  private readonly walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>
+  private readonly walletBuilder: (
+    primaryKey: number[],
+    privilegedKeyManager: PrivilegedKeyManager
+  ) => Promise<WalletInterface>
 
   /**
    * The underlying wallet instance that is built once authenticated.
@@ -85,7 +143,7 @@ export class SimpleWalletManager implements WalletInterface {
    *                        If the snapshot contains a primary key, it will be loaded immediately
    *                        (though you will still need to provide a privileged key manager to authenticate).
    */
-  constructor (
+  constructor(
     adminOriginator: OriginatorDomainNameStringUnder250Bytes,
     walletBuilder: (primaryKey: number[], privilegedKeyManager: PrivilegedKeyManager) => Promise<WalletInterface>,
     stateSnapshot?: number[]
@@ -97,7 +155,7 @@ export class SimpleWalletManager implements WalletInterface {
     this._initSnapshot = stateSnapshot
   }
 
-  private async _init (): Promise<void> {
+  private async _init(): Promise<void> {
     if (this._initSnapshot !== undefined) {
       await this.loadSnapshot(this._initSnapshot)
     }
@@ -110,7 +168,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * @param key A 32-byte primary key.
    */
-  async providePrimaryKey (key: number[]): Promise<void> {
+  async providePrimaryKey(key: number[]): Promise<void> {
     this.primaryKey = key
     await this.tryBuildUnderlying()
   }
@@ -122,7 +180,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * @param manager An instance of `PrivilegedKeyManager`.
    */
-  async providePrivilegedKeyManager (manager: PrivilegedKeyManager): Promise<void> {
+  async providePrivilegedKeyManager(manager: PrivilegedKeyManager): Promise<void> {
     this.underlyingPrivilegedKeyManager = manager
     await this.tryBuildUnderlying()
   }
@@ -131,11 +189,11 @@ export class SimpleWalletManager implements WalletInterface {
    * Internal method that checks if we have both the primary key and privileged manager.
    * If so, we build the underlying wallet instance and become authenticated.
    */
-  private async tryBuildUnderlying (): Promise<void> {
+  private async tryBuildUnderlying(): Promise<void> {
     if (this.authenticated) {
       throw new Error('The user is already authenticated.')
     }
-    if ((this.primaryKey == null) || (this.underlyingPrivilegedKeyManager == null)) {
+    if (this.primaryKey == null || this.underlyingPrivilegedKeyManager == null) {
       return
     }
     // Build the underlying wallet:
@@ -148,7 +206,7 @@ export class SimpleWalletManager implements WalletInterface {
    *
    * This clears the primary key, the privileged key manager, and the `authenticated` flag.
    */
-  destroy (): void {
+  destroy(): void {
     this.underlying = undefined
     this.underlyingPrivilegedKeyManager = undefined
     this.authenticated = false
@@ -171,7 +229,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @returns A byte array representing the encrypted snapshot.
    * @throws {Error} if no primary key is currently set.
    */
-  saveSnapshot (): number[] {
+  saveSnapshot(): number[] {
     if (this.primaryKey == null) {
       throw new Error('No primary key is set; cannot save snapshot.')
     }
@@ -180,7 +238,7 @@ export class SimpleWalletManager implements WalletInterface {
     const snapshotKey = Random(32)
 
     // For this simple wallet manager, we only store the primary key.
-    const writer = new Utils.Writer()
+    const writer = new Writer()
     // Write a 1-byte version:
     writer.writeUInt8(1)
     // Write a varint length and then the primary key bytes:
@@ -193,7 +251,7 @@ export class SimpleWalletManager implements WalletInterface {
     const encryptedPayload = new SymmetricKey(snapshotKey).encrypt(snapshotPreimage) as number[]
 
     // Build the final snapshot: [ snapshotKey (32 bytes) + encryptedPayload ]
-    const snapshotWriter = new Utils.Writer()
+    const snapshotWriter = new Writer()
     snapshotWriter.write(snapshotKey)
     snapshotWriter.write(encryptedPayload)
 
@@ -208,9 +266,9 @@ export class SimpleWalletManager implements WalletInterface {
    * @param snapshot A byte array that was previously returned by `saveSnapshot`.
    * @throws {Error} If the snapshot format is invalid or decryption fails.
    */
-  async loadSnapshot (snapshot: number[]): Promise<void> {
+  async loadSnapshot(snapshot: number[]): Promise<void> {
     try {
-      const reader = new Utils.Reader(snapshot)
+      const reader = new Reader(snapshot)
 
       // First 32 bytes is the snapshotKey:
       const snapshotKey = reader.read(32)
@@ -221,7 +279,7 @@ export class SimpleWalletManager implements WalletInterface {
       // Decrypt the payload with the snapshotKey:
       const decrypted = new SymmetricKey(snapshotKey).decrypt(encryptedPayload) as number[]
 
-      const payloadReader = new Utils.Reader(decrypted)
+      const payloadReader = new Reader(decrypted)
 
       // Check version:
       const version = payloadReader.readUInt8()
@@ -230,7 +288,7 @@ export class SimpleWalletManager implements WalletInterface {
       }
 
       // Read the varint length and the primary key:
-      const pkLength = payloadReader.readVarIntNum()
+      const pkLength = payloadReader.readVarIntNumStrict(false)
       const pk = payloadReader.read(pkLength)
 
       this.primaryKey = pk
@@ -250,7 +308,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @param originator The originator domain, which must not be the admin originator.
    * @throws If not authenticated, or if the originator is the admin.
    */
-  async isAuthenticated (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+  async isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
     this.ensureCanCall(originator)
     return { authenticated: true }
   }
@@ -263,7 +321,7 @@ export class SimpleWalletManager implements WalletInterface {
    * @param originator The originator domain, which must not be the admin originator.
    * @throws If the originator is the admin.
    */
-  async waitForAuthentication (
+  async waitForAuthentication(
     _: {},
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AuthenticatedResult> {
@@ -276,7 +334,7 @@ export class SimpleWalletManager implements WalletInterface {
     return { authenticated: true }
   }
 
-  async getPublicKey (
+  async getPublicKey(
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
@@ -284,7 +342,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.getPublicKey(args, originator)
   }
 
-  async revealCounterpartyKeyLinkage (
+  async revealCounterpartyKeyLinkage(
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
@@ -292,7 +350,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.revealCounterpartyKeyLinkage(args, originator)
   }
 
-  async revealSpecificKeyLinkage (
+  async revealSpecificKeyLinkage(
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
@@ -300,7 +358,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.revealSpecificKeyLinkage(args, originator)
   }
 
-  async encrypt (
+  async encrypt(
     args: WalletEncryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletEncryptResult> {
@@ -308,7 +366,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.encrypt(args, originator)
   }
 
-  async decrypt (
+  async decrypt(
     args: WalletDecryptArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<WalletDecryptResult> {
@@ -316,7 +374,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.decrypt(args, originator)
   }
 
-  async createHmac (
+  async createHmac(
     args: CreateHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateHmacResult> {
@@ -324,7 +382,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.createHmac(args, originator)
   }
 
-  async verifyHmac (
+  async verifyHmac(
     args: VerifyHmacArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifyHmacResult> {
@@ -332,7 +390,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.verifyHmac(args, originator)
   }
 
-  async createSignature (
+  async createSignature(
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
@@ -340,7 +398,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.createSignature(args, originator)
   }
 
-  async verifySignature (
+  async verifySignature(
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
@@ -348,7 +406,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.verifySignature(args, originator)
   }
 
-  async createAction (
+  async createAction(
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
@@ -356,7 +414,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.createAction(args, originator)
   }
 
-  async signAction (
+  async signAction(
     args: SignActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<SignActionResult> {
@@ -364,7 +422,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.signAction(args, originator)
   }
 
-  async abortAction (
+  async abortAction(
     args: AbortActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AbortActionResult> {
@@ -372,7 +430,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.abortAction(args, originator)
   }
 
-  async listActions (
+  async listActions(
     args: ListActionsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListActionsResult> {
@@ -380,7 +438,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.listActions(args, originator)
   }
 
-  async internalizeAction (
+  async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
@@ -388,7 +446,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.internalizeAction(args, originator)
   }
 
-  async listOutputs (
+  async listOutputs(
     args: ListOutputsArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListOutputsResult> {
@@ -396,7 +454,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.listOutputs(args, originator)
   }
 
-  async relinquishOutput (
+  async relinquishOutput(
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
@@ -404,7 +462,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.relinquishOutput(args, originator)
   }
 
-  async acquireCertificate (
+  async acquireCertificate(
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
@@ -412,7 +470,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.acquireCertificate(args, originator)
   }
 
-  async listCertificates (
+  async listCertificates(
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
@@ -420,7 +478,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.listCertificates(args, originator)
   }
 
-  async proveCertificate (
+  async proveCertificate(
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
@@ -428,7 +486,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.proveCertificate(args, originator)
   }
 
-  async relinquishCertificate (
+  async relinquishCertificate(
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
@@ -436,7 +494,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.relinquishCertificate(args, originator)
   }
 
-  async discoverByIdentityKey (
+  async discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
@@ -444,7 +502,7 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.discoverByIdentityKey(args, originator)
   }
 
-  async discoverByAttributes (
+  async discoverByAttributes(
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
@@ -452,12 +510,12 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.discoverByAttributes(args, originator)
   }
 
-  async getHeight (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+  async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
     this.ensureCanCall(originator)
     return await this.underlying!.getHeight({}, originator)
   }
 
-  async getHeaderForHeight (
+  async getHeaderForHeight(
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
@@ -465,12 +523,12 @@ export class SimpleWalletManager implements WalletInterface {
     return await this.underlying!.getHeaderForHeight(args, originator)
   }
 
-  async getNetwork (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+  async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
     this.ensureCanCall(originator)
     return await this.underlying!.getNetwork({}, originator)
   }
 
-  async getVersion (_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+  async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
     this.ensureCanCall(originator)
     return await this.underlying!.getVersion({}, originator)
   }
@@ -479,7 +537,7 @@ export class SimpleWalletManager implements WalletInterface {
    * A small helper that throws if the user is not authenticated or if the
    * provided originator is the admin (which is not permitted externally).
    */
-  private ensureCanCall (originator?: OriginatorDomainNameStringUnder250Bytes) {
+  private ensureCanCall(originator?: OriginatorDomainNameStringUnder250Bytes) {
     if (originator === this.adminOriginator) {
       throw new Error('External applications cannot use the admin originator.')
     }

@@ -13,8 +13,8 @@ test('pins every component and license file in the deployed docs bundle', () => 
   const { registry, errors } = checkBundledLicensePolicy()
 
   assert.deepEqual(errors, [])
-  assert.equal(registry.components.length, 55)
-  assert.equal(registry.components.filter(component => component.kind === 'vite').length, 53)
+  assert.equal(registry.components.length, 60)
+  assert.equal(registry.components.filter(component => component.kind === 'vite').length, 58)
   assert.ok(
     registry.components.some(
       component => component.name === 'pagefind' && component.version === '1.5.2'

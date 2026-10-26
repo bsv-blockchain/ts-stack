@@ -1,118 +1,105 @@
-/* eslint-env jest */
-// set up env vars before requiring
-process.env.SERVER_PRIVATE_KEY = '5KU2L5qbkL5MPnUK1cuC5fWamjz7aoKCAZAbKdqmChed8TTbWCZ'
+process.env.SERVER_PRIVATE_KEY = '44'.repeat(32)
 process.env.BSV_NETWORK = 'testnet'
 process.env.WALLET_STORAGE_URL = 'http://localhost:3000'
 
-const mockBroadcast = jest.fn()
+const {
+  PrivateKey,
+  ProtoWallet,
+  Script,
+  SHIPBroadcaster,
+  StorageUtils,
+  Transaction
+} = require('@bsv/sdk')
 
-// Mock all the BSV SDK components
-jest.mock('@bsv/sdk', () => ({
-  StorageUtils: {
-    getHashFromURL: jest.fn(),
-    getURLForHash: jest.fn(() => 'mock-uhrp-url')
-  },
-  PrivateKey: {
-    fromHex: jest.fn(() => ({
-      toPublicKey: jest.fn(() => ({
-        toString: jest.fn(() => 'mock-public-key')
-      }))
-    }))
-  },
-  Utils: {
-    toArray: jest.fn(() => [1, 2, 3]),
-    toHex: jest.fn(() => 'mock-hex'),
-    Writer: jest.fn(() => ({
-      writeVarIntNum: jest.fn(() => ({
-        toArray: jest.fn(() => [4, 5, 6])
-      }))
-    }))
-  },
-  PushDrop: jest.fn().mockImplementation(() => ({
-    lock: jest.fn(() => Promise.resolve({
-      toHex: jest.fn(() => 'mock-locking-script-hex')
-    }))
-  })),
-  Transaction: {
-    fromAtomicBEEF: jest.fn(() => ({
-      id: jest.fn(() => 'mock-txid')
-    }))
-  },
-  SHIPBroadcaster: jest.fn(() => ({
-    broadcast: mockBroadcast
-  }))
-}))
-
-jest.mock('../walletSingleton', () => ({
-  getWallet: jest.fn(() => ({
-    createAction: jest.fn(() => Promise.resolve({
-      tx: 'mock-beef'
-    }))
-  }))
-}))
+const cryptoWallet = new ProtoWallet(new PrivateKey(process.env.SERVER_PRIVATE_KEY, 'hex'))
+let partial
+const mockWallet = {
+  getPublicKey: async args => await cryptoWallet.getPublicKey(args),
+  createSignature: async args => await cryptoWallet.createSignature(args),
+  verifySignature: async args => await cryptoWallet.verifySignature(args),
+  createAction: jest.fn(async args => {
+    partial = new Transaction()
+    partial.addInput({
+      sourceTXID: '66'.repeat(32),
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_0')
+    })
+    for (const output of args.outputs ?? []) {
+      partial.addOutput({
+        satoshis: output.satoshis,
+        lockingScript: Script.fromHex(output.lockingScript)
+      })
+    }
+    return {
+      signableTransaction: { reference: 'Y2xvdWQtYWR2ZXJ0', tx: partial.toAtomicBEEF(true) }
+    }
+  }),
+  signAction: jest.fn(async () => ({ tx: partial.toAtomicBEEF(true), txid: partial.id('hex') })),
+  abortAction: jest.fn(async () => ({ aborted: true }))
+}
 
 jest.mock('@bsv/wallet-toolbox', () => ({
-  Setup: {
-    createWalletClientNoEnv: jest.fn(() => Promise.resolve({
-      createAction: jest.fn(() => Promise.resolve({
-        tx: 'mock-beef'
-      }))
-    }))
-  }
+  Setup: { createWalletClientNoEnv: jest.fn(async () => mockWallet) }
 }))
 
 const {
   default: createUHRPAdvertisement,
   createUHRPAdvertisementWithResult
 } = require('../createUHRPAdvertisement')
-const { StorageUtils } = require('@bsv/sdk')
 
-let valid
+const hash = Array.from({ length: 32 }, (_, index) => index)
+const valid = {
+  hash,
+  objectIdentifier: '5HueCGU8rMjxEXxiPuD5BDu',
+  url: 'https://files.example/cdn/5HueCGU8rMjxEXxiPuD5BDu',
+  expiryTime: 2_000_000_000,
+  contentLength: 100,
+  uploaderIdentityKey: PrivateKey.fromRandom().toPublicKey().toString(),
+  contentType: 'application/octet-stream'
+}
 
-describe('createUHRPAdvertisement', () => {
-  beforeEach(() => {
-    StorageUtils.getHashFromURL.mockReturnValue([1, 2, 3, 4])
-    mockBroadcast.mockResolvedValue({
-      status: 'success',
-      txid: 'mock-txid',
-      message: 'accepted'
+beforeEach(() => {
+  jest.clearAllMocks()
+  jest.restoreAllMocks()
+  jest.spyOn(SHIPBroadcaster.prototype, 'broadcast').mockImplementation(async tx => ({
+    status: 'success',
+    txid: tx.id('hex'),
+    message: 'accepted'
+  }))
+})
+
+afterEach(() => jest.restoreAllMocks())
+
+it('creates a cryptographically authenticated, bound UHRP advertisement', async () => {
+  await expect(createUHRPAdvertisement(valid)).resolves.toMatchObject({
+    txid: expect.stringMatching(/^[0-9a-f]{64}$/)
+  })
+})
+
+it('accepts the canonical UHRP URL form of a hash', async () => {
+  await expect(
+    createUHRPAdvertisement({ ...valid, hash: StorageUtils.getURLForHash(hash) })
+  ).resolves.toMatchObject({ txid: expect.any(String) })
+})
+
+it('creates an authenticated advertisement for a CHIRP root at its real serving path', async () => {
+  const root = StorageUtils.getURLForHash(hash)
+  await expect(
+    createUHRPAdvertisement({
+      ...valid,
+      objectIdentifier: root,
+      url: `https://files.example/chirp/v1/${root}/objects/${root}`
     })
-    valid = {
-      hash: 'MOCK_HASH',
-      objectIdentifier: 'MOCK_IDENTIFIER',
-      url: 'MOCK_HTTPS_URL',
-      expiryTime: 1620253222257,
-      contentLength: 100,
-      uploaderIdentityKey: 'mock-uploader-key'
-    }
-  })
-  
-  afterEach(() => {
-    jest.clearAllMocks()
-  })
-  
-  it('Creates UHRP advertisement successfully', async () => {
-    const result = await createUHRPAdvertisement(valid)
-    expect(result).toEqual({ txid: 'mock-txid' })
-  })
-  
-  it('Converts string hash to array using StorageUtils', async () => {
-    await createUHRPAdvertisement(valid)
-    expect(StorageUtils.getHashFromURL).toHaveBeenCalledWith('MOCK_HASH')
-  })
+  ).resolves.toMatchObject({ txid: expect.stringMatching(/^[0-9a-f]{64}$/) })
+})
 
-  it('Exposes returned broadcast failures without changing the legacy response', async () => {
-    const broadcastResult = {
-      status: 'error',
-      code: 'ERR_NO_HOSTS_INTERESTED',
-      description: 'No hosts accepted the advertisement.'
-    }
-    mockBroadcast.mockResolvedValue(broadcastResult)
-
-    await expect(createUHRPAdvertisementWithResult(valid)).resolves.toEqual({
-      txid: 'mock-txid',
-      broadcastResult
-    })
-    await expect(createUHRPAdvertisement(valid)).resolves.toEqual({ txid: 'mock-txid' })
-  })
+it('exposes failure to CHIRP and fails the legacy success wrapper closed', async () => {
+  const broadcastResult = {
+    status: 'error',
+    code: 'ERR_NO_HOSTS_INTERESTED',
+    description: 'No host accepted.'
+  }
+  jest.spyOn(SHIPBroadcaster.prototype, 'broadcast').mockResolvedValue(broadcastResult)
+  await expect(createUHRPAdvertisementWithResult(valid)).resolves.toMatchObject({ broadcastResult })
+  await expect(createUHRPAdvertisement(valid)).rejects.toThrow('was not accepted')
 })

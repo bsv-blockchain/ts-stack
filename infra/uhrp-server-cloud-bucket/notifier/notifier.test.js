@@ -25,6 +25,8 @@ test('advertise requests keep the admin token out of the body', () => {
 
   assert.equal(request.url, 'https://uhrp.example/advertise')
   assert.equal(request.config.headers.Authorization, `Bearer ${token}`)
+  assert.equal(request.config.maxRedirects, 0)
+  assert.equal(request.config.timeout, 15_000)
   assert.equal(Object.hasOwn(request.body, 'adminToken'), false)
 })
 
@@ -40,5 +42,20 @@ test('advertise requests reject short admin tokens', () => {
       fileSize: 456
     }),
     /at least 32/
+  )
+})
+
+test('advertise requests reject unsafe callback origins', () => {
+  assert.throws(
+    () => buildAdvertiseRequest({
+      hostingDomain: 'https://user:secret@uhrp.example/path',
+      adminToken: 'a'.repeat(32),
+      uhrpUrl: 'uhrp://example',
+      uploaderIdentityKey: 'identity',
+      objectIdentifier: 'object',
+      expiryTime: 123,
+      fileSize: 456
+    }),
+    /credential-free HTTPS origin/
   )
 })

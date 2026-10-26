@@ -1,5 +1,7 @@
 import { Transaction } from '@bsv/sdk'
-import * as sdk from '../../sdk/index'
+import type * as sdk from '../../sdk/index'
+import { WalletError } from '../../sdk/WalletError'
+import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { Format } from '../../utility/Format'
 import { Services } from '../../services/Services'
 import { MonitorDaemon } from '../../monitor/MonitorDaemon'
@@ -7,6 +9,7 @@ import { Wallet } from '../../Wallet'
 import { formatUnknownForLog as formatAdminValue } from '../../utility/formatUnknown'
 import { renderAdminPage } from './adminUi'
 import { runAdminUtxoReview, type AdminUtxoReviewTask } from './reviewUtxos'
+import { MAX_MONITOR_OFFSET, normalizeMonitorIdentityKey, requireMonitorInteger } from '../../monitor/monitorValidation'
 import path from 'node:path'
 import {
   bodyParserErrorHandler,
@@ -326,8 +329,9 @@ async function queryReqReview(context: MonitorAdminContext, query: Record<string
 export type UtxoReviewMode = 'all' | 'change' | 'liquidity'
 
 export function normalizeReviewMode(value: unknown): UtxoReviewMode {
+  if (value === undefined || value === 'all') return 'all'
   if (value === 'change' || value === 'liquidity') return value
-  return 'all'
+  throw new WERR_INVALID_PARAMETER('mode', "'all', 'change', or 'liquidity'")
 }
 
 function getReviewUtxosTask(context: MonitorAdminContext): AdminUtxoReviewTask & {
@@ -378,16 +382,18 @@ async function resolveIdentityKeyFromInput(context: MonitorAdminContext, userInp
   const value = userInput.trim()
   if (!value) throw new Error('identityKey or userId is required.')
 
-  if (value.length < 64) {
+  if (/^[0-9]+$/.test(value)) {
     const storage = await getStorage(context)
-    const userId = asNumber(value, -1)
-    if (userId < 0) throw new Error('userId must be a valid integer.')
+    const userId = Number(value)
+    if (!Number.isSafeInteger(userId) || userId < 1 || userId > MAX_MONITOR_OFFSET) {
+      throw new WERR_INVALID_PARAMETER('userId', `an integer from 1 through ${MAX_MONITOR_OFFSET}`)
+    }
     const user = (await storage.findUsers({ partial: { userId } }))[0]
     if (!user?.identityKey) throw new Error(`User ${userId} was not found.`)
-    return user.identityKey
+    return normalizeMonitorIdentityKey(user.identityKey)
   }
 
-  return value
+  return normalizeMonitorIdentityKey(value)
 }
 
 async function queryMonitorCallHistory(context: MonitorAdminContext, query: Record<string, unknown>) {
@@ -683,8 +689,8 @@ export class AdminServer {
       if (!userInput) throw new Error('identityKey or userId is required.')
       const mode = normalizeReviewMode(req.body?.mode)
       const release = req.body?.release === true
-      const pageLimit = Math.min(Math.max(asNumber(req.body?.pageLimit, 20), 1), 250)
-      const offset = Math.max(asNumber(req.body?.offset, 0), 0)
+      const pageLimit = requireMonitorInteger(req.body?.pageLimit ?? 20, 'pageLimit', 1, 250)
+      const offset = requireMonitorInteger(req.body?.offset ?? 0, 'offset', 0, MAX_MONITOR_OFFSET - pageLimit)
       res.json(
         await reviewUtxosByIdentityKey(this.context, req.auth.identityKey, userInput, mode, release, pageLimit, offset)
       )
@@ -714,7 +720,7 @@ export class AdminServer {
     })
 
     this.app.use((error: any, _req: any, res: any, _next: any) => {
-      const e = sdk.WalletError.fromUnknown(error)
+      const e = WalletError.fromUnknown(error)
       console.error('Monitor admin request failed', e)
       res.status(500).json({
         error: {

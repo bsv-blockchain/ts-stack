@@ -1,4 +1,10 @@
-import { WalletClient, WalletInterface } from '@bsv/sdk'
+import {
+  WalletClient,
+  WalletInterface,
+  snapshotWalletResultRequest,
+  validateWalletArgs,
+  validateWalletResult
+} from '@bsv/sdk'
 import { WalletCore } from './core/WalletCore'
 import { WalletDefaults } from './core/types'
 import { createTokenMethods } from './modules/tokens'
@@ -45,7 +51,14 @@ export type BrowserWallet = BrowserWalletCore &
 
 export async function createWallet(defaults?: Partial<WalletDefaults>): Promise<BrowserWallet> {
   const client = new WalletClient('auto', 'simple')
-  const { publicKey } = await client.getPublicKey({ identityKey: true })
+  const request = { identityKey: true } as const
+  validateWalletArgs('getPublicKey', request)
+  const binding = snapshotWalletResultRequest('getPublicKey', request)
+  const { publicKey } = validateWalletResult(
+    'getPublicKey',
+    await client.getPublicKey(request),
+    binding
+  )
   const wallet = new BrowserWalletCore(client, publicKey, defaults)
 
   Object.assign(wallet, createTokenMethods(wallet))
@@ -68,10 +81,8 @@ export { Overlay } from './modules/overlay'
 export { Certifier } from './modules/certification'
 export { WalletCore } from './core/WalletCore'
 export { DID } from './modules/did'
-export {
-  CredentialSchema,
-  CredentialIssuer,
-  MemoryRevocationStore,
-  toVerifiableCredential,
-  toVerifiablePresentation
-} from './modules/credentials'
+export { CredentialSchema, CredentialIssuer, MemoryRevocationStore } from './modules/credentials'
+
+export type { DidDocument, DidResolutionResult } from '@bsv/did'
+export type { BRC52Envelope, BRC52VerificationResult } from '@bsv/did/brc52'
+export type { IssuedCredential } from './modules/credentials'

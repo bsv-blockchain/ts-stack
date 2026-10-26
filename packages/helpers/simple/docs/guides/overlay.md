@@ -4,12 +4,12 @@ Overlay networks let you broadcast transactions to topic-specific services and q
 
 ## Core Concepts
 
-| Concept | Prefix | Description |
-|---------|--------|-------------|
-| **Topic** | `tm_` | A category of transactions (e.g., `tm_payments`, `tm_tokens`) |
-| **Lookup Service** | `ls_` | A query endpoint for finding data (e.g., `ls_payments`) |
-| **SHIP** | — | Protocol for advertising topic hosting |
-| **SLAP** | — | Protocol for advertising lookup services |
+| Concept            | Prefix | Description                                                   |
+| ------------------ | ------ | ------------------------------------------------------------- |
+| **Topic**          | `tm_`  | A category of transactions (e.g., `tm_payments`, `tm_tokens`) |
+| **Lookup Service** | `ls_`  | A query endpoint for finding data (e.g., `ls_payments`)       |
+| **SHIP**           | —      | Protocol for advertising topic hosting                        |
+| **SLAP**           | —      | Protocol for advertising lookup services                      |
 
 > **Important:** Topics must start with `tm_` and lookup services must start with `ls_`. The library enforces these prefixes and throws if they're missing.
 
@@ -26,13 +26,17 @@ const overlay = await Overlay.create({
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `topics` | `string[]` | *required* | Topics to broadcast to (must start with `tm_`) |
-| `network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'` |
-| `slapTrackers` | `string[]` | SDK default | Custom SLAP tracker URLs |
-| `hostOverrides` | `Record<string, string[]>` | — | Override hosts for specific topics |
-| `additionalHosts` | `Record<string, string[]>` | — | Add extra hosts for specific topics |
+| Parameter                | Type                         | Default     | Description                                             |
+| ------------------------ | ---------------------------- | ----------- | ------------------------------------------------------- |
+| `topics`                 | `string[]`                   | _required_  | 1–64 unique bounded `tm_` topic identifiers             |
+| `network`                | `string`                     | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'` |
+| `slapTrackers`           | `string[]`                   | SDK default | Custom SLAP tracker URLs                                |
+| `hostOverrides`          | `Record<string, string[]>`   | —           | Override hosts for specific topics                      |
+| `additionalHosts`        | `Record<string, string[]>`   | —           | Add extra hosts for specific topics                     |
+| `requireAckFromAllHosts` | `'all' \| 'any' \| string[]` | SDK default | Topics every host must acknowledge                      |
+| `requireAckFromAnyHost`  | `'all' \| 'any' \| string[]` | SDK default | Topics at least one host must acknowledge               |
+
+The constructor owns a validated copy of routing and acknowledgement configuration. Later mutation of the objects supplied by the caller has no effect.
 
 ## Managing Topics
 
@@ -72,6 +76,8 @@ if (result.success) {
 const result = await overlay.broadcast(tx, ['tm_payments'])
 ```
 
+An override changes only the destination topic set. It does not disable or weaken `requireAckFromAllHosts` or `requireAckFromAnyHost`; explicit requirements that the override cannot satisfy fail closed.
+
 ## Querying
 
 ### Raw Query
@@ -102,7 +108,7 @@ Tell the network that you host a specific topic at a domain:
 await wallet.advertiseSHIP(
   'https://myserver.com',
   'tm_payments',
-  'ship-tokens'     // optional: basket to store the token
+  'ship-tokens' // optional: basket to store the token
 )
 ```
 
@@ -114,7 +120,7 @@ Tell the network that you provide a lookup service at a domain:
 await wallet.advertiseSLAP(
   'https://myserver.com',
   'ls_payments',
-  'slap-tokens'     // optional: basket
+  'slap-tokens' // optional: basket
 )
 ```
 
@@ -126,14 +132,16 @@ Create a transaction and broadcast to overlay in one step:
 const { txid, broadcast } = await wallet.broadcastAction(
   overlay,
   {
-    outputs: [{
-      lockingScript: scriptHex,
-      satoshis: 1,
-      outputDescription: 'Overlay output'
-    }],
+    outputs: [
+      {
+        lockingScript: scriptHex,
+        satoshis: 1,
+        outputDescription: 'Overlay output'
+      }
+    ],
     description: 'Overlay broadcast'
   },
-  ['tm_payments']   // optional: specific topics
+  ['tm_payments'] // optional: specific topics
 )
 
 console.log('TXID:', txid)
@@ -155,8 +163,8 @@ const result = await wallet.withRetry(async () => {
 For operations not covered by the simple API:
 
 ```typescript
-const broadcaster = overlay.getBroadcaster()  // TopicBroadcaster
-const resolver = overlay.getResolver()        // LookupResolver
+const broadcaster = overlay.getBroadcaster() // TopicBroadcaster
+const resolver = overlay.getResolver() // LookupResolver
 ```
 
 ## Complete Example
@@ -177,13 +185,10 @@ await wallet.advertiseSHIP('https://myapp.com', 'tm_my_app')
 await wallet.advertiseSLAP('https://myapp.com', 'ls_my_app')
 
 // Broadcast a transaction
-const { txid, broadcast } = await wallet.broadcastAction(
-  overlay,
-  {
-    outputs: [{ lockingScript: '...', satoshis: 1, outputDescription: 'Data' }],
-    description: 'Store data in overlay'
-  }
-)
+const { txid, broadcast } = await wallet.broadcastAction(overlay, {
+  outputs: [{ lockingScript: '...', satoshis: 1, outputDescription: 'Data' }],
+  description: 'Store data in overlay'
+})
 
 // Query data
 const outputs = await overlay.lookupOutputs('ls_my_app', { type: 'recent' })

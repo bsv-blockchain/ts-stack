@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { randomBytes } from 'node:crypto'
 import { serializeSchema, buildPage } from './ui-page.js'
 import { openBrowser as defaultOpenBrowser } from './open-browser.js'
 import { applyConfig, type RunResult } from '../pipeline.js'
@@ -23,20 +24,78 @@ export interface UiServer {
   close: () => void
 }
 
+const MAX_REQUEST_BODY_BYTES = 64 * 1024
+const SESSION_HEADER = 'x-create-bsv-app-session'
+
+class UiRequestError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message)
+  }
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
+  const declaredLength = req.headers['content-length']
+  if (declaredLength !== undefined) {
+    if (!/^(?:0|[1-9]\d*)$/u.test(declaredLength)) {
+      throw new UiRequestError(400, 'Invalid request body length.')
+    }
+    if (Number(declaredLength) > MAX_REQUEST_BODY_BYTES) {
+      throw new UiRequestError(413, 'Request body is too large.')
+    }
+  }
   const chunks: Buffer[] = []
-  for await (const c of req) chunks.push(c as Buffer)
-  return Buffer.concat(chunks).toString('utf8')
+  let total = 0
+  for await (const chunk of req) {
+    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    total += bytes.length
+    if (total > MAX_REQUEST_BODY_BYTES) {
+      throw new UiRequestError(413, 'Request body is too large.')
+    }
+    chunks.push(bytes)
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, total))
+  } catch {
+    throw new UiRequestError(400, 'Request body must be valid UTF-8.')
+  }
 }
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'content-type': 'application/json' })
+  res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' })
   res.end(JSON.stringify(body))
 }
 
 function serveIndex(res: ServerResponse, html: string): void {
-  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
   res.end(html)
+}
+
+function isJsonContentType(value: string | undefined): boolean {
+  return value !== undefined && /^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(value.trim())
+}
+
+function authorizeLocalRequest(
+  req: IncomingMessage,
+  expectedOrigin: string,
+  sessionToken: string
+): UiRequestError | null {
+  if (req.headers.host !== expectedOrigin.slice('http://'.length)) {
+    return new UiRequestError(403, 'Forbidden request host.')
+  }
+  if (req.method !== 'POST') return null
+  if (req.headers.origin !== expectedOrigin) {
+    return new UiRequestError(403, 'Forbidden request origin.')
+  }
+  if (req.headers[SESSION_HEADER] !== sessionToken) {
+    return new UiRequestError(403, 'Invalid UI session.')
+  }
+  if (!isJsonContentType(req.headers['content-type'])) {
+    return new UiRequestError(415, 'Request body must be JSON.')
+  }
+  return null
 }
 
 async function handleGenerate(
@@ -55,6 +114,7 @@ async function handleGenerate(
     sendJson(res, 200, { targetDir: result.targetDir, written: result.written, deps: result.deps })
     resolveDone(result)
   } catch (err) {
+    if (err instanceof UiRequestError) throw err
     if (err instanceof ConfigError) {
       sendJson(res, 400, { error: 'Invalid project configuration.' })
       return
@@ -103,6 +163,7 @@ async function handlePlan(
     }))
     sendJson(res, 200, { files })
   } catch (err) {
+    if (err instanceof UiRequestError) throw err
     if (err instanceof ConfigError) {
       sendJson(res, 200, { files: [], error: 'Invalid project configuration.' })
       return
@@ -118,6 +179,8 @@ export async function startUiServer(opts: {
   deps?: { runCommand?: RunCommand }
 }): Promise<UiServer> {
   const { existing, targetDir } = opts
+  const sessionToken = randomBytes(32).toString('base64url')
+  const scriptNonce = randomBytes(24).toString('base64url')
   const included =
     existing === null
       ? listCapabilities()
@@ -127,7 +190,9 @@ export async function startUiServer(opts: {
   const html = buildPage({
     schema: serializeSchema(existing),
     seed: seedDraft(existing, {}),
-    included
+    included,
+    sessionToken,
+    scriptNonce
   })
 
   let resolveDone: (r: RunResult) => void = () => {}
@@ -135,22 +200,49 @@ export async function startUiServer(opts: {
     resolveDone = resolve
   })
 
+  let expectedOrigin = ''
   const server = createServer((req, res) => {
+    res.setHeader(
+      'content-security-policy',
+      `default-src 'none'; script-src 'nonce-${scriptNonce}'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`
+    )
+    res.setHeader('referrer-policy', 'no-referrer')
+    res.setHeader('x-content-type-options', 'nosniff')
+    res.setHeader('x-frame-options', 'DENY')
+    const authorizationError = authorizeLocalRequest(req, expectedOrigin, sessionToken)
+    if (authorizationError !== null) {
+      sendJson(res, authorizationError.status, { error: authorizationError.message })
+      return
+    }
     void (async () => {
-      if (req.method === 'GET' && (req.url === '/' || req.url === '')) return serveIndex(res, html)
-      if (req.method === 'POST' && req.url === '/generate')
-        return await handleGenerate(
-          req,
-          res,
-          existing,
-          targetDir,
-          opts.deps?.runCommand,
-          resolveDone
-        )
-      if (req.method === 'POST' && req.url === '/plan')
-        return await handlePlan(req, res, existing, targetDir)
-      sendJson(res, 404, { error: 'not found' })
-    })()
+      try {
+        if (req.method === 'GET' && (req.url === '/' || req.url === ''))
+          return serveIndex(res, html)
+        if (req.method === 'POST' && req.url === '/generate')
+          return await handleGenerate(
+            req,
+            res,
+            existing,
+            targetDir,
+            opts.deps?.runCommand,
+            resolveDone
+          )
+        if (req.method === 'POST' && req.url === '/plan')
+          return await handlePlan(req, res, existing, targetDir)
+        sendJson(res, 404, { error: 'not found' })
+      } catch (error) {
+        if (error instanceof UiRequestError) {
+          sendJson(res, error.status, { error: error.message })
+          return
+        }
+        console.error('UI request failed:', error)
+        sendJson(res, 500, { error: 'UI request failed.' })
+      }
+    })().catch(error => {
+      console.error('UI request failed:', error)
+      if (!res.headersSent) sendJson(res, 500, { error: 'UI request failed.' })
+      else res.destroy()
+    })
   })
 
   await new Promise<void>(resolve => {
@@ -158,6 +250,7 @@ export async function startUiServer(opts: {
   })
   const { port } = server.address() as AddressInfo
   const url = `http://127.0.0.1:${port}`
+  expectedOrigin = url
   return { url, done, close: () => server.close() }
 }
 

@@ -3,7 +3,7 @@ import { CHIRPError } from './errors.js'
 const MAX_UINT64 = 0xffffffffffffffffn
 
 export function encodeCompactSize(value: bigint): Uint8Array {
-  if (value < 0n || value > MAX_UINT64) {
+  if (typeof value !== 'bigint' || value < 0n || value > MAX_UINT64) {
     throw new CHIRPError('ERR_CHIRP_INTEGER_RANGE', 'CompactSize value is outside uint64.')
   }
   if (value <= 252n) return Uint8Array.of(Number(value))
@@ -16,6 +16,9 @@ export function decodeCompactSize(
   bytes: Uint8Array,
   offset = 0
 ): { value: bigint; offset: number } {
+  if (!(bytes instanceof Uint8Array) || !Number.isSafeInteger(offset) || offset < 0) {
+    throw new TypeError('CompactSize decoding requires Uint8Array bytes and a safe offset.')
+  }
   if (offset >= bytes.byteLength) truncated()
   const prefix = bytes[offset]
   if (prefix < 0xfd) return { value: BigInt(prefix), offset: offset + 1 }
@@ -41,7 +44,14 @@ export function decodeCompactSize(
 }
 
 export function bigEndian(value: bigint, width: number): Uint8Array {
-  if (value < 0n || value >= 1n << BigInt(width * 8)) {
+  if (
+    typeof value !== 'bigint' ||
+    !Number.isSafeInteger(width) ||
+    width < 1 ||
+    width > 8 ||
+    value < 0n ||
+    value >= 1n << BigInt(width * 8)
+  ) {
     throw new CHIRPError('ERR_CHIRP_INTEGER_RANGE', 'Integer does not fit its field.')
   }
   const result = new Uint8Array(width)
@@ -54,6 +64,16 @@ export function bigEndian(value: bigint, width: number): Uint8Array {
 }
 
 export function readBigEndian(bytes: Uint8Array, offset: number, width: number): bigint {
+  if (
+    !(bytes instanceof Uint8Array) ||
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(width) ||
+    width < 1 ||
+    width > 8
+  ) {
+    throw new TypeError('Big-endian decoding requires Uint8Array bytes and safe field bounds.')
+  }
   if (offset + width > bytes.byteLength) truncated()
   let result = 0n
   for (let index = 0; index < width; index += 1) {
@@ -63,7 +83,13 @@ export function readBigEndian(bytes: Uint8Array, offset: number, width: number):
 }
 
 export function concat(...parts: Uint8Array[]): Uint8Array {
-  const length = parts.reduce((total, part) => total + part.byteLength, 0)
+  let length = 0
+  for (const part of parts) {
+    if (!(part instanceof Uint8Array)) throw new TypeError('concat requires Uint8Array parts.')
+    length += part.byteLength
+    if (!Number.isSafeInteger(length))
+      throw new RangeError('Concatenated byte length is too large.')
+  }
   const result = new Uint8Array(length)
   let offset = 0
   for (const part of parts) {

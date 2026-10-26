@@ -8,10 +8,17 @@ import {
   SpendNotificationMode
 } from '@bsv/overlay'
 import { Db } from 'mongodb'
-import { readUoraAnchor } from './anchorFormat.js'
+import { identityKeyFromDidKey, readUoraAnchor } from './anchorFormat.js'
 import { UoraDppQuery } from './types.js'
 import { UoraDppStorage } from './UoraDppStorage.js'
 import docs from './UoraDppLookupDocs.md.js'
+import {
+  readInteger,
+  readString,
+  requireHex,
+  requireLookupQuery,
+  requirePublicKey
+} from '../shared/queryValidation.js'
 
 const TOPIC = 'tm_uora_dpp'
 const SERVICE = 'ls_uora_dpp'
@@ -81,15 +88,31 @@ export class UoraDppLookupService implements LookupService {
   }
 
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
-    if (question === undefined || question === null) throw new Error('A valid query is required!')
-    if (question.service !== SERVICE) throw new Error('Lookup service not supported!')
-
-    const query = (question.query ?? {}) as UoraDppQuery
-    if (query.limit !== undefined && query.limit < 0) {
-      throw new Error('Limit must be a non-negative number')
+    const raw = requireLookupQuery(question, SERVICE, [
+      'issuer',
+      'issuerKey',
+      'subject',
+      'attestationId',
+      'digest',
+      'anchoredBy',
+      'uoraType',
+      'limit',
+      'skip'
+    ])
+    const issuer = readString(raw, 'issuer', { maxBytes: 128 })
+    if (issuer !== undefined && identityKeyFromDidKey(issuer) === undefined) {
+      throw new Error('Invalid lookup query: issuer must be a canonical secp256k1 did:key')
     }
-    if (query.skip !== undefined && query.skip < 0) {
-      throw new Error('Skip must be a non-negative number')
+    const query: UoraDppQuery = {
+      issuer,
+      issuerKey: requirePublicKey(readString(raw, 'issuerKey', { maxBytes: 66 }), 'issuerKey'),
+      subject: readString(raw, 'subject', { maxBytes: 512 }),
+      attestationId: readString(raw, 'attestationId', { maxBytes: 256 }),
+      digest: requireHex(readString(raw, 'digest', { maxBytes: 64 }), 'digest', 32),
+      anchoredBy: requirePublicKey(readString(raw, 'anchoredBy', { maxBytes: 66 }), 'anchoredBy'),
+      uoraType: readString(raw, 'uoraType', { maxBytes: 64 }),
+      limit: readInteger(raw, 'limit', 500, 1, 500),
+      skip: readInteger(raw, 'skip', 0, 0, 100000)
     }
 
     // `uoraType` and `anchoredBy` narrow but cannot select: either alone is
@@ -101,13 +124,12 @@ export class UoraDppLookupService implements LookupService {
     // dropped it for not being a usable string, and what reached Mongo was an
     // empty filter. The caller got the table scan this guard exists to refuse,
     // and could page the whole collection with `skip`.
-    const selects = (value: unknown): boolean => typeof value === 'string' && value !== ''
     const selective =
-      selects(query.issuer) ||
-      selects(query.issuerKey) ||
-      selects(query.subject) ||
-      selects(query.attestationId) ||
-      selects(query.digest)
+      query.issuer !== undefined ||
+      query.issuerKey !== undefined ||
+      query.subject !== undefined ||
+      query.attestationId !== undefined ||
+      query.digest !== undefined
     if (!selective) {
       throw new Error('Query must provide issuer, issuerKey, subject, attestationId or digest')
     }

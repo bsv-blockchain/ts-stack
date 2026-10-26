@@ -1,5 +1,13 @@
 import type { ModuleContext } from '../types.js'
-import type { WalletInterface } from '../../wallet/Wallet.interfaces.js'
+import type {
+  CreateActionArgs,
+  SignActionArgs,
+  WalletInterface
+} from '../../wallet/Wallet.interfaces.js'
+import PrivateKey from '../../primitives/PrivateKey.js'
+import Transaction from '../../transaction/Transaction.js'
+import Script from '../../script/Script.js'
+import P2PKH from '../../script/templates/P2PKH.js'
 import { Brc29RemittanceModule } from '../modules/BasicBRC29.js'
 
 const makeContext = (wallet: WalletInterface): ModuleContext => ({
@@ -8,16 +16,67 @@ const makeContext = (wallet: WalletInterface): ModuleContext => ({
   now: () => 123
 })
 
+const PUBLIC_KEY = new PrivateKey(2).toPublicKey().toString()
+const PAYMENT_SCRIPT = new P2PKH().lock(new PrivateKey(2).toPublicKey().toAddress()).toHex()
+
+const addFundingInput = (transaction: Transaction): void => {
+  const source = new Transaction()
+  source.addOutput({ satoshis: 1_000_000, lockingScript: Script.fromASM('OP_1') })
+  transaction.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScript: Script.fromASM('OP_1')
+  })
+}
+
+const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface => {
+  let pending: Transaction | undefined
+  return {
+    getPublicKey: jest.fn(async () => ({ publicKey: PUBLIC_KEY })),
+    createAction: jest.fn(async (args: CreateActionArgs) => {
+      pending = new Transaction(args.version ?? 1, [], [], args.lockTime ?? 0)
+      addFundingInput(pending)
+      for (const output of args.outputs ?? []) {
+        pending.addOutput({
+          satoshis: output.satoshis,
+          lockingScript: Script.fromHex(output.lockingScript)
+        })
+      }
+      return {
+        signableTransaction: {
+          reference: 'YnJjMjktYmFzZQ==',
+          tx: pending.toAtomicBEEF(true)
+        }
+      }
+    }),
+    signAction: jest.fn(async (_args: SignActionArgs) => ({
+      tx: pending!.toAtomicBEEF(true),
+      txid: pending!.id('hex')
+    })),
+    abortAction: jest.fn(async () => ({ aborted: true })),
+    internalizeAction: jest.fn(async () => ({ accepted: true })),
+    ...overrides
+  } as unknown as WalletInterface
+}
+
+const settlement = (amountSatoshis = 1000) => ({
+  customInstructions: { derivationPrefix: 'p', derivationSuffix: 's' },
+  transaction: new Transaction(
+    1,
+    [],
+    [{ satoshis: amountSatoshis, lockingScript: Script.fromHex(PAYMENT_SCRIPT) }]
+  ).toAtomicBEEF(true),
+  amountSatoshis,
+  outputIndex: 0
+})
+
 describe('Brc29RemittanceModule', () => {
   // Prevent console.log output during tests
   const _consoleErrorSpy = jest.spyOn(console, 'log').mockImplementation(() => {})
 
   describe('unsolicited settlements (no invoice)', () => {
     it('builds a settlement artifact for unsolicited payment', async () => {
-      const wallet = {
-        getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-        createAction: jest.fn(async () => ({ tx: [1, 2, 3] }))
-      } as unknown as WalletInterface
+      const wallet = makeWallet()
 
       const module = new Brc29RemittanceModule({
         protocolID: [2, 'test-protocol'],
@@ -26,9 +85,6 @@ describe('Brc29RemittanceModule', () => {
         outputDescription: 'Test output',
         nonceProvider: {
           createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
-        },
-        lockingScriptProvider: {
-          pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
         }
       })
 
@@ -42,11 +98,12 @@ describe('Brc29RemittanceModule', () => {
 
       expect(result.artifact.customInstructions).toEqual({
         derivationPrefix: 'prefix',
-        derivationSuffix: 'suffix'
+        derivationSuffix: 'suffix',
+        protocolID: [2, 'test-protocol']
       })
       expect(result.artifact.amountSatoshis).toBe(1000)
       expect(result.artifact.outputIndex).toBe(0)
-      expect(result.artifact.transaction).toEqual([1, 2, 3])
+      expect(Transaction.fromAtomicBEEF(result.artifact.transaction).outputs[0].satoshis).toBe(1000)
 
       expect(wallet.getPublicKey).toHaveBeenCalledWith(
         {
@@ -62,6 +119,7 @@ describe('Brc29RemittanceModule', () => {
       expect(customInstructions).toEqual({
         derivationPrefix: 'prefix',
         derivationSuffix: 'suffix',
+        protocolID: [2, 'test-protocol'],
         payee: option.payee,
         threadId: 'thread-1',
         note: 'unsolicited payment'
@@ -69,24 +127,12 @@ describe('Brc29RemittanceModule', () => {
       expect(createArgs.outputs[0].outputDescription).toBe('Test output')
     })
 
-    it.each([
-      ['direct tx', { tx: new Uint8Array([1, 2, 3]) }],
-      [
-        'signable transaction',
-        { signableTransaction: { tx: new Uint8Array([4, 5, 6]), reference: 'cmVm' } }
-      ]
-    ])('normalizes a Wallet Wire Uint8Array from %s into a portable settlement', async (_case, action) => {
-      const wallet = {
-        getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-        createAction: jest.fn(async () => action)
-      } as unknown as WalletInterface
+    it('returns the verified signed transaction as portable JSON bytes', async () => {
+      const wallet = makeWallet()
 
       const module = new Brc29RemittanceModule({
         nonceProvider: {
           createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
-        },
-        lockingScriptProvider: {
-          pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
         }
       })
 
@@ -98,8 +144,9 @@ describe('Brc29RemittanceModule', () => {
       expect(result.action).toBe('settle')
       if (result.action !== 'settle') return
       expect(Array.isArray(result.artifact.transaction)).toBe(true)
-      expect(result.artifact.transaction).toEqual(Array.from(action.tx ?? action.signableTransaction!.tx))
-      expect(JSON.parse(JSON.stringify(result.artifact.transaction))).toEqual(result.artifact.transaction)
+      expect(JSON.parse(JSON.stringify(result.artifact.transaction))).toEqual(
+        result.artifact.transaction
+      )
     })
 
     it('terminates on invalid amounts for unsolicited settlements', async () => {
@@ -138,17 +185,11 @@ describe('Brc29RemittanceModule', () => {
 
   describe('settlement building edge cases', () => {
     it('terminates when wallet fails to create transaction', async () => {
-      const wallet = {
-        getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-        createAction: jest.fn(async () => ({}))
-      } as unknown as WalletInterface
+      const wallet = makeWallet({ createAction: jest.fn(async () => ({})) })
 
       const module = new Brc29RemittanceModule({
         nonceProvider: {
           createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
-        },
-        lockingScriptProvider: {
-          pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
         }
       })
       const option = { amountSatoshis: 1000, payee: 'payee-key' }
@@ -158,26 +199,19 @@ describe('Brc29RemittanceModule', () => {
       )
       expect(result.action).toBe('terminate')
       if (result.action === 'terminate') {
-        expect(result.termination.code).toBe('brc29.missing_tx')
+        expect(result.termination.code).toBe('brc29.build_failed')
       }
     })
   })
 
   describe('settlement acceptance', () => {
     it('accepts settlements by internalizing the payment', async () => {
-      const wallet = {
-        internalizeAction: jest.fn(async () => ({ accepted: true }))
-      } as unknown as WalletInterface
+      const wallet = makeWallet()
 
       const module = new Brc29RemittanceModule()
-      const settlement = {
-        customInstructions: { derivationPrefix: 'p', derivationSuffix: 's' },
-        transaction: [9, 9, 9],
-        amountSatoshis: 1000,
-        outputIndex: 1
-      }
+      const payment = settlement()
       const result = await module.acceptSettlement(
-        { threadId: 'thread-1', settlement, sender: 'payer-key' },
+        { threadId: 'thread-1', settlement: payment, sender: 'payer-key' },
         makeContext(wallet)
       )
       expect(result.action).toBe('accept')
@@ -187,7 +221,7 @@ describe('Brc29RemittanceModule', () => {
 
       expect(wallet.internalizeAction).toHaveBeenCalledWith(
         {
-          tx: settlement.transaction,
+          tx: payment.transaction,
           outputs: [
             {
               paymentRemittance: {
@@ -195,7 +229,7 @@ describe('Brc29RemittanceModule', () => {
                 derivationSuffix: 's',
                 senderIdentityKey: 'payer-key'
               },
-              outputIndex: 1,
+              outputIndex: 0,
               protocol: 'wallet payment'
             }
           ],
@@ -209,19 +243,13 @@ describe('Brc29RemittanceModule', () => {
     it.each([{ accepted: false }, {}])(
       'terminates without affirmative wallet acceptance: %j',
       async result => {
-        const wallet = {
-          internalizeAction: jest.fn(async () => result)
-        } as unknown as WalletInterface
+        const wallet = makeWallet({ internalizeAction: jest.fn(async () => result) })
         const module = new Brc29RemittanceModule()
         const accepted = await module.acceptSettlement(
           {
             threadId: 'thread-1',
             sender: 'payer-key',
-            settlement: {
-              customInstructions: { derivationPrefix: 'p', derivationSuffix: 's' },
-              transaction: [9, 9, 9],
-              amountSatoshis: 1000
-            }
+            settlement: settlement()
           },
           makeContext(wallet)
         )
@@ -233,20 +261,15 @@ describe('Brc29RemittanceModule', () => {
     )
 
     it('terminates when internalization fails', async () => {
-      const wallet = {
+      const wallet = makeWallet({
         internalizeAction: jest.fn(async () => {
           throw new Error('fail')
         })
-      } as unknown as WalletInterface
+      })
 
       const module = new Brc29RemittanceModule()
-      const settlement = {
-        customInstructions: { derivationPrefix: 'p', derivationSuffix: 's' },
-        transaction: [9, 9, 9],
-        amountSatoshis: 1000
-      }
       const result = await module.acceptSettlement(
-        { threadId: 'thread-1', settlement, sender: 'payer-key' },
+        { threadId: 'thread-1', settlement: settlement(), sender: 'payer-key' },
         makeContext(wallet)
       )
       expect(result.action).toBe('terminate')

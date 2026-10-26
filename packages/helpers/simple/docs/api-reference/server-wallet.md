@@ -19,14 +19,14 @@ import { ServerWallet } from '@bsv/simple/server'
 ## Type Definition
 
 ```typescript
-type ServerWallet = ServerWalletCore
-  & ReturnType<typeof createTokenMethods>
-  & ReturnType<typeof createInscriptionMethods>
-  & ReturnType<typeof createMessageBoxMethods>
-  & ReturnType<typeof createCertificationMethods>
-  & ReturnType<typeof createOverlayMethods>
-  & ReturnType<typeof createDIDMethods>
-  & ReturnType<typeof createCredentialMethods>
+type ServerWallet = ServerWalletCore &
+  ReturnType<typeof createTokenMethods> &
+  ReturnType<typeof createInscriptionMethods> &
+  ReturnType<typeof createMessageBoxMethods> &
+  ReturnType<typeof createCertificationMethods> &
+  ReturnType<typeof createOverlayMethods> &
+  ReturnType<typeof createDIDMethods> &
+  ReturnType<typeof createCredentialMethods>
 ```
 
 ## ServerWallet.create()
@@ -39,13 +39,14 @@ namespace ServerWallet {
 
 Factory function that creates a fully-composed `ServerWallet`.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `config.privateKey` | `string` | Yes | Hex-encoded private key |
-| `config.network` | `Network` | No | `'main'` (default) or `'testnet'` |
-| `config.storageUrl` | `string` | No | Storage service URL (default: `'https://storage.babbage.systems'`) |
+| Parameter           | Type      | Required | Description                                                        |
+| ------------------- | --------- | -------- | ------------------------------------------------------------------ |
+| `config.privateKey` | `string`  | Yes      | Hex-encoded private key                                            |
+| `config.network`    | `Network` | No       | `'main'` (default) or `'testnet'`                                  |
+| `config.storageUrl` | `string`  | No       | Storage service URL (default: `'https://storage.babbage.systems'`) |
 
 **What happens:**
+
 1. Creates a `PrivateKey` and `KeyDeriver` from the hex key
 2. Initializes `WalletStorageManager` and `WalletSigner`
 3. Connects to the storage service via `StorageClient`
@@ -71,10 +72,10 @@ createPaymentRequest(options: { satoshis: number; memo?: string }): PaymentReque
 
 Generate a BRC-29 payment request that a browser wallet can fulfill.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `options.satoshis` | `number` | Yes | Amount requested |
-| `options.memo` | `string` | No | Human-readable memo |
+| Parameter          | Type     | Required | Description         |
+| ------------------ | -------- | -------- | ------------------- |
+| `options.satoshis` | `number` | Yes      | Amount requested    |
+| `options.memo`     | `string` | No       | Human-readable memo |
 
 **Returns:**
 
@@ -96,14 +97,14 @@ async receivePayment(payment: IncomingPayment): Promise<void>
 
 Internalize a payment received from a browser wallet using the `wallet payment` protocol.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `payment.tx` | `number[] \| Uint8Array` | Yes | AtomicBEEF transaction bytes |
-| `payment.senderIdentityKey` | `string` | Yes | Sender's identity key |
-| `payment.derivationPrefix` | `string` | Yes | BRC-29 derivation prefix |
-| `payment.derivationSuffix` | `string` | Yes | BRC-29 derivation suffix |
-| `payment.outputIndex` | `number` | Yes | Index of the payment output |
-| `payment.description` | `string` | No | Transaction description |
+| Parameter                   | Type                     | Required | Description                  |
+| --------------------------- | ------------------------ | -------- | ---------------------------- |
+| `payment.tx`                | `number[] \| Uint8Array` | Yes      | AtomicBEEF transaction bytes |
+| `payment.senderIdentityKey` | `string`                 | Yes      | Sender's identity key        |
+| `payment.derivationPrefix`  | `string`                 | Yes      | BRC-29 derivation prefix     |
+| `payment.derivationSuffix`  | `string`                 | Yes      | BRC-29 derivation suffix     |
+| `payment.outputIndex`       | `number`                 | Yes      | Index of the payment output  |
+| `payment.description`       | `string`                 | No       | Transaction description      |
 
 ## Shared Methods
 
@@ -136,9 +137,21 @@ For development, use the handler factory which manages key persistence automatic
 ```typescript
 // app/api/server-wallet/route.ts
 import { createServerWalletHandler } from '@bsv/simple/server'
-const handler = createServerWalletHandler()
-export const GET = handler.GET, POST = handler.POST
+const handler = createServerWalletHandler({
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
+})
+export const GET = handler.GET,
+  POST = handler.POST
 ```
+
+Every generated route defaults closed. The authorization callback must return
+literal `true` for the requested action. Bind it to a real authenticated
+application session; balance/output disclosure and reset are especially
+sensitive, but request and receive endpoints are also resource-bearing wallet
+operations.
 
 Or for lower-level access, use `generatePrivateKey()` (no `@bsv/sdk` import needed):
 
@@ -147,7 +160,10 @@ import { generatePrivateKey } from '@bsv/simple/server'
 const key = process.env.SERVER_PRIVATE_KEY || generatePrivateKey()
 ```
 
-> Add `.server-wallet.json` to `.gitignore`.
+> Add `.server-wallet.json` to `.gitignore`. Existing key state is loaded only
+> from a bounded, owner-only regular file and its stored public identity must
+> match the private key. Corruption fails closed rather than generating and
+> persisting a replacement identity.
 
 ## Dependencies
 

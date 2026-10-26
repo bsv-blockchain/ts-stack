@@ -1,4 +1,4 @@
-import * as sdk from '../../../sdk'
+import type * as sdk from '../../../sdk'
 
 export interface TableTxLabelMap extends sdk.EntityTimeStamp {
   created_at: Date

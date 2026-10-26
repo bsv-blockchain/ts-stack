@@ -1,3 +1,4 @@
+import { Script, Transaction } from '@bsv/sdk'
 import { _tu } from '../../../../test/utils/TestUtilsWalletStorage'
 import { TableProvenTxReq } from '../../../storage/schema/tables'
 import { getProofs, TaskCheckForProofs } from '../TaskCheckForProofs'
@@ -59,6 +60,47 @@ describe('TaskCheckForProofs', () => {
       expect(result.invalid).toHaveLength(1)
       const updated = (await ctx.activeStorage.findProvenTxReqs({ partial: { provenTxReqId: req.provenTxReqId } }))[0]
       expect(updated.status).toBe('invalid')
+    } finally {
+      await ctx.storage.destroy()
+    }
+  })
+
+  test('counts a rejected proof as exactly one attempt', async () => {
+    const ctx = await _tu.createSQLiteTestSetup1Wallet({ databaseName: 'proofAttemptsOnce' })
+    try {
+      const transaction = new Transaction()
+      transaction.addInput({
+        sourceTXID: '44'.repeat(32),
+        sourceOutputIndex: 0,
+        sequence: 0xffffffff,
+        unlockingScript: Script.fromASM('OP_1')
+      })
+      transaction.addOutput({ lockingScript: Script.fromASM('OP_1'), satoshis: 1 })
+      const req = await _tu.insertTestProvenTxReq(ctx.activeStorage, transaction.id('hex'))
+      await ctx.activeStorage.updateProvenTxReq(req.provenTxReqId, {
+        status: 'unmined',
+        rawTx: transaction.toBinary()
+      })
+      const saved = (await ctx.activeStorage.findProvenTxReqs({ partial: { provenTxReqId: req.provenTxReqId } }))[0]
+      const attemptsBefore = saved.attempts
+      ctx.monitor.options.unprovenAttemptsLimitMain = 100
+      ctx.monitor.options.unprovenAttemptsLimitTest = 100
+      jest.spyOn(ctx.monitor.services, 'getMerklePath').mockResolvedValue({
+        name: 'malformed-provider',
+        merklePath: {} as never,
+        header: {} as never
+      })
+      jest.spyOn(ctx.monitor.services, 'getValidatedMerklePath').mockResolvedValue({
+        name: 'malformed-provider',
+        merklePath: {} as never,
+        header: {} as never
+      })
+
+      const result = await getProofs(new TaskCheckForProofs(ctx.monitor), [saved], Number.MAX_SAFE_INTEGER, 0, true)
+
+      expect(result.processed).toEqual([{ provenTxReqId: req.provenTxReqId, status: 'unmined' }])
+      const updated = (await ctx.activeStorage.findProvenTxReqs({ partial: { provenTxReqId: req.provenTxReqId } }))[0]
+      expect(updated.attempts).toBe(attemptsBefore + 1)
     } finally {
       await ctx.storage.destroy()
     }

@@ -95,7 +95,6 @@ All 33 public packages in the monorepo, with published npm names.
 | air-gap        | `@bsv/air-gap`       | BRC-141 one-way optical transport using fountain-coded QR parts                 |
 | simple         | `@bsv/simple`        | High-level wrapper for app developers (`./browser` and `./server` entry points) |
 | did            | `@bsv/did`           | SD-JWT VC and optional `did:key` helpers                                        |
-| did-client     | `@bsv/did-client`    | DID creation and resolution client                                              |
 | wallet-helper  | `@bsv/wallet-helper` | Fluent transaction builder                                                      |
 | amountinator   | `@bsv/amountinator`  | BSV amount formatting and conversion                                            |
 | fund-wallet    | `@bsv/fund-wallet`   | CLI tool for funding wallets on testnet                                         |

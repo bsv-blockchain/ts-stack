@@ -57,4 +57,51 @@ describe('#Paymail Server - P2P Payment Destinations', () => {
 
     expect(response.statusCode).toBe(400)
   })
+
+  it('fails closed when domain logic returns offsetting or malformed outputs', async () => {
+    const unsafeApp = express()
+    const route = new P2pPaymentDestinationRoute({
+      domainLogicHandler: () => ({
+        outputs: [
+          { script: '51', satoshis: -1 },
+          { script: '52', satoshis: 1001 }
+        ],
+        reference: 'unsafe'
+      })
+    })
+    unsafeApp.use(
+      new PaymailRouter({ baseUrl: 'https://example.test', routes: [route] }).getRouter()
+    )
+
+    const response = await request(unsafeApp)
+      .post('/p2p-payment-destination/alice@example.test')
+      .send({ satoshis: 1000 })
+
+    expect(response.statusCode).toBe(500)
+    expect(response.text).toBe('Internal server error')
+  })
+
+  it('binds the output total to the wire request even if domain logic mutates its body', async () => {
+    const mutationApp = express()
+    const route = new P2pPaymentDestinationRoute({
+      domainLogicHandler: (_params, body) => {
+        const requestBody = body as { satoshis: number }
+        requestBody.satoshis = 1
+        return {
+          outputs: [{ script: '51', satoshis: requestBody.satoshis }],
+          reference: 'mutated'
+        }
+      }
+    })
+    mutationApp.use(
+      new PaymailRouter({ baseUrl: 'https://example.test', routes: [route] }).getRouter()
+    )
+
+    const response = await request(mutationApp)
+      .post('/p2p-payment-destination/alice@example.test')
+      .send({ satoshis: 1000 })
+
+    expect(response.statusCode).toBe(500)
+    expect(response.text).toBe('Internal server error')
+  })
 })

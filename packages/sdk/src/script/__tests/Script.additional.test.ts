@@ -3,6 +3,23 @@ import OP from '../OP'
 import BigNumber from '../../primitives/BigNumber'
 
 describe('Script – additional coverage', () => {
+  it('isolates serialized bytes and detects in-place chunk mutations', () => {
+    const script = Script.fromASM('OP_TRUE')
+    const serialized = script.toUint8Array()
+    serialized[0] = OP.OP_FALSE
+    expect(script.toHex()).toBe('51')
+
+    const chunks = script.chunks
+    chunks[0].op = OP.OP_FALSE
+    expect(script.toHex()).toBe('00')
+
+    const pushed = Script.fromHex('0101')
+    const pushedChunks = pushed.chunks
+    pushed.toHex()
+    if (pushedChunks[0].data == null) throw new Error('Expected pushed data')
+    pushedChunks[0].data[0] = 2
+    expect(pushed.toHex()).toBe('0102')
+  })
   describe('fromHex', () => {
     it('throws for odd-length hex string', () => {
       expect(() => Script.fromHex('abc')).toThrow()

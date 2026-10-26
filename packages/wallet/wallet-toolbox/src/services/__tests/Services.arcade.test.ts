@@ -8,6 +8,8 @@ import { arcadeDefaultUrl, createDefaultWalletServicesOptions } from '../createD
  */
 
 const ARCADE_URL = 'https://arcade-v2-ttn-us-1.bsvblockchain.tech'
+const LOSER_TXID = '11'.repeat(32)
+const TARGET_TXID = '22'.repeat(32)
 
 describe('Services Arcade wiring', () => {
   test('arcadeDefaultUrl maps all public Arcade deployments', () => {
@@ -160,10 +162,10 @@ describe('Services Arcade wiring', () => {
     ]
     services.getStatusForTxidsServices.reset()
 
-    const result = await services.getStatusForTxids(['loser'])
+    const result = await services.getStatusForTxids([LOSER_TXID])
 
-    expect(explorer).toHaveBeenCalledWith(['loser'])
-    expect(arcade).toHaveBeenCalledWith(['loser'])
+    expect(explorer).toHaveBeenCalledWith([LOSER_TXID])
+    expect(arcade).toHaveBeenCalledWith([LOSER_TXID])
     expect(result.results[0]).toMatchObject({ terminal: true, inputConflict: true })
   })
 
@@ -195,9 +197,9 @@ describe('Services Arcade wiring', () => {
     ]
     services.getStatusForTxidsServices.reset()
 
-    await expect(services.getStatusForTxids(['txid'])).resolves.toMatchObject({
+    await expect(services.getStatusForTxids([TARGET_TXID])).resolves.toMatchObject({
       status: 'success',
-      results: [{ txid: 'txid', status: 'mined', depth: 1 }]
+      results: [{ txid: TARGET_TXID, status: 'mined', depth: 1 }]
     })
   })
 })

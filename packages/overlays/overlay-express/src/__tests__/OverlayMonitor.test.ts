@@ -252,4 +252,91 @@ describe('OverlayMonitor', () => {
     expect(report.results[0].error).toContain('timed out')
     expect(report.summary.failedProbeCount).toBe(1)
   })
+
+  it.each([
+    'http://overlay.example',
+    'https://user:password@overlay.example',
+    'https://overlay.example?token=secret',
+    'https://overlay.example/#fragment'
+  ])('rejects unsafe target URL %s before sending credentials', baseUrl => {
+    expect(() => new OverlayMonitor({
+      targets: [{ name: 'unsafe', baseUrl, probes: [] }],
+      fetchImpl: jest.fn<typeof fetch>()
+    })).toThrow('credential-free HTTPS')
+  })
+
+  it('requires an explicit opt-out for HTTP/private development targets', async () => {
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response('{"outputs":[]}', { status: 200 }))
+    const monitor = new OverlayMonitor({
+      targets: [{
+        name: 'local',
+        baseUrl: 'http://127.0.0.1:3000',
+        allowPrivateHosts: true,
+        probes: [{ service: 'ls_local', query: {} }]
+      }],
+      fetchImpl
+    })
+
+    await monitor.runOnce()
+
+    expect(fetchImpl).toHaveBeenCalledWith('http://127.0.0.1:3000/lookup', expect.objectContaining({
+      redirect: 'error'
+    }))
+  })
+
+  it('bounds response bodies before parsing attacker-controlled JSON', async () => {
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response('{"outputs":[]}', {
+      status: 200,
+      headers: { 'content-length': '1000' }
+    }))
+    const monitor = new OverlayMonitor({
+      targets: [{
+        name: 'oversized',
+        baseUrl: 'https://overlay.example',
+        probes: [{ service: 'ls_large', query: {} }]
+      }],
+      fetchImpl,
+      maxResponseBytes: 128
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(report.results[0].ok).toBe(false)
+    expect(report.results[0].error).toContain('exceeds 128 bytes')
+  })
+
+  it('rejects lookup responses without the protocol outputs array', async () => {
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response('{"status":"success"}', { status: 200 }))
+    const monitor = new OverlayMonitor({
+      targets: [{
+        name: 'malformed',
+        baseUrl: 'https://overlay.example',
+        probes: [{ service: 'ls_malformed', query: {} }]
+      }],
+      fetchImpl
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(report.results[0].ok).toBe(false)
+    expect(report.results[0].error).toBe('Invalid Overlay lookup JSON response')
+  })
+
+  it('caps BEEF analysis work independently of returned output count', async () => {
+    const outputs = Array.from({ length: 101 }, (_, outputIndex) => ({ outputIndex, beef: [] }))
+    const fetchImpl = jest.fn<typeof fetch>(async () => new Response(JSON.stringify({ outputs }), { status: 200 }))
+    const monitor = new OverlayMonitor({
+      targets: [{
+        name: 'many-outputs',
+        baseUrl: 'https://overlay.example',
+        probes: [{ service: 'ls_many', query: {} }]
+      }],
+      fetchImpl
+    })
+
+    const report = await monitor.runOnce()
+
+    expect(report.results[0].outputCount).toBe(101)
+    expect(report.results[0].analyzedOutputCount).toBe(100)
+  })
 })

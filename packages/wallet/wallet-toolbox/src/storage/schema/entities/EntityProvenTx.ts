@@ -8,23 +8,34 @@ import { EntityProvenTxReq } from './EntityProvenTxReq'
 import { WERR_INTERNAL, WERR_MISSING_PARAMETER } from '../../../sdk/WERR_errors'
 import { WalletError } from '../../../sdk/WalletError'
 import { assertSyncProofReplacementAuthorized, syncProofUpdatedAt } from '../../methods/validateSyncProof'
+import {
+  authenticateMerklePathResult,
+  MerkleRootValidator,
+  normalizeTxid,
+  snapshotMerklePathResult,
+  SnapshotMerklePathResult,
+  ValidatedMerklePathResult
+} from '../../../services/validateMerklePathResult'
+import { doubleSha256BE } from '../../../utility/utilityHelpers'
+import { asString } from '../../../utility/utilityHelpers.noBuffer'
+import { safeDiagnostic } from '../../../services/chaintracker/chaintracks/util/safeDiagnostic'
+import { copyRawTransactionBytes, validateRawTxResult } from '../../../services/validateRawTxResult'
 import { getCanonicalMerklePath } from '../../../services/getCanonicalMerklePath'
 
 export class EntityProvenTx extends EntityBase<TableProvenTx> {
   private sameProof(candidate: TableProvenTx): boolean {
-    return this.txid.toLowerCase() === candidate.txid.toLowerCase() &&
+    return (
+      this.txid.toLowerCase() === candidate.txid.toLowerCase() &&
       this.height === candidate.height &&
       this.index === candidate.index &&
       arraysEqual(this.merklePath, candidate.merklePath) &&
       arraysEqual(this.rawTx, candidate.rawTx) &&
       this.blockHash.toLowerCase() === candidate.blockHash.toLowerCase() &&
       this.merkleRoot.toLowerCase() === candidate.merkleRoot.toLowerCase()
+    )
   }
 
-  private static async invalidatePreparedProofs(
-    storage: EntityStorage,
-    trx?: TrxToken
-  ): Promise<void> {
+  private static async invalidatePreparedProofs(storage: EntityStorage, trx?: TrxToken): Promise<void> {
     const extension = storage as EntityStorage & {
       invalidatePreparedBeefs?: (trx?: TrxToken) => Promise<number>
     }
@@ -50,36 +61,59 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
    * @returns
    */
   static async fromTxid(txid: string, services: WalletServices, rawTx?: number[]): Promise<ProvenTxFromTxidResult> {
-    const r: ProvenTxFromTxidResult = { proven: undefined, rawTx }
+    const normalizedTxid = normalizeTxid(txid)
+    const r: ProvenTxFromTxidResult = { proven: undefined }
 
-    if (r.rawTx == null) {
-      const gr = await services.getRawTx(txid)
-      if (gr?.rawTx == null)
-      // Failing to find anything...
-      {
-        return r
+    try {
+      if (rawTx == null) {
+        const gr = validateRawTxResult(await services.getRawTx(normalizedTxid), normalizedTxid)
+        if (gr.rawTx == null) {
+          // Failing to find anything...
+          return r
+        }
+        r.rawTx = gr.rawTx
+      } else {
+        r.rawTx = copyRawTransactionBytes(rawTx)
       }
-      r.rawTx = gr.rawTx!
+    } catch {
+      return r
+    }
+    if (asString(doubleSha256BE(r.rawTx)) !== normalizedTxid) return r
+
+    let gmpr: SnapshotMerklePathResult
+    try {
+      const tracker = await services.getChainTracker()
+      gmpr = snapshotMerklePathResult(await getCanonicalMerklePath(services, tracker, normalizedTxid), true)
+    } catch {
+      return r
     }
 
-    const gmpr = await getCanonicalMerklePath(services, await services.getChainTracker(), txid)
-
-    if (gmpr.merklePath != null && gmpr.header != null) {
-      const index = gmpr.merklePath.path[0].find(l => l.hash === txid)?.offset
-      if (index !== undefined) {
+    if (gmpr.merklePath != null && !Array.isArray(gmpr.merklePath) && gmpr.header != null) {
+      try {
+        const tracker = await services.getChainTracker()
+        const validated = await authenticateMerklePathResult(
+          normalizedTxid,
+          { merklePath: gmpr.merklePath, header: gmpr.header },
+          tracker,
+          false,
+          false
+        )
         const api: TableProvenTx = {
           created_at: new Date(),
           updated_at: new Date(),
           provenTxId: 0,
-          txid,
-          height: gmpr.header.height,
-          index,
-          merklePath: gmpr.merklePath.toBinary(),
+          txid: normalizedTxid,
+          height: validated.header.height,
+          index: validated.index,
+          merklePath: validated.merklePath.toBinary(),
           rawTx: r.rawTx,
-          blockHash: gmpr.header.hash,
-          merkleRoot: gmpr.header.merkleRoot
+          blockHash: validated.header.hash,
+          merkleRoot: validated.root
         }
         r.proven = new EntityProvenTx(api)
+      } catch {
+        // A fetched transaction is not proven unless its path is structurally
+        // bound to the requested txid and affirmed by the wallet chain tracker.
       }
     }
 
@@ -311,35 +345,34 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     req.applyProofTimeout(maxRebroadcastAttempts)
   }
 
-  private static createFromProof(
-    req: EntityProvenTxReq,
-    gmpResult: GetMerklePathResult,
-    proof: MerklePath
-  ): EntityProvenTx {
-    const leaf = proof.path[0].find(candidate => candidate.txid === true && candidate.hash === req.txid)
-    if (leaf == null) {
-      req.addHistoryNote({ what: 'getMerklePathTxidNotFound' }, true)
-      throw new WERR_INTERNAL('merkle path does not contain leaf for txid')
-    }
+  private static createFromProof(req: EntityProvenTxReq, validated: ValidatedMerklePathResult): EntityProvenTx {
     const now = new Date()
     return new EntityProvenTx({
       created_at: now,
       updated_at: now,
       provenTxId: 0,
       txid: req.txid!,
-      height: proof.blockHeight,
-      index: leaf.offset,
-      merklePath: proof.toBinary(),
+      height: validated.header.height,
+      index: validated.index,
+      merklePath: validated.merklePath.toBinary(),
       rawTx: req.rawTx!,
-      merkleRoot: gmpResult.header!.merkleRoot,
-      blockHash: gmpResult.header!.hash
+      merkleRoot: validated.root,
+      blockHash: validated.header.hash
     })
   }
 
   private static recordProofError(req: EntityProvenTxReq, error: unknown): void {
     const { code, description } = WalletError.fromUnknown(error)
     const { attempts } = req
-    req.addHistoryNote({ what: 'getMerklePathProvenError', attempts, code, description }, true)
+    req.addHistoryNote(
+      {
+        what: 'getMerklePathProvenError',
+        attempts,
+        code: safeDiagnostic(code, 64),
+        description: safeDiagnostic(description)
+      },
+      true
+    )
   }
 
   /**
@@ -355,35 +388,65 @@ export class EntityProvenTx extends EntityBase<TableProvenTx> {
     req: EntityProvenTxReq,
     gmpResult: GetMerklePathResult,
     countsAsAttempt: boolean,
-    maxRebroadcastAttempts = 0
+    maxRebroadcastAttempts = 0,
+    rootValidator?: MerkleRootValidator
   ): Promise<EntityProvenTx | undefined> {
     if (!req.txid) throw new WERR_MISSING_PARAMETER('req.txid')
     if (!req.rawTx) throw new WERR_MISSING_PARAMETER('req.rawTx')
 
     if (!req.rawTx) throw new WERR_INTERNAL('rawTx must be valid')
+    const txid = normalizeTxid(req.txid)
+    if (asString(doubleSha256BE(req.rawTx)) !== txid) {
+      throw new WERR_INTERNAL('rawTx must hash to req.txid')
+    }
 
-    for (const note of gmpResult.notes || []) {
+    let proofResult: SnapshotMerklePathResult
+    try {
+      proofResult = snapshotMerklePathResult(gmpResult, true)
+    } catch (error: unknown) {
+      if (countsAsAttempt) req.attempts = Math.min(Number.MAX_SAFE_INTEGER, req.attempts + 1)
+      EntityProvenTx.recordProofError(req, error)
+      return undefined
+    }
+
+    for (const note of proofResult.notes ?? []) {
       req.addHistoryNote(note, true)
     }
 
-    if (!gmpResult.name && gmpResult.merklePath == null && gmpResult.error == null) {
+    if (!proofResult.name && proofResult.merklePath == null && proofResult.error == null) {
       // Most likely offline or now services configured.
       // Does not count as a proof attempt.
       return undefined
     }
 
-    if (gmpResult.merklePath == null) {
+    if (proofResult.merklePath == null) {
       EntityProvenTx.applyProofTimeoutIfExpired(req, maxRebroadcastAttempts)
       return undefined
     }
 
-    if (countsAsAttempt) req.attempts++
+    if (countsAsAttempt) req.attempts = Math.min(Number.MAX_SAFE_INTEGER, req.attempts + 1)
 
-    const merklePaths = Array.isArray(gmpResult.merklePath) ? gmpResult.merklePath : [gmpResult.merklePath]
+    if (rootValidator == null) {
+      EntityProvenTx.recordProofError(
+        req,
+        new WERR_INTERNAL('A chain-root validator is required before accepting a proven transaction')
+      )
+      return undefined
+    }
+
+    const merklePaths = Array.isArray(proofResult.merklePath) ? proofResult.merklePath : [proofResult.merklePath]
 
     for (const proof of merklePaths) {
       try {
-        return EntityProvenTx.createFromProof(req, gmpResult, proof)
+        const candidate: GetMerklePathResult = {
+          name: proofResult.name,
+          merklePath: proof,
+          header: proofResult.header,
+          error: proofResult.error,
+          notes: proofResult.notes
+        }
+        const validated = await authenticateMerklePathResult(txid, candidate, rootValidator, false, false)
+        return EntityProvenTx.createFromProof(req, validated)
       } catch (error: unknown) {
         EntityProvenTx.recordProofError(req, error)
       }

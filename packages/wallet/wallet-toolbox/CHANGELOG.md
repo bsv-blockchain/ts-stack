@@ -4,7 +4,399 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.1
+
+- The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
+  what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
+  invalid, revoked or expired key, before it reads the transaction. Previously a refused
+  key was recorded as a transaction rejection, so a mistyped or revoked `arcadeApiKey`
+  marked broadcasts `invalid` and failed their transactions. The wallet now fails over
+  or keeps the transaction queued for retry, and the history note says whether the
+  configured key was refused or the endpoint requires one. No configuration or consumer
+  migration is required.
+
+## wallet-toolbox 2.15.0
+
+- `GoChaintracksServiceClient` accepts Go orphan-hash reorg announcements as well
+  as the existing TypeScript shape. Orphan headers are resolved sequentially under
+  one event deadline and validated before Monitor receives the ordered list.
+  Adds `streamErrorCount` and optional bounded `onStreamError` diagnostics.
+  Rejected events do not discard following complete events in the same chunk.
+  No listener, schema or consumer migration is required.
+
+- `TaskReorg` rechecks the latest 12 heights after each processed tip without
+  requiring reorg events. It persists unresolved recovery ranges before remote
+  work and retries them once per minute, including after restart and after
+  a height leaves the recent window. It also journals the gap observed after
+  monitor downtime. `recentDepth = 0` disables this recovery.
+- The lagged proof audit leaves an empty wallet uncheckpointed, starts at the
+  minimum stored proof height, repairs legacy empty-prefix checkpoints, and
+  retains bounded fair retries even if the tip retreats. Its compact recovery
+  state fits the monitor-event limit, independently of diagnostic size.
+- IndexedDB monitor history honors descending reads. IndexedDB automatically
+  upgrades to version 7 with a nonunique `proven_txs.height` index so bootstrap
+  does not deserialize proof blobs. Close older database connections before
+  upgrading and retain a backup; there is no SQL schema or manual data rewrite.
+
+- With the compatibility SDK, existing certificate references accept bounded
+  historical types through the normal BRC-100 APIs. Storage listing and proof
+  retain their existing queries; relinquishment inherits the updated SDK
+  reference validator on both manager and provider. Upgrade the remote storage
+  SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
+  and new signing/acquisition remain strict at 32 bytes.
+
+
+- Adds a `regtest` `Chain` for Teranode regression-network deployments
+  (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
+  canonical regtest genesis header; `ChaintracksServiceClient` and
+  `GoChaintracksServiceClient` accept a service that reports its chain as
+  `regtest`; Arcade and ChainTracks endpoints come from `REGTEST_ARCADE_URL` and
+  `REGTEST_CHAINTRACKS_URL` (`regtestArcadeUrl`, `regtestChaintracksUrl`). Like
+  TTN, the default regtest services use Arcade as broadcaster and Merkle-path
+  provider and register no legacy ARC fallback; like `tstn`, no WhatsOnChain
+  provider is registered.
+- Header proof-of-work and chain-work checks take an optional `chain`, and the
+  new `proofOfWorkLimitBits(chain)` reports the limit it selects. Only
+  `regtest` raises it, to `0x207fffff`. Every other chain, and every check that
+  names no chain, keeps the mainnet limit of `0x1d00ffff`, so no existing
+  validation is relaxed. Every ChainTracks client, storage, ingestor, bulk-file
+  path and Monitor header check now passes its configured chain.
+- `tstn` is unchanged: it keeps go-chaincfg's `TeraScalingTestNetParams`
+  genesis and proof-of-work limit. A deployment that runs regtest parameters
+  should configure `regtest`, not `tstn`.
+- A WhatsOnChain instance for a network with no WhatsOnChain service (`tstn`,
+  `regtest`) now refuses every request (`isAvailable` is `false`) instead of
+  sending it to a relative URL, which a browser resolves against the page's
+  origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
+  networks, so their headers come only from ChainTracks.
+- BRC-177 `p nosend expiry never` is supported. The anchor funds the protected
+  action without a reclaim allowance, no reclaim transaction is built or
+  armed, and the action has no deadline, so the monitor never reclaims it. An
+  unreleased `never` action can still be aborted; aborting a released one, in
+  any later state, fails because its payment is permanently sent. Released
+  `never` actions are left out of the expiry lifecycle scan, and storage
+  `createAction` refuses caller-supplied BRC-177 metadata. `Brc177NoSendExpiryMode` gains
+  `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
+  result's `deadline` is `null`.
+- `WalletPermissionsManager` passes `signAction` through the permission modules
+  that handled the action's `createAction`, both for a caller's `signAction`
+  and for the signing step of a one-call `createAction`. Modules receive it via
+  `onRequest` and `onResponse` with method `signAction` and may add `spends`
+  for inputs they supplied. Both calls carry `action` (`reference`, the
+  signable `transaction`, `noSend` and `createArgs`, the `createAction`
+  arguments as the modules returned them), so a module keeps no state between
+  `createAction` and `signAction`. A module request failure aborts the action; a
+  module response failure is thrown without aborting the signed action. A
+  module that rejects unknown methods must accept `signAction`.
+- `encryptMetadata(wallet, plaintext, originator?)` and
+  `maybeDecryptMetadata(wallet, value, originator?)` are exported. They encrypt
+  and decrypt metadata as a permissions manager with `encryptWalletMetadata`
+  does, so a permission module can store and read its own baskets' custom
+  instructions through the underlying wallet. The manager uses the same
+  functions.
+- `createAction` encrypts P-basket output custom instructions after the
+  permission modules run, as `internalizeAction` already does, so instructions a
+  module adds or replaces are stored encrypted.
+- New `listOutputs` special operation `specOpBasketPrefixOutputs`: with a
+  basket namespace such as `p color` in tag 0, it lists outputs from every
+  basket in that namespace that are unspent or reserved as an input of a
+  pending action (`spendable` false), ordered by txid and vout. Spent outputs
+  are excluded. The permissions manager reserves it for the admin originator.
+- `listOutputs` rejects a `balance p <module> <basket>` query with
+  `WERR_INVALID_PARAMETER`, as BRC-112 requires: the satoshi sum of a BRC-99
+  module basket is never reported past its module. `balance <basket>` on other
+  baskets is unchanged, and a module may offer `p <module> balance <basket>`.
+- `WalletPermissionsManager.getVersion` advertises the BRC-205 capability
+  attributes of the configured permission modules: a `PermissionsModule` may
+  declare `capabilities` (attribute key to value), appended to the underlying
+  version string as `base; key=value;` in scheme-id and key order, merged with
+  attributes the wallet already reports and never repeating a key. The built-in
+  BRC-177 module advertises `brc177-nosend=2`. `withBrc205Capabilities` is
+  exported.
+- `createAction` locks the known inputs it marks spent on MySQL and Postgres,
+  so of two concurrent actions spending the same input, the second sees it spent
+  and fails with the existing double-spend or unspendable-input error instead of
+  overwriting `spentBy`. SQLite and IndexedDB already serialize these writes.
+- Callers that count `listOutputs` results narrow `totalOutputs` to a number
+  with the exported `numericTotalOutputs`, following the `@bsv/sdk` change that
+  lets BRC-112 module balance queries return decimal text.
+- `@bsv/sdk` 4.0.0 is accepted as a peer alongside the existing 2.x and 3.x
+  ranges.
+
+## wallet-toolbox 2.14.10
+
+- Live `syncToWriter` / `syncFromReader` compare reader and writer
+  `TableSettings.chain` before any chunk moves and throw `WERR_NETWORK_CHAIN`
+  on mismatch. The class remains a public sdk export with its deserializer and
+  JSON round-trip. Portable BRC-38 import still throws a generic `Error`.
+  Custom `processSyncChunk` writers may set `ProcessSyncChunkResult.error`;
+  both live-sync loops throw that error and stop. First-party providers still
+  throw. No API or schema migration is required.
+
+## wallet-toolbox 2.14.9
+
+- Complete per-transaction broadcast results when the refreshed request is
+  already `unmined` or `completed`, preserving that durable state. Successful
+  first receipt without a mining proof no longer throws an internal unknown
+  status error on shared storage or when another worker advances the request.
+  Negative broadcast results and competing-transaction evidence remain negative;
+  they do not authorize recipient output credit. Repeated successful receipt
+  remains idempotent, and valid mined payments retain the proof path.
+- SQL storage uses a durable, leased user/TXID receipt claim to keep a second
+  pod from crediting a pending first receipt. Completed claims remain as
+  coordination keys; expired claims can be recovered, and an old owner cannot
+  finalize after its claim is replaced. The migration preserves historical
+  transactions and outputs, including duplicates. No API or wire migration.
+  Back up and preflight SQL storage, then coordinate all storage instances in
+  the protected rollout; this source candidate does not deploy hosted storage.
+
+## wallet-toolbox 2.14.8
+
+- `WalletPermissionsManager.internalizeAction` stores basket `customInstructions`
+  with one metadata encryption when `encryptWalletMetadata` is enabled.
+  A normal basket on a call that also carries a registered `p <scheme>` label
+  was encrypted before the permission module ran and again afterwards, so
+  `listOutputs` (which decrypts once) returned ciphertext. The after-module
+  pass now encrypts only permission-module baskets, matching `createAction`'s
+  once-only rule.- Preserve bounded pre-construction double-spend reviews from remote storage.
+  An empty attempted TXID is accepted only with one doubleSpend result, empty
+  send results, absent constructed-action fields and nonempty competing evidence.
+  Consumers must validate the evidence and synchronize the winning transaction
+  before rebuilding a save. The existing JSON transport carries this evidence;
+  binary wire framing is unchanged. No database or call migration is required.
+
+- Confirmed `internalizeAction` resolves the block header before the storage
+  writer opens. IndexedDB otherwise finished that transaction during the
+  asynchronous lookup and rejected a valid mined payment before storing the
+  proven transaction, transaction, or requested output. A missing or malformed
+  header, or an invalid proof, still rejects with no partial records. Upgrade
+  the active storage implementation, including the browser client; no API, wire,
+  or schema migration is required.
+
+- Restart-safe WAB registration checkpoints preserve the original wallet root
+  across interrupted faucet redemption and UMP publication. Persist through
+  `pendingRegistrationTokenSaver`, reload with `loadPendingRegistrationToken`
+  before authentication, and retain the checkpoint until an authenticated
+  snapshot is saved and `hasPendingRegistrationToken()` returns false. Recover
+  older pending registrations without checkpoints using their original wallet
+  state. WAB wire behavior is unchanged.
+
+- Profile additions and deletions change the local list only when the replacement
+  UMP token is published. Failed factor retrieval or publication preserves the
+  list for retry. A failed active-profile deletion attempts to restore that
+  profile without masking the update error.
+- Concurrent profile creation reserves case-insensitive names until the attempt
+  settles, preventing duplicate names while preserving retry after failure.
+- If restoring the active wallet fails after publication, the committed token
+  and profile list remain in place. Inspect `listProfiles()` before retrying.
+  The underlying factor-decryption failure still requires separate diagnosis.
+
+## wallet-toolbox 2.14.7
+
+- Internalization broadcasts unproven transactions new to the receiving user,
+  including shared-storage no-send payments. A rejected broadcast stores no
+  recipient outputs; proven transactions are not rebroadcast. Upgrade active
+  storage; no API, wire or schema migration is required.
+
+- IndexedDB empty certificate certifier/type, transaction status and output-tag
+  ID arrays mean no optional filter, matching Knex. Nonempty arrays, partial
+  predicates and user ownership remain enforced; no schema migration is required.
+
+- BEEF requests and schema-declared storage response bytes use the existing
+  negotiated compact binary JSON codec. Legacy peers retain numeric-array
+  JSON and identical transaction/proof bytes. Existing authentication and
+  payload ceilings remain unchanged; no API or database migration is required.
+
+- BRC-177 anchors cover both the protected action and an economic reclaim.
+  Protected actions keep their only managed input bound to the named anchor,
+  create no wallet change, and pay the bounded reclaim surplus as miner fee.
+  Ordinary actions retain their existing change planning. No API, wire or
+  database migration is required.
+
+## wallet-toolbox 2.14.6
+
+- UMP support pins anchor verified update lineage. Password and token updates
+  supersede the pinned predecessor, including multi-hop updates and recovery-hash
+  continuity. Unrelated historical continuations cannot override the anchor.
+  Competing descendants remain indeterminate rather than falling back to a spent
+  pin. No API or schema migration is required.
+
+- Every retained token spend proves control through its unlocking script,
+  including confirmed updates and presentation/recovery-hash rotation. Funding
+  paths do not establish a token-update lineage.
+
+- Explicit overlay history is linked past confirmed Merkle anchors. Deploy the
+  UMP history decider and engine retention fix with this client patch; missing
+  pin ancestry remains indeterminate rather than selecting an unrelated continuation.
+
+- WAB faucet redemption accepts the local signer's independently validated
+  service charge and derived change, with exact SDK transaction binding. Empty
+  wallets no longer reject legitimate fee outputs financed by the faucet input.
+  Upgrade the SDK alongside the toolbox to enable the new capability. Older SDK
+  peers retain strict behavior; serialization discards local output authority.
+  Signup interruption/retry persistence remains unchanged.
+
+## wallet-toolbox 2.14.5
+
+- `WalletPermissionsManager` retires no-send transaction ownership and reference
+  aliases when `createAction` or `signAction` reports them as `sending` or
+  `unproven`, including sendWith-only calls and successful members of an
+  undelayed batch's review error. Failed or unreported actions retain their
+  originator binding for retry or abort. Cleanup visits only the retired
+  transaction's references instead of scanning the session's history.
+
+## wallet-toolbox 2.14.4
+
+- `discoverByIdentityKey` and `discoverByAttributes` keep each certificate's
+  `certifierInfo.description` within BRC-100's 5-50 UTF-8 bytes. The default
+  SocialCert (56 bytes) and Metanet Trust Services (55 bytes) descriptions
+  exceeded it, so `@bsv/sdk` 2.8.8+ rejected every discovery result from one of
+  them with `Invalid discoverByAttributes result
+certificates[n].certifierInfo.description: expected 5–50 UTF-8 bytes`, which
+  broke `IdentityClient.resolveByAttributes` and `resolveByIdentityKey`. Both
+  defaults are shortened. Trust settings still accept descriptions of up to 500
+  bytes so stored settings stay readable; a longer one is cut at a code point
+  boundary when the result is built, and one under 5 bytes becomes
+  `Trusted certifier`.
+- A non-admin `createAction` with `noSend` that `WalletPermissionsManager`
+  signs internally returned `noSendChange` outpoints on the unsigned txid next
+  to the signed `txid`, so `@bsv/sdk` 2.8.8+ rejected it with `Invalid
+createAction result noSendChange[0]: expected an outpoint of the returned
+transaction`. The outpoints now name the signed transaction (vouts are
+  unchanged by signing).
+- That same no-send action could not be released: the caller only gets its
+  `txid`, and `abortAction` from a non-admin originator accepted only references
+  the manager had issued, which it drops once it signs. The originator that
+  created a no-send action can now abort it by that `txid`; other originators
+  still cannot, and a broadcast action is never abortable this way. The same
+  applies when the caller signs a `signAndProcess: false` no-send action itself
+  with `signAction`: it can then abort it by the `reference` it signed or by the
+  signed `txid`, where before `abortAction` failed with `The action reference
+was not issued by this permissions manager.`
+- `discoverByIdentityKey` and `discoverByAttributes` return the requested
+  `limit`/`offset` page (limit 10 when omitted). They returned every trusted
+  match, and `@bsv/sdk` rejects a page longer than the limit. `totalCertificates`
+  still counts every trusted match.
+- `ChaintracksServiceClient`, `BHServiceClient` and `GoChaintracksServiceClient`
+  called `fetch` as a method of the client, which browsers refuse ("Failed to
+  execute 'fetch' on 'Window': Illegal invocation" in Chrome, "Can only call
+  Window.fetch on instances of Window" in WebKit). Any in-page wallet verifying
+  a merkle proof through them failed, for example `internalizeAction` of a BRC-29
+  payment. They now call the default or supplied `fetch` with no receiver.
+
+## wallet-toolbox 2.14.3
+
+- Surplus change shaping no longer splits change into outputs below the dust
+  floor. Baskets still on the legacy 32-sat `minimumDesiredUTXOValue` produced
+  split outputs that were later folded away, leaving a fee sized for the larger
+  transaction and failing with `generateChangeSdk error: required fee error`.
+  Each split output now gets at least `max(dustFloor, changeInitialSatoshis)`.
+- `WalletPermissionsManager.abortAction` lets the admin originator abort any of
+  the wallet's actions, including signed `noSend` actions and actions from an
+  earlier session, which the in-memory pending-reference map no longer holds.
+  Other originators still need a reference this manager issued to them.
+
+## wallet-toolbox 2.14.2
+
+- Match complete English text tokens and default stopwords consistently with SDK 2.8.7; preserve quoted and excluded phrases. Scan ordered literal tokens without a combined wildcard expression. Direct filtering ignores inherited attributes and rejects non-string requested values without coercion.
+
+- `discoverByAttributes` no longer drops every overlay result for `any`
+  searches. `filterCertificatesByAttributes` treated the identity overlay's
+  all-fields `any` search as a literal field name, so no certificate matched.
+  It now accepts a certificate when searchable decrypted fields satisfy the requested text terms,
+  and named attributes use the overlay's fuzzy matching (`userName` stays
+  exact). `any` follows the overlay's MongoDB text search: case- and
+  diacritic-insensitive, quoted phrases required, `-term` excluded, and
+  `profilePhoto`/`icon` not searched. Word stemming is not reproduced, so a
+  stem-only overlay match can still be dropped. Blank named attributes are
+  ignored, as on the overlay; a query with no usable attribute matches nothing.
+  Results are still bound to the query they answered.
+
+## wallet-toolbox 2.14.1
+
+- Keep exact action-spend metadata in a shared local WeakMap, preserving storage
+  service-charge authorization across permission-module transforms and separately
+  loaded core, client and mobile bundles without adding keys to public results.
+- Consume the legacy internal Symbol before returning permission-managed results.
+  Completed and two-step `createAction` responses now pass the existing strict
+  binary BRC-100 codec. No app, wire, database, BRC-39 or recovery migration is
+  required; upgrade the wallet host and permission manager together. Reconcile
+  history before retrying an older host's failed response because the transaction
+  may already exist.
+
 ## wallet-toolbox (unreleased)
+
+- Raise the `@bsv/sdk` peer dependency floor to `^2.8.0` in `@bsv/wallet-toolbox`,
+  `@bsv/wallet-toolbox-client`, and `@bsv/wallet-toolbox-mobile`. Value imports
+  used by the built mobile/client bundles and by internal helpers
+  (`TransactionEvidenceCoordinator`, `TransactionEvidenceError`,
+  `completeBoundAction`, `createPublicHTTPSFetch`, `decodeCanonicalPushDrop`,
+  `defaultTransactionEvidenceLimits`, `toUTF8Strict`,
+  `MAXIMUM_SEND_WITH_TRANSACTIONS`) do not exist in `@bsv/sdk` 2.4.1 through
+  2.7.1 despite the prior `^2.4.1` peer range; confirmed against the published
+  tarballs for each version.
+- `Monitor`'s scheduler no longer stops running every task when the optional
+  Chaintracks header/reorg push subscription setup fails or is unimplemented.
+  `runOnce`/`startTasks` previously awaited `ready` directly, so any
+  `chaintracksWithEvents` failure (e.g. the built-in HTTP-polling
+  `ChaintracksServiceClient`, which documents `supportsReorgEvents: false` and
+  throws `Method not implemented.` from `subscribeHeaders`/`subscribeReorgs`)
+  rejected the whole task loop and permanently stopped `startTasks()`. Monitor
+  now skips the subscription attempt entirely when an event source declares
+  `supportsReorgEvents: false`, and otherwise retries subscription setup
+  opportunistically on the next tick, logging a `chaintracksEventsError`
+  monitor event, while every other scheduled task keeps running. A genuine
+  configured-chain mismatch still fails closed: subscriptions are never
+  registered against a `chaintracksWithEvents` source reporting the wrong
+  chain.
+- Confirm `relinquishOutput`'s `basket` argument against the output's actual
+  current basket (looked up inside the same transaction) before clearing
+  `basketId`, instead of clearing it unconditionally. Rejects a basket that
+  does not contain the output, a basket name that does not exist, and an
+  already-unbasketed output, each with `WERR_INVALID_PARAMETER`. Without this,
+  `WalletPermissionsManager.relinquishOutput` (which only checks the
+  originator's access to the _claimed_ basket) let an app with permission on
+  any basket relinquish any output by outpoint, including another app's basket
+  output or the admin `default` change basket.
+- Reject `internalizeAction` basket-insertion merges that would reclassify an
+  existing output out of a different basket it already occupies, closing a gap
+  where `validateBasketMerges()` only rejected reclassifying wallet-managed
+  change. An app with insertion permission on basket X could previously
+  internalize an already-known transaction and move another app's output from
+  basket Y into X, then spend it. Idempotent re-internalization into the same
+  basket, and inserting a currently unbasketed (non-managed-change) output —
+  including the documented default-basket legacy-recovery sweep — keep
+  working. The requested basket is resolved with a plain lookup so a rejected
+  request never creates it.
+- Fix `WalletPermissionsManager` rejecting every sendMax `createAction` call.
+  `verifyRequestedOutputsPresent` now matches fixed-amount outputs first by
+  exact (script, satoshis), then matches any output requested with the
+  `maxPossibleSatoshis` sentinel by locking script alone against whatever is
+  left unused, and returns the resolved real amount per requested output.
+  `computeNetSpend` bills that resolved amount instead of the sentinel, so
+  spending authorization reflects the real funded value (previously ~21
+  million BSV) instead of throwing `The transaction returned for signing does
+not contain caller-requested output ...`.
+- Additively export `WalletMonitorTask`, `attemptToPostReqsToNetwork` (with its
+  `PostReqsToNetworkResult` type), `parseJsonRpc`/`stringifyJsonRpc`, and
+  `verifyUnlockScripts` (with its `UnlockScriptVerificationResult` type) from
+  `src/index.mobile.ts` and `src/index.client.ts`. The published
+  `@bsv/wallet-toolbox-mobile` and `@bsv/wallet-toolbox-client` bundles do not
+  support deep imports, so hosts implementing a custom `Monitor.addTask` task,
+  posting signed requests to the network directly, exchanging the storage
+  remoting wire format, or verifying unlock scripts previously could not reach
+  these symbols at all.
+- Keep cold raw-transaction reads on the caller's transaction, including SQLite
+  with one connection; do not cache uncommitted settings or start background
+  work. Accept missing optional inputBEEF when returning stored raw bytes.
+- Reject unresolved output-basket mappings before sync writes. Apply valid newer
+  basket assignments/removals, preserving equal/older local relinquishment and
+  transaction rollback/retry. Included in unpublished 2.13.2; no schema migration.
+- Restore transactional SQLite migrations in the unpublished 2.13.2 candidate.
+  DDL, migration journal and lock changes roll back after an interrupted attempt;
+  foreign-key enforcement is restored after success or failure. Existing stores
+  with unjournaled partial schema need operator-reviewed recovery; this change
+  does not delete or automatically reconcile historical wallet data.
 
 - Implement `BHServiceClient.findChainTipHash()` by delegating to its existing
   `findChainTipHeader()` call against `/api/v1/chain/tip/longest`, instead of
@@ -18,29 +410,263 @@ attention to changes that materially alter behavior or extend functionality.
   unresolved proof repairs behind waiting heights across monitor restarts, and
   retain retries that become temporarily ineligible after the chain tip
   retreats. Existing checkpoints remain compatible; no migration is required.
-  The reviewed Hermes Brotli ceiling advances from 1,139,000 to 1,140,000 bytes:
-  Linux CI measured 1,139,020 bytes and macOS measured 1,138,239–1,138,711 for
-  the corrected candidate. Both retained the governed mobile module/runtime composition;
-  there is no dependency or public-export addition. All other bundle ceilings
-  remain unchanged.
 
 - Validate every newly acquired and replacement Merkle proof against the active
   ChainTracks root before persistence, continue to later providers when an
   earlier provider returns an orphan proof, and retain unresolved reorg heights
-  for bounded per-run retries without stopping the forward audit cursor. No
-  schema or consumer migration is required. Hosted Linux measures the added
-  validation path at 1,721,610 raw Vite bytes and 1,772,653 raw Metro bytes;
-  the reviewed raw ceilings advance to 1,722,000 and 1,773,000 respectively.
-  Local macOS Vite compression measures 406,865 gzip and 317,787 Brotli bytes;
-  those reviewed ceilings advance to 407,000 and 318,000. Local esbuild raw
-  output is 1,342,911 raw / 370,427 gzip / 296,708 Brotli bytes and those
-  reviewed ceilings advance to 1,343,500 / 371,000 / 297,000, covering the
-  hosted Linux esbuild gzip measurement of 370,528 bytes. Other platform
-  measurements remain under their existing limits except optimized Hermes:
-  hosted Linux raw bytecode measures 3,602,790 bytes, while local macOS
-  compression measures 1,465,937 gzip / 1,137,982 Brotli bytes. The reviewed
-  cross-platform Hermes ceilings advance to 3,603,500 raw / 1,467,000 gzip /
-  1,139,000 Brotli bytes, retaining bounded Linux/macOS compression variance.
+  for bounded per-run retries without stopping the forward review cursor. No
+  schema or consumer migration is required.
+
+- Require mutually authenticated responses from remote wallet storage, pin the
+  authenticated server identity for each client instance, optionally accept an
+  independently validated `serverIdentityKey`, and bind the distinct advertised
+  storage identity to that channel, with an optional independent
+  `storageIdentityKey` pin. Strictly correlate JSON-RPC version and request ID,
+  require one unambiguous result or error, keep remote response details out of
+  transport diagnostics, and preserve an explicit null result for void server
+  methods.
+
+- Complete WAB faucet funding through one exact wallet-owned BRC-29 output.
+  Fee-adjusted output amounts are bounded without weakening exact script
+  binding, real Wallet Toolbox symbol metadata remains accessor-safe, and the
+  redemption is staged and labeled before broadcast. Interrupted retries
+  recover the same transaction from its dedicated basket or recognize the
+  already-internalized action instead of signing the faucet input again.
+
+- Make ChainTracks lifecycle and event delivery fail closed. Startup errors are
+  awaited and retryable, failed or cold instances can be fully destroyed,
+  long-running source promises are drained, subscriptions are bounded and
+  deleted rather than tombstoned, and every listener receives an isolated
+  header snapshot. Provider heights, bulk results, type guards, direct source
+  options, and diagnostics are now bounded and accessor-safe. WhatsOnChain
+  options and shared chain-info results cannot be mutated after validation.
+  Filesystem cache mutation is serialized per digest across processes, caller
+  metadata/bytes are snapshotted before awaits, and bulk revalidation takes the
+  writer lock. Bulk-file reconciliation and multi-record replacement are atomic
+  in Knex and IndexedDB, ordinary mutations reach durable storage before memory,
+  failed writes restore the prior manager state, and remote manifests cannot
+  supply local storage identities. Custom storage implementations must add the
+  optional atomic replacement method before performing multi-file changes.
+  Remote clients require complete live metadata and bounded event topology,
+  subscription state, timers, and single-line diagnostics. Destructive Knex
+  rollback failures now propagate. The wallet monitor independently binds its
+  event source to the configured network, authenticates and copies every
+  reorganization header, bounds and deduplicates deactivation retries,
+  coalesces prepared-proof invalidation, cleans up partial subscriptions, and
+  contains application callback failures without implicit console output.
+
+- Make Arcade transaction-status SSE a bounded, ordered durable stream. Client
+  options are snapshotted without accessors; credentials, cursors, payloads,
+  fields, queued count, and queued bytes have explicit ceilings; and event data
+  is validated and copied. Only one event reaches storage at a time, its cursor
+  advances only after processing and persistence succeed, and a malformed,
+  excessive, or failed event closes the stream without dispatching later queued
+  events. Logging is silent by default and transport errors never forward the
+  credential-bearing EventSource object. Monitor task setup retains one pending
+  event, retries storage/checkpoint failures, and closes on removal or teardown.
+
+- Repair monitor and daemon lifecycle ordering. Every scheduled or standalone
+  run now awaits retryable ChainTracks subscriptions, standalone runs initialize
+  every task, transient setup failures retry, and loop failures reset running
+  state. The daemon starts subscriptions before ChainTracks and tasks, can stop
+  after a successful start, and destroys monitor resources before storage even
+  when cleanup fails. Monitor event/task names and diagnostic text are bounded;
+  library logging is opt-in and dotenv loading is quiet.
+
+- Authenticate every ordinary Merkle-proof result before it can create a
+  `ProvenTx` or restore a failed transaction. Provider responses are copied and
+  structurally bounded, must contain a leaf matching the requested txid
+  (independently of the optional `txid` marker),
+  must compute the canonical header root at the same height, and must resolve
+  through a proof-of-work-valid wallet header. Monitor consumers additionally
+  require the local ChainTracks root verdict and bind the request's raw
+  transaction to its txid. WhatsOnChain, Bitails, and Arcade enforce the same
+  invariant when called directly; TSC conversion rejects malformed, sparse,
+  oversized, and unsafe-integer proofs. `TaskUnFail` uses a one-shot internal
+  authorization guard and re-reads its first mutating page so batches over 100
+  cannot be skipped. Existing wire formats and public method signatures remain
+  compatible; the optional root-validator argument is additive.
+
+- Authenticate external transaction-status results before they can influence
+  wallet state. Results must be uniquely bound to requested txids and have
+  consistent mined/known/unknown depth, terminal, and input-conflict fields;
+  provider attribution is local, while descriptions and competing txids are
+  copied and bounded. Malformed providers fail over instead of supplying
+  failure, quarantine, abort-protection, or double-spend evidence. Arcade also
+  validates and binds its complete transaction-data response before status
+  classification or proof parsing, and WhatsOnChain rejects impossible depth.
+  Monitor proof, no-send, and abandonment scans now preserve stable pagination
+  while rows leave their query, and a rejected proof counts as one attempt.
+
+- Bound raw-transaction and proof-provider envelopes before inspection.
+  Raw results are txid-bound, accessor-free owned byte arrays capped at 32 MiB;
+  malformed providers fail over and cannot forge local attribution or mutate
+  accepted bytes. Merkle provider notes are copied as bounded scalar data and
+  legacy custom services may supply at most eight dense proof candidates.
+  Monitor options, task work controls, persisted checkpoints, and polled block
+  headers are also validated and copied before they control background work.
+
+- Contain UTXO-oracle evidence and invalid-change review work. Provider results
+  are accessor-free, bounded, outpoint-consistent owned data with locally
+  configured attribution; malformed responses fail over and never become spent
+  evidence. Manual and admin review require canonical identities and exact
+  modes, booleans, pages, offsets, tags, and safe monetary totals. Whole-wallet
+  compatibility scans have a 10,000-candidate ceiling, and a release rebinds the
+  exact classified outpoint, value, basket, ownership, and allocation state
+  under the write lock before changing spendability.
+
+- Authenticate and bound script-history and transaction-broadcast provider
+  boundaries. History is hash/endian-bound, accessor-free, deduplicated, and
+  capped; all WhatsOnChain calls carry validated whole-request deadlines and
+  chain responses are copied before use. BEEF and direct raw submissions are
+  size- and txid-bound, providers receive isolated snapshots, result identities
+  and state invariants are enforced with local attribution, and sensitive or
+  excessive diagnostics are discarded. Malformed, throwing, or hung providers
+  fail over without forging the wallet's internal timeout marker. A broadcast
+  double-spend claim is terminal only after at least one exact input is
+  conclusively observed spent; unknown oracle evidence remains retryable.
+
+- Enforce one atomic `sendWith` resource invariant from SDK validation and
+  binary decoding through storage, action-batch commit, provider submission,
+  and delayed monitor retry. Broadcast sets contain at most 1,000 unique,
+  canonical transaction IDs, including the newly created or signed
+  transaction. Malformed storage flags cannot diverge from the actual list,
+  and an oversized legacy batch is reported and skipped as a whole rather than
+  partially broadcast or expanded without bound. If any member cannot be
+  resolved or assembled, no ready subset is scheduled or broadcast; members
+  already known by the network remain compatible with retrying the rest.
+
+- Make user provisioning and schema lifecycle failure-atomic. A newly inserted
+  user and its mandatory managed-change basket now share one transaction, and
+  creation-race retry restarts the whole transaction. Knex migration and
+  destructive rollback errors propagate, explicit empty-schema state is the
+  only rollback terminator, and SQLite foreign-key enforcement is restored in
+  `finally` after both successful and failed migration work.
+
+- Keep secrets and untrusted wallet material out of implicit process logs.
+  `Setup.makeEnv()` returns generated development keys without printing them;
+  invalid BEEF, identity/certificate parsing, permission batching, provisioning
+  races, migration failures, and IndexedDB orphan handling no longer emit raw
+  objects, transaction/proof data, database details, or row identifiers. The
+  existing explicit wallet logger receives only a generic BEEF-validation
+  message when a caller opts into it.
+
+- Preserve wallet write atomicity across metadata revival, entity insertion,
+  and abort-time chain checks. Soft-deleted baskets, labels, label mappings,
+  output tags, and tag mappings now revive in the caller's exact transaction;
+  new proof-request and sync-state entities retain that transaction as well.
+  `abortAction` queries external chain status before opening an IndexedDB write
+  scope, then rebinds the observation to the exact transaction ID and txid
+  under the write lock before committing its decision.
+
+- Keep shared-storage schema and process lifecycle under operator authority.
+  Authenticated remote migration requests are compatibility no-ops, matching
+  remote destroy requests, so a wallet tenant cannot contend on global DDL or
+  initialize shared storage metadata.
+
+- Bound authenticated proof-request reads before database and memory work.
+  Knex and IndexedDB apply wallet ownership in the same query/cursor scan as
+  status, partial, offset, and limit filtering. Custom providers retain a
+  bounded compatibility path and must supply exact txids or a provider-native
+  scoped query for wallets with more than 10,000 proof requests.
+
+- Bound caller-selected Wallet Storage RPC offsets as well as page sizes.
+  Top-level list offsets, nested find paging, and synchronization checkpoints
+  are rejected before database/cursor work when they exceed the selected
+  resource profile. Operators can raise the explicit ceiling for larger
+  histories without changing the wire format.
+
+- Redact internal Wallet Storage failures at every authenticated HTTP response
+  boundary. JSON-RPC and action-batch upload routes preserve explicit public
+  wallet errors, but generic exceptions and custom `WERR_INTERNAL` diagnostics
+  now return only the stable internal-error name and default message. Detailed
+  provider, database, and filesystem failures remain available through
+  explicitly configured operator logging and telemetry.
+
+- Clarify local-contact authority throughout SDK and Wallet Toolbox identity
+  documentation. A saved contact is an authoritative wallet-local trust anchor
+  based on the user's independent validation, analogous to accepting a
+  self-signed certificate. Its infinite trust is intentionally local—not a
+  third-party certification or transferable trust claim—and authenticated
+  contact storage proves retention of that decision rather than the underlying
+  real-world identity.
+
+- Re-bind cryptographically authenticated identity-overlay certificates to the
+  exact lookup they answer before applying trust thresholds. A dishonest lookup
+  host can no longer answer an identity-key or public-attribute query with a
+  different valid trusted certificate. Local contacts remain authoritative;
+  contact lookup matching continues to follow the caller-installed source's
+  explicit local trust contract.
+
+- Harden local ChainTracks persistence and legacy bulk tooling. Memory-backed
+  trackers no longer share state, IndexedDB and Knex require unique active
+  headers and consecutive parent linkage, reorganization walks are bounded and
+  fail atomically, direct admissions are authenticated, and Knex serializes tip
+  mutation through an internal state row. MySQL now stores 64-character hex
+  values as `VARCHAR(64)` and multi-megabyte header objects as `LONGBLOB`; the
+  additive migration clears the rebuildable legacy live-header cache before
+  widening fields that permissive MySQL could already have truncated. Bulk
+  manifests, local readers, exporters, filesystem operations, and lock queues
+  now have canonical path, byte, count, continuity, genesis, digest,
+  proof-of-work, and progress bounds. Filesystem cache reads are bounded before
+  allocation and authenticate writes, while the durable download budget now
+  serializes reservations across processes and fails closed on an abandoned
+  lock instead of silently resetting or losing allowance.
+
+- Fix the legacy `BHServiceClient` Merkle-root cache so rejected, stale, or
+  externally written roots can never become authoritative. Every verdict now
+  resolves a bounded canonical header, validates its computed hash and proof
+  of work, and binds it to the requested height or hash. Its HTTP reads reject
+  redirects and malformed endpoints, retain whole-body deadlines, and enforce
+  response and batch ceilings. ChainTracks core options are validated before
+  startup, and all library/factory logging is now silent unless the embedding
+  application supplies the existing optional logger.
+
+- Treat every remote ChainTracks HTTP/SSE and WhatsOnChain HTTP/CDN/WebSocket
+  response as untrusted input: retain the
+  deadline through bounded body consumption, bound and idle-timeout streams,
+  prohibit redirects and ambiguous endpoint URLs, validate canonical header
+  bytes and proof of work, and bind network, height, hash, and reorganization
+  results to each request before returning or queueing them. Submitted and live
+  header queues are copy-isolated, deduplicated where applicable, and bounded.
+  Service-discovered CDN links must remain credential-free public HTTPS with
+  DNS-pinned Node connections, legacy history streams are range-ordered and
+  chunked, and no declared target contributes to bulk chain selection before
+  its complete header and proof of work have been authenticated.
+
+- Authenticate every discovered permission token against its exact BEEF
+  outpoint, canonical signed PushDrop fields, locally derived locking key, and
+  signed grant content. Basket membership and tags remain selectors only. Bind
+  public partial actions and all token mint, renewal, coalescing, and revocation
+  flows to the exact authorized final transaction and actual input indexes.
+  Include signer-authenticated storage service charges in the exact spend sent
+  for permission approval, without changing the BRC-100 API or wire format, and
+  fail closed on inconsistent sources or unsafe monetary arithmetic. The exact
+  packed platform measurements are 2,184,519 / 520,753 / 397,289 bytes for Vite
+  and 1,704,383 / 471,571 / 370,439 for esbuild (raw/gzip/Brotli), with reviewed
+  ceilings of 2,230,000 / 535,000 / 410,000 and
+  1,740,000 / 485,000 / 380,000 respectively. Mobile measures
+  2,344,815 / 597,625 / 454,020 for Metro and
+  4,579,110 / 1,919,816 / 1,489,229 for optimized Hermes bytecode, with reviewed
+  ceilings of 2,400,000 / 610,000 / 465,000 and
+  4,675,000 / 1,960,000 / 1,520,000 respectively.
+
+- Bind UMP renewal to an exact canonical, field-signed predecessor owned by the
+  local wallet and require one exact replacement token in the completed action.
+  Bind WAB faucet funding to its exact Atomic BEEF target, output-zero R-puzzle
+  commitment, actual wallet input index, and returned final transaction ID.
+
+- Bind legacy P2PKH funding imports to the exact atomic signing target and
+  final wallet transaction. Reject result-only transaction IDs, ambiguous
+  outpoints, oversized or redirected provider responses, and unbounded BEEF
+  recursion/source graphs before signing or allocation.
+
+- Atomically consume BRC-103 signed-message nonces across StorageServer replicas.
+  The additive `2026-09-16-001 add auth message replay claims` migration creates
+  `auth_message_nonces` with a composite session-or-identity scope/nonce
+  uniqueness constraint and expiry index. Signed follow-up and unsigned
+  initial-request replays are both rejected. Run the migration before deploying
+  the new runtime; otherwise authentication processing fails closed.
 
 - Integrate upstream security corrections without dropping the sync recovery contracts.
   Record combined browser/mobile artifact costs and limits in the sync transfer guide.
@@ -571,7 +1197,7 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.1.27
 
-- Add optional `contactSource` (and exported `ContactSource` / `ContactRecord` interfaces) on `WalletArgs` and the `Wallet` class. When provided, `Wallet.discoverByIdentityKey` consults the local contacts source **before** the in-process `_overlayCache` and before any network call; on a hit, the overlay is not queried at all. `Wallet.discoverByAttributes` consults the contact source's optional `findByAttributes` when present. Contact-source failures are swallowed and fall through to the existing network path so the network is never gated on a flaky contact store.
+- Add optional `contactSource` (and exported `ContactSource` / `ContactRecord` interfaces) on `WalletArgs` and the `Wallet` class. When provided, `Wallet.discoverByIdentityKey` consults the local contacts source **before** the in-process `_overlayCache` and before any network call; on a hit, the overlay is not queried at all. `Wallet.discoverByAttributes` consults the contact source's optional `findByAttributes` when present. Contact-source failures are swallowed and fall through to the existing network path so the network is never gated on a flaky contact store. A caller-installed contact source is an explicit personal trust anchor: its records are locally authoritative, not third-party certifier attestations. Synthetic contact results default to type `contact`, use empty certificate-proof fields, and receive infinite trust to express that local policy decision.
 - `Wallet.discoverByIdentityKey` and `Wallet.discoverByAttributes` accept `forceRefresh?: boolean`. When `true`, both the contacts short-circuit and the 2-minute `_overlayCache` are bypassed so the network is consulted fresh — useful for a manual refresh action.
 - `identityUtils.parseResults` now yields to the host runtime between certificates on UI runtimes (browser / React Native, detected at call time). On Node the yield is skipped to avoid timer overhead. Same total work; the JS thread no longer owns the frame for the duration of the loop, so menu taps and scroll keep working while a large identity result is parsed.
 - `identityUtils.parseResults$` — new async-iterable form that emits each successfully parsed `VerifiableCertificate` as soon as it's ready, for callers that want progressive rendering.

@@ -7,7 +7,8 @@
  * internals.
  */
 
-import { IncomingPayment } from '../../core/types'
+import { LockingScript, Transaction, UnlockingScript } from '@bsv/sdk'
+import { IncomingPayment, ServerWalletConfig } from '../../core/types'
 
 // Module factories must avoid out-of-scope variables — Jest enforces this.
 jest.mock('@bsv/wallet-toolbox', () => ({
@@ -39,6 +40,33 @@ jest.mock('../../modules/credentials', () => ({ createCredentialMethods: jest.fn
 // A real, deterministic private key (32 zero bytes is a valid scalar in secp256k1
 // for our purposes here — we only need PrivateKey.fromHex to succeed).
 const VALID_PRIVATE_KEY = '0000000000000000000000000000000000000000000000000000000000000001'
+const DERIVATION_PREFIX = 'cA=='
+const DERIVATION_SUFFIX = 'cw=='
+
+function validAtomicBeef(): number[] {
+  const outputs = Array.from({ length: 3 }, () => ({
+    satoshis: 1,
+    lockingScript: LockingScript.fromASM('OP_TRUE')
+  }))
+  const funding = new Transaction(
+    1,
+    [],
+    [{ satoshis: outputs.length, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+    0
+  )
+  return new Transaction(
+    1,
+    [
+      {
+        sourceTransaction: funding,
+        sourceOutputIndex: 0,
+        unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+      }
+    ],
+    outputs,
+    0
+  ).toAtomicBEEF()
+}
 
 describe('ServerWallet.create', () => {
   // We re-require the module after mocks are in place.
@@ -65,7 +93,7 @@ describe('ServerWallet.create', () => {
     const { Services } = require('@bsv/wallet-toolbox')
     Services.mockClear()
     await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY, network: 'testnet' })
-    expect(Services).toHaveBeenCalledWith('testnet')
+    expect(Services).toHaveBeenCalledWith('test')
   })
 
   it('uses the default storage URL when not provided', async () => {
@@ -83,6 +111,32 @@ describe('ServerWallet.create', () => {
       storageUrl: 'https://example.test/storage'
     })
     expect(StorageClient).toHaveBeenCalledWith(expect.anything(), 'https://example.test/storage')
+  })
+
+  it('ignores inherited private-key, network, and storage configuration', async () => {
+    const { Services, StorageClient } = require('@bsv/wallet-toolbox')
+    Object.defineProperties(Object.prototype, {
+      privateKey: { value: VALID_PRIVATE_KEY, configurable: true },
+      network: { value: 'testnet', configurable: true },
+      storageUrl: { value: 'https://ambient.invalid', configurable: true }
+    })
+    try {
+      await expect(ServerWallet.create({} as ServerWalletConfig)).rejects.toThrow(
+        'Invalid server wallet configuration'
+      )
+      Services.mockClear()
+      StorageClient.mockClear()
+      await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+      expect(Services).toHaveBeenCalledWith('main')
+      expect(StorageClient).toHaveBeenCalledWith(
+        expect.anything(),
+        'https://storage.babbage.systems'
+      )
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'privateKey')
+      Reflect.deleteProperty(Object.prototype, 'network')
+      Reflect.deleteProperty(Object.prototype, 'storageUrl')
+    }
   })
 })
 
@@ -103,8 +157,9 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
 
   it('forwards the supplied tx as-is when it is a number array', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+    const tx = validAtomicBeef()
     const payment: IncomingPayment = {
-      tx: [1, 2, 3, 4],
+      tx,
       senderIdentityKey: SENDER,
       derivationPrefix: 'cGF5bWVudA==',
       derivationSuffix: 'dGVzdA==',
@@ -116,7 +171,7 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
     expect(internalizeAction).toHaveBeenCalledTimes(1)
     expect(internalizeAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        tx: [1, 2, 3, 4],
+        tx,
         labels: ['server_funding']
       })
     )
@@ -124,11 +179,12 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
 
   it('converts a Uint8Array tx to a number[] before forwarding', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+    const tx = validAtomicBeef()
     const payment: IncomingPayment = {
-      tx: new Uint8Array([5, 6, 7]),
+      tx: new Uint8Array(tx),
       senderIdentityKey: SENDER,
-      derivationPrefix: 'p',
-      derivationSuffix: 's',
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
       outputIndex: 1
     }
 
@@ -136,7 +192,7 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
 
     expect(internalizeAction).toHaveBeenCalledWith(
       expect.objectContaining({
-        tx: [5, 6, 7]
+        tx
       })
     )
   })
@@ -144,10 +200,10 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
   it('uses the supplied description when provided', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
     await wallet.receivePayment({
-      tx: [1],
+      tx: validAtomicBeef(),
       senderIdentityKey: SENDER,
-      derivationPrefix: 'p',
-      derivationSuffix: 's',
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
       outputIndex: 0,
       description: 'custom description'
     })
@@ -162,10 +218,10 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
   it('falls back to a synthesized description when none is supplied', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
     await wallet.receivePayment({
-      tx: [1],
+      tx: validAtomicBeef(),
       senderIdentityKey: SENDER,
-      derivationPrefix: 'p',
-      derivationSuffix: 's',
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
       outputIndex: 0
     })
 
@@ -179,10 +235,10 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
   it('falls back to a synthesized description when description is empty', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
     await wallet.receivePayment({
-      tx: [1],
+      tx: validAtomicBeef(),
       senderIdentityKey: SENDER,
-      derivationPrefix: 'p',
-      derivationSuffix: 's',
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
       outputIndex: 0,
       description: ''
     })
@@ -197,10 +253,10 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
   it('emits the legacy "server_funding" label and "wallet payment" protocol', async () => {
     const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
     await wallet.receivePayment({
-      tx: [1],
+      tx: validAtomicBeef(),
       senderIdentityKey: SENDER,
-      derivationPrefix: 'p',
-      derivationSuffix: 's',
+      derivationPrefix: DERIVATION_PREFIX,
+      derivationSuffix: DERIVATION_SUFFIX,
       outputIndex: 2
     })
 
@@ -212,10 +268,87 @@ describe('_ServerWallet (via ServerWallet.create) — deprecated receivePayment'
         protocol: 'wallet payment',
         paymentRemittance: {
           senderIdentityKey: SENDER,
-          derivationPrefix: 'p',
-          derivationSuffix: 's'
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX
         }
       }
     ])
+  })
+
+  it('rejects a negative wallet internalization verdict', async () => {
+    internalizeAction.mockResolvedValue({ accepted: false })
+    const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+
+    await expect(
+      wallet.receivePayment({
+        tx: validAtomicBeef(),
+        senderIdentityKey: SENDER,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
+        outputIndex: 0
+      })
+    ).rejects.toThrow('Receiving wallet did not accept the payment')
+  })
+
+  it('rejects inherited payment data and inherited wallet acceptance', async () => {
+    const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+    Object.defineProperties(Object.prototype, {
+      tx: { value: validAtomicBeef(), configurable: true, writable: true },
+      accepted: { value: true, configurable: true, writable: true }
+    })
+    try {
+      await expect(
+        wallet.receivePayment({
+          senderIdentityKey: SENDER,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          outputIndex: 0
+        } as IncomingPayment)
+      ).rejects.toThrow('Incoming payment transaction must be a bounded dense byte array')
+
+      internalizeAction.mockResolvedValue({})
+      await expect(
+        wallet.receivePayment({
+          tx: validAtomicBeef(),
+          senderIdentityKey: SENDER,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          outputIndex: 0
+        })
+      ).rejects.toThrow('Receiving wallet did not accept the payment')
+    } finally {
+      Reflect.deleteProperty(Object.prototype, 'tx')
+      Reflect.deleteProperty(Object.prototype, 'accepted')
+    }
+  })
+
+  it('rejects accessor bytes and coercive identity objects without invoking attacker code', async () => {
+    const wallet = await ServerWallet.create({ privateKey: VALID_PRIVATE_KEY })
+    const byteGetter = jest.fn(() => 1)
+    const tx = [0]
+    Object.defineProperty(tx, '0', { enumerable: true, get: byteGetter })
+    await expect(
+      wallet.receivePayment({
+        tx,
+        senderIdentityKey: SENDER,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
+        outputIndex: 0
+      })
+    ).rejects.toThrow('bounded dense byte array')
+    expect(byteGetter).not.toHaveBeenCalled()
+
+    const coercion = jest.fn(() => SENDER)
+    await expect(
+      wallet.receivePayment({
+        tx: validAtomicBeef(),
+        senderIdentityKey: { toString: coercion } as unknown as string,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
+        outputIndex: 0
+      })
+    ).rejects.toThrow('identity key')
+    expect(coercion).not.toHaveBeenCalled()
+    expect(internalizeAction).not.toHaveBeenCalled()
   })
 })

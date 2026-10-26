@@ -109,8 +109,9 @@ if (useOtlp || process.env.OTEL_CONSOLE_EXPORTERS === 'true') {
   const rawInfo = console.info.bind(console)
   const rawError = console.error.bind(console)
 
-  // Bridge stray console.* calls into OTel logs so nothing is lost while code is
-  // migrated to the structured (pino) logger.
+  // Record only the existence of stray console.* calls. Their arguments can
+  // contain dependency exceptions, SQL bindings, credentials, message bodies,
+  // wallet data, or push tokens and must not cross the OTLP trust boundary.
   if (useOtlp) {
     const logger = logs.getLogger(pkg.name, pkg.version)
     const SEVERITY: Record<string, SeverityNumber> = {
@@ -129,19 +130,8 @@ if (useOtlp || process.env.OTEL_CONSOLE_EXPORTERS === 'true') {
           logger.emit({
             severityNumber: SEVERITY[method],
             severityText: method.toUpperCase(),
-            body: args
-              .map(a =>
-                typeof a === 'string'
-                  ? a
-                  : (() => {
-                      try {
-                        return JSON.stringify(a)
-                      } catch {
-                        return String(a)
-                      }
-                    })()
-              )
-              .join(' ')
+            body: `console.${method}`,
+            attributes: { argument_count: args.length }
           })
         } catch {
           /* never let telemetry break logging */
@@ -157,7 +147,7 @@ if (useOtlp || process.env.OTEL_CONSOLE_EXPORTERS === 'true') {
     sdk
       .shutdown()
       .then(() => rawInfo(`[otel] flushed (${signal})`))
-      .catch((err: unknown) => rawError('[otel] shutdown error', err))
+      .catch(() => rawError('[otel] shutdown error'))
       .finally(() => {
         if (process.listeners(signal).length <= 1) process.exit(0)
       })

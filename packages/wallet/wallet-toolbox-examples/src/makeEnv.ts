@@ -1,4 +1,5 @@
 import { Setup } from '@bsv/wallet-toolbox'
+import { runArgv2Function } from './runArgv2Function'
 /**
  * Running the `makeEnv` function generates several new private keys
  * and related `.env` file initializers which simplify use of the `Setup`
@@ -9,18 +10,18 @@ import { Setup } from '@bsv/wallet-toolbox'
  *
  * Note that you can replace or add to the auto-generated keys.
  *
- * The following command will run the function,
- * capture the output into a file named '.env',
- * and display the file's contents:
+ * The following commands create a user-readable-only `.env` file. Never display,
+ * share, or commit its contents; `DEV_KEYS` contains root private keys.
  *
  * ```bash
- * npx tsx makeEnv > .env; cat .env
+ * umask 077
+ * npx tsx makeEnv > .env
  * ```
  *
  * @publicbody
  */
-export function makeEnv() {
-  Setup.makeEnv()
+export function makeEnv(): void {
+  process.stdout.write(Setup.makeEnv())
 }
 
-makeEnv()
+if (require.main === module) void runArgv2Function(module.exports)

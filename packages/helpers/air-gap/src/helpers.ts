@@ -37,6 +37,6 @@ export function estimatePartCharLength(blockBytes: number = DEFAULT_BLOCK_BYTES)
   const remainder = bytes % 3
   // Unpadded base64url: 4 characters per whole 3-byte group, then one character
   // per 6 bits of the tail (2 for 1 byte, 3 for 2 bytes).
-  const body = Math.floor(bytes / 3) * 4 + (remainder === 0 ? 0 : remainder + 1)
+  const body = ((bytes / 3) | 0) * 4 + (remainder ? remainder + 1 : 0)
   return AIR_GAP_PREFIX.length + body
 }

@@ -90,6 +90,23 @@ describe('typed acquisition messages', () => {
     await expect(
       validateQuote(dishonestTotal, request, issuerSigner.identityKey)
     ).rejects.toMatchObject({ code: 'ERR_LCH_PAYMENT' })
+    const noncanonicalSegments = await signObject(
+      'quote',
+      {
+        ...quote.body,
+        segmentSelection: {
+          type: 'segments',
+          ranges: [
+            [2, 3],
+            [1, 2]
+          ]
+        }
+      },
+      issuerSigner
+    )
+    await expect(
+      validateQuote(noncanonicalSegments, request, issuerSigner.identityKey)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_SELECTION' })
   })
 
   it('rejects malformed request digests before signing', async () => {
@@ -298,14 +315,37 @@ describe('wallet-backed payee receiver', () => {
     await expect(receiver.receive(demand, wrongBuyerDelivery)).rejects.toMatchObject({
       code: 'ERR_LCH_PAYMENT'
     })
+    Object.defineProperty(Object.prototype, 'accepted', {
+      configurable: true,
+      value: true
+    })
+    try {
+      const pollutedReceiver = new WalletPaymentReceiver({
+        wallet: {
+          getPublicKey: async () => ({ publicKey: payeePublicKey.toString() }),
+          internalizeAction: async () => ({})
+        } as never,
+        signer: payeeSigner,
+        now: () => 2_001n
+      })
+      await expect(pollutedReceiver.receive(demand, delivery)).rejects.toMatchObject({
+        code: 'ERR_LCH_PAYMENT'
+      })
+    } finally {
+      delete (Object.prototype as { accepted?: unknown }).accepted
+    }
     const first = await receiver.receive(demand, delivery)
     const repeated = await receiver.receive(demand, delivery)
-    expect(repeated).toBe(first)
+    expect(repeated).toStrictEqual(first)
     expect(internalizeAction).toHaveBeenCalledTimes(1)
     expect(internalizeAction.mock.calls[0]?.[0]).toMatchObject({
       outputs: [{ outputIndex: 0, protocol: 'wallet payment' }]
     })
     await expect(validatePaymentReceipt(first)).resolves.toBeInstanceOf(Uint8Array)
+    first.body.satoshis = 8
+    await expect(receiver.receive(demand, delivery)).resolves.toMatchObject({
+      body: { satoshis: 7n }
+    })
   })
 
   it('rejects a conflicting transaction for a claimed Demand', async () => {

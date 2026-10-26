@@ -8,9 +8,10 @@ import { ECDSA, PrivateKey, Transaction } from '@bsv/sdk'
 describe('#Paymail Server - P2P Receive Beef Transaction', () => {
   let app: Express
   let paymailClient: PaymailClient
-  const domainLogicHandler = jest.fn((_params: unknown, _body?: unknown) => {
+  const domainLogicHandler = jest.fn((_params: unknown, body?: unknown) => {
+    const { beef } = body as { beef: string }
     return {
-      txid: '5878f6efcb1aa3be389510ae2ff10d0368976bf867e8442b751908f19024f8dd'
+      txid: Transaction.fromHexBEEF(beef).id('hex')
     }
   })
 
@@ -40,15 +41,13 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
         metadata: {
           sender: 'halfinny@vistamail.org',
           pubkey: '02d362a22ddc1a299122455690bec54397ae0b1b2765e4f1687cb479271c050a40',
-          signature: 'signature(txid)',
+          signature: `${'A'.repeat(87)}=`,
           note: 'gm.'
         },
         reference: 'someRefId'
       })
     expect(response.statusCode).toBe(400)
-    expect(response.text).toEqual(
-      'Invalid body: Serialized BEEF must start with 4022206465 or 4022206466 but starts with 1'
-    )
+    expect(response.text).toEqual('Invalid body: Invalid transaction encoding')
   })
 
   it('should receive beef transaction', async () => {
@@ -95,9 +94,7 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
         unexpected: 'drop me'
       })
     expect(response.statusCode).toBe(200)
-    expect(response.body.txid).toEqual(
-      '5878f6efcb1aa3be389510ae2ff10d0368976bf867e8442b751908f19024f8dd'
-    )
+    expect(response.body.txid).toEqual(tx.id('hex'))
     expect(domainLogicHandler.mock.calls[0]?.[1]).toEqual({
       beef: tx.toHexBEEF(),
       metadata: {
@@ -147,7 +144,7 @@ describe('#Paymail Server - P2P Receive Beef Transaction', () => {
         metadata: {
           sender: 'halfinny@vistamail.org',
           pubkey: privateKey.toPublicKey().toString(),
-          signature: 'cafebabe',
+          signature: `${'A'.repeat(87)}=`,
           note: 'gm.'
         },
         reference: 'someRefId'

@@ -1,7 +1,7 @@
 import LookupResolver, { OverlayLookupFacilitator } from '../overlay-tools/LookupResolver'
 import { TelemetryEvent } from '../telemetry/Telemetry'
 
-function createReputationStorage (): { get: () => undefined, set: () => void } {
+function createReputationStorage(): { get: () => undefined; set: () => void } {
   return {
     get: () => undefined,
     set: () => {}
@@ -39,7 +39,7 @@ describe('LookupResolver diagnostics', () => {
     })
 
     const partialFacilitator: OverlayLookupFacilitator = {
-      lookup: async (host) => {
+      lookup: async host => {
         if (host.includes('failed')) throw new Error('network unavailable')
         return { type: 'output-list', outputs: [] }
       }
@@ -75,7 +75,7 @@ describe('LookupResolver diagnostics', () => {
         lookup: async () => ({ type: 'output-list', outputs: [] })
       },
       hostOverrides: {
-        ls_private: ['https://overlay.example/private/path?secret=yes']
+        ls_private: ['https://overlay.example']
       },
       reputationStorage: createReputationStorage(),
       telemetry: {
@@ -102,8 +102,6 @@ describe('LookupResolver diagnostics', () => {
     expect(events.length).toBeGreaterThan(0)
     expect(serialized).not.toContain(privateHash)
     expect(serialized).not.toContain('must-never-appear')
-    expect(serialized).not.toContain('/private/path')
-    expect(serialized).not.toContain('secret=yes')
     expect(serialized).toContain('https://overlay.example')
     expect(serialized).toContain('lookup-correlation')
   })

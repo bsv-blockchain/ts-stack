@@ -107,6 +107,18 @@ describe('HostReputationTracker – additional coverage', () => {
       expect(snap.avgLatencyMs).toBe(1500)
     })
 
+    it('caps implausibly large finite latency samples', () => {
+      const t = new HostReputationTracker()
+      t.recordSuccess('https://host.com', Number.MAX_VALUE)
+      expect(t.snapshot('https://host.com')!.avgLatencyMs).toBe(24 * 60 * 60 * 1000)
+    })
+
+    it('rejects empty or oversized host keys', () => {
+      const t = new HostReputationTracker()
+      expect(() => t.recordSuccess('', 10)).toThrow('host is invalid')
+      expect(() => t.recordFailure('x'.repeat(2049), 'offline')).toThrow('host is invalid')
+    })
+
     it('clears lastError on success', () => {
       const t = new HostReputationTracker()
       t.recordFailure('https://host.com', 'some error')
@@ -180,6 +192,18 @@ describe('HostReputationTracker – additional coverage', () => {
       expect(snap.lastError).toBeUndefined()
     })
 
+    it('contains hostile Error message accessors', () => {
+      const t = new HostReputationTracker()
+      const reason = new Error('unused')
+      Object.defineProperty(reason, 'message', {
+        get: () => {
+          throw new Error('accessor executed')
+        }
+      })
+      expect(() => t.recordFailure('https://host.com', reason)).not.toThrow()
+      expect(t.snapshot('https://host.com')!.lastError).toBeUndefined()
+    })
+
     // Immediate backoff triggers (ERR_NAME_NOT_RESOLVED, ENOTFOUND, etc.)
     it.each([
       'ERR_NAME_NOT_RESOLVED: dns error',
@@ -236,6 +260,14 @@ describe('HostReputationTracker – additional coverage', () => {
       const t = new HostReputationTracker()
       expect(t.rankHosts([])).toEqual([])
     })
+
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+      'rejects invalid ranking time %s',
+      now => {
+        const t = new HostReputationTracker()
+        expect(() => t.rankHosts(['https://host.com'], now)).toThrow('ranking time is invalid')
+      }
+    )
 
     it('deduplicates hosts keeping first occurrence order', () => {
       const t = new HostReputationTracker()
@@ -403,6 +435,49 @@ describe('HostReputationTracker – additional coverage', () => {
       const snap = t.snapshot('https://host.com')
       expect(snap!.avgLatencyMs).toBeNull()
       expect(snap!.lastLatencyMs).toBeNull()
+    })
+
+    it.each([
+      ['negative counters', '"totalSuccesses":-1'],
+      ['non-finite counters', '"totalSuccesses":1e309'],
+      ['negative latency', '"avgLatencyMs":-1'],
+      ['unbounded latency', '"avgLatencyMs":1e309'],
+      ['unbounded backoff', `"backoffUntil":${Date.now() + 10 * 60_000}`]
+    ])('discards entries containing %s', (_label, field) => {
+      const raw = `{"https://poisoned.example":{"host":"https://poisoned.example",${field}}}`
+      const t = new HostReputationTracker(makeStore({ bsvsdk_overlay_host_reputation_v3: raw }))
+      expect(t.snapshot('https://poisoned.example')).toBeUndefined()
+    })
+
+    it('discards a stored entry whose embedded host differs from its map key', () => {
+      const raw = JSON.stringify({
+        'https://trusted.example': { host: 'https://attacker.example' }
+      })
+      const t = new HostReputationTracker(makeStore({ bsvsdk_overlay_host_reputation_v3: raw }))
+      expect(t.snapshot('https://trusted.example')).toBeUndefined()
+      expect(t.snapshot('https://attacker.example')).toBeUndefined()
+    })
+
+    it('rejects oversized persisted entry collections before loading any host', () => {
+      const entries: Record<string, unknown> = {}
+      for (let index = 0; index < 1025; index++) {
+        entries[`https://host-${index}.example`] = {}
+      }
+      const t = new HostReputationTracker(
+        makeStore({ bsvsdk_overlay_host_reputation_v3: JSON.stringify(entries) })
+      )
+      expect(t.snapshot('https://host-0.example')).toBeUndefined()
+    })
+
+    it('serializes prototype-named hosts as owned data', () => {
+      const kv = makeStore()
+      const t = new HostReputationTracker(kv)
+      t.recordSuccess('__proto__', 10)
+      t.flush()
+
+      const stored = JSON.parse(kv.store.get('bsvsdk_overlay_host_reputation_v3')!)
+      expect(Object.prototype.hasOwnProperty.call(stored, '__proto__')).toBe(true)
+      expect(stored.__proto__.host).toBe('__proto__')
     })
 
     it('handles storage.get throwing by returning undefined', () => {

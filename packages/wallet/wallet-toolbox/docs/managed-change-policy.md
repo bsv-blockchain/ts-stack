@@ -43,13 +43,26 @@ without allowing them into balance or automatic funding.
 | Request | New output | Existing custom output | Existing managed change |
 | --- | --- | --- | --- |
 | `wallet payment` | Store as managed change in `default` | Promote to managed change after BRC-29 script verification | Idempotent when already in `default` |
-| `basket insertion` to a non-default basket | Store as custom | Move/update as custom; no wallet-balance adjustment | Reject; managed change cannot be reclassified |
+| `basket insertion` to a non-default basket | Store as custom | Move/update as custom; no wallet-balance adjustment\* | Reject; managed change cannot be reclassified |
 | `basket insertion` to `default` | Reject | Reject | Reject |
 
 The wallet signer verifies that `paymentRemittance` derives the transaction
 output's locking script before storage can promote it. This is the supported
 way to repair a genuine BRC-29 payment that was previously classified as
 custom. Merely recognizing a P2PKH locking script is not enough.
+
+\* Only when the existing custom output is currently unbasketed, already in
+the target basket (idempotent re-internalization), or in `default` (see
+[Sweeping and recovery](#sweeping-and-recovery)). A `basket insertion` cannot
+reclassify an existing custom output that already belongs to a *different*
+real, named basket; that request is rejected with `WERR_INVALID_PARAMETER`
+even though the caller holds insertion permission for the requested basket.
+Storage does not know which application "owns" a basket — permission checks
+for the requested basket happen at the `WalletPermissionsManager` layer, not
+here — so without this check an app with insertion permission on basket X
+could internalize an already-known transaction and move another app's output
+out of basket Y into X, then spend it. The requested basket is resolved with a
+read-only lookup, so a rejected request never creates it.
 
 ## Sweeping and recovery
 

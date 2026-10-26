@@ -2,6 +2,14 @@ import { BroadcastResponse, BroadcastFailure, Broadcaster } from '../Broadcaster
 import Transaction from '../Transaction.js'
 import { HttpClient } from '../http/HttpClient.js'
 import { defaultHttpClient } from '../http/DefaultHttpClient.js'
+import {
+  normalizeBroadcasterHttpClient,
+  normalizeBsvNetwork,
+  providerDiagnostic,
+  providerStatusCode,
+  TRANSACTION_ID
+} from './BroadcasterValidation.js'
+import { lockConfiguration } from '../http/ConfigurationLock.js'
 
 /**
  * Represents an WhatsOnChain transaction broadcaster.
@@ -21,9 +29,10 @@ export default class WhatsOnChainBroadcaster implements Broadcaster {
     network: 'main' | 'test' | 'stn' = 'main',
     httpClient: HttpClient = defaultHttpClient()
   ) {
-    this.network = network
-    this.URL = `https://api.whatsonchain.com/v1/bsv/${network}/tx/raw`
-    this.httpClient = httpClient
+    this.network = normalizeBsvNetwork(network)
+    this.URL = `https://api.whatsonchain.com/v1/bsv/${this.network}/tx/raw`
+    this.httpClient = normalizeBroadcasterHttpClient(httpClient, "What's On Chain httpClient")
+    lockConfiguration(this, ['network', 'URL', 'httpClient'])
   }
 
   /**
@@ -47,26 +56,38 @@ export default class WhatsOnChainBroadcaster implements Broadcaster {
     try {
       const response = await this.httpClient.request<string>(this.URL, requestOptions)
       if (response.ok) {
-        const txid = response.data
+        const expectedTxid = tx.id('hex')
+        if (
+          typeof expectedTxid !== 'string' ||
+          !TRANSACTION_ID.test(expectedTxid) ||
+          typeof response.data !== 'string' ||
+          !TRANSACTION_ID.test(response.data) ||
+          response.data.toLowerCase() !== expectedTxid.toLowerCase()
+        ) {
+          return {
+            status: 'error',
+            code: 'ERR_TXID_MISMATCH',
+            description:
+              'Broadcaster acknowledged a transaction other than the submitted transaction'
+          }
+        }
         return {
           status: 'success',
-          txid,
+          txid: expectedTxid.toLowerCase(),
           message: 'broadcast successful'
         }
       } else {
         return {
           status: 'error',
-          code: response.status.toString() ?? 'ERR_UNKNOWN',
-          description: response.data ?? 'Unknown error'
+          code: providerStatusCode(response.status),
+          description: providerDiagnostic(response.data)
         }
       }
-    } catch (error) {
-      const caughtError = error as { message?: unknown }
+    } catch {
       return {
         status: 'error',
         code: '500',
-        description:
-          typeof caughtError.message === 'string' ? caughtError.message : 'Internal Server Error'
+        description: 'Internal Server Error'
       }
     }
   }

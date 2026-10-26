@@ -16,7 +16,7 @@ Each user’s presentation key is **guarded** by one or more **Auth Methods** (e
 - **Creates** a new record (if they’re a new user), storing their 256-bit key securely, or
 - **Retrieves** an existing key (if they’re returning).
 
-Additionally, the WAB provides a **faucet** feature that can make a one-time BSV satoshi payment for each unique presentation key, logging the payment and returning the transaction data to the user.
+Additionally, the WAB provides a **faucet** feature that can make a one-time BSV satoshi payment for an eligible verified authentication identity and account history, logging the payment and returning the transaction data to the user. Faucet eligibility does not reset when a presentation key rotates or when an identity is unlinked or its account is deleted.
 
 ---
 
@@ -157,7 +157,7 @@ For local development, you can create a `.env` file in the `server/` root with t
 # Twilio config (if you want to test the Twilio method locally)
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
-TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
+TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # If using a local MySQL database:
 DB_CLIENT=mysql2
@@ -262,7 +262,60 @@ Support can restore those associations if the change is later determined to be
 fraudulent. Faucet history remains attached to its original auth-method record.
 Presentation keys and Shamir user hashes are exact 256-bit hexadecimal values.
 Stored Shamir shares are bounded and structurally validated before any database
-operation.
+operation. `SHARE_ENCRYPTION_KEY` must be exactly 64 hexadecimal characters
+(32 bytes); a missing or malformed value fails startup. Treat it as a durable
+data-encryption key, keep it stable and backed up separately from the database,
+and re-encrypt stored shares under an explicitly controlled rotation procedure
+before retiring it. Merely changing this variable makes existing shares
+unreadable.
+
+Faucet startup likewise requires a valid nonzero secp256k1
+`SERVER_PRIVATE_KEY`, a supported `BSV_NETWORK`, and an HTTPS `STORAGE_URL`.
+Plain HTTP is accepted only for an explicit loopback storage service. Configure
+these values before startup; they are validated again before a payment
+reservation is created, so a configuration error cannot strand a user's
+one-time faucet claim.
+
+The payment reservation and every currently linked authentication method's
+`receivedFaucet` marker are committed together before the wallet call. New or
+replacement authentication methods inherit that marker from either an
+existing method or any persisted payment row. Only `ready` is deliverable;
+every other status remains a fail-closed pending claim until reconciled.
+Unlinking or account deletion
+preserves the detached authentication rows and payment evidence as durable
+anti-abuse history. The faucet-claim backfill migration repairs linked legacy
+rows. Any orphaned payment stops startup for operator reconciliation because
+the legacy schema cannot prove which identities consumed it; conservatively
+marking uncertain orphaned identities is the fail-closed remedy.
+
+This faucet-claim migration is **not rolling-upgrade compatible** with older WAB
+writers. Before applying it, enter maintenance mode, remove WAB from service,
+gracefully drain and stop every old replica, verify that no old process can write
+the database, and take a restorable backup. Start one new replica with traffic
+still blocked so it can apply and verify the migration, then deploy only the new
+image to the remaining replicas before restoring traffic. Never roll a migrated
+database back to the old image: the old link/unlink paths can clear this monotonic
+evidence and reopen faucet reclaim. Recover by rolling forward, or while traffic
+remains stopped restore the pre-migration database and image together. The
+payment-reservation migration's down step refuses to remove its status and
+uniqueness controls while any payment row exists; never delete payout evidence
+to force a rollback.
+
+Faucet backup and restore must also span the external wallet boundary. Retain
+point-in-time database logs and wallet/audit evidence through the latest faucet
+action. After restoring a snapshot, keep the faucet route out of service until
+every later wallet action is correlated to its payment row and authentication
+identities and the payment and `receivedFaucet` markers are reconstructed. If
+the identity association is uncertain, conservatively mark every plausible
+identity before re-enabling faucet traffic; the absence of a claim in an older
+snapshot is never evidence that another payout is safe.
+
+Account and share deletion therefore removes the live account, presentation
+credentials, and stored share, but it does not erase the detached authentication
+identity or faucet-payment evidence used to prevent a second payout. Operators
+must disclose this limited retention, document its privacy and legal basis and
+retention period, restrict access to abuse-prevention purposes, and archive or
+delete evidence only when that policy permits without resetting a faucet claim.
 
 Account deletion is a two-step proof-of-identity flow. The start response is
 identical for known and unknown identities to avoid account enumeration. Its
@@ -336,13 +389,13 @@ for evidence requirements, commands, auditing, rollout, and rollback.
    yarn dev
    ```
 
-   This runs `ts-node-dev` or equivalent.
+   This runs `tsx watch` with the existing telemetry preload and watches both source files and `.env`.
 
-   The server should start on `http://localhost:3000`.
+   The server should start on `http://localhost:8080`.
 
 3. **Test** the endpoints:
    ```bash
-   curl http://localhost:3000/info
+   curl http://localhost:8080/info
    ```
    You should see a JSON response with the WAB’s config info.
 
@@ -425,7 +478,7 @@ The WAB is **modular**: you can configure multiple ways for users to authenticat
 **Twilio** is a popular service for sending SMS verification codes. Here’s how to enable it:
 
 1. **Sign up** for a [Twilio account](https://www.twilio.com/).
-2. **Create** or **access** a [Verify Service](https://www.twilio.com/console/verify/services). Copy the **Service SID** (looks like `VAxxxxxxxxx` or `VExxxxxxx`).
+2. **Create** or **access** a [Verify Service](https://www.twilio.com/console/verify/services). Copy its canonical **Service SID** (`VA` followed by 32 hexadecimal characters). A `VE` SID identifies an individual verification, not a Verify Service.
 3. In your Twilio console, **grab**:
    - **Twilio Account SID** (`ACxxxxxxxxx...`)
    - **Auth Token**
@@ -433,11 +486,11 @@ The WAB is **modular**: you can configure multiple ways for users to authenticat
    ```bash
    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
    TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
-   TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
+   TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
    ```
 5. **Use** the `TwilioAuthMethod` in code. By default, the [AuthController](./src/controllers/AuthController.ts) can instantiate it if `methodType === "TwilioPhone"`.
 
-When a client sends a request to `/auth/start` with `methodType = "TwilioPhone"`, the server calls Twilio to send the SMS code. The client then calls `/auth/complete` with the OTP code, and the WAB verifies it with Twilio, linking that phone number to the user’s presentation key.
+When a client sends a request to `/auth/start` with `methodType = "TwilioPhone"`, the server calls Twilio to send the SMS code. The client then calls `/auth/complete` with the exact 4–10 digit OTP configured by the Verify Service, and the WAB verifies it with Twilio, linking that phone number to the user’s presentation key. Leave all three Twilio variables absent to disable this method; partial or malformed credentials fail startup and are never advertised.
 
 > **Note**: For more advanced Twilio features (voice calls, push notifications, etc.), you can customize the `TwilioAuthMethod`.
 
@@ -522,8 +575,9 @@ DB_PASS=mysecret
 DB_NAME=mydatabase
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxx
 TWILIO_AUTH_TOKEN=xxxxxxxxxxxxxxx
-TWILIO_VERIFY_SERVICE_SID=VExxxxxxxxx
+TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 PORT=8080
+SHARE_ENCRYPTION_KEY=<64 hex characters from a secret manager>
 # Optional; begin with dual-write during a rolling upgrade.
 WAB_PRESENTATION_KEY_ENCRYPTION_MODE=dual-write
 WAB_PRESENTATION_KEY_ENCRYPTION_KEY=<64 hex characters from a secret manager>
@@ -548,7 +602,7 @@ gcloud run deploy wab-server-production \
   --set-env-vars=DB_NAME=mydatabase \
   --set-env-vars=TWILIO_ACCOUNT_SID=ACxxxxxxx \
   --set-env-vars=TWILIO_AUTH_TOKEN=xxxxxxx \
-  --set-env-vars=TWILIO_VERIFY_SERVICE_SID=VExxxxxxx \
+  --set-env-vars=TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx \
   --set-env-vars=PORT=8080
 ```
 
@@ -604,3 +658,15 @@ To contribute:
 ## License
 
 This project is available under the [Open BSV License Version 6](./LICENSE.txt).
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

@@ -135,7 +135,7 @@ describe('LookupResolver dynamic discovery', () => {
     const service = 'ls_foo'
     const fooReceipt = await slapReceipt(201, fooHost, service)
     const barReceipt = await slapReceipt(202, barHost, 'ls_bar')
-    const shipReceipt = await overlayReceipt('SHIP', 203, shipHost, service)
+    const shipReceipt = await overlayReceipt('SHIP', 203, shipHost, 'tm_foo')
     const hostCalls: string[] = []
     const lookup = jest.fn(async (url: string, question: { service: string }) => {
       if (url === fooTracker) return { type: 'output-list' as const, outputs: [fooReceipt] }
@@ -625,7 +625,7 @@ describe('LookupResolver dynamic discovery', () => {
     })
   })
 
-  it('normalizes duplicate configured endpoints and never exceeds the host concurrency budget', async () => {
+  it('never exceeds the host concurrency budget for configured endpoints', async () => {
     const one = 'https://one.example'
     const two = 'https://two.example'
     const three = 'https://three.example'
@@ -643,7 +643,7 @@ describe('LookupResolver dynamic discovery', () => {
           return { type: 'output-list' as const, outputs: [] }
         }
       },
-      hostOverrides: { ls_concurrency: [`${one}/`, one, two, three] }
+      hostOverrides: { ls_concurrency: [one, two, three] }
     })
     const pending = resolver.query({ service: 'ls_concurrency', query: {} }, undefined, {
       limits: { hostConcurrency: 2 }

@@ -1,5 +1,13 @@
 import type { ModuleContext } from '../types.js'
-import type { WalletInterface } from '../../wallet/Wallet.interfaces.js'
+import type {
+  CreateActionArgs,
+  SignActionArgs,
+  WalletInterface
+} from '../../wallet/Wallet.interfaces.js'
+import PrivateKey from '../../primitives/PrivateKey.js'
+import Transaction from '../../transaction/Transaction.js'
+import Script from '../../script/Script.js'
+import P2PKH from '../../script/templates/P2PKH.js'
 import {
   Brc29RemittanceModule,
   DefaultNonceProvider,
@@ -14,17 +22,56 @@ const makeContext = (wallet: WalletInterface): ModuleContext => ({
   now: () => 123
 })
 
-const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface =>
-  ({
-    getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-    createAction: jest.fn(async () => ({ tx: [1, 2, 3] })),
+const PUBLIC_KEY = new PrivateKey(2).toPublicKey().toString()
+const PAYMENT_SCRIPT = new P2PKH().lock(new PrivateKey(2).toPublicKey().toAddress()).toHex()
+
+const addFundingInput = (transaction: Transaction): void => {
+  const source = new Transaction()
+  source.addOutput({ satoshis: 1_000_000, lockingScript: Script.fromASM('OP_1') })
+  transaction.addInput({
+    sourceTransaction: source,
+    sourceOutputIndex: 0,
+    unlockingScript: Script.fromASM('OP_1')
+  })
+}
+
+const makeWallet = (overrides: Partial<WalletInterface> = {}): WalletInterface => {
+  let pending: Transaction | undefined
+  return {
+    getPublicKey: jest.fn(async () => ({ publicKey: PUBLIC_KEY })),
+    createAction: jest.fn(async (args: CreateActionArgs) => {
+      pending = new Transaction(args.version ?? 1, [], [], args.lockTime ?? 0)
+      addFundingInput(pending)
+      for (const output of args.outputs ?? []) {
+        pending.addOutput({
+          satoshis: output.satoshis,
+          lockingScript: Script.fromHex(output.lockingScript)
+        })
+      }
+      return {
+        signableTransaction: {
+          reference: 'YnJjMjktYWRkaXRpb25hbA==',
+          tx: pending.toAtomicBEEF(true)
+        }
+      }
+    }),
+    signAction: jest.fn(async (_args: SignActionArgs) => ({
+      tx: pending!.toAtomicBEEF(true),
+      txid: pending!.id('hex')
+    })),
+    abortAction: jest.fn(async () => ({ aborted: true })),
     internalizeAction: jest.fn(async () => ({ accepted: true })),
     ...overrides
-  }) as unknown as WalletInterface
+  } as unknown as WalletInterface
+}
 
 const validSettlement = {
   customInstructions: { derivationPrefix: 'prefix', derivationSuffix: 'suffix' },
-  transaction: [1, 2, 3],
+  transaction: new Transaction(
+    1,
+    [],
+    [{ satoshis: 1000, lockingScript: Script.fromHex(PAYMENT_SCRIPT) }]
+  ).toAtomicBEEF(true),
   amountSatoshis: 1000
 }
 
@@ -163,10 +210,10 @@ describe('Brc29RemittanceModule – buildSettlement option validation', () => {
 
 describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
   it.each([
-    ['an empty public key', '', '76a914abcd88ac', 'brc29.public_key_missing'],
-    ['a whitespace-only public key', '   ', 'script', 'brc29.public_key_missing'],
-    ['an empty locking script', '02deadbeef', '', 'brc29.locking_script_missing'],
-    ['a whitespace-only locking script', '02deadbeef', '   ', 'brc29.locking_script_missing']
+    ['an empty public key', '', PAYMENT_SCRIPT, 'brc29.public_key_missing'],
+    ['a whitespace-only public key', '   ', PAYMENT_SCRIPT, 'brc29.public_key_missing'],
+    ['an empty locking script', PUBLIC_KEY, '', 'brc29.build_failed'],
+    ['a whitespace-only locking script', PUBLIC_KEY, '   ', 'brc29.build_failed']
   ])(
     'terminates when the wallet path returns %s',
     async (_case, publicKey, lockingScript, expectedCode) => {
@@ -189,19 +236,11 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     }
   )
 
-  it('settles successfully when createAction returns signableTransaction.tx instead of direct tx', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-      createAction: jest.fn(async () => ({
-        signableTransaction: { tx: [4, 5, 6], reference: 'cmVm' }
-      }))
-    })
+  it('settles successfully through the deferred-signing wallet path', async () => {
+    const wallet = makeWallet()
     const module = new Brc29RemittanceModule({
       nonceProvider: {
         createNonce: jest.fn().mockResolvedValueOnce('prefix').mockResolvedValueOnce('suffix')
-      },
-      lockingScriptProvider: {
-        pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914deadbeef88ac')
       }
     })
 
@@ -209,69 +248,21 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
       { threadId: 'tid', option: { amountSatoshis: 500, payee: 'pk' } },
       makeContext(wallet)
     )
-    // signableTransaction.tx = [4, 5, 6] is a valid atomic BEEF array
     expect(result.action).toBe('settle')
     if (result.action === 'settle') {
-      expect(result.artifact.transaction).toEqual([4, 5, 6])
+      expect(Transaction.fromAtomicBEEF(result.artifact.transaction).outputs[0].satoshis).toBe(500)
     }
   })
 
   it('terminates when tx is not a valid byte array (contains non-byte values)', async () => {
     const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
+      getPublicKey: jest.fn(async () => ({ publicKey: PUBLIC_KEY })),
       createAction: jest.fn(async () => ({ tx: [256, 1, 2] })) // 256 is out of byte range
     })
     const module = new Brc29RemittanceModule({
       nonceProvider: {
         createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
-      },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
-    })
-
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.invalid_tx')
-    }
-  })
-
-  it('terminates when tx is an empty array', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-      createAction: jest.fn(async () => ({ tx: [] })) // empty
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: {
-        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
-      },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
-    })
-
-    const result = await module.buildSettlement(
-      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk' } },
-      makeContext(wallet)
-    )
-    expect(result.action).toBe('terminate')
-    if (result.action === 'terminate') {
-      expect(result.termination.code).toBe('brc29.invalid_tx')
-    }
-  })
-
-  it('terminates when createAction throws an unexpected error', async () => {
-    const wallet = makeWallet({
-      getPublicKey: jest.fn(async () => ({ publicKey: '02deadbeef' })),
-      createAction: jest.fn(async () => {
-        throw new Error('unexpected wallet error')
-      })
-    })
-    const module = new Brc29RemittanceModule({
-      nonceProvider: {
-        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
-      },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
+      }
     })
 
     const result = await module.buildSettlement(
@@ -281,7 +272,51 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
     expect(result.action).toBe('terminate')
     if (result.action === 'terminate') {
       expect(result.termination.code).toBe('brc29.build_failed')
-      expect(result.termination.message).toContain('unexpected wallet error')
+    }
+  })
+
+  it('terminates when tx is an empty array', async () => {
+    const wallet = makeWallet({
+      getPublicKey: jest.fn(async () => ({ publicKey: PUBLIC_KEY })),
+      createAction: jest.fn(async () => ({ tx: [] })) // empty
+    })
+    const module = new Brc29RemittanceModule({
+      nonceProvider: {
+        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
+      }
+    })
+
+    const result = await module.buildSettlement(
+      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk' } },
+      makeContext(wallet)
+    )
+    expect(result.action).toBe('terminate')
+    if (result.action === 'terminate') {
+      expect(result.termination.code).toBe('brc29.build_failed')
+    }
+  })
+
+  it('terminates when createAction throws an unexpected error', async () => {
+    const wallet = makeWallet({
+      getPublicKey: jest.fn(async () => ({ publicKey: PUBLIC_KEY })),
+      createAction: jest.fn(async () => {
+        throw new Error('unexpected wallet error')
+      })
+    })
+    const module = new Brc29RemittanceModule({
+      nonceProvider: {
+        createNonce: jest.fn().mockResolvedValueOnce('p').mockResolvedValueOnce('s')
+      }
+    })
+
+    const result = await module.buildSettlement(
+      { threadId: 'tid', option: { amountSatoshis: 100, payee: 'pk' } },
+      makeContext(wallet)
+    )
+    expect(result.action).toBe('terminate')
+    if (result.action === 'terminate') {
+      expect(result.termination.code).toBe('brc29.build_failed')
+      expect(result.termination.message).not.toContain('unexpected wallet error')
     }
   })
 
@@ -307,14 +342,11 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
   })
 
   it('uses option-level protocolID, labels, and description overrides', async () => {
-    const wallet = makeWallet({
-      createAction: jest.fn(async () => ({ tx: [7, 8, 9] }))
-    })
+    const wallet = makeWallet()
     const module = new Brc29RemittanceModule({
       nonceProvider: {
         createNonce: jest.fn().mockResolvedValueOnce('pref').mockResolvedValueOnce('suf')
-      },
-      lockingScriptProvider: { pubKeyToP2PKHLockingScript: jest.fn(async () => '76a914abcd88ac') }
+      }
     })
 
     const result = await module.buildSettlement(
@@ -326,14 +358,14 @@ describe('Brc29RemittanceModule – buildSettlement wallet failures', () => {
           protocolID: [1, 'custom-proto'],
           labels: ['my-label'],
           description: 'Custom description',
-          outputIndex: 2
+          outputIndex: 0
         }
       },
       makeContext(wallet)
     )
     expect(result.action).toBe('settle')
     if (result.action === 'settle') {
-      expect(result.artifact.outputIndex).toBe(2)
+      expect(result.artifact.outputIndex).toBe(0)
       expect(result.artifact.amountSatoshis).toBe(777)
     }
 

@@ -45,7 +45,7 @@ class MessageObject(BaseModel):
     )
     recipients: list[PubKeyHex] | None = Field(
         None,
-        description='Preferred plural form. Takes precedence over `recipient` when both are present.',
+        description='Preferred plural form. Takes precedence over `recipient` when both are present. Compressed and uncompressed encodings of the same key count as one recipient and must not be repeated.',
     )
     messageBox: constr(min_length=1, max_length=128) = Field(
         ...,
@@ -107,7 +107,7 @@ class Payment(BaseModel):
     tx: AtomicBEEF
     outputs: list[PaymentOutput] = Field(
         ...,
-        description="Output list. When a server delivery fee applies, output[0] must be the\nserver's delivery fee output. Subsequent outputs are recipient-side.\n",
+        description='Output list. When a server delivery fee applies, output[0] must pay\nthe per-recipient delivery fee multiplied by the number of recipients.\nSubsequent outputs are recipient-side.\n',
     )
     description: constr(min_length=5, max_length=50) = Field(
         ..., description='Human-readable description for wallet internalization.'
@@ -138,7 +138,7 @@ class PermissionRecord(BaseModel):
         None, description='Sender identity key, or null for a box-wide default.'
     )
     messageBox: str | None = None
-    recipientFee: int | None = Field(
+    recipientFee: conint(ge=-1, le=2147483647) | None = Field(
         None,
         description='-1 = blocked, 0 = always allow, positive = satoshi amount required.',
     )

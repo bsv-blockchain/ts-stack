@@ -48,16 +48,21 @@ afterEach(() => {
 
 describe('strict lookup boundaries', () => {
   it('returns no Any result when the requested transaction is absent', async () => {
+    const txid = 'aa'.repeat(32)
     const findByTxid = jest.fn(async () => null)
     const service = new AnyLookupService({ findByTxid } as unknown as AnyStorage)
 
-    await expect(service.lookup(lookupQuestion('ls_anytx', 'missing'))).resolves.toEqual([])
-    expect(findByTxid).toHaveBeenCalledWith('missing')
+    await expect(service.lookup(lookupQuestion('ls_anytx', txid))).resolves.toEqual([])
+    expect(findByTxid).toHaveBeenCalledWith(txid)
   })
 
   it.each([
-    ['missing', null, []],
-    ['known', { txid: 'known', outputIndex: 0 }, [{ txid: 'known', outputIndex: 0 }]]
+    ['aa'.repeat(32), null, []],
+    [
+      'bb'.repeat(32),
+      { txid: 'bb'.repeat(32), outputIndex: 0 },
+      [{ txid: 'bb'.repeat(32), outputIndex: 0 }]
+    ]
   ])('normalizes a Fractionalize %s transaction result', async (txid, stored, expected) => {
     const findByTxid = jest.fn(async () => stored)
     const service = new FractionalizeLookupService({

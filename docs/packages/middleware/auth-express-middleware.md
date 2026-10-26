@@ -3,10 +3,10 @@ id: pkg-auth-express-middleware
 title: '@bsv/auth-express-middleware'
 kind: package
 domain: middleware
-version: '2.2.4'
+version: '2.2.10'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/auth-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/auth-express-middleware'
@@ -16,10 +16,20 @@ tags: [middleware, express, auth, brc-103, brc-104]
 
 # @bsv/auth-express-middleware
 
+This source candidate declares SDK peer `^2.8.5 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 Express transport for BRC-103 peer-to-peer mutual authentication over
 BRC-104 HTTP. It handles the public handshake, verifies authenticated
 application requests, signs responses, and optionally exchanges verifiable
 certificates.
+
+The 2.2.10 source candidate answers a general request whose session nonce or
+HMAC cannot be verified with `401 ERR_AUTH_FAILED`. `AuthFetch` discards that
+session and authenticates again. Unrelated processing failures remain
+`500 ERR_INTERNAL_SERVER_ERROR`. No BRC-103/104 wire or request-shape migration
+is required. This candidate is not publication.
 
 ## Install
 
@@ -34,6 +44,34 @@ native ESM and CommonJS entry points with matching declarations.
 Version 2.2.4 requires `@bsv/sdk` 2.7.1 or later so the identity assigned to
 `req.auth.identityKey` is the identity bound to the verified peer session, not
 unsigned BRC-104 transport metadata.
+
+Version 2.2.6 restores bodyless authenticated requests when the Express 4 JSON
+parser supplies an empty-object placeholder. HTTP message framing distinguishes
+that placeholder from a real JSON `{}` body. Existing clients need no changes;
+framed bodies and authentication checks retain their existing semantics.
+
+Version 2.2.7 preserves Express's one-argument response header-map overload.
+`res.set({ ...headers })` and authenticated payment challenges work with the
+same Express validation, signed headers and wire format. No client migration
+is required.
+
+Version 2.2.8 requires SDK 2.8.5 and removes middleware header-size and
+header-count ceilings. `createAuthMiddleware` configures its Peer with
+`maxGeneralPayloadBytes: null`, avoiding an indirect SDK general-message
+ceiling for received headers while retaining metadata and signature validation.
+Received headers are excluded from `maxRequestBytes`, which still applies to
+handshake/plain-data and encoded request bodies. The middleware preserves all
+selected header bytes for BRC-104 signing and verification, rather than rejecting
+a received payment because of an additional header budget. HTTP server, CDN,
+proxy and WAF configuration own transport header limits. Configure those layers
+for the largest supported payment proof and validate the complete route.
+
+Malformed or duplicate signed headers, unsafe header values, authentication
+failures and invalid signatures still fail validation. Body budgets, timeouts
+and replay protection remain separate. Clients consuming larger signed responses
+need matching capacity; SDK 2.8.5 raises its header limits by 4x. No BRC100 call,
+wire or wallet-data migration is required. Source publication is a separate
+protected release step.
 
 ## Quick start
 
@@ -67,6 +105,7 @@ app.use(
     sessionManager,
     certificatesToRequest,
     onCertificatesReceived,
+    certificateApprovalStore,
     logger,
     logLevel: 'error',
     transportLimits: {
@@ -85,6 +124,12 @@ with a signed `413`. The default is 8 MiB. Operators may set it to `-1` only
 when the embedding service enforces an equivalent response budget. Malformed
 requests are rejected before state allocation. At capacity, the middleware
 fails closed with `503`.
+
+When `onCertificatesReceived` is configured, approval is retained against the
+exact validated session nonce and identity. The default bounded approval store
+is process-local. Load-balanced services must inject a shared
+`certificateApprovalStore` as well as a shared `AsyncSessionManager`; malformed
+or unavailable approval-store results fail closed.
 
 The exact `/.well-known/auth` endpoint remains public because it establishes
 the session. Similar path prefixes receive normal auth treatment.
@@ -146,6 +191,15 @@ CORS. CSP is primarily a document policy and is not a substitute for API CORS.
 
 - Use HTTPS; mutual authentication does not encrypt all HTTP data.
 - Parse bodies before auth so signed and routed values match.
+- Use matching parsers and only flat string fields for URL-encoded bodies;
+  lossy nested/array coercions and unsupported nonempty bodies are rejected.
+- Do not authorize from `Host`, `Cookie`, forwarding headers, or other metadata
+  omitted by the BRC-104 v0.1 signed frame. This subset is deliberate because
+  browser and webpage libraries often cannot safely observe those values when
+  signing. Pin the authority at the edge and compare required values with exact
+  signed `x-bsv-*` or `Authorization` fields. Response authentication likewise
+  covers only the declared signed header set, not arbitrary standard response
+  headers or the complete browser/proxy context.
 - Install one auth wrapper per request path.
 - Keep finite timeouts/response sizes/capacity and alert on `408`, `413`, and
   `503`.
@@ -159,12 +213,14 @@ Runtime:
 
 - `createAuthMiddleware`
 - `ExpressTransport`
+- `InMemoryCertificateApprovalStore`
 
 Types:
 
 - `AuthMiddlewareOptions`
 - `AuthRequest`
 - `AuthTransportLimits`
+- `CertificateApprovalStore`
 - `LogLevel`
 
 ## Related packages

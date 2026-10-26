@@ -47,6 +47,13 @@ of your choice.
 
 Finally, you can deep dive into the details of the interface and types in the reference material below.
 
+Identity contacts are wallet-local trust anchors. Saving one records the
+user's independently validated identity-key association as authoritative for
+that wallet, much like accepting a self-signed certificate. This is local
+policy—not transferable third-party certification. See the
+[Identity reference](./reference/identity.md) before enabling contact-first
+resolution or importing contact data.
+
 ## Reference Material
 
 - [Remittance Getting Started](./remittance-getting-started.md)

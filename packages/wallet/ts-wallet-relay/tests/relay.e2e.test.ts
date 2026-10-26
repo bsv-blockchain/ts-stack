@@ -9,7 +9,7 @@
 import http from 'node:http'
 import express from 'express'
 import { WebSocket } from 'ws'
-import { ProtoWallet, PrivateKey } from '@bsv/sdk'
+import { ProtoWallet, PrivateKey, Transaction } from '@bsv/sdk'
 import { WalletRelayService } from '../src/server/WalletRelayService.js'
 import { WalletPairingSession } from '../src/client/WalletPairingSession.js'
 import { parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
@@ -17,6 +17,8 @@ import { parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUr
 // WalletPairingSession uses `new WebSocket(...)` via the browser global.
 // Polyfill it here so the mobile client works inside Node.js tests.
 ;(globalThis as unknown as Record<string, unknown>).WebSocket = WebSocket
+
+const VALID_ATOMIC_BEEF = new Transaction().toAtomicBEEF()
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -81,6 +83,7 @@ describe('WalletRelayService E2E', () => {
   let httpServer: http.Server
   let service: WalletRelayService
   let baseUrl: string
+  let backendWallet: ProtoWallet
 
   beforeEach(async () => {
     const { app, server } = makeServer()
@@ -88,10 +91,11 @@ describe('WalletRelayService E2E', () => {
     const port = await startListening(server)
     baseUrl = `http://localhost:${port}`
 
+    backendWallet = new ProtoWallet(PrivateKey.fromRandom())
     service = new WalletRelayService({
       app,
       server,
-      wallet: new ProtoWallet(PrivateKey.fromRandom()),
+      wallet: backendWallet,
       relayUrl: `ws://localhost:${port}`,
       origin: `http://localhost:${port}`
     })
@@ -117,6 +121,7 @@ describe('WalletRelayService E2E', () => {
     it('GET /api/session returns a pending session', async () => {
       const res = await fetch(`${baseUrl}/api/session`)
       expect(res.ok).toBe(true)
+      expect(res.headers.get('cache-control')).toContain('no-store')
       const body = (await res.json()) as { sessionId: string; status: string }
       expect(body.sessionId).toBeTruthy()
       expect(body.status).toBe('pending')
@@ -159,6 +164,50 @@ describe('WalletRelayService E2E', () => {
         await stopServer(server)
       }
     }, 10_000)
+
+    it('GET /api/session bounds public session-creation work per minute', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const capped = new WalletRelayService({
+        app,
+        server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        maxSessions: 2,
+        maxSessionCreationsPerMinute: 1
+      })
+      try {
+        await capped.createSession()
+        const res = await fetch(`http://localhost:${port}/api/session`)
+        expect(res.status).toBe(429)
+        expect(res.headers.get('cache-control')).toContain('no-store')
+      } finally {
+        capped.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('releases a session slot when wallet-controlled session setup fails validation', async () => {
+      const { server } = makeServer()
+      const port = await startListening(server)
+      const wallet = new ProtoWallet(PrivateKey.fromRandom())
+      jest.spyOn(wallet, 'getPublicKey').mockResolvedValueOnce({ publicKey: 'invalid' } as never)
+      const capped = new WalletRelayService({
+        server,
+        wallet,
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        maxSessions: 1
+      })
+      try {
+        await expect(capped.createSession()).rejects.toThrow(/publicKey/)
+        await expect(capped.createSession()).resolves.toMatchObject({ status: 'pending' })
+      } finally {
+        capped.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
   })
 
   // ── resolveRelay ────────────────────────────────────────────────────────────
@@ -191,7 +240,7 @@ describe('WalletRelayService E2E', () => {
       const { params } = parsePairingUri(created.pairingUri)
       const fetchMock = jest
         .spyOn(globalThis, 'fetch')
-        .mockResolvedValue({ ok: false, status: 404 } as Response)
+        .mockResolvedValue(new Response('{}', { status: 404 }))
       const session = new WalletPairingSession(new ProtoWallet(PrivateKey.fromRandom()), params!)
       try {
         await expect(session.resolveRelay()).rejects.toThrow(/HTTP 404/)
@@ -224,6 +273,74 @@ describe('WalletRelayService E2E', () => {
 
       expect(service.getSession(created.sessionId)?.status).toBe('connected')
       mobile.disconnect()
+    }, 10_000)
+
+    it('requires a reconnecting mobile to re-prove key possession before keeping the slot', async () => {
+      const { app, server } = makeServer()
+      const port = await startListening(server)
+      const svc = new WalletRelayService({
+        app,
+        server,
+        wallet: new ProtoWallet(PrivateKey.fromRandom()),
+        relayUrl: `ws://localhost:${port}`,
+        origin: `http://localhost:${port}`,
+        mobileAuthTimeoutMs: 250
+      })
+      try {
+        const created = await svc.createSession()
+        const mobile = await pairMobile(
+          created.pairingUri,
+          new ProtoWallet(PrivateKey.fromRandom())
+        )
+        mobile.disconnect()
+        await new Promise(resolve => setTimeout(resolve, 100))
+        expect(svc.getSession(created.sessionId)?.status).toBe('disconnected')
+
+        const squatter = new WebSocket(
+          `ws://localhost:${port}/ws?topic=${created.sessionId}&role=mobile`
+        )
+        const closed = new Promise<{ code: number; reason: string }>(resolve => {
+          squatter.once('close', (code, reason) => resolve({ code, reason: reason.toString() }))
+        })
+        await new Promise<void>((resolve, reject) => {
+          squatter.once('open', () => resolve())
+          squatter.once('error', reject)
+        })
+        await expect(closed).resolves.toEqual({
+          code: 1008,
+          reason: 'Authentication failed'
+        })
+        expect(svc.getSession(created.sessionId)?.status).toBe('disconnected')
+      } finally {
+        svc.stop()
+        await stopServer(server)
+      }
+    }, 10_000)
+
+    it('does not open a socket after an in-flight connection attempt is cancelled', async () => {
+      const created = await service.createSession()
+      const { params } = parsePairingUri(created.pairingUri)
+      const wallet = new ProtoWallet(PrivateKey.fromRandom())
+      const publicKey = (await wallet.getPublicKey({ identityKey: true })).publicKey
+      let release!: () => void
+      const waiting = new Promise<void>(resolve => {
+        release = resolve
+      })
+      jest.spyOn(wallet, 'getPublicKey').mockImplementationOnce(async () => {
+        await waiting
+        return { publicKey }
+      })
+      const mobile = new WalletPairingSession(wallet, params!)
+      await mobile.resolveRelay()
+
+      const connecting = mobile.connect()
+      mobile.disconnect()
+      release()
+
+      await expect(connecting).rejects.toThrow(/cancelled/)
+      await new Promise(resolve => setTimeout(resolve, 25))
+      expect(service.getSession(created.sessionId)?.status).toBe('pending')
+      expect(mobile.status).toBe('disconnected')
     }, 10_000)
 
     it('onSessionConnected fires with the correct session id', async () => {
@@ -382,7 +499,7 @@ describe('WalletRelayService E2E', () => {
       const rpc = await service.sendRequest(
         created.sessionId,
         'createAction',
-        {},
+        { description: 'test wallet failure' },
         created.desktopToken
       )
 
@@ -397,21 +514,97 @@ describe('WalletRelayService E2E', () => {
       const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) => {
         receivedParams = params
         return Promise.resolve({
-          signableTransaction: { tx: new Uint8Array([4, 5, 6]), reference: 'cmVm' }
+          signableTransaction: { tx: new Uint8Array(VALID_ATOMIC_BEEF), reference: 'cmVm' }
         })
       })
 
       const rpc = await service.sendRequest(
         created.sessionId,
         'createAction',
-        { description: 'test action', inputBEEF: new Uint8Array([1, 2, 3]) },
+        {
+          description: 'test action',
+          inputBEEF: new Uint8Array(VALID_ATOMIC_BEEF),
+          options: { signAndProcess: false }
+        },
         created.desktopToken
       )
 
-      expect(receivedParams).toMatchObject({ inputBEEF: [1, 2, 3] })
+      expect(receivedParams).toMatchObject({ inputBEEF: VALID_ATOMIC_BEEF })
       expect(rpc.result).toEqual({
-        signableTransaction: { tx: [4, 5, 6], reference: 'cmVm' }
+        signableTransaction: { tx: VALID_ATOMIC_BEEF, reference: 'cmVm' }
       })
+      mobile.disconnect()
+    }, 10_000)
+
+    it('serializes concurrent encryption so replay-protected request sequences stay ordered', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const mobilePublicKey = (await mobileWallet.getPublicKey({ identityKey: true })).publicKey
+      const created = await service.createSession()
+      const received: number[] = []
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) => {
+        received.push((params as { keyID: string }).keyID === 'first' ? 1 : 2)
+        return Promise.resolve({ publicKey: mobilePublicKey })
+      })
+
+      const originalEncrypt = backendWallet.encrypt.bind(backendWallet)
+      let encryption = 0
+      jest.spyOn(backendWallet, 'encrypt').mockImplementation(async args => {
+        encryption += 1
+        if (encryption === 1) await new Promise(resolve => setTimeout(resolve, 50))
+        return originalEncrypt(args)
+      })
+
+      const first = service.sendRequest(
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true, keyID: 'first' },
+        created.desktopToken
+      )
+      const second = service.sendRequest(
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true, keyID: 'second' },
+        created.desktopToken
+      )
+
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+      expect(received).toEqual([1, 2])
+      mobile.disconnect()
+    }, 10_000)
+
+    it('serializes mobile decryption so asynchronous completion cannot discard an earlier request', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const mobilePublicKey = (await mobileWallet.getPublicKey({ identityKey: true })).publicKey
+      const originalDecrypt = mobileWallet.decrypt.bind(mobileWallet)
+      let decryption = 0
+      jest.spyOn(mobileWallet, 'decrypt').mockImplementation(async args => {
+        decryption += 1
+        if (decryption === 2) await new Promise(resolve => setTimeout(resolve, 50))
+        return originalDecrypt(args)
+      })
+
+      const created = await service.createSession()
+      const received: string[] = []
+      const mobile = await pairMobile(created.pairingUri, mobileWallet, (_method, params) => {
+        received.push((params as { keyID: string }).keyID)
+        return Promise.resolve({ publicKey: mobilePublicKey })
+      })
+
+      const first = service.sendRequest(
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true, keyID: 'first' },
+        created.desktopToken
+      )
+      const second = service.sendRequest(
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true, keyID: 'second' },
+        created.desktopToken
+      )
+
+      await expect(Promise.all([first, second])).resolves.toHaveLength(2)
+      expect(received).toEqual(['first', 'second'])
       mobile.disconnect()
     }, 10_000)
   })
@@ -514,7 +707,7 @@ describe('WalletRelayService E2E', () => {
       const requestPromise = service.sendRequest(
         created.sessionId,
         'getPublicKey',
-        {},
+        { identityKey: true },
         created.desktopToken
       )
 
@@ -524,6 +717,35 @@ describe('WalletRelayService E2E', () => {
       service.deleteSession(created.sessionId, created.desktopToken)
 
       await expect(requestPromise).rejects.toThrow()
+      mobile.disconnect()
+    }, 10_000)
+
+    it('stop() cancels an in-flight encryption and revokes its socket authority', async () => {
+      const mobileWallet = new ProtoWallet(PrivateKey.fromRandom())
+      const created = await service.createSession()
+      const mobile = await pairMobile(created.pairingUri, mobileWallet)
+      const originalEncrypt = backendWallet.encrypt.bind(backendWallet)
+      let release!: () => void
+      const waiting = new Promise<void>(resolve => {
+        release = resolve
+      })
+      jest.spyOn(backendWallet, 'encrypt').mockImplementationOnce(async args => {
+        await waiting
+        return originalEncrypt(args)
+      })
+
+      const request = service.sendRequest(
+        created.sessionId,
+        'getPublicKey',
+        { identityKey: true },
+        created.desktopToken
+      )
+      await Promise.resolve()
+      service.stop()
+
+      await expect(request).rejects.toThrow('Server shutting down')
+      release()
+      await new Promise(resolve => setImmediate(resolve))
       mobile.disconnect()
     }, 10_000)
 
@@ -699,7 +921,10 @@ describe('WalletRelayService E2E', () => {
           'Content-Type': 'application/json',
           'X-Desktop-Token': created.desktopToken
         },
-        body: JSON.stringify({ method: 'createAction', params: {} })
+        body: JSON.stringify({
+          method: 'createAction',
+          params: { description: 'test disconnected wallet' }
+        })
       })
 
       // Give the request one tick to register as pending on the server

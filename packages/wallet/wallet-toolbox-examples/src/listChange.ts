@@ -8,7 +8,7 @@ type WalletAction = Awaited<
 function logSpendableChange(actions: WalletAction[], statuses: string[]): void {
   for (const action of actions) {
     if (!statuses.includes(action.status)) continue
-    for (const output of action.outputs!) {
+    for (const output of action.outputs ?? []) {
       if (!output.spendable || output.basket !== 'default') continue
       console.log(
         `${ar(output.satoshis, 10)} ${al(action.status, 10)} ${ar(output.outputIndex, 3)} ${action.txid}`
@@ -34,22 +34,26 @@ export async function listChange(): Promise<void> {
       rootKeyHex: env.devKeys[identityKey]
     })
 
-    console.log(`
+    try {
+      console.log(`
 
 Change for:
   identityKey ${identityKey}
 `)
 
-    const { actions } = await setup.wallet.listActions({
-      labels: [],
-      includeOutputs: true,
-      limit: 1000
-    })
+      const { actions } = await setup.wallet.listActions({
+        labels: [],
+        includeOutputs: true,
+        limit: 1000
+      })
 
-    const actionsNewestFirst = [...actions]
-    actionsNewestFirst.reverse()
-    for (const statuses of [['nosend'], ['completed', 'unproven']]) {
-      logSpendableChange(actionsNewestFirst, statuses)
+      const actionsNewestFirst = [...actions]
+      actionsNewestFirst.reverse()
+      for (const statuses of [['nosend'], ['completed', 'unproven']]) {
+        logSpendableChange(actionsNewestFirst, statuses)
+      }
+    } finally {
+      await setup.wallet.destroy()
     }
   }
 }
@@ -72,4 +76,4 @@ export function ar(v: string | number, w: number): string {
   return v.toString().padStart(w)
 }
 
-runArgv2Function(module.exports)
+if (require.main === module) void runArgv2Function(module.exports)

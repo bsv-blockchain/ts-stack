@@ -350,7 +350,9 @@ networks:
 
 1. **Don't expose ports directly to internet** - Use reverse proxy
 2. **Use HTTPS** in production with SSL certificates
-3. **Set resource limits** to prevent resource exhaustion
+3. **Set resource limits** to prevent resource exhaustion. Keep the
+   process-global header-submission rate limit enabled: this endpoint performs
+   asynchronous proof validation and deliberately never trusts caller fields.
 4. **Regular backups** of the bulk headers volume
 5. **Monitor logs** for suspicious activity
 

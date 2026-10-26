@@ -144,6 +144,11 @@ describe('the frozen part-to-blocks mapping', () => {
     }
   })
 
+  it('rejects an over-limit degree before materializing the block mapping', () => {
+    expect(blocksForPart(67_433, 0xffff).length).toBe(4241)
+    expect(blocksForPart(67_433, 0xffff, 4096)).toEqual([])
+  })
+
   it('samples the ideal soliton distribution, not an approximation of it', () => {
     // Frequencies over a fixed window of the deterministic mapping. The old
     // two-draw sampler put ~20% of K=5 draws on degree 5 instead of 5%; this

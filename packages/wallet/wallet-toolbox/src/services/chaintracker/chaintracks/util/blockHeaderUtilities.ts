@@ -1,5 +1,7 @@
 import { validateAgainstDirtyHashes } from './dirtyHashes'
-import { BigNumber, Hash, Utils } from '@bsv/sdk'
+import { BigNumber } from '@bsv/sdk'
+import { SHA256, sha256 } from '@bsv/sdk/primitives/Hash'
+import { ReaderUint8Array, Writer, toBase64 } from '@bsv/sdk/primitives/utils'
 import { asArray, asString } from '../../../../utility/utilityHelpers.noBuffer'
 import { doubleSha256BE } from '../../../../utility/utilityHelpers'
 import { Chain } from '../../../../sdk/types'
@@ -8,6 +10,95 @@ import { BulkHeaderFileInfo } from './BulkHeaderFile'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk/WERR_errors'
 import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.interfaces'
+
+const MAX_HEADER_COUNT = 100_000
+const MAX_HEADER_BYTES = MAX_HEADER_COUNT * 80
+const MAX_BLOCK_HEIGHT = 0x7fffffff
+const UINT32_MAX = 0xffffffff
+const HEX_32_BYTES = /^[0-9a-fA-F]{64}$/
+
+function validateByteWindow(
+  buffer: unknown,
+  offset: number,
+  length: number,
+  name = 'buffer'
+): asserts buffer is number[] | Uint8Array {
+  if (!Array.isArray(buffer) && !(buffer instanceof Uint8Array)) {
+    throw new WERR_INVALID_PARAMETER(name, 'a byte array')
+  }
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    !Number.isSafeInteger(offset + length) ||
+    offset + length > buffer.length
+  ) {
+    throw new WERR_INVALID_PARAMETER(`${name} window`, 'non-negative safe integers within the byte array')
+  }
+  if (Array.isArray(buffer)) {
+    for (let index = offset; index < offset + length; index++) {
+      const value = buffer[index]
+      if (!Number.isInteger(value) || value < 0 || value > 0xff) {
+        throw new WERR_INVALID_PARAMETER(name, 'an array of byte integers')
+      }
+    }
+  }
+}
+
+function validateWritableByteWindow(
+  buffer: unknown,
+  offset: number,
+  length: number
+): asserts buffer is number[] | Uint8Array {
+  if (!Array.isArray(buffer) && !(buffer instanceof Uint8Array)) {
+    throw new WERR_INVALID_PARAMETER('buffer', 'a writable byte array')
+  }
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 0 ||
+    !Number.isSafeInteger(offset + length) ||
+    offset + length > buffer.length
+  ) {
+    throw new WERR_INVALID_PARAMETER('offset', `a non-negative safe integer with ${length} writable bytes`)
+  }
+}
+
+function validateWork(value: unknown, name: string): BigNumber {
+  if (typeof value !== 'string' || !HEX_32_BYTES.test(value)) {
+    throw new WERR_INVALID_PARAMETER(name, 'exactly 32 hexadecimal bytes')
+  }
+  return new BigNumber(value, 16)
+}
+
+function copyBaseHeaderData(value: unknown): BaseBlockHeader {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new WERR_INVALID_PARAMETER('header', 'a plain data object')
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new WERR_INVALID_PARAMETER('header', 'a plain data object')
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  if (Object.values(descriptors).some(descriptor => descriptor.get != null || descriptor.set != null)) {
+    throw new WERR_INVALID_PARAMETER('header', 'accessor-free data properties')
+  }
+  const read = (name: string): unknown => {
+    const descriptor = descriptors[name]
+    if (descriptor == null || !('value' in descriptor)) {
+      throw new WERR_INVALID_PARAMETER('header', `an own ${name} data property`)
+    }
+    return descriptor.value
+  }
+  return {
+    version: read('version') as number,
+    previousHash: read('previousHash') as string,
+    merkleRoot: read('merkleRoot') as string,
+    time: read('time') as number,
+    bits: read('bits') as number,
+    nonce: read('nonce') as number
+  }
+}
 
 /**
  * Computes sha256 hash of file contents read as bytes with no encoding.
@@ -18,13 +109,32 @@ import { BaseBlockHeader, BlockHeader } from '../../../../sdk/WalletServices.int
 export async function sha256HashOfBinaryFile(
   fs: ChaintracksFsApi,
   filepath: string,
-  _bufferSize = 80000
+  bufferSize = 80000
 ): Promise<{ hash: string; length: number }> {
-  const sha256 = new Hash.SHA256()
-  const bytes = await fs.readFile(filepath)
-  const length = bytes.length
-  sha256.update(asArray(bytes))
-  return { hash: Utils.toBase64(sha256.digest()), length }
+  if (!Number.isSafeInteger(bufferSize) || bufferSize < 1 || bufferSize > MAX_HEADER_BYTES) {
+    throw new WERR_INVALID_PARAMETER('bufferSize', `an integer from 1 through ${MAX_HEADER_BYTES}`)
+  }
+  const hasher = new SHA256()
+  const file = await fs.openReadableFile(filepath)
+  try {
+    const length = await file.getLength()
+    if (!Number.isSafeInteger(length) || length < 0 || length > MAX_HEADER_BYTES) {
+      throw new WERR_INVALID_PARAMETER('file length', `an integer from 0 through ${MAX_HEADER_BYTES}`)
+    }
+    let offset = 0
+    while (offset < length) {
+      const requested = Math.min(bufferSize, length - offset)
+      const bytes = await file.read(requested, offset)
+      if (!(bytes instanceof Uint8Array) || bytes.length === 0 || bytes.length > requested) {
+        throw new Error('Binary file reader returned an invalid or incomplete chunk.')
+      }
+      hasher.update(asArray(bytes))
+      offset += bytes.length
+    }
+    return { hash: toBase64(hasher.digest()), length }
+  } finally {
+    await file.close()
+  }
 }
 
 /**
@@ -41,7 +151,44 @@ export async function validateBulkFileData(
   prevChainWork: string,
   fetch?: ChaintracksFetchApi
 ): Promise<BulkHeaderFileInfo> {
+  if (bf == null || typeof bf !== 'object' || Array.isArray(bf)) {
+    throw new WERR_INVALID_PARAMETER('bf', 'a plain data object')
+  }
+  const prototype = Object.getPrototypeOf(bf)
+  const descriptors = Object.getOwnPropertyDescriptors(bf)
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Object.values(descriptors).some(descriptor => descriptor.get != null || descriptor.set != null)
+  ) {
+    throw new WERR_INVALID_PARAMETER('bf', 'an accessor-free plain data object')
+  }
   const vbf = { ...bf }
+
+  if (!Number.isSafeInteger(vbf.count) || vbf.count <= 0 || vbf.count > MAX_HEADER_COUNT) {
+    throw new WERR_INVALID_PARAMETER('bf.count', `an integer from 1 through ${MAX_HEADER_COUNT}`)
+  }
+
+  if (!Number.isSafeInteger(vbf.firstHeight) || vbf.firstHeight < 0 || vbf.firstHeight > MAX_BLOCK_HEIGHT) {
+    throw new WERR_INVALID_PARAMETER('bf.firstHeight', `an integer from 0 through ${MAX_BLOCK_HEIGHT}`)
+  }
+  if (vbf.firstHeight + vbf.count - 1 > MAX_BLOCK_HEIGHT) {
+    throw new WERR_INVALID_PARAMETER('bf', 'a header range within the supported block heights')
+  }
+  if (!['main', 'test', 'stn', 'ttn', 'tstn', 'regtest', 'mock'].includes(vbf.chain!)) {
+    throw new WERR_INVALID_PARAMETER('bf.chain', 'a supported Chaintracks network')
+  }
+  if (
+    typeof vbf.fileName !== 'string' ||
+    !/^[A-Za-z0-9][A-Za-z0-9._~-]{0,254}$/.test(vbf.fileName) ||
+    vbf.fileName === '.' ||
+    vbf.fileName === '..'
+  ) {
+    throw new WERR_INVALID_PARAMETER('bf.fileName', 'a safe path-free ASCII file name')
+  }
+  if (typeof prevHash !== 'string' || !HEX_32_BYTES.test(prevHash)) {
+    throw new WERR_INVALID_PARAMETER('prevHash', 'exactly 32 hexadecimal bytes')
+  }
+  validateWork(prevChainWork, 'prevChainWork')
 
   if (vbf.data == null && vbf.sourceUrl && fetch != null) {
     const url = fetch.pathJoin(vbf.sourceUrl, vbf.fileName)
@@ -49,10 +196,7 @@ export async function validateBulkFileData(
   }
 
   if (vbf.data == null) throw new WERR_INVALID_OPERATION(`bulk file ${vbf.fileName} data is unavailable`)
-
-  if (vbf.count <= 0) {
-    throw new WERR_INVALID_PARAMETER('bf.count', `expected count to be greater than 0, but got ${vbf.count}`)
-  }
+  if (!(vbf.data instanceof Uint8Array)) throw new WERR_INVALID_PARAMETER('bf.data', 'a Uint8Array')
 
   if (vbf.data.length !== vbf.count * 80) {
     throw new WERR_INVALID_PARAMETER(
@@ -61,12 +205,33 @@ export async function validateBulkFileData(
     )
   }
 
-  vbf.fileHash = asString(Hash.sha256(asArray(vbf.data)), 'base64')
+  vbf.fileHash = asString(sha256(asArray(vbf.data)), 'base64')
   if (bf.fileHash && bf.fileHash !== vbf.fileHash) {
     throw new WERR_INVALID_PARAMETER('bf.fileHash', `expected ${bf.fileHash} but got ${vbf.fileHash}`)
   }
 
-  const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(vbf.data, prevHash, 0, undefined, prevChainWork)
+  const { lastHeaderHash, lastChainWork } = validateBufferOfHeaders(
+    vbf.data,
+    prevHash,
+    0,
+    undefined,
+    prevChainWork,
+    vbf.chain
+  )
+  if (
+    bf.lastHash &&
+    (typeof bf.lastHash !== 'string' || !HEX_32_BYTES.test(bf.lastHash) || bf.lastHash.toLowerCase() !== lastHeaderHash)
+  ) {
+    throw new WERR_INVALID_PARAMETER('bf.lastHash', `expected ${bf.lastHash} but got ${lastHeaderHash}`)
+  }
+  if (
+    bf.lastChainWork &&
+    (typeof bf.lastChainWork !== 'string' ||
+      !HEX_32_BYTES.test(bf.lastChainWork) ||
+      bf.lastChainWork.toLowerCase() !== lastChainWork)
+  ) {
+    throw new WERR_INVALID_PARAMETER('bf.lastChainWork', `expected ${bf.lastChainWork} but got ${lastChainWork}`)
+  }
   vbf.lastHash = lastHeaderHash
   vbf.lastChainWork = lastChainWork!
   if (vbf.firstHeight === 0) {
@@ -84,6 +249,9 @@ export async function validateBulkFileData(
  * @param previousHash Expected previousHash of first header.
  * @param offset Optional starting offset within `buffer`.
  * @param count Optional number of headers to validate. Validates to end of buffer if missing.
+ * @param previousChainWork Optional chain work through `previousHash`; when present, the result carries it forward.
+ * @param chain Optional chain the headers belong to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns Header hash of last header validated or previousHash if there where none.
  */
 export function validateBufferOfHeaders(
@@ -91,12 +259,34 @@ export function validateBufferOfHeaders(
   previousHash: string,
   offset = 0,
   count = -1,
-  previousChainWork?: string
+  previousChainWork?: string,
+  chain?: Chain
 ): { lastHeaderHash: string; lastChainWork: string | undefined } {
-  if (count < 0) count = Math.floor((buffer.length - offset) / 80)
-  count = Math.max(0, count)
-  let lastHeaderHash = previousHash
+  if (!(buffer instanceof Uint8Array)) throw new WERR_INVALID_PARAMETER('buffer', 'a Uint8Array')
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > buffer.length) {
+    throw new WERR_INVALID_PARAMETER('offset', 'a non-negative safe integer within the buffer')
+  }
+  if (!Number.isSafeInteger(count) || count < -1 || count > MAX_HEADER_COUNT) {
+    throw new WERR_INVALID_PARAMETER('count', `-1 or an integer from 0 through ${MAX_HEADER_COUNT}`)
+  }
+  if (count < 0) {
+    if ((buffer.length - offset) % 80 !== 0) {
+      throw new WERR_INVALID_PARAMETER('buffer', 'a complete sequence of 80-byte headers')
+    }
+    count = (buffer.length - offset) / 80
+  }
+  if (count > MAX_HEADER_COUNT || offset + count * 80 > buffer.length) {
+    throw new WERR_INVALID_PARAMETER('buffer', 'enough bytes for the bounded requested header count')
+  }
+  if (typeof previousHash !== 'string' || !HEX_32_BYTES.test(previousHash)) {
+    throw new WERR_INVALID_PARAMETER('previousHash', 'exactly 32 hexadecimal bytes')
+  }
+  let lastHeaderHash = previousHash.toLowerCase()
   let lastChainWork = previousChainWork
+  if (lastChainWork !== undefined) {
+    validateWork(lastChainWork, 'previousChainWork')
+    lastChainWork = lastChainWork.toLowerCase()
+  }
   for (let i = 0; i < count; i++) {
     const headerStart = offset + i * 80
     const headerEnd = headerStart + 80
@@ -114,9 +304,9 @@ export function validateBufferOfHeaders(
     }
     lastHeaderHash = asString(doubleSha256BE(header))
     validateAgainstDirtyHashes(lastHeaderHash)
-    validateConsensusProofOfWork(lastHeaderHash, h.bits)
+    validateConsensusProofOfWork(lastHeaderHash, h.bits, chain)
     if (lastChainWork) {
-      lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits))
+      lastChainWork = addWork(lastChainWork, convertBitsToWork(h.bits, chain))
     }
   }
   return { lastHeaderHash, lastChainWork }
@@ -150,14 +340,18 @@ export function validateGenesisHeader(buffer: Uint8Array, chain: Chain): void {
  * @returns Converted chainWork value from BN to hex string of 32 bytes.
  */
 export function workBNtoBuffer(work: BigNumber): string {
-  return work.toString(16).padStart(64, '0')
+  const encoded = work.toString(16)
+  if (!/^[0-9a-f]+$/i.test(encoded) || encoded.length > 64) {
+    throw new WERR_INVALID_PARAMETER('work', 'a non-negative integer no greater than 256 bits')
+  }
+  return encoded.toLowerCase().padStart(64, '0')
 }
 
 /**
  * Returns true if work1 is more work (greater than) work2
  */
 export function isMoreWork(work1: string, work2: string): boolean {
-  return new BigNumber(asArray(work1), 16).gt(new BigNumber(asArray(work2), 16))
+  return validateWork(work1, 'work1').gt(validateWork(work2, 'work2'))
 }
 
 /**
@@ -165,7 +359,7 @@ export function isMoreWork(work1: string, work2: string): boolean {
  * @returns Sum of work1 + work2 as Buffer encoded chainWork value
  */
 export function addWork(work1: string, work2: string): string {
-  const sum = new BigNumber(work1, 16).add(new BigNumber(work2, 16))
+  const sum = validateWork(work1, 'work1').add(validateWork(work2, 'work2'))
   return workBNtoBuffer(sum)
 }
 
@@ -174,7 +368,10 @@ export function addWork(work1: string, work2: string): string {
  * @returns work1 - work2 as Buffer encoded chainWork value
  */
 export function subWork(work1: string, work2: string): string {
-  const sum = new BigNumber(work1, 16).sub(new BigNumber(work2, 16))
+  const minuend = validateWork(work1, 'work1')
+  const subtrahend = validateWork(work2, 'work2')
+  if (minuend.lt(subtrahend)) throw new WERR_INVALID_PARAMETER('work1/work2', 'a non-negative subtraction')
+  const sum = minuend.sub(subtrahend)
   return workBNtoBuffer(sum)
 }
 
@@ -184,7 +381,12 @@ export function subWork(work1: string, work2: string): string {
  * @returns 32 byte Buffer with "target" value
  */
 export function convertBitsToTarget(bits: number | number[]): BigNumber {
-  if (Array.isArray(bits)) bits = readUInt32LE(bits, 0)
+  if (Array.isArray(bits)) {
+    if (bits.length !== 4) throw new WERR_INVALID_PARAMETER('bits', 'exactly four bytes')
+    validateByteWindow(bits, 0, 4, 'bits')
+    bits = readUInt32LE(bits, 0)
+  }
+  validateUnsignedHeaderInteger(bits, 'bits', UINT32_MAX)
 
   const shift = (bits >> 24) & 0xff
   const data = bits & 0x007fffff
@@ -199,13 +401,22 @@ export function convertBitsToTarget(bits: number | number[]): BigNumber {
   return target
 }
 
+function readCompactBits(bits: number[]): number {
+  if (bits.length !== 4) throw new WERR_INVALID_PARAMETER('bits', 'exactly four bytes')
+  validateByteWindow(bits, 0, 4, 'bits')
+  return readUInt32LE(bits, 0)
+}
+
 /**
  * Computes "chainWork" value for 4 byte Bitcoin block header "bits" value.
  * @param bits number or converted from Buffer using `readUint32LE`
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns 32 byte Buffer with "chainWork" value
  */
-export function convertBitsToWork(bits: number | number[]): string {
-  const target = convertBitsToTarget(bits)
+export function convertBitsToWork(bits: number | number[], chain?: Chain): string {
+  const encoded = Array.isArray(bits) ? readCompactBits(bits) : bits
+  const target = validateCompactTarget(encoded, chain)
 
   // convert target to work
   const work = target.notn(256).div(target.addn(1)).addn(1)
@@ -218,8 +429,22 @@ export function deserializeBaseBlockHeaders(
   offset = 0,
   count?: number | undefined
 ): BaseBlockHeader[] {
+  if (!Array.isArray(buffer) && !(buffer instanceof Uint8Array)) {
+    throw new WERR_INVALID_PARAMETER('buffer', 'a byte array')
+  }
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > buffer.length) {
+    throw new WERR_INVALID_PARAMETER('offset', 'a non-negative safe integer within the buffer')
+  }
+  if (count !== undefined && (!Number.isSafeInteger(count) || count < 0 || count > MAX_HEADER_COUNT)) {
+    throw new WERR_INVALID_PARAMETER('count', `an integer from 0 through ${MAX_HEADER_COUNT}`)
+  }
+  const available = Math.floor((buffer.length - offset) / 80)
+  const limit = count ?? available
+  if (Math.min(available, limit) > MAX_HEADER_COUNT) {
+    throw new WERR_INVALID_PARAMETER('buffer', `no more than ${MAX_HEADER_COUNT} headers per decode`)
+  }
   const headers: BaseBlockHeader[] = []
-  while ((!count || headers.length < count) && offset + 80 <= buffer.length && offset >= 0) {
+  while (headers.length < limit && offset + 80 <= buffer.length) {
     headers.push(deserializeBaseBlockHeader(buffer, offset))
     offset += 80
   }
@@ -232,11 +457,18 @@ export function deserializeBlockHeaders(
   offset = 0,
   count?: number | undefined
 ): BlockHeader[] {
+  if (!Number.isSafeInteger(firstHeight) || firstHeight < 0 || firstHeight > MAX_BLOCK_HEIGHT) {
+    throw new WERR_INVALID_PARAMETER('firstHeight', `an integer from 0 through ${MAX_BLOCK_HEIGHT}`)
+  }
+  const baseHeaders = deserializeBaseBlockHeaders(buffer, offset, count)
+  if (firstHeight + baseHeaders.length - 1 > MAX_BLOCK_HEIGHT) {
+    throw new WERR_INVALID_PARAMETER('headers', 'a range within the supported block heights')
+  }
   const headers: BlockHeader[] = []
   let nextHeight = firstHeight
-  while ((!count || headers.length < count) && offset + 80 <= buffer.length && offset >= 0) {
+  while (headers.length < baseHeaders.length) {
     const baseBuffer = buffer.slice(offset, offset + 80)
-    const base = deserializeBaseBlockHeader(baseBuffer)
+    const base = baseHeaders[headers.length]
     const header = {
       ...base,
       height: nextHeight++,
@@ -258,7 +490,7 @@ export function deserializeBlockHeaders(
  *
  * @returns true if the header is correctly formatted
  */
-function validateUnsignedHeaderInteger(value: unknown, field: string, maximum: number, rangeField = field): void {
+function validateUnsignedHeaderInteger(value: unknown, field: string, maximum: number): void {
   if (typeof value !== 'number') {
     throw new TypeError(`Header ${field} must be a number.`)
   }
@@ -266,80 +498,67 @@ function validateUnsignedHeaderInteger(value: unknown, field: string, maximum: n
     throw new TypeError(`Header ${field} must be an integer.`)
   }
   if (value < 0 || value > maximum) {
-    throw new Error(`Header ${rangeField} must be between 0 and ${maximum}.`)
+    throw new Error(`Header ${field} must be between 0 and ${maximum}.`)
   }
 }
 
-export function validateHeaderFormat(header: BlockHeader): void {
-  const ALLOWED_KEYS = {
-    version: true,
-    previousHash: true,
-    merkleRoot: true,
-    time: true,
-    bits: true,
-    nonce: true,
-    height: true,
-    hash: true
-  }
-
-  const UINT_MAX = 0xffffffff
-
-  /**
-   * Root object checks
-   */
-  if (header === undefined) {
-    throw new TypeError('Missing header.')
-  }
-  if (typeof header !== 'object') {
+const BASE_HEADER_KEYS = ['version', 'previousHash', 'merkleRoot', 'time', 'bits', 'nonce'] as const
+const BLOCK_HEADER_KEYS = [...BASE_HEADER_KEYS, 'height', 'hash'] as const
+function validateHeaderRecord(
+  header: unknown,
+  allowedKeys: readonly string[]
+): asserts header is Record<string, unknown> {
+  if (header == null) throw new TypeError('Missing header.')
+  if (typeof header !== 'object' || Array.isArray(header)) {
     throw new TypeError('Header must be an object.')
   }
-  if (!Object.keys(header).every(key => key in ALLOWED_KEYS)) {
-    throw new Error('Header contains extra properties.')
+  const prototype = Object.getPrototypeOf(header)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError('Header must be a plain data object.')
   }
+  const descriptors = Object.getOwnPropertyDescriptors(header)
+  const keys = Object.keys(descriptors)
+  if (
+    keys.length !== allowedKeys.length ||
+    !keys.every(key => allowedKeys.includes(key)) ||
+    keys.some(key => descriptors[key]?.get != null || descriptors[key]?.set != null)
+  ) {
+    throw new Error('Header must contain exactly the required data properties.')
+  }
+}
 
-  /**
-   * Version
-   */
+/**
+ * Validates the exact data representation of an unpositioned 80-byte block
+ * header before it reaches a chain lookup, queue, or serializer.
+ */
+export function validateBaseBlockHeaderFormat(header: BaseBlockHeader): void {
+  const UINT_MAX = 0xffffffff
+  validateHeaderRecord(header, BASE_HEADER_KEYS)
   validateUnsignedHeaderInteger(header.version, 'version', UINT_MAX)
-
-  /**
-   * Height
-   */
-  validateUnsignedHeaderInteger(header.height, 'height', UINT_MAX / 2, 'version')
-
-  /**
-   * Previous hash
-   */
-  if (header.previousHash.length !== 64) {
+  if (typeof header.previousHash !== 'string' || !HEX_32_BYTES.test(header.previousHash)) {
     throw new Error('Header previousHash must be 32 hex bytes.')
   }
-
-  /**
-   * Merkle root
-   */
-  if (header.merkleRoot.length !== 64) {
+  if (typeof header.merkleRoot !== 'string' || !HEX_32_BYTES.test(header.merkleRoot)) {
     throw new Error('Header merkleRoot must be 32 hex bytes.')
   }
-
-  /**
-   * Time
-   */
   validateUnsignedHeaderInteger(header.time, 'time', UINT_MAX)
-
-  /**
-   * Bits
-   */
   validateUnsignedHeaderInteger(header.bits, 'bits', UINT_MAX)
-
-  /**
-   * Nonce
-   */
   validateUnsignedHeaderInteger(header.nonce, 'nonce', UINT_MAX)
+}
 
-  /**
-   * Hash
-   */
-  if (header.hash.length !== 64) {
+export function validateHeaderFormat(header: BlockHeader): void {
+  validateHeaderRecord(header, BLOCK_HEADER_KEYS)
+  const baseHeader: BaseBlockHeader = {
+    version: header.version,
+    previousHash: header.previousHash,
+    merkleRoot: header.merkleRoot,
+    time: header.time,
+    bits: header.bits,
+    nonce: header.nonce
+  }
+  validateBaseBlockHeaderFormat(baseHeader)
+  validateUnsignedHeaderInteger(header.height, 'height', 0x7fffffff)
+  if (typeof header.hash !== 'string' || !HEX_32_BYTES.test(header.hash)) {
     throw new Error('Header hash must be 32 hex bytes.')
   }
   if (header.hash !== asString(blockHash(header))) {
@@ -350,13 +569,21 @@ export function validateHeaderFormat(header: BlockHeader): void {
 /**
  * Ensures that a header has a valid proof-of-work target and hash.
  *
- * @param header The header to validate
+ * @param hash The header hash, big-endian.
+ * @param bits The header's compact target.
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  *
  * @returns true if the header is valid
  */
-export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number) {
+export function validateHeaderDifficulty(hash: number[] | Uint8Array, bits: number, chain?: Chain) {
+  if (!Array.isArray(hash) && !(hash instanceof Uint8Array)) {
+    throw new WERR_INVALID_PARAMETER('hash', 'exactly 32 bytes')
+  }
+  validateByteWindow(hash, 0, hash.length, 'hash')
+  if (hash.length !== 32) throw new WERR_INVALID_PARAMETER('hash', 'exactly 32 bytes')
   const hashBN = new BigNumber(asArray(hash))
-  const target = validateCompactTarget(bits)
+  const target = validateCompactTarget(bits, chain)
 
   if (hashBN.lte(target)) return true
 
@@ -370,12 +597,34 @@ const proofOfWorkExceptions = new Map([
   ['6b38bdbcd73a19f7889d23e1fa6166a9de71affceca60ca3bb1b28af8135c594', 0x1d00ffff]
 ])
 
-function validateConsensusProofOfWork(hash: string, bits: number): void {
-  if (proofOfWorkExceptions.get(hash) === bits) return
-  validateHeaderDifficulty(asArray(hash, 'hex'), bits)
+/** Compact encoding of the highest target (lowest difficulty) mainnet and every public test network admit. */
+const MAINNET_POW_LIMIT_BITS = 0x1d00ffff
+
+/**
+ * Compact encoding of regtest's highest target, as Teranode defines it
+ * (go-chaincfg `RegressionNetParams.PowLimitBits`). Every regtest header carries
+ * these bits, so its proof of work costs nothing to produce: a regtest chain is
+ * only as trustworthy as the ChainTracks service that serves it.
+ */
+const REGTEST_POW_LIMIT_BITS = 0x207fffff
+
+/**
+ * The compact encoding of the highest proof-of-work target `chain` admits.
+ *
+ * Only `'regtest'` raises the limit. Every other chain — and an omitted chain,
+ * which is how every caller that predates this parameter asks — keeps the mainnet
+ * limit, so no existing validation is relaxed.
+ */
+export function proofOfWorkLimitBits(chain?: Chain): number {
+  return chain === 'regtest' ? REGTEST_POW_LIMIT_BITS : MAINNET_POW_LIMIT_BITS
 }
 
-function validateCompactTarget(bits: number): BigNumber {
+function validateConsensusProofOfWork(hash: string, bits: number, chain?: Chain): void {
+  if (proofOfWorkExceptions.get(hash) === bits) return
+  validateHeaderDifficulty(asArray(hash, 'hex'), bits, chain)
+}
+
+function validateCompactTarget(bits: number, chain?: Chain): BigNumber {
   if (!Number.isSafeInteger(bits) || bits < 0 || bits > 0xffffffff) {
     throw new Error('Block target encoding is invalid.')
   }
@@ -388,7 +637,7 @@ function validateCompactTarget(bits: number): BigNumber {
   }
 
   const target = convertBitsToTarget(bits)
-  const proofOfWorkLimit = convertBitsToTarget(0x1d00ffff)
+  const proofOfWorkLimit = convertBitsToTarget(proofOfWorkLimitBits(chain))
   if (target.gt(proofOfWorkLimit)) {
     throw new Error('Block target exceeds the proof-of-work limit.')
   }
@@ -400,11 +649,13 @@ function validateCompactTarget(bits: number): BigNumber {
  * proof-of-work target.
  *
  * @param header Header whose format and hash have already been checked.
+ * @param chain Optional chain the header belongs to. Selects its proof-of-work limit
+ *   (see `proofOfWorkLimitBits`); omitted means the mainnet limit.
  * @returns true if the header has valid proof-of-work.
  * @publicbody
  */
-export function validateHeaderProofOfWork(header: BlockHeader): true {
-  validateConsensusProofOfWork(header.hash, header.bits)
+export function validateHeaderProofOfWork(header: BlockHeader, chain?: Chain): true {
+  validateConsensusProofOfWork(header.hash, header.bits, chain)
   return true
 }
 
@@ -433,20 +684,23 @@ export function blockHash(header: BaseBlockHeader | number[] | Uint8Array): stri
  * @publicbody
  */
 export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: number[], offset?: number): number[] {
-  const writer = new Utils.Writer()
-  writer.writeUInt32LE(header.version)
-  writer.write(asArray(header.previousHash).reverse())
-  writer.write(asArray(header.merkleRoot).reverse())
-  writer.writeUInt32LE(header.time)
-  writer.writeUInt32LE(header.bits)
-  writer.writeUInt32LE(header.nonce)
+  const validated = copyBaseHeaderData(header)
+  validateBaseBlockHeaderFormat(validated)
+  const writer = new Writer()
+  writer.writeUInt32LE(validated.version)
+  writer.write(asArray(validated.previousHash).reverse())
+  writer.write(asArray(validated.merkleRoot).reverse())
+  writer.writeUInt32LE(validated.time)
+  writer.writeUInt32LE(validated.bits)
+  writer.writeUInt32LE(validated.nonce)
   const data = writer.toArray()
   if (buffer != null) {
-    offset ||= 0
+    if (!Array.isArray(buffer)) throw new WERR_INVALID_PARAMETER('buffer', 'an array')
+    offset ??= 0
+    if (!Number.isSafeInteger(offset) || offset < 0 || offset + data.length > buffer.length) {
+      throw new WERR_INVALID_PARAMETER('offset', 'a non-negative safe integer with 80 writable bytes')
+    }
     for (let i = 0; i < data.length; i++) {
-      if (offset + i >= buffer.length) {
-        throw new Error(`Buffer overflow at offset ${offset + i} for data length ${data.length}`)
-      }
       buffer[offset + i] = data[i]
     }
   }
@@ -454,12 +708,14 @@ export function serializeBaseBlockHeader(header: BaseBlockHeader, buffer?: numbe
 }
 
 export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array {
+  if (!Array.isArray(headers) || headers.length > MAX_HEADER_COUNT) {
+    throw new WERR_INVALID_PARAMETER('headers', `a dense array of no more than ${MAX_HEADER_COUNT} entries`)
+  }
   const data = new Uint8Array(headers.length * 80)
-  let i = -1
-  for (const header of headers) {
-    i++
-    const d = serializeBaseBlockHeader(header)
-    data.set(d, i * 80)
+  for (let index = 0; index < headers.length; index++) {
+    if (!Object.hasOwn(headers, index)) throw new WERR_INVALID_PARAMETER('headers', 'a dense array')
+    const d = serializeBaseBlockHeader(headers[index])
+    data.set(d, index * 80)
   }
   return data
 }
@@ -469,7 +725,8 @@ export function serializeBaseBlockHeaders(headers: BlockHeader[]): Uint8Array {
  * @publicbody
  */
 export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset = 0): BaseBlockHeader {
-  const reader = Utils.ReaderUint8Array.makeReader(buffer, offset)
+  validateByteWindow(buffer, offset, 80)
+  const reader = ReaderUint8Array.makeReader(buffer, offset)
   const header: BaseBlockHeader = {
     version: reader.readUInt32LE(),
     previousHash: asString(reader.read(32).reverse()),
@@ -482,6 +739,9 @@ export function deserializeBaseBlockHeader(buffer: number[] | Uint8Array, offset
 }
 
 export function deserializeBlockHeader(buffer: number[] | Uint8Array, height: number, offset = 0): BlockHeader {
+  if (!Number.isSafeInteger(height) || height < 0 || height > MAX_BLOCK_HEIGHT) {
+    throw new WERR_INVALID_PARAMETER('height', `an integer from 0 through ${MAX_BLOCK_HEIGHT}`)
+  }
   const base = deserializeBaseBlockHeader(buffer, offset)
   const header: BlockHeader = {
     ...base,
@@ -554,6 +814,18 @@ export function genesisHeader(chain: Chain): BlockHeader {
         height: 0,
         hash: '000000005d221c0e023cb56b5682cf094f32cd959958b40bc931e5797cae706c'
       }
+    case 'regtest':
+      // go-chaincfg regTestGenesisBlock: the Bitcoin regtest genesis header.
+      return {
+        version: 1,
+        previousHash: '0000000000000000000000000000000000000000000000000000000000000000',
+        merkleRoot: '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+        time: 1296688602,
+        bits: 545259519,
+        nonce: 2,
+        height: 0,
+        hash: '0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206'
+      }
     case 'mock':
       throw new Error("genesisHeader does not support 'mock' chain. Mock chain generates its own genesis block.")
   }
@@ -583,6 +855,8 @@ export function swapByteOrder(buffer: number[]): number[] {
  * @publicbody
  */
 export function convertUint32ToBuffer(n: number, littleEndian = true): number[] {
+  validateUnsignedHeaderInteger(n, 'uint32', UINT32_MAX)
+  if (typeof littleEndian !== 'boolean') throw new WERR_INVALID_PARAMETER('littleEndian', 'a boolean')
   const a = [
     n & 0xff, // lowest byte
     (n >> 8) & 0xff,
@@ -593,6 +867,8 @@ export function convertUint32ToBuffer(n: number, littleEndian = true): number[] 
 }
 
 export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: number): number {
+  validateUnsignedHeaderInteger(n, 'uint32', UINT32_MAX)
+  validateWritableByteWindow(a, offset, 4)
   a[offset++] = n & 0xff // lowest byte
   a[offset++] = (n >> 8) & 0xff
   a[offset++] = (n >> 16) & 0xff
@@ -601,6 +877,8 @@ export function writeUInt32LE(n: number, a: number[] | Uint8Array, offset: numbe
 }
 
 export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: number): number {
+  validateUnsignedHeaderInteger(n, 'uint32', UINT32_MAX)
+  validateWritableByteWindow(a, offset, 4)
   a[offset++] = (n >> 24) & 0xff // highest byte
   a[offset++] = (n >> 16) & 0xff
   a[offset++] = (n >> 8) & 0xff
@@ -609,11 +887,13 @@ export function writeUInt32BE(n: number, a: number[] | Uint8Array, offset: numbe
 }
 
 export function readUInt32LE(a: number[] | Uint8Array, offset: number): number {
-  return a[offset++] | (a[offset++] << 8) | (a[offset++] << 16) | (a[offset++] << 24)
+  validateByteWindow(a, offset, 4)
+  return (a[offset++] | (a[offset++] << 8) | (a[offset++] << 16) | (a[offset++] << 24)) >>> 0
 }
 
 export function readUInt32BE(a: number[] | Uint8Array, offset: number): number {
-  return (a[offset++] << 24) | (a[offset++] << 16) | (a[offset++] << 8) | a[offset++]
+  validateByteWindow(a, offset, 4)
+  return ((a[offset++] << 24) | (a[offset++] << 16) | (a[offset++] << 8) | a[offset++]) >>> 0
 }
 
 /**
@@ -623,7 +903,10 @@ export function readUInt32BE(a: number[] | Uint8Array, offset: number): number {
  * @publicbody
  */
 export function convertBufferToUint32(buffer: number[] | Uint8Array, littleEndian = true): number {
+  validateByteWindow(buffer, 0, 4)
+  if (buffer.length !== 4) throw new WERR_INVALID_PARAMETER('buffer', 'exactly four bytes')
+  if (typeof littleEndian !== 'boolean') throw new WERR_INVALID_PARAMETER('littleEndian', 'a boolean')
   const a = littleEndian ? buffer : buffer.slice().reverse()
-  const n = a[0] | (a[1] << 8) | (a[2] << 16) | (a[3] << 24)
+  const n = (a[0] | (a[1] << 8) | (a[2] << 16) | (a[3] << 24)) >>> 0
   return n
 }

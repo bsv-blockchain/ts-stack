@@ -64,6 +64,16 @@ spec:
                 configMapKeyRef:
                   name: overlay-config
                   key: gasp-enabled
+            - name: MANDALA_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: mandala-enabled
+            - name: MANDALA_STATIC_DENYLIST_JSON
+              valueFrom:
+                configMapKeyRef:
+                  name: overlay-config
+                  key: mandala-static-denylist-json
             - name: KNEX_URL
               valueFrom:
                 secretKeyRef:
@@ -79,6 +89,18 @@ spec:
                 secretKeyRef:
                   name: overlay-secrets
                   key: server-private-key
+            - name: MANDALA_VERIFIER_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: mandala-verifier-private-key
+                  optional: true
+            - name: MANDALA_ADMIN_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: overlay-secrets
+                  key: mandala-admin-private-key
+                  optional: true
             - name: ARC_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -89,7 +111,7 @@ spec:
                 secretKeyRef:
                   name: overlay-secrets
                   key: admin-token
-          image: ghcr.io/bsv-blockchain/overlay-server:v2.1.29@sha256:ee8c705dd7d25e7b9de86b292b82e8e9a36a7a1821c956af5aef9b26ac7448a2
+          image: ghcr.io/bsv-blockchain/overlay-server:v2.1.37@sha256:74bb49337f34bf4b9b8cf95545c8cb51070b502d46f85e2690ab42eb6cb7552c
           imagePullPolicy: IfNotPresent
           name: overlay
           lifecycle:

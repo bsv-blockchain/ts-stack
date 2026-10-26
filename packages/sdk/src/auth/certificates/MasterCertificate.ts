@@ -7,10 +7,143 @@ import {
   WalletCounterparty
 } from '../../wallet/Wallet.interfaces.js'
 import Certificate from './Certificate.js'
-import * as Utils from '../../primitives/utils.js'
+import { toArray as UtilsToArray, toBase64, toUTF8Strict } from '../../primitives/utils.js'
 import SymmetricKey from '../../primitives/SymmetricKey.js'
 import Random from '../../primitives/Random.js'
-import ProtoWallet from '../../wallet/ProtoWallet.js'
+import type ProtoWallet from '../../wallet/ProtoWallet.js'
+import PublicKey from '../../primitives/PublicKey.js'
+import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
+import { base64ToBytes } from '../../wallet/WalletByteEncoding.js'
+
+const MAX_MASTER_CERTIFICATE_FIELDS = 100
+const MAX_MASTER_KEYRING_VALUE_BYTES = 2048
+const MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES = 1024 * 1024
+const MAX_DECRYPTED_CERTIFICATE_FIELD_BYTES = 64 * 1024
+
+function assertCertificateFieldName(value: unknown): asserts value is string {
+  if (typeof value !== 'string') throw new Error('Certificate field names must be strings')
+  const byteLength = UtilsToArray(value, 'utf8').length
+  if (byteLength < 1 || byteLength > 50 || isUnsafeRecordKey(value)) {
+    throw new Error('Certificate field name must be a safe UTF-8 string of 1–50 bytes')
+  }
+}
+
+function snapshotStringRecord(
+  value: unknown,
+  field: string,
+  maximumEntries = MAX_MASTER_CERTIFICATE_FIELDS
+): Record<string, string> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${field} must be a plain object`)
+  }
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(`${field} must be a plain object`)
+  }
+  const names = Reflect.ownKeys(value)
+  if (names.length > maximumEntries) {
+    throw new Error(`${field} cannot contain more than ${maximumEntries} entries`)
+  }
+  const snapshot = Object.create(null) as Record<string, string>
+  for (const name of names) {
+    assertCertificateFieldName(name)
+    const descriptor = Object.getOwnPropertyDescriptor(value, name)
+    if (
+      descriptor == null ||
+      !Object.hasOwn(descriptor, 'value') ||
+      typeof descriptor.value !== 'string'
+    ) {
+      throw new Error(`${field}.${name} must be an own string data property`)
+    }
+    snapshot[name] = descriptor.value
+  }
+  return snapshot
+}
+
+function canonicalBase64(value: string, field: string, maximumBytes: number): number[] {
+  let decoded: number[]
+  try {
+    decoded = base64ToBytes(value)
+  } catch {
+    throw new Error(`${field} must use canonical base64 encoding`)
+  }
+  if (decoded.length < 1 || decoded.length > maximumBytes) {
+    throw new Error(`${field} is empty, oversized, or non-canonical`)
+  }
+  return decoded
+}
+
+function canonical32ByteBase64(value: string, field: string): void {
+  const decoded = canonicalBase64(value, field, 32)
+  if (decoded.length !== 32) throw new Error(`${field} must encode exactly 32 bytes`)
+}
+
+function denseBytes(value: unknown, field: string, maximumBytes: number): number[] {
+  const bytes = value instanceof Uint8Array ? Array.from(value) : value
+  if (!Array.isArray(bytes) || bytes.length < 1 || bytes.length > maximumBytes) {
+    throw new Error(`${field} must be a non-empty byte array of at most ${maximumBytes} bytes`)
+  }
+  const snapshot = Array.from<number>({ length: bytes.length })
+  for (let index = 0; index < bytes.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(bytes, index)
+    if (
+      descriptor == null ||
+      !Object.hasOwn(descriptor, 'value') ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      throw new Error(`${field} must be a dense byte array`)
+    }
+    snapshot[index] = descriptor.value
+  }
+  return snapshot
+}
+
+function assertCompressedPublicKey(value: string, field: string): void {
+  try {
+    if (!/^(02|03)[0-9a-fA-F]{64}$/.test(value)) throw new Error('invalid encoding')
+    PublicKey.fromString(value)
+  } catch {
+    throw new Error(`${field} must be a valid compressed public key`)
+  }
+}
+
+function assertRevocationOutpoint(value: string): void {
+  const parts = value.split('.')
+  const [txid, outputIndex = '0'] = parts
+  if (
+    parts.length > 2 ||
+    !/^[0-9a-fA-F]{64}$/.test(txid) ||
+    !/^(?:0|[1-9]\d*)$/.test(outputIndex) ||
+    Number(outputIndex) > 0xffffffff
+  ) {
+    throw new Error('Certificate revocation outpoint is invalid')
+  }
+}
+
+function snapshotFieldsToReveal(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > MAX_MASTER_CERTIFICATE_FIELDS) {
+    throw new TypeError(
+      `fieldsToReveal must be an array of at most ${MAX_MASTER_CERTIFICATE_FIELDS} strings`
+    )
+  }
+  const snapshot: string[] = []
+  const seen = new Set<string>()
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, index)
+    if (descriptor == null || !Object.hasOwn(descriptor, 'value')) {
+      throw new TypeError('fieldsToReveal must be a dense array of strings')
+    }
+    assertCertificateFieldName(descriptor.value)
+    if (seen.has(descriptor.value)) {
+      throw new Error(`fieldsToReveal contains duplicate field: ${descriptor.value}`)
+    }
+    seen.add(descriptor.value)
+    snapshot.push(descriptor.value)
+  }
+  return snapshot
+}
 
 interface CreateCertificateFieldsResult {
   certificateFields: Record<CertificateFieldNameUnder50Bytes, Base64String>
@@ -24,6 +157,9 @@ interface CreateCertificateFieldsResult {
  * The `MasterCertificate` can securely decrypt each master key and re-encrypt it for a verifier, creating a customized
  * keyring containing only the keys necessary for the verifier to access designated fields.
  *
+ * Inputs are copied and bounded before wallet calls. New field-revelation keys
+ * are encoded as exactly 32 bytes; decryption also accepts the historical
+ * minimal big-endian 1–31-byte form and restores omitted leading zero bytes.
  */
 export class MasterCertificate extends Certificate {
   declare type: Base64String
@@ -57,18 +193,46 @@ export class MasterCertificate extends Certificate {
       signature?: HexString
     ]
   ) {
-    super(type, serialNumber, subject, certifier, revocationOutpoint, fields, signature)
+    const fieldsSnapshot = snapshotStringRecord(fields, 'Certificate fields') as Record<
+      CertificateFieldNameUnder50Bytes,
+      Base64String
+    >
+    const masterKeyringSnapshot = snapshotStringRecord(
+      masterKeyring,
+      'Master certificate keyring'
+    ) as Record<CertificateFieldNameUnder50Bytes, Base64String>
 
     // Ensure every field in `fields` is a string and has a corresponding key in `masterKeyring`
-    for (const fieldName of Object.keys(fields)) {
-      if (masterKeyring[fieldName] === undefined || masterKeyring[fieldName] === '') {
+    for (const fieldName of Object.keys(fieldsSnapshot)) {
+      if (
+        masterKeyringSnapshot[fieldName] === undefined ||
+        masterKeyringSnapshot[fieldName] === ''
+      ) {
         throw new Error(
           `Master keyring must contain a value for every field. Missing or empty key for field: "${fieldName}".`
         )
       }
+      canonicalBase64(
+        fieldsSnapshot[fieldName],
+        `Certificate field ${fieldName}`,
+        MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES
+      )
+      canonicalBase64(
+        masterKeyringSnapshot[fieldName],
+        `Master certificate keyring field ${fieldName}`,
+        MAX_MASTER_KEYRING_VALUE_BYTES
+      )
+    }
+    for (const fieldName of Object.keys(masterKeyringSnapshot)) {
+      canonicalBase64(
+        masterKeyringSnapshot[fieldName],
+        `Master certificate keyring field ${fieldName}`,
+        MAX_MASTER_KEYRING_VALUE_BYTES
+      )
     }
 
-    this.masterKeyring = masterKeyring
+    super(type, serialNumber, subject, certifier, revocationOutpoint, fieldsSnapshot, signature)
+    this.masterKeyring = masterKeyringSnapshot
   }
 
   /**
@@ -94,21 +258,44 @@ export class MasterCertificate extends Certificate {
     privileged?: boolean,
     privilegedReason?: string
   ): Promise<CreateCertificateFieldsResult> {
-    const certificateFields: Record<CertificateFieldNameUnder50Bytes, Base64String> = {}
-    const masterKeyring: Record<CertificateFieldNameUnder50Bytes, Base64String> = {}
-    for (const [fieldName, fieldValue] of Object.entries(fields)) {
+    const fieldsSnapshot = snapshotStringRecord(fields, 'Certificate plaintext fields')
+    const certificateFields = Object.create(null) as Record<
+      CertificateFieldNameUnder50Bytes,
+      Base64String
+    >
+    const masterKeyring = Object.create(null) as Record<
+      CertificateFieldNameUnder50Bytes,
+      Base64String
+    >
+    for (const [fieldName, fieldValue] of Object.entries(fieldsSnapshot)) {
+      const plaintext = UtilsToArray(fieldValue, 'utf8')
+      if (plaintext.length > MAX_DECRYPTED_CERTIFICATE_FIELD_BYTES) {
+        throw new Error(
+          `Certificate plaintext field ${fieldName} exceeds the maximum of ${MAX_DECRYPTED_CERTIFICATE_FIELD_BYTES} bytes`
+        )
+      }
       const fieldSymmetricKey = SymmetricKey.fromRandom()
-      const encryptedFieldValue = fieldSymmetricKey.encrypt(Utils.toArray(fieldValue, 'utf8'))
-      certificateFields[fieldName] = Utils.toBase64(encryptedFieldValue as number[])
+      const encryptedFieldValue = denseBytes(
+        fieldSymmetricKey.encrypt(plaintext),
+        `Encrypted certificate field ${fieldName}`,
+        MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES
+      )
+      certificateFields[fieldName] = toBase64(encryptedFieldValue)
 
       const { ciphertext: encryptedFieldRevelationKey } = await creatorWallet.encrypt({
-        plaintext: fieldSymmetricKey.toArray(),
+        plaintext: fieldSymmetricKey.toArray('be', 32),
         ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
         counterparty: certifierOrSubject,
         privileged,
         privilegedReason
       })
-      masterKeyring[fieldName] = Utils.toBase64(encryptedFieldRevelationKey)
+      masterKeyring[fieldName] = toBase64(
+        denseBytes(
+          encryptedFieldRevelationKey,
+          `Encrypted master keyring field ${fieldName}`,
+          MAX_MASTER_KEYRING_VALUE_BYTES
+        )
+      )
     }
 
     return {
@@ -158,16 +345,34 @@ export class MasterCertificate extends Certificate {
       privilegedReason?: string
     ]
   ): Promise<Record<CertificateFieldNameUnder50Bytes, string>> {
-    if (!Array.isArray(fieldsToReveal)) {
-      throw new TypeError('fieldsToReveal must be an array of strings')
+    const revealedFields = snapshotFieldsToReveal(fieldsToReveal)
+    const fieldsSnapshot = snapshotStringRecord(fields, 'Certificate fields')
+    const masterKeyringSnapshot = snapshotStringRecord(masterKeyring, 'Master certificate keyring')
+    for (const fieldName of Object.keys(fieldsSnapshot)) {
+      canonicalBase64(
+        fieldsSnapshot[fieldName],
+        `Certificate field ${fieldName}`,
+        MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES
+      )
     }
-    const fieldRevelationKeyring: Record<CertificateFieldNameUnder50Bytes, string> = {}
-    for (const fieldName of fieldsToReveal) {
+    for (const fieldName of Object.keys(masterKeyringSnapshot)) {
+      canonicalBase64(
+        masterKeyringSnapshot[fieldName],
+        `Master certificate keyring field ${fieldName}`,
+        MAX_MASTER_KEYRING_VALUE_BYTES
+      )
+    }
+    canonical32ByteBase64(serialNumber, 'Certificate serial number')
+    const fieldRevelationKeyring = Object.create(null) as Record<
+      CertificateFieldNameUnder50Bytes,
+      string
+    >
+    for (const fieldName of revealedFields) {
       // Make sure that fields to reveal is a subset of the certificate fields
       if (
-        fields[fieldName] === undefined ||
-        fields[fieldName] === null ||
-        fields[fieldName] === ''
+        fieldsSnapshot[fieldName] === undefined ||
+        fieldsSnapshot[fieldName] === null ||
+        fieldsSnapshot[fieldName] === ''
       ) {
         throw new Error(
           `Fields to reveal must be a subset of the certificate fields. Missing the "${fieldName}" field.`
@@ -178,9 +383,9 @@ export class MasterCertificate extends Certificate {
       const masterFieldKey = (
         await this.decryptField(
           subjectWallet,
-          masterKeyring,
+          masterKeyringSnapshot,
           fieldName,
-          fields[fieldName],
+          fieldsSnapshot[fieldName],
           certifier,
           privileged,
           privilegedReason
@@ -197,7 +402,13 @@ export class MasterCertificate extends Certificate {
       })
 
       // Add encryptedFieldRevelationKey to fieldRevelationKeyring
-      fieldRevelationKeyring[fieldName] = Utils.toBase64(encryptedFieldRevelationKey)
+      fieldRevelationKeyring[fieldName] = toBase64(
+        denseBytes(
+          encryptedFieldRevelationKey,
+          `Verifier keyring field ${fieldName}`,
+          MAX_MASTER_KEYRING_VALUE_BYTES
+        )
+      )
     }
 
     // Return the field revelation keyring which can be used to create a verifiable certificate for a verifier.
@@ -215,7 +426,7 @@ export class MasterCertificate extends Certificate {
    * @param {ProtoWallet} certifierWallet - The wallet of the certifier, used to sign the certificate and encrypt field keys.
    * @param {WalletCounterparty} subject - The subject for whom the certificate is issued.
    * @param {Record<CertificateFieldNameUnder50Bytes, string>} fields - Unencrypted certificate fields to include, with their names and values.
-   * @param {string} certificateType - The type of certificate being issued.
+   * @param {Base64String} certificateType - The 32-byte Base64 certificate type being issued.
    * @param {function(string, Record<CertificateFieldNameUnder50Bytes, string>?): Promise<string>} getRevocationOutpoint -
    *   Optional function to obtain a revocation outpoint for the certificate. Defaults to a placeholder.
    * @param {function(string): Promise<void>} updateProgress - Optional callback for reporting progress updates during the operation. Defaults to a no-op.
@@ -227,12 +438,27 @@ export class MasterCertificate extends Certificate {
     certifierWallet: ProtoWallet,
     subject: WalletCounterparty,
     fields: Record<CertificateFieldNameUnder50Bytes, string>,
-    certificateType: string,
+    certificateType: Base64String,
     getRevocationOutpoint = async (_serial: string): Promise<string> => '00'.repeat(32),
     serialNumber?: string
   ): Promise<MasterCertificate> {
     // 1. Generate a random serialNumber if not provided
-    const finalSerialNumber = serialNumber ?? Utils.toBase64(Random(32))
+    const finalSerialNumber = serialNumber ?? toBase64(Random(32))
+    canonical32ByteBase64(certificateType, 'Certificate type')
+    canonical32ByteBase64(finalSerialNumber, 'Certificate serial number')
+
+    const { publicKey: certifierIdentityKey } = await certifierWallet.getPublicKey({
+      identityKey: true
+    })
+    assertCompressedPublicKey(certifierIdentityKey, 'Certificate certifier')
+
+    let subjectIdentityKey: string
+    if (subject === 'self') {
+      subjectIdentityKey = certifierIdentityKey
+    } else {
+      subjectIdentityKey = subject
+      assertCompressedPublicKey(subjectIdentityKey, 'Certificate subject')
+    }
 
     // 2. Create encrypted certificate fields and associated master keyring
     const { certificateFields, masterKeyring } = await this.createCertificateFields(
@@ -243,20 +469,14 @@ export class MasterCertificate extends Certificate {
 
     // 3. Obtain a revocation outpoint
     const revocationOutpoint = await getRevocationOutpoint(finalSerialNumber)
-
-    let subjectIdentityKey: string
-    if (subject === 'self') {
-      subjectIdentityKey = (await certifierWallet.getPublicKey({ identityKey: true })).publicKey
-    } else {
-      subjectIdentityKey = subject
-    }
+    assertRevocationOutpoint(revocationOutpoint)
 
     // 4. Create new MasterCertificate instance
     const certificate = new MasterCertificate(
       certificateType,
       finalSerialNumber,
       subjectIdentityKey,
-      (await certifierWallet.getPublicKey({ identityKey: true })).publicKey,
+      certifierIdentityKey,
       revocationOutpoint,
       certificateFields,
       masterKeyring
@@ -264,6 +484,9 @@ export class MasterCertificate extends Certificate {
 
     // 5. Sign and return the new MasterCertificate certifying the subject.
     await certificate.sign(certifierWallet)
+    if (subject === 'self' && certificate.subject !== certificate.certifier) {
+      throw new Error('Self-issued certificate signer identity changed during issuance')
+    }
     return certificate
   }
 
@@ -294,19 +517,38 @@ export class MasterCertificate extends Certificate {
     privileged?: boolean,
     privilegedReason?: string
   ): Promise<Record<CertificateFieldNameUnder50Bytes, string>> {
-    if (masterKeyring == null || Object.keys(masterKeyring).length === 0) {
+    const masterKeyringSnapshot = snapshotStringRecord(masterKeyring, 'Master certificate keyring')
+    const fieldsSnapshot = snapshotStringRecord(fields, 'Certificate fields')
+    if (Object.keys(masterKeyringSnapshot).length === 0) {
       throw new Error('A MasterCertificate must have a valid masterKeyring!')
     }
     try {
-      const decryptedFields: Record<CertificateFieldNameUnder50Bytes, string> = {}
+      for (const fieldName of Object.keys(masterKeyringSnapshot)) {
+        canonicalBase64(
+          masterKeyringSnapshot[fieldName],
+          `Master certificate keyring field ${fieldName}`,
+          MAX_MASTER_KEYRING_VALUE_BYTES
+        )
+      }
+      for (const fieldName of Object.keys(fieldsSnapshot)) {
+        canonicalBase64(
+          fieldsSnapshot[fieldName],
+          `Certificate field ${fieldName}`,
+          MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES
+        )
+      }
+      const decryptedFields = Object.create(null) as Record<
+        CertificateFieldNameUnder50Bytes,
+        string
+      >
       // Note: we want to iterate through all fields, not just masterKeyring keys/value pairs.
-      for (const fieldName of Object.keys(fields)) {
+      for (const fieldName of Object.keys(fieldsSnapshot)) {
         decryptedFields[fieldName] = (
           await this.decryptField(
             subjectOrCertifierWallet,
-            masterKeyring,
+            masterKeyringSnapshot,
             fieldName,
-            fields[fieldName],
+            fieldsSnapshot[fieldName],
             counterparty,
             privileged,
             privilegedReason
@@ -328,24 +570,53 @@ export class MasterCertificate extends Certificate {
     privileged?: boolean,
     privilegedReason?: string
   ): Promise<{ fieldRevelationKey: number[]; decryptedFieldValue: string }> {
-    if (masterKeyring == null || Object.keys(masterKeyring).length === 0) {
-      throw new Error('A MasterCertificate must have a valid masterKeyring!')
-    }
     try {
+      assertCertificateFieldName(fieldName)
+      const masterKeyringSnapshot = snapshotStringRecord(
+        masterKeyring,
+        'Master certificate keyring'
+      )
+      if (Object.keys(masterKeyringSnapshot).length === 0) {
+        throw new Error('A MasterCertificate must have a valid masterKeyring!')
+      }
+      const encryptedKey = canonicalBase64(
+        masterKeyringSnapshot[fieldName],
+        `Master certificate keyring field ${fieldName}`,
+        MAX_MASTER_KEYRING_VALUE_BYTES
+      )
+      const encryptedField = canonicalBase64(
+        fieldValue,
+        `Certificate field ${fieldName}`,
+        MAX_ENCRYPTED_CERTIFICATE_FIELD_BYTES
+      )
       const { plaintext: fieldRevelationKey } = await subjectOrCertifierWallet.decrypt({
-        ciphertext: Utils.toArray(masterKeyring[fieldName], 'base64'),
+        ciphertext: encryptedKey,
         ...Certificate.getCertificateFieldEncryptionDetails(fieldName), // Only fieldName used on MasterCertificate
         counterparty,
         privileged,
         privilegedReason
       })
 
-      const decryptedFieldValue = new SymmetricKey(fieldRevelationKey).decrypt(
-        Utils.toArray(fieldValue, 'base64')
+      const legacyRevelationKey = denseBytes(
+        fieldRevelationKey,
+        'Certificate field revelation key',
+        32
+      )
+      // Older certificate keyrings may contain the minimal big-endian encoding
+      // emitted by BigNumber.toArray(). Preserve compatibility by restoring the
+      // omitted leading zero bytes before using the key as AES-256 material.
+      const revelationKey = [
+        ...Array.from<number>({ length: 32 - legacyRevelationKey.length }).fill(0),
+        ...legacyRevelationKey
+      ]
+      const decryptedFieldValue = denseBytes(
+        new SymmetricKey(revelationKey).decrypt(encryptedField),
+        'Decrypted certificate field',
+        MAX_DECRYPTED_CERTIFICATE_FIELD_BYTES
       )
       return {
-        fieldRevelationKey,
-        decryptedFieldValue: Utils.toUTF8(decryptedFieldValue as number[])
+        fieldRevelationKey: revelationKey,
+        decryptedFieldValue: toUTF8Strict(decryptedFieldValue)
       }
     } catch {
       throw new Error('Failed to decrypt certificate field!')

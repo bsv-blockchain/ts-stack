@@ -11,6 +11,7 @@ import {
   SignActionResult
 } from '../../wallet/Wallet.interfaces.js'
 import Transaction from '../../transaction/Transaction.js'
+import { completeBoundAction } from '../../wallet/completeBoundAction.js'
 
 // --- Constants for Mock Values ---
 const testLockingScriptHex = 'mockLockingScriptHex'
@@ -60,14 +61,17 @@ jest.mock('../../transaction/Transaction.js', () => ({
 }))
 
 jest.mock('../../primitives/utils.js', () => ({
+  ...jest.requireActual('../../primitives/utils.js'),
   // Ensure toArray returns Array<number> or Uint8Array
   toArray: jest.fn((str: string, encoding = 'utf8') =>
     Array.from(Buffer.from(str, encoding as BufferEncoding))
   ),
-  toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
+  toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8')),
+  toUTF8Strict: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
 }))
 
 jest.mock('../../wallet/WalletClient.js', () => jest.fn())
+jest.mock('../../wallet/completeBoundAction.js')
 
 // --- Typed Mocks for SDK Components ---
 const _MockedLockingScript = LockingScript as jest.Mocked<typeof LockingScript>
@@ -79,6 +83,9 @@ const MockedPushDrop = PushDrop as jest.MockedClass<typeof PushDrop> & {
 const MockedPushDropDecode = MockedPushDrop.decode
 const MockedUtils = Utils as jest.Mocked<typeof Utils>
 const MockedTransaction = Transaction as jest.Mocked<typeof Transaction>
+const MockedCompleteBoundAction = completeBoundAction as jest.MockedFunction<
+  typeof completeBoundAction
+>
 
 // --- Mock Wallet Setup ---
 const createMockWallet = (): jest.Mocked<WalletInterface> =>
@@ -90,6 +97,15 @@ const createMockWallet = (): jest.Mocked<WalletInterface> =>
     signAction: jest.fn(),
     relinquishOutput: jest.fn()
   }) as unknown as jest.Mocked<WalletInterface>
+
+function authenticatedFixtures(result: ListOutputsResult): any[] {
+  return result.outputs.map(output => ({
+    outpoint: output.outpoint,
+    output,
+    lockingScript: { toHex: () => output.lockingScript ?? testLockingScriptHex },
+    valueField: [1]
+  }))
+}
 
 describe('localKVStore', () => {
   let mockWallet: jest.Mocked<WalletInterface>
@@ -113,10 +129,64 @@ describe('localKVStore', () => {
     // Create a kvStore instance with the mock wallet
     // Default encrypt=true unless specified otherwise in a test block
     kvStore = new LocalKVStore(mockWallet, testContext, true)
+    kvStore['authenticateOutputs'] = jest.fn(async (_key, result) =>
+      result.outputs.map(output => {
+        const decoded = MockedPushDropDecode({})
+        if (decoded.fields.length < 1 || decoded.fields.length > 2) {
+          throw new Error('Invalid token.')
+        }
+        return {
+          outpoint: output.outpoint,
+          output,
+          lockingScript: { toHex: () => output.lockingScript ?? testLockingScriptHex },
+          valueField: decoded.fields[0]
+        }
+      })
+    )
+    MockedCompleteBoundAction.mockImplementation(async (wallet, args, options, originator) => {
+      const created = await wallet.createAction(args, originator)
+      const partialBytes = created.signableTransaction?.tx ?? created.tx
+      if (partialBytes == null) {
+        if ((args.inputs?.length ?? 0) > 0)
+          throw new Error('Wallet did not return a signable transaction when expected.')
+        return {
+          id: () => created.txid ?? '0'.repeat(64),
+          outputs: (args.outputs ?? []).map(output => ({
+            satoshis: output.satoshis,
+            lockingScript: { toHex: () => output.lockingScript }
+          }))
+        } as unknown as Transaction
+      }
+      const partial = Transaction.fromAtomicBEEF(partialBytes)
+      const spends: Record<number, { unlockingScript: string }> = {}
+      for (const [index, input] of (args.inputs ?? []).entries()) {
+        const signer = options.inputSigners?.[input.outpoint]
+        if (signer != null) {
+          const script = await signer(partial, index)
+          spends[index] = { unlockingScript: typeof script === 'string' ? script : script.toHex() }
+        }
+      }
+      const signed = await wallet.signAction(
+        { reference: created.signableTransaction?.reference ?? 'ref', spends },
+        originator
+      )
+      if (signed?.txid == null && signed?.tx == null) {
+        throw new Error('signAction must return a valid transaction')
+      }
+      const resultTxid = signed?.txid ?? created.txid ?? '0'.repeat(64)
+      return {
+        id: () => resultTxid,
+        outputs: (args.outputs ?? []).map(output => ({
+          satoshis: output.satoshis,
+          lockingScript: { toHex: () => output.lockingScript }
+        }))
+      } as unknown as Transaction
+    })
 
     // Reset specific mock implementations if needed after clearAllMocks
     // (e.g., if a test overrides a default implementation)
     MockedPushDropDecode.mockClear() // Clear calls/results for static decode
+    MockedPushDropDecode.mockReturnValue({ fields: [[1], [2]] })
   })
 
   // --- Constructor Tests ---
@@ -142,10 +212,10 @@ describe('localKVStore', () => {
 
     it('should throw an error if context is missing or empty', () => {
       expect(() => new LocalKVStore(mockWallet, '')).toThrow(
-        'A context in which to operate is required.'
+        'A context of 5–300 UTF-8 bytes is required.'
       )
       expect(() => new LocalKVStore(mockWallet, null as any)).toThrow(
-        'A context in which to operate is required.'
+        'A context of 5–300 UTF-8 bytes is required.'
       )
     })
   })
@@ -367,7 +437,8 @@ describe('localKVStore', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: 'oldValue',
         outpoint: existingOutpoint,
-        lor: mockedLor
+        lor: mockedLor,
+        authenticated: authenticatedFixtures(mockedLor)
       })
 
       /**
@@ -408,7 +479,15 @@ describe('localKVStore', () => {
       // Verify signing steps
       expect(MockedTransaction.fromAtomicBEEF).toHaveBeenCalledWith(signableTx)
       // Check unlock was called on the instance
-      expect(mockPDInstance.unlock).toHaveBeenCalledWith([2, testContext], testKey, 'self')
+      expect(mockPDInstance.unlock).toHaveBeenCalledWith(
+        [2, testContext],
+        testKey,
+        'self',
+        'all',
+        false,
+        0,
+        expect.any(Object)
+      )
 
       // Get the unlocker returned by the mock unlock method
       const mockUnlocker = (mockPDInstance.unlock as jest.Mock).mock.results[0].value
@@ -491,7 +570,8 @@ describe('localKVStore', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: 'oldValue',
         outpoint: existingOutpoint2,
-        lor: mockedLor
+        lor: mockedLor,
+        authenticated: authenticatedFixtures(mockedLor)
       })
 
       const result = await kvStore.set(testKey, testValue)
@@ -519,8 +599,26 @@ describe('localKVStore', () => {
       // Verify signing loop
       expect(MockedTransaction.fromAtomicBEEF).toHaveBeenCalledWith(signableTx)
       expect(mockPDInstance.unlock).toHaveBeenCalledTimes(2) // Called for each input
-      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(1, [2, testContext], testKey, 'self')
-      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(2, [2, testContext], testKey, 'self')
+      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(
+        1,
+        [2, testContext],
+        testKey,
+        'self',
+        'all',
+        false,
+        0,
+        expect.any(Object)
+      )
+      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(
+        2,
+        [2, testContext],
+        testKey,
+        'self',
+        'all',
+        false,
+        0,
+        expect.any(Object)
+      )
 
       // Get the *same* mock unlocker instance (since unlock is mocked to always return it)
       const mockUnlocker = (mockPDInstance.unlock as jest.Mock).mock.results[0].value
@@ -558,7 +656,8 @@ describe('localKVStore', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: 'different_value', // Different from testValue to trigger createAction
         outpoint: undefined,
-        lor: mockedLor
+        lor: mockedLor,
+        authenticated: []
       })
 
       // Mock wallet.createAction to fail with a specific error
@@ -682,8 +781,26 @@ describe('localKVStore', () => {
       // Verify signing
       expect(MockedTransaction.fromAtomicBEEF).toHaveBeenCalledWith(signableTx)
       expect(mockPDInstance.unlock).toHaveBeenCalledTimes(2)
-      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(1, [2, testContext], testKey, 'self')
-      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(2, [2, testContext], testKey, 'self')
+      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(
+        1,
+        [2, testContext],
+        testKey,
+        'self',
+        'all',
+        false,
+        undefined,
+        expect.any(Object)
+      )
+      expect(mockPDInstance.unlock).toHaveBeenNthCalledWith(
+        2,
+        [2, testContext],
+        testKey,
+        'self',
+        'all',
+        false,
+        undefined,
+        expect.any(Object)
+      )
       const mockUnlocker = (mockPDInstance.unlock as jest.Mock).mock.results[0].value
       expect(mockUnlocker.sign).toHaveBeenCalledTimes(2)
       expect(mockUnlocker.sign).toHaveBeenNthCalledWith(1, mockTxObject, 0)

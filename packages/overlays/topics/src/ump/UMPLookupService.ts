@@ -1,16 +1,24 @@
+import { toHex } from '@bsv/sdk/primitives/utils'
 import {
   AdmissionMode,
+  LookupQuestion,
   LookupService,
   OutputAdmittedByTopic,
   OutputSpent,
   SpendNotificationMode
 } from '@bsv/overlay'
-import { PushDrop, Utils } from '@bsv/sdk'
+import { PushDrop } from '@bsv/sdk'
 import { UMPRecord, UTXOReference } from './types.js'
 import { Db, Collection } from 'mongodb'
 import { MongoUMPIdentityStore, UMPIdentityReservationStore } from './UMPIdentityStore.js'
+import {
+  readString,
+  requireHex,
+  requireLookupQuery,
+  requireOutpoint
+} from '../shared/queryValidation.js'
 
-class UMPLookupService implements LookupService {
+export class UMPLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
   records: Collection<UMPRecord>
@@ -30,8 +38,8 @@ class UMPLookupService implements LookupService {
     const result = PushDrop.decode(lockingScript)
     const protocolFields = result.fields
 
-    const presentationHash = Utils.toHex(protocolFields[6])
-    const recoveryHash = Utils.toHex(protocolFields[7])
+    const presentationHash = toHex(protocolFields[6])
+    const recoveryHash = toHex(protocolFields[7])
 
     const hasV3AtIndex11 = protocolFields.length >= 12 && protocolFields[11]?.length === 1
     const hasV3AtIndex12 =
@@ -75,17 +83,31 @@ class UMPLookupService implements LookupService {
     await this.identityStore.release(`${txid}.${outputIndex}`)
   }
 
-  async lookup({ query }: any): Promise<UTXOReference[]> {
-    if (!query) throw new Error('Lookup must include a valid query!')
+  async lookup(question: LookupQuestion): Promise<UTXOReference[]> {
+    const query = requireLookupQuery(question, 'ls_users', [
+      'presentationHash',
+      'recoveryHash',
+      'outpoint'
+    ])
+    const presentationHash = requireHex(
+      readString(query, 'presentationHash', { maxBytes: 64 }),
+      'presentationHash',
+      32
+    )
+    const recoveryHash = requireHex(
+      readString(query, 'recoveryHash', { maxBytes: 64 }),
+      'recoveryHash',
+      32
+    )
+    const outpoint = requireOutpoint(readString(query, 'outpoint', { maxBytes: 75 }))
 
     let filter: Record<string, any>
-    if (query.presentationHash) {
-      filter = { presentationHash: query.presentationHash }
-    } else if (query.recoveryHash) {
-      filter = { recoveryHash: query.recoveryHash }
-    } else if (query.outpoint) {
-      const [txid, outputIndex] = (query.outpoint as string).split('.')
-      filter = { txid, outputIndex: Number(outputIndex) }
+    if (presentationHash !== undefined) {
+      filter = { presentationHash }
+    } else if (recoveryHash !== undefined) {
+      filter = { recoveryHash }
+    } else if (outpoint !== undefined) {
+      filter = outpoint
     } else {
       throw new Error('Query parameters must include presentationHash, recoveryHash, or outpoint!')
     }
@@ -94,11 +116,17 @@ class UMPLookupService implements LookupService {
     // Prefer the most recently indexed candidates so the live lineage tip is
     // not permanently hidden behind the oldest 100 records.
     const docs = await this.records.find(filter).sort({ _id: -1 }).limit(100).toArray()
-    return docs.map(doc => ({ txid: doc.txid, outputIndex: doc.outputIndex }))
+    // Token updates consume and retain their predecessors. Request the full
+    // topical lineage even after confirmation; the Engine owns traversal bounds.
+    return docs.map(doc => ({
+      txid: doc.txid,
+      outputIndex: doc.outputIndex,
+      history: () => Promise.resolve(true)
+    }))
   }
 
   async getDocumentation(): Promise<string> {
-    return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint.'
+    return 'UMP Lookup Service: find wallet account descriptors by presentation hash, recovery hash, or outpoint, including their retained token-update lineage.'
   }
 
   async getMetaData(): Promise<{

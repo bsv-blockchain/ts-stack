@@ -1,7 +1,9 @@
 // Modified minimalistic-crypto-utils lineage; see ../../THIRD_PARTY_NOTICES.md.
 import BigNumber from './BigNumber.js'
+import { utf8Bytes } from './UTF8.js'
 import { hash256 } from './Hash.js'
 import { assertValidHex } from './hex.js'
+import strictCompactSize from './readVarIntNumStrict.js'
 
 export { WriterUint8Array } from './WriterUint8Array.js'
 export { ReaderUint8Array } from './ReaderUint8Array.js'
@@ -78,6 +80,18 @@ export const toUint8Array = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): Uint8Ar
   return new Uint8Array(toArray(msg, enc))
 }
 
+const MAX_ARRAY_LENGTH = 2 ** 32 - 1
+
+const bytesToNumbers = (bytes: Uint8Array): number[] => {
+  // A JavaScript array holds at most 2^32 - 1 elements; Array.from threw the
+  // same RangeError beyond that.
+  if (bytes.length > MAX_ARRAY_LENGTH) throw new RangeError('Invalid array length')
+  const out: number[] = []
+  out.length = bytes.length
+  for (let i = 0; i < bytes.length; i++) out[i] = bytes[i]
+  return out
+}
+
 /**
  * Converts various message formats into an array of numbers.
  * Supports arrays, hexadecimal strings, base64 strings, and UTF-8 strings.
@@ -90,6 +104,7 @@ export const toArray = (msg: any, enc?: 'hex' | 'utf8' | 'base64'): any[] => {
   if (Array.isArray(msg)) return msg.slice()
   if (msg === undefined) return []
 
+  if (msg instanceof Uint8Array) return bytesToNumbers(msg)
   if (typeof msg !== 'string') {
     return Array.from(msg, (item: any) => Math.trunc(item))
   }
@@ -114,7 +129,7 @@ for (let i = 0; i < 6; i++) {
 }
 
 const hexToArray = (msg: string): number[] => {
-  return Array.from(hexToUint8Array(msg))
+  return bytesToNumbers(hexToUint8Array(msg))
 }
 
 /**
@@ -198,7 +213,7 @@ export function base64ToArray(msg: string): number[] {
  * @returns An array of numbers, each representing a byte in the UTF-8 encoded string.
  */
 function utf8ToArray(str: string): number[] {
-  return Array.from(new TextEncoder().encode(str))
+  return Array.from(utf8Bytes(str))
 }
 
 /**
@@ -208,6 +223,21 @@ function utf8ToArray(str: string): number[] {
  */
 export const toUTF8 = (arr: number[] | Uint8Array): string => {
   return new TextDecoder().decode(arr instanceof Uint8Array ? arr : new Uint8Array(arr))
+}
+
+/**
+ * Decodes canonical UTF-8 and rejects malformed byte sequences instead of
+ * replacing them with U+FFFD. Use this at trust boundaries where replacement
+ * could make distinct attacker-controlled byte strings compare as one value.
+ *
+ * @param arr - UTF-8 bytes to decode.
+ * @returns The decoded string.
+ * @throws TypeError when the input is not well-formed UTF-8.
+ */
+export const toUTF8Strict = (arr: number[] | Uint8Array): string => {
+  return new TextDecoder('utf-8', { fatal: true }).decode(
+    arr instanceof Uint8Array ? arr : new Uint8Array(arr)
+  )
 }
 
 /**
@@ -413,7 +443,8 @@ export class Writer {
 
   toArray(): number[] {
     const totalLength = this.length
-    const ret = Array.from({ length: totalLength }, () => 0)
+    const ret: number[] = []
+    ret.length = totalLength
     let offset = 0
     for (const buf of this.bufs) {
       if (buf instanceof Uint8Array) {
@@ -549,6 +580,9 @@ export class Writer {
   }
 
   static varIntNum(n: number): number[] {
+    if (!Number.isFinite(n) || !Number.isInteger(n)) {
+      throw new RangeError('CompactSize value must be a finite integer')
+    }
     let buf: number[]
     if (n < 0) {
       return this.varIntBn(new BigNumber(n))
@@ -625,22 +659,39 @@ export class Reader {
 
   constructor(bin: number[] = [], pos: number = 0) {
     this.bin = bin
-    this.pos = pos
     this.length = bin.length
+    if (!Number.isSafeInteger(pos) || pos < 0 || pos > this.length) {
+      throw new RangeError('Reader position exceeds available data')
+    }
+    this.pos = pos
+  }
+
+  private ensureAvailable(len: number): void {
+    if (
+      !Number.isSafeInteger(len) ||
+      len < 0 ||
+      !Number.isSafeInteger(this.pos) ||
+      this.pos < 0 ||
+      this.pos + len > this.length
+    ) {
+      throw new RangeError('Reader read exceeds available data')
+    }
   }
 
   public eof(): boolean {
     return this.pos >= this.length
   }
 
-  public read(len = this.length): number[] {
+  public read(len = this.length - this.pos): number[] {
+    this.ensureAvailable(len)
     const start = this.pos
     const end = this.pos + len
     this.pos = end
     return this.bin.slice(start, end)
   }
 
-  public readReverse(len = this.length): number[] {
+  public readReverse(len = this.length - this.pos): number[] {
+    this.ensureAvailable(len)
     const buf2 = Array.from({ length: len }, () => 0)
     for (let i = 0; i < len; i++) {
       buf2[i] = this.bin[this.pos + len - 1 - i]
@@ -650,19 +701,20 @@ export class Reader {
   }
 
   public readUInt8(): number {
+    this.ensureAvailable(1)
     const val = this.bin[this.pos]
     this.pos += 1
     return val
   }
 
   public readInt8(): number {
-    const val = this.bin[this.pos]
-    this.pos += 1
+    const val = this.readUInt8()
     // If the sign bit is set, convert to negative value
     return (val & 0x80) === 0 ? val : val - 0x100
   }
 
   public readUInt16BE(): number {
+    this.ensureAvailable(2)
     const val = (this.bin[this.pos] << 8) | this.bin[this.pos + 1]
     this.pos += 2
     return val
@@ -675,6 +727,7 @@ export class Reader {
   }
 
   public readUInt16LE(): number {
+    this.ensureAvailable(2)
     const val = this.bin[this.pos] | (this.bin[this.pos + 1] << 8)
     this.pos += 2
     return val
@@ -688,6 +741,7 @@ export class Reader {
   }
 
   public readUInt32BE(): number {
+    this.ensureAvailable(4)
     const val =
       this.bin[this.pos] * 0x1000000 + // Shift the first byte by 24 bits
       ((this.bin[this.pos + 1] << 16) | // Shift the second byte by 16 bits
@@ -704,6 +758,7 @@ export class Reader {
   }
 
   public readUInt32LE(): number {
+    this.ensureAvailable(4)
     const val =
       (this.bin[this.pos] |
         (this.bin[this.pos + 1] << 8) |
@@ -721,9 +776,8 @@ export class Reader {
   }
 
   public readUInt64BEBn(): BigNumber {
-    const bin = this.bin.slice(this.pos, this.pos + 8)
+    const bin = this.read(8)
     const bn = new BigNumber(bin)
-    this.pos = this.pos + 8
     return bn
   }
 
@@ -760,6 +814,15 @@ export class Reader {
       default:
         return first
     }
+  }
+
+  /**
+   * Reads a canonical CompactSize value that can be represented exactly by
+   * JavaScript. The legacy `-1` sentinel is accepted when `signed` is true;
+   * pass `false` for untrusted lengths, counts, and indexes.
+   */
+  public readVarIntNumStrict(signed: boolean = true): number {
+    return strictCompactSize(this, signed)
   }
 
   public readVarInt(): number[] {

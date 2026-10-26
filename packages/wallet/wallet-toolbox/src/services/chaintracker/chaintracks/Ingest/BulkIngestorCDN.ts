@@ -6,7 +6,7 @@ import { BulkHeaderFileInfo, BulkHeaderFilesInfo } from '../util/BulkHeaderFile'
 import { HeightRange, HeightRanges } from '../util/HeightRange'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
 import { WERR_INVALID_PARAMETER } from '../../../../sdk'
-import { selectBulkHeaderFiles } from '../util/BulkFileDataManager'
+import { normalizeBulkHeaderFilesInfo, selectBulkHeaderFiles } from '../util/BulkFileDataManager'
 
 export interface BulkIngestorCDNOptions extends BulkIngestorBaseOptions {
   /**
@@ -36,7 +36,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
    * @param localCachePath defaults to './data/bulk_cdn_headers/'
    * @returns
    */
-  static createBulkIngestorCDNOptions (
+  static createBulkIngestorCDNOptions(
     chain: Chain,
     cdnUrl: string,
     fetch: ChaintracksFetchApi,
@@ -61,22 +61,52 @@ export class BulkIngestorCDN extends BulkIngestorBase {
   selectedFiles: BulkHeaderFileInfo[] | undefined
   currentRange: HeightRange | undefined
 
-  constructor (options: BulkIngestorCDNOptions) {
+  constructor(options: BulkIngestorCDNOptions) {
     super(options)
-    if (!options.jsonResource) throw new Error('The jsonResource options property is required.')
-    if (!options.cdnUrl) throw new Error('The cdnUrl options property is required.')
+    if (
+      typeof options.fetch !== 'object' ||
+      options.fetch == null ||
+      typeof options.fetch.fetchJson !== 'function' ||
+      typeof options.fetch.pathJoin !== 'function'
+    ) {
+      throw new Error('The fetch options property must implement fetchJson and pathJoin.')
+    }
+    if (typeof options.cdnUrl !== 'string' || options.cdnUrl.length === 0 || options.cdnUrl.length > 2048) {
+      throw new Error('The cdnUrl options property must be a URL no longer than 2048 characters.')
+    }
+    let cdnUrl: URL
+    try {
+      cdnUrl = new URL(options.cdnUrl)
+    } catch {
+      throw new Error('The cdnUrl options property must be a valid HTTP(S) URL.')
+    }
+    if (
+      !['http:', 'https:'].includes(cdnUrl.protocol) ||
+      cdnUrl.username !== '' ||
+      cdnUrl.password !== '' ||
+      cdnUrl.search !== '' ||
+      cdnUrl.hash !== ''
+    ) {
+      throw new Error('The cdnUrl options property must be an HTTP(S) URL without credentials, query, or fragment.')
+    }
+    if (
+      options.maxPerFile !== undefined &&
+      (!Number.isSafeInteger(options.maxPerFile) || options.maxPerFile < 1 || options.maxPerFile > 100_000)
+    ) {
+      throw new Error('maxPerFile must be an integer from 1 through 100000 when supplied.')
+    }
 
     this.fetch = options.fetch
-    this.jsonResource = options.jsonResource
-    this.cdnUrl = options.cdnUrl
+    this.jsonResource = this.jsonFilename
+    this.cdnUrl = cdnUrl.toString()
     this.maxPerFile = options.maxPerFile
   }
 
-  override async getPresentHeight (): Promise<number | undefined> {
+  override async getPresentHeight(): Promise<number | undefined> {
     return undefined
   }
 
-  getJsonHttpHeaders (): Record<string, string> {
+  getJsonHttpHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
       Accept: 'application/json'
     }
@@ -113,7 +143,7 @@ export class BulkIngestorCDN extends BulkIngestorBase {
    * @param priorLiveHeaders
    * @returns
    */
-  async fetchHeaders (
+  async fetchHeaders(
     before: HeightRanges,
     fetchRange: HeightRange,
     bulkRange: HeightRange,
@@ -124,17 +154,18 @@ export class BulkIngestorCDN extends BulkIngestorBase {
     const toUrl = (file: string) => this.fetch.pathJoin(this.cdnUrl, file)
 
     const url = toUrl(this.jsonResource)
-    this.availableBulkFiles = await this.fetch.fetchJson(url)
-    if (this.availableBulkFiles == null) {
+    const response = await this.fetch.fetchJson<unknown>(url)
+    if (response == null) {
       throw new WERR_INVALID_PARAMETER(
         `${this.jsonResource}`,
         `a valid BulkHeaderFilesInfo JSON resource available from ${url}`
       )
     }
+    this.availableBulkFiles = normalizeBulkHeaderFilesInfo(response)
     this.selectedFiles = selectBulkHeaderFiles(
       this.availableBulkFiles.files,
       this.chain,
-      this.maxPerFile || this.availableBulkFiles.headersPerFile
+      this.maxPerFile ?? this.availableBulkFiles.headersPerFile
     )
     for (const bf of this.selectedFiles) {
       if (!bf.fileHash) {

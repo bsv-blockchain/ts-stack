@@ -3,10 +3,12 @@ import { BlockHeadersService } from '../../../transaction/chaintrackers/BlockHea
 describe('BlockHeadersService', () => {
   const baseUrl = 'https://headers.spv.money'
   const apiKey = 'test-api-key-12345'
-  const merkleRoot = 'abc123merkleroot'
+  const merkleRoot = 'a'.repeat(64)
   const blockHeight = 800000
 
-  function makeHttpClient (response: { ok: boolean, status: number, data: any }): { request: jest.Mock } {
+  function makeHttpClient(response: { ok: boolean; status: number; data: any }): {
+    request: jest.Mock
+  } {
     return {
       request: jest.fn().mockResolvedValue(response)
     }
@@ -53,7 +55,7 @@ describe('BlockHeadersService', () => {
           confirmationState: 'CONFIRMED',
           confirmations: [
             {
-              blockHash: 'hash123',
+              blockHash: 'b'.repeat(64),
               blockHeight,
               merkleRoot,
               confirmation: 'CONFIRMED'
@@ -91,7 +93,7 @@ describe('BlockHeadersService', () => {
 
       const tracker = new BlockHeadersService(baseUrl, { apiKey, httpClient })
       await expect(tracker.isValidRootForHeight(merkleRoot, blockHeight)).rejects.toThrow(
-        `Failed to verify merkleroot for height ${blockHeight} because of an error:`
+        `Failed to verify merkleroot for height ${blockHeight}.`
       )
     })
 
@@ -209,7 +211,7 @@ describe('BlockHeadersService', () => {
 
       const tracker = new BlockHeadersService(baseUrl, { apiKey, httpClient })
       await expect(tracker.currentHeight()).rejects.toThrow(
-        'Failed to get current height because of an error:'
+        'Failed to get current height from Block Headers Service.'
       )
     })
 
@@ -222,7 +224,7 @@ describe('BlockHeadersService', () => {
 
       const tracker = new BlockHeadersService(baseUrl, { apiKey, httpClient })
       await expect(tracker.currentHeight()).rejects.toThrow(
-        'Failed to get current height because of an error:'
+        'Failed to get current height from Block Headers Service.'
       )
     })
 
@@ -235,7 +237,7 @@ describe('BlockHeadersService', () => {
 
       const tracker = new BlockHeadersService(baseUrl, { apiKey, httpClient })
       await expect(tracker.currentHeight()).rejects.toThrow(
-        'Failed to get current height because of an error:'
+        'Failed to get current height from Block Headers Service.'
       )
     })
 
@@ -246,7 +248,7 @@ describe('BlockHeadersService', () => {
 
       const tracker = new BlockHeadersService(baseUrl, { apiKey, httpClient })
       await expect(tracker.currentHeight()).rejects.toThrow(
-        'Failed to get current height because of an error: Connection refused'
+        'Failed to get current height from Block Headers Service.'
       )
     })
   })

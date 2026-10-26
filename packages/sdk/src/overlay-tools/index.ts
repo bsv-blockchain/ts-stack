@@ -1,7 +1,12 @@
 export * from './LookupResolver.js'
 export * from './SHIPBroadcaster.js'
 export * from './withDoubleSpendRetry.js'
-export { default as OverlayAdminTokenTemplate } from './OverlayAdminTokenTemplate.js'
+export * from './OverlayNames.js'
+export {
+  default as OverlayAdminTokenTemplate,
+  type OverlayDiscoveryAdvertisement,
+  type OverlayDiscoveryProtocol
+} from './OverlayAdminTokenTemplate.js'
 export { default as LookupResolver } from './LookupResolver.js'
 
 // For intuitive clarity, we name this the Topic Broadcaster.

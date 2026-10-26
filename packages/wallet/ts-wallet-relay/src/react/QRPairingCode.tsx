@@ -1,5 +1,6 @@
 import React from 'react'
 import { useQRPairing } from './useQRPairing.js'
+import { requireQrDataUrl } from '../shared/artifacts.js'
 
 export type QRPairingCodeProps = {
   /**
@@ -72,13 +73,14 @@ export function QRPairingCode({
   children,
   ...buttonProps
 }: QRPairingCodeProps) {
+  const safeQrDataUrl = requireQrDataUrl(qrDataUrl)
   const { open } = useQRPairing(pairingUri, {
     openUrl: onPress ? uri => onPress(uri) : undefined
   })
 
   return (
     <button type="button" {...buttonProps} onClick={open}>
-      {children ?? <img src={qrDataUrl} alt="Scan with BSV wallet" {...imageProps} />}
+      {children ?? <img src={safeQrDataUrl} alt="Scan with BSV wallet" {...imageProps} />}
     </button>
   )
 }

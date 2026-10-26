@@ -1,4 +1,5 @@
-import { CachedKeyDeriver, LockingScript, ProtoWallet, PublicKey, Utils } from '@bsv/sdk'
+import { Writer, fromBase58, toArray, toBase58, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
+import { CachedKeyDeriver, LockingScript, ProtoWallet, PublicKey } from '@bsv/sdk'
 import type { WalletProtocol } from '@bsv/sdk'
 
 /**
@@ -88,7 +89,7 @@ export function identityKeyFromDidKey(did: string): string | undefined {
   if (!did.startsWith(DID_KEY_PREFIX)) return undefined
   let bytes: number[]
   try {
-    bytes = Utils.fromBase58(did.slice(DID_KEY_PREFIX.length))
+    bytes = fromBase58(did.slice(DID_KEY_PREFIX.length))
   } catch {
     return undefined
   }
@@ -97,7 +98,7 @@ export function identityKeyFromDidKey(did: string): string | undefined {
   }
   const key = bytes.slice(2)
   if (key.length !== 33) return undefined
-  const hex = Utils.toHex(key)
+  const hex = toHex(key)
   return canonicalKey(hex) ? hex : undefined
 }
 
@@ -105,7 +106,7 @@ export function identityKeyFromDidKey(did: string): string | undefined {
 export function didKeyFromIdentityKey(identityKeyHex: string): string {
   if (!canonicalKey(identityKeyHex)) throw new Error('not a canonical compressed public key')
   const key = PublicKey.fromString(identityKeyHex)
-  return `${DID_KEY_PREFIX}${Utils.toBase58([
+  return `${DID_KEY_PREFIX}${toBase58([
     ...SECP256K1_PUB_MULTICODEC,
     ...(key.encode(true) as number[])
   ])}`
@@ -129,12 +130,12 @@ export function expectedLockingKey(anchorServiceKey: string, attestationId: stri
 function text(bytes: number[]): string | undefined {
   let decoded: string
   try {
-    decoded = Utils.toUTF8(bytes)
+    decoded = toUTF8(bytes)
   } catch {
     return undefined
   }
   if (decoded === '') return undefined
-  return Utils.toHex(Utils.toArray(decoded, 'utf8')) === Utils.toHex(bytes) ? decoded : undefined
+  return toHex(toArray(decoded, 'utf8')) === toHex(bytes) ? decoded : undefined
 }
 
 const OP_CHECKSIG = 0xac
@@ -174,7 +175,7 @@ function readExactPushDrop(lockingScript: LockingScript): {
   if (chunks[1]?.op !== OP_CHECKSIG) throw new Error('no OP_CHECKSIG after the locking key')
   let lockingPublicKey: PublicKey
   try {
-    lockingPublicKey = PublicKey.fromString(Utils.toHex(keyData))
+    lockingPublicKey = PublicKey.fromString(toHex(keyData))
   } catch {
     throw new Error('the locking key is not a valid public key')
   }
@@ -283,7 +284,7 @@ export function readUoraAnchor(lockingScript: LockingScript): {
  * boundaries; a writer signs this preimage and appends it as the last field.
  */
 export function anchorSigningPreimage(fields: number[][]): number[] {
-  const writer = new Utils.Writer()
+  const writer = new Writer()
   for (const field of fields) {
     writer.writeVarIntNum(field.length)
     writer.write(field)
@@ -323,5 +324,5 @@ export async function assertAnchorSignature(
   } catch {
     valid = false
   }
-  if (!valid) throw new Error('the anchor fields were not signed by the anchoring service')
+  if (valid !== true) throw new Error('the anchor fields were not signed by the anchoring service')
 }

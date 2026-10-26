@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "lastReviewed": "2026-08-24",
+  "lastReviewed": "2026-09-21",
   "owner": "ts-stack-maintainers",
   "reportRetentionDays": 30,
-  "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison.",
+  "growthPolicy": "Every browser consumer is measured from its exact packed dependency graph with Vite and esbuild (or the governed platform equivalent). A budget increase requires a versioned source change, composition evidence, and explicit review; generated reports preserve package/module composition for comparison. After an approved increase, each byte dimension normally retains at least 10% headroom above the reviewed exact measurement, rounded to a stable one-thousand-byte or five-thousand-byte boundary. A different margin requires an explicit composition rationale.",
   "packages": [
     {
       "name": "@bsv/air-gap",
@@ -13,46 +13,46 @@
       "splittingDisposition": "Single self-contained codec entry with zero runtime dependencies; no server adapter or optional platform code exists to split."
     },
     {
-      "name": "@bsv/did-client",
-      "path": "packages/helpers/did-client",
-      "budget": "packages/helpers/did-client/browser-budget.json",
-      "entry": ".",
-      "splittingDisposition": "No optional server adapter is reachable from the browser entry."
-    },
-    {
       "name": "@bsv/did",
       "path": "packages/helpers/did",
       "budget": "packages/helpers/did/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The package is browser-native and has no optional server adapter in its entry."
+      "splittingDisposition": "The immutable BRC202 DID and separate SD-JWT root entry retain the existing browser budget. The optional BRC52 VC entry has an independent exact-tarball measurement and gate; applications importing only the root do not opt into its all-export graph."
+    },
+    {
+      "name": "@bsv/did",
+      "path": "packages/helpers/did",
+      "budget": "packages/helpers/did/browser-brc52-budget.json",
+      "entry": "./brc52",
+      "splittingDisposition": "The optional BRC52 entry provides original-signature envelopes, authenticated selective disclosure, and outpoint status. Its complete export graph is measured and gated independently; measured all-export size is not a claim about every application tree-shaken bundle."
     },
     {
       "name": "@bsv/simple",
       "path": "packages/helpers/simple",
       "budget": "packages/helpers/simple/browser-budget.json",
       "entry": "./browser",
-      "splittingDisposition": "Server modules are excluded by the browser export; the optional certification implementation remains a dynamic import."
+      "splittingDisposition": "Server modules are excluded by the browser export; the optional certification implementation remains a dynamic import. The reviewed security candidate remains one chunk: Vite 1067190/259585/206290 raw/gzip/Brotli bytes across 170 modules and nine packages, and esbuild 830492/237608/195117 across 250 modules. The retained graph provides the versioned Message Box and SDK boundary validators used by the synchronous browser API. The rounded limits retain roughly 13-15% headroom for maintenance of those approved trust-boundary validators without immediately reopening the growth decision."
     },
     {
       "name": "@bsv/templates",
       "path": "packages/helpers/ts-templates",
       "budget": "packages/helpers/ts-templates/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser entry contains no optional server adapter."
+      "splittingDisposition": "The browser entry contains no optional server adapter. The reviewed security candidate remains one chunk: Vite 216963/67471/57550 raw/gzip/Brotli bytes across 40 modules and two packages, and esbuild 167893/63111/54208 across 59 modules."
     },
     {
       "name": "@bsv/authsocket-client",
       "path": "packages/messaging/authsocket-client",
       "budget": "packages/messaging/authsocket-client/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The client package is already separated from server-side AuthSocket code."
+      "splittingDisposition": "The client package is already separated from server-side AuthSocket code. The reviewed security candidate remains one chunk: Vite 271345/77712/64997 raw/gzip/Brotli bytes across 68 modules and seven packages, esbuild 208543/71262/60483 across 69 modules, and UMD 210684/70538/59901 across 68 modules."
     },
     {
       "name": "@bsv/message-box-client",
       "path": "packages/messaging/message-box-client",
       "budget": "packages/messaging/message-box-client/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The client package is already separated from Message Box service code."
+      "splittingDisposition": "The client package is already separated from Message Box service code. The reviewed security candidate remains one chunk: Vite 934283/231083/184536 raw/gzip/Brotli bytes across 155 modules and eight packages, esbuild 723214/209929/172056 across 155 modules, and UMD 728215/205027/167457 across 154 modules. Controlled builds attribute most of the UMD increase to required SDK wallet-result validation; deferring it would weaken the trust boundary or change synchronous behavior. The rounded limits retain roughly 12-14% headroom for maintenance of the approved validators without immediately reopening the growth decision."
     },
     {
       "name": "@bsv/paymail",
@@ -60,6 +60,13 @@
       "budget": "packages/messaging/ts-paymail/browser-budget.json",
       "entry": ".",
       "splittingDisposition": "Conditional exports select the browser-safe implementation and the composition gate rejects Node/server dependencies."
+    },
+    {
+      "name": "@bsv/webrtpay",
+      "path": "packages/messaging/webrtpay",
+      "budget": "packages/messaging/webrtpay/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "Browser entry only; the Node relay server is the separate ./server subpath and never enters the browser graph."
     },
     {
       "name": "@bsv/402-pay",
@@ -73,56 +80,63 @@
       "path": "packages/overlays/gasp-core",
       "budget": "packages/overlays/gasp-core/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The protocol core has no optional server adapter in its browser graph."
+      "splittingDisposition": "The protocol core has no optional server adapter in its browser graph. The reviewed security candidate remains one chunk: Vite 351778/97428/79838 raw/gzip/Brotli bytes across 59 modules and two packages, and esbuild 268068/88848/74378 across 59 modules. The small increase is inherited from the versioned SDK validation graph."
     },
     {
       "name": "@bsv/chirp",
       "path": "packages/network/chirp",
       "budget": "packages/network/chirp/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry."
+      "splittingDisposition": "The browser entry contains only CHIRP codecs, builders, verifiers, upload/download clients, and the browser-safe SDK dependency; the Node CLI is a separate unexported bin entry. The reviewed security candidate remains one chunk: Vite 637391/167063/134692 raw/gzip/Brotli bytes across 112 modules and two packages, and esbuild 490458/151405/125328 across 114 modules. The rounded limits retain roughly 14-17% headroom for maintenance of the approved trust-boundary graph without immediately reopening the growth decision."
     },
     {
       "name": "@bsv/lch",
       "path": "packages/content/lch",
       "budget": "packages/content/lch/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The browser entry contains protocol codecs, crypto, acquisition, composition, and storage adapters; the Node CLI and optional C2PA implementation remain outside the browser graph."
+      "splittingDisposition": "The browser entry contains protocol codecs, crypto, acquisition, composition, and storage adapters; the Node CLI and optional C2PA implementation remain outside the browser graph. The reviewed security candidate remains one chunk: Vite 665391/173167/140522 raw/gzip/Brotli bytes across 116 modules and two packages, and esbuild 520031/158613/131058 across 119 modules. The rounded limits retain roughly 13-15% headroom for maintenance of the approved trust-boundary snapshots without immediately reopening the growth decision."
     },
     {
       "name": "@bsv/sdk",
       "path": "packages/sdk",
       "budget": "packages/sdk/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The SDK browser graph is a public compatibility surface; further splitting requires evidence that it preserves synchronous exports and consumer behavior."
+      "splittingDisposition": "The SDK browser graph is a public compatibility surface; further splitting would have to preserve synchronous exports and consumer behavior. The reviewed 2.8.0 security candidate remains one chunk and one package: Vite 1092642/266124/210013 raw/gzip/Brotli bytes across 160 modules, esbuild 835896/242063/196052 across 191 modules, and UMD 827796/234399/189501 across 160 modules. The growth is the required wallet-result, completed-action, BEEF, authentication, transport, and immutable-request validation graph. The rounded limits retain roughly 13-15% headroom for maintenance of those approved trust-boundary validators without immediately reopening the growth decision."
     },
     {
       "name": "@bsv/verifast",
       "path": "packages/verifast",
       "budget": "packages/verifast/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "WASM and worker payloads remain separate packed assets and are measured with the exact browser consumer."
+      "splittingDisposition": "WASM and worker payloads remain separate packed assets and are measured with the exact browser consumer. The reviewed security candidate measures Vite 767838/305610/131043 raw/gzip/Brotli bytes across two chunks and 12 modules, esbuild 39421/13709/12252 across one chunk and 11 modules, and the two-file UMD/WASM payload 299273/117184/92452 across eight source-map modules."
     },
     {
       "name": "@bsv/wallet-relay",
       "path": "packages/wallet/ts-wallet-relay",
       "budget": "packages/wallet/ts-wallet-relay/browser-budget.json",
       "entry": "./client",
-      "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager."
+      "splittingDisposition": "The client subpath excludes Express and the server-only QR adapter; qrcode is dynamically imported only by the server session manager. Both relay directions retain the SDK's exact wallet-argument and cryptographic-result validators so a hostile peer cannot smuggle malformed wallet calls or forge signing, payment, or authentication verdicts. The audited exact-tarball composition is one chunk: Vite 169600/47639/39547 raw/gzip/Brotli bytes across 27 modules and four packages; esbuild 130696/43950/36801 across 30 modules."
+    },
+    {
+      "name": "@bsv/color-permission-module",
+      "path": "packages/wallet/color-permission-module",
+      "budget": "packages/wallet/color-permission-module/browser-budget.json",
+      "entry": ".",
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports BRC-162 script helpers from @bsv/templates and only the metadata decryption helper and storage-operation identifier from @bsv/wallet-toolbox-client, with no host, server or UI adapter bundled."
     },
     {
       "name": "@bsv/ecpm-permission-module",
       "path": "packages/wallet/ecpm-permission-module",
       "budget": "packages/wallet/ecpm-permission-module/browser-budget.json",
       "entry": ".",
-      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled."
+      "splittingDisposition": "The ESM entry is a single semantic wallet module; it imports only the public secp256k1 primitives from @bsv/sdk, while wallet-toolbox interfaces are type-only and no host, server, UI, or privileged-key adapter is bundled. The reviewed security candidate remains one chunk: Vite 100044/35203/29547 raw/gzip/Brotli bytes across 15 modules and two packages, and esbuild 78035/32862/27909 across 18 modules. The rounded Vite limits retain roughly 14-15% headroom; the existing esbuild limits retain more."
     },
     {
       "name": "@bsv/wallet-toolbox-client",
       "path": "packages/wallet/wallet-toolbox/client",
       "budget": "packages/wallet/wallet-toolbox/client/platform-budget.json",
       "entry": ".",
-      "splittingDisposition": "The dedicated browser export excludes Node storage, database adapters, and direct P2P. Its browser-safe fetch/SSE ChainTracks adapter is an intentional shared capability measured by the platform-specific exact-package gate."
+      "splittingDisposition": "The dedicated browser export excludes Node storage, database adapters, and direct P2P. Its browser-safe fetch/SSE ChainTracks adapter and the SDK's wallet-result validation are intentional shared capabilities measured by the platform-specific exact-package gate. The reviewed security candidate remains one chunk: Vite 2186790/521169/397673 raw/gzip/Brotli bytes across 132 modules and five packages, and esbuild 1706073/471926/370405 across 204 modules. The rounded limits retain roughly 14-17% headroom for maintenance of those approved trust-boundary validators without immediately reopening the growth decision."
     }
   ]
 }

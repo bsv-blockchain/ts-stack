@@ -17,6 +17,17 @@ afterEach(() => {
 
 const noopRun: RunCommand = () => {}
 
+async function uiHeaders(url: string): Promise<Record<string, string>> {
+  const html = await (await fetch(url)).text()
+  const serializedToken = /window\.__SESSION_TOKEN__ = ("[A-Za-z0-9_-]+");/u.exec(html)?.[1]
+  if (serializedToken === undefined) throw new Error('UI session token missing from page')
+  return {
+    'content-type': 'application/json',
+    'x-create-bsv-app-session': JSON.parse(serializedToken) as string,
+    origin: url
+  }
+}
+
 test('GET / serves the self-contained page', async () => {
   const srv: UiServer = await startUiServer({
     existing: null,
@@ -29,6 +40,81 @@ test('GET / serves the self-contained page', async () => {
     const html = await res.text()
     expect(html).toContain('create-bsv-app')
     expect(html).toContain('window.__SCHEMA__')
+    expect(res.headers.get('cache-control')).toBe('no-store')
+    expect(res.headers.get('content-security-policy')).toMatch(/script-src 'nonce-/u)
+    expect(res.headers.get('x-frame-options')).toBe('DENY')
+  } finally {
+    srv.close()
+  }
+})
+
+test('mutating endpoints reject cross-origin and tokenless requests before running commands', async () => {
+  const runCommand = jest.fn<RunCommand>()
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand } })
+  try {
+    const hostile = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain', origin: 'https://attacker.example' },
+      body: JSON.stringify({ mode: 'new', name: 'owned', frontend: 'react' })
+    })
+    expect(hostile.status).toBe(403)
+
+    const sameOriginWithoutToken = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: srv.url },
+      body: JSON.stringify({ mode: 'new', name: 'owned', frontend: 'react' })
+    })
+    expect(sameOriginWithoutToken.status).toBe(403)
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(existsSync(join(dir, 'owned'))).toBe(false)
+  } finally {
+    srv.close()
+  }
+})
+
+test('UI session tokens do not authorize another server instance', async () => {
+  const first = await startUiServer({
+    existing: null,
+    targetDir: dir,
+    deps: { runCommand: noopRun }
+  })
+  const second = await startUiServer({
+    existing: null,
+    targetDir: dir,
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const firstHeaders = await uiHeaders(first.url)
+    const response = await fetch(`${second.url}/plan`, {
+      method: 'POST',
+      headers: { ...firstHeaders, origin: second.url },
+      body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'react' })
+    })
+    expect(response.status).toBe(403)
+  } finally {
+    first.close()
+    second.close()
+  }
+})
+
+test('POST bodies are JSON-only and bounded before parsing', async () => {
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const headers = await uiHeaders(srv.url)
+    const wrongType = await fetch(`${srv.url}/plan`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'text/plain' },
+      body: '{}'
+    })
+    expect(wrongType.status).toBe(415)
+
+    const oversized = await fetch(`${srv.url}/plan`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ padding: 'x'.repeat(64 * 1024) })
+    })
+    expect(oversized.status).toBe(413)
+    expect(await oversized.json()).toEqual({ error: 'Request body is too large.' })
   } finally {
     srv.close()
   }
@@ -63,7 +149,7 @@ test('POST /generate (valid new draft) scaffolds, resolves done, and 200s', asyn
   try {
     const res = await fetch(`${srv.url}/generate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({
         mode: 'new',
         name: 'demo',
@@ -98,7 +184,7 @@ test('POST /generate (new, wallet-login) scaffolds and includes useWalletLogin.t
   try {
     const res = await fetch(`${srv.url}/generate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({
         mode: 'new',
         name: 'demo',
@@ -131,7 +217,7 @@ test('POST /generate (invalid: new with no targets) returns 400 and stays up', a
   try {
     const res = await fetch(`${srvUrl}/generate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'none', backend: 'none' })
     })
     expect(res.status).toBe(400)
@@ -157,7 +243,7 @@ test('POST /generate does not expose unexpected command failures', async () => {
   try {
     const res = await fetch(`${srv.url}/generate`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({
         mode: 'new',
         name: 'demo',
@@ -187,16 +273,18 @@ test('runUi opens the browser then resolves after the simulated submit', async (
     targetDir: target,
     runCommand: noopRun,
     openBrowser: (url: string) => {
-      void fetch(`${url}/generate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          mode: 'new',
-          name: 'demo',
-          frontend: 'react',
-          capabilities: ['wallet-connect']
+      void (async () => {
+        await fetch(`${url}/generate`, {
+          method: 'POST',
+          headers: await uiHeaders(url),
+          body: JSON.stringify({
+            mode: 'new',
+            name: 'demo',
+            frontend: 'react',
+            capabilities: ['wallet-connect']
+          })
         })
-      })
+      })()
     }
   })
   expect(result.targetDir).toBe(target)
@@ -209,7 +297,7 @@ test('POST /plan returns the real BSV files create-bsv-app would write (new mode
     const srvUrl: string = srv.url
     const res = await fetch(srvUrl + '/plan', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({
         mode: 'new',
         name: 'demo',
@@ -237,7 +325,7 @@ test('POST /plan marks an existing file as edit', async () => {
     const srvUrl: string = srv.url
     const res = await fetch(srvUrl + '/plan', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({
         mode: 'new',
         name: 'demo',
@@ -259,7 +347,7 @@ test('POST /plan returns { files: [], error } for an invalid draft', async () =>
     const srvUrl: string = srv.url
     const res = await fetch(srvUrl + '/plan', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({ mode: 'new', name: 'demo', frontend: 'none', backend: 'none' })
     })
     expect(res.status).toBe(200)
@@ -277,7 +365,7 @@ test('POST /plan does not expose unexpected parser details', async () => {
   try {
     const res = await fetch(`${srv.url}/plan`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: '{'
     })
     const data = await res.json()
@@ -311,7 +399,7 @@ test('POST /generate add-mode does NOT overwrite existing capability files (forc
     const srvUrl: string = srv.url
     const res = await fetch(srvUrl + '/generate', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: await uiHeaders(srv.url),
       body: JSON.stringify({ capabilities: ['wallet-login'] })
     })
     expect(res.status).toBe(200)

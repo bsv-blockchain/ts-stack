@@ -54,6 +54,13 @@ describe('isBroadcastResponse', () => {
     }
     expect(isBroadcastResponse(r)).toBe(false)
   })
+
+  it('does not trust an inherited status discriminator', () => {
+    const r = Object.create({ status: 'success' }) as BroadcastResponse
+    r.txid = 'abc123'
+    r.message = 'broadcast successful'
+    expect(isBroadcastResponse(r)).toBe(false)
+  })
 })
 
 describe('isBroadcastFailure', () => {
@@ -114,6 +121,14 @@ describe('isBroadcastFailure', () => {
       expect(r.txid).toBeUndefined()
       expect(r.more).toBeUndefined()
     }
+  })
+
+  it('does not invoke an accessor-backed status discriminator', () => {
+    const status = jest.fn(() => 'error')
+    const r = Object.create(null) as BroadcastFailure
+    Object.defineProperty(r, 'status', { get: status })
+    expect(isBroadcastFailure(r)).toBe(false)
+    expect(status).not.toHaveBeenCalled()
   })
 })
 

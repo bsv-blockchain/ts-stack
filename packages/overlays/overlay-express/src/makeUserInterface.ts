@@ -19,6 +19,38 @@ export interface UIConfig {
   defaultContent?: string
   /** Admin identity key for wallet-based admin detection */
   adminIdentityKey?: string
+  /** Per-response CSP nonce supplied by OverlayExpress. */
+  scriptNonce?: string
+}
+
+function htmlAttribute(value: string): string {
+  return value
+    .split('&').join('&amp;')
+    .split('"').join('&quot;')
+    .split('<').join('&lt;')
+    .split('>').join('&gt;')
+}
+
+function javascriptString(value: string): string {
+  return JSON.stringify(value)
+    .split('<').join('\\u003c')
+    .split('>').join('\\u003e')
+    .split('&').join('\\u0026')
+    .split('\u2028').join('\\u2028')
+    .split('\u2029').join('\\u2029')
+}
+
+function legacyMarkdownValue(value: string): string {
+  const trimmed = value.trim()
+  return trimmed.startsWith('`') && trimmed.endsWith('`')
+    ? trimmed.slice(1, -1).split('\\`').join('`')
+    : value
+}
+
+function assertStyleSafe(name: string, value: string): void {
+  if (/[<>]/.test(value)) {
+    throw new TypeError(`${name} must not contain HTML delimiters`)
+  }
 }
 
 export default function makeUserInterface (config: UIConfig = {}): string {
@@ -39,8 +71,31 @@ export default function makeUserInterface (config: UIConfig = {}): string {
     secondaryBackgroundColor = '#f8f8f8',
     secondaryTextColor = '#0e0e0e',
     defaultContent = generalGuide,
-    adminIdentityKey = ''
+    adminIdentityKey = '',
+    scriptNonce = ''
   } = config
+  if (scriptNonce !== '' && !/^[A-Za-z0-9+/=_-]{16,256}$/.test(scriptNonce)) {
+    throw new TypeError('scriptNonce is invalid')
+  }
+  for (const [name, value] of Object.entries({
+    backgroundColor,
+    primaryTextColor,
+    primaryColor,
+    secondaryColor,
+    fontFamily,
+    headingFontFamily,
+    additionalStyles,
+    sectionBackgroundColor,
+    linkColor,
+    hoverColor,
+    borderColor,
+    secondaryBackgroundColor,
+    secondaryTextColor
+  })) {
+    assertStyleSafe(name, value)
+  }
+  const nonceAttribute = scriptNonce === '' ? '' : ` nonce="${htmlAttribute(scriptNonce)}"`
+  const defaultMarkdown = legacyMarkdownValue(defaultContent)
 
   return `<!DOCTYPE html>
 <html>
@@ -48,7 +103,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Overlay Services</title>
-  <link rel="icon" type="image/x-icon" href="${faviconUrl}">
+  <link rel="icon" type="image/x-icon" href="${htmlAttribute(faviconUrl)}">
   <style>
     :root {
       --background-color: ${backgroundColor};
@@ -405,19 +460,92 @@ export default function makeUserInterface (config: UIConfig = {}): string {
 
     ${additionalStyles}
   </style>
-  <script src="https://cdn.jsdelivr.net/npm/showdown@2.0.3/dist/showdown.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/styles/atom-one-dark.min.css">
-  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/highlight.min.js"></script>
-  <script>
-    const faviconUrl = '${faviconUrl}';
-    const HOST = '${host}';
-    const CONFIGURED_ADMIN_IDENTITY_KEY = '${adminIdentityKey}';
+  <script${nonceAttribute} src="https://cdn.jsdelivr.net/npm/showdown@2.0.3/dist/showdown.min.js" integrity="sha384-raA/ys24v0l7dngtwYK4UcAbwhBBfjsrebIGkf+0SeDc45oiqT1aDqb6k8jWBLb2" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/styles/atom-one-dark.min.css" integrity="sha384-oaMLBGEzBOJx3UHwac0cVndtX5fxGQIfnAeFZ35RTgqPcYlbprH9o9PUV/F8Le07" crossorigin="anonymous">
+  <script${nonceAttribute} src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.7.0/build/highlight.min.js" integrity="sha384-4l+9bhb7rakZ18megzl0/DWczL8ojbDl1jIEzBVffeMho9A6xB/lkqt1K0PC8Jin" crossorigin="anonymous"></script>
+  <script${nonceAttribute}>
+    const faviconUrl = ${javascriptString(faviconUrl)};
+    const HOST = ${javascriptString(host)};
+    const CONFIGURED_ADMIN_IDENTITY_KEY = ${javascriptString(adminIdentityKey)};
+    const DEFAULT_MARKDOWN = ${javascriptString(defaultMarkdown)};
 
     /* ==========================================
        MARKDOWN CONVERTER
     ========================================== */
     const showdown = window.showdown;
     window.hljs.configure({ languages: ['typescript', 'javascript', 'json', 'html', 'css', 'bash', 'markdown'] });
+
+    const sanitizeRenderedHtml = (html) => {
+      const allowed = new Set([
+        'A', 'B', 'BLOCKQUOTE', 'BR', 'CODE', 'DEL', 'EM', 'H1', 'H2', 'H3',
+        'H4', 'H5', 'H6', 'HR', 'I', 'IMG', 'LI', 'OL', 'P', 'PRE', 'STRONG',
+        'TABLE', 'TBODY', 'TD', 'TH', 'THEAD', 'TR', 'UL'
+      ]);
+      const dropWithContent = new Set([
+        'BASE', 'BUTTON', 'EMBED', 'FORM', 'IFRAME', 'INPUT', 'LINK', 'META',
+        'OBJECT', 'SCRIPT', 'STYLE', 'SVG', 'TEMPLATE'
+      ]);
+      const template = document.createElement('template');
+      template.innerHTML = String(html || '');
+      for (const element of Array.from(template.content.querySelectorAll('*'))) {
+        if (dropWithContent.has(element.tagName)) {
+          element.remove();
+          continue;
+        }
+        if (!allowed.has(element.tagName)) {
+          element.replaceWith(...Array.from(element.childNodes));
+          continue;
+        }
+        const original = {
+          href: element.getAttribute('href'),
+          src: element.getAttribute('src'),
+          alt: element.getAttribute('alt'),
+          title: element.getAttribute('title'),
+          className: element.getAttribute('class'),
+          language: element.getAttribute('data-language')
+        };
+        for (const attribute of Array.from(element.attributes)) {
+          element.removeAttribute(attribute.name);
+        }
+        if (element.tagName === 'A' && original.href) {
+          try {
+            const target = new URL(original.href, window.location.href);
+            if (['http:', 'https:', 'mailto:'].includes(target.protocol)) {
+              element.setAttribute('href', target.toString());
+              element.setAttribute('rel', 'noopener noreferrer');
+              if (target.protocol !== 'mailto:') element.setAttribute('target', '_blank');
+            }
+          } catch (e) {}
+        }
+        if (element.tagName === 'IMG' && original.src) {
+          try {
+            const target = new URL(original.src, window.location.href);
+            if (target.protocol === 'https:') {
+              element.setAttribute('src', target.toString());
+              element.setAttribute('loading', 'lazy');
+              element.setAttribute('referrerpolicy', 'no-referrer');
+            }
+          } catch (e) {}
+        }
+        if (original.alt) element.setAttribute('alt', original.alt.slice(0, 1024));
+        if (original.title) element.setAttribute('title', original.title.slice(0, 1024));
+        if (
+          element.tagName === 'CODE' &&
+          original.className &&
+          /^(?:hljs|language-[A-Za-z0-9_-]{1,64})(?: (?:hljs|language-[A-Za-z0-9_-]{1,64}))*$/.test(original.className)
+        ) {
+          element.setAttribute('class', original.className);
+        }
+        if (
+          element.tagName === 'PRE' &&
+          original.language &&
+          /^[A-Za-z0-9_-]{1,64}$/.test(original.language)
+        ) {
+          element.setAttribute('data-language', original.language);
+        }
+      }
+      return template.innerHTML;
+    };
 
     const Convert = (md) => {
       let converter = new showdown.Converter({
@@ -451,7 +579,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
         }
       ];
       converter.addExtension(codeExtension());
-      return converter.makeHtml(md);
+      return sanitizeRenderedHtml(converter.makeHtml(String(md || '')));
     };
 
     const applyHighlighting = () => {
@@ -475,7 +603,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
 
     window.returnHome = () => {
       if (!window.defaultHtml) {
-        window.defaultHtml = Convert(${defaultContent});
+        window.defaultHtml = Convert(DEFAULT_MARKDOWN);
       }
       document.getElementById('documentation_container').innerHTML = window.defaultHtml;
       document.getElementById('documentation_container').style.display = '';
@@ -487,8 +615,11 @@ export default function makeUserInterface (config: UIConfig = {}): string {
     const updateSelectedItem = (type, id) => {
       window.location.hash = \`\${type}/\${id}\`;
       document.querySelectorAll('.list-item a').forEach(item => item.classList.remove('active'));
-      const selector = \`[data-\${type}="\${id}"]\`;
-      const selectedItem = document.querySelector(selector);
+      const selectedItem = Array.from(document.querySelectorAll('.list-item a')).find(item => {
+        return type === 'manager'
+          ? item.dataset.manager === id
+          : item.dataset.provider === id;
+      });
       if (selectedItem) selectedItem.classList.add('active');
     };
 
@@ -496,7 +627,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       try {
         document.getElementById('documentation_container').style.display = '';
         document.getElementById('admin_content').style.display = 'none';
-        let res = await fetch(\`\${HOST}/getDocumentationForTopicManager?manager=\${manager}\`);
+        let res = await fetch(\`\${HOST}/getDocumentationForTopicManager?manager=\${encodeURIComponent(manager)}\`);
         let docs = await res.text();
         document.getElementById('documentation_container').innerHTML = Convert(docs);
         applyHighlighting();
@@ -508,7 +639,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       try {
         document.getElementById('documentation_container').style.display = '';
         document.getElementById('admin_content').style.display = 'none';
-        let res = await fetch(\`\${HOST}/getDocumentationForLookupServiceProvider?lookupService=\${provider}\`);
+        let res = await fetch(\`\${HOST}/getDocumentationForLookupServiceProvider?lookupService=\${encodeURIComponent(provider)}\`);
         let docs = await res.text();
         document.getElementById('documentation_container').innerHTML = Convert(docs);
         applyHighlighting();
@@ -548,29 +679,10 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       },
 
       async tryWalletDetection() {
-        try {
-          // Dynamically import WalletClient from the BSV SDK
-          // This works when the user has a wallet extension installed
-          const { WalletClient } = await import('https://cdn.jsdelivr.net/npm/@bsv/sdk@2/+esm');
-          const wallet = new WalletClient('auto', window.location.origin);
-          const { publicKey } = await wallet.getPublicKey({ identityKey: true });
-
-          // Fetch the server's admin config to compare identity keys
-          const configRes = await fetch(HOST + '/admin/config');
-          const config = await configRes.json();
-
-          if (config.adminIdentityKey && publicKey === config.adminIdentityKey) {
-            // Identity matches the admin key - create AuthFetch for authenticated requests
-            const { AuthFetch } = await import('https://cdn.jsdelivr.net/npm/@bsv/sdk@2/+esm');
-            this.authFetch = new AuthFetch(wallet);
-            this.walletAuthMode = true;
-            this.isAdmin = true;
-            this.showAdminSection();
-            showToast('Wallet detected - admin access granted', 'success');
-          }
-        } catch (e) {
-          // Wallet not available or identity doesn't match - fall back to token auth
-        }
+        // The page deliberately does not dynamically import executable wallet
+        // code from a third-party CDN. Wallet-authenticated callers can still
+        // use the admin API directly; this embedded UI uses its bearer token.
+        return Promise.resolve();
       },
 
       showAdminSection() {
@@ -654,25 +766,25 @@ export default function makeUserInterface (config: UIConfig = {}): string {
         container.innerHTML = \`
           <div class="admin-panel">
             <h2>Dashboard Overview</h2>
-            <p class="subtitle">\${d.nodeName} on \${d.network}net &mdash; uptime: \${uptime}</p>
+            <p class="subtitle">\${escHtml(String(d.nodeName || ''))} on \${escHtml(String(d.network || ''))}net &mdash; uptime: \${escHtml(uptime)}</p>
             <div class="stats-grid">
-              <div class="stat-card"><div class="stat-label">SHIP Records</div><div class="stat-value info">\${d.shipRecordCount}</div></div>
-              <div class="stat-card"><div class="stat-label">SLAP Records</div><div class="stat-value info">\${d.slapRecordCount}</div></div>
-              <div class="stat-card"><div class="stat-label">Banned Domains</div><div class="stat-value \${d.bannedDomains > 0 ? 'warning' : 'success'}">\${d.bannedDomains}</div></div>
-              <div class="stat-card"><div class="stat-label">Banned Outpoints</div><div class="stat-value \${d.bannedOutpoints > 0 ? 'warning' : 'success'}">\${d.bannedOutpoints}</div></div>
-              <div class="stat-card"><div class="stat-label">Topic Managers</div><div class="stat-value">\${d.topicManagers.length}</div></div>
-              <div class="stat-card"><div class="stat-label">Lookup Services</div><div class="stat-value">\${d.lookupServices.length}</div></div>
+              <div class="stat-card"><div class="stat-label">SHIP Records</div><div class="stat-value info">\${safeNonnegativeInteger(d.shipRecordCount)}</div></div>
+              <div class="stat-card"><div class="stat-label">SLAP Records</div><div class="stat-value info">\${safeNonnegativeInteger(d.slapRecordCount)}</div></div>
+              <div class="stat-card"><div class="stat-label">Banned Domains</div><div class="stat-value \${safeNonnegativeInteger(d.bannedDomains) > 0 ? 'warning' : 'success'}">\${safeNonnegativeInteger(d.bannedDomains)}</div></div>
+              <div class="stat-card"><div class="stat-label">Banned Outpoints</div><div class="stat-value \${safeNonnegativeInteger(d.bannedOutpoints) > 0 ? 'warning' : 'success'}">\${safeNonnegativeInteger(d.bannedOutpoints)}</div></div>
+              <div class="stat-card"><div class="stat-label">Topic Managers</div><div class="stat-value">\${Array.isArray(d.topicManagers) ? d.topicManagers.length : 0}</div></div>
+              <div class="stat-card"><div class="stat-label">Lookup Services</div><div class="stat-value">\${Array.isArray(d.lookupServices) ? d.lookupServices.length : 0}</div></div>
             </div>
             <h3>Quick Actions</h3>
             <div class="action-bar">
-              <button class="btn btn-primary" onclick="Admin.runJanitor()">Run Janitor</button>
-              <button class="btn btn-primary" onclick="Admin.syncAds()">Sync Advertisements</button>
-              \${d.gaspSyncEnabled ? '<button class="btn btn-primary" onclick="Admin.gaspSync()">GASP Sync</button>' : ''}
+              <button class="btn btn-primary" data-ui-action="run-janitor">Run Janitor</button>
+              <button class="btn btn-primary" data-ui-action="sync-ads">Sync Advertisements</button>
+              \${d.gaspSyncEnabled ? '<button class="btn btn-primary" data-ui-action="gasp-sync">GASP Sync</button>' : ''}
             </div>
             <h3>Hosted Topics</h3>
-            <p style="color:#999">\${d.topicManagers.join(', ')}</p>
+            <p style="color:#999">\${(Array.isArray(d.topicManagers) ? d.topicManagers : []).map(value => escHtml(String(value))).join(', ')}</p>
             <h3>Hosted Lookup Services</h3>
-            <p style="color:#999">\${d.lookupServices.join(', ')}</p>
+            <p style="color:#999">\${(Array.isArray(d.lookupServices) ? d.lookupServices : []).map(value => escHtml(String(value))).join(', ')}</p>
           </div>
         \`;
       },
@@ -689,14 +801,17 @@ export default function makeUserInterface (config: UIConfig = {}): string {
         const qs = \`?page=\${this.shipPage}&limit=30\${this.shipSearch ? '&search=' + encodeURIComponent(this.shipSearch) : ''}\`;
         const result = await this.api('GET', '/admin/ship-records' + qs);
         if (!result || result.status !== 'success') return;
-        const { records, total, page: pg, pages } = result.data;
+        const records = Array.isArray(result.data.records) ? result.data.records : [];
+        const total = safeNonnegativeInteger(result.data.total);
+        const pg = safePositiveInteger(result.data.page);
+        const pages = safePositiveInteger(result.data.pages);
         container.innerHTML = \`
           <div class="admin-panel">
             <h2>SHIP Records</h2>
             <p class="subtitle">Hosts advertising topic managers (\${total} total)</p>
             <div class="search-bar">
-              <input type="text" id="ship_search" placeholder="Search by domain, topic, txid, or identity key..." value="\${escHtml(this.shipSearch)}" onkeydown="if(event.key==='Enter')Admin.showShipRecords(1,this.value)" />
-              <button class="btn btn-primary" onclick="Admin.showShipRecords(1,document.getElementById('ship_search').value)">Search</button>
+              <input type="text" id="ship_search" data-enter-action="ship-search" placeholder="Search by domain, topic, txid, or identity key..." value="\${escHtml(this.shipSearch)}" />
+              <button class="btn btn-primary" data-ui-action="ship-search">Search</button>
             </div>
             \${records.length === 0 ? '<div class="empty-state"><p>No SHIP records found.</p></div>' : \`
             <div style="overflow-x:auto">
@@ -715,16 +830,16 @@ export default function makeUserInterface (config: UIConfig = {}): string {
               <tbody>
                 \${records.map(r => \`
                   <tr>
-                    <td><span class="health-dot \${healthDotClass(r.down)}"></span>\${r.down ? 'Down: '+r.down : 'OK'}</td>
-                    <td class="mono truncate" title="\${escHtml(r.domain)}">\${escHtml(r.domain)}</td>
-                    <td>\${escHtml(r.topic)}</td>
-                    <td class="mono truncate" title="\${escHtml(r.identityKey)}">\${escHtml((r.identityKey||'').substring(0,12))}...</td>
-                    <td class="mono truncate" title="\${r.txid}.\${r.outputIndex}">\${r.txid.substring(0,8)}...\${r.outputIndex}</td>
-                    <td>\${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}</td>
+                    <td><span class="health-dot \${healthDotClass(r.down)}"></span>\${safeNonnegativeInteger(r.down) > 0 ? 'Down: ' + safeNonnegativeInteger(r.down) : 'OK'}</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.domain || ''))}">\${escHtml(String(r.domain || ''))}</td>
+                    <td>\${escHtml(String(r.topic || ''))}</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.identityKey || ''))}">\${escHtml(String(r.identityKey || '').substring(0,12))}...</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.txid || ''))}.\${safeNonnegativeInteger(r.outputIndex, -1)}">\${escHtml(String(r.txid || '').substring(0,8))}...\${safeNonnegativeInteger(r.outputIndex, -1)}</td>
+                    <td>\${safeDate(r.createdAt)}</td>
                     <td>
-                      <button class="btn btn-sm btn-primary" onclick="Admin.healthCheck('\${escHtml(r.domain)}')">Ping</button>
-                      <button class="btn btn-sm btn-danger" onclick="Admin.confirmRemoveToken('\${r.txid}', \${r.outputIndex}, '\${escHtml(r.domain)}')">Remove</button>
-                      <button class="btn btn-sm btn-warning" onclick="Admin.confirmBanDomain('\${escHtml(r.domain)}')">Ban Host</button>
+                      <button class="btn btn-sm btn-primary" data-ui-action="record-health" data-domain="\${escHtml(String(r.domain || ''))}">Ping</button>
+                      <button class="btn btn-sm btn-danger" data-ui-action="remove-token" data-txid="\${escHtml(String(r.txid || ''))}" data-output-index="\${safeNonnegativeInteger(r.outputIndex, -1)}" data-domain="\${escHtml(String(r.domain || ''))}">Remove</button>
+                      <button class="btn btn-sm btn-warning" data-ui-action="ban-domain" data-domain="\${escHtml(String(r.domain || ''))}">Ban Host</button>
                     </td>
                   </tr>
                 \`).join('')}
@@ -732,9 +847,9 @@ export default function makeUserInterface (config: UIConfig = {}): string {
             </table>
             </div>
             <div class="pagination">
-              <button class="btn btn-sm btn-outline" \${pg <= 1 ? 'disabled' : ''} onclick="Admin.showShipRecords(\${pg - 1})">Prev</button>
+              <button class="btn btn-sm btn-outline" \${pg <= 1 ? 'disabled' : ''} data-ui-action="ship-page" data-page="\${Math.max(1, pg - 1)}">Prev</button>
               <span class="page-info">Page \${pg} of \${pages}</span>
-              <button class="btn btn-sm btn-outline" \${pg >= pages ? 'disabled' : ''} onclick="Admin.showShipRecords(\${pg + 1})">Next</button>
+              <button class="btn btn-sm btn-outline" \${pg >= pages ? 'disabled' : ''} data-ui-action="ship-page" data-page="\${Math.min(pages, pg + 1)}">Next</button>
             </div>
             \`}
           </div>
@@ -753,14 +868,17 @@ export default function makeUserInterface (config: UIConfig = {}): string {
         const qs = \`?page=\${this.slapPage}&limit=30\${this.slapSearch ? '&search=' + encodeURIComponent(this.slapSearch) : ''}\`;
         const result = await this.api('GET', '/admin/slap-records' + qs);
         if (!result || result.status !== 'success') return;
-        const { records, total, page: pg, pages } = result.data;
+        const records = Array.isArray(result.data.records) ? result.data.records : [];
+        const total = safeNonnegativeInteger(result.data.total);
+        const pg = safePositiveInteger(result.data.page);
+        const pages = safePositiveInteger(result.data.pages);
         container.innerHTML = \`
           <div class="admin-panel">
             <h2>SLAP Records</h2>
             <p class="subtitle">Hosts advertising lookup services (\${total} total)</p>
             <div class="search-bar">
-              <input type="text" id="slap_search" placeholder="Search by domain, service, txid, or identity key..." value="\${escHtml(this.slapSearch)}" onkeydown="if(event.key==='Enter')Admin.showSlapRecords(1,this.value)" />
-              <button class="btn btn-primary" onclick="Admin.showSlapRecords(1,document.getElementById('slap_search').value)">Search</button>
+              <input type="text" id="slap_search" data-enter-action="slap-search" placeholder="Search by domain, service, txid, or identity key..." value="\${escHtml(this.slapSearch)}" />
+              <button class="btn btn-primary" data-ui-action="slap-search">Search</button>
             </div>
             \${records.length === 0 ? '<div class="empty-state"><p>No SLAP records found.</p></div>' : \`
             <div style="overflow-x:auto">
@@ -779,16 +897,16 @@ export default function makeUserInterface (config: UIConfig = {}): string {
               <tbody>
                 \${records.map(r => \`
                   <tr>
-                    <td><span class="health-dot \${healthDotClass(r.down)}"></span>\${r.down ? 'Down: '+r.down : 'OK'}</td>
-                    <td class="mono truncate" title="\${escHtml(r.domain)}">\${escHtml(r.domain)}</td>
-                    <td>\${escHtml(r.service)}</td>
-                    <td class="mono truncate" title="\${escHtml(r.identityKey)}">\${escHtml((r.identityKey||'').substring(0,12))}...</td>
-                    <td class="mono truncate" title="\${r.txid}.\${r.outputIndex}">\${r.txid.substring(0,8)}...\${r.outputIndex}</td>
-                    <td>\${r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'N/A'}</td>
+                    <td><span class="health-dot \${healthDotClass(r.down)}"></span>\${safeNonnegativeInteger(r.down) > 0 ? 'Down: ' + safeNonnegativeInteger(r.down) : 'OK'}</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.domain || ''))}">\${escHtml(String(r.domain || ''))}</td>
+                    <td>\${escHtml(String(r.service || ''))}</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.identityKey || ''))}">\${escHtml(String(r.identityKey || '').substring(0,12))}...</td>
+                    <td class="mono truncate" title="\${escHtml(String(r.txid || ''))}.\${safeNonnegativeInteger(r.outputIndex, -1)}">\${escHtml(String(r.txid || '').substring(0,8))}...\${safeNonnegativeInteger(r.outputIndex, -1)}</td>
+                    <td>\${safeDate(r.createdAt)}</td>
                     <td>
-                      <button class="btn btn-sm btn-primary" onclick="Admin.healthCheck('\${escHtml(r.domain)}')">Ping</button>
-                      <button class="btn btn-sm btn-danger" onclick="Admin.confirmRemoveToken('\${r.txid}', \${r.outputIndex}, '\${escHtml(r.domain)}')">Remove</button>
-                      <button class="btn btn-sm btn-warning" onclick="Admin.confirmBanDomain('\${escHtml(r.domain)}')">Ban Host</button>
+                      <button class="btn btn-sm btn-primary" data-ui-action="record-health" data-domain="\${escHtml(String(r.domain || ''))}">Ping</button>
+                      <button class="btn btn-sm btn-danger" data-ui-action="remove-token" data-txid="\${escHtml(String(r.txid || ''))}" data-output-index="\${safeNonnegativeInteger(r.outputIndex, -1)}" data-domain="\${escHtml(String(r.domain || ''))}">Remove</button>
+                      <button class="btn btn-sm btn-warning" data-ui-action="ban-domain" data-domain="\${escHtml(String(r.domain || ''))}">Ban Host</button>
                     </td>
                   </tr>
                 \`).join('')}
@@ -796,9 +914,9 @@ export default function makeUserInterface (config: UIConfig = {}): string {
             </table>
             </div>
             <div class="pagination">
-              <button class="btn btn-sm btn-outline" \${pg <= 1 ? 'disabled' : ''} onclick="Admin.showSlapRecords(\${pg - 1})">Prev</button>
+              <button class="btn btn-sm btn-outline" \${pg <= 1 ? 'disabled' : ''} data-ui-action="slap-page" data-page="\${Math.max(1, pg - 1)}">Prev</button>
               <span class="page-info">Page \${pg} of \${pages}</span>
-              <button class="btn btn-sm btn-outline" \${pg >= pages ? 'disabled' : ''} onclick="Admin.showSlapRecords(\${pg + 1})">Next</button>
+              <button class="btn btn-sm btn-outline" \${pg >= pages ? 'disabled' : ''} data-ui-action="slap-page" data-page="\${Math.min(pages, pg + 1)}">Next</button>
             </div>
             \`}
           </div>
@@ -824,7 +942,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
               <select id="ban_type"><option value="domain">Domain</option><option value="outpoint">Outpoint</option></select>
               <input type="text" id="ban_value" placeholder="e.g. https://dead-host.example.com or txid.outputIndex" style="flex:1" />
               <input type="text" id="ban_reason" placeholder="Reason (optional)" style="width:200px" />
-              <button class="btn btn-danger" onclick="Admin.addBan()">Ban</button>
+              <button class="btn btn-danger" data-ui-action="add-ban">Ban</button>
             </div>
             <h3>Banned Domains (\${domainBans.length})</h3>
             \${domainBans.length === 0 ? '<p style="color:#777">No banned domains.</p>' : \`
@@ -833,10 +951,10 @@ export default function makeUserInterface (config: UIConfig = {}): string {
               <tbody>
                 \${domainBans.map(b => \`
                   <tr>
-                    <td class="mono">\${escHtml(b.value)}</td>
-                    <td>\${escHtml(b.reason || 'N/A')}</td>
-                    <td>\${new Date(b.bannedAt).toLocaleString()}</td>
-                    <td><button class="btn btn-sm btn-success" onclick="Admin.unban('domain','\${escHtml(b.value)}')">Unban</button></td>
+                    <td class="mono">\${escHtml(String(b.value || ''))}</td>
+                    <td>\${escHtml(String(b.reason || 'N/A'))}</td>
+                    <td>\${safeDate(b.bannedAt, true)}</td>
+                    <td><button class="btn btn-sm btn-success" data-ui-action="unban" data-ban-type="domain" data-value="\${escHtml(String(b.value || ''))}">Unban</button></td>
                   </tr>
                 \`).join('')}
               </tbody>
@@ -848,11 +966,11 @@ export default function makeUserInterface (config: UIConfig = {}): string {
               <tbody>
                 \${outpointBans.map(b => \`
                   <tr>
-                    <td class="mono truncate" title="\${escHtml(b.value)}">\${escHtml(b.value.substring(0,20))}...</td>
-                    <td class="mono">\${escHtml(b.domain || 'N/A')}</td>
-                    <td>\${escHtml(b.reason || 'N/A')}</td>
-                    <td>\${new Date(b.bannedAt).toLocaleString()}</td>
-                    <td><button class="btn btn-sm btn-success" onclick="Admin.unban('outpoint','\${escHtml(b.value)}')">Unban</button></td>
+                    <td class="mono truncate" title="\${escHtml(String(b.value || ''))}">\${escHtml(String(b.value || '').substring(0,20))}...</td>
+                    <td class="mono">\${escHtml(String(b.domain || 'N/A'))}</td>
+                    <td>\${escHtml(String(b.reason || 'N/A'))}</td>
+                    <td>\${safeDate(b.bannedAt, true)}</td>
+                    <td><button class="btn btn-sm btn-success" data-ui-action="unban" data-ban-type="outpoint" data-value="\${escHtml(String(b.value || ''))}">Unban</button></td>
                   </tr>
                 \`).join('')}
               </tbody>
@@ -870,8 +988,8 @@ export default function makeUserInterface (config: UIConfig = {}): string {
             <h2>Health Checker</h2>
             <p class="subtitle">Ping a host's /health endpoint to verify it is online</p>
             <div class="admin-form-row">
-              <input type="text" id="health_url" placeholder="https://overlay-host.example.com" style="flex:1" onkeydown="if(event.key==='Enter')Admin.healthCheck(this.value)" />
-              <button class="btn btn-primary" onclick="Admin.healthCheck(document.getElementById('health_url').value)">Check Health</button>
+              <input type="text" id="health_url" data-enter-action="health-check" placeholder="https://overlay-host.example.com" style="flex:1" />
+              <button class="btn btn-primary" data-ui-action="health-check">Check Health</button>
             </div>
             <div id="health_results"></div>
           </div>
@@ -889,10 +1007,10 @@ export default function makeUserInterface (config: UIConfig = {}): string {
           resultsEl.innerHTML = \`
             <div class="health-result-card">
               <h3><span class="health-dot \${d.healthy ? 'green' : 'red'}"></span>\${d.healthy ? 'Healthy' : 'Unhealthy'}</h3>
-              <div class="health-result-row"><span>URL</span><span class="mono">\${escHtml(d.url)}</span></div>
-              <div class="health-result-row"><span>Response Time</span><span>\${d.responseTimeMs}ms</span></div>
-              \${d.statusCode ? \`<div class="health-result-row"><span>Status Code</span><span>\${d.statusCode}</span></div>\` : ''}
-              \${d.error ? \`<div class="health-result-row"><span>Error</span><span style="color:var(--danger-color)">\${escHtml(d.error)}</span></div>\` : ''}
+              <div class="health-result-row"><span>URL</span><span class="mono">\${escHtml(String(d.url || ''))}</span></div>
+              <div class="health-result-row"><span>Response Time</span><span>\${safeNonnegativeInteger(d.responseTimeMs)}ms</span></div>
+              \${safeNonnegativeInteger(d.statusCode) > 0 ? \`<div class="health-result-row"><span>Status Code</span><span>\${safeNonnegativeInteger(d.statusCode)}</span></div>\` : ''}
+              \${d.error ? \`<div class="health-result-row"><span>Error</span><span style="color:var(--danger-color)">\${escHtml(String(d.error))}</span></div>\` : ''}
             </div>
           \`;
         } else {
@@ -946,6 +1064,8 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       },
 
       confirmRemoveToken(txid, outputIndex, domain) {
+        txid = String(txid || '');
+        domain = String(domain || '');
         showConfirm(
           'Remove Token',
           \`Remove token <code>\${txid.substring(0,12)}...\${outputIndex}</code> from \${escHtml(domain)}?\`,
@@ -958,6 +1078,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       },
 
       confirmBanDomain(domain) {
+        domain = String(domain || '');
         showConfirm(
           'Ban Domain',
           \`Ban <strong>\${escHtml(domain)}</strong>?<br><br>This will remove ALL SHIP and SLAP records for this domain and prevent GASP from re-syncing them.\`,
@@ -996,8 +1117,68 @@ export default function makeUserInterface (config: UIConfig = {}): string {
     function escHtml(str) {
       if (!str) return '';
       const div = document.createElement('div');
-      div.textContent = str;
+      div.textContent = String(str);
       return div.innerHTML;
+    }
+
+    function safeNonnegativeInteger(value, fallback = 0) {
+      return Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+    }
+
+    function safePositiveInteger(value) {
+      return Number.isSafeInteger(value) && value > 0 ? value : 1;
+    }
+
+    function safeDate(value, includeTime = false) {
+      if (!value) return 'N/A';
+      const date = new Date(value);
+      if (!Number.isFinite(date.getTime())) return 'N/A';
+      return escHtml(includeTime ? date.toLocaleString() : date.toLocaleDateString());
+    }
+
+    function inputValue(id) {
+      const input = document.getElementById(id);
+      return input && typeof input.value === 'string' ? input.value : '';
+    }
+
+    function handleUiAction(action, dataset = {}) {
+      switch (action) {
+        case 'home': window.returnHome(); break;
+        case 'overview': Admin.showOverview(); break;
+        case 'ship': Admin.showShipRecords(1); break;
+        case 'slap': Admin.showSlapRecords(1); break;
+        case 'bans': Admin.showBanList(); break;
+        case 'health': Admin.showHealthChecker(); break;
+        case 'logout': Admin.logout(); break;
+        case 'login': window.showAdminLogin(); break;
+        case 'submit-login': handleAdminLogin(); break;
+        case 'run-janitor': Admin.runJanitor(); break;
+        case 'sync-ads': Admin.syncAds(); break;
+        case 'gasp-sync': Admin.gaspSync(); break;
+        case 'ship-search': Admin.showShipRecords(1, inputValue('ship_search')); break;
+        case 'slap-search': Admin.showSlapRecords(1, inputValue('slap_search')); break;
+        case 'health-check': Admin.healthCheck(inputValue('health_url')); break;
+        case 'add-ban': Admin.addBan(); break;
+        case 'record-health': Admin.healthCheck(String(dataset.domain || '')); break;
+        case 'ban-domain': Admin.confirmBanDomain(String(dataset.domain || '')); break;
+        case 'ship-page': Admin.showShipRecords(safePositiveInteger(Number(dataset.page))); break;
+        case 'slap-page': Admin.showSlapRecords(safePositiveInteger(Number(dataset.page))); break;
+        case 'remove-token': {
+          const txid = String(dataset.txid || '');
+          const outputIndex = Number(dataset.outputIndex);
+          if (/^[0-9a-fA-F]{64}$/.test(txid) && Number.isSafeInteger(outputIndex) && outputIndex >= 0 && outputIndex <= 4294967295) {
+            Admin.confirmRemoveToken(txid, outputIndex, String(dataset.domain || ''));
+          } else {
+            showToast('Invalid token outpoint', 'error');
+          }
+          break;
+        }
+        case 'unban': {
+          const type = String(dataset.banType || '');
+          if (type === 'domain' || type === 'outpoint') Admin.unban(type, String(dataset.value || ''));
+          break;
+        }
+      }
     }
 
     function healthDotClass(downCount) {
@@ -1058,12 +1239,12 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       document.getElementById('admin_content').innerHTML = \`
         <div class="admin-login">
           <h2>Admin Login</h2>
-          <p>Authenticate with your BSV wallet (automatic if wallet extension is present and identity key matches), or enter the admin bearer token.</p>
+          <p>Enter the server's admin bearer token. The embedded dashboard does not download or execute a wallet SDK.</p>
           <div class="admin-login-form">
-            <input type="password" id="admin_token_input" placeholder="Admin Bearer Token" onkeydown="if(event.key==='Enter')handleAdminLogin()" />
-            <button class="btn btn-primary" onclick="handleAdminLogin()">Login with Token</button>
+            <input type="password" id="admin_token_input" data-enter-action="submit-login" placeholder="Admin Bearer Token" />
+            <button class="btn btn-primary" data-ui-action="submit-login">Login with Token</button>
           </div>
-          <p style="margin-top:1em;color:#777;font-size:0.85em">If you have a BSV wallet extension installed and your identity key matches the server admin key, you will be authenticated automatically via BSV mutual authentication.</p>
+          <p style="margin-top:1em;color:#777;font-size:0.85em">Wallet mutual authentication remains available to direct admin API clients configured with the server admin identity key.</p>
         </div>
       \`;
     };
@@ -1082,9 +1263,9 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       const hash = window.location.hash.substring(1);
       if (!hash) return;
       const [type, id] = hash.split('/');
-      if (type === 'manager' && id && managersData[id]) {
+      if (type === 'manager' && id && Object.prototype.hasOwnProperty.call(managersData, id)) {
         window.managerDocumentation(id);
-      } else if (type === 'provider' && id && providersData[id]) {
+      } else if (type === 'provider' && id && Object.prototype.hasOwnProperty.call(providersData, id)) {
         window.topicDocumentation(id);
       } else if (type === 'admin') {
         if (!Admin.isAdmin) { window.showAdminLogin(); return; }
@@ -1102,6 +1283,20 @@ export default function makeUserInterface (config: UIConfig = {}): string {
     document.addEventListener('DOMContentLoaded', () => {
       Admin.init();
 
+      document.addEventListener('click', event => {
+        const target = event.target instanceof Element ? event.target.closest('[data-ui-action]') : null;
+        if (!target) return;
+        event.preventDefault();
+        handleUiAction(target.dataset.uiAction, target.dataset);
+      });
+      document.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        const target = event.target;
+        if (!(target instanceof HTMLElement) || !target.dataset.enterAction) return;
+        event.preventDefault();
+        handleUiAction(target.dataset.enterAction, target.dataset);
+      });
+
       let managersLoaded = false;
       let providersLoaded = false;
 
@@ -1112,13 +1307,18 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       fetch(HOST + '/listTopicManagers')
         .then(res => res.json())
         .then(managers => {
-          managersData = managers;
+          if (!managers || typeof managers !== 'object' || Array.isArray(managers)) throw new TypeError('Invalid topic manager response');
+          managersData = Object.assign(Object.create(null), managers);
           const managerList = document.getElementById('manager_list');
           Object.keys(managers).forEach(manager => {
             let managerData = managers[manager];
             let li = document.createElement('li');
             li.className = 'list-item';
-            li.innerHTML = \`<a data-manager="\${manager}" onclick="window.managerDocumentation('\${manager}')">\${managerData.name}</a>\`;
+            const link = document.createElement('a');
+            link.dataset.manager = manager;
+            link.textContent = String((managerData && managerData.name) || manager);
+            link.onclick = () => window.managerDocumentation(manager);
+            li.appendChild(link);
             managerList.appendChild(li);
           });
           managersLoaded = true;
@@ -1133,13 +1333,18 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       fetch(HOST + '/listLookupServiceProviders')
         .then(res => res.json())
         .then(providers => {
-          providersData = providers;
+          if (!providers || typeof providers !== 'object' || Array.isArray(providers)) throw new TypeError('Invalid lookup provider response');
+          providersData = Object.assign(Object.create(null), providers);
           const providerList = document.getElementById('provider_list');
           Object.keys(providers).forEach(provider => {
             let providerData = providers[provider];
             let li = document.createElement('li');
             li.className = 'list-item';
-            li.innerHTML = \`<a data-provider="\${provider}" onclick="window.topicDocumentation('\${provider}')">\${providerData.name}</a>\`;
+            const link = document.createElement('a');
+            link.dataset.provider = provider;
+            link.textContent = String((providerData && providerData.name) || provider);
+            link.onclick = () => window.topicDocumentation(provider);
+            li.appendChild(link);
             providerList.appendChild(li);
           });
           providersLoaded = true;
@@ -1158,8 +1363,8 @@ export default function makeUserInterface (config: UIConfig = {}): string {
           const parts = hash.split('/');
           if (parts.length === 2) {
             const [type, id] = parts;
-            if (type === 'manager' && id && managersData[id]) { window.managerDocumentation(id); }
-            else if (type === 'provider' && id && providersData[id]) { window.topicDocumentation(id); }
+            if (type === 'manager' && id && Object.prototype.hasOwnProperty.call(managersData, id)) { window.managerDocumentation(id); }
+            else if (type === 'provider' && id && Object.prototype.hasOwnProperty.call(providersData, id)) { window.topicDocumentation(id); }
             else if (type === 'admin') { handleUrlHash(); }
           }
         } else {
@@ -1177,7 +1382,7 @@ export default function makeUserInterface (config: UIConfig = {}): string {
   <div class="main">
     <div class="column_left">
       <div class="page_head">
-        <h1 class="welcome" onclick="window.returnHome()">Overlay Services</h1>
+        <h1 class="welcome" data-ui-action="home">Overlay Services</h1>
       </div>
       <div class="topic_container">
         <h3>Topic Managers</h3>
@@ -1190,26 +1395,26 @@ export default function makeUserInterface (config: UIConfig = {}): string {
       <div>
         <h3>External Links</h3>
         <ul id="external_list">
-          <li class="list-item"><a href="https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays" target="_blank">Overlay packages on GitHub</a></li>
-          <li class="list-item"><a href="https://bsv.brc.dev/transactions/0076" target="_blank">BRC-76 GASP</a></li>
-          <li class="list-item"><a href="https://fast.brc.dev" target="_blank">Quick Start for App Developers</a></li>
+          <li class="list-item"><a href="https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays" target="_blank" rel="noopener noreferrer">Overlay packages on GitHub</a></li>
+          <li class="list-item"><a href="https://bsv.brc.dev/transactions/0076" target="_blank" rel="noopener noreferrer">BRC-76 GASP</a></li>
+          <li class="list-item"><a href="https://fast.brc.dev" target="_blank" rel="noopener noreferrer">Quick Start for App Developers</a></li>
         </ul>
       </div>
       <div id="admin_section">
         <div class="admin-divider"></div>
         <h3>Admin Dashboard</h3>
         <ul id="admin_list">
-          <li class="list-item"><a data-admin="admin-overview" onclick="Admin.showOverview()">Overview</a></li>
-          <li class="list-item"><a data-admin="admin-ship" onclick="Admin.showShipRecords(1)">SHIP Records</a></li>
-          <li class="list-item"><a data-admin="admin-slap" onclick="Admin.showSlapRecords(1)">SLAP Records</a></li>
-          <li class="list-item"><a data-admin="admin-bans" onclick="Admin.showBanList()">Ban List</a></li>
-          <li class="list-item"><a data-admin="admin-health" onclick="Admin.showHealthChecker()">Health Checker</a></li>
-          <li class="list-item"><a onclick="Admin.logout()" style="color:var(--danger-color)">Logout</a></li>
+          <li class="list-item"><a data-admin="admin-overview" data-ui-action="overview">Overview</a></li>
+          <li class="list-item"><a data-admin="admin-ship" data-ui-action="ship">SHIP Records</a></li>
+          <li class="list-item"><a data-admin="admin-slap" data-ui-action="slap">SLAP Records</a></li>
+          <li class="list-item"><a data-admin="admin-bans" data-ui-action="bans">Ban List</a></li>
+          <li class="list-item"><a data-admin="admin-health" data-ui-action="health">Health Checker</a></li>
+          <li class="list-item"><a data-ui-action="logout" style="color:var(--danger-color)">Logout</a></li>
         </ul>
       </div>
       <div id="admin_login_link" style="margin-top:1em">
         <ul style="list-style:none;padding:0">
-          <li class="list-item"><a data-admin="admin-login" onclick="window.showAdminLogin()">Admin Login</a></li>
+          <li class="list-item"><a data-admin="admin-login" data-ui-action="login">Admin Login</a></li>
         </ul>
       </div>
     </div>

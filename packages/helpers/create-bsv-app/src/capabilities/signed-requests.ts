@@ -17,8 +17,8 @@ const USE_SIGNED_REQUEST = `// Hook: signedFetch attaches a proof bound to the r
 import { useCallback } from 'react'
 import { useWallet } from './WalletContext.js'
 import { createSignedRequest } from './signedRequest.js'
-import { getServerIdentity } from './serverIdentity.js'
-import { API_BASE_URL } from './config.js'
+import { getServerIdentity, requireIdentityKey } from './serverIdentity.js'
+import { apiFetch } from './apiClient.js'
 import type { RequestBody } from './auth.js'
 
 // serverIdentityKey is optional: when omitted it's fetched from GET /api/identity.
@@ -26,9 +26,9 @@ export function useSignedRequest (serverIdentityKey?: string) {
   const { wallet } = useWallet()
   const signedFetch = useCallback(async (url: string, opts: { action: string, body?: RequestBody }): Promise<Response> => {
     if (wallet === null) throw new Error('connect a wallet first')
-    const counterparty = serverIdentityKey ?? await getServerIdentity()
+    const counterparty = requireIdentityKey(serverIdentityKey ?? await getServerIdentity())
     const proof = await createSignedRequest(wallet, { serverIdentityKey: counterparty, action: opts.action, body: opts.body })
-    return await fetch(API_BASE_URL + url, {
+    return await apiFetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ proof, body: opts.body })
@@ -42,6 +42,7 @@ const SIGNED_REQUEST_DEMO = `import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ConnectWallet } from './ConnectWallet.js'
 import { useSignedRequest } from './useSignedRequest.js'
+import { readApiJson } from './apiClient.js'
 
 export function SignedRequestDemo () {
   const { signedFetch, connected } = useSignedRequest()
@@ -59,7 +60,7 @@ export function SignedRequestDemo () {
       const res = await signedFetch('/api/echo', { action: 'echo', body: { hello: 'world' } })
       if (!res.ok) { step('✗ Server rejected the request (' + String(res.status) + ')'); setError('request failed: ' + String(res.status)); return }
       step('✓ Signature valid — server processed the request')
-      setResult(await res.json())
+      setResult(await readApiJson(res))
     } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
@@ -108,7 +109,7 @@ Authenticate individual API calls: sign a proof bound to a route (\`action\`) + 
 - It's stateless — there's no session; every request carries its own authentication. The demo page narrates the steps and shows the server's JSON reply.
 
 ### How it's used
-- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-fetched; pass \`useSignedRequest(serverIdentityKey)\` to pin it.
+- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-discovery trusts the configured API origin; pass \`useSignedRequest(serverIdentityKey)\` to pin an independently validated key.
 - \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`: connect, send a signed echo to \`/api/echo\`, watch the steps + JSON result.
 - \`verifySignedRequest.ts\` (server) — \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.
 
@@ -146,7 +147,7 @@ export const signedRequests: Capability = {
       `import { consumeNonce } from '${bsvImport(ctx, 'nonceStore.js')}'`
     )
     builder.server.routes.push(
-      "app.post('/api/echo', async (req, res) => { const { proof, body } = req.body; const r = await verifySignedRequest(serverWallet, proof, { action: 'echo', body }, consumeNonce); res.status(r.valid ? 200 : 401).json(r) })"
+      "app.post('/api/echo', async (req, res) => { const { proof, body } = req.body; const r = await verifySignedRequest(serverWallet, proof, { action: 'echo', body }, consumeNonce); if (!r.valid) { res.status(401).json({ error: 'invalid proof' }); return }; res.json({ valid: true, identityKey: r.identityKey }) })"
     )
   },
   npmDependencies: () => ({

@@ -9,29 +9,28 @@
  * the `protocol` field. Message transport, request/response flows, and HMAC
  * proofs reuse the same machinery PeerPayClient uses for satoshi payments.
  */
+import { createNonce } from '@bsv/sdk/auth/utils/createNonce'
+import { PublicKey } from '@bsv/sdk/primitives'
+import { normalizeBRC100ByteArray, stringifyBRC100 } from '@bsv/sdk/wallet/BRC100ByteEncoding'
+import type {
+  OriginatorDomainNameStringUnder250Bytes,
+  WalletInterface
+} from '@bsv/sdk/wallet/Wallet.interfaces'
+import { validateBase64String } from '@bsv/sdk/wallet/validationHelpers'
 import { MessageBoxClient } from './MessageBoxClient.js'
-import {
-  PeerMessage,
-  TokenToken,
+import type {
+  TokenAdapterContext,
+  TokenSettlementAdapter,
+  TokenSourceRef
+} from './TokenSettlementAdapter.js'
+import type {
   IncomingToken,
+  IncomingTokenRequest,
+  PeerMessage,
   TokenRequestMessage,
   TokenRequestResponse,
-  IncomingTokenRequest
+  TokenToken
 } from './types.js'
-import {
-  TokenSettlementAdapter,
-  TokenSourceRef,
-  TokenAdapterContext
-} from './TokenSettlementAdapter.js'
-import {
-  WalletInterface,
-  OriginatorDomainNameStringUnder250Bytes,
-  createNonce,
-  normalizeBRC100ByteArray,
-  toBRC100PortableByteArray,
-  stringifyBRC100
-} from '@bsv/sdk'
-
 import * as Logger from './Utils/logger.js'
 
 function hexToBytes(hex: string): number[] {
@@ -44,8 +43,8 @@ function hexToBytes(hex: string): number[] {
 function safeParse<T>(input: unknown): T | undefined {
   try {
     return typeof input === 'string' ? (JSON.parse(input) as T) : (input as T)
-  } catch (parseError) {
-    Logger.error('[PT CLIENT] Failed to parse input in safeParse:', input, parseError)
+  } catch {
+    Logger.error('[PT CLIENT] Failed to parse an untrusted message body')
     return undefined
   }
 }
@@ -53,6 +52,237 @@ function safeParse<T>(input: unknown): T | undefined {
 export const STANDARD_TOKEN_MESSAGEBOX = 'token_inbox'
 export const TOKEN_REQUESTS_MESSAGEBOX = 'token_requests'
 export const TOKEN_REQUEST_RESPONSES_MESSAGEBOX = 'token_request_responses'
+const MAX_INCOMING_TOKENS = 1_000
+const MAX_INCOMING_TOKEN_PAGES = 10
+const MAX_TOKEN_TRANSACTION_BYTES = 64 * 1024 * 1024
+const MAX_TOKEN_TEXT_BYTES = 1_024
+const MAX_TOKEN_REQUEST_DESCRIPTION_BYTES = 2_000
+
+type PlainRecord = Record<string, unknown>
+
+function dataRecord(value: unknown): PlainRecord | undefined {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) return undefined
+  const result = Object.create(null) as PlainRecord
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (typeof key !== 'string' || descriptor == null || !('value' in descriptor)) return undefined
+    result[key] = descriptor.value
+  }
+  return result
+}
+
+function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some(character => {
+    const codePoint = character.codePointAt(0) ?? 0
+    return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)
+  })
+}
+
+function boundedTokenText(value: unknown, name: string, maximum = MAX_TOKEN_TEXT_BYTES): string {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    new TextEncoder().encode(value).byteLength > maximum ||
+    hasControlCharacters(value)
+  ) {
+    throw new TypeError(`Token ${name} is invalid`)
+  }
+  return value
+}
+
+function canonicalIdentityKey(value: unknown): string {
+  if (typeof value !== 'string' || !/^(?:02|03)[0-9a-f]{64}$/.test(value)) {
+    throw new TypeError('Token identity key is invalid')
+  }
+  try {
+    if (PublicKey.fromString(value).toString() !== value) {
+      throw new TypeError('Token identity key is invalid')
+    }
+  } catch {
+    throw new TypeError('Token identity key is invalid')
+  }
+  return value
+}
+
+function canonicalTokenAmount(value: unknown): string {
+  if (typeof value !== 'string' || !/^[1-9]\d{0,77}$/.test(value)) {
+    throw new TypeError('Token amount must be a positive canonical integer')
+  }
+  return value
+}
+
+function normalizeTokenToken(value: unknown): TokenToken {
+  const token = dataRecord(value)
+  const customInstructions = dataRecord(token?.customInstructions)
+  if (token == null || customInstructions == null) {
+    throw new TypeError('Token settlement is invalid')
+  }
+  const transaction = normalizeBRC100ByteArray(token.transaction)
+  if (
+    transaction == null ||
+    transaction.length === 0 ||
+    transaction.length > MAX_TOKEN_TRANSACTION_BYTES
+  ) {
+    throw new TypeError('Token settlement transaction is invalid')
+  }
+  const outputIndex = token.outputIndex ?? 0
+  if (
+    typeof outputIndex !== 'number' ||
+    !Number.isSafeInteger(outputIndex) ||
+    outputIndex < 0 ||
+    outputIndex > 0xffffffff
+  ) {
+    throw new TypeError('Token settlement output index is invalid')
+  }
+  const txid = token.txid == null ? undefined : boundedTokenText(token.txid, 'transaction ID', 128)
+  return {
+    protocol: boundedTokenText(token.protocol, 'protocol', 128),
+    assetId: boundedTokenText(token.assetId, 'asset ID'),
+    amount: canonicalTokenAmount(token.amount),
+    customInstructions: {
+      derivationPrefix: validateBase64String(
+        customInstructions.derivationPrefix as string,
+        'derivationPrefix'
+      ),
+      derivationSuffix: validateBase64String(
+        customInstructions.derivationSuffix as string,
+        'derivationSuffix'
+      )
+    },
+    transaction: Array.from(transaction),
+    outputIndex,
+    ...(txid == null ? {} : { txid })
+  }
+}
+
+function normalizeIncomingToken(value: unknown): IncomingToken {
+  const incoming = dataRecord(value)
+  if (incoming == null) throw new TypeError('Incoming token is invalid')
+  return {
+    messageId: boundedTokenText(incoming.messageId, 'message ID'),
+    sender: canonicalIdentityKey(incoming.sender),
+    token: normalizeTokenToken(incoming.token)
+  }
+}
+
+function tokenFromMessage(value: unknown): IncomingToken | null {
+  const message = dataRecord(value)
+  if (message == null) return null
+  let body: unknown = message.body
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body) as unknown
+    } catch {
+      return null
+    }
+  }
+  const token = dataRecord(body)
+  if (token == null || (token.sender != null && token.sender !== message.sender)) return null
+  try {
+    return normalizeIncomingToken({
+      messageId: boundedTokenText(message.messageId, 'message ID'),
+      sender: canonicalIdentityKey(message.sender),
+      token: normalizeTokenToken(token)
+    })
+  } catch {
+    return null
+  }
+}
+
+function normalizeSendTokenParams(value: unknown): SendTokenParams {
+  const transfer = dataRecord(value)
+  const source = dataRecord(transfer?.source)
+  if (transfer == null || source == null) {
+    throw new TypeError('Invalid token transfer')
+  }
+  if (Object.keys(source).length > 64) {
+    throw new TypeError('Token source contains too many fields')
+  }
+  const recipient = canonicalIdentityKey(transfer.recipient)
+  const protocol = boundedTokenText(transfer.protocol, 'protocol', 128)
+  const assetId = boundedTokenText(source.assetId, 'asset ID')
+  const sourceProtocol = boundedTokenText(source.protocol, 'source protocol', 128)
+  if (sourceProtocol !== protocol) throw new TypeError('Token source protocol does not match')
+  const amount = canonicalTokenAmount(transfer.amount)
+  return {
+    recipient,
+    protocol,
+    source: { ...source, protocol: sourceProtocol, assetId } as TokenSourceRef,
+    amount
+  }
+}
+
+type AuthenticatedTokenRequest = IncomingTokenRequest & { requestProof: string }
+
+function tokenRequestFromMessage(value: unknown): AuthenticatedTokenRequest | null {
+  const message = dataRecord(value)
+  if (message == null) return null
+  let body: unknown = message.body
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body) as unknown
+    } catch {
+      return null
+    }
+  }
+  const request = dataRecord(body)
+  if (request == null || request.cancelled === true) return null
+  try {
+    const sender = canonicalIdentityKey(message.sender)
+    if (request.senderIdentityKey !== sender) return null
+    const expiresAt = request.expiresAt
+    if (typeof expiresAt !== 'number' || !Number.isSafeInteger(expiresAt) || expiresAt <= 0) {
+      return null
+    }
+    const requestProof = request.requestProof
+    if (typeof requestProof !== 'string' || !/^[0-9a-f]{64}$/.test(requestProof)) return null
+    return {
+      messageId: boundedTokenText(message.messageId, 'request message ID'),
+      sender,
+      requestId: boundedTokenText(request.requestId, 'request ID'),
+      protocol: boundedTokenText(request.protocol, 'request protocol', 128),
+      assetId: boundedTokenText(request.assetId, 'request asset ID'),
+      amount: canonicalTokenAmount(request.amount),
+      description: boundedTokenText(
+        request.description,
+        'request description',
+        MAX_TOKEN_REQUEST_DESCRIPTION_BYTES
+      ),
+      expiresAt,
+      requestProof
+    }
+  } catch {
+    return null
+  }
+}
+
+function normalizeTokenRequestResponse(value: unknown): TokenRequestResponse | null {
+  const response = dataRecord(value)
+  if (response == null) return null
+  try {
+    const requestId = boundedTokenText(response.requestId, 'response request ID')
+    if (response.status !== 'sent' && response.status !== 'declined') return null
+    const note =
+      response.note == null
+        ? undefined
+        : boundedTokenText(response.note, 'response note', MAX_TOKEN_REQUEST_DESCRIPTION_BYTES)
+    if (response.status === 'declined') {
+      return { requestId, status: 'declined', ...(note == null ? {} : { note }) }
+    }
+    return {
+      requestId,
+      status: 'sent',
+      protocol: boundedTokenText(response.protocol, 'response protocol', 128),
+      assetId: boundedTokenText(response.assetId, 'response asset ID'),
+      amountSent: canonicalTokenAmount(response.amountSent),
+      ...(note == null ? {} : { note })
+    }
+  } catch {
+    return null
+  }
+}
 
 export interface PeerTokenClientConfig {
   messageBoxHost?: string
@@ -79,6 +309,7 @@ export class PeerTokenClient extends MessageBoxClient {
   private readonly peerTokenWalletClient: WalletInterface
   private readonly messageBox: string
   private readonly adapters: Map<string, TokenSettlementAdapter>
+  private readonly activeTokenRequestMutations = new Set<string>()
   /**
    * The configured MessageBox host, threaded explicitly through every token
    * transport call. On mainnet the `ls_messagebox` overlay (SLAP) has no
@@ -100,7 +331,21 @@ export class PeerTokenClient extends MessageBoxClient {
     this.tokenHost = messageBoxHost
     this.peerTokenWalletClient = walletClient
     this.originator = originator
-    this.adapters = new Map(config.adapters.map(a => [a.protocol, a]))
+    if (!Array.isArray(config.adapters) || config.adapters.length > 64) {
+      throw new TypeError('Token adapters must be a bounded array')
+    }
+    this.adapters = new Map()
+    for (const adapter of config.adapters) {
+      const protocol = boundedTokenText(adapter?.protocol, 'adapter protocol', 128)
+      if (
+        this.adapters.has(protocol) ||
+        typeof adapter.buildTokenSettlement !== 'function' ||
+        typeof adapter.acceptTokenSettlement !== 'function'
+      ) {
+        throw new TypeError('Token adapter configuration is invalid')
+      }
+      this.adapters.set(protocol, adapter)
+    }
   }
 
   private adapterFor(protocol: string): TokenSettlementAdapter {
@@ -126,39 +371,37 @@ export class PeerTokenClient extends MessageBoxClient {
    * validates only — no signing, no broadcast (mainnet rehearsal).
    */
   async createTokenToken(params: SendTokenParams, dryRun = false): Promise<TokenToken> {
-    const adapter = this.adapterFor(params.protocol)
-    const result = await adapter.buildTokenSettlement(
-      { recipient: params.recipient, source: params.source, amount: params.amount },
-      this.adapterContext(dryRun)
+    if (typeof dryRun !== 'boolean') throw new TypeError('dryRun must be a boolean')
+    const normalizedParams = normalizeSendTokenParams(params)
+    const adapter = this.adapterFor(normalizedParams.protocol)
+    const result = dataRecord(
+      await adapter.buildTokenSettlement(normalizedParams, this.adapterContext(dryRun))
     )
-    if (result.action === 'terminate') {
-      throw new Error(result.termination.message)
+    if (result?.action !== 'settle') {
+      const termination = dataRecord(result?.termination)
+      if (result?.action === 'terminate' && termination != null) {
+        throw new Error(boundedTokenText(termination.message, 'termination message', 2_000))
+      }
+      throw new Error('Token settlement adapter did not produce a settlement')
     }
-    const { artifact } = result
-    const transaction = toBRC100PortableByteArray(artifact.transaction)
-    if (transaction == null || transaction.length === 0) {
-      throw new Error('Token settlement transaction must be a non-empty BRC-100 byte array')
+    const artifact = normalizeTokenToken(result.artifact)
+    if (
+      artifact.protocol !== normalizedParams.protocol ||
+      artifact.assetId !== normalizedParams.source.assetId ||
+      artifact.amount !== normalizedParams.amount
+    ) {
+      throw new Error('Token settlement adapter changed the requested token authority')
     }
-    return {
-      protocol: artifact.protocol,
-      assetId: artifact.assetId,
-      amount: artifact.amount,
-      customInstructions: artifact.customInstructions,
-      transaction,
-      outputIndex: artifact.outputIndex,
-      txid: artifact.txid
-    }
+    return artifact
   }
 
   /** Sends a token to a recipient over HTTP. Returns the sent token (incl. txid). */
   async sendToken(params: SendTokenParams, hostOverride?: string): Promise<TokenToken> {
-    if (params.recipient == null || params.recipient.trim() === '') {
-      throw new Error('Invalid token transfer: recipient is required')
-    }
-    const token = await this.createTokenToken(params)
+    const normalizedParams = normalizeSendTokenParams(params)
+    const token = await this.createTokenToken(normalizedParams)
     await this.sendMessage(
       {
-        recipient: params.recipient,
+        recipient: normalizedParams.recipient,
         messageBox: this.messageBox,
         body: stringifyBRC100(token)
       },
@@ -169,22 +412,23 @@ export class PeerTokenClient extends MessageBoxClient {
 
   /** Sends a token over WebSocket, falling back to HTTP if the socket fails. Returns the sent token. */
   async sendLiveToken(params: SendTokenParams, overrideHost?: string): Promise<TokenToken> {
-    const token = await this.createTokenToken(params)
+    const normalizedParams = normalizeSendTokenParams(params)
+    const token = await this.createTokenToken(normalizedParams)
     const host = overrideHost ?? this.tokenHost
     try {
       await this.sendLiveMessage(
         {
-          recipient: params.recipient,
+          recipient: normalizedParams.recipient,
           messageBox: this.messageBox,
           body: stringifyBRC100(token)
         },
         host
       )
-    } catch (err) {
-      Logger.warn('[PT CLIENT] sendLiveMessage failed, falling back to HTTP:', err)
+    } catch {
+      Logger.warn('[PT CLIENT] Live send failed; falling back to HTTP')
       await this.sendMessage(
         {
-          recipient: params.recipient,
+          recipient: normalizedParams.recipient,
           messageBox: this.messageBox,
           body: stringifyBRC100(token)
         },
@@ -206,9 +450,9 @@ export class PeerTokenClient extends MessageBoxClient {
       messageBox: this.messageBox,
       overrideHost: overrideHost ?? this.tokenHost,
       onMessage: (message: PeerMessage) => {
-        const token = safeParse<TokenToken>(message.body)
-        if (token == null) return
-        onToken({ messageId: message.messageId, sender: message.sender, token })
+        const incoming = tokenFromMessage(message)
+        if (incoming == null) return
+        onToken(incoming)
       }
     })
   }
@@ -218,35 +462,64 @@ export class PeerTokenClient extends MessageBoxClient {
    * then acknowledges the transport message.
    */
   async acceptToken(incoming: IncomingToken): Promise<any> {
-    try {
-      const adapter = this.adapterFor(incoming.token.protocol)
-      const transaction = normalizeBRC100ByteArray(incoming.token.transaction)
-      if (transaction == null || transaction.length === 0) {
-        throw new Error('Token settlement transaction must be a non-empty BRC-100 byte array')
-      }
-      const result = await adapter.acceptTokenSettlement(
-        {
-          sender: incoming.sender,
-          settlement: {
-            customInstructions: incoming.token.customInstructions,
-            transaction,
-            protocol: incoming.token.protocol,
-            assetId: incoming.token.assetId,
-            amount: incoming.token.amount,
-            outputIndex: incoming.token.outputIndex ?? 0
-          }
-        },
-        this.adapterContext()
+    const messageId = boundedTokenText(incoming?.messageId, 'message ID')
+    return await this.withTokenMutation(messageId, async () => {
+      const fresh = await this.resolveFreshIncomingToken(messageId)
+      const adapter = this.adapterFor(fresh.token.protocol)
+      const result = dataRecord(
+        await adapter.acceptTokenSettlement(
+          {
+            sender: fresh.sender,
+            settlement: {
+              customInstructions: { ...fresh.token.customInstructions },
+              transaction: Array.from(fresh.token.transaction),
+              protocol: fresh.token.protocol,
+              assetId: fresh.token.assetId,
+              amount: fresh.token.amount,
+              outputIndex: fresh.token.outputIndex ?? 0,
+              ...(fresh.token.txid == null ? {} : { txid: fresh.token.txid })
+            }
+          },
+          this.adapterContext()
+        )
       )
-      if (result.action === 'terminate') {
-        throw new Error(result.termination.message)
+      if (result?.action !== 'accept') {
+        const termination = dataRecord(result?.termination)
+        if (result?.action === 'terminate' && termination != null) {
+          throw new Error(boundedTokenText(termination.message, 'termination message', 2_000))
+        }
+        throw new Error('Token settlement adapter did not accept the token')
       }
-      await this.acknowledgeMessage({ messageIds: [incoming.messageId], host: this.tokenHost })
-      return { incoming, receiptData: result.receiptData }
-    } catch (error) {
-      Logger.error(`[PT CLIENT] Error accepting token: ${String(error)}`)
-      return 'Unable to receive token!'
+      try {
+        await this.acknowledgeMessage({ messageIds: [fresh.messageId], host: this.tokenHost })
+      } catch {
+        Logger.warn('[PT CLIENT] Token was accepted but acknowledgement failed')
+      }
+      return { incoming: fresh, receiptData: result.receiptData }
+    })
+  }
+
+  private async withTokenMutation<T>(messageId: string, operation: () => Promise<T>): Promise<T> {
+    if (this.activeTokenRequestMutations.has(messageId)) {
+      throw new Error('Token message is already being processed by this client')
     }
+    this.activeTokenRequestMutations.add(messageId)
+    try {
+      return await operation()
+    } finally {
+      this.activeTokenRequestMutations.delete(messageId)
+    }
+  }
+
+  private async resolveFreshIncomingToken(messageId: unknown): Promise<IncomingToken> {
+    const requestedMessageId = boundedTokenText(messageId, 'message ID')
+    const matches = (await this.listIncomingTokens()).filter(
+      candidate => candidate.messageId === requestedMessageId
+    )
+    if (matches.length !== 1) {
+      throw new Error('Incoming token is not present exactly once in the authenticated inbox')
+    }
+    return normalizeIncomingToken(matches[0])
   }
 
   /** Lists pending incoming tokens from the token message box. */
@@ -255,15 +528,18 @@ export class PeerTokenClient extends MessageBoxClient {
     // resolution, which has no advertised ls_messagebox hosts on mainnet.
     const messages = await this.listMessagesLite({
       messageBox: this.messageBox,
-      host: overrideHost ?? this.tokenHost
+      host: overrideHost ?? this.tokenHost,
+      limit: MAX_INCOMING_TOKENS,
+      pageSize: 100,
+      maxPages: MAX_INCOMING_TOKEN_PAGES
     })
-    return messages
-      .map((msg: any) => {
-        const token = safeParse<TokenToken>(msg.body)
-        if (token == null) return null
-        return { messageId: msg.messageId, sender: msg.sender, token }
-      })
-      .filter((t): t is IncomingToken => t != null)
+    if (!Array.isArray(messages) || messages.length > MAX_INCOMING_TOKENS) {
+      throw new Error('Incoming token collection exceeds the configured limit')
+    }
+    return messages.flatMap(message => {
+      const token = tokenFromMessage(message)
+      return token == null ? [] : [token]
+    })
   }
 
   // ── Token request flow (mirrors PeerPayClient's payment requests) ──────────
@@ -283,44 +559,68 @@ export class PeerTokenClient extends MessageBoxClient {
     },
     hostOverride?: string
   ): Promise<{ requestId: string; requestProof: string }> {
+    const request = dataRecord(params)
+    if (request == null) throw new TypeError('Token request is invalid')
+    const recipient = canonicalIdentityKey(request.recipient)
+    const protocol = boundedTokenText(request.protocol, 'request protocol', 128)
+    const assetId = boundedTokenText(request.assetId, 'request asset ID')
+    const amount = canonicalTokenAmount(request.amount)
+    const description = boundedTokenText(
+      request.description,
+      'request description',
+      MAX_TOKEN_REQUEST_DESCRIPTION_BYTES
+    )
+    if (
+      typeof request.expiresAt !== 'number' ||
+      !Number.isSafeInteger(request.expiresAt) ||
+      request.expiresAt <= Date.now()
+    ) {
+      throw new TypeError('Token request expiry must be a future safe-integer timestamp')
+    }
     const requestId = await createNonce(this.peerTokenWalletClient, 'self', this.originator)
-    const senderIdentityKey = await this.getIdentityKey()
+    const normalizedRequestId = boundedTokenText(requestId, 'request ID')
+    const senderIdentityKey = canonicalIdentityKey(await this.getIdentityKey())
 
-    const proofData = Array.from(new TextEncoder().encode(requestId + params.recipient))
+    const proofData = Array.from(new TextEncoder().encode(normalizedRequestId + recipient))
     const { hmac } = await this.peerTokenWalletClient.createHmac(
       {
         data: proofData,
         protocolID: [2, 'token request auth'],
-        keyID: requestId,
-        counterparty: params.recipient
+        keyID: normalizedRequestId,
+        counterparty: recipient
       },
       this.originator
     )
-    const requestProof = Array.from(hmac)
-      .map((b: number) => b.toString(16).padStart(2, '0'))
-      .join('')
+    if (
+      !Array.isArray(hmac) ||
+      hmac.length !== 32 ||
+      !hmac.every(byte => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+    ) {
+      throw new Error('Wallet returned an invalid token request proof')
+    }
+    const requestProof = hmac.map((b: number) => b.toString(16).padStart(2, '0')).join('')
 
     const body: TokenRequestMessage = {
-      requestId,
-      protocol: params.protocol,
-      assetId: params.assetId,
-      amount: params.amount,
-      description: params.description,
-      expiresAt: params.expiresAt,
+      requestId: normalizedRequestId,
+      protocol,
+      assetId,
+      amount,
+      description,
+      expiresAt: request.expiresAt,
       senderIdentityKey,
       requestProof
     }
 
     await this.sendMessage(
       {
-        recipient: params.recipient,
+        recipient,
         messageBox: TOKEN_REQUESTS_MESSAGEBOX,
         body: stringifyBRC100(body)
       },
       hostOverride ?? this.tokenHost
     )
 
-    return { requestId, requestProof }
+    return { requestId: normalizedRequestId, requestProof }
   }
 
   /** Listens for incoming token requests in real time over WebSocket. */
@@ -333,21 +633,65 @@ export class PeerTokenClient extends MessageBoxClient {
   }): Promise<void> {
     await this.listenForLiveMessages({
       messageBox: TOKEN_REQUESTS_MESSAGEBOX,
-      overrideHost,
+      overrideHost: overrideHost ?? this.tokenHost,
       onMessage: (message: PeerMessage) => {
-        const body = safeParse<TokenRequestMessage>(message.body)
-        if (body == null || body.cancelled === true) return
-        onRequest({
-          messageId: message.messageId,
-          sender: message.sender,
-          requestId: body.requestId,
-          protocol: body.protocol,
-          assetId: body.assetId,
-          amount: body.amount,
-          description: body.description,
-          expiresAt: body.expiresAt
+        const request = tokenRequestFromMessage(message)
+        if (request == null || request.expiresAt <= Date.now()) return
+        return this.verifyTokenRequestProof(request).then(valid => {
+          if (valid) onRequest(request)
         })
       }
+    })
+  }
+
+  /** Lists bounded, authenticated, unexpired token requests. */
+  async listIncomingTokenRequests(overrideHost?: string): Promise<IncomingTokenRequest[]> {
+    const messages = await this.listMessagesLite({
+      messageBox: TOKEN_REQUESTS_MESSAGEBOX,
+      host: overrideHost ?? this.tokenHost,
+      limit: MAX_INCOMING_TOKENS,
+      pageSize: 100,
+      maxPages: MAX_INCOMING_TOKEN_PAGES
+    })
+    if (!Array.isArray(messages) || messages.length > MAX_INCOMING_TOKENS) {
+      throw new Error('Incoming token request collection exceeds the configured limit')
+    }
+    const requests: AuthenticatedTokenRequest[] = []
+    for (const message of messages) {
+      const request = tokenRequestFromMessage(message)
+      if (
+        request != null &&
+        request.expiresAt > Date.now() &&
+        (await this.verifyTokenRequestProof(request))
+      ) {
+        requests.push(request)
+      }
+    }
+    return requests
+  }
+
+  private async resolveFreshTokenRequest(
+    messageId: unknown,
+    hostOverride?: string
+  ): Promise<AuthenticatedTokenRequest> {
+    const requestedMessageId = boundedTokenText(messageId, 'request message ID')
+    const matches = (await this.listIncomingTokenRequests(hostOverride)).filter(
+      request => request.messageId === requestedMessageId
+    ) as AuthenticatedTokenRequest[]
+    if (matches.length !== 1) {
+      throw new Error('Token request is not present exactly once in the authenticated inbox')
+    }
+    return matches[0]
+  }
+
+  private async withFreshTokenRequest(
+    messageId: unknown,
+    hostOverride: string | undefined,
+    operation: (request: AuthenticatedTokenRequest) => Promise<void>
+  ): Promise<void> {
+    const requestedMessageId = boundedTokenText(messageId, 'request message ID')
+    await this.withTokenMutation(requestedMessageId, async () => {
+      await operation(await this.resolveFreshTokenRequest(requestedMessageId, hostOverride))
     })
   }
 
@@ -359,39 +703,60 @@ export class PeerTokenClient extends MessageBoxClient {
     params: { request: IncomingTokenRequest; source: TokenSourceRef; note?: string },
     hostOverride?: string
   ): Promise<void> {
-    const { request, source, note } = params
-
-    await this.sendToken(
-      {
-        recipient: request.sender,
-        protocol: request.protocol,
-        source,
-        amount: request.amount
-      },
-      hostOverride ?? this.tokenHost
-    )
-
-    const response: TokenRequestResponse = {
-      requestId: request.requestId,
-      status: 'sent',
-      protocol: request.protocol,
-      assetId: request.assetId,
-      amountSent: request.amount,
-      ...(note != null && { note })
+    const fulfillment = dataRecord(params)
+    const request = dataRecord(fulfillment?.request)
+    const source = dataRecord(fulfillment?.source)
+    if (fulfillment == null || request == null || source == null) {
+      throw new TypeError('Token request fulfillment is invalid')
     }
+    const normalizedNote =
+      fulfillment.note == null
+        ? undefined
+        : boundedTokenText(fulfillment.note, 'response note', MAX_TOKEN_REQUEST_DESCRIPTION_BYTES)
+    await this.withFreshTokenRequest(request.messageId, hostOverride, async fresh => {
+      if (
+        boundedTokenText(source.protocol, 'source protocol', 128) !== fresh.protocol ||
+        boundedTokenText(source.assetId, 'source asset ID') !== fresh.assetId
+      ) {
+        throw new Error('Token source does not satisfy the authenticated request')
+      }
 
-    await this.sendMessage(
-      {
-        recipient: request.sender,
-        messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-        body: stringifyBRC100(response)
-      },
-      hostOverride ?? this.tokenHost
-    )
+      await this.sendToken(
+        {
+          recipient: fresh.sender,
+          protocol: fresh.protocol,
+          source: source as TokenSourceRef,
+          amount: fresh.amount
+        },
+        hostOverride ?? this.tokenHost
+      )
 
-    await this.acknowledgeMessage({
-      messageIds: [request.messageId],
-      host: hostOverride ?? this.tokenHost
+      const response: TokenRequestResponse = {
+        requestId: fresh.requestId,
+        status: 'sent',
+        protocol: fresh.protocol,
+        assetId: fresh.assetId,
+        amountSent: fresh.amount,
+        ...(normalizedNote != null && { note: normalizedNote })
+      }
+
+      await this.sendMessage(
+        {
+          recipient: fresh.sender,
+          messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
+          body: stringifyBRC100(response)
+        },
+        hostOverride ?? this.tokenHost
+      )
+
+      try {
+        await this.acknowledgeMessage({
+          messageIds: [fresh.messageId],
+          host: hostOverride ?? this.tokenHost
+        })
+      } catch {
+        Logger.warn('[PT CLIENT] Token request was fulfilled but acknowledgement failed')
+      }
     })
   }
 
@@ -400,23 +765,37 @@ export class PeerTokenClient extends MessageBoxClient {
     params: { request: IncomingTokenRequest; note?: string },
     hostOverride?: string
   ): Promise<void> {
-    const { request, note } = params
-    const response: TokenRequestResponse = {
-      requestId: request.requestId,
-      status: 'declined',
-      ...(note != null && { note })
+    const decline = dataRecord(params)
+    const request = dataRecord(decline?.request)
+    if (decline == null || request == null) {
+      throw new TypeError('Token request decline is invalid')
     }
-    await this.sendMessage(
-      {
-        recipient: request.sender,
-        messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-        body: stringifyBRC100(response)
-      },
-      hostOverride ?? this.tokenHost
-    )
-    await this.acknowledgeMessage({
-      messageIds: [request.messageId],
-      host: hostOverride ?? this.tokenHost
+    const normalizedNote =
+      decline.note == null
+        ? undefined
+        : boundedTokenText(decline.note, 'response note', MAX_TOKEN_REQUEST_DESCRIPTION_BYTES)
+    await this.withFreshTokenRequest(request.messageId, hostOverride, async fresh => {
+      const response: TokenRequestResponse = {
+        requestId: fresh.requestId,
+        status: 'declined',
+        ...(normalizedNote != null && { note: normalizedNote })
+      }
+      await this.sendMessage(
+        {
+          recipient: fresh.sender,
+          messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
+          body: stringifyBRC100(response)
+        },
+        hostOverride ?? this.tokenHost
+      )
+      try {
+        await this.acknowledgeMessage({
+          messageIds: [fresh.messageId],
+          host: hostOverride ?? this.tokenHost
+        })
+      } catch {
+        Logger.warn('[PT CLIENT] Token request was declined but acknowledgement failed')
+      }
     })
   }
 
@@ -425,16 +804,26 @@ export class PeerTokenClient extends MessageBoxClient {
     params: { recipient: string; requestId: string; requestProof: string },
     hostOverride?: string
   ): Promise<void> {
-    const senderIdentityKey = await this.getIdentityKey()
+    const cancellation = dataRecord(params)
+    if (cancellation == null) throw new TypeError('Token cancellation is invalid')
+    const recipient = canonicalIdentityKey(cancellation.recipient)
+    const requestId = boundedTokenText(cancellation.requestId, 'request ID')
+    if (
+      typeof cancellation.requestProof !== 'string' ||
+      !/^[0-9a-f]{64}$/.test(cancellation.requestProof)
+    ) {
+      throw new TypeError('Token request proof is invalid')
+    }
+    const senderIdentityKey = canonicalIdentityKey(await this.getIdentityKey())
     const body: TokenRequestMessage = {
-      requestId: params.requestId,
+      requestId,
       senderIdentityKey,
-      requestProof: params.requestProof,
+      requestProof: cancellation.requestProof,
       cancelled: true
     }
     await this.sendMessage(
       {
-        recipient: params.recipient,
+        recipient,
         messageBox: TOKEN_REQUESTS_MESSAGEBOX,
         body: stringifyBRC100(body)
       },
@@ -446,11 +835,18 @@ export class PeerTokenClient extends MessageBoxClient {
   async listTokenRequestResponses(hostOverride?: string): Promise<TokenRequestResponse[]> {
     const messages = await this.listMessagesLite({
       messageBox: TOKEN_REQUEST_RESPONSES_MESSAGEBOX,
-      host: hostOverride ?? this.tokenHost
+      host: hostOverride ?? this.tokenHost,
+      limit: MAX_INCOMING_TOKENS,
+      pageSize: 100,
+      maxPages: MAX_INCOMING_TOKEN_PAGES
     })
-    return messages
-      .map((msg: any) => safeParse<TokenRequestResponse>(msg.body))
-      .filter((r): r is TokenRequestResponse => r != null)
+    if (!Array.isArray(messages) || messages.length > MAX_INCOMING_TOKENS) {
+      throw new Error('Token request response collection exceeds the configured limit')
+    }
+    return messages.flatMap(message => {
+      const response = normalizeTokenRequestResponse(safeParse(message.body))
+      return response == null ? [] : [response]
+    })
   }
 
   /**
@@ -462,20 +858,32 @@ export class PeerTokenClient extends MessageBoxClient {
     sender: string
     requestProof: string
   }): Promise<boolean> {
-    const myIdentityKey = await this.getIdentityKey()
     try {
-      const proofData = Array.from(new TextEncoder().encode(request.requestId + myIdentityKey))
-      await this.peerTokenWalletClient.verifyHmac(
-        {
-          data: proofData,
-          hmac: hexToBytes(request.requestProof),
-          protocolID: [2, 'token request auth'],
-          keyID: request.requestId,
-          counterparty: request.sender
-        },
-        this.originator
+      const normalizedRequest = dataRecord(request)
+      if (normalizedRequest == null) return false
+      const requestId = boundedTokenText(normalizedRequest.requestId, 'request ID')
+      const sender = canonicalIdentityKey(normalizedRequest.sender)
+      if (
+        typeof normalizedRequest.requestProof !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(normalizedRequest.requestProof)
+      ) {
+        return false
+      }
+      const myIdentityKey = canonicalIdentityKey(await this.getIdentityKey())
+      const proofData = Array.from(new TextEncoder().encode(requestId + myIdentityKey))
+      const result = dataRecord(
+        await this.peerTokenWalletClient.verifyHmac(
+          {
+            data: proofData,
+            hmac: hexToBytes(normalizedRequest.requestProof),
+            protocolID: [2, 'token request auth'],
+            keyID: requestId,
+            counterparty: sender
+          },
+          this.originator
+        )
       )
-      return true
+      return result?.valid === true
     } catch {
       return false
     }

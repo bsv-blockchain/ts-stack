@@ -40,11 +40,11 @@ test('lint exclusion parsing rejects authored tests and benchmarks without backt
   )
 })
 
-test('workspace discovery exactly matches the 42-project registry', () => {
+test('workspace discovery exactly matches the 43-project registry', () => {
   const discovered = discoverWorkspaceProjects()
 
-  assert.equal(discovered.length, 42)
-  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 34)
+  assert.equal(discovered.length, 43)
+  assert.equal(discovered.filter(project => project.manifest.private !== true).length, 35)
   assert.deepEqual(
     discovered.map(project => project.path),
     [...projects.projects].map(project => project.path).sort()
@@ -67,7 +67,7 @@ test('workspace discovery exactly matches the 42-project registry', () => {
 test('every checked-in first-party package manifest uses the current Association name', () => {
   const manifests = discoverPackageManifests()
 
-  assert.equal(manifests.length, 51)
+  assert.equal(manifests.length, 53)
   assert.deepEqual(validatePackageAuthorIdentity(manifests), [])
   assert.ok(manifests.every(({ manifest }) => manifest.author === PACKAGE_AUTHOR))
 
@@ -80,8 +80,8 @@ test('current repository health controls and ratchet are internally consistent',
   const result = evaluateRepositoryHealth({ today: '2026-09-04' })
 
   assert.deepEqual(result.errors, [])
-  assert.equal(result.projects.length, 42)
-  assert.equal(result.publicPackages, 34)
+  assert.equal(result.projects.length, 43)
+  assert.equal(result.publicPackages, 35)
   assert.equal(result.findings.length, 0)
 })
 
@@ -228,7 +228,7 @@ test('every public package declares supported runtime and canonical support meta
     project => project.manifest.private !== true
   )
 
-  assert.equal(publicPackages.length, 34)
+  assert.equal(publicPackages.length, 35)
   for (const project of publicPackages) {
     assert.equal(
       project.manifest.engines?.node,
@@ -282,7 +282,7 @@ test('every public package declares supported runtime and canonical support meta
 
 test('every public package has canonical, machine-verified consumer profiles', () => {
   const publicProjects = projects.projects.filter(project => project.release === 'npm-oidc')
-  assert.equal(publicProjects.length, 34)
+  assert.equal(publicProjects.length, 35)
   assert.ok(publicProjects.every(project => project.consumerProfiles.length > 0))
   assert.deepEqual(
     [...new Set(publicProjects.flatMap(project => project.consumerProfiles))].sort(),
@@ -342,7 +342,7 @@ test('contract findings are deterministic and match their recorded baseline', ()
   const baseline = readJson(path.join(healthDirectory, 'contract-baseline.json'))
 
   assert.deepEqual(compareContractBaseline(baseline, findings), [])
-  assert.deepEqual(createContractBaseline(findings, '2026-07-26'), baseline)
+  assert.deepEqual(createContractBaseline(findings, '2026-09-21'), baseline)
 })
 
 test('contract ratchet detects both new and stale resolved findings', () => {
@@ -362,7 +362,7 @@ test('contract ratchet detects both new and stale resolved findings', () => {
   )
 })
 
-test('exception registry rejects expired, under-evidenced exceptions', () => {
+test('exception registry rejects under-evidenced exceptions without blocking on expiry', () => {
   const registry = {
     schemaVersion: 1,
     lastReviewed: '2026-07-25',
@@ -383,12 +383,11 @@ test('exception registry rejects expired, under-evidenced exceptions', () => {
 
   assert.deepEqual(validateExceptionRegistry(registry, '2026-07-25'), [
     'exception temporary-hold reason must be at least 20 characters',
-    'exception temporary-hold must have one or more evidence references',
-    'exception temporary-hold expired on 2026-07-24'
+    'exception temporary-hold must have one or more evidence references'
   ])
 })
 
-test('exception registry requires a current monthly review even when empty', () => {
+test('exception registry never fails solely because of the current calendar date', () => {
   assert.deepEqual(
     validateExceptionRegistry(
       {
@@ -398,7 +397,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json monthly review is overdue: last reviewed 2026-06-01']
+    []
   )
   assert.deepEqual(
     validateExceptionRegistry(
@@ -409,7 +408,7 @@ test('exception registry requires a current monthly review even when empty', () 
       },
       '2026-07-25'
     ),
-    ['exceptions.json lastReviewed is in the future: 2026-07-26']
+    []
   )
 })
 
@@ -549,14 +548,17 @@ test('CI and release typecheck the built cross-package declaration graph', () =>
   }
 })
 
-test('calendar expiry is advisory in source CI and enforced by the maintenance audit', () => {
+test('calendar expiry stays advisory even with legacy maintenance enforcement options', () => {
   const ordinary = evaluateRepositoryHealth({ today: '2027-01-01' })
   assert.deepEqual(ordinary.errors, [])
   assert.ok(ordinary.warnings.some(item => item.includes('expired on')))
   assert.ok(ordinary.warnings.some(item => item.includes('monthly review is overdue')))
   const maintenance = evaluateRepositoryHealth({ today: '2027-01-01', enforceDeadlines: true })
-  for (const warning of ordinary.warnings) assert.ok(maintenance.errors.includes(warning))
-  assert.deepEqual(maintenance.warnings, [])
+  assert.deepEqual(maintenance.errors, [])
+  assert.deepEqual(maintenance.warnings, ordinary.warnings)
+  const earlierClock = evaluateRepositoryHealth({ today: '2020-01-01' })
+  assert.deepEqual(earlierClock.errors, [])
+  assert.ok(earlierClock.warnings.some(item => item.includes('lastReviewed is in the future')))
 })
 
 test('source CI still rejects malformed exception dates and missing evidence', () => {

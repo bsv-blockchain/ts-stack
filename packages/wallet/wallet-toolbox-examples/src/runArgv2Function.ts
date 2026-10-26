@@ -28,5 +28,6 @@ export function runArgv2Function(
     .then(() => run())
     .catch(error => {
       console.error(error)
+      process.exitCode = 1
     })
 }

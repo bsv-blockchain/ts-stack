@@ -1,5 +1,10 @@
 import { encrypt, decrypt } from '../../messages/EncryptedMessage'
+import {
+  MAX_ENCRYPTED_MESSAGE_BYTES,
+  MAX_MESSAGE_PAYLOAD_BYTES
+} from '../../messages/MessageValidation'
 import PrivateKey from '../../primitives/PrivateKey'
+import PublicKey from '../../primitives/PublicKey'
 
 describe('EncryptedMessage', () => {
   it('Encrypts a message for a recipient', () => {
@@ -16,18 +21,16 @@ describe('EncryptedMessage', () => {
     {
       // Rare length case... Leading zeros in key BigNumber array.
       const encrypted = [
-        66, 66, 16, 51, 2, 215, 146, 77, 79, 125, 67, 234, 150, 90, 70, 90, 227,
-        9, 95, 244, 17, 49, 229, 148, 111, 60, 133, 247, 158, 68, 173, 188, 248,
-        226, 126, 8, 14, 2, 53, 43, 191, 74, 76, 221, 18, 86, 79, 147, 250, 51,
-        44, 227, 51, 48, 29, 154, 212, 2, 113, 248, 16, 113, 129, 52, 10, 239,
-        37, 190, 89, 213,
+        66, 66, 16, 51, 2, 215, 146, 77, 79, 125, 67, 234, 150, 90, 70, 90, 227, 9, 95, 244, 17, 49,
+        229, 148, 111, 60, 133, 247, 158, 68, 173, 188, 248, 226, 126, 8, 14, 2, 53, 43, 191, 74,
+        76, 221, 18, 86, 79, 147, 250, 51, 44, 227, 51, 48, 29, 154, 212, 2, 113, 248, 16, 113, 129,
+        52, 10, 239, 37, 190, 89, 213,
 
-        75, 148, 8, 235, 104, 137, 80, 129, 55, 68, 182, 141, 118, 212, 215,
-        121, 161, 107, 62, 247, 12, 172, 244, 170, 208, 37, 213, 198, 103, 118,
-        75, 166, 166, 131, 191, 105, 48, 232, 101, 223, 255, 169, 176, 204, 126,
-        249, 78, 178, 10, 51, 13, 163, 58, 232, 122, 111, 210, 218, 187, 247,
-        164, 101, 207, 15, 37, 227, 108, 82, 70, 35, 5, 148, 18, 162, 120, 64,
-        46, 40, 227, 197, 6, 112, 207, 200, 238, 81
+        75, 148, 8, 235, 104, 137, 80, 129, 55, 68, 182, 141, 118, 212, 215, 121, 161, 107, 62, 247,
+        12, 172, 244, 170, 208, 37, 213, 198, 103, 118, 75, 166, 166, 131, 191, 105, 48, 232, 101,
+        223, 255, 169, 176, 204, 126, 249, 78, 178, 10, 51, 13, 163, 58, 232, 122, 111, 210, 218,
+        187, 247, 164, 101, 207, 15, 37, 227, 108, 82, 70, 35, 5, 148, 18, 162, 120, 64, 46, 40,
+        227, 197, 6, 112, 207, 200, 238, 81
       ]
       expect(() => decrypt(encrypted, recipient)).not.toThrow()
     }
@@ -40,9 +43,7 @@ describe('EncryptedMessage', () => {
     const encrypted = encrypt(message, sender, recipientPub)
     encrypted[0] = 1
     expect(() => decrypt(encrypted, recipient)).toThrow(
-      new Error(
-        'Message version mismatch: Expected 42421033, received 01421033'
-      )
+      new Error('Message version mismatch: Expected 42421033, received 01421033')
     )
   })
   it('Fails to decrypt a message with wrong recipient', () => {
@@ -57,5 +58,45 @@ describe('EncryptedMessage', () => {
         'The encrypted message expects a recipient public key of 02352bbf4a4cdd12564f93fa332ce333301d9ad40271f8107181340aef25be59d5, but the provided key is 03421f5fc9a21065445c96fdb91c0c1e2f2431741c72713b4b99ddcb316f31e9fc'
       )
     )
+  })
+
+  it('rejects malformed or excessive plaintext and ciphertext byte arrays', () => {
+    const sender = new PrivateKey(15)
+    const recipient = new PrivateKey(21)
+    const sparse = [1, 2]
+    delete sparse[0]
+    const excessivePlaintext: number[] = []
+    excessivePlaintext.length = MAX_MESSAGE_PAYLOAD_BYTES + 1
+    const excessiveCiphertext: number[] = []
+    excessiveCiphertext.length = MAX_ENCRYPTED_MESSAGE_BYTES + 1
+
+    expect(() => encrypt(sparse, sender, recipient.toPublicKey())).toThrow(TypeError)
+    expect(() => encrypt([256], sender, recipient.toPublicKey())).toThrow(TypeError)
+    expect(() => encrypt(excessivePlaintext, sender, recipient.toPublicKey())).toThrow(RangeError)
+    expect(() =>
+      decrypt(
+        Array.from({ length: 149 }, () => 0),
+        recipient
+      )
+    ).toThrow(RangeError)
+    expect(() => decrypt(excessiveCiphertext, recipient)).toThrow(RangeError)
+  })
+
+  it('requires canonical key classes and ignores overridden key methods', () => {
+    const sender = new PrivateKey(15)
+    const recipient = new PrivateKey(21)
+    const recipientPublic = recipient.toPublicKey()
+    Reflect.set(sender, 'deriveChild', () => {
+      throw new Error('caller override invoked')
+    })
+    Reflect.set(recipientPublic, 'deriveChild', () => {
+      throw new Error('caller override invoked')
+    })
+
+    const encrypted = encrypt([1, 2, 3], sender, recipientPublic)
+    expect(decrypt(encrypted, recipient)).toEqual([1, 2, 3])
+    expect(() => encrypt([1], {} as PrivateKey, recipientPublic)).toThrow(TypeError)
+    expect(() => encrypt([1], new PrivateKey(0), recipientPublic)).toThrow(TypeError)
+    expect(() => encrypt([1], new PrivateKey(1), new PublicKey(1, 1))).toThrow(TypeError)
   })
 })

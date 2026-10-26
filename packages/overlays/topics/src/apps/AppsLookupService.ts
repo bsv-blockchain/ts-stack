@@ -1,8 +1,26 @@
+import { toUTF8 } from '@bsv/sdk/primitives/utils'
 import { AppsStorageManager } from './AppsStorageManager.js'
-import { AdmissionMode, LookupFormula, LookupQuestion, LookupService, OutputAdmittedByTopic, OutputSpent, SpendNotificationMode } from '@bsv/overlay'
-import { PushDrop, Utils } from '@bsv/sdk'
+import {
+  AdmissionMode,
+  LookupFormula,
+  LookupQuestion,
+  LookupService,
+  OutputAdmittedByTopic,
+  OutputSpent,
+  SpendNotificationMode
+} from '@bsv/overlay'
+import { PushDrop } from '@bsv/sdk'
 import { Db } from 'mongodb'
-import { AppCatalogQuery, PublishedAppMetadata } from './types.js'
+import { PublishedAppMetadata } from './types.js'
+import {
+  readInteger,
+  readSortOrder,
+  readString,
+  readStringArray,
+  requireLookupQuery,
+  requireOutpoint,
+  requirePublicKey
+} from '../shared/queryValidation.js'
 
 class AppsLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
@@ -11,17 +29,18 @@ class AppsLookupService implements LookupService {
   private static readonly TOPIC = 'tm_apps'
   private static readonly SERVICE_ID = 'ls_apps'
 
-  constructor (public storageManager: AppsStorageManager) { }
+  constructor(public storageManager: AppsStorageManager) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { txid, outputIndex, topic, lockingScript } = payload
     if (topic !== AppsLookupService.TOPIC) return
 
     const decoded = PushDrop.decode(lockingScript)
-    if (decoded.fields.length !== 2) throw new Error('App token must have exactly one metadata field + signature')
+    if (decoded.fields.length !== 2)
+      throw new Error('App token must have exactly one metadata field + signature')
 
-    const metadataJSON = Utils.toUTF8(decoded.fields[0])
+    const metadataJSON = toUTF8(decoded.fields[0])
     let metadata: PublishedAppMetadata
     try {
       metadata = JSON.parse(metadataJSON)
@@ -33,38 +52,64 @@ class AppsLookupService implements LookupService {
     await this.storageManager.storeRecord(txid, outputIndex, metadata)
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { topic, txid, outputIndex } = payload
     if (topic !== AppsLookupService.TOPIC) return
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storageManager.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) throw new Error('A valid query must be provided!')
-    if (question.service !== AppsLookupService.SERVICE_ID) throw new Error('Lookup service not supported!')
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, AppsLookupService.SERVICE_ID, [
+      'domain',
+      'publisher',
+      'name',
+      'outpoint',
+      'tags',
+      'category',
+      'limit',
+      'skip',
+      'sortOrder'
+    ])
+    const domain = readString(query, 'domain', { maxBytes: 253 })
+    const publisher = requirePublicKey(
+      readString(query, 'publisher', { maxBytes: 66 }),
+      'publisher'
+    )
+    const name = readString(query, 'name', { maxBytes: 200 })
+    const outpointParts = requireOutpoint(readString(query, 'outpoint', { maxBytes: 75 }))
+    const outpoint =
+      outpointParts === undefined ? undefined : `${outpointParts.txid}.${outpointParts.outputIndex}`
+    const tags = readStringArray(query, 'tags', { maxItems: 32, maxItemBytes: 100 })
+    const category = readString(query, 'category', { maxBytes: 100 })
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const sortOrder = readSortOrder(query)
 
-    const query = (question.query as AppCatalogQuery)
+    if (domain !== undefined)
+      return await this.storageManager.findByDomain(domain, limit, skip, sortOrder)
+    if (publisher !== undefined)
+      return await this.storageManager.findByPublisher(publisher, limit, skip, sortOrder)
+    if (tags !== undefined)
+      return await this.storageManager.findByTags(tags, limit, skip, sortOrder)
+    if (category !== undefined)
+      return await this.storageManager.findByCategory(category, limit, skip, sortOrder)
+    if (name !== undefined)
+      return await this.storageManager.findByNameFuzzy(name, limit, skip, sortOrder)
+    if (outpoint !== undefined) return await this.storageManager.findByOutpoint(outpoint)
 
-    if (query.domain) return await this.storageManager.findByDomain(query.domain, query.limit, query.skip, query.sortOrder)
-    if (query.publisher) return await this.storageManager.findByPublisher(query.publisher, query.limit, query.skip, query.sortOrder)
-    if (query.tags?.length) return await this.storageManager.findByTags(query.tags, query.limit, query.skip, query.sortOrder)
-    if (query.category) return await this.storageManager.findByCategory(query.category, query.limit, query.skip, query.sortOrder)
-    if (query.name) return await this.storageManager.findByNameFuzzy(query.name, query.limit, query.skip, query.sortOrder)
-    if (query.outpoint) return await this.storageManager.findByOutpoint(query.outpoint)
-
-    return await this.storageManager.findAllApps(query.limit, query.skip, query.sortOrder)
+    return await this.storageManager.findAllApps(limit, skip, sortOrder)
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return 'Apps Lookup Service: find published Metanet Apps.'
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -78,7 +123,7 @@ class AppsLookupService implements LookupService {
   }
 }
 
-function createAppsLookupService (db: Db): AppsLookupService {
+function createAppsLookupService(db: Db): AppsLookupService {
   return new AppsLookupService(new AppsStorageManager(db))
 }
 export default createAppsLookupService

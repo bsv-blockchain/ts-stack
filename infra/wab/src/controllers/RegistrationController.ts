@@ -1,15 +1,16 @@
 import type { Request, Response } from 'express'
 import { log } from '../logger'
-import { isHexIdentifier, isRecord } from '../security/requestValidation'
+import { isHexIdentifier, snapshotRequestBody } from '../security/requestValidation'
 import { UserService } from '../services/UserService'
 
 export class RegistrationController {
   static async finalize(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body) || !isHexIdentifier(req.body.presentationKey)) {
+      const body = snapshotRequestBody(req.body)
+      if (body == null || !isHexIdentifier(body.presentationKey)) {
         return res.status(400).json({ message: 'A valid 32-byte presentationKey is required.' })
       }
-      const user = await UserService.finalizeRegistration(req.body.presentationKey)
+      const user = await UserService.finalizeRegistration(body.presentationKey)
       if (!user) return res.status(404).json({ message: 'Registration was not found.' })
 
       log.info(

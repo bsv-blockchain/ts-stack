@@ -121,6 +121,36 @@ describe('Chaintracks configuration compatibility', () => {
     await (defaultKnexOptions.storage as ChaintracksStorageKnex).shutdown()
   })
 
+  test('rejects unsafe core limits and malformed ingestor collections without logging by default', () => {
+    const consoleLog = jest.spyOn(console, 'log').mockImplementation(() => {})
+    const valid = createDefaultNoDbChaintracksOptions('main', ...customTail)
+
+    expect(() => new Chaintracks(valid)).not.toThrow()
+    expect(consoleLog).not.toHaveBeenCalled()
+
+    for (const addLiveRecursionLimit of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => new Chaintracks({ ...valid, addLiveRecursionLimit })).toThrow(
+        'addLiveRecursionLimit must be an integer between 0 and 10000'
+      )
+    }
+    expect(() => new Chaintracks({ ...valid, chain: 'invalid' as never })).toThrow(
+      'chain must be a supported Chain value'
+    )
+    expect(() => new Chaintracks({ ...valid, readonly: 'false' as never })).toThrow('readonly must be a boolean')
+    expect(() => new Chaintracks({ ...valid, logging: 'console' as never })).toThrow(
+      'logging must be a function when supplied'
+    )
+
+    const sparseBulk = Array(2) as typeof valid.bulkIngestors
+    sparseBulk[1] = valid.bulkIngestors[0]
+    expect(() => new Chaintracks({ ...valid, bulkIngestors: sparseBulk })).toThrow(
+      'bulkIngestors must be a dense array'
+    )
+    expect(() => new Chaintracks({ ...valid, liveIngestors: Array(1_001).fill(valid.liveIngestors[0]) })).toThrow(
+      'liveIngestors cannot contain more than 1000 entries'
+    )
+  })
+
   test('adds a credential-free remote bulk/live source without changing legacy source order', () => {
     const remote = { getChain: jest.fn(async () => 'ttn') } as unknown as ChaintracksClientApi
     const sources = { chaintracks: remote, remoteMaxHeadersPerRequest: 250 }
@@ -144,7 +174,7 @@ describe('Chaintracks configuration compatibility', () => {
     }
   )
 
-  test.each(['stn', 'tstn'] as const)('%s requires an explicit remote live source', chain => {
+  test.each(['stn', 'tstn', 'regtest'] as const)('%s requires an explicit remote live source', chain => {
     expect(() => createDefaultNoDbChaintracksOptions(chain)).toThrow(
       `ChainTracks ${chain} requires at least one bulk and live source`
     )
@@ -228,7 +258,7 @@ describe('Chaintracks configuration compatibility', () => {
     await knex.storage.shutdown()
 
     const failure = new Error('startup failed')
-    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {})
     jest.spyOn(Chaintracks.prototype, 'makeAvailable').mockImplementation(() => {
       throw failure
     })
@@ -247,5 +277,6 @@ describe('Chaintracks configuration compatibility', () => {
         ...customTail
       )
     ).rejects.toBe(failure)
+    expect(consoleError).not.toHaveBeenCalled()
   })
 })

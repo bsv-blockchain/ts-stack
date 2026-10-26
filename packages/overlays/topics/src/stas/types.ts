@@ -26,4 +26,6 @@ export interface StasQuery {
   txid?: string
   outputIndex?: number
   ownerHash160?: PubKeyHex
+  limit?: number
+  skip?: number
 }

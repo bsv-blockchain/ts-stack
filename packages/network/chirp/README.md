@@ -39,10 +39,23 @@ const result = await new CHIRPBuilder().build(new Blob([largeFile]), {
 console.log(result.chirpURL)
 ```
 
+Direct byte arrays and build options are snapshotted before asynchronous work.
+Every object passed to a sink is an owned copy, so a sink cannot mutate the
+verified result. Pass an `AbortSignal` as `signal` when a stream or asynchronous
+iterator must remain cancellable. A custom sink is still a local authority: it
+decides where verified bytes are persisted and must provide its own durability
+and access-control policy.
+
 ## Publish to complete hosts
 
 `CHIRPUploader` uses the same BRC-103/104 `WalletInterface` and `AuthFetch`
 boundary as `StorageUploader`. Existing UHRP upload APIs are unchanged.
+
+Object uploads sign their `Content-Type` and send the verified bytes unchanged.
+The HTTP transport supplies `Content-Length` from the byte body; omitting
+`Content-Encoding` means identity encoding. These transport headers are not
+passed through `AuthFetch` as signed application headers. Custom authenticated
+transports must retain the exact bytes and ordinary HTTP framing.
 
 ```ts
 import { CHIRPUploader } from '@bsv/chirp'
@@ -58,6 +71,12 @@ const result = await new CHIRPUploader({
   mediaType: file.type || undefined
 })
 ```
+
+To customize DNS pinning or HTTP transport while retaining `AuthFetch`, provide
+`fetchClient`. The legacy `fetch` option replaces the complete request path,
+including `AuthFetch`, and is appropriate only for tests or a caller-supplied
+authenticated client. Both callbacks are local trust boundaries; CHIRP cannot
+make an unrestricted custom transport safe.
 
 ## Retrieve or stream
 
@@ -79,6 +98,12 @@ for an atomic bounded `Uint8Array` result. Object responses may stream without
 reference. Readers always enforce the referenced blob length and a finite node
 or future-profile object bound.
 
+Custom cache entries are never trusted for integrity: reads are copied and
+hash-verified before use, writes receive owned copies, and `MemoryCHIRPCache`
+verifies the identifier before insertion. Configuration, per-call ranges, and
+callbacks are captured before network awaits so later caller mutation cannot
+change an in-flight operation.
+
 ## CLI
 
 ```sh
@@ -94,9 +119,14 @@ chirp verify chirp://...
 
 The wallet module exports a default `WalletInterface` or async
 `createWallet()`. Resume files contain opaque host session capabilities and
-should be protected like other authenticated client state.
+should be protected like other authenticated client state. The built-in CLI
+reads at most 1 MiB from a regular non-symlink checkpoint and replaces
+checkpoints atomically with mode `0600`. Retrieved output is first written to a
+private same-directory temporary and linked into its final name without
+following or overwriting an existing path.
 Storage hosts must use HTTPS unless `allowInsecureHTTP` (or the CLI's
-`--allow-insecure-http`) is selected explicitly for local development.
+`--allow-insecure-http`) is selected explicitly for local development. Private
+hosts additionally require `allowPrivateHosts` or `--allow-private-hosts`.
 
 ## Compatibility and limits
 
@@ -106,12 +136,16 @@ Storage hosts must use HTTPS unless `allowInsecureHTTP` (or the CLI's
   `tm_uhrp` / `ls_uhrp`.
 - Default atomic downloads are limited to 512 MiB. Streaming, object count,
   concurrency, retry, depth, response size, and cache sizes are bounded and
-  configurable. Profile 1 blobs are always capped at 4 MiB; `maxObjectBytes`
-  sets the absolute local ceiling for blobs from unknown future profiles.
+  configurable; object/reference traversal defaults to 100,000 and depth
+  cannot exceed the v1 limit of 16. Profile 1 blobs are always capped at 4 MiB;
+  `maxObjectBytes` sets the absolute local ceiling for blobs from unknown future
+  profiles.
 - Object requests and UHRP resolution have bounded timeouts. Browser clients
   inherit the browser network boundary; server-side consumers can provide a
   `urlPolicy`, and the CLI rejects DNS results outside public address space by
-  default. `--allow-private-hosts` is an explicit local-development override.
+  default. Timeout races also bound custom asynchronous adapters that ignore an
+  abort signal, although their own abandoned work remains their responsibility.
+  `--allow-private-hosts` is an explicit local-development override.
 - Resolution of a future chunking profile remains hash-, length-, and
   `contentHash`-verified, while `profileCanonical` reports `false` until the
   profile-specific construction is understood. Profile 1 reports canonical

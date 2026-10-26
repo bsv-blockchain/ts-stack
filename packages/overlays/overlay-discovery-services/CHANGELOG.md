@@ -9,6 +9,14 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- `isValidTopicOrServiceName`, SHIP/SLAP admission, `WalletAdvertiser` and the
+  SHIP/SLAP lookup filters accept topic and service names with digits, up to
+  256 bytes, matching the `@bsv/sdk` overlay name grammar and the BRC-207
+  per-asset names (`tm_color_<txid>_<vout>`, `ls_color_<txid>_<vout>`). Names
+  accepted before are still accepted; no migration is required.
+
+- Order equal creation timestamps by unique MongoDB _id for stable discovery pagination.
+
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Advances the packed overlay dependency candidate for BASM validation hardening.
   Package runtime behavior is unchanged; no consumer migration is required.
@@ -23,6 +31,11 @@ All notable changes to this project will be documented in this file. The format 
 - Preserve the historical plain `Error` contract for malformed lookup queries
   while validating every optional topics-array element.
 - Share SHIP/SLAP admittance logging without changing emitted messages.
+- Clarify that `WalletAdvertiser.findAllAdvertisements()` reconciles only the
+  current wallet identity's authenticated advertisements, while SHIP/SLAP
+  lookup services discover other identities.
+- Mark the retained public `WalletAdvertiser.privateKey` property as a
+  compatibility-only root secret that must never cross a trust boundary.
 
 ### Deprecated
 
@@ -34,12 +47,24 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Fixed
 
-- Describe the accepted zero lookup limit accurately.
+- Make a zero lookup limit return zero rows instead of MongoDB's special
+  unbounded result, and document the 1,000-row result ceiling.
 
 ### Security
 
 - Reject punycode host labels explicitly instead of relying on Node's evolving
   URL parser validation for advertisable transport endpoints.
+- Authenticate lookup-returned and revoked advertisements against their exact
+  canonical script, owner identity, metadata, one-satoshi output, transaction,
+  and outpoint before wallet signing. Bind requested action inputs and outputs
+  through the final wallet-signed transaction.
+- Require canonical bounded PushDrop advertisements and revalidate lookup
+  admission callbacks before indexing them.
+- Require accessor-free allowlisted lookup queries, bounded strings and arrays,
+  real compressed public keys, exact booleans and sort order, integer
+  pagination, and a maximum of 1,000 returned records.
+- Reject credentialed, fragmented, oversized, or ambiguous transport and JS8
+  advertisement URIs.
 
 ---
 

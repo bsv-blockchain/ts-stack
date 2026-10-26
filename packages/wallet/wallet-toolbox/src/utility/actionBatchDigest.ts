@@ -1,15 +1,16 @@
-import { Hash, Utils } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toArray, toHex, toUint8Array } from '@bsv/sdk/primitives/utils'
 import { ActionBatchManifest } from '../sdk/ActionBatch.interfaces'
 
-export function actionBatchBlobDigest (bytes: number[] | Uint8Array): string {
-  return Utils.toHex(Hash.sha256(bytes))
+export function actionBatchBlobDigest(bytes: number[] | Uint8Array): string {
+  return toHex(sha256(bytes))
 }
 
 /**
  * Digest only the semantic manifest. Inline bytes are represented by their
  * content digest so inline and uploaded forms have the same idempotency key.
  */
-export function actionBatchManifestDigest (manifest: Omit<ActionBatchManifest, 'digest'>): string {
+export function actionBatchManifestDigest(manifest: Omit<ActionBatchManifest, 'digest'>): string {
   if (manifest.format === 2) return actionBatchManifestDigestV2(manifest)
   const payload = {
     batchId: manifest.batchId,
@@ -17,11 +18,13 @@ export function actionBatchManifestDigest (manifest: Omit<ActionBatchManifest, '
       reference: action.reference,
       txid: action.txid,
       rawTxDigest: action.rawTxDigest ?? actionBatchBlobDigest(action.rawTx ?? []),
-      lockingScriptDigests: action.lockingScriptDigests ?? action.plan.outputs.map(output =>
-        output.lockingScript.length === 0
-          ? undefined
-          : actionBatchBlobDigest(Utils.toUint8Array(output.lockingScript, 'hex'))
-      ),
+      lockingScriptDigests:
+        action.lockingScriptDigests ??
+        action.plan.outputs.map(output =>
+          output.lockingScript.length === 0
+            ? undefined
+            : actionBatchBlobDigest(toUint8Array(output.lockingScript, 'hex'))
+        ),
       plan: {
         inputs: action.plan.inputs,
         outputs: action.plan.outputs.map(output => ({ ...output, lockingScript: '' })),
@@ -41,10 +44,10 @@ export function actionBatchManifestDigest (manifest: Omit<ActionBatchManifest, '
     sendWith: manifest.sendWith,
     isDelayed: manifest.isDelayed
   }
-  return actionBatchBlobDigest(Utils.toArray(JSON.stringify(payload), 'utf8'))
+  return actionBatchBlobDigest(toArray(JSON.stringify(payload), 'utf8'))
 }
 
-function actionBatchManifestDigestV2 (manifest: Omit<ActionBatchManifest, 'digest'>): string {
+function actionBatchManifestDigestV2(manifest: Omit<ActionBatchManifest, 'digest'>): string {
   const payload = {
     format: 2,
     batchId: manifest.batchId,
@@ -77,10 +80,10 @@ function actionBatchManifestDigestV2 (manifest: Omit<ActionBatchManifest, 'diges
     sendWith: manifest.sendWith,
     isDelayed: manifest.isDelayed
   }
-  return actionBatchBlobDigest(Utils.toArray(JSON.stringify(payload), 'utf8'))
+  return actionBatchBlobDigest(toArray(JSON.stringify(payload), 'utf8'))
 }
 
-export function verifyActionBatchManifestDigest (manifest: ActionBatchManifest): boolean {
+export function verifyActionBatchManifestDigest(manifest: ActionBatchManifest): boolean {
   const { digest: _digest, ...withoutDigest } = manifest
   return manifest.digest === actionBatchManifestDigest(withoutDigest)
 }

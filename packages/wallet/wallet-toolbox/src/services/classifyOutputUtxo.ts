@@ -1,7 +1,8 @@
-import { Utils } from '@bsv/sdk'
+import { toHex } from '@bsv/sdk/primitives/utils'
 import type { WalletServices } from '../sdk/WalletServices.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../sdk/WERR_errors'
 import type { TableOutput } from '../storage/schema/tables/TableOutput'
+import { validateUtxoStatusResult } from './validateUtxoStatusResult'
 
 export type OutputUtxoVerdict = 'unspent' | 'spent' | 'unknown'
 
@@ -62,17 +63,23 @@ export async function classifyOutputUtxo(
     }
   }
 
+  const outpoint = `${output.txid.toLowerCase()}.${output.vout}`
+  let rawResult: unknown
   try {
-    const hash = services.hashOutputScript(Utils.toHex(output.lockingScript))
-    const result = await services.getUtxoStatus(hash, undefined, `${output.txid}.${output.vout}`)
-    const provider = typeof result?.name === 'string' && result.name.length > 0
-      ? result.name
-      : '<invalid-provider-result>'
-    if (
-      result?.status !== 'success' ||
-      typeof result.isUtxo !== 'boolean' ||
-      provider === '<invalid-provider-result>'
-    ) {
+    const hash = services.hashOutputScript(toHex(output.lockingScript))
+    rawResult = await services.getUtxoStatus(hash, undefined, outpoint)
+  } catch (error: unknown) {
+    return {
+      verdict: 'unknown',
+      provider: '<provider-error>',
+      error
+    }
+  }
+
+  try {
+    const result = validateUtxoStatusResult(rawResult, outpoint)
+    const provider = result.name
+    if (result.status !== 'success') {
       return {
         verdict: 'unknown',
         provider,
@@ -86,7 +93,7 @@ export async function classifyOutputUtxo(
   } catch (error: unknown) {
     return {
       verdict: 'unknown',
-      provider: '<provider-error>',
+      provider: '<invalid-provider-result>',
       error
     }
   }

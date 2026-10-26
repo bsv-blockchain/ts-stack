@@ -54,7 +54,7 @@ describe('GASP protocol properties', () => {
     await fc.assert(
       fc.asyncProperty(
         fc.integer({ min: 0, max: Number.MAX_SAFE_INTEGER }),
-        fc.option(fc.integer({ min: 1, max: 1_000_000 }), { nil: undefined }),
+        fc.option(fc.integer({ min: 1, max: 10_000 }), { nil: undefined }),
         async (since, limit) => {
           const { gasp, findKnownUTXOs } = harness([], since)
           await expect(gasp.buildInitialRequest(since, limit)).resolves.toEqual({
@@ -66,7 +66,7 @@ describe('GASP protocol properties', () => {
             since,
             UTXOList: []
           })
-          expect(findKnownUTXOs).toHaveBeenCalledWith(since, limit)
+          expect(findKnownUTXOs).toHaveBeenCalledWith(since, limit ?? 1000)
         }
       )
     )
@@ -99,6 +99,7 @@ describe('GASP protocol properties', () => {
           0.5,
           Number.NaN,
           Number.POSITIVE_INFINITY,
+          10_001,
           Number.MAX_SAFE_INTEGER + 1
         ),
         async invalidLimit => {

@@ -1,10 +1,8 @@
-import { Validation } from '@bsv/sdk'
+import { Beef, Script, Transaction, Validation } from '@bsv/sdk'
 import type { StorageCapabilities } from '../../../sdk/ActionBatch.interfaces'
 import { actionBatchBootstrap } from '../actionBatchBootstrap'
 
-function capabilities (
-  compactBegin?: boolean
-): NonNullable<StorageCapabilities['actionBatch']> {
+function capabilities(compactBegin?: boolean): NonNullable<StorageCapabilities['actionBatch']> {
   return {
     version: 1,
     maxInlineBytes: 2,
@@ -17,19 +15,28 @@ function capabilities (
 }
 
 describe('actionBatchBootstrap', () => {
+  const sourceTransaction = new Transaction()
+  sourceTransaction.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
+  const inputBEEF = new Beef()
+  inputBEEF.mergeTransaction(sourceTransaction)
+  const inputBEEFBytes = inputBEEF.toBinary()
   const action = Validation.validateCreateActionArgs({
     description: 'generic large action bootstrap',
-    inputBEEF: [1, 2, 3],
-    inputs: [{
-      outpoint: `${'11'.repeat(32)}.0`,
-      inputDescription: 'generic external input',
-      unlockingScript: '51'
-    }],
-    outputs: [{
-      satoshis: 1,
-      lockingScript: '515151',
-      outputDescription: 'generic large output'
-    }],
+    inputBEEF: inputBEEFBytes,
+    inputs: [
+      {
+        outpoint: `${sourceTransaction.id('hex')}.0`,
+        inputDescription: 'generic external input',
+        unlockingScript: '51'
+      }
+    ],
+    outputs: [
+      {
+        satoshis: 1,
+        lockingScript: '515151',
+        outputDescription: 'generic large output'
+      }
+    ],
     options: { noSend: true, randomizeOutputs: false }
   })
 
@@ -47,7 +54,7 @@ describe('actionBatchBootstrap', () => {
   it('preserves the original request for rolling-deployment compatibility', () => {
     const bootstrap = actionBatchBootstrap(action, capabilities())
 
-    expect(bootstrap.firstAction.inputBEEF).toEqual([1, 2, 3])
+    expect(bootstrap.firstAction.inputBEEF).toEqual(inputBEEFBytes)
     expect(bootstrap.firstAction.inputs[0].unlockingScript).toBe('51')
     expect(bootstrap.firstAction.outputs[0].lockingScript).toBe('515151')
     expect(bootstrap.firstActionOutputScriptLengths).toBeUndefined()

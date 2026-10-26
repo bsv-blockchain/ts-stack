@@ -3,7 +3,7 @@ services:
     image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
     container_name: mongo
     ports:
-      - "27017:27017"
+      - '27017:27017'
     volumes:
       - mongo_data:/data/db
     environment:
@@ -14,7 +14,7 @@ services:
     image: mysql:8.4.11@sha256:b3b90af2a6552ae30c266fdb7d5dd55f3afb72404bb78d37fe8a23eb857fd3fb
     container_name: mysql
     ports:
-      - "3306:3306"
+      - '3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-appdb}
@@ -32,7 +32,7 @@ services:
       - mongodb
       - mysql
     ports:
-      - "8080:8080"
+      - '8080:8080'
     environment:
       MONGO_URL: mongodb://${MONGO_ROOT_USERNAME:-root}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD}@mongodb:27017
       KNEX_URL: mysql://${MYSQL_USER:-appuser}:${MYSQL_PASSWORD:?set MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE:-appdb}
@@ -43,7 +43,8 @@ services:
       NETWORK: main
       NODE_NAME: your-overlay-node
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN}
-      GASP_ENABLED: "false"
+      GASP_ENABLED: 'false'
+      MANDALA_ENABLED: 'false'
       OVERLAY_CORS_MODE: ${OVERLAY_CORS_MODE:-}
       OVERLAY_CORS_ALLOWED_ORIGINS: ${OVERLAY_CORS_ALLOWED_ORIGINS:-}
       OVERLAY_CORS_ALLOWED_HEADERS: ${OVERLAY_CORS_ALLOWED_HEADERS:-}
@@ -62,7 +63,7 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
       DEPLOY_ENV: ${DEPLOY_ENV:-production}
     # Direct node invocation with the OTel preload (image has no npm; see Dockerfile).
-    command: ["node", "--import", "./dist/telemetry.js", "dist/index.js"]
+    command: ['node', '--import', './dist/telemetry.js', 'dist/index.js']
 
   janitor:
     image: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b

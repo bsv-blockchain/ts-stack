@@ -13,14 +13,14 @@ import { createWallet, type BrowserWallet } from '@bsv/simple/browser'
 ## Type Definition
 
 ```typescript
-type BrowserWallet = BrowserWalletCore
-  & ReturnType<typeof createTokenMethods>
-  & ReturnType<typeof createInscriptionMethods>
-  & ReturnType<typeof createMessageBoxMethods>
-  & ReturnType<typeof createCertificationMethods>
-  & ReturnType<typeof createOverlayMethods>
-  & ReturnType<typeof createDIDMethods>
-  & ReturnType<typeof createCredentialMethods>
+type BrowserWallet = BrowserWalletCore &
+  ReturnType<typeof createTokenMethods> &
+  ReturnType<typeof createInscriptionMethods> &
+  ReturnType<typeof createMessageBoxMethods> &
+  ReturnType<typeof createCertificationMethods> &
+  ReturnType<typeof createOverlayMethods> &
+  ReturnType<typeof createDIDMethods> &
+  ReturnType<typeof createCredentialMethods>
 ```
 
 ## createWallet()
@@ -31,11 +31,12 @@ async function createWallet(defaults?: Partial<WalletDefaults>): Promise<Browser
 
 Factory function that creates a fully-composed `BrowserWallet`.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `defaults` | `Partial<WalletDefaults>` | No | Override default configuration |
+| Parameter  | Type                      | Required | Description                    |
+| ---------- | ------------------------- | -------- | ------------------------------ |
+| `defaults` | `Partial<WalletDefaults>` | No       | Override default configuration |
 
 **What happens:**
+
 1. Creates a `WalletClient` (prompts user to connect via MetaNet Client or browser extension)
 2. Retrieves the user's identity key
 3. Instantiates `BrowserWalletCore` (extends `WalletCore`)
@@ -54,20 +55,24 @@ const wallet = await createWallet({
 })
 ```
 
+The bundled registry is a legacy unauthenticated directory. Its results do not
+prove control of an identity key and must not be used alone to select a payment
+recipient.
+
 ## Available Methods
 
 `BrowserWallet` includes all methods from:
 
-| Source | Methods |
-|--------|---------|
-| [WalletCore](wallet-core.md) | `getIdentityKey()`, `getAddress()`, `getStatus()`, `getWalletInfo()`, `getClient()`, `derivePublicKey()`, `derivePaymentKey()`, `pay()`, `send()`, `fundServerWallet()` |
-| [Tokens](tokens.md) | `createToken()`, `listTokenDetails()`, `sendToken()`, `redeemToken()`, `sendTokenViaMessageBox()`, `listIncomingTokens()`, `acceptIncomingToken()` |
-| [Inscriptions](inscriptions.md) | `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()` |
-| [MessageBox](messagebox.md) | `certifyForMessageBox()`, `getMessageBoxHandle()`, `revokeMessageBoxCertification()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`, `registerIdentityTag()`, `lookupIdentityByTag()`, `listMyTags()`, `revokeIdentityTag()` |
-| [Certification](certification.md) | `acquireCertificateFrom()`, `listCertificatesFrom()`, `relinquishCert()` |
-| [DID](did.md) | `getDID()`, `resolveDID()`, `registerDID()` |
-| [Credentials](credentials.md) | `acquireCredential()`, `listCredentials()`, `createPresentation()` |
-| [Overlay](overlay.md) | `advertiseSHIP()`, `advertiseSLAP()`, `broadcastAction()`, `withRetry()` |
+| Source                            | Methods                                                                                                                                                                                                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [WalletCore](wallet-core.md)      | `getIdentityKey()`, `getAddress()`, `getStatus()`, `getWalletInfo()`, `getClient()`, `derivePublicKey()`, `derivePaymentKey()`, `pay()`, `send()`, `fundServerWallet()`                                                                                       |
+| [Tokens](tokens.md)               | `createToken()`, `listTokenDetails()`, `sendToken()`, `redeemToken()`, `sendTokenViaMessageBox()`, `listIncomingTokens()`, `acceptIncomingToken()`                                                                                                            |
+| [Inscriptions](inscriptions.md)   | `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()`                                                                                                                                                                               |
+| [MessageBox](messagebox.md)       | `certifyForMessageBox()`, `getMessageBoxHandle()`, `revokeMessageBoxCertification()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`, `registerIdentityTag()`, `lookupIdentityByTag()`, `listMyTags()`, `revokeIdentityTag()` |
+| [Certification](certification.md) | `acquireCertificateFrom()`, `listCertificatesFrom()`, `relinquishCert()`                                                                                                                                                                                      |
+| [DID](did.md)                     | `getDID()`, `resolveDID()`                                                                                                                                                                                                                                    |
+| [Credentials](credentials.md)     | `acquireCredential()`, `listCredentials()`                                                                                                                                                                                                                    |
+| [Overlay](overlay.md)             | `advertiseSHIP()`, `advertiseSLAP()`, `broadcastAction()`, `withRetry()`                                                                                                                                                                                      |
 
 ## Re-exports from `@bsv/simple/browser`
 
@@ -78,13 +83,7 @@ export { Overlay } from './modules/overlay'
 export { Certifier } from './modules/certification'
 export { DID } from './modules/did'
 export { WalletCore } from './core/WalletCore'
-export {
-  CredentialSchema,
-  CredentialIssuer,
-  MemoryRevocationStore,
-  toVerifiableCredential,
-  toVerifiablePresentation
-} from './modules/credentials'
+export { CredentialSchema, CredentialIssuer, MemoryRevocationStore } from './modules/credentials'
 ```
 
 ## Underlying Client

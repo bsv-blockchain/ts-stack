@@ -1,5 +1,6 @@
 import { BlockHeader } from '../../sdk/WalletServices.interfaces'
 import { Monitor } from '../Monitor'
+import { copyValidatedMonitorHeader, MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
 /**
@@ -32,10 +33,16 @@ export class TaskNewHeader extends WalletMonitorTask {
     public triggerMsecs = 1 * Monitor.oneMinute
   ) {
     super(monitor, TaskNewHeader.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
   }
 
   async getHeader(): Promise<BlockHeader> {
-    return await this.monitor.chaintracks.findChainTipHeader()
+    return copyValidatedMonitorHeader(
+      await this.monitor.chaintracks.findChainTipHeader(),
+      'chain tip header',
+      true,
+      this.monitor.chain
+    )
   }
 
   /**

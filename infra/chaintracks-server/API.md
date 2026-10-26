@@ -534,7 +534,13 @@ curl -X POST http://localhost:3011/addHeaderHex \
 
 **Processing:**
 
-- Header is queued for processing (returns immediately)
+- The body must contain exactly the six documented data fields. Integer fields
+  are unsigned 32-bit values and both hashes are exact 32-byte hexadecimal
+  strings.
+- Header is copied and queued for processing (returns immediately)
+- Duplicate pending headers are ignored and the queue is bounded
+- A process-global submission limit applies before queueing; saturation returns
+  `429` or retryable `503` rather than retaining more work
 - Header is validated and inserted asynchronously
 - If previous header is unknown, header is ignored
 - Invalid headers are rejected silently

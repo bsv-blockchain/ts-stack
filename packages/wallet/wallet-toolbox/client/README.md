@@ -13,6 +13,48 @@ Use this package in:
 
 For Node servers, use [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox). For React Native / mobile, use [`@bsv/wallet-toolbox-mobile`](https://www.npmjs.com/package/@bsv/wallet-toolbox-mobile).
 
+## Receiving already-broadcast payments
+
+The 2.14.9 source candidate completes broadcast results even when storage
+already marks the request `unmined` or `completed`. This fixes first receipt
+without a mining proof on shared storage, and the same result path when another
+storage worker advances the request before the broadcast result refresh. The
+stored advanced state remains intact; unsuccessful provider results still
+reject receipt and do not credit new recipient outputs. Repeated successful
+receipt remains idempotent. A payment carrying its valid mining proof follows
+the existing proof path without rebroadcast.
+
+Remote SQL storage also needs the 2.14.9 storage migration and coordinated
+server rollout: a durable user/TXID claim serializes receipts across pods while
+preserving historical rows. The browser's local IndexedDB provider does not
+use that SQL claim. No public API or wire migration
+is required. Source versions are candidates until published through the
+protected release workflow; upgrading an app alone does not upgrade its remote
+storage server.
+
+## BRC-100 result compatibility
+
+Version 2.14.1 keeps internal exact-spend accounting off public `createAction`
+results, fixing strict binary bridge failures after the wallet operation while
+retaining fee and service-charge authorization. Upgrade the wallet and permission
+manager together. Existing JSON bridges that remove internal metadata retain their
+behavior; no application, BRC-39 or account-recovery migration is required. Check
+wallet history before retrying an action whose response failed on an older host.
+
+## Backup and recovery
+
+A BRC-100 wallet needs both recoverable keys and wallet records/derivation
+metadata. BRC-39 exports contain wallet data, not root keys or manager snapshots.
+IndexedDB can be evicted or lost with the browser profile. Keep an independent
+data copy and test recovery on a clean profile.
+
+Read [Wallet backup and recovery](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/),
+[BRC-38/39 integration](https://bsv-blockchain.github.io/ts-stack/guides/wallet-data-portability/) and the
+[recovery checklist](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
+Portable helpers require a concrete local `StorageProvider`; a remote client
+is not one. Qualify the local-copy path and device memory limits before adding
+export/import UI.
+
 ## Large wallet records
 
 Compatible providers negotiate authenticated, integrity-checked transfers for
@@ -183,3 +225,23 @@ reference, reclaim, commission, and relation lookups avoid repeated full-wallet
 scans during restores. Legacy duplicate transaction IDs remain intact. Clients
 that request an older IndexedDB schema version cannot reopen this database;
 retain a compatible client when using the local backup.
+
+## WAB faucet fee compatibility
+
+Version 2.14.6 carries the local signer's independently validated fee/change
+outputs through the permissions manager to SDK completed-action binding. Upgrade
+with an SDK exposing `completeBoundAction.outputAuthorizationVersion=1`; older SDK
+peers preserve their strict behavior and do not receive the fee-bearing faucet
+fix. Use wallet and authentication manager from the same package instance.
+Serialized results discard local authorization. See the full toolbox README for
+SDK3 migration and the unchanged signup retry/reconciliation limitations.
+
+## Pre-construction conflict recovery
+
+The 2.14.7 candidate preserves remote storage's empty attempted-TXID sentinel
+only for a bounded double-spend review before transaction construction. It does
+not authorize a retry. Applications must verify complete competing transactions
+against the requested explicit inputs, synchronize the accepted winner, then
+read fresh state before rebuilding. Upgrade the application SDK alongside the
+wallet parser. Use the existing JSON wallet API for structured review errors;
+the binary wire format is unchanged. No database or call migration is required.

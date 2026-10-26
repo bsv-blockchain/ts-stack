@@ -13,6 +13,10 @@ jest.mock('../../../transaction/Transaction', () => {
     toHexEF(): string {
       return 'mocked_transaction_hexEF'
     }
+
+    id(): string {
+      return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    }
   }
   return { __esModule: true, default: MockTransaction }
 })
@@ -21,7 +25,7 @@ describe('WhatsOnChainBroadcaster', () => {
   const network = 'main'
   const successResponse = {
     status: 200,
-    data: 'mocked_txid'
+    data: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
   }
 
   let transaction: Transaction
@@ -61,7 +65,7 @@ describe('WhatsOnChainBroadcaster', () => {
     expect(mockFetch).toHaveBeenCalled()
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'broadcast successful'
     })
   })
@@ -78,7 +82,7 @@ describe('WhatsOnChainBroadcaster', () => {
 
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'broadcast successful'
     })
   })
@@ -92,7 +96,7 @@ describe('WhatsOnChainBroadcaster', () => {
     expect(mockFetch).toHaveBeenCalled()
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'broadcast successful'
     })
   })
@@ -105,7 +109,7 @@ describe('WhatsOnChainBroadcaster', () => {
 
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       message: 'broadcast successful'
     })
   })
@@ -121,7 +125,7 @@ describe('WhatsOnChainBroadcaster', () => {
     expect(response).toEqual({
       status: 'error',
       code: '500',
-      description: 'Network error'
+      description: 'Internal Server Error'
     })
   })
 

@@ -1,10 +1,13 @@
 import { Beef, Transaction, WalletLoggerInterface } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
-import * as sdk from '../../sdk'
-import { ReqHistoryNote } from '../../sdk'
+import type * as sdk from '../../sdk'
+import type { ReqHistoryNote } from '../../sdk/types'
+import { WalletError } from '../../sdk/WalletError'
+import { WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { wait } from '../../utility/utilityHelpers'
 import { markConfirmedStaleReqInputs } from './reconcileFailedTransactionInputs'
+import { normalizeWalletOutpoint, validateUtxoStatusResult } from '../../services/validateUtxoStatusResult'
 
 /**
  * Attempt to post one or more `ProvenTxReq` with status 'unsent'
@@ -12,7 +15,7 @@ import { markConfirmedStaleReqInputs } from './reconcileFailedTransactionInputs'
  *
  * @param reqs
  */
-export async function attemptToPostReqsToNetwork (
+export async function attemptToPostReqsToNetwork(
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
   trx?: sdk.TrxToken,
@@ -39,11 +42,11 @@ export async function attemptToPostReqsToNetwork (
   return r
 }
 
-async function validateReqsAndMergeBeefs (
+async function validateReqsAndMergeBeefs(
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
   trx?: sdk.TrxToken
-): Promise<{ r: PostReqsToNetworkResult, vreqs: PostReqsToNetworkDetails[], txids: string[] }> {
+): Promise<{ r: PostReqsToNetworkResult; vreqs: PostReqsToNetworkDetails[]; txids: string[] }> {
   const r: PostReqsToNetworkResult = {
     status: 'success',
     beef: new Beef(),
@@ -56,7 +59,7 @@ async function validateReqsAndMergeBeefs (
   for (const req of reqs) {
     try {
       const noRawTx = !req.rawTx
-      const noTxIds = (req.notify.transactionIds == null) || req.notify.transactionIds.length < 1
+      const noTxIds = req.notify.transactionIds == null || req.notify.transactionIds.length < 1
       const noInputBEEF = req.inputBEEF == null
       if (noRawTx || noTxIds || noInputBEEF) {
         // This should have happened earlier...
@@ -71,7 +74,7 @@ async function validateReqsAndMergeBeefs (
         r.details.push(vreq)
       }
     } catch (error_: unknown) {
-      const { code, message } = sdk.WalletError.fromUnknown(error_)
+      const { code, message } = WalletError.fromUnknown(error_)
       req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message })
       req.attempts++
       if (req.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {
@@ -84,7 +87,7 @@ async function validateReqsAndMergeBeefs (
   return { r, vreqs, txids: vreqs.map(r => r.txid) }
 }
 
-async function transferNotesToReqHistories (
+async function transferNotesToReqHistories(
   txids: string[],
   vreqs: PostReqsToNetworkDetails[],
   pbrs: sdk.PostBeefResult[],
@@ -93,7 +96,7 @@ async function transferNotesToReqHistories (
 ): Promise<void> {
   for (const txid of txids) {
     const vreq = vreqs.find(r => r.txid === txid)
-    if (vreq == null) throw new sdk.WERR_INTERNAL()
+    if (vreq == null) throw new WERR_INTERNAL()
     const notes: sdk.ReqHistoryNote[] = []
     for (const pbr of pbrs) {
       notes.push(...(pbr.notes || []))
@@ -107,10 +110,7 @@ async function transferNotesToReqHistories (
   }
 }
 
-function tallyTxidResults (
-  ar: AggregatePostBeefTxResult,
-  pbrs: sdk.PostBeefResult[]
-): void {
+function tallyTxidResults(ar: AggregatePostBeefTxResult, pbrs: sdk.PostBeefResult[]): void {
   for (const pbr of pbrs) {
     const tr = pbr.txidResults.find(tr => tr.txid === ar.txid)
     if (tr == null) continue
@@ -144,7 +144,7 @@ function tallyTxidResults (
  * @param storage
  * @returns
  */
-function aggregatePostBeefResultsByTxid (
+function aggregatePostBeefResultsByTxid(
   txids: string[],
   vreqs: PostReqsToNetworkDetails[],
   pbrs: sdk.PostBeefResult[]
@@ -214,7 +214,7 @@ function applyAggregateStatus(
       req.attempts++
       return { newReqStatus: 'sending', newTxStatus: 'sending' }
     default:
-      throw new sdk.WERR_INTERNAL(`unimplemented AggregateStatus ${status}`)
+      throw new WERR_INTERNAL(`unimplemented AggregateStatus ${status}`)
   }
 }
 
@@ -237,14 +237,12 @@ async function recordStaleInputEvidence(
     aggStatus: ar.status,
     checked: stale.checked,
     confirmed: stale.staleConfirmed,
-    ...(stale.staleOutpoints.length > 0
-      ? { outpoints: stale.staleOutpoints.join(',') }
-      : {})
+    ...(stale.staleOutpoints.length > 0 ? { outpoints: stale.staleOutpoints.join(',') } : {})
   })
   await req.updateStorageDynamicProperties(storage, trx)
 }
 
-export async function updateReqsFromAggregateResults (
+export async function updateReqsFromAggregateResults(
   txids: string[],
   r: PostReqsToNetworkResult,
   apbrs: Record<string, AggregatePostBeefTxResult>,
@@ -272,11 +270,18 @@ export async function updateReqsFromAggregateResults (
       serviceErrorCount
     }
 
-    if (['completed', 'unmined'].includes(req.status))
-    // However it happened, don't degrade status if it is somehow already beyond broadcast stage
-    { continue }
+    if (['completed', 'unmined'].includes(req.status)) {
+      // Preserve advanced durable state, but still report this broadcast's outcome.
+      // Leaving details unknown makes a successful first receipt fail aggregation.
+      // Negative provider results must remain negative even for an advanced request.
+      const details = r.details.find(d => d.txid === txid)!
+      details.status = ar.status
+      details.competingTxs = ar.competingTxs
+      continue
+    }
 
-    if (ar.status === 'doubleSpend' && (services != null) && (trx == null)) await confirmDoubleSpend(ar, r.beef, storage, services, logger)
+    if (ar.status === 'doubleSpend' && services != null && trx == null)
+      await confirmDoubleSpend(ar, r.beef, storage, services, logger)
 
     const { newReqStatus, newTxStatus } = applyAggregateStatus(req, ar.status)
 
@@ -316,8 +321,7 @@ export async function updateReqsFromAggregateResults (
     //
     // Gate: services available + not in a nested transaction (chain
     // queries are async I/O — same gate as confirmDoubleSpend).
-    if (newTxStatus === 'failed')
-      await recordStaleInputEvidence(ar, req, storage, services, trx, logger)
+    if (newTxStatus === 'failed') await recordStaleInputEvidence(ar, req, storage, services, trx, logger)
 
     // Transfer critical results to details going back to the user
     const details = r.details.find(d => d.txid === txid)!
@@ -328,7 +332,7 @@ export async function updateReqsFromAggregateResults (
   logger?.group('update storage from aggregate results')
 }
 
-async function gatherCompetingTxids (
+async function gatherCompetingTxids(
   ar: AggregatePostBeefTxResult,
   beef: Beef,
   services: sdk.WalletServices,
@@ -371,7 +375,7 @@ async function gatherCompetingTxids (
  * @param storage
  * @param services
  */
-async function confirmDoubleSpend (
+async function confirmDoubleSpend(
   ar: AggregatePostBeefTxResult,
   beef: Beef,
   storage: StorageProvider,
@@ -400,10 +404,54 @@ async function confirmDoubleSpend (
     ar.status = 'success'
     note.newStatus = ar.status
   } else {
-    // Confirmed double spend, get txids of possible competing transactions.
-    await gatherCompetingTxids(ar, beef, services, note, logger)
+    const tx = Transaction.fromBinary(req.rawTx)
+    const { spent, unspent, unknown } = await classifyBroadcastInputSpendEvidence(tx, beef, services)
+    note.inputsSpent = spent
+    note.inputsUnspent = unspent
+    note.inputsUnknown = unknown
+    if (spent > 0) {
+      // At least one exact input has independent positive spent evidence.
+      await gatherCompetingTxids(ar, beef, services, note, logger)
+    } else {
+      // A broadcaster's rejection plus absence from transaction-status indexes
+      // is not proof of a double spend. Preserve another success, otherwise
+      // retry as a service failure without failing or quarantining the action.
+      ar.status = ar.successCount > 0 ? 'success' : 'serviceError'
+      note.newStatus = ar.status
+    }
   }
   req.addHistoryNote(note)
+}
+
+export async function classifyBroadcastInputSpendEvidence(
+  tx: Transaction,
+  beef: Beef,
+  services: Pick<sdk.WalletServices, 'hashOutputScript' | 'getUtxoStatus'>
+): Promise<{ spent: number; unspent: number; unknown: number }> {
+  let spent = 0
+  let unspent = 0
+  let unknown = 0
+  for (const input of tx.inputs) {
+    try {
+      const sourceTxid = input.sourceTXID
+      const sourceOutputIndex = input.sourceOutputIndex
+      if (sourceTxid == null || !Number.isSafeInteger(sourceOutputIndex) || sourceOutputIndex < 0) {
+        throw new Error('invalid input outpoint')
+      }
+      const sourceTx = beef.findTxid(sourceTxid)?.tx
+      const sourceOutput = sourceTx?.outputs[sourceOutputIndex]
+      if (sourceOutput == null) throw new Error('missing input source')
+      const outpoint = normalizeWalletOutpoint(`${sourceTxid}.${sourceOutputIndex}`)!
+      const hash = services.hashOutputScript(sourceOutput.lockingScript.toHex())
+      const result = validateUtxoStatusResult(await services.getUtxoStatus(hash, undefined, outpoint), outpoint)
+      if (result.status !== 'success') unknown++
+      else if (result.isUtxo) unspent++
+      else spent++
+    } catch {
+      unknown++
+    }
+  }
+  return { spent, unspent, unknown }
 }
 
 /**
@@ -446,7 +494,7 @@ async function confirmDoubleSpend (
  * Returns counts for instrumentation and the set of stale outpoints
  * that were actually evicted (added to history note for diagnostics).
  */
-export async function markStaleInputsAsSpent (
+export async function markStaleInputsAsSpent(
   ar: AggregatePostBeefTxResult,
   storage: StorageProvider,
   services: sdk.WalletServices,
@@ -487,12 +535,7 @@ export interface AggregatePostBeefTxResult {
  *
  */
 export type PostReqsToNetworkDetailsStatus =
-  | 'success'
-  | 'doubleSpend'
-  | 'unknown'
-  | 'invalid'
-  | 'serviceError'
-  | 'invalidTx'
+  'success' | 'doubleSpend' | 'unknown' | 'invalid' | 'serviceError' | 'invalidTx'
 
 export interface PostReqsToNetworkDetails {
   txid: string

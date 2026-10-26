@@ -4,12 +4,12 @@ import { Services } from '../Services'
 const header = {
   version: 1,
   previousHash: '00'.repeat(32),
-  merkleRoot: '11'.repeat(32),
-  time: 1,
-  bits: 1,
-  nonce: 1,
-  height: 123,
-  hash: '22'.repeat(32)
+  merkleRoot: '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
+  time: 1231006505,
+  bits: 486604799,
+  nonce: 2083236893,
+  height: 0,
+  hash: '000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f'
 }
 
 describe('Services telemetry', () => {
@@ -17,7 +17,7 @@ describe('Services telemetry', () => {
     const events: TelemetryEvent[] = []
     const options = Services.createDefaultOptions('test')
     options.chaintracks = {
-      currentHeight: jest.fn(async () => 123),
+      currentHeight: jest.fn(async () => 0),
       findHeaderForHeight: jest.fn(async () => header),
       findHeaderForBlockHash: jest.fn(async () => header)
     } as any
@@ -37,8 +37,8 @@ describe('Services telemetry', () => {
         return 'recovered'
       }, 'retry_test')
     ).resolves.toBe('recovered')
-    await expect(services.getHeight()).resolves.toBe(123)
-    await expect(services.getHeaderForHeight(123)).resolves.toHaveLength(80)
+    await expect(services.getHeight()).resolves.toBe(0)
+    await expect(services.getHeaderForHeight(0)).resolves.toHaveLength(80)
     await expect(services.hashToHeader(header.hash)).resolves.toEqual(header)
 
     const requests = events.filter(event => event.name === 'wallet.chaintracks.request')

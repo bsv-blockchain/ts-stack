@@ -21,8 +21,7 @@
  * statistical quality: 32-bit state, three shifts, no library, no floats.
  */
 function makeRng(seed: number): () => number {
-  let x = seed >>> 0
-  if (x === 0) x = 0x6d2b79f5
+  let x = seed >>> 0 || 0x6d2b79f5
   return () => {
     x ^= x << 13
     x >>>= 0
@@ -65,19 +64,25 @@ function draw23(rng: () => number): number {
  * @param seq - Part sequence number.
  * @param k - Source block count.
  */
-export function blocksForPart(seq: number, k: number): number[] {
-  const rng = makeRng(Math.imul(seq, 0x9e3779b1) >>> 0)
+export function blocksForPart(seq: number, k: number, maximumDegree = k): number[] {
+  const rng = makeRng(Math.imul(seq, 0x9e3779b1))
   const r = draw23(rng)
-  let degree = Math.floor((2 ** 23 + r) / (r + 1))
+  let degree = ((2 ** 23 + r) / (r + 1)) | 0
   if (degree > k) degree = 1
-  const pool = Array.from({ length: k }, (_, i) => i)
+  if (degree > maximumDegree) return []
+  // Sparse representation of an initially-identity Fisher-Yates pool. Only
+  // positions touched by the first `degree` swaps are stored, so a hostile K
+  // cannot force an O(K) allocation. Missing sparse positions retain their
+  // identity value, exactly matching the full pool.
+  const pool: number[] = []
   for (let i = 0; i < degree; i++) {
-    const j = i + Math.floor((draw23(rng) * (k - i)) / 2 ** 23)
-    const t = pool[i]
-    pool[i] = pool[j]
-    pool[j] = t
+    const j = i + (((draw23(rng) * (k - i)) / 2 ** 23) | 0)
+    const atI = pool[i] ?? i
+    pool[i] = pool[j] ?? j
+    pool[j] = atI
   }
-  return pool.slice(0, degree)
+  pool.length = degree
+  return pool
 }
 
 /**
@@ -88,5 +93,5 @@ export function blocksForPart(seq: number, k: number): number[] {
  * length reconciliation.
  */
 export function xorInto(target: Uint8Array, source: Uint8Array): void {
-  for (let i = 0; i < target.length; i++) target[i] ^= source[i]
+  for (let i = target.length; i-- > 0;) target[i] ^= source[i]
 }

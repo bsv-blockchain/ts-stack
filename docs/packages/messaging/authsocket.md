@@ -3,7 +3,7 @@ id: pkg-authsocket
 title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: '2.1.7'
+version: '2.1.10'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
@@ -15,6 +15,10 @@ tags: [messaging, websocket, brc-31, auth]
 ---
 
 # @bsv/authsocket
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Server-side BRC-103 mutual authentication wrapper for Socket.IO. Enforces cryptographic signing and verification on all WebSocket messages, enabling peer-to-peer identity verification and certificate exchange.
 
@@ -50,13 +54,25 @@ io.on('connection', async socket => {
 server.listen(3000)
 ```
 
+The connection callback runs only after identity proof and completes before any
+first or concurrently received application event is dispatched. Until every
+connection callback finishes, the peer is excluded from broadcasts and
+identity-targeted delivery. A failed callback therefore cannot leave queued
+messages authorized.
+
+`requestedCertificates` is only the legacy v0.1 SDK allowlist. It cannot express
+complete application fulfillment semantics, and this wrapper does not expose
+the evidence to the connection callback. Do not infer certificate-based
+authorization from configuring the option; authorize the verified identity
+independently or use an integration with an explicit evidence callback.
+
 ## What it provides
 
 - **AuthSocketServer** — Wraps HTTP server to add BRC-103 authentication to Socket.IO
 - **AuthSocket** — Socket wrapper with auto-signing and verification on all messages
 - **BRC-103 handshake** — Nonce-based challenge-response mutual authentication
 - **Session management** — Tracks nonces and authentication state per socket
-- **Certificate exchange** — Support for requesting and verifying certificates during handshake
+- **Certificate exchange** — SDK allowlist validation during handshake; not an application authorization verdict
 - **Message signing** — Every message auto-signed with server wallet; every inbound message verified
 - **Automatic re-dispatch** — Special `'authMessage'` channel for BRC-103 frames; user code sees normal Socket.IO events
 - **Graceful lifecycle** — Idempotent `close()` disconnects clients and closes the attached HTTP server
@@ -169,6 +185,7 @@ io.on('connection', async socket => {
 3. **No auto-reconnect on server side** — client-side library handles reconnection logic
 4. **Each socket is separate peer** — nonce state is per-socket; don't mix them
 5. **CORS must be set explicitly** — Socket.IO requires `cors` config for browser clients
+6. **Event bodies are strict JSON** — ambiguous values and serialization hooks are rejected before signing
 
 ## Related packages
 

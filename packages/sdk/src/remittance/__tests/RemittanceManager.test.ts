@@ -481,7 +481,7 @@ describe('RemittanceManager base flows', () => {
     expect(awaited.threadId).toBe(handle.threadId)
   })
 
-  it('marks a thread as errored on invalid state transition', async () => {
+  it('rejects an orphan receipt before allocating a thread', async () => {
     const bus = new MessageBus()
     const module: RemittanceModule<{}, {}, {}> = {
       id: 'error-module',
@@ -518,9 +518,7 @@ describe('RemittanceManager base flows', () => {
     bus.send('taker-key', 'maker-key', 'remittance_inbox', JSON.stringify(receiptEnv))
     await maker.syncThreads()
 
-    const thread = maker.getThreadOrThrow('thread-1' as ThreadId)
-    expect(thread.state).toBe('errored')
-    expect(thread.flags.error).toBe(true)
+    expect(maker.getThread('thread-1' as ThreadId)).toBeUndefined()
   })
 
   it('processes live messages when CommsLayer supports streaming', async () => {

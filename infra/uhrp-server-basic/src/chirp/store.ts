@@ -12,19 +12,34 @@ import type {
   ChirpStore
 } from './contracts'
 import { log } from '../logger'
+import { writeBytesFully } from '../utils/writeBytesFully'
 
 const DATA_ROOT = path.resolve(process.env.CHIRP_DATA_DIR ?? path.join(process.cwd(), 'data/chirp'))
 const OBJECTS_ROOT = path.join(DATA_ROOT, 'objects')
 const UPLOADS_ROOT = path.join(DATA_ROOT, 'uploads')
 const ROOTS_ROOT = path.join(DATA_ROOT, 'roots')
+const ROOT_LOCKS_ROOT = path.join(ROOTS_ROOT, '.locks')
 const IDENTIFIER = /^[1-9A-HJ-NP-Za-km-z]{40,128}$/
 const UPLOAD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const STAGING_SECONDS = positiveEnvironment('CHIRP_STAGING_SECONDS', 86_400)
 const GC_INTERVAL_MS = positiveEnvironment('CHIRP_GC_INTERVAL_MS', 15 * 60 * 1000)
 const GC_MAX_ENTRIES = positiveEnvironment('CHIRP_GC_MAX_ENTRIES', 100_000)
+const MAX_ACTIVE_SESSIONS = positiveEnvironment('CHIRP_MAX_ACTIVE_SESSIONS', 1_024)
+const MAX_ACTIVE_SESSIONS_PER_IDENTITY = positiveEnvironment(
+  'CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY',
+  8
+)
+const MAX_STAGED_OBJECTS_PER_SESSION = positiveEnvironment(
+  'CHIRP_MAX_STAGED_OBJECTS_PER_SESSION',
+  4_096
+)
+const MIN_FREE_BYTES = nonNegativeEnvironment('CHIRP_MIN_FREE_BYTES', 1_073_741_824)
 const COMMIT_CACHE_ROOTS = positiveEnvironment('CHIRP_COMMIT_CACHE_ROOTS', 128)
 const COMMIT_CACHE_OBJECTS = positiveEnvironment('CHIRP_COMMIT_CACHE_OBJECTS', 200_000)
 const COMMIT_CACHE_SECONDS = positiveEnvironment('CHIRP_COMMIT_CACHE_SECONDS', 30)
+const FILESYSTEM_LOCK_ATTEMPTS = 50
+const FILESYSTEM_LOCK_RETRY_MS = 100
+const FILESYSTEM_LOCK_HEARTBEAT_MS = 60_000
 
 class FilesystemChirpStore implements ChirpStore {
   private readonly commitIndex = new ChirpCommitIndex(
@@ -39,28 +54,36 @@ class FilesystemChirpStore implements ChirpStore {
     logicalLength: string | null
   ): Promise<ChirpSession> {
     await this.ensureRoots()
-    const now = Math.floor(Date.now() / 1000)
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const uploadId = randomUUID()
-      const directory = uploadDirectory(uploadId)
-      try {
-        await fs.mkdir(directory, { recursive: false, mode: 0o700 })
-        await fs.mkdir(path.join(directory, 'objects'), { mode: 0o700 })
-        const session: ChirpSession = {
-          uploadId,
-          identityFingerprint: fingerprintIdentity(identityKey),
-          retentionSeconds,
-          logicalLength,
-          createdAt: now,
-          stagingExpiresAt: now + STAGING_SECONDS
+    return await withFilesystemLock(
+      path.join(DATA_ROOT, '.sessions.lock'),
+      'ERR_CHIRP_SESSION_BUSY',
+      async () => {
+        const now = Math.floor(Date.now() / 1000)
+        const identityFingerprint = fingerprintIdentity(identityKey)
+        await enforceSessionQuota(identityFingerprint, now)
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          const uploadId = randomUUID()
+          const directory = uploadDirectory(uploadId)
+          try {
+            await fs.mkdir(directory, { recursive: false, mode: 0o700 })
+            await fs.mkdir(path.join(directory, 'objects'), { mode: 0o700 })
+            const session: ChirpSession = {
+              uploadId,
+              identityFingerprint,
+              retentionSeconds,
+              logicalLength,
+              createdAt: now,
+              stagingExpiresAt: now + STAGING_SECONDS
+            }
+            await writeJSONAtomic(path.join(directory, 'session.json'), session)
+            return session
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+          }
         }
-        await writeJSONAtomic(path.join(directory, 'session.json'), session)
-        return session
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        throw new CHIRPError('ERR_CHIRP_SESSION', 'Unable to allocate a CHIRP upload session.')
       }
-    }
-    throw new CHIRPError('ERR_CHIRP_SESSION', 'Unable to allocate a CHIRP upload session.')
+    )
   }
 
   async getSession(uploadId: string, identityKey: string): Promise<ChirpSession | null> {
@@ -98,35 +121,76 @@ class FilesystemChirpStore implements ChirpStore {
       drain(source)
       return session == null ? 'session_missing' : 'digest_mismatch'
     }
-    if (await exists(marker)) {
-      drain(source)
-      return 'exists'
-    }
     await this.ensureRoots()
-    const temporary = path.join(DATA_ROOT, `.object.${randomUUID()}.tmp`)
-    const handle = await fs.open(temporary, 'wx', 0o600)
     try {
-      const staged = await writeObjectSource(handle, source, declaredLength, maximumBytes)
-      if (typeof staged === 'string') return staged
-      const actualIdentifier = objectIdentifierForHash(staged.digest)
-      if (actualIdentifier !== objectIdentifier) return 'digest_mismatch'
-      await handle.sync()
-      await handle.close()
-      try {
-        await fs.link(temporary, objectPath)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      return await withFilesystemLock(
+        path.join(uploadDirectory(uploadId), '.stage.lock'),
+        'ERR_CHIRP_UPLOAD_BUSY',
+        async () => {
+          if ((await this.getSession(uploadId, identityKey)) == null) {
+            drain(source)
+            return 'session_missing'
+          }
+          if (await exists(marker)) {
+            drain(source)
+            return 'exists'
+          }
+          const markers = await fs.readdir(path.dirname(marker)).catch(() => [])
+          if (
+            markers.filter(identifier => IDENTIFIER.test(identifier)).length >=
+            MAX_STAGED_OBJECTS_PER_SESSION
+          ) {
+            drain(source)
+            return 'quota_exceeded'
+          }
+          // Serialize the reserve check and maximum-sized write across every
+          // upload session (and process sharing DATA_ROOT). This turns the
+          // statfs check into an actual reservation: while the lock is held no
+          // sibling upload can independently spend the same free bytes.
+          return await withFilesystemLock(
+            path.join(DATA_ROOT, '.storage-reserve.lock'),
+            'ERR_CHIRP_UPLOAD_BUSY',
+            async () => {
+              if (!(await hasStorageReserve(maximumBytes))) {
+                drain(source)
+                return 'insufficient_storage'
+              }
+
+              const temporary = path.join(DATA_ROOT, `.object.${randomUUID()}.tmp`)
+              const handle = await fs.open(temporary, 'wx', 0o600)
+              try {
+                const staged = await writeObjectSource(handle, source, declaredLength, maximumBytes)
+                if (typeof staged === 'string') return staged
+                const actualIdentifier = objectIdentifierForHash(staged.digest)
+                if (actualIdentifier !== objectIdentifier) return 'digest_mismatch'
+                await handle.sync()
+                await handle.close()
+                try {
+                  await fs.link(temporary, objectPath)
+                } catch (error) {
+                  if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+                }
+                try {
+                  await fs.writeFile(containedDataPath(marker), '', { flag: 'wx', mode: 0o600 })
+                  return 'created'
+                } catch (error) {
+                  if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'exists'
+                  throw error
+                }
+              } finally {
+                await handle.close().catch(() => {})
+                await fs.rm(temporary, { force: true })
+              }
+            }
+          )
+        }
+      )
+    } catch (error) {
+      if (error instanceof CHIRPError && error.code === 'ERR_CHIRP_UPLOAD_BUSY') {
+        drain(source)
+        return 'busy'
       }
-      try {
-        await fs.writeFile(containedDataPath(marker), '', { flag: 'wx', mode: 0o600 })
-        return 'created'
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'exists'
-        throw error
-      }
-    } finally {
-      await handle.close().catch(() => {})
-      await fs.rm(temporary, { force: true })
+      throw error
     }
   }
 
@@ -147,33 +211,27 @@ class FilesystemChirpStore implements ChirpStore {
     return Uint8Array.from(await fs.readFile(objectPath))
   }
 
-  async withCommitLock<T>(uploadId: string, operation: () => Promise<T>): Promise<T> {
+  async withCommitLock<T>(
+    uploadId: string,
+    rootIdentifier: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
     const directory = safeUploadDirectory(uploadId)
-    if (directory == null) throw new CHIRPError('ERR_CHIRP_SESSION', 'Invalid upload session.')
-    const lockPath = containedDataPath(path.join(directory, '.commit.lock'))
-    let handle: Awaited<ReturnType<typeof fs.open>> | undefined
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      try {
-        handle = await fs.open(lockPath, 'wx', 0o600)
-        break
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-        const stat = await fs.stat(lockPath).catch(() => null)
-        if (stat != null && Date.now() - stat.mtimeMs > 5 * 60 * 1000) {
-          await fs.rm(lockPath, { force: true })
-          continue
-        }
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
+    const rootPath = rootRecordPath(rootIdentifier)
+    if (directory == null || rootPath == null) {
+      throw new CHIRPError('ERR_CHIRP_SESSION', 'Invalid upload session or root identifier.')
     }
-    if (handle == null)
-      throw new CHIRPError('ERR_CHIRP_COMMIT_BUSY', 'CHIRP commit is already in progress.')
-    try {
-      return await operation()
-    } finally {
-      await handle.close().catch(() => {})
-      await fs.rm(lockPath, { force: true })
-    }
+    await this.ensureRoots()
+    return await withFilesystemLock(
+      path.join(directory, '.commit.lock'),
+      'ERR_CHIRP_COMMIT_BUSY',
+      async () =>
+        await withFilesystemLock(
+          path.join(ROOT_LOCKS_ROOT, `${rootIdentifier}.lock`),
+          'ERR_CHIRP_COMMIT_BUSY',
+          operation
+        )
+    )
   }
 
   async getCommit(rootIdentifier: string): Promise<ChirpCommitRecord | null> {
@@ -264,19 +322,17 @@ class FilesystemChirpStore implements ChirpStore {
     const uploadIds = await fs.readdir(UPLOADS_ROOT).catch(() => [])
     const rootFiles = await fs.readdir(ROOTS_ROOT).catch(() => [])
     const objectFiles = await fs.readdir(OBJECTS_ROOT).catch(() => [])
-    const entryCount = uploadIds.length + rootFiles.length + objectFiles.length
-    if (entryCount > GC_MAX_ENTRIES) {
-      log.warn(
-        { operation: 'chirp.gc', outcome: 'bounded', entries: entryCount },
-        'CHIRP GC entry bound reached'
-      )
-      return
-    }
     await collectLiveUploads(uploadIds, live, now)
     await collectLiveRoots(rootFiles, live, now)
-    await deleteUnreferencedObjects(objectFiles, live)
+    const objectCleanup = await deleteUnreferencedObjects(objectFiles, live, GC_MAX_ENTRIES)
+    await deleteStaleTemporaryObjects(now, GC_MAX_ENTRIES)
     log.info(
-      { operation: 'chirp.gc', live_objects: live.size },
+      {
+        operation: 'chirp.gc',
+        live_objects: live.size,
+        deleted_objects: objectCleanup.deleted,
+        remaining_unreferenced_objects: objectCleanup.remaining
+      },
       'CHIRP garbage collection completed'
     )
   }
@@ -285,7 +341,8 @@ class FilesystemChirpStore implements ChirpStore {
     await Promise.all([
       fs.mkdir(OBJECTS_ROOT, { recursive: true, mode: 0o700 }),
       fs.mkdir(UPLOADS_ROOT, { recursive: true, mode: 0o700 }),
-      fs.mkdir(ROOTS_ROOT, { recursive: true, mode: 0o700 })
+      fs.mkdir(ROOTS_ROOT, { recursive: true, mode: 0o700 }),
+      fs.mkdir(ROOT_LOCKS_ROOT, { recursive: true, mode: 0o700 })
     ])
   }
 }
@@ -305,7 +362,7 @@ async function writeObjectSource(
       return 'too_large'
     }
     hasher.update(bytes)
-    await handle.write(bytes)
+    await writeBytesFully(handle, bytes)
   }
   if (declaredLength != null && length !== declaredLength) return 'size_mismatch'
   return { digest: Uint8Array.from(hasher.digest()) }
@@ -329,6 +386,35 @@ async function collectLiveUploads(
   }
 }
 
+async function enforceSessionQuota(identityFingerprint: string, now: number): Promise<void> {
+  const uploadIds = await fs.readdir(UPLOADS_ROOT).catch(() => [])
+  let activeSessions = 0
+  let identitySessions = 0
+  for (const uploadId of uploadIds) {
+    const directory = safeUploadDirectory(uploadId)
+    if (directory == null) continue
+    const session = await readJSON<ChirpSession>(path.join(directory, 'session.json'))
+    if (session == null || session.stagingExpiresAt <= now) {
+      await fs.rm(directory, { recursive: true, force: true })
+      continue
+    }
+    activeSessions += 1
+    if (session.identityFingerprint === identityFingerprint) identitySessions += 1
+  }
+  if (activeSessions >= MAX_ACTIVE_SESSIONS) {
+    throw new CHIRPError(
+      'ERR_CHIRP_SESSION_QUOTA',
+      'The host has reached its active CHIRP upload-session limit.'
+    )
+  }
+  if (identitySessions >= MAX_ACTIVE_SESSIONS_PER_IDENTITY) {
+    throw new CHIRPError(
+      'ERR_CHIRP_SESSION_QUOTA',
+      'This identity has reached its active CHIRP upload-session limit.'
+    )
+  }
+}
+
 async function collectLiveRoots(
   rootFiles: string[],
   live: Set<string>,
@@ -347,10 +433,42 @@ async function collectLiveRoots(
   }
 }
 
-async function deleteUnreferencedObjects(objectFiles: string[], live: Set<string>): Promise<void> {
+async function deleteUnreferencedObjects(
+  objectFiles: string[],
+  live: Set<string>,
+  maximumDeletes: number
+): Promise<{ deleted: number; remaining: number }> {
+  let deleted = 0
+  let remaining = 0
   for (const identifier of objectFiles) {
     if (IDENTIFIER.test(identifier) && !live.has(identifier)) {
-      await fs.rm(path.join(OBJECTS_ROOT, identifier), { force: true })
+      if (deleted < maximumDeletes) {
+        await fs.rm(path.join(OBJECTS_ROOT, identifier), { force: true })
+        deleted += 1
+      } else {
+        remaining += 1
+      }
+    }
+  }
+  return { deleted, remaining }
+}
+
+async function deleteStaleTemporaryObjects(now: number, maximumDeletes: number): Promise<void> {
+  const entries = await fs.readdir(DATA_ROOT, { withFileTypes: true }).catch(() => [])
+  let deleted = 0
+  for (const entry of entries) {
+    if (
+      deleted >= maximumDeletes ||
+      !entry.isFile() ||
+      !/^\.object\.[0-9a-f-]+\.tmp$/.test(entry.name)
+    ) {
+      continue
+    }
+    const candidate = path.join(DATA_ROOT, entry.name)
+    const stat = await fs.stat(candidate).catch(() => null)
+    if (stat != null && Math.floor(stat.mtimeMs / 1000) + STAGING_SECONDS <= now) {
+      await fs.rm(candidate, { force: true })
+      deleted += 1
     }
   }
 }
@@ -448,12 +566,65 @@ async function exists(file: string): Promise<boolean> {
   }
 }
 
+async function hasStorageReserve(maximumWriteBytes: number): Promise<boolean> {
+  const stats = await fs.statfs(DATA_ROOT, { bigint: true })
+  const availableBytes = stats.bavail * stats.bsize
+  return availableBytes >= BigInt(MIN_FREE_BYTES) + BigInt(maximumWriteBytes)
+}
+
+async function withFilesystemLock<T>(
+  file: string,
+  busyCode: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const lockPath = containedDataPath(file)
+  const ownerToken = randomUUID()
+  let handle: Awaited<ReturnType<typeof fs.open>> | undefined
+  for (let attempt = 0; attempt < FILESYSTEM_LOCK_ATTEMPTS; attempt += 1) {
+    try {
+      handle = await fs.open(lockPath, 'wx', 0o600)
+      await handle.writeFile(`${ownerToken}\n`, 'utf8')
+      await handle.sync()
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      await new Promise(resolve => setTimeout(resolve, FILESYSTEM_LOCK_RETRY_MS))
+    }
+  }
+  if (handle == null) {
+    throw new CHIRPError(busyCode, 'CHIRP storage operation is already in progress.')
+  }
+  const heartbeat = setInterval(() => {
+    const now = new Date()
+    void handle?.utimes(now, now).catch(() => {})
+  }, FILESYSTEM_LOCK_HEARTBEAT_MS)
+  heartbeat.unref()
+  try {
+    return await operation()
+  } finally {
+    clearInterval(heartbeat)
+    await handle.close().catch(() => {})
+    const currentOwner = await fs.readFile(lockPath, 'utf8').catch(() => null)
+    if (currentOwner === `${ownerToken}\n`) await fs.rm(lockPath, { force: true })
+  }
+}
+
 function positiveEnvironment(name: string, fallback: number): number {
   const raw = process.env[name]
   if (raw == null || raw === '') return fallback
   const value = Number(raw)
   if (!Number.isSafeInteger(value) || value < 1)
     throw new TypeError(`${name} must be a positive integer.`)
+  return value
+}
+
+function nonNegativeEnvironment(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (raw == null || raw === '') return fallback
+  const value = Number(raw)
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`${name} must be a non-negative integer.`)
+  }
   return value
 }
 

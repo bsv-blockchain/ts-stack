@@ -3,6 +3,39 @@ import { convertWocToBlockHeaderHex, WhatsOnChain } from '../../../providers/Wha
 import { wait } from '../../../../utility/utilityHelpers'
 import { Chain } from '../../../../sdk/types'
 import { BlockHeader } from '../../../../sdk/WalletServices.interfaces'
+import { safeDiagnostic } from '../util/safeDiagnostic'
+
+const MAX_WEBSOCKET_MESSAGE_BYTES = 1024 * 1024
+const MAX_BULK_HEADERS_PER_CONNECTION = 100000
+const MAX_IDLE_WAIT_MSECS = 60 * 60 * 1000
+const WEBSOCKET_HANDSHAKE_TIMEOUT_MSECS = 30000
+
+function safeProviderMessage(value: unknown): string {
+  return safeDiagnostic(value)
+}
+
+function requirePositiveInteger(value: number, name: string, maximum: number): void {
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`${name} must be a positive safe integer no greater than ${maximum}.`)
+  }
+}
+
+function serializedData(rawData: WebSocket.Data): string {
+  const serialized = rawData.toString()
+  if (new TextEncoder().encode(serialized).length > MAX_WEBSOCKET_MESSAGE_BYTES) {
+    throw new Error(`WhatsOnChain WebSocket message exceeds ${MAX_WEBSOCKET_MESSAGE_BYTES} bytes.`)
+  }
+  return serialized
+}
+
+function websocketOptions(): WebSocket.ClientOptions {
+  return {
+    followRedirects: false,
+    handshakeTimeout: WEBSOCKET_HANDSHAKE_TIMEOUT_MSECS,
+    maxPayload: MAX_WEBSOCKET_MESSAGE_BYTES,
+    perMessageDeflate: false
+  }
+}
 
 export interface StopListenerToken {
   stop: (() => void) | undefined
@@ -36,6 +69,8 @@ async function getWhatsOnChainTipHeight(chain: Chain = 'main', apiKey?: string):
 interface BulkListenerState {
   done: boolean
   count: number
+  nextHeight: number
+  lastHash?: string
   ping: number
   ok: boolean
   wsIsOpen: boolean
@@ -57,18 +92,26 @@ function processHeaderMessage(
     return
   }
   if (data.connect) {
-    logger(json)
+    logger('WhatsOnChain WebSocket connected.')
     return
   }
   if (!data.pub) {
-    error(42, `unknown data ${json}`)
+    error(42, 'unknown WhatsOnChain data frame')
     return
   }
   const wocHeader = data.pub.data
   if (!wocHeader) return
   const header = convertWocToBlockHeaderHex(wocHeader)
+  if (header.height !== state.nextHeight) {
+    throw new Error(`expected header height ${state.nextHeight}, got ${header.height}`)
+  }
+  if (state.lastHash != null && header.previousHash !== state.lastHash) {
+    throw new Error(`header ${header.height} does not extend the preceding WebSocket header`)
+  }
   enqueue(header)
   state.count++
+  state.nextHeight++
+  state.lastHash = header.hash
   if (header.height < toHeight) return
   state.ok = true
   state.done = true
@@ -76,7 +119,7 @@ function processHeaderMessage(
 }
 
 function processBulkData(
-  rawData: any,
+  rawData: WebSocket.Data,
   state: BulkListenerState,
   ws: WebSocket,
   toHeight: number,
@@ -84,11 +127,12 @@ function processBulkData(
   error: (code: number, message: string) => boolean,
   logger: (...args: any[]) => void
 ): void {
-  if (rawData.length === 0) {
+  const serialized = serializedData(rawData)
+  if (serialized.length === 0) {
     state.ping++
     return
   }
-  const data = JSON.parse(rawData)
+  const data = JSON.parse(serialized)
   switch (data.type || 0) {
     case 0:
       processHeaderMessage(data, state, ws, toHeight, enqueue, error, logger)
@@ -98,11 +142,11 @@ function processBulkData(
     case 6:
       break
     case 7:
-      error(data.data.code, JSON.stringify(data.data))
+      error(Number.isSafeInteger(data.data?.code) ? data.data.code : -1, safeProviderMessage(JSON.stringify(data.data)))
       ws.close()
       break
     default:
-      error(42, `unknown rawData ${rawData}`)
+      error(42, 'unknown WhatsOnChain WebSocket frame type')
       ws.close()
   }
 }
@@ -134,6 +178,7 @@ export async function WocHeadersBulkListener(
   const state: BulkListenerState = {
     done: false,
     count: 0,
+    nextHeight: fromHeight,
     ping: 0,
     ok: false,
     wsIsOpen: false
@@ -164,11 +209,26 @@ export async function WocHeadersBulkListener(
     case 'stn':
     case 'ttn':
     case 'tstn':
+    case 'regtest':
     case 'mock':
       throw new Error(`WocHeadersBulkListener does not support '${chain}' chain.`)
   }
 
-  const ws = new WebSocket(webSocketUrl)
+  requirePositiveInteger(idleWait, 'idleWait', MAX_IDLE_WAIT_MSECS)
+  if (
+    !Number.isSafeInteger(fromHeight) ||
+    !Number.isSafeInteger(toHeight) ||
+    fromHeight < 0 ||
+    toHeight < fromHeight ||
+    toHeight > 0x7fffffff ||
+    toHeight - fromHeight + 1 > MAX_BULK_HEADERS_PER_CONNECTION
+  ) {
+    throw new Error(
+      `WhatsOnChain bulk range must contain at most ${MAX_BULK_HEADERS_PER_CONNECTION} non-negative heights.`
+    )
+  }
+
+  const ws = new WebSocket(webSocketUrl, websocketOptions())
 
   ws.onopen = function (this, _evt) {
     // This is required to trigger connect on server side.
@@ -188,7 +248,7 @@ export async function WocHeadersBulkListener(
       default:
         break
     }
-    const ignoreError = error(code, evt.message)
+    const ignoreError = error(code, safeProviderMessage(evt.message))
     if (!ignoreError) ws.close()
   }
 
@@ -199,7 +259,16 @@ export async function WocHeadersBulkListener(
   }
 
   ws.onmessage = function (this, ev) {
-    processBulkData(ev.data, state, ws, toHeight, enqueue, error, logger)
+    try {
+      processBulkData(ev.data, state, ws, toHeight, enqueue, error, logger)
+    } catch (caught: unknown) {
+      error(
+        -3,
+        `invalid WhatsOnChain WebSocket message: ${safeProviderMessage(caught instanceof Error ? caught.message : caught)}`
+      )
+      state.done = true
+      ws.close()
+    }
   }
 
   // Allow this many wait repetitions for first header, then expect the headers to keep coming
@@ -310,7 +379,7 @@ export async function WocHeadersLiveListener(
   stop: StopListenerToken,
   chain: Chain,
   _logger: (...args: any[]) => void,
-  _idleWait = 100000
+  idleWait = 100000
 ): Promise<boolean> {
   let _count = 0
   let ok = false
@@ -344,18 +413,21 @@ export async function WocHeadersLiveListener(
     case 'stn':
     case 'ttn':
     case 'tstn':
+    case 'regtest':
     case 'mock':
       throw new Error(`WocHeadersLiveListener does not support '${chain}' chain.`)
   }
 
+  requirePositiveInteger(idleWait, 'idleWait', MAX_IDLE_WAIT_MSECS)
+
   function processData(rawData: WebSocket.Data) {
-    const serializedData = rawData.toString()
-    if (serializedData.length === 0) {
+    const serialized = serializedData(rawData)
+    if (serialized.length === 0) {
       // Ping
       return
     }
     // rawData may be a Buffer...
-    const data = JSON.parse(serializedData)
+    const data = JSON.parse(serialized)
     const json = JSON.stringify(data)
     switch (data.type || 0) {
       case 0:
@@ -373,7 +445,7 @@ export async function WocHeadersLiveListener(
               enqueue(header)
               _count++
             } else {
-              error(42, `unknown data ${json}`)
+              error(42, 'unknown WhatsOnChain data frame')
             }
           }
         }
@@ -387,16 +459,19 @@ export async function WocHeadersLiveListener(
       case 7:
         // If you don't close after unsubscribe or end of headers, after a delay, this is received.
         // "{\"type\":7,\"data\":{\"code\":200,\"reason\":\"Data Delivered\"}}"
-        error(data.data.code, JSON.stringify(data.data))
+        error(
+          Number.isSafeInteger(data.data?.code) ? data.data.code : -1,
+          safeProviderMessage(JSON.stringify(data.data))
+        )
         ws.close()
         break
       default:
-        error(42, `unknown data ${json}`)
+        error(42, 'unknown WhatsOnChain WebSocket frame type')
         ws.close()
     }
   }
 
-  const ws = new WebSocket(webSocketUrl)
+  const ws = new WebSocket(webSocketUrl, websocketOptions())
 
   ws.onopen = function (this, _evt) {
     // This is required to trigger connect on server side.
@@ -416,7 +491,7 @@ export async function WocHeadersLiveListener(
       default:
         break
     }
-    const ignoreError = error(code, evt.message)
+    const ignoreError = error(code, safeProviderMessage(evt.message))
     if (!ignoreError) ws.close()
   }
 
@@ -427,8 +502,17 @@ export async function WocHeadersLiveListener(
   }
 
   ws.onmessage = function (this, ev) {
-    processData(ev.data)
-    msecsWithoutPing = 0
+    try {
+      processData(ev.data)
+      msecsWithoutPing = 0
+    } catch (caught: unknown) {
+      error(
+        -3,
+        `invalid WhatsOnChain WebSocket message: ${safeProviderMessage(caught instanceof Error ? caught.message : caught)}`
+      )
+      done = true
+      ws.close()
+    }
   }
 
   const waitMsecs = 1000
@@ -436,11 +520,16 @@ export async function WocHeadersLiveListener(
 
   while (!done) {
     await wait(waitMsecs)
+    if (done) break
 
     msecsWithoutPing += waitMsecs
     sinceLastSentPing += waitMsecs
 
-    if (sinceLastSentPing > 10000) {
+    if (msecsWithoutPing >= idleWait) {
+      error(-2, 'unexpectedly went idle')
+      done = true
+      ws.close()
+    } else if (sinceLastSentPing > 10000 && wsIsOpen) {
       ws.send('ping')
       sinceLastSentPing = 0
     }

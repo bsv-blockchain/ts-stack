@@ -1,4 +1,4 @@
-import * as sdk from '../../../sdk'
+import type * as sdk from '../../../sdk'
 
 export interface TableProvenTxReq extends TableProvenTxReqDynamics {
   created_at: Date

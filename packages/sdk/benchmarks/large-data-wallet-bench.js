@@ -1,9 +1,11 @@
 import { performance } from 'node:perf_hooks'
+import { writeFile } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 
-const sdkRoot = process.env.SDK_DIST_ROOT == null
-  ? new URL('../dist/esm/src/', import.meta.url)
-  : pathToFileURL(`${process.env.SDK_DIST_ROOT.replace(/\/$/, '')}/`)
+const sdkRoot =
+  process.env.SDK_DIST_ROOT == null
+    ? new URL('../dist/esm/src/', import.meta.url)
+    : pathToFileURL(`${process.env.SDK_DIST_ROOT.replace(/\/$/, '')}/`)
 const [
   { default: Beef },
   { default: Script },
@@ -18,18 +20,15 @@ const [
   import(new URL('wallet/substrates/WalletWireTransceiver.js', sdkRoot))
 ])
 
-const payloadBytes = Number.parseInt(
-  process.env.WALLET_BENCH_BYTES ?? String(8 * 1024 * 1024),
-  10
-)
+const payloadBytes = Number.parseInt(process.env.WALLET_BENCH_BYTES ?? String(8 * 1024 * 1024), 10)
 const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? '7', 10)
 
-function median (values) {
+function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function measure (name, operation, warmups = 2) {
+async function measure(name, operation, warmups = 2) {
   for (let i = 0; i < warmups; i++) await operation()
   const values = []
   for (let i = 0; i < samples; i++) {
@@ -37,25 +36,27 @@ async function measure (name, operation, warmups = 2) {
     await operation()
     values.push(performance.now() - start)
   }
-  console.log(`${name}: ${JSON.stringify({
+  const result = {
     medianMs: median(values),
     minMs: Math.min(...values),
     maxMs: Math.max(...values),
     samples: values.length
-  })}`)
+  }
+  console.log(`${name}: ${JSON.stringify(result)}`)
+  return result
 }
 
-function makePayload () {
+function makePayload() {
   const bytes = new Uint8Array(payloadBytes)
   for (let i = 0; i < bytes.length; i++) bytes[i] = i & 0xff
   return bytes
 }
 
-function makeWalletWire (onInternalize, onCreate) {
+function makeWalletWire(onInternalize, onCreate) {
   const wallet = new Proxy(
     { internalizeAction: onInternalize, createAction: onCreate },
     {
-      get (target, property) {
+      get(target, property) {
         if (property in target) return target[property]
         return async () => {
           throw new Error(`Unexpected benchmark wallet call: ${String(property)}`)
@@ -66,12 +67,13 @@ function makeWalletWire (onInternalize, onCreate) {
   return new WalletWireTransceiver(new WalletWireProcessor(wallet))
 }
 
-async function run () {
+async function run() {
+  const measurements = {}
   const payload = makePayload()
   const hex = `${payload.length.toString(16).padStart(8, '0')}${'51'.repeat(payload.length)}`
   console.log(JSON.stringify({ payloadBytes, samples, node: process.version }))
 
-  await measure('large hex Script.fromHex', () => {
+  measurements.scriptFromHex = await measure('large hex Script.fromHex', () => {
     const script = Script.fromHex(hex)
     if (script.toUint8Array().length !== payload.length + 4) {
       throw new Error('hex script length changed')
@@ -85,11 +87,15 @@ async function run () {
   beef.mergeTransaction(tx)
   const atomic = beef.toUint8ArrayAtomic(txid)
   console.log(`atomic bytes: ${atomic.length}`)
-  await measure('warm Beef.toUint8ArrayAtomic', () => {
-    if (beef.toUint8ArrayAtomic(txid).length !== atomic.length) {
-      throw new Error('Atomic BEEF length changed')
-    }
-  }, 0)
+  measurements.beefToUint8ArrayAtomic = await measure(
+    'warm Beef.toUint8ArrayAtomic',
+    () => {
+      if (beef.toUint8ArrayAtomic(txid).length !== atomic.length) {
+        throw new Error('Atomic BEEF length changed')
+      }
+    },
+    0
+  )
 
   let receivedBytes = 0
   const wallet = makeWalletWire(
@@ -101,35 +107,67 @@ async function run () {
       receivedBytes = args.inputBEEF.length
       return {
         signableTransaction: {
-          tx: payload,
+          tx: atomic,
           reference: 'AQIDBA=='
         }
       }
     }
   )
   const internalizeArgs = {
-    tx: payload,
-    outputs: [],
+    tx: atomic,
+    outputs: [
+      {
+        outputIndex: 0,
+        protocol: 'basket insertion',
+        insertionRemittance: { basket: 'benchmark' }
+      }
+    ],
     description: 'generic large-data wallet benchmark'
   }
-  await measure('Wallet Wire internalizeAction round trip', async () => {
-    await wallet.internalizeAction(internalizeArgs)
-    if (receivedBytes !== payload.length) {
-      throw new Error('Wallet Wire payload length changed')
+  measurements.walletWireInternalize = await measure(
+    'Wallet Wire internalizeAction round trip',
+    async () => {
+      await wallet.internalizeAction(internalizeArgs)
+      if (receivedBytes !== atomic.length) {
+        throw new Error('Wallet Wire payload length changed')
+      }
     }
-  })
-  await measure('Wallet Wire createAction BEEF round trip', async () => {
-    const result = await wallet.createAction({
-      description: 'generic large-data create benchmark',
-      inputBEEF: payload,
-      labels: [],
-      options: { signAndProcess: false }
-    })
-    if (receivedBytes !== payload.length ||
-      result.signableTransaction?.tx.length !== payload.length) {
-      throw new Error('Wallet Wire createAction BEEF length changed')
+  )
+  measurements.walletWireCreate = await measure(
+    'Wallet Wire createAction BEEF round trip',
+    async () => {
+      const result = await wallet.createAction({
+        description: 'generic large-data create benchmark',
+        inputBEEF: atomic,
+        labels: [],
+        options: { signAndProcess: false }
+      })
+      if (
+        receivedBytes !== atomic.length ||
+        result.signableTransaction?.tx.length !== atomic.length
+      ) {
+        throw new Error('Wallet Wire createAction BEEF length changed')
+      }
     }
-  })
+  )
+
+  if (process.env.BENCH_REPORT != null) {
+    await writeFile(
+      process.env.BENCH_REPORT,
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          benchmark: 'sdk-large-data-wallet',
+          payloadBytes,
+          samples,
+          node: process.version,
+          measurements
+        },
+        null,
+        2
+      )}\n`
+    )
+  }
 }
 
 await run()

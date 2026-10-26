@@ -59,6 +59,51 @@ describe('Transaction.verify with a pluggable verifier', () => {
     expect(result).toBe(true)
   })
 
+  it('verifies an owned transaction graph snapshot across asynchronous backends', async () => {
+    const tx = await buildValidTx()
+    const originalOutput = tx.outputs[0].satoshis
+    const originalSourceOutput = tx.inputs[0].sourceTransaction?.outputs[0].satoshis
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => {
+      resume = resolve
+    })
+    let verifiedTx: Transaction | undefined
+    const pending = tx.verify('scripts only', undefined, undefined, {
+      verifyScripts: async ({ tx: snapshot }) => {
+        verifiedTx = snapshot
+        await gate
+        return true
+      }
+    })
+
+    tx.outputs[0].satoshis = (originalOutput ?? 0) + 100
+    if (tx.inputs[0].sourceTransaction !== undefined) {
+      tx.inputs[0].sourceTransaction.outputs[0].satoshis = (originalSourceOutput ?? 0) + 200
+    }
+    resume()
+
+    await expect(pending).resolves.toBe(true)
+    expect(verifiedTx).not.toBe(tx)
+    expect(verifiedTx?.outputs[0].satoshis).toBe(originalOutput)
+    expect(verifiedTx?.inputs[0].sourceTransaction?.outputs[0].satoshis).toBe(originalSourceOutput)
+  })
+
+  it('rejects truthy non-boolean single and batch verifier verdicts', async () => {
+    const tx = await buildValidTx()
+    await expect(
+      tx.verify('scripts only', undefined, undefined, {
+        verifyScripts: async () => 'false' as unknown as boolean
+      })
+    ).rejects.toThrow('Script verifier returned a non-boolean verdict')
+
+    await expect(
+      tx.verify('scripts only', undefined, undefined, {
+        verifyScripts: async () => true,
+        verifyScriptsBatch: async () => ['false'] as unknown as boolean[]
+      })
+    ).rejects.toThrow('Script verifier returned a non-boolean verdict')
+  })
+
   it('preserves the JavaScript path when an adaptive verifier declines before execution', async () => {
     const tx = await buildValidTx()
     const verifyScripts = jest.fn(async () => false)
@@ -72,11 +117,11 @@ describe('Transaction.verify with a pluggable verifier', () => {
     ).resolves.toBe(true)
 
     expect(shouldVerifyScripts).toHaveBeenCalledTimes(1)
-    expect(shouldVerifyScripts).toHaveBeenCalledWith({
-      tx,
-      blockHeight: 943816,
-      consensus: true
-    })
+    const selectedParams = shouldVerifyScripts.mock.calls[0][0]
+    expect(selectedParams.tx).not.toBe(tx)
+    expect(selectedParams.tx.toUint8Array()).toEqual(tx.toUint8Array())
+    expect(selectedParams.blockHeight).toBe(943816)
+    expect(selectedParams.consensus).toBe(true)
     expect(verifyScripts).not.toHaveBeenCalled()
   })
 
@@ -109,15 +154,15 @@ describe('Transaction.verify with a pluggable verifier', () => {
       verifyScripts: jest.fn(async () => true)
     }
     await expect(tx.verify('scripts only', undefined, 1024, capableVerifier)).resolves.toBe(true)
-    expect(capableVerifier.verifyScripts).toHaveBeenCalledWith({
-      tx,
-      blockHeight: 943816,
-      consensus: true,
-      memoryLimit: 1024
-    })
+    const verifiedParams = (capableVerifier.verifyScripts as jest.Mock).mock.calls[0][0]
+    expect(verifiedParams.tx).not.toBe(tx)
+    expect(verifiedParams.tx.toUint8Array()).toEqual(tx.toUint8Array())
+    expect(verifiedParams.blockHeight).toBe(943816)
+    expect(verifiedParams.consensus).toBe(true)
+    expect(verifiedParams.memoryLimit).toBe(1024)
   })
 
-  it('does not hash an already-linked transaction graph for scripts-only verification', async () => {
+  it('binds a linked source transaction ID without hashing the transaction being verified', async () => {
     const tx = await buildValidTx()
     const sourceTransaction = tx.inputs[0].sourceTransaction as Transaction
     tx.inputs[0].sourceTXID = sourceTransaction.id('hex')
@@ -186,7 +231,10 @@ describe('Transaction.verify with a pluggable verifier', () => {
 
     expect(verifyScripts).not.toHaveBeenCalled()
     expect(verifyScriptsBatch).toHaveBeenCalledTimes(1)
-    expect(verifyScriptsBatch.mock.calls[0][0].map(({ tx }) => tx)).toEqual([tip, middle])
+    const verifiedTransactions = verifyScriptsBatch.mock.calls[0][0].map(({ tx }) => tx)
+    expect(verifiedTransactions[0]).not.toBe(tip)
+    expect(verifiedTransactions[1]).not.toBe(middle)
+    expect(verifiedTransactions.map(tx => tx.id('hex'))).toEqual([tip.id('hex'), middle.id('hex')])
   })
 
   it('rejects a malformed graph-batch result instead of masking transactions', async () => {
@@ -278,7 +326,7 @@ describe('Transaction.verify with a pluggable verifier', () => {
       undefinedOutput.verify('scripts only', undefined, undefined, {
         verifyScripts: async () => true
       })
-    ).rejects.toThrow('Every output must have a defined amount during transaction verification')
+    ).rejects.toThrow('Output 0 amount must be a non-negative safe integer')
 
     const insufficientFee = await buildValidTx()
     await expect(

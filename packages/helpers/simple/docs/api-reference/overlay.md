@@ -14,17 +14,19 @@ static async create(config: OverlayConfig): Promise<Overlay>
 
 Create a new overlay instance.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `config.topics` | `string[]` | *required* | Topics to broadcast to (must start with `tm_`) |
-| `config.network` | `string` | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'` |
-| `config.slapTrackers` | `string[]` | SDK default | Custom SLAP tracker URLs |
-| `config.hostOverrides` | `Record<string, string[]>` | — | Override hosts for specific topics |
-| `config.additionalHosts` | `Record<string, string[]>` | — | Add extra hosts for specific topics |
-| `config.requireAckFromAllHosts` | `'all' \| 'any' \| string[]` | — | Require acknowledgment from all hosts |
-| `config.requireAckFromAnyHost` | `'all' \| 'any' \| string[]` | — | Require acknowledgment from any host |
+| Parameter                       | Type                         | Default     | Description                                                           |
+| ------------------------------- | ---------------------------- | ----------- | --------------------------------------------------------------------- |
+| `config.topics`                 | `string[]`                   | _required_  | Unique bounded topics to broadcast to (1–64, each a `tm_` identifier) |
+| `config.network`                | `string`                     | `'mainnet'` | `'mainnet'`, `'testnet'`, `'teratestnet'`, or `'local'`               |
+| `config.slapTrackers`           | `string[]`                   | SDK default | Custom SLAP tracker URLs                                              |
+| `config.hostOverrides`          | `Record<string, string[]>`   | —           | Override hosts for specific topics                                    |
+| `config.additionalHosts`        | `Record<string, string[]>`   | —           | Add extra hosts for specific topics                                   |
+| `config.requireAckFromAllHosts` | `'all' \| 'any' \| string[]` | —           | Require acknowledgment from all hosts                                 |
+| `config.requireAckFromAnyHost`  | `'all' \| 'any' \| string[]` | —           | Require acknowledgment from any host                                  |
 
-**Throws:** `Error` if no topics provided or any topic doesn't start with `tm_`.
+Configuration arrays and host maps are validated and copied during creation, so mutating caller-owned objects cannot silently change routing or acknowledgement policy.
+
+**Throws:** `Error` for an empty, duplicate, malformed, or excessive topic list, an invalid network preset, or malformed routing/acknowledgement configuration.
 
 ```typescript
 import { Overlay } from '@bsv/simple/browser'
@@ -66,7 +68,9 @@ Add a topic to the overlay. Rebuilds the internal broadcaster.
 removeTopic(topic: string): void
 ```
 
-Remove a topic from the overlay. Rebuilds the internal broadcaster if topics remain.
+Remove a topic from the overlay and rebuild the internal broadcaster.
+
+**Throws:** `Error` when removing the last topic. An overlay always retains at least one active topic; create a new instance to replace the complete topic set.
 
 ### overlay.broadcast()
 
@@ -76,10 +80,12 @@ async broadcast(tx: Transaction, topics?: string[]): Promise<OverlayBroadcastRes
 
 Submit a pre-built transaction to overlay topics.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `tx` | `Transaction` | Yes | BSV SDK `Transaction` object |
-| `topics` | `string[]` | No | Override topics for this broadcast (must start with `tm_`) |
+| Parameter | Type          | Required | Description                                                           |
+| --------- | ------------- | -------- | --------------------------------------------------------------------- |
+| `tx`      | `Transaction` | Yes      | BSV SDK `Transaction` object                                          |
+| `topics`  | `string[]`    | No       | Override topics for this broadcast (unique bounded `tm_` identifiers) |
+
+Per-call topic overrides retain the overlay's configured acknowledgement requirements. If an explicit acknowledgement topic list does not match the override set, the broadcast fails closed rather than weakening the policy.
 
 **Returns:**
 
@@ -100,11 +106,11 @@ async query(service: string, query: unknown, timeout?: number): Promise<LookupAn
 
 Query a lookup service.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `service` | `string` | Yes | Lookup service name (should start with `ls_`) |
-| `query` | `unknown` | Yes | Query parameters |
-| `timeout` | `number` | No | Timeout in milliseconds |
+| Parameter | Type      | Required | Description                                   |
+| --------- | --------- | -------- | --------------------------------------------- |
+| `service` | `string`  | Yes      | Lookup service name (should start with `ls_`) |
+| `query`   | `unknown` | Yes      | Query parameters                              |
+| `timeout` | `number`  | No       | Timeout in milliseconds                       |
 
 **Returns:** `LookupAnswer` from the BSV SDK.
 
@@ -116,10 +122,10 @@ async lookupOutputs(service: string, query: unknown): Promise<OverlayOutput[]>
 
 Query a lookup service and extract parsed outputs.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `service` | `string` | Lookup service name |
-| `query` | `unknown` | Query parameters |
+| Parameter | Type      | Description         |
+| --------- | --------- | ------------------- |
+| `service` | `string`  | Lookup service name |
+| `query`   | `unknown` | Query parameters    |
 
 **Returns:**
 
@@ -163,11 +169,11 @@ async advertiseSHIP(
 
 Create a SHIP advertisement: "I host topic X at domain Y".
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | `string` | Yes | Hosting domain URL |
-| `topic` | `string` | Yes | Topic name (must start with `tm_`) |
-| `basket` | `string` | No | Store the SHIP token in a basket |
+| Parameter | Type     | Required | Description                        |
+| --------- | -------- | -------- | ---------------------------------- |
+| `domain`  | `string` | Yes      | Hosting domain URL                 |
+| `topic`   | `string` | Yes      | Topic name (must start with `tm_`) |
+| `basket`  | `string` | No       | Store the SHIP token in a basket   |
 
 **Throws:** `Error` if topic doesn't start with `tm_`.
 
@@ -185,11 +191,11 @@ async advertiseSLAP(
 
 Create a SLAP advertisement: "I provide lookup service X at domain Y".
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | `string` | Yes | Service domain URL |
-| `service` | `string` | Yes | Service name (must start with `ls_`) |
-| `basket` | `string` | No | Store the SLAP token in a basket |
+| Parameter | Type     | Required | Description                          |
+| --------- | -------- | -------- | ------------------------------------ |
+| `domain`  | `string` | Yes      | Service domain URL                   |
+| `service` | `string` | Yes      | Service name (must start with `ls_`) |
+| `basket`  | `string` | No       | Store the SLAP token in a basket     |
 
 **Throws:** `Error` if service doesn't start with `ls_`.
 
@@ -205,14 +211,15 @@ async broadcastAction(
 
 Create a transaction and broadcast to overlay in one step.
 
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `overlay` | `Overlay` | Yes | Overlay instance |
-| `actionOptions.outputs` | `any[]` | Yes | Output specifications for `createAction()` |
-| `actionOptions.description` | `string` | No | Transaction description |
-| `topics` | `string[]` | No | Override topics for broadcast |
+| Parameter                   | Type       | Required | Description                                |
+| --------------------------- | ---------- | -------- | ------------------------------------------ |
+| `overlay`                   | `Overlay`  | Yes      | Overlay instance                           |
+| `actionOptions.outputs`     | `any[]`    | Yes      | Output specifications for `createAction()` |
+| `actionOptions.description` | `string`   | No       | Transaction description                    |
+| `topics`                    | `string[]` | No       | Override topics for broadcast              |
 
 **What happens:**
+
 1. Calls `createAction()` with the outputs
 2. Parses the result as `Transaction.fromAtomicBEEF()`
 3. Broadcasts via `overlay.broadcast()`
@@ -231,10 +238,10 @@ async withRetry<T>(
 
 Wrap an operation with automatic retry on double-spend errors.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `operation` | `() => Promise<T>` | *required* | The operation to retry |
-| `overlay` | `Overlay` | *required* | Overlay instance (provides the broadcaster) |
-| `maxRetries` | `number` | SDK default | Maximum retry attempts |
+| Parameter    | Type               | Default     | Description                                 |
+| ------------ | ------------------ | ----------- | ------------------------------------------- |
+| `operation`  | `() => Promise<T>` | _required_  | The operation to retry                      |
+| `overlay`    | `Overlay`          | _required_  | Overlay instance (provides the broadcaster) |
+| `maxRetries` | `number`           | SDK default | Maximum retry attempts                      |
 
 Uses `withDoubleSpendRetry()` from `@bsv/sdk` under the hood.

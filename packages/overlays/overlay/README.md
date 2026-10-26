@@ -4,10 +4,19 @@ The core engine and storage contracts for BSV Overlay Services. The engine admit
 transactions through topic managers, maintains UTXO state, serves lookup
 services, and supports SHIP, SLAP, GASP, and BASM synchronization.
 
+Lookup history selectors retain their selected topical predecessors even when a
+transaction is confirmed. The response keeps its current subject last in BRC-62
+BEEF and includes the selected available history within existing traversal and
+byte budgets. A lookup with no history selector returns its original proof bytes.
+UMP hosts must request this lineage to let clients follow token updates past an
+older WAB support pin.
+
 Use [`@bsv/overlay-express`](../overlay-express/README.md) when you want the
 standard HTTP server, operational endpoints, edge policy, and health checks.
 Use this package directly when you are embedding the engine in another runtime
 or implementing a custom transport.
+
+Knex storage maps SQL `NULL` block heights to absent confirmation metadata. It never invents a confirmed height; malformed non-null values still fail engine validation.
 
 ## Requirements
 
@@ -162,6 +171,73 @@ For production deployments:
 - protect administrative and callback routes with explicit credentials;
 - avoid logging raw secrets, authorization headers, or unbounded payloads;
 - monitor readiness, proof acquisition, synchronization, and unproven state.
+
+Run every `KnexStorageMigrations` migration before serving traffic. The topical
+uniqueness migration deliberately stops when duplicate `(txid, outputIndex,
+topic)` output rows or `(txid, topic)` applied-transaction rows already exist;
+operators must inspect and reconcile those records rather than letting a
+migration discard security-relevant state. The engine serializes submissions
+inside one process, while database uniqueness and conditional unspent updates
+enforce the same spend/admission boundary across processes.
+
+Prefer roll-forward after these migrations. Older package versions do not know
+their migration names, so a bare image rollback can fail migration-list
+validation. To restore an older version, stop writes and either use the new
+migration source to reverse `spentBy` and topical uniqueness in reverse order
+after exporting and reconciling every `spent`/`spentBy` association, or restore
+coordinated pre-migration SQL and lookup-store backups. Never drop `spentBy` or
+restore only one store without preserving that spend evidence.
+
+Submission is intentionally not a single all-or-nothing transaction across
+primary storage and external lookup indexes. The Engine validates before
+mutation, propagates failures, and never invokes the success callback until all
+attempted writes complete, but a late failure does not roll back an earlier
+committed write or third-party index update. A rejected submission therefore
+does not assert rollback. Operators and custom adapters must detect and
+reconcile partially applied work before replaying or exposing affected state.
+
+GASP v1 bidirectional `submitNode` omits the `spentBy` parent outpoint. A
+receiver must already have the relevant parent, request it in a subsequent
+sync round, or reject the graph; it must never infer the edge from the child
+alone. Pull-only operation avoids that assumption. The Overlay pull adapter
+binds topic, graph, raw transaction, output, parent edge, proof, resource
+limits, and historical spend state before finalization.
+
+Remote GASP/BASM peers and propagation/header providers are separate network
+authorities. Production adapters accept credential-free public HTTPS, pin DNS
+addresses to the requested origin, reject redirects, bound streamed bodies and
+deadlines, and correlate every transaction, topic, height, index, and proof to
+its request. Private or HTTP targets belong only in explicit isolated local
+development configurations.
+
+Reorg event streams are hints rather than independent chain-state authority.
+Before demoting a proven admission for a reported orphaned block, the Engine
+requires the configured canonical header resolver to return a different hash
+for that exact height. An unavailable resolver or a hash that is still
+canonical rejects the event before any durable mutation.
+
+SHIP tracker answers are discovery hints, not trusted routing authority. Before
+using a discovered endpoint for GASP, the Engine now requires a canonical
+identity-linked advertisement signature, a one-satoshi token, exact BEEF/TXID
+correlation, and the requested topic. The endpoint still passes through the
+same public-HTTPS and DNS-pinning controls as an explicitly configured peer.
+
+Custom `Storage`, `LookupService`, `TopicManager`, advertiser, chain-tracker,
+and header-resolver implementations are trusted local components, but their
+runtime results are still checked before the Engine mutates or returns state.
+Storage queries must return only records bound to the requested outpoint,
+topic, height, block hash, and score window. Lookup formulas use a default
+1,000-result limit and an unconditional 100,000-result safety ceiling; history
+depth, context bytes, stored BEEF, graph fan-out, and aggregate traversal work
+are also bounded. `maxLookupResults: -1` disables the operator-selected lower
+limit, not the hard safety ceiling. BASM anchor stores must return strictly
+ordered, request-bound, canonical hash records.
+
+Public component metadata is copied through a bounded own-data-property schema;
+names, descriptions, versions, and HTTP(S) links that are malformed, accessor
+backed, or oversized fall back to a minimal local registry description.
+Component Markdown documentation is limited to 1 MiB before it crosses the
+Engine/HTTP boundary.
 
 `@bsv/overlay-express` supplies these standard HTTP controls while preserving
 public protocol access by default.

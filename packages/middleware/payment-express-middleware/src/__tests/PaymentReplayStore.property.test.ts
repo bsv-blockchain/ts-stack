@@ -1,6 +1,6 @@
 import fc from 'fast-check'
 
-import { InMemoryPaymentReplayStore } from '../index.js'
+import { createPaymentMiddleware, InMemoryPaymentReplayStore } from '../index.js'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -16,6 +16,14 @@ fc.configureGlobal({
 })
 
 describe('payment replay-store properties', () => {
+  test('reports the stable capacity error for invalid boundaries', () => {
+    for (const capacity of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => new InMemoryPaymentReplayStore(capacity)).toThrow(
+        'Replay-store capacity must be a positive safe integer.'
+      )
+    }
+  })
+
   test('accepts each arbitrary transaction ID exactly once up to its capacity', () => {
     fc.assert(
       fc.property(
@@ -58,4 +66,50 @@ describe('payment replay-store properties', () => {
       )
     )
   })
+
+  test.each([
+    [1, 400, 'ERR_MALFORMED_PAYMENT'],
+    [Number.MAX_SAFE_INTEGER, 400, 'ERR_MALFORMED_PAYMENT'],
+    [-1, 500, 'ERR_PAYMENT_INTERNAL'],
+    [0.5, 500, 'ERR_PAYMENT_INTERNAL'],
+    [Number.MAX_SAFE_INTEGER + 1, 500, 'ERR_PAYMENT_INTERNAL']
+  ] as const)(
+    'classifies request price %s before processing a payment header',
+    async (requestPrice, expectedStatus, expectedCode) => {
+      const response = {
+        statusCode: 200,
+        body: undefined as unknown,
+        status(code: number) {
+          this.statusCode = code
+          return this
+        },
+        json(body: unknown) {
+          this.body = body
+          return this
+        }
+      }
+      const next = jest.fn()
+      const wallet = { internalizeAction: jest.fn() }
+      const middleware = createPaymentMiddleware({
+        wallet: wallet as never,
+        calculateRequestPrice: () => requestPrice
+      }) as any
+
+      await middleware(
+        {
+          auth: {
+            identityKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+          },
+          headers: { 'x-bsv-payment': ['malformed'] }
+        },
+        response,
+        next
+      )
+
+      expect(response.statusCode).toBe(expectedStatus)
+      expect(response.body).toMatchObject({ code: expectedCode })
+      expect(wallet.internalizeAction).not.toHaveBeenCalled()
+      expect(next).not.toHaveBeenCalled()
+    }
+  )
 })

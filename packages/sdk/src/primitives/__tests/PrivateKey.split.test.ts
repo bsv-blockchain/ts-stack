@@ -1,5 +1,5 @@
 import PrivateKey, { KeyShares } from '../../primitives/PrivateKey'
-import { PointInFiniteField } from '../../primitives/Polynomial'
+import Polynomial, { MAX_SHAMIR_SHARES, PointInFiniteField } from '../../primitives/Polynomial'
 
 describe('PrivateKey', () => {
   it('should split the private key into shares correctly', () => {
@@ -82,5 +82,46 @@ describe('PrivateKey', () => {
     const backup = key.toBackupShares(3, 5)
     const recoveredKey = PrivateKey.fromBackupShares(backup.slice(0, 3))
     expect(recoveredKey.toWif()).toBe(key.toWif())
+  })
+
+  it('rejects non-integer, non-finite, and excessive share-generation work before entering loops', () => {
+    const key = PrivateKey.fromRandom()
+    for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, 2.5]) {
+      expect(() => key.toKeyShares(invalid, 3)).toThrow('safe integers')
+      expect(() => key.toKeyShares(2, invalid)).toThrow('safe integers')
+    }
+    expect(() => key.toKeyShares(2, MAX_SHAMIR_SHARES + 1)).toThrow(`cannot exceed ${MAX_SHAMIR_SHARES}`)
+    expect(() => key.toKeyShares(MAX_SHAMIR_SHARES + 1, MAX_SHAMIR_SHARES + 1)).toThrow(
+      `cannot exceed ${MAX_SHAMIR_SHARES}`
+    )
+    expect(() => Polynomial.fromPrivateKey(key, Number.POSITIVE_INFINITY)).toThrow('safe integer')
+  })
+
+  it('rejects oversized, sparse, and non-canonical backup shares before big-number parsing', () => {
+    const key = PrivateKey.fromRandom()
+    const valid = key.toBackupShares(2, 3)
+    expect(() => KeyShares.fromBackupFormat(Array(MAX_SHAMIR_SHARES + 1).fill(valid[0]))).toThrow(
+      `${MAX_SHAMIR_SHARES}`
+    )
+    expect(() => KeyShares.fromBackupFormat([`1.${'2'.repeat(250)}.2.deadbeef`])).toThrow('Invalid share format')
+    expect(() => KeyShares.fromBackupFormat([valid[0].replace('.2.', '.02.')])).toThrow('canonical share data')
+    expect(() => KeyShares.fromBackupFormat([valid[0].replace(/^[^.]+/, '11')])).toThrow(
+      'canonical Base58 representation'
+    )
+    const sparse = Array(2) as string[]
+    sparse[1] = valid[1]
+    expect(() => KeyShares.fromBackupFormat(sparse)).toThrow('dense array')
+  })
+
+  it('bounds and validates mutable KeyShares again before serialization or reconstruction', () => {
+    const key = PrivateKey.fromRandom()
+    const valid = KeyShares.fromBackupFormat(key.toBackupShares(2, 3))
+    valid.threshold = Number.POSITIVE_INFINITY
+    expect(() => valid.toBackupFormat()).toThrow('safe integer')
+    expect(() => PrivateKey.fromKeyShares(valid)).toThrow('safe integer')
+
+    const malformed = KeyShares.fromBackupFormat(key.toBackupShares(2, 3))
+    malformed.points[0] = { x: malformed.points[0].x, y: malformed.points[0].y } as PointInFiniteField
+    expect(() => PrivateKey.fromKeyShares(malformed)).toThrow('finite-field points')
   })
 })

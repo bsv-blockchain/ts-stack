@@ -107,10 +107,17 @@ The module:
 - invalidates authorization if the returned transaction cannot be parsed and
   bound;
 - treats malformed or unbound signature payloads conservatively;
+- accepts prompt approval only as the exact boolean `true`, bounds active
+  authorization state to 1,024 originators, and requires dense byte-exact
+  signature data;
 - auto-approves issuance only when the action has no caller-supplied inputs and
   an output has the exact `btms_type_issue` tag or its PushDrop asset field is
   exactly `ISSUE`; mixed issuance/spend actions require approval; and
 - performs expiry cleanup during requests, without a background timer.
+
+An unbound issuance preimage must be an exactly framed, canonical BIP-143
+preimage with no trailing data. Merely placing an `ISSUE` marker near the
+script-code offset is not authorization.
 
 A prompt approval is not a general-purpose wallet grant. Hosts should preserve
 the permission module in the signing path for every `p btms ...` basket and

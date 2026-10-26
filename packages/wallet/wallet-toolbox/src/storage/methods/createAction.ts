@@ -1,12 +1,11 @@
 import {
-  Beef,
-  OriginatorDomainNameStringUnder250Bytes,
-  Random,
-  Script,
-  TelemetrySpan,
-  Utils,
-  Validation
-} from '@bsv/sdk'
+  type ValidCreateActionArgs,
+  type ValidCreateActionInput,
+  type ValidCreateActionOutput,
+  validateSatoshis
+} from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, OriginatorDomainNameStringUnder250Bytes, Random, Script, TelemetrySpan } from '@bsv/sdk'
+import { toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   generateChangeSdk,
   GenerateChangeSdkChangeInput,
@@ -67,7 +66,7 @@ export function setDisableDoubleSpendCheckForTest(v: boolean) {
 export async function createAction(
   storage: StorageProvider,
   auth: AuthId,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<StorageCreateActionResult> {
   if (!storage.telemetry.enabled) return await createActionCore(storage, auth, vargs)
@@ -101,7 +100,7 @@ export async function createAction(
 async function createActionCore(
   storage: StorageProvider,
   auth: AuthId,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   parent?: TelemetrySpan
 ): Promise<StorageCreateActionResult> {
   const logger = vargs.logger
@@ -351,14 +350,14 @@ interface CreateTransactionSdkContext {
   derivationPrefix?: string
 }
 
-export interface XValidCreateActionInput extends Validation.ValidCreateActionInput {
+export interface XValidCreateActionInput extends ValidCreateActionInput {
   vin: number
   lockingScript: Script
   satoshis: number
   output?: TableOutput
 }
 
-export interface XValidCreateActionOutput extends Validation.ValidCreateActionOutput {
+export interface XValidCreateActionOutput extends ValidCreateActionOutput {
   vout: number
   providedBy: StorageProvidedBy
   purpose?: string
@@ -397,18 +396,23 @@ function makeDefaultOutput(userId: number, transactionId: number, satoshis: numb
 }
 
 /** Check known outputs for double-spend, mark them spent, return competing txid if found. */
-async function markKnownInputsSpent(
+export async function markKnownInputsSpent(
   storage: StorageProvider,
   knownInputRows: Array<{ i: XValidCreateActionInput; o: TableOutput }>,
   transactionId: number
 ): Promise<string | undefined> {
   let doubleSpendTxid: string | undefined
   await storage.transaction(async trx => {
-    const outputIds = knownInputRows.map(ni => verifyId(ni.o.outputId))
-    const knownOutputsById = await storage.findOutputsByIds(outputIds, trx)
+    // Locks the inputs on MySQL and Postgres, so a concurrent action spending one waits and then
+    // reads it as spent instead of overwriting spentBy.
+    const knownOutputs = await storage.findOutputsByOutpointsForUpdate(
+      verifyId(knownInputRows[0].o.userId),
+      knownInputRows.map(({ o }) => ({ txid: verifyTruthy(o.txid), vout: o.vout })),
+      trx
+    )
     for (const ni of knownInputRows) {
       const { i, o } = ni
-      const o2 = knownOutputsById[verifyId(o.outputId)]
+      const o2 = knownOutputs[`${o.txid}.${o.vout}`]
       if (!o2) throw new WERR_INTERNAL(`missing outputId ${o.outputId}`)
       if (o2.spentBy !== undefined && o2.spentBy !== null) {
         const spendingTx = await storage.findTransactionById(verifyId(o2.spentBy), trx)
@@ -439,17 +443,18 @@ async function markKnownInputsSpent(
 /** Build an SDK input record for a new-input row that has a backing output. */
 async function buildSdkInputFromOutput(
   storage: StorageProvider,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   vin: number,
   i: XValidCreateActionInput | undefined,
   o: TableOutput,
   unlockLen: number | undefined
 ): Promise<StorageCreateTransactionSdkInput> {
   if (i == null && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
-  const sourceTransaction =
+  const sourceRawTx =
     vargs.includeAllSourceTransactions && vargs.isSignAction
       ? await storage.getRawTxOfKnownValidTransaction(o.txid)
       : undefined
+  const sourceTransaction = sourceRawTx == null ? undefined : Uint8Array.from(sourceRawTx)
   return {
     vin,
     sourceTxid: o.txid!,
@@ -488,7 +493,7 @@ function buildSdkInputFromXInput(vin: number, i: XValidCreateActionInput): Stora
 async function createNewInputs(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   ctx: CreateTransactionSdkContext,
   allocatedChange: TableOutput[]
 ): Promise<StorageCreateTransactionSdkInput[]> {
@@ -549,7 +554,7 @@ function describeNewOutput(
   const changeVout = o.change && o.purpose === 'change' && o.providedBy === 'storage' ? o.vout : undefined
   const ro: StorageCreateTransactionSdkOutput = {
     vout: verifyInteger(o.vout),
-    satoshis: Validation.validateSatoshis(o.satoshis, 'o.satoshis'),
+    satoshis: validateSatoshis(o.satoshis, 'o.satoshis'),
     lockingScript: o.lockingScript == null ? '' : asString(o.lockingScript),
     providedBy: verifyTruthy(o.providedBy),
     purpose: o.purpose || undefined,
@@ -645,7 +650,7 @@ async function createRequiredOutput(
 async function createNewOutputs(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   ctx: CreateTransactionSdkContext,
   changeOutputs: TableOutput[],
   trx?: TrxToken
@@ -705,7 +710,7 @@ async function createNewOutputs(
 async function createNewTxRecord(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   storageBeef: number[],
   satoshis = 0,
   trx?: TrxToken,
@@ -731,9 +736,10 @@ async function createNewTxRecord(
   const brc177 = (vargs as Brc177ValidCreateActionArgs).brc177
   if (brc177?.kind === 'protected') {
     newTx.noSendExpiryMode = brc177.expiry.mode
-    newTx.noSendExpiryValue = brc177.expiry.value
-    newTx.noSendExpiryDeadline = brc177.deadline
-    newTx.noSendExpiryState = 'preparing'
+    newTx.noSendExpiryValue = brc177.expiry.value ?? undefined
+    newTx.noSendExpiryDeadline = brc177.deadline ?? undefined
+    // A `never` action has no reclaim to arm, so it is ready for signature release at once.
+    newTx.noSendExpiryState = brc177.expiry.mode === 'never' ? 'unsigned' : 'preparing'
     newTx.noSendExpiryAnchorTxid = brc177.anchorTxid
     newTx.noSendExpiryAnchorVout = brc177.anchorVout
   }
@@ -774,7 +780,7 @@ async function createNewTxRecord(
 export function validateRequiredOutputs(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
 ): XValidCreateActionOutput[] {
   const xoutputs: XValidCreateActionOutput[] = []
   let vout = -1
@@ -852,7 +858,7 @@ export function validateRequiredOutputs(
 export async function validateRequiredInputs(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
 ): Promise<{
   storageBeef: Beef
   beef: Beef
@@ -908,7 +914,7 @@ export async function validateRequiredInputs(
   await ensureBeefContainsAllInputTxids(beef, inputsByTxid, localKnownInputTxids, trustSelf, storage)
 
   if (!(await beef.verify(await storage.getServices().getChainTracker(), true))) {
-    console.log(`verifyInputBeef failed, inputBEEF failed to verify.\n${beef.toLogString()}\n`)
+    vargs.logger?.error('inputBEEF failed independent validation')
     throw new WERR_INVALID_PARAMETER('inputBEEF', 'valid Beef when factoring options.trustSelf')
   }
 
@@ -967,7 +973,7 @@ async function ensureBeefContainsAllInputTxids(
 function applyStoredInputScript(
   output: TableOutput,
   input: XValidCreateActionInput,
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
 ): void {
   const { txid, vout } = input.outpoint
   if (output.change) {
@@ -983,7 +989,7 @@ function applyStoredInputScript(
   if (!disableDoubleSpendCheckForTest && !output.spendable && !vargs.isNoSend) {
     throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'spendable output unless noSend is true')
   }
-  input.satoshis = Validation.validateSatoshis(output.satoshis, 'output.satoshis')
+  input.satoshis = validateSatoshis(output.satoshis, 'output.satoshis')
   input.lockingScript = Script.fromBinary(asArray(output.lockingScript))
 }
 
@@ -1006,14 +1012,14 @@ async function applyBeefInputScript(
     throw new WERR_INVALID_PARAMETER(`${txid}.${vout}`, 'valid outpoint')
   }
   const sourceOutput = beefTx.tx!.outputs[vout]
-  input.satoshis = Validation.validateSatoshis(sourceOutput.satoshis, 'so.satoshis')
+  input.satoshis = validateSatoshis(sourceOutput.satoshis, 'so.satoshis')
   input.lockingScript = sourceOutput.lockingScript
 }
 
 async function resolveInputScript(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   input: XValidCreateActionInput,
   beef: Beef,
   preloadedOutputsByOutpoint: Record<string, TableOutput>
@@ -1031,7 +1037,7 @@ async function resolveInputScript(
 async function validateNoSendChange(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   changeBasket: TableOutputBasket
 ): Promise<TableOutput[]> {
   const r: TableOutput[] = []
@@ -1103,7 +1109,7 @@ function fundingPlanSatoshis(plan: PreparedFundingPlan): number {
 
 type FundingPlanBaseContext = readonly [
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   xinputs: XValidCreateActionInput[],
   xoutputs: XValidCreateActionOutput[],
   changeBasket: TableOutputBasket,
@@ -1148,7 +1154,7 @@ async function traceStorageStep<T>(
 
 interface MakeFundingParamsArgs {
   storage: StorageProvider
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
   xinputs: XValidCreateActionInput[]
   xoutputs: XValidCreateActionOutput[]
   changeBasket: TableOutputBasket
@@ -1179,9 +1185,13 @@ function makeFundingParams(args: MakeFundingParamsArgs): GenerateChangeSdkParams
     changeLockingScriptLength: 25,
     changeUnlockingScriptLength: 107,
     targetNetCount: changeBasket.numberOfDesiredUTXOs - healthyChangeCount,
-    // The planner requires a positive cap. The exact anchor leaves no surplus,
-    // and validateBrc177FundingPlan below independently rejects any change.
+    // The planner requires a positive cap; surplusToFee below keeps the
+    // protected action change-free regardless.
     maxChangeOutputs: brc177?.kind === 'protected' ? 1 : storage.managedChangePolicy.maxOutputsPerAction,
+    // The anchor is sized to cover the reclaim (BRC-177 Prefunding §2); the
+    // protected action carries no change, so any surplus is fee.
+    // validateBrc177FundingPlan below independently rejects any change.
+    surplusToFee: brc177?.kind === 'protected',
     surplusPoolShaping: !compatibilityFallback,
     maxMigrationInputs: compatibilityFallback ? 0 : storage.managedChangePolicy.migrationInputsPerAction,
     randomVals: vargs.randomVals
@@ -1555,7 +1565,7 @@ async function hydrateFundingInputScripts(
 async function fundNewTransactionSdk(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   ctx: CreateTransactionSdkContext,
   initialPlan: PreparedFundingPlan,
   parent?: TelemetrySpan,
@@ -1645,7 +1655,7 @@ async function fundNewTransactionSdk(
     } else {
       for (let i = 0; i < count; i++) val.push(rand(0, 255))
     }
-    return Utils.toBase64(val)
+    return toBase64(val)
   }
 
   // Generate a derivation prefix for the payment
@@ -1703,10 +1713,7 @@ async function fundNewTransactionSdk(
   return r
 }
 
-function validateBrc177FundingPlan(
-  vargs: Brc177ValidCreateActionArgs,
-  plan: PreparedFundingPlan
-): void {
+function validateBrc177FundingPlan(vargs: Brc177ValidCreateActionArgs, plan: PreparedFundingPlan): void {
   if (vargs.brc177?.kind !== 'protected') return
   if (plan.selected.length !== 1 || vargs.options.noSendChange.length !== 1) {
     throw new WERR_INVALID_OPERATION('BRC-177 protected action must use exactly one revocation anchor')
@@ -1726,7 +1733,7 @@ function validateBrc177FundingPlan(
  * in the `beef` to txidOnly.
  * @returns undefined if `vargs.options.returnTXIDOnly` or trimmed `Beef`
  */
-function trimInputBeef(beef: Beef, vargs: Validation.ValidCreateActionArgs): Uint8Array | undefined {
+function trimInputBeef(beef: Beef, vargs: ValidCreateActionArgs): Uint8Array | undefined {
   if (vargs.options.returnTXIDOnly) return undefined
   const knownTxids = vargs.options.knownTxids ?? []
   const hasKnownTxid = makeKnownTxidLookup(knownTxids)
@@ -1777,11 +1784,11 @@ interface PreparedBeefStorageExtension {
   enqueuePreparedBeef: (preparation: PreparedBeefPreparation) => boolean
 }
 
-function preparedBeefStorage (storage: StorageProvider): Partial<PreparedBeefStorageExtension> {
+function preparedBeefStorage(storage: StorageProvider): Partial<PreparedBeefStorageExtension> {
   return storage as unknown as Partial<PreparedBeefStorageExtension>
 }
 
-function appendPreparedBeefPreparation (
+function appendPreparedBeefPreparation(
   preparations: PreparedBeefPreparation[],
   writeEnabled: boolean,
   userId: number,
@@ -1791,7 +1798,7 @@ function appendPreparedBeefPreparation (
   preparations.push({ userId, rootTxids })
 }
 
-function enqueuePreparedBeefs (storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
+function enqueuePreparedBeefs(storage: StorageProvider, preparations: PreparedBeefPreparation[]): void {
   const extension = preparedBeefStorage(storage)
   if (typeof extension.enqueuePreparedBeef !== 'function') return
   for (const preparation of preparations) extension.enqueuePreparedBeef.call(storage, preparation)
@@ -1807,15 +1814,16 @@ async function loadAllocatedChangeBeef(
   const extension = preparedBeefStorage(storage)
   const readEnabled = extension.preparedBeefReadsEnabled?.call(storage) === true
   const writeEnabled = extension.preparedBeefWritesEnabled?.call(storage) === true
-  const lookup = readEnabled && typeof extension.lookupPreparedBeefs === 'function'
-    ? await extension.lookupPreparedBeefs.call(storage, userId, txids, parent)
-    : {
-        beef: new Beef(),
-        hitTxids: [],
-        missingTxids: [...new Set(txids)],
-        corruptCount: 0,
-        byteLength: 0
-      }
+  const lookup =
+    readEnabled && typeof extension.lookupPreparedBeefs === 'function'
+      ? await extension.lookupPreparedBeefs.call(storage, userId, txids, parent)
+      : {
+          beef: new Beef(),
+          hitTxids: [],
+          missingTxids: [...new Set(txids)],
+          corruptCount: 0,
+          byteLength: 0
+        }
   const beef = lookup.beef
   const preparations: PreparedBeefPreparation[] = []
   if (lookup.missingTxids.length > 0) {
@@ -1826,12 +1834,7 @@ async function loadAllocatedChangeBeef(
     if (lookup.hitTxids.length === 0) {
       // Preserve the original disabled/cold path without merging into an
       // otherwise empty BEEF solely for this optimization.
-      appendPreparedBeefPreparation(
-        preparations,
-        writeEnabled,
-        userId,
-        lookup.missingTxids
-      )
+      appendPreparedBeefPreparation(preparations, writeEnabled, userId, lookup.missingTxids)
       return {
         beef: fetched,
         preparations,
@@ -1842,12 +1845,7 @@ async function loadAllocatedChangeBeef(
     beef.mergeBeef(fetched)
     // A caller's knownTxids may leave placeholders which are unsuitable for a
     // reusable artifact. Rebuild those roots strictly in the worker.
-    appendPreparedBeefPreparation(
-      preparations,
-      writeEnabled,
-      userId,
-      lookup.missingTxids
-    )
+    appendPreparedBeefPreparation(preparations, writeEnabled, userId, lookup.missingTxids)
   }
   return {
     beef,
@@ -1875,7 +1873,7 @@ function missingAllocatedChangeTxids(
 function startAllocatedChangeBeefPrefetch(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   allocatedChange: ManagedChangeInputCandidate[],
   beef: Beef,
   parent?: TelemetrySpan
@@ -1933,7 +1931,7 @@ function sameTxids(left: readonly string[], right: readonly string[]): boolean {
 async function mergeAllocatedChangeBeefs(
   storage: StorageProvider,
   userId: number,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   allocatedChange: TableOutput[],
   beef: Beef,
   prefetch: Promise<AllocatedChangeBeefPrefetchResult>,

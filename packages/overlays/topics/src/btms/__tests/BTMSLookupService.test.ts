@@ -199,7 +199,12 @@ describe('BTMS Lookup Service', () => {
 
     it('stores a signed token with metadata', async () => {
       const dummySignature = Array.from({ length: 64 }, (_, i) => (i * 19) % 256)
-      const lockingScript = createPushDropScript(testPubKey, ['existingAsset.5', '50', 'Meta', dummySignature])
+      const lockingScript = createPushDropScript(testPubKey, [
+        'existingAsset.5',
+        '50',
+        'Meta',
+        dummySignature
+      ])
 
       await service.outputAdmittedByTopic({
         mode: 'locking-script',
@@ -233,37 +238,66 @@ describe('BTMS Lookup Service', () => {
     it('throws on invalid payload mode', async () => {
       const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '100'])
 
-      await expect(service.outputAdmittedByTopic({
-        mode: 'output-script' as any,
-        txid: 'abc123',
-        outputIndex: 0,
-        topic: 'tm_btms',
-        lockingScript
-      } as OutputAdmittedByTopic)).rejects.toThrow('Invalid payload mode')
+      await expect(
+        service.outputAdmittedByTopic({
+          mode: 'output-script' as any,
+          txid: 'abc123',
+          outputIndex: 0,
+          topic: 'tm_btms',
+          lockingScript
+        } as OutputAdmittedByTopic)
+      ).rejects.toThrow('Invalid payload mode')
     })
 
     it('throws on invalid token amount', async () => {
       const lockingScript = createPushDropScript(testPubKey, ['ISSUE', 'abc'])
 
-      await expect(service.outputAdmittedByTopic({
-        mode: 'locking-script',
-        txid: 'badamount',
-        outputIndex: 0,
-        topic: 'tm_btms',
-        lockingScript
-      } as OutputAdmittedByTopic)).rejects.toThrow('Invalid token amount')
+      await expect(
+        service.outputAdmittedByTopic({
+          mode: 'locking-script',
+          txid: 'badamount',
+          outputIndex: 0,
+          topic: 'tm_btms',
+          lockingScript
+        } as OutputAdmittedByTopic)
+      ).rejects.toThrow('Invalid token amount')
     })
 
-    it('throws on too many fields', async () => {
-      const lockingScript = createPushDropScript(testPubKey, ['ISSUE', '100', 'metadata', [1, 2, 3], 'extra'])
+    it.each(['9007199254740992', '01', '1e3'])(
+      'throws on unsafe or non-canonical token amount %s',
+      async amount => {
+        const lockingScript = createPushDropScript(testPubKey, ['ISSUE', amount])
 
-      await expect(service.outputAdmittedByTopic({
-        mode: 'locking-script',
-        txid: 'badfields',
-        outputIndex: 0,
-        topic: 'tm_btms',
-        lockingScript
-      } as OutputAdmittedByTopic)).rejects.toThrow('BTMS token must have 2-4 fields')
+        await expect(
+          service.outputAdmittedByTopic({
+            mode: 'locking-script',
+            txid: 'badamount',
+            outputIndex: 0,
+            topic: 'tm_btms',
+            lockingScript
+          } as OutputAdmittedByTopic)
+        ).rejects.toThrow('Invalid token amount')
+      }
+    )
+
+    it('throws on too many fields', async () => {
+      const lockingScript = createPushDropScript(testPubKey, [
+        'ISSUE',
+        '100',
+        'metadata',
+        [1, 2, 3],
+        'extra'
+      ])
+
+      await expect(
+        service.outputAdmittedByTopic({
+          mode: 'locking-script',
+          txid: 'badfields',
+          outputIndex: 0,
+          topic: 'tm_btms',
+          lockingScript
+        } as OutputAdmittedByTopic)
+      ).rejects.toThrow('BTMS token must have 2-4 fields')
     })
   })
 
@@ -358,17 +392,21 @@ describe('BTMS Lookup Service', () => {
     })
 
     it('throws on invalid service', async () => {
-      await expect(service.lookup({
-        service: 'ls_other',
-        query: {}
-      } as LookupQuestion)).rejects.toThrow('Lookup service not supported')
+      await expect(
+        service.lookup({
+          service: 'ls_other',
+          query: {}
+        } as LookupQuestion)
+      ).rejects.toThrow('Lookup service not supported')
     })
 
     it('throws on missing query', async () => {
-      await expect(service.lookup({
-        service: 'ls_btms',
-        query: null
-      } as unknown as LookupQuestion)).rejects.toThrow('A valid query must be provided')
+      await expect(
+        service.lookup({
+          service: 'ls_btms',
+          query: null
+        } as unknown as LookupQuestion)
+      ).rejects.toThrow('query must be an object')
     })
 
     it('history selector canonicalizes ISSUE output IDs', async () => {
@@ -392,7 +430,9 @@ describe('BTMS Lookup Service', () => {
     it('returns documentation string', async () => {
       const docsResult = await service.getDocumentation()
       expect(typeof docsResult).toBe('string')
-      expect(docsResult.length).toBeGreaterThan(0)
+      expect(docsResult).toContain('canonical positive base-10 integer')
+      expect(docsResult).toContain('9007199254740991')
+      expect(docsResult).toContain('Non-canonical, non-positive, or inexact amount fields')
     })
   })
 

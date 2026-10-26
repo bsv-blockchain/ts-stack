@@ -3,8 +3,8 @@ import { PublicKey } from '@bsv/sdk'
 import { Logger } from '../../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { runtimeDeps } from '../../runtimeDeps.js'
-
-const MAX_MESSAGE_BOX_BYTES = 128
+import { readStoredRecipientFee } from '../../utils/messagePermissions.js'
+import { isCanonicalMessageBox, MAX_MESSAGE_BOX_BYTES } from '../../security/messageFields.js'
 
 export interface GetPermissionRequest extends AuthRequest {
   query: {
@@ -33,7 +33,8 @@ export interface GetPermissionRequest extends AuthRequest {
  *         required: true
  *         schema:
  *           type: string
- *         description: messageBox type to check
+ *           maxLength: 128
+ *         description: Exact control-free messageBox type to check
  *     responses:
  *       200:
  *         description: Permission setting retrieved successfully (or null if not set)
@@ -62,25 +63,22 @@ export default {
       }
 
       const { sender, messageBox } = req.query
+      let normalizedSender: string | undefined
 
       // Validate required parameters
-      if (
-        typeof messageBox !== 'string' ||
-        messageBox.trim() === '' ||
-        Buffer.byteLength(messageBox.trim(), 'utf8') > MAX_MESSAGE_BOX_BYTES
-      ) {
+      if (!isCanonicalMessageBox(messageBox)) {
         Logger.log('[DEBUG] Missing required parameters for get permission')
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_BOX',
-          description: `messageBox must be a non-empty string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
+          description: `messageBox must be an exact, control-free string of at most ${MAX_MESSAGE_BOX_BYTES} bytes.`
         })
       }
 
       // Validate sender public key format if provided
       if (sender != null) {
         try {
-          PublicKey.fromString(sender)
+          normalizedSender = PublicKey.fromString(sender).toString()
         } catch {
           Logger.log('[DEBUG] Invalid sender public key format')
           return res.status(400).json({
@@ -92,13 +90,13 @@ export default {
       }
 
       const recipient = req.auth.identityKey
-      const normalizedMessageBox = messageBox.trim()
+      const normalizedMessageBox = messageBox
 
       // Get message permission directly from database
       const whereClause = {
         recipient,
         message_box: normalizedMessageBox,
-        sender_scope: sender ?? ''
+        sender_scope: normalizedSender ?? ''
       }
 
       const permission = await runtimeDeps
@@ -107,12 +105,10 @@ export default {
         .select('recipient_fee', 'created_at', 'updated_at')
         .first()
 
-      Logger.log(
-        `[DEBUG] Permission record for ${sender ?? 'box-wide'} -> authenticated recipient ` +
-          `(${normalizedMessageBox}): ${permission == null ? 'not found' : 'found'}`
-      )
+      Logger.log('[DEBUG] Permission lookup completed for authenticated recipient.')
 
       if (permission != null) {
+        const recipientFee = readStoredRecipientFee(permission.recipient_fee)
         // Helper function to determine status from recipient fee
         const getStatusFromFee = (fee: number): 'always_allow' | 'blocked' | 'payment_required' => {
           if (fee === -1) return 'blocked'
@@ -124,14 +120,14 @@ export default {
         return res.status(200).json({
           status: 'success',
           description:
-            sender != null
-              ? `Permission setting found for sender ${sender} to ${normalizedMessageBox}.`
+            normalizedSender != null
+              ? `Permission setting found for sender ${normalizedSender} to ${normalizedMessageBox}.`
               : `Box-wide permission setting found for ${normalizedMessageBox}.`,
           permission: {
-            sender: sender ?? null,
+            sender: normalizedSender ?? null,
             messageBox: normalizedMessageBox,
-            recipientFee: permission.recipient_fee,
-            status: getStatusFromFee(permission.recipient_fee),
+            recipientFee,
+            status: getStatusFromFee(recipientFee),
             createdAt: permission.created_at.toISOString(),
             updatedAt: permission.updated_at.toISOString()
           }
@@ -141,14 +137,14 @@ export default {
         return res.status(200).json({
           status: 'success',
           description:
-            sender != null
-              ? `No permission setting found for sender ${sender} to ${normalizedMessageBox}.`
+            normalizedSender != null
+              ? `No permission setting found for sender ${normalizedSender} to ${normalizedMessageBox}.`
               : `No box-wide permission setting found for ${normalizedMessageBox}.`,
           permission: null
         })
       }
-    } catch (error) {
-      Logger.error('[ERROR] Internal Server Error in get permission:', error)
+    } catch {
+      Logger.error('[ERROR] Internal Server Error in get permission.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',

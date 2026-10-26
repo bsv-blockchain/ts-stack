@@ -9,6 +9,19 @@
 
 import WalletClient from '../WalletClient'
 import type { WalletInterface } from '../Wallet.interfaces'
+import { Utils } from '../../primitives/index'
+import Transaction from '../../transaction/Transaction'
+import Script from '../../script/Script'
+
+const VALID_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const VALID_TXID = 'ab'.repeat(32)
+const VALID_DER_SIGNATURE = [0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]
+const VALID_TYPE = Utils.toBase64(Array(32).fill(1))
+const VALID_SERIAL = Utils.toBase64(Array(32).fill(2))
+const VALID_SIGNATURE_HEX = Utils.toHex(VALID_DER_SIGNATURE)
+const VALID_TRANSACTION = new Transaction()
+const VALID_ATOMIC_BEEF = VALID_TRANSACTION.toAtomicBEEF()
+const VALID_ATOMIC_TXID = VALID_TRANSACTION.id('hex')
 
 // ---------------------------------------------------------------------------
 // Helper: create a fully-mocked substrate and an already-connected WalletClient
@@ -53,6 +66,170 @@ function clientWith(mock: jest.Mocked<WalletInterface>, originator = 'test.origi
   return client
 }
 
+describe('WalletClient result-binding request snapshots', () => {
+  it('retains input source-value evidence when a substrate mutates the request', async () => {
+    const source = new Transaction(
+      1,
+      [],
+      [{ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') }],
+      0
+    )
+    const transaction = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: source.id('hex'),
+          sourceOutputIndex: 0,
+          unlockingScript: Script.fromASM('OP_TRUE')
+        }
+      ],
+      [{ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') }],
+      0
+    )
+    const mock = buildMockSubstrate()
+    mock.createAction.mockImplementation(async args => {
+      args.inputBEEF = undefined
+      return { txid: transaction.id('hex'), tx: transaction.toAtomicBEEF(true) }
+    })
+    const client = clientWith(mock)
+
+    await expect(
+      client.createAction({
+        description: 'Immutable source evidence',
+        inputBEEF: source.toBEEF(),
+        inputs: [
+          {
+            outpoint: `${source.id('hex')}.0`,
+            inputDescription: 'One satoshi source',
+            unlockingScript: '51'
+          }
+        ],
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'One satoshi output' }]
+      })
+    ).resolves.toMatchObject({ txid: transaction.id('hex') })
+  })
+
+  it('does not let a direct substrate rewrite requested value flow before validation', async () => {
+    const mock = buildMockSubstrate()
+    mock.createAction.mockImplementation(async args => {
+      args.outputs![0].satoshis = 2
+      const substituted = new Transaction(
+        1,
+        [],
+        [{ satoshis: 2, lockingScript: Script.fromASM('OP_TRUE') }],
+        0
+      )
+      return { txid: substituted.id('hex'), tx: substituted.toAtomicBEEF() }
+    })
+    const client = clientWith(mock)
+    const args = {
+      description: 'Immutable payment request',
+      outputs: [
+        {
+          satoshis: 1,
+          lockingScript: '51',
+          outputDescription: 'Original payment output'
+        }
+      ]
+    }
+
+    await expect(client.createAction(args)).rejects.toThrow('every requested output')
+    expect(args.outputs[0].satoshis).toBe(2)
+  })
+
+  it('does not let a substrate remove a requested evidence mode while pending', async () => {
+    const mock = buildMockSubstrate()
+    mock.listOutputs.mockImplementation(async args => {
+      args.include = undefined
+      return {
+        totalOutputs: 1,
+        outputs: [{ outpoint: `${VALID_TXID}.0`, satoshis: 1, spendable: true }]
+      }
+    })
+    const client = clientWith(mock)
+
+    await expect(
+      client.listOutputs({ basket: 'default', include: 'entire transactions', limit: 1 })
+    ).rejects.toThrow('requested complete output transactions')
+  })
+
+  it('does not let a substrate remove requested output tags while pending', async () => {
+    const mock = buildMockSubstrate()
+    mock.listOutputs.mockImplementation(async args => {
+      args.includeTags = false
+      return {
+        totalOutputs: 1,
+        outputs: [{ outpoint: `${VALID_TXID}.0`, satoshis: 1, spendable: true }]
+      }
+    })
+    const client = clientWith(mock)
+
+    await expect(
+      client.listOutputs({ basket: 'default', tags: ['owned'], includeTags: true, limit: 1 })
+    ).rejects.toThrow('explicitly requested output tags')
+  })
+
+  it('does not let a substrate remove requested action-history labels while pending', async () => {
+    const mock = buildMockSubstrate()
+    mock.listActions.mockImplementation(async args => {
+      args.includeLabels = false
+      return {
+        totalActions: 1,
+        actions: [
+          {
+            txid: VALID_TXID,
+            satoshis: 0,
+            status: 'completed',
+            isOutgoing: false,
+            description: 'Substituted action history',
+            version: 1,
+            lockTime: 0
+          }
+        ]
+      }
+    })
+    const client = clientWith(mock)
+
+    await expect(
+      client.listActions({ labels: ['reviewed'], includeLabels: true, limit: 1 })
+    ).rejects.toThrow('explicitly requested labels')
+  })
+
+  it('does not let a direct-certificate substrate rewrite the signed identity request', async () => {
+    const substitutedSerial = Utils.toBase64(Array(32).fill(3))
+    const mock = buildMockSubstrate()
+    mock.acquireCertificate.mockImplementation(async args => {
+      args.serialNumber = substitutedSerial
+      return {
+        type: VALID_TYPE,
+        serialNumber: substitutedSerial,
+        subject: VALID_PUBLIC_KEY,
+        certifier: VALID_PUBLIC_KEY,
+        revocationOutpoint: `${VALID_TXID}.0`,
+        fields: {},
+        signature: VALID_SIGNATURE_HEX
+      }
+    })
+    const client = clientWith(mock)
+    const args = {
+      acquisitionProtocol: 'direct' as const,
+      type: VALID_TYPE,
+      serialNumber: VALID_SERIAL,
+      certifier: VALID_PUBLIC_KEY,
+      revocationOutpoint: `${VALID_TXID}.0`,
+      fields: {},
+      signature: VALID_SIGNATURE_HEX,
+      keyringRevealer: 'certifier' as const,
+      keyringForSubject: {}
+    }
+
+    await expect(client.acquireCertificate(args)).rejects.toThrow(
+      'requested certificate serialNumber'
+    )
+    expect(args.serialNumber).toBe(substitutedSerial)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // relinquishOutput
 // ---------------------------------------------------------------------------
@@ -94,7 +271,7 @@ describe('WalletClient.relinquishOutput – substrate delegation', () => {
 describe('WalletClient.getPublicKey – substrate delegation', () => {
   it('returns the public key from the substrate', async () => {
     const mock = buildMockSubstrate()
-    const expectedKey = 'aa'.repeat(33)
+    const expectedKey = VALID_PUBLIC_KEY
     mock.getPublicKey.mockResolvedValue({ publicKey: expectedKey })
     const client = clientWith(mock)
 
@@ -106,7 +283,7 @@ describe('WalletClient.getPublicKey – substrate delegation', () => {
 
   it('passes protocolID and keyID through to the substrate', async () => {
     const mock = buildMockSubstrate()
-    mock.getPublicKey.mockResolvedValue({ publicKey: 'bb'.repeat(33) })
+    mock.getPublicKey.mockResolvedValue({ publicKey: VALID_PUBLIC_KEY })
     const client = clientWith(mock)
 
     await client.getPublicKey({
@@ -130,9 +307,9 @@ describe('WalletClient.revealCounterpartyKeyLinkage – substrate delegation', (
   it('delegates and returns the linkage result', async () => {
     const mock = buildMockSubstrate()
     const fakeResult = {
-      prover: 'aa'.repeat(33),
-      verifier: 'bb'.repeat(33),
-      counterparty: 'cc'.repeat(33),
+      prover: VALID_PUBLIC_KEY,
+      verifier: VALID_PUBLIC_KEY,
+      counterparty: VALID_PUBLIC_KEY,
       revelationTime: '2024-01-01T00:00:00.000Z',
       encryptedLinkage: [1, 2, 3],
       encryptedLinkageProof: [4, 5, 6]
@@ -141,8 +318,8 @@ describe('WalletClient.revealCounterpartyKeyLinkage – substrate delegation', (
     const client = clientWith(mock)
 
     const args = {
-      counterparty: 'cc'.repeat(33),
-      verifier: 'bb'.repeat(33)
+      counterparty: VALID_PUBLIC_KEY,
+      verifier: VALID_PUBLIC_KEY
     }
     const result = await client.revealCounterpartyKeyLinkage(args)
 
@@ -159,9 +336,9 @@ describe('WalletClient.revealSpecificKeyLinkage – substrate delegation', () =>
   it('delegates and returns the specific linkage result', async () => {
     const mock = buildMockSubstrate()
     const fakeResult = {
-      prover: 'aa'.repeat(33),
-      verifier: 'bb'.repeat(33),
-      counterparty: 'cc'.repeat(33),
+      prover: VALID_PUBLIC_KEY,
+      verifier: VALID_PUBLIC_KEY,
+      counterparty: VALID_PUBLIC_KEY,
       protocolID: [1, 'proto'] as [0 | 1 | 2, string],
       keyID: '1',
       encryptedLinkage: [1],
@@ -172,8 +349,8 @@ describe('WalletClient.revealSpecificKeyLinkage – substrate delegation', () =>
     const client = clientWith(mock)
 
     const args = {
-      counterparty: 'cc'.repeat(33),
-      verifier: 'bb'.repeat(33),
+      counterparty: VALID_PUBLIC_KEY,
+      verifier: VALID_PUBLIC_KEY,
       protocolID: [1, 'proto'] as [0 | 1 | 2, string],
       keyID: '1'
     }
@@ -231,7 +408,7 @@ describe('WalletClient.decrypt – substrate delegation', () => {
 describe('WalletClient.createHmac – substrate delegation', () => {
   it('returns hmac bytes from the substrate', async () => {
     const mock = buildMockSubstrate()
-    mock.createHmac.mockResolvedValue({ hmac: [0, 1, 2, 3] })
+    mock.createHmac.mockResolvedValue({ hmac: Array(32).fill(0) })
     const client = clientWith(mock)
 
     const args = {
@@ -241,7 +418,7 @@ describe('WalletClient.createHmac – substrate delegation', () => {
     }
     const result = await client.createHmac(args)
 
-    expect(result).toEqual({ hmac: [0, 1, 2, 3] })
+    expect(result).toEqual({ hmac: Array(32).fill(0) })
     expect(mock.createHmac).toHaveBeenCalledWith(args, 'test.origin')
   })
 })
@@ -254,7 +431,7 @@ describe('WalletClient.verifyHmac – substrate delegation', () => {
 
     const args = {
       data: [10, 20],
-      hmac: [0, 1, 2, 3],
+      hmac: Array(32).fill(0),
       protocolID: [2, 'hmac-proto'] as [0 | 1 | 2, string],
       keyID: '1'
     }
@@ -272,7 +449,7 @@ describe('WalletClient.verifyHmac – substrate delegation', () => {
 describe('WalletClient.createSignature – substrate delegation', () => {
   it('returns signature bytes from the substrate', async () => {
     const mock = buildMockSubstrate()
-    mock.createSignature.mockResolvedValue({ signature: [5, 6, 7] })
+    mock.createSignature.mockResolvedValue({ signature: VALID_DER_SIGNATURE })
     const client = clientWith(mock)
 
     const args = {
@@ -282,7 +459,7 @@ describe('WalletClient.createSignature – substrate delegation', () => {
     }
     const result = await client.createSignature(args)
 
-    expect(result).toEqual({ signature: [5, 6, 7] })
+    expect(result).toEqual({ signature: VALID_DER_SIGNATURE })
     expect(mock.createSignature).toHaveBeenCalledWith(args, 'test.origin')
   })
 })
@@ -295,7 +472,7 @@ describe('WalletClient.verifySignature – substrate delegation', () => {
 
     const args = {
       data: [1, 2],
-      signature: [5, 6, 7],
+      signature: VALID_DER_SIGNATURE,
       protocolID: [1, 'sig-proto'] as [0 | 1 | 2, string],
       keyID: '1'
     }
@@ -312,15 +489,16 @@ describe('WalletClient.verifySignature – substrate delegation', () => {
 
 describe('WalletClient.acquireCertificate – substrate delegation', () => {
   const baseCert = {
-    type: 'dHlwZQ==',
-    certifier: 'aa'.repeat(33),
+    type: VALID_TYPE,
+    certifier: VALID_PUBLIC_KEY,
     fields: { name: 'alice' },
     acquisitionProtocol: 'direct' as const,
-    serialNumber: 'c2VyaWFs',
-    revocationOutpoint: 'a'.repeat(64) + '.0',
-    signature: 'aabb',
+    serialNumber: VALID_SERIAL,
+    revocationOutpoint: `${VALID_TXID}.0`,
+    signature: VALID_SIGNATURE_HEX,
     keyringRevealer: 'certifier' as const,
-    keyringForSubject: {}
+    keyringForSubject: {},
+    subject: VALID_PUBLIC_KEY
   }
 
   it('delegates direct acquisition to substrate and returns result', async () => {
@@ -330,26 +508,26 @@ describe('WalletClient.acquireCertificate – substrate delegation', () => {
 
     const result = await client.acquireCertificate(baseCert)
 
-    expect(result).toMatchObject({ type: 'dHlwZQ==' })
+    expect(result).toMatchObject({ type: VALID_TYPE })
     expect(mock.acquireCertificate).toHaveBeenCalledWith(baseCert, 'test.origin')
   })
 
   it('delegates issuance acquisition to substrate', async () => {
     const mock = buildMockSubstrate()
     const issuanceCert = {
-      type: 'dHlwZQ==',
-      certifier: 'aa'.repeat(33),
+      type: VALID_TYPE,
+      certifier: VALID_PUBLIC_KEY,
       fields: {},
       acquisitionProtocol: 'issuance' as const,
       certifierUrl: 'https://certifier.example.com'
     }
-    mock.acquireCertificate.mockResolvedValue(issuanceCert as any)
+    mock.acquireCertificate.mockResolvedValue({ ...baseCert, fields: {} } as any)
     const client = clientWith(mock)
 
     const result = await client.acquireCertificate(issuanceCert)
 
     expect(mock.acquireCertificate).toHaveBeenCalledWith(issuanceCert, 'test.origin')
-    expect(result).toMatchObject({ acquisitionProtocol: 'issuance' })
+    expect(result).toMatchObject({ type: VALID_TYPE })
   })
 })
 
@@ -364,7 +542,7 @@ describe('WalletClient.listCertificates – substrate delegation', () => {
     mock.listCertificates.mockResolvedValue(fakeList)
     const client = clientWith(mock)
 
-    const args = { certifiers: ['aa'.repeat(33)], types: ['dHlwZQ=='] }
+    const args = { certifiers: [VALID_PUBLIC_KEY], types: [VALID_TYPE] }
     const result = await client.listCertificates(args)
 
     expect(result).toEqual(fakeList)
@@ -379,22 +557,22 @@ describe('WalletClient.listCertificates – substrate delegation', () => {
 describe('WalletClient.proveCertificate – substrate delegation', () => {
   it('delegates to substrate and returns prove result', async () => {
     const mock = buildMockSubstrate()
-    const fakeResult = { keyringForVerifier: {} }
+    const fakeResult = { keyringForVerifier: { name: 'AQ==' } }
     mock.proveCertificate.mockResolvedValue(fakeResult as any)
     const client = clientWith(mock)
 
     const args = {
       certificate: {
-        type: 'dHlwZQ==',
-        certifier: 'aa'.repeat(33),
-        serialNumber: 'c2VyaWFs',
+        type: VALID_TYPE,
+        certifier: VALID_PUBLIC_KEY,
+        serialNumber: VALID_SERIAL,
         fields: {},
-        subject: 'bb'.repeat(33),
+        subject: VALID_PUBLIC_KEY,
         revocationOutpoint: 'a'.repeat(64) + '.0',
-        signature: 'aabb'
+        signature: VALID_SIGNATURE_HEX
       } as any,
       fieldsToReveal: ['name'],
-      verifier: 'cc'.repeat(33)
+      verifier: VALID_PUBLIC_KEY
     }
     const result = await client.proveCertificate(args)
 
@@ -414,9 +592,9 @@ describe('WalletClient.relinquishCertificate – substrate delegation', () => {
     const client = clientWith(mock)
 
     const args = {
-      type: 'dHlwZQ==',
-      serialNumber: 'c2VyaWFs',
-      certifier: 'aa'.repeat(33)
+      type: VALID_TYPE,
+      serialNumber: VALID_SERIAL,
+      certifier: VALID_PUBLIC_KEY
     }
     const result = await client.relinquishCertificate(args)
 
@@ -436,7 +614,7 @@ describe('WalletClient.discoverByIdentityKey – substrate delegation', () => {
     mock.discoverByIdentityKey.mockResolvedValue(fakeResult)
     const client = clientWith(mock)
 
-    const args = { identityKey: 'aa'.repeat(33) }
+    const args = { identityKey: VALID_PUBLIC_KEY }
     const result = await client.discoverByIdentityKey(args)
 
     expect(result).toEqual(fakeResult)
@@ -479,14 +657,14 @@ describe('WalletClient.isAuthenticated – substrate delegation', () => {
     expect(mock.isAuthenticated).toHaveBeenCalledWith({}, 'test.origin')
   })
 
-  it('uses default empty object when no args provided', async () => {
+  it('rejects a non-affirmative authentication result', async () => {
     const mock = buildMockSubstrate()
     mock.isAuthenticated.mockResolvedValue({ authenticated: false } as any)
     const client = clientWith(mock)
 
-    const result = await client.isAuthenticated()
-
-    expect(result).toEqual({ authenticated: false })
+    await expect(client.isAuthenticated()).rejects.toThrow(
+      'Invalid isAuthenticated result authenticated'
+    )
     expect(mock.isAuthenticated).toHaveBeenCalledWith({}, 'test.origin')
   })
 })
@@ -542,12 +720,12 @@ describe('WalletClient.getHeight – substrate delegation', () => {
 describe('WalletClient.getHeaderForHeight – substrate delegation', () => {
   it('returns block header hex from substrate', async () => {
     const mock = buildMockSubstrate()
-    mock.getHeaderForHeight.mockResolvedValue({ header: 'deadbeef' })
+    mock.getHeaderForHeight.mockResolvedValue({ header: '00'.repeat(80) })
     const client = clientWith(mock)
 
     const result = await client.getHeaderForHeight({ height: 800000 })
 
-    expect(result).toEqual({ header: 'deadbeef' })
+    expect(result).toEqual({ header: '00'.repeat(80) })
     expect(mock.getHeaderForHeight).toHaveBeenCalledWith({ height: 800000 }, 'test.origin')
   })
 })
@@ -614,7 +792,7 @@ describe('WalletClient.getVersion – substrate delegation', () => {
 describe('WalletClient.createAction – substrate delegation', () => {
   it('delegates a valid createAction call to the substrate', async () => {
     const mock = buildMockSubstrate()
-    const fakeResult = { txid: 'abc123', tx: [1, 2, 3] }
+    const fakeResult = { txid: VALID_ATOMIC_TXID, tx: VALID_ATOMIC_BEEF }
     mock.createAction.mockResolvedValue(fakeResult as any)
     const client = clientWith(mock)
 
@@ -627,7 +805,10 @@ describe('WalletClient.createAction – substrate delegation', () => {
 
   it('passes originator undefined when no originator was set', async () => {
     const mock = buildMockSubstrate()
-    mock.createAction.mockResolvedValue({ txid: 'xyz' } as any)
+    mock.createAction.mockResolvedValue({
+      txid: VALID_ATOMIC_TXID,
+      tx: VALID_ATOMIC_BEEF
+    })
     // Create the client by passing the mock object directly (no originator)
     const client = new WalletClient(mock)
 
@@ -644,7 +825,7 @@ describe('WalletClient.createAction – substrate delegation', () => {
 describe('WalletClient.signAction – substrate delegation', () => {
   it('delegates a valid signAction call to the substrate', async () => {
     const mock = buildMockSubstrate()
-    const fakeResult = { txid: 'signed123', tx: [1, 2, 3] }
+    const fakeResult = { txid: VALID_ATOMIC_TXID, tx: VALID_ATOMIC_BEEF }
     mock.signAction.mockResolvedValue(fakeResult as any)
     const client = clientWith(mock)
 
@@ -702,22 +883,19 @@ describe('WalletClient.internalizeAction – substrate delegation', () => {
     mock.internalizeAction.mockResolvedValue({ accepted: true })
     const client = clientWith(mock)
 
-    // Minimal valid AtomicBEEF: BEEF_V2 header + 0 bumps + 1 txid-only tx
-    // BEEF_V2 = 4022206466 (0xEFBE0002) in little-endian = [2, 0, 190, 239]
-    // TX_DATA_FORMAT.TXID_ONLY = 2, followed by 32-byte txid
-    const minimalBeef: number[] = [
-      2,
-      0,
-      190,
-      239, // BEEF_V2 version LE
-      0, // 0 bumps (varint)
-      1, // 1 tx (varint)
-      2, // TX_DATA_FORMAT.TXID_ONLY
-      ...Array.from({ length: 32 }).fill(0) // 32-byte zero txid
-    ]
     const args = {
-      tx: minimalBeef,
-      outputs: [{ outputIndex: 0, protocol: 'wallet payment' as const }],
+      tx: VALID_ATOMIC_BEEF,
+      outputs: [
+        {
+          outputIndex: 0,
+          protocol: 'wallet payment' as const,
+          paymentRemittance: {
+            derivationPrefix: 'AQ==',
+            derivationSuffix: 'Ag==',
+            senderIdentityKey: VALID_PUBLIC_KEY
+          }
+        }
+      ],
       description: 'Internalize tx'
     }
     const result = await client.internalizeAction(args)
@@ -743,6 +921,19 @@ describe('WalletClient.listOutputs – substrate delegation', () => {
 
     expect(result).toEqual(fakeResult)
     expect(mock.listOutputs).toHaveBeenCalledWith(args, 'test.origin')
+  })
+
+  it('rejects a result page larger than the requested default limit', async () => {
+    const mock = buildMockSubstrate()
+    mock.listOutputs.mockResolvedValue({
+      totalOutputs: 11,
+      outputs: Array(11).fill(null)
+    } as any)
+    const client = clientWith(mock)
+
+    await expect(client.listOutputs({ basket: 'default' })).rejects.toThrow(
+      'at most the requested limit of 10'
+    )
   })
 })
 

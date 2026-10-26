@@ -18,6 +18,10 @@ jest.mock('socket.io-client', () => ({
   io: mockIo
 }))
 
+jest.mock('@bsv/sdk/auth/Peer', () => ({
+  Peer: mockPeerConstructor
+}))
+
 jest.mock('@bsv/sdk', () => ({
   ...jest.requireActual('@bsv/sdk'),
   Peer: mockPeerConstructor,
@@ -29,6 +33,7 @@ jest.mock('@bsv/sdk', () => ({
 
 import { AuthSocketClient } from '../AuthSocketClient.js'
 import { SocketClientTransport } from '../SocketClientTransport.js'
+import { PrivateKey } from '@bsv/sdk'
 
 describe('AuthSocketClient', () => {
   let socketListeners: Map<string, (...arguments_: any[]) => any>
@@ -81,7 +86,7 @@ describe('AuthSocketClient', () => {
 
     expect(client.on('connect', connected)).toBe(client)
     expect(client.on('disconnect', disconnected)).toBe(client)
-    expect(mockIo).toHaveBeenCalledWith('https://example.test', managerOptions)
+    expect(mockIo).toHaveBeenCalledWith('https://example.test/', managerOptions)
     expect(mockPeerConstructor).toHaveBeenCalledWith(
       wallet,
       expect.any(SocketClientTransport),
@@ -256,31 +261,35 @@ describe('AuthSocketClient', () => {
     expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
   })
 
-  it('handles malformed general messages and clears identity on disconnect', () => {
-    const { client } = createClient()
+  it('rejects malformed general messages and clears identity on disconnect', async () => {
+    const onError = jest.fn()
+    const { client } = createClient(onError)
     const unknown = jest.fn()
     client.on('_unknown', unknown)
 
-    generalMessageListener?.('server-key', Array.from(Buffer.from('{not-json')))
-    expect(unknown).toHaveBeenCalledWith(undefined)
+    await generalMessageListener?.('server-key', Array.from(Buffer.from('{not-json')))
+    expect(unknown).not.toHaveBeenCalled()
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
     expect(client.serverIdentityKey).toBe('server-key')
 
     client.disconnect()
 
     expect(client.serverIdentityKey).toBeUndefined()
-    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(2)
   })
 
   it.each([null, [], 7, 'event', {}, { eventName: 7 }])(
     'routes a valid JSON non-envelope (%p) to the explicit unknown event',
-    value => {
-      const { client } = createClient()
+    async value => {
+      const onError = jest.fn()
+      const { client } = createClient(onError)
       const unknown = jest.fn()
       client.on('_unknown', unknown)
 
-      generalMessageListener?.('server-key', Array.from(Buffer.from(JSON.stringify(value))))
+      await generalMessageListener?.('server-key', Array.from(Buffer.from(JSON.stringify(value))))
 
-      expect(unknown).toHaveBeenCalledWith(undefined)
+      expect(unknown).not.toHaveBeenCalled()
+      expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
     }
   )
 
@@ -351,5 +360,64 @@ describe('AuthSocketClient', () => {
       )
     }).not.toThrow()
     expect(client.serverIdentityKey).toBe('server-key')
+  })
+
+  it.each([
+    'http://example.test',
+    'ws://192.0.2.1/socket',
+    'https://user:secret@example.test',
+    'ftp://example.test'
+  ])('rejects an unsafe server URL before opening a socket: %s', url => {
+    expect(() => AuthSocketClient(url, { wallet: {} as never })).toThrow(TypeError)
+    expect(mockIo).not.toHaveBeenCalled()
+  })
+
+  it('allows exact loopback cleartext URLs', () => {
+    AuthSocketClient('http://127.0.0.1:3000', { wallet: {} as never })
+    expect(mockIo).toHaveBeenCalledWith('http://127.0.0.1:3000/', undefined)
+  })
+
+  it.each([
+    { hostname: 'attacker.example' },
+    { port: 80 },
+    { secure: false },
+    { rejectUnauthorized: false },
+    { transportOptions: { websocket: { hostname: 'attacker.example' } } },
+    { transportOptions: { polling: { rejectUnauthorized: false } } }
+  ])('rejects manager options that bypass the validated endpoint or TLS: %p', managerOptions => {
+    expect(() =>
+      AuthSocketClient('https://example.test', {
+        wallet: {} as never,
+        managerOptions
+      })
+    ).toThrow(TypeError)
+    expect(mockIo).not.toHaveBeenCalled()
+  })
+
+  it('rejects a server identity that differs from the configured pin before dispatch', async () => {
+    const onError = jest.fn()
+    const expected = PrivateKey.fromRandom().toPublicKey().toString()
+    const other = PrivateKey.fromRandom().toPublicKey().toString()
+    const client = AuthSocketClient('https://example.test', {
+      wallet: {} as never,
+      expectedServerIdentityKey: expected,
+      onError
+    })
+    const received = jest.fn()
+    client.on('message', received)
+
+    await generalMessageListener?.(
+      other,
+      Array.from(Buffer.from(JSON.stringify({ eventName: 'message', data: 'secret' })))
+    )
+    await Promise.resolve()
+
+    expect(received).not.toHaveBeenCalled()
+    expect(mockSocket.disconnect).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledWith(expect.any(Error), {
+      phase: 'application',
+      socketId: 'socket-id',
+      eventName: undefined
+    })
   })
 })

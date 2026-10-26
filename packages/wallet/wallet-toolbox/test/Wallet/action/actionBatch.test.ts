@@ -9,6 +9,7 @@ import type { ActionBatchManifest } from '../../../src/sdk/ActionBatch.interface
 import { maxPossibleSatoshis } from '../../../src/storage/methods/generateChange'
 import { additionalFundingTarget, fundingRunwayExtension } from '../../../src/signer/actionBatch/ActionBatchWorkspace'
 import { WERR_INSUFFICIENT_FUNDS } from '../../../src/sdk/WERR_errors'
+import { getExactActionSpend } from '../../../src/utility/exactActionSpend'
 
 const randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
 
@@ -393,6 +394,8 @@ describe('in-memory action batch workspace', () => {
     })
     expect(created.signableTransaction).toBeDefined()
     const pending = ctx.wallet.pendingSignActions[created.signableTransaction!.reference]
+    expect(getExactActionSpend(created)).toBe(pending.amount)
+    expect(Object.getOwnPropertySymbols(created)).toEqual([])
     pending.dcr.inputBeef = Array.from(pending.dcr.inputBeef as Uint8Array)
     const signed = await ctx.wallet.signAction({
       reference: created.signableTransaction!.reference,
@@ -700,11 +703,13 @@ describe('in-memory action batch workspace', () => {
       batchId: begun.batchId
     })
     const related = actionArgs(staged.noSendChange)
-    related.inputs = [{
-      outpoint: `${'11'.repeat(32)}.0`,
-      unlockingScript: '00',
-      inputDescription: 'force an extension after expiry'
-    }]
+    related.inputs = [
+      {
+        outpoint: `${'11'.repeat(32)}.0`,
+        unlockingScript: '00',
+        inputDescription: 'force an extension after expiry'
+      }
+    ]
 
     await expect(ctx.wallet.createAction(related)).rejects.toMatchObject({
       name: 'WERR_ACTION_BATCH_STATE',
@@ -712,10 +717,12 @@ describe('in-memory action batch workspace', () => {
     })
     expect(ctx.wallet.actionBatch.hasWorkspace).toBe(true)
     Reflect.set(Reflect.get(ctx.wallet.actionBatch, 'workspace') as object, 'expiresAt', Date.now() - 1)
-    await expect(ctx.wallet.createAction({
-      description: 'Commit through retained v1 expiry recovery',
-      options: { sendWith: [staged.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit through retained v1 expiry recovery',
+        options: { sendWith: [staged.txid!] }
+      })
+    ).resolves.toBeDefined()
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('committed')
   })
 
@@ -738,10 +745,11 @@ describe('in-memory action batch workspace', () => {
     })
     expect(competing.reservedOutputs.some(output => firstIds.includes(output.outputId))).toBe(true)
 
-    const commit = async () => await ctx.wallet.createAction({
-      description: 'Commit through v1 conflict recovery',
-      options: { sendWith: [staged.txid!] }
-    })
+    const commit = async () =>
+      await ctx.wallet.createAction({
+        description: 'Commit through v1 conflict recovery',
+        options: { sendWith: [staged.txid!] }
+      })
     await expect(commit()).rejects.toThrow('reserved elsewhere')
     expect(ctx.wallet.actionBatch.hasWorkspace).toBe(true)
     await ctx.storage.abortActionBatch(competing.batchId)
@@ -800,10 +808,12 @@ describe('in-memory action batch workspace', () => {
 
     expect(resume).toHaveBeenCalledWith(expect.objectContaining({ batchId: begun.batchId }))
     expect((await ctx.activeStorage.findActionBatch(ctx.userId, begun.batchId))?.status).toBe('active')
-    await expect(ctx.wallet.createAction({
-      description: 'Commit resumed connected workspace',
-      options: { sendWith: [root.txid!, child.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit resumed connected workspace',
+        options: { sendWith: [root.txid!, child.txid!] }
+      })
+    ).resolves.toBeDefined()
   })
 
   test('a serialized plan-time expiry resumes and retries the related action once', async () => {
@@ -811,7 +821,8 @@ describe('in-memory action batch workspace', () => {
     const root = await ctx.wallet.createAction(actionArgs())
     const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as any
     const originalPlan = workspace.plan.bind(workspace)
-    const plan = jest.spyOn(workspace, 'plan')
+    const plan = jest
+      .spyOn(workspace, 'plan')
       .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
       .mockImplementation(originalPlan)
     const resume = jest.spyOn(workspace, 'resume')
@@ -831,10 +842,8 @@ describe('in-memory action batch workspace', () => {
     ctx.wallet.randomVals = randomVals
     const root = await ctx.wallet.createAction(actionArgs())
     const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as any
-    jest.spyOn(workspace, 'plan')
-      .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
-    jest.spyOn(workspace, 'resume')
-      .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
+    jest.spyOn(workspace, 'plan').mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
+    jest.spyOn(workspace, 'resume').mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
 
     await expect(ctx.wallet.createAction(actionArgs(root.noSendChange))).rejects.toMatchObject({
       name: 'WERR_ACTION_BATCH_STATE',
@@ -881,14 +890,18 @@ describe('in-memory action batch workspace', () => {
 
     expect(begin).toHaveBeenCalledTimes(1)
     expect(legacyCreate).toHaveBeenCalledTimes(1)
-    await expect(ctx.wallet.createAction({
-      description: 'Commit only the owned workspace',
-      options: { sendWith: [workspaceRoot.txid!] }
-    })).resolves.toBeDefined()
-    expect((await ctx.activeStorage.findTransactions({
-      partial: { userId: ctx.userId, txid: unrelated.txid },
-      noRawTx: true
-    }))).toHaveLength(1)
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit only the owned workspace',
+        options: { sendWith: [workspaceRoot.txid!] }
+      })
+    ).resolves.toBeDefined()
+    expect(
+      await ctx.activeStorage.findTransactions({
+        partial: { userId: ctx.userId, txid: unrelated.txid },
+        noRawTx: true
+      })
+    ).toHaveLength(1)
   })
 
   test('an unrelated sendWith does not commit an open workspace', async () => {
@@ -899,15 +912,19 @@ describe('in-memory action batch workspace', () => {
       options: { acceptDelayedBroadcast: true, randomizeOutputs: false }
     })
     const workspaceRoot = await ctx.wallet.createAction(actionArgs())
-    await expect(ctx.wallet.createAction({
-      description: 'Send only the unrelated persisted action',
-      options: { sendWith: [unrelated.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Send only the unrelated persisted action',
+        options: { sendWith: [unrelated.txid!] }
+      })
+    ).resolves.toBeDefined()
     expect(commit).not.toHaveBeenCalled()
-    await expect(ctx.wallet.createAction({
-      description: 'Commit the owned workspace afterwards',
-      options: { sendWith: [workspaceRoot.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit the owned workspace afterwards',
+        options: { sendWith: [workspaceRoot.txid!] }
+      })
+    ).resolves.toBeDefined()
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
@@ -929,15 +946,19 @@ describe('in-memory action batch workspace', () => {
     const child = await ctx.wallet.createAction(childArgs)
 
     expect(child.sendWithResults).toContainEqual(expect.objectContaining({ txid: unrelated.txid }))
-    expect(legacyProcess).toHaveBeenLastCalledWith(expect.objectContaining({
-      isNewTx: false,
-      sendWith: [unrelated.txid]
-    }))
+    expect(legacyProcess).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        isNewTx: false,
+        sendWith: [unrelated.txid]
+      })
+    )
     expect(commit).not.toHaveBeenCalled()
-    await expect(ctx.wallet.createAction({
-      description: 'Commit the workspace after the unrelated broadcast',
-      options: { sendWith: [root.txid!, child.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit the workspace after the unrelated broadcast',
+        options: { sendWith: [root.txid!, child.txid!] }
+      })
+    ).resolves.toBeDefined()
     expect(commit).toHaveBeenCalledTimes(1)
   })
 
@@ -946,15 +967,18 @@ describe('in-memory action batch workspace', () => {
     const staged = await ctx.wallet.createAction(actionArgs())
     const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as any
     const originalCommit = workspace.commit.bind(workspace)
-    const commit = jest.spyOn(workspace, 'commit')
+    const commit = jest
+      .spyOn(workspace, 'commit')
       .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
       .mockImplementation(originalCommit)
     const resume = jest.spyOn(workspace, 'resume')
 
-    await expect(ctx.wallet.createAction({
-      description: 'Commit workspace after serialized expiry',
-      options: { sendWith: [staged.txid!] }
-    })).resolves.toBeDefined()
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Commit workspace after serialized expiry',
+        options: { sendWith: [staged.txid!] }
+      })
+    ).resolves.toBeDefined()
     expect(commit).toHaveBeenCalledTimes(2)
     expect(resume).toHaveBeenCalledTimes(1)
   })
@@ -963,15 +987,15 @@ describe('in-memory action batch workspace', () => {
     ctx.wallet.randomVals = randomVals
     const staged = await ctx.wallet.createAction(actionArgs())
     const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as any
-    jest.spyOn(workspace, 'commit')
-      .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
-    jest.spyOn(workspace, 'resume')
-      .mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
+    jest.spyOn(workspace, 'commit').mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'expired' })
+    jest.spyOn(workspace, 'resume').mockRejectedValueOnce({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
 
-    await expect(ctx.wallet.createAction({
-      description: 'Reject terminal commit recovery',
-      options: { sendWith: [staged.txid!] }
-    })).rejects.toMatchObject({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
+    await expect(
+      ctx.wallet.createAction({
+        description: 'Reject terminal commit recovery',
+        options: { sendWith: [staged.txid!] }
+      })
+    ).rejects.toMatchObject({ name: 'WERR_ACTION_BATCH_STATE', state: 'conflicted' })
     expect(ctx.wallet.actionBatch.hasWorkspace).toBe(false)
   })
 
@@ -992,9 +1016,7 @@ describe('in-memory action batch workspace', () => {
     const workspace = Reflect.get(ctx.wallet.actionBatch, 'workspace') as object
     Reflect.set(workspace, 'expiresAt', Date.now() - 1)
 
-    await expect(
-      ctx.wallet.createAction(actionArgs(staged.noSendChange))
-    ).rejects.toMatchObject({
+    await expect(ctx.wallet.createAction(actionArgs(staged.noSendChange))).rejects.toMatchObject({
       name: 'WERR_ACTION_BATCH_STATE',
       state: 'conflicted',
       batchId: begun.batchId

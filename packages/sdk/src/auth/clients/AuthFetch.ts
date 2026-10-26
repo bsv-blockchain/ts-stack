@@ -1,5 +1,13 @@
 // @ts-nocheck
-import * as Utils from '../../primitives/utils.js'
+import {
+  Reader,
+  Writer as UtilsWriter,
+  toArray as UtilsToArray,
+  toBase64,
+  toHex as UtilsToHex,
+  toSafeString,
+  toUTF8Strict
+} from '../../primitives/utils.js'
 import Random from '../../primitives/Random.js'
 import P2PKH from '../../script/templates/P2PKH.js'
 import PublicKey from '../../primitives/PublicKey.js'
@@ -10,12 +18,17 @@ import {
 import { stringifyBRC100 } from '../../wallet/BRC100ByteEncoding.js'
 import { createNonce } from '../utils/createNonce.js'
 import { Peer } from '../Peer.js'
-import { SimplifiedFetchTransport } from '../transports/SimplifiedFetchTransport.js'
+import {
+  DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES,
+  SimplifiedFetchTransport,
+  SimplifiedFetchTransportOptions
+} from '../transports/SimplifiedFetchTransport.js'
 import { SessionManager, AsyncSessionManager } from '../SessionManager.js'
 import { RequestedCertificateSet } from '../types.js'
 import { VerifiableCertificate } from '../certificates/VerifiableCertificate.js'
 import { Writer } from '../../primitives/utils.js'
-import { getVerifiableCertificates } from '../utils/index.js'
+import { getVerifiableCertificates } from '../utils/getVerifiableCertificates.js'
+import { copyAuthByteArray } from '../AuthMessageValidation.js'
 
 interface SimplifiedFetchRequestOptions {
   method?: string
@@ -76,6 +89,16 @@ interface RequestBodySummary {
 const PAYMENT_VERSION = '1.0'
 const AUTH_RESPONSE_TIMEOUT_MS = 30000
 const MAX_PENDING_AUTH_REQUESTS = 1000
+const MAX_BUFFERED_CERTIFICATES = 1000
+const MAX_AUTH_RESPONSE_HEADERS = 512
+const MAX_AUTH_RESPONSE_HEADER_KEY_BYTES = 1024
+const MAX_AUTH_RESPONSE_HEADER_VALUE_BYTES = 32 * 1024
+const MAX_AUTH_RESPONSE_HEADER_BYTES = 256 * 1024
+const MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES = 512 * 1024
+// Matches SimplifiedFetchTransport's fixed complete-request frame ceiling.
+const MAX_AUTH_HTTP_REQUEST_FRAME_BYTES = 16 * 1024 * 1024
+const MAX_PAYMENT_TRANSACTION_BYTES = 16 * 1024 * 1024
+const REDACTED_LOG_VALUE = '[redacted]'
 
 /**
  * Optional 402 response header by which a server declares transactions it already holds.
@@ -133,13 +156,20 @@ export function parseKnownTxidsHeader(headerValue: string | null): string[] | un
  * and certificate handling to enable secure and mutually-authenticated requests.
  *
  * Additionally, it automatically handles 402 Payment Required responses by creating
- * and sending BSV payment transactions when necessary.
+ * and sending BSV payment transactions when necessary. The configured wallet's
+ * `createAction` policy is the spending-authorization boundary: applications
+ * should use a wallet that requires the intended user/policy approval.
  * Recipients may advertise already-validated ancestors through the optional
  * `x-bsv-payment-known-txids` response header. Up to 256 unique, valid lowercase
  * transaction IDs are forwarded to wallet `createAction` options, including
  * newly created payments after repricing. An absent or invalid-only header
  * preserves existing payment creation behavior.
  * The header is an optional SDK extension, not a standardized BRC-105 header.
+ *
+ * Payment diagnostics retain only the URL origin, header names (and
+ * `Content-Type`), amount, identity keys, retry counts, and bounded error
+ * metadata. URL credentials/path/query, authorization values, transaction
+ * bytes, and payment derivation material are not included.
  */
 export class AuthFetch {
   private readonly sessionManager: SessionManager
@@ -148,18 +178,23 @@ export class AuthFetch {
   private readonly certificatesReceived: VerifiableCertificate[] = []
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
+  readonly #transportOptions: SimplifiedFetchTransportOptions
+  private readonly maxResponseBytes: number
+  private readonly fetchClient?: typeof fetch
   peers: Record<string, AuthPeer> = {}
 
   /**
    * Constructs a new AuthFetch instance.
    * @param wallet - The wallet instance for signing and authentication.
-   * @param requestedCertificates - Optional set of certificates to request from peers.
+   * @param requestedCertificates - Optional v0.1 certificate allowlist/request. AuthFetch does not interpret allowlist validation as application authorization.
    */
   constructor(
     wallet: WalletInterface,
     requestedCertificates?: RequestedCertificateSet,
     sessionManager?: SessionManager | AsyncSessionManager,
-    originator?: OriginatorDomainNameStringUnder250Bytes
+    originator?: OriginatorDomainNameStringUnder250Bytes,
+    transportOptions: SimplifiedFetchTransportOptions = {},
+    fetchClient?: typeof fetch
   ) {
     this.wallet = wallet
     this.requestedCertificates = requestedCertificates
@@ -168,13 +203,19 @@ export class AuthFetch {
     // injected, the underlying Peer awaits all calls internally.
     this.sessionManager = (sessionManager ?? new SessionManager()) as SessionManager
     this.originator = originator
+    this.#transportOptions = { ...transportOptions }
+    this.fetchClient = fetchClient
+    this.maxResponseBytes = positiveResponseLimit(
+      transportOptions.maxResponseBytes,
+      DEFAULT_SIMPLIFIED_FETCH_MAX_RESPONSE_BYTES
+    )
   }
 
   /**
    * Mutually authenticates and sends a HTTP request to a server.
    *
    * 1) Attempt the request.
-   * 2) If 402 Payment Required, automatically create and send payment.
+   * 2) If 402 Payment Required, ask the wallet to authorize, create, and send payment.
    * 3) Return the final response.
    *
    * @param url - The URL to send the request to.
@@ -201,7 +242,7 @@ export class AuthFetch {
           const parsedUrl = new URL(url)
           const baseURL = parsedUrl.origin
 
-          const peerToUse = await this.getOrCreatePeer(baseURL)
+          const peerToUse = await this.#getOrCreatePeer(baseURL)
           if (peerToUse.supportsMutualAuth === false) {
             resolve(await this.handleFetchAndValidate(url, config, peerToUse))
             return
@@ -209,7 +250,7 @@ export class AuthFetch {
 
           // Serialize the simplified fetch request.
           const requestNonce = Random(32)
-          const requestNonceAsBase64 = Utils.toBase64(requestNonce)
+          const requestNonceAsBase64 = toBase64(requestNonce)
 
           const writer = await this.serializeRequest(method, headers, body, parsedUrl, requestNonce)
 
@@ -298,17 +339,28 @@ export class AuthFetch {
     return response
   }
 
-  private async getOrCreatePeer(baseURL: string): Promise<AuthPeer> {
+  async #getOrCreatePeer(baseURL: string): Promise<AuthPeer> {
     const existingPeer = this.peers[baseURL]
     if (existingPeer !== undefined) return existingPeer
 
     const newPeer = new Peer(
       this.wallet,
-      new SimplifiedFetchTransport(baseURL),
+      this.#createTransport(baseURL),
       this.requestedCertificates,
       this.sessionManager,
       undefined,
-      this.originator
+      this.originator,
+      // Budget binary bytes separately from the generic JSON envelope,
+      // retaining a finite bound before Peer snapshots either HTTP frame.
+      {
+        maxGeneralPayloadBytes: Math.max(
+          MAX_AUTH_HTTP_REQUEST_FRAME_BYTES,
+          Math.min(
+            Number.MAX_SAFE_INTEGER,
+            this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES
+          )
+        )
+      }
     )
     await newPeer.ready
     const peerState: AuthPeer = {
@@ -318,7 +370,7 @@ export class AuthFetch {
     this.peers[baseURL] = peerState
     newPeer.listenForCertificatesReceived(
       (_senderPublicKey: string, certs: VerifiableCertificate[]) => {
-        this.certificatesReceived.push(...certs)
+        this.retainReceivedCertificates(certs)
       }
     )
     newPeer.listenForCertificatesRequested((async (
@@ -379,8 +431,11 @@ export class AuthFetch {
     senderPublicKey: string,
     payload: number[]
   ): Response | undefined {
-    const responseReader = new Utils.Reader(payload)
-    const responseNonceAsBase64 = Utils.toBase64(responseReader.read(32))
+    if (payload.length > this.maxResponseBytes + MAX_AUTH_RESPONSE_FRAME_OVERHEAD_BYTES) {
+      throw new Error('Authenticated response frame exceeds the configured limit.')
+    }
+    const responseReader = new StrictResponseReader(payload)
+    const responseNonceAsBase64 = toBase64(responseReader.readExact(32, 'response nonce'))
     if (responseNonceAsBase64 !== requestNonceAsBase64) return undefined
 
     const peerState = this.peers[baseURL]
@@ -389,24 +444,53 @@ export class AuthFetch {
       peerState.supportsMutualAuth = true
     }
 
-    const statusCode = responseReader.readVarIntNum()
-    const responseHeaders: Record<string, string> = {}
-    const nHeaders = responseReader.readVarIntNum()
-    for (let i = 0; i < nHeaders; i++) {
-      const nHeaderKeyBytes = responseReader.readVarIntNum()
-      const headerKey = Utils.toUTF8(responseReader.read(nHeaderKeyBytes))
-      const nHeaderValueBytes = responseReader.readVarIntNum()
-      responseHeaders[headerKey] = Utils.toUTF8(responseReader.read(nHeaderValueBytes))
+    const statusCode = responseReader.readVarInt('status code')
+    if (statusCode < 200 || statusCode > 599) {
+      throw new Error('Authenticated response contains an invalid HTTP status code.')
     }
-    responseHeaders['x-bsv-auth-identity-key'] = senderPublicKey
+    const responseHeaders = new Headers()
+    const nHeaders = responseReader.readBoundedLength(
+      MAX_AUTH_RESPONSE_HEADERS,
+      'response header count'
+    )
+    let headerBytes = 0
+    for (let i = 0; i < nHeaders; i++) {
+      const nHeaderKeyBytes = responseReader.readBoundedLength(
+        MAX_AUTH_RESPONSE_HEADER_KEY_BYTES,
+        'response header name length',
+        1
+      )
+      const headerKey = toUTF8Strict(
+        responseReader.readExact(nHeaderKeyBytes, 'response header name')
+      )
+      const nHeaderValueBytes = responseReader.readBoundedLength(
+        MAX_AUTH_RESPONSE_HEADER_VALUE_BYTES,
+        'response header value length'
+      )
+      const headerValue = toUTF8Strict(
+        responseReader.readExact(nHeaderValueBytes, 'response header value')
+      )
+      headerBytes += nHeaderKeyBytes + nHeaderValueBytes
+      if (headerBytes > MAX_AUTH_RESPONSE_HEADER_BYTES) {
+        throw new Error('Authenticated response headers exceed the configured limit.')
+      }
+      responseHeaders.set(headerKey, headerValue)
+    }
+    responseHeaders.set('x-bsv-auth-identity-key', senderPublicKey)
 
-    const responseBodyBytes = responseReader.readVarIntNum()
+    const responseBodyBytes = responseReader.readVarInt('response body length', true)
+    if (responseBodyBytes < -1 || responseBodyBytes > this.maxResponseBytes) {
+      throw new Error('Authenticated response body exceeds the configured limit.')
+    }
     const responseBody =
-      responseBodyBytes > 0 ? new Uint8Array(responseReader.read(responseBodyBytes)) : null
+      responseBodyBytes > 0
+        ? new Uint8Array(responseReader.readExact(responseBodyBytes, 'response body'))
+        : null
+    responseReader.assertFinished()
     return new Response(responseBody, {
       status: statusCode,
       statusText: `${statusCode}`,
-      headers: new Headers(responseHeaders)
+      headers: responseHeaders
     })
   }
 
@@ -422,22 +506,7 @@ export class AuthFetch {
     const parsedUrl = new URL(baseUrl)
     const baseURL = parsedUrl.origin
 
-    let peerToUse: { peer: Peer; identityKey?: string }
-    if (this.peers[baseURL] === undefined) {
-      const newTransport = new SimplifiedFetchTransport(baseURL)
-      const newPeer = new Peer(
-        this.wallet,
-        newTransport,
-        this.requestedCertificates,
-        this.sessionManager,
-        this.originator
-      )
-      await newPeer.ready
-      peerToUse = { peer: newPeer }
-      this.peers[baseURL] = peerToUse
-    } else {
-      peerToUse = { peer: this.peers[baseURL].peer }
-    }
+    const peerToUse = await this.#getOrCreatePeer(baseURL)
 
     // Return a promise that resolves when certificates are received
     const CERTIFICATE_REQUEST_TIMEOUT_MS = 30000
@@ -455,7 +524,6 @@ export class AuthFetch {
         (_senderPublicKey: string, certs: VerifiableCertificate[]) => {
           if (settled) return
           cleanup()
-          this.certificatesReceived.push(...certs)
           resolve(certs)
         }
       )
@@ -488,17 +556,30 @@ export class AuthFetch {
     return this.certificatesReceived.splice(0)
   }
 
-  private writeOptionalText(writer: Writer, value: string): void {
+  private retainReceivedCertificates(certs: VerifiableCertificate[]): void {
+    if (!Array.isArray(certs) || certs.length > 100) {
+      throw new Error('Certificate response exceeds the per-message limit')
+    }
+    this.certificatesReceived.push(...certs)
+    const excess = this.certificatesReceived.length - MAX_BUFFERED_CERTIFICATES
+    if (excess > 0) this.certificatesReceived.splice(0, excess)
+  }
+
+  #createTransport(baseURL: string): SimplifiedFetchTransport {
+    return new SimplifiedFetchTransport(baseURL, this.fetchClient, this.#transportOptions)
+  }
+
+  #writeOptionalText(writer: Writer, value: string): void {
     if (value.length === 0) {
       writer.writeVarIntNum(-1)
       return
     }
-    const bytes = Utils.toArray(value)
+    const bytes = UtilsToArray(value)
     writer.writeVarIntNum(bytes.length)
     writer.write(bytes)
   }
 
-  private includedRequestHeaders(headers: Record<string, string>): Array<[string, string]> {
+  #includedRequestHeaders(headers: Record<string, string>): Array<[string, string]> {
     const includedHeaders: Array<[string, string]> = []
     for (const [key, originalValue] of Object.entries(headers)) {
       const normalizedKey = key.toLowerCase()
@@ -519,11 +600,11 @@ export class AuthFetch {
     return includedHeaders.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
   }
 
-  private writeRequestHeaders(writer: Writer, headers: Array<[string, string]>): void {
+  #writeRequestHeaders(writer: Writer, headers: Array<[string, string]>): void {
     writer.writeVarIntNum(headers.length)
     for (const [key, value] of headers) {
-      const keyBytes = Utils.toArray(key, 'utf8')
-      const valueBytes = Utils.toArray(value, 'utf8')
+      const keyBytes = UtilsToArray(key, 'utf8')
+      const valueBytes = UtilsToArray(value, 'utf8')
       writer.writeVarIntNum(keyBytes.length)
       writer.write(keyBytes)
       writer.writeVarIntNum(valueBytes.length)
@@ -531,14 +612,14 @@ export class AuthFetch {
     }
   }
 
-  private defaultRequestBody(method: string, body: any, headers: Array<[string, string]>): any {
+  #defaultRequestBody(method: string, body: any, headers: Array<[string, string]>): any {
     const methodsWithBody = ['POST', 'PUT', 'PATCH', 'DELETE']
     if (!methodsWithBody.includes(method.toUpperCase()) || body !== undefined) return body
     const contentType = headers.find(([key]) => key === 'content-type')?.[1]
     return contentType?.includes('application/json') === true ? '{}' : ''
   }
 
-  private async writeRequestBody(writer: Writer, body: any): Promise<void> {
+  async #writeRequestBody(writer: Writer, body: any): Promise<void> {
     if (!body) {
       writer.writeVarIntNum(-1)
       return
@@ -567,29 +648,29 @@ export class AuthFetch {
     parsedUrl: URL,
     requestNonce: number[]
   ): Promise<Writer> {
-    const writer = new Utils.Writer()
+    const writer = new UtilsWriter()
     // Write request nonce
     writer.write(requestNonce)
     // Method length
     writer.writeVarIntNum(method.length)
     // Method
-    writer.write(Utils.toArray(method))
+    writer.write(UtilsToArray(method))
 
-    this.writeOptionalText(writer, parsedUrl.pathname)
-    this.writeOptionalText(writer, parsedUrl.search)
+    this.#writeOptionalText(writer, parsedUrl.pathname)
+    this.#writeOptionalText(writer, parsedUrl.search)
 
     // Construct headers to send / sign:
     // Ensures clients only provided supported HTTP request headers
     // - Include custom headers prefixed with x-bsv (excluding those starting with x-bsv-auth)
     // - Include a normalized version of the content-type header
     // - Include the authorization header
-    const includedHeaders = this.includedRequestHeaders(headers)
-    this.writeRequestHeaders(writer, includedHeaders)
+    const includedHeaders = this.#includedRequestHeaders(headers)
+    this.#writeRequestHeaders(writer, includedHeaders)
 
     // If method typically carries a body and body is undefined, default it
     // This prevents signature verification errors due to mismatch default body types with express
-    body = this.defaultRequestBody(method, body, includedHeaders)
-    await this.writeRequestBody(writer, body)
+    body = this.#defaultRequestBody(method, body, includedHeaders)
+    await this.#writeRequestBody(writer, body)
     return writer
   }
 
@@ -601,9 +682,16 @@ export class AuthFetch {
     config: RequestInit,
     peerToUse: AuthPeer
   ): Promise<Response> {
-    const response = await fetch(url, config)
-    response.headers.forEach(header => {
-      if (header.toLocaleLowerCase().startsWith('x-bsv')) {
+    const response = await (this.fetchClient ?? fetch)(url, {
+      method: config.method,
+      headers: config.headers,
+      body: config.body,
+      // Do not allow a fallback request to replay a caller's body,
+      // authorization header, or x-bsv metadata to a redirect destination.
+      redirect: 'error'
+    })
+    response.headers.forEach((_value, name) => {
+      if (name.toLocaleLowerCase().startsWith('x-bsv')) {
         throw new Error('The server is trying to claim it has been authenticated when it has not!')
       }
     })
@@ -636,8 +724,11 @@ export class AuthFetch {
     if (!satoshisRequiredHeader) {
       throw new Error('Missing x-bsv-payment-satoshis-required response header.')
     }
-    const satoshisRequired = Number.parseInt(satoshisRequiredHeader)
-    if (Number.isNaN(satoshisRequired) || satoshisRequired <= 0) {
+    if (!/^[1-9]\d*$/.test(satoshisRequiredHeader)) {
+      throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
+    }
+    const satoshisRequired = Number(satoshisRequiredHeader)
+    if (!Number.isSafeInteger(satoshisRequired)) {
       throw new Error('Invalid x-bsv-payment-satoshis-required response header value.')
     }
 
@@ -774,6 +865,9 @@ export class AuthFetch {
     derivationPrefix: string,
     knownTxids?: string[]
   ): Promise<PaymentRetryContext> {
+    const requestSummary = this.buildPaymentRequestSummary(url, config)
+    const paymentLabels = Array.isArray(config.labels) ? [...config.labels] : []
+    const maxAttempts = this.getMaxPaymentAttempts(config)
     const derivationSuffix = await createNonce(this.wallet, undefined, this.originator)
 
     const { publicKey: derivedPublicKey } = await this.wallet.getPublicKey(
@@ -788,10 +882,14 @@ export class AuthFetch {
       .lock(PublicKey.fromString(derivedPublicKey).toAddress())
       .toHex()
 
-    const { tx } = await this.wallet.createAction(
+    const { tx: transactionResult } = await this.wallet.createAction(
       {
         description: `Payment for request to ${new URL(url).origin}`,
-        labels: this.buildPaymentActionLabels(config, derivationPrefix, derivationSuffix),
+        labels: this.buildPaymentActionLabels(
+          { labels: paymentLabels },
+          derivationPrefix,
+          derivationSuffix
+        ),
         outputs: [
           {
             satoshis: satoshisRequired,
@@ -814,6 +912,12 @@ export class AuthFetch {
       this.originator
     )
 
+    const transaction = copyAuthByteArray(
+      transactionResult,
+      'BRC-105 payment transaction',
+      MAX_PAYMENT_TRANSACTION_BYTES
+    )
+
     const { publicKey: clientIdentityKey } = await this.wallet.getPublicKey(
       { identityKey: true },
       this.originator
@@ -821,15 +925,15 @@ export class AuthFetch {
 
     return {
       satoshisRequired,
-      transactionBase64: Utils.toBase64(tx),
+      transactionBase64: toBase64(transaction),
       derivationPrefix,
       derivationSuffix,
       serverIdentityKey,
       clientIdentityKey,
       attempts: 0,
-      maxAttempts: this.getMaxPaymentAttempts(config),
+      maxAttempts,
       errors: [],
-      requestSummary: this.buildPaymentRequestSummary(url, config)
+      requestSummary
     }
   }
 
@@ -846,14 +950,14 @@ export class AuthFetch {
   ): string[] {
     const callerLabels = Array.isArray(config.labels) ? config.labels : []
     return [
-      `brc105 ${this.base64NonceToLabelHex(derivationPrefix)} ${this.base64NonceToLabelHex(derivationSuffix)}`,
+      `brc105 ${this.#base64NonceToLabelHex(derivationPrefix)} ${this.#base64NonceToLabelHex(derivationSuffix)}`,
       ...callerLabels
     ]
   }
 
   /** Hex-encode a base64 BRC-105 nonce for case-stable wallet labels. */
-  private base64NonceToLabelHex(base64Nonce: string): string {
-    return Utils.toHex(Utils.toArray(base64Nonce, 'base64'))
+  #base64NonceToLabelHex(base64Nonce: string): string {
+    return UtilsToHex(UtilsToArray(base64Nonce, 'base64'))
   }
 
   private getMaxPaymentAttempts(config: SimplifiedFetchRequestOptions): number {
@@ -869,12 +973,19 @@ export class AuthFetch {
     url: string,
     config: SimplifiedFetchRequestOptions
   ): PaymentRetryContext['requestSummary'] {
-    const headers = { ...config.headers }
+    const headers = Object.fromEntries(
+      Object.keys(config.headers ?? {}).map(headerName => [
+        headerName,
+        headerName.toLowerCase() === 'content-type'
+          ? String(config.headers?.[headerName] ?? '')
+          : REDACTED_LOG_VALUE
+      ])
+    )
     const method = typeof config.method === 'string' ? config.method.toUpperCase() : 'GET'
     const bodySummary = this.describeRequestBodyForLogging(config.body)
 
     return {
-      url,
+      url: this.#safeLogUrl(url),
       method,
       headers,
       bodyType: bodySummary.type,
@@ -884,19 +995,19 @@ export class AuthFetch {
 
   private describeRequestBodyForLogging(body: any): RequestBodySummary {
     return (
-      this.describeSimpleRequestBody(body) ??
-      this.describePlatformRequestBody(body) ??
-      this.describeSerializableRequestBody(body)
+      this.#describeSimpleRequestBody(body) ??
+      this.#describePlatformRequestBody(body) ??
+      this.#describeSerializableRequestBody(body)
     )
   }
 
-  private describeSimpleRequestBody(body: any): RequestBodySummary | undefined {
+  #describeSimpleRequestBody(body: any): RequestBodySummary | undefined {
     if (body == null) {
       return { type: 'none', byteLength: 0 }
     }
 
     if (typeof body === 'string') {
-      return { type: 'string', byteLength: Utils.toArray(body, 'utf8').length }
+      return { type: 'string', byteLength: UtilsToArray(body, 'utf8').length }
     }
 
     if (Array.isArray(body)) {
@@ -908,7 +1019,7 @@ export class AuthFetch {
     return undefined
   }
 
-  private describePlatformRequestBody(body: any): RequestBodySummary | undefined {
+  #describePlatformRequestBody(body: any): RequestBodySummary | undefined {
     if (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer) {
       return { type: 'ArrayBuffer', byteLength: body.byteLength }
     }
@@ -930,7 +1041,7 @@ export class AuthFetch {
 
     if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
       const serialized = body.toString()
-      return { type: 'URLSearchParams', byteLength: Utils.toArray(serialized, 'utf8').length }
+      return { type: 'URLSearchParams', byteLength: UtilsToArray(serialized, 'utf8').length }
     }
 
     if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
@@ -939,11 +1050,11 @@ export class AuthFetch {
     return undefined
   }
 
-  private describeSerializableRequestBody(body: any): RequestBodySummary {
+  #describeSerializableRequestBody(body: any): RequestBodySummary {
     try {
       const serialized = stringifyBRC100(body)
       if (typeof serialized === 'string') {
-        return { type: 'object', byteLength: Utils.toArray(serialized, 'utf8').length }
+        return { type: 'object', byteLength: UtilsToArray(serialized, 'utf8').length }
       }
     } catch {
       // Ignore JSON serialization issues for logging purposes only
@@ -966,13 +1077,10 @@ export class AuthFetch {
 
   private composePaymentLogDetails(url: string, context: PaymentRetryContext): Record<string, any> {
     return {
-      url,
+      url: this.#safeLogUrl(url),
       request: context.requestSummary,
       payment: {
         satoshis: context.satoshisRequired,
-        transactionBase64: context.transactionBase64,
-        derivationPrefix: context.derivationPrefix,
-        derivationSuffix: context.derivationSuffix,
         serverIdentityKey: context.serverIdentityKey,
         clientIdentityKey: context.clientIdentityKey
       },
@@ -980,7 +1088,11 @@ export class AuthFetch {
         used: context.attempts,
         max: context.maxAttempts
       },
-      errors: context.errors
+      errors: context.errors.map(({ attempt, timestamp, message }) => ({
+        attempt,
+        timestamp,
+        message
+      }))
     }
   }
 
@@ -1013,7 +1125,7 @@ export class AuthFetch {
       entry.message = error.message
       entry.stack = error.stack ?? undefined
     } else {
-      entry.message = Utils.toSafeString(error)
+      entry.message = toSafeString(error)
     }
 
     return entry
@@ -1037,16 +1149,14 @@ export class AuthFetch {
     context: PaymentRetryContext,
     lastError: unknown
   ): Error {
-    const message = `Paid request to ${url} failed after ${context.attempts}/${context.maxAttempts} attempts. Sent ${context.satoshisRequired} satoshis to ${context.serverIdentityKey}.`
+    const safeUrl = this.#safeLogUrl(url)
+    const message = `Paid request to ${safeUrl} failed after ${context.attempts}/${context.maxAttempts} attempts. Sent ${context.satoshisRequired} satoshis to ${context.serverIdentityKey}.`
     const error = new Error(message)
 
     const failureDetails = {
       request: context.requestSummary,
       payment: {
         satoshis: context.satoshisRequired,
-        transactionBase64: context.transactionBase64,
-        derivationPrefix: context.derivationPrefix,
-        derivationSuffix: context.derivationSuffix,
         serverIdentityKey: context.serverIdentityKey,
         clientIdentityKey: context.clientIdentityKey
       },
@@ -1066,6 +1176,14 @@ export class AuthFetch {
     return error
   }
 
+  #safeLogUrl(url: string): string {
+    try {
+      return new URL(url).origin
+    } catch {
+      return '[invalid URL]'
+    }
+  }
+
   private async normalizeBodyToNumberArray(body: BodyInit | null | undefined): Promise<number[]> {
     // 0. Null / undefined
     if (body == null) {
@@ -1079,7 +1197,7 @@ export class AuthFetch {
 
     // 2. string
     if (typeof body === 'string') {
-      return Utils.toArray(body, 'utf8')
+      return UtilsToArray(body, 'utf8')
     }
 
     // 3. ArrayBuffer / TypedArrays
@@ -1104,12 +1222,12 @@ export class AuthFetch {
         entries.push([key, typeof value === 'string' ? value : value.name])
       })
       const urlEncoded = new URLSearchParams(entries).toString()
-      return Utils.toArray(urlEncoded, 'utf8')
+      return UtilsToArray(urlEncoded, 'utf8')
     }
 
     // 6. URLSearchParams
     if (body instanceof URLSearchParams) {
-      return Utils.toArray(body.toString(), 'utf8')
+      return UtilsToArray(body.toString(), 'utf8')
     }
 
     // 7. ReadableStream
@@ -1118,9 +1236,65 @@ export class AuthFetch {
     }
 
     // 8. Plain object JSON body
-    if (typeof body === 'object') return Utils.toArray(stringifyBRC100(body), 'utf8')
+    if (typeof body === 'object') return UtilsToArray(stringifyBRC100(body), 'utf8')
 
     // 9. Fallback
     throw new Error('Unsupported body type in this SimplifiedFetch implementation.')
   }
+}
+
+class StrictResponseReader {
+  private readonly reader: Reader
+
+  constructor(payload: number[]) {
+    this.reader = new Reader(payload)
+  }
+
+  readVarInt(field: string, signed: boolean = false): number {
+    this.#requireBytes(1, field)
+    const first = this.reader.bin[this.reader.pos]
+    const encodedLength = first === 0xfd ? 3 : first === 0xfe ? 5 : first === 0xff ? 9 : 1
+    this.#requireBytes(encodedLength, field)
+    const value = this.reader.readVarIntNumStrict(signed)
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`Authenticated response contains an invalid ${field}.`)
+    }
+    return value
+  }
+
+  readBoundedLength(maximum: number, field: string, minimum = 0): number {
+    const value = this.readVarInt(field)
+    if (value < minimum || value > maximum) {
+      throw new Error(`Authenticated response contains an invalid ${field}.`)
+    }
+    return value
+  }
+
+  readExact(length: number, field: string): number[] {
+    if (!Number.isSafeInteger(length) || length < 0) {
+      throw new Error(`Authenticated response contains an invalid ${field} length.`)
+    }
+    this.#requireBytes(length, field)
+    return this.reader.read(length)
+  }
+
+  assertFinished(): void {
+    if (this.reader.pos !== this.reader.bin.length) {
+      throw new Error('Authenticated response contains trailing bytes.')
+    }
+  }
+
+  #requireBytes(length: number, field: string): void {
+    if (this.reader.pos + length > this.reader.bin.length) {
+      throw new Error(`Authenticated response truncated while reading ${field}.`)
+    }
+  }
+}
+
+function positiveResponseLimit(value: number | undefined, fallback: number): number {
+  const candidate = value ?? fallback
+  if (!Number.isSafeInteger(candidate) || candidate < 1) {
+    throw new TypeError('maxResponseBytes must be a positive safe integer')
+  }
+  return candidate
 }

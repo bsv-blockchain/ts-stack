@@ -24,11 +24,11 @@ export default class ECIES {
         iv: number[];
         kE: number[];
         kM: number[];
-    } 
-    public static electrumEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, noKey = false): number[] 
-    public static electrumDecrypt(encBuf: number[], toPrivateKey: PrivateKey, fromPublicKey?: PublicKey): number[] 
-    public static bitcoreEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, ivBuf?: number[]): number[] 
-    public static bitcoreDecrypt(encBuf: number[], toPrivateKey: PrivateKey): number[] 
+    }
+    public static electrumEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, noKey = false): number[]
+    public static electrumDecrypt(encBuf: number[], toPrivateKey: PrivateKey, fromPublicKey?: PublicKey): number[]
+    public static bitcoreEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, ivBuf?: number[]): number[]
+    public static bitcoreDecrypt(encBuf: number[], toPrivateKey: PrivateKey): number[]
 }
 ```
 
@@ -39,7 +39,7 @@ See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitiv
 Decrypts a message encrypted using the Bitcore variant of ECIES.
 
 ```ts
-public static bitcoreDecrypt(encBuf: number[], toPrivateKey: PrivateKey): number[] 
+public static bitcoreDecrypt(encBuf: number[], toPrivateKey: PrivateKey): number[]
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey)
 
@@ -59,7 +59,7 @@ Argument Details
 Encrypts a given message using the Bitcore variant of ECIES.
 
 ```ts
-public static bitcoreEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, ivBuf?: number[]): number[] 
+public static bitcoreEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, ivBuf?: number[]): number[]
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -83,7 +83,7 @@ Argument Details
 Decrypts a message encrypted using the Electrum ECIES method.
 
 ```ts
-public static electrumDecrypt(encBuf: number[], toPrivateKey: PrivateKey, fromPublicKey?: PublicKey): number[] 
+public static electrumDecrypt(encBuf: number[], toPrivateKey: PrivateKey, fromPublicKey?: PublicKey): number[]
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -105,7 +105,7 @@ Argument Details
 Encrypts a given message using the Electrum ECIES method.
 
 ```ts
-public static electrumEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, noKey = false): number[] 
+public static electrumEncrypt(messageBuf: number[], toPublicKey: PublicKey, fromPrivateKey?: PrivateKey, noKey = false): number[]
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -123,6 +123,8 @@ Argument Details
   + The private key of the sender. If not provided, a random private key is used.
 + **noKey**
   + If true, does not include the sender's public key in the encrypted message.
+Reusing `fromPrivateKey` repeats BIE1's derived key and IV. Omit it to use a fresh ephemeral
+key, and do not use `noKey` for new protocols.
 
 #### Method ivkEkM
 
@@ -134,7 +136,7 @@ public static ivkEkM(privKey: PrivateKey, pubKey: PublicKey): {
     iv: number[];
     kE: number[];
     kM: number[];
-} 
+}
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -167,25 +169,25 @@ export default class HD {
         pubKey: 76067358,
         privKey: 76066276
     };
-    constructor(versionBytesNum?: number, depth?: number, parentFingerPrint?: number[], childIndex?: number, chainCode?: number[], privKey?: PrivateKey, pubKey?: PublicKey) 
-    public fromRandom(): this 
-    public static fromRandom(): HD 
-    public static fromString(str: string): HD 
-    public fromString(str: string): this 
-    public static fromSeed(bytes: number[]): HD 
-    public fromSeed(bytes: number[]): this 
-    public static fromBinary(buf: number[]): HD 
-    public fromBinary(buf: number[]): this 
-    public toString(): string 
-    public derive(path: string): HD 
-    public deriveChild(i: number): HD 
-    public toPublic(): HD 
-    public toBinary(): number[] 
-    public isPrivate(): boolean 
+    constructor(versionBytesNum?: number, depth?: number, parentFingerPrint?: number[], childIndex?: number, chainCode?: number[], privKey?: PrivateKey, pubKey?: PublicKey)
+    public fromRandom(): this
+    public static fromRandom(): HD
+    public static fromString(str: string): HD
+    public fromString(str: string): this
+    public static fromSeed(bytes: number[]): HD
+    public fromSeed(bytes: number[]): this
+    public static fromBinary(buf: number[]): HD
+    public fromBinary(buf: number[]): this
+    public toString(): string
+    public derive(path: string): HD
+    public deriveChild(i: number): HD
+    public toPublic(): HD
+    public toBinary(): number[]
+    public isPrivate(): boolean
 }
 ```
 
-See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
+See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey), [string](./remittance.md#function-string)
 
 #### Constructor
 
@@ -193,7 +195,7 @@ Constructor for the BIP32 HD wallet.
 Initializes an HD wallet with optional parameters for version bytes, depth, parent fingerprint, child index, chain code, private key, and public key.
 
 ```ts
-constructor(versionBytesNum?: number, depth?: number, parentFingerPrint?: number[], childIndex?: number, chainCode?: number[], privKey?: PrivateKey, pubKey?: PublicKey) 
+constructor(versionBytesNum?: number, depth?: number, parentFingerPrint?: number[], childIndex?: number, chainCode?: number[], privKey?: PrivateKey, pubKey?: PublicKey)
 ```
 See also: [PrivateKey](./primitives.md#class-privatekey), [PublicKey](./primitives.md#class-publickey)
 
@@ -220,9 +222,9 @@ Derives a child HD wallet based on a given path.
 The path specifies the hierarchy of the child key to be derived.
 
 ```ts
-public derive(path: string): HD 
+public derive(path: string): HD
 ```
-See also: [HD](./compat.md#class-hd)
+See also: [HD](./compat.md#class-hd), [string](./remittance.md#function-string)
 
 Returns
 
@@ -239,7 +241,7 @@ Derives a child HD wallet from the current wallet based on an index.
 This method generates either a private or public child key depending on the current wallet's state.
 
 ```ts
-public deriveChild(i: number): HD 
+public deriveChild(i: number): HD
 ```
 See also: [HD](./compat.md#class-hd)
 
@@ -258,7 +260,7 @@ Initializes the HD wallet from a binary buffer.
 Parses a binary buffer to set up the wallet's properties.
 
 ```ts
-public static fromBinary(buf: number[]): HD 
+public static fromBinary(buf: number[]): HD
 ```
 See also: [HD](./compat.md#class-hd)
 
@@ -277,7 +279,7 @@ Initializes the HD wallet from a binary buffer.
 Parses a binary buffer to set up the wallet's properties.
 
 ```ts
-public fromBinary(buf: number[]): this 
+public fromBinary(buf: number[]): this
 ```
 
 Returns
@@ -295,7 +297,7 @@ Generates a new HD wallet with random keys.
 This method creates a root HD wallet with randomly generated private and public keys.
 
 ```ts
-public fromRandom(): this 
+public fromRandom(): this
 ```
 
 Returns
@@ -308,7 +310,7 @@ Generates a new HD wallet with random keys.
 This method creates a root HD wallet with randomly generated private and public keys.
 
 ```ts
-public static fromRandom(): HD 
+public static fromRandom(): HD
 ```
 See also: [HD](./compat.md#class-hd)
 
@@ -322,7 +324,7 @@ Initializes the HD wallet from a seed.
 This method generates keys and other properties from a given seed, conforming to the BIP32 specification.
 
 ```ts
-public static fromSeed(bytes: number[]): HD 
+public static fromSeed(bytes: number[]): HD
 ```
 See also: [HD](./compat.md#class-hd)
 
@@ -341,7 +343,7 @@ Initializes the HD wallet from a seed.
 This method generates keys and other properties from a given seed, conforming to the BIP32 specification.
 
 ```ts
-public fromSeed(bytes: number[]): this 
+public fromSeed(bytes: number[]): this
 ```
 
 Returns
@@ -359,9 +361,9 @@ Initializes the HD wallet from a given base58 encoded string.
 This method decodes a provided string to set up the HD wallet's properties.
 
 ```ts
-public static fromString(str: string): HD 
+public static fromString(str: string): HD
 ```
-See also: [HD](./compat.md#class-hd)
+See also: [HD](./compat.md#class-hd), [string](./remittance.md#function-string)
 
 Returns
 
@@ -378,8 +380,9 @@ Initializes the HD wallet from a given base58 encoded string.
 This method decodes a provided string to set up the HD wallet's properties.
 
 ```ts
-public fromString(str: string): this 
+public fromString(str: string): this
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -396,7 +399,7 @@ Checks if the HD wallet contains a private key.
 This method determines whether the wallet is a private key wallet or a public key only wallet.
 
 ```ts
-public isPrivate(): boolean 
+public isPrivate(): boolean
 ```
 
 Returns
@@ -409,7 +412,7 @@ Converts the HD wallet into a binary representation.
 This method serializes the wallet's properties into a binary format.
 
 ```ts
-public toBinary(): number[] 
+public toBinary(): number[]
 ```
 
 Returns
@@ -422,7 +425,7 @@ Converts the current HD wallet to a public-only wallet.
 This method strips away the private key information, leaving only the public part.
 
 ```ts
-public toPublic(): HD 
+public toPublic(): HD
 ```
 See also: [HD](./compat.md#class-hd)
 
@@ -438,8 +441,9 @@ Converts the HD wallet to a base58 encoded string.
 This method provides a string representation of the HD wallet's current state.
 
 ```ts
-public toString(): string 
+public toString(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -458,35 +462,36 @@ export default class Mnemonic {
         value: string[];
         space: string;
     };
-    constructor(mnemonic?: string, seed?: number[], wordlist = wordList) 
-    public toBinary(): number[] 
-    public fromBinary(bin: number[]): this 
-    public fromRandom(bits?: number): this 
-    public static fromRandom(bits?: number): Mnemonic 
-    public fromEntropy(buf: number[]): this 
-    public static fromEntropy(buf: number[]): Mnemonic 
-    public fromString(mnemonic: string): this 
-    public static fromString(str: string): Mnemonic 
-    public toString(): string 
-    public toSeed(passphrase?: string): number[] 
-    public entropy2Mnemonic(buf: number[]): this 
-    public check(): boolean 
-    public mnemonic2Seed(passphrase = ""): this 
-    public isValid(passphrase = ""): boolean 
-    public static isValid(mnemonic: string, passphrase = ""): boolean 
+    constructor(mnemonic?: string, seed?: number[], wordlist = wordList)
+    public toBinary(): number[]
+    public fromBinary(bin: number[]): this
+    public fromRandom(bits?: number): this
+    public static fromRandom(bits?: number): Mnemonic
+    public fromEntropy(buf: number[]): this
+    public static fromEntropy(buf: number[]): Mnemonic
+    public fromString(mnemonic: string): this
+    public static fromString(str: string): Mnemonic
+    public toString(): string
+    public toSeed(passphrase?: string): number[]
+    public entropy2Mnemonic(buf: number[]): this
+    public toEntropy(): number[]
+    public check(): boolean
+    public mnemonic2Seed(passphrase = ""): this
+    public isValid(passphrase = ""): boolean
+    public static isValid(mnemonic: string, passphrase = ""): boolean
 }
 ```
 
-See also: [wordList](./compat.md#variable-wordlist)
+See also: [string](./remittance.md#function-string), [wordList](./compat.md#variable-wordlist)
 
 #### Constructor
 
 Constructs a Mnemonic object.
 
 ```ts
-constructor(mnemonic?: string, seed?: number[], wordlist = wordList) 
+constructor(mnemonic?: string, seed?: number[], wordlist = wordList)
 ```
-See also: [wordList](./compat.md#variable-wordlist)
+See also: [string](./remittance.md#function-string), [wordList](./compat.md#variable-wordlist)
 
 Argument Details
 
@@ -503,7 +508,7 @@ Validates the mnemonic phrase.
 Checks for correct length, absence of invalid words, and proper checksum.
 
 ```ts
-public check(): boolean 
+public check(): boolean
 ```
 
 Returns
@@ -522,7 +527,7 @@ mnemonic phrase based on the Mnemonic wordlist. The entropy should be at least 1
 The method applies a checksum and maps the entropy to words in the wordlist.
 
 ```ts
-public entropy2Mnemonic(buf: number[]): this 
+public entropy2Mnemonic(buf: number[]): this
 ```
 
 Returns
@@ -543,7 +548,7 @@ If the entropy is less than 128 bits or if it's not an even multiple of 11 bits.
 Loads a mnemonic and seed from a binary representation.
 
 ```ts
-public fromBinary(bin: number[]): this 
+public fromBinary(bin: number[]): this
 ```
 
 Returns
@@ -561,7 +566,7 @@ Converts given entropy into a mnemonic phrase.
 This method is used to generate a mnemonic from a specific entropy source.
 
 ```ts
-public fromEntropy(buf: number[]): this 
+public fromEntropy(buf: number[]): this
 ```
 
 Returns
@@ -582,7 +587,7 @@ If the entropy is less than 128 bits.
 Static method to create a Mnemonic instance from a given entropy.
 
 ```ts
-public static fromEntropy(buf: number[]): Mnemonic 
+public static fromEntropy(buf: number[]): Mnemonic
 ```
 See also: [Mnemonic](./compat.md#class-mnemonic)
 
@@ -600,7 +605,7 @@ Argument Details
 Generates a random mnemonic from a given bit length.
 
 ```ts
-public fromRandom(bits?: number): this 
+public fromRandom(bits?: number): this
 ```
 
 Returns
@@ -621,7 +626,7 @@ If the bit length is not a multiple of 32 or is less than 128.
 Static method to generate a Mnemonic instance with a random mnemonic.
 
 ```ts
-public static fromRandom(bits?: number): Mnemonic 
+public static fromRandom(bits?: number): Mnemonic
 ```
 See also: [Mnemonic](./compat.md#class-mnemonic)
 
@@ -639,8 +644,9 @@ Argument Details
 Sets the mnemonic for the instance from a string.
 
 ```ts
-public fromString(mnemonic: string): this 
+public fromString(mnemonic: string): this
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -651,14 +657,19 @@ Argument Details
 + **mnemonic**
   + The mnemonic phrase as a string.
 
+Throws
+
+If the mnemonic does not pass BIP-39 validation
+(unknown words, invalid length, or bad checksum).
+
 #### Method fromString
 
 Static method to create a Mnemonic instance from a mnemonic string.
 
 ```ts
-public static fromString(str: string): Mnemonic 
+public static fromString(str: string): Mnemonic
 ```
-See also: [Mnemonic](./compat.md#class-mnemonic)
+See also: [Mnemonic](./compat.md#class-mnemonic), [string](./remittance.md#function-string)
 
 Returns
 
@@ -675,7 +686,7 @@ Determines the validity of a given passphrase with the mnemonic.
 This method is useful for checking if a passphrase matches with the mnemonic.
 
 ```ts
-public isValid(passphrase = ""): boolean 
+public isValid(passphrase = ""): boolean
 ```
 
 Returns
@@ -692,8 +703,9 @@ Argument Details
 Static method to check the validity of a given mnemonic and passphrase combination.
 
 ```ts
-public static isValid(mnemonic: string, passphrase = ""): boolean 
+public static isValid(mnemonic: string, passphrase = ""): boolean
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -714,7 +726,7 @@ and uses PBKDF2 to generate a seed. It also validates the mnemonic before conver
 This seed can then be used for generating deterministic keys.
 
 ```ts
-public mnemonic2Seed(passphrase = ""): this 
+public mnemonic2Seed(passphrase = ""): this
 ```
 
 Returns
@@ -735,12 +747,28 @@ If the mnemonic does not pass validation or if the passphrase is not a string.
 Converts the mnemonic and seed into a binary representation.
 
 ```ts
-public toBinary(): number[] 
+public toBinary(): number[]
 ```
 
 Returns
 
 The binary representation of the mnemonic and seed.
+
+#### Method toEntropy
+
+Recovers the original entropy bytes from the instance's mnemonic phrase.
+
+```ts
+public toEntropy(): number[]
+```
+
+Returns
+
+The entropy buffer that was originally used to generate the mnemonic.
+
+Throws
+
+If the mnemonic is invalid or contains unknown words.
 
 #### Method toSeed
 
@@ -748,8 +776,9 @@ Converts the mnemonic to a seed.
 The mnemonic must pass the validity check before conversion.
 
 ```ts
-public toSeed(passphrase?: string): number[] 
+public toSeed(passphrase?: string): number[]
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -771,8 +800,9 @@ function toString() { [native code] }
 Converts the instance's mnemonic to a string representation.
 
 ```ts
-public toString(): string 
+public toString(): string
 ```
+See also: [string](./remittance.md#function-string)
 
 Returns
 
@@ -783,6 +813,41 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ---
 ## Functions
 
+| |
+| --- |
+| [compatBytes](#function-compatbytes) |
+| [compatString](#function-compatstring) |
+| [fromUtxo](#function-fromutxo) |
+| [uint32](#function-uint32) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+
+### Function: compatBytes
+
+Copy a legacy byte-array argument without permitting sparse or coercible values.
+
+```ts
+export function compatBytes(value: unknown, label: string, minimum = 0, maximum = MAX_COMPAT_BYTE_PAYLOAD): number[]
+```
+
+See also: [MAX_COMPAT_BYTE_PAYLOAD](./compat.md#variable-max_compat_byte_payload), [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
+### Function: compatString
+
+```ts
+export function compatString(value: unknown, label: string, maximum: number): string
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Function: fromUtxo
 
 Example
@@ -802,7 +867,7 @@ tx.addInput(i)
 export default function fromUtxo(utxo: JsonUtxo, unlockingScriptTemplate: {
     sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>;
     estimateLength: (tx: Transaction, inputIndex: number) => Promise<number>;
-}): TransactionInput 
+}): TransactionInput
 ```
 
 See also: [Transaction](./transaction.md#class-transaction), [TransactionInput](./transaction.md#interface-transactioninput), [UnlockingScript](./script.md#class-unlockingscript), [sign](./compat.md#variable-sign)
@@ -817,6 +882,17 @@ Argument Details
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+### Function: uint32
+
+```ts
+export function uint32(value: unknown, label: string): number
+```
+
+See also: [string](./remittance.md#function-string)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ## Types
 
 ## Enums
@@ -825,6 +901,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 | |
 | --- |
+| [MAX_COMPAT_BYTE_PAYLOAD](#variable-max_compat_byte_payload) |
 | [magicHash](#variable-magichash) |
 | [sign](#variable-sign) |
 | [verify](#variable-verify) |
@@ -834,22 +911,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ---
 
+### Variable: MAX_COMPAT_BYTE_PAYLOAD
+
+```ts
+MAX_COMPAT_BYTE_PAYLOAD = 16 * 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
+
+---
 ### Variable: magicHash
 
 ```ts
-magicHash = (messageBuf: number[]): number[] => {
-    const bw = new Writer();
-    bw.writeVarIntNum(prefix.length);
-    bw.write(toArray(prefix, "utf8"));
-    bw.writeVarIntNum(messageBuf.length);
-    bw.write(messageBuf);
-    const buf = bw.toArray();
-    const hashBuf = Hash.hash256(buf);
-    return hashBuf;
-}
+magicHash = (messageBuf: number[]): number[] => computeMagicHash(messageBuf)
 ```
-
-See also: [Writer](./primitives.md#class-writer), [hash256](./primitives.md#variable-hash256), [toArray](./primitives.md#variable-toarray)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -858,8 +933,11 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 sign = (message: number[], privateKey: PrivateKey, mode: "raw" | "base64" = "base64"): Signature | string => {
-    const hashBuf = magicHash(message);
-    const sig = ECDSA.sign(new BigNumber(hashBuf), privateKey, true);
+    if (mode !== "raw" && mode !== "base64") {
+        throw new TypeError("BSM signature mode must be raw or base64");
+    }
+    const hashBuf = computeMagicHash(message);
+    const sig = ECDSASign(new BigNumber(hashBuf), privateKey, true);
     if (mode === "raw") {
         return sig;
     }
@@ -869,7 +947,7 @@ sign = (message: number[], privateKey: PrivateKey, mode: "raw" | "base64" = "bas
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature), [magicHash](./compat.md#variable-magichash)
+See also: [BigNumber](./primitives.md#class-bignumber), [PrivateKey](./primitives.md#class-privatekey), [Signature](./primitives.md#class-signature), [string](./remittance.md#function-string)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
@@ -878,12 +956,12 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 verify = (message: number[], sig: Signature, pubKey: PublicKey): boolean => {
-    const hashBuf = magicHash(message);
-    return ECDSA.verify(new BigNumber(hashBuf), sig, pubKey);
+    const hashBuf = computeMagicHash(message);
+    return ECDSAVerify(new BigNumber(hashBuf), sig, pubKey) === true;
 }
 ```
 
-See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature), [magicHash](./compat.md#variable-magichash)
+See also: [BigNumber](./primitives.md#class-bignumber), [PublicKey](./primitives.md#class-publickey), [Signature](./primitives.md#class-signature)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 

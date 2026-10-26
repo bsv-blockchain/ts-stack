@@ -63,14 +63,12 @@ describe('bounded content and endpoint adapters', () => {
   })
 
   it('uses CHIRP, UHRP, and bounded HTTPS sources', async () => {
-    const chirpDownload = jest.fn(async () => ({ data: Uint8Array.of(1, 2, 3) }))
+    const chirpDownload = jest.fn(async () => ({ data: Uint8Array.of(2) }))
     const chirp = new UniversalContentSource({
       chirp: { download: chirpDownload },
       maximumBytes: 3
     })
-    await expect(chirp.read('chirp://sha256.example', 1n, 2n)).resolves.toEqual(
-      Uint8Array.of(1, 2, 3)
-    )
+    await expect(chirp.read('chirp://sha256.example', 1n, 2n)).resolves.toEqual(Uint8Array.of(2))
     expect(chirpDownload).toHaveBeenCalledWith('chirp://sha256.example', {
       range: { start: 1n, endExclusive: 2n }
     })
@@ -98,6 +96,42 @@ describe('bounded content and endpoint adapters', () => {
     await expect(oversized.read('https://storage.example/large')).rejects.toMatchObject({
       code: 'ERR_LCH_CONTENT_UNAVAILABLE'
     })
+  })
+
+  it('requires content adapters to return the exact requested byte range', async () => {
+    const chirp = new UniversalContentSource({
+      chirp: { download: async () => ({ data: Uint8Array.of(1, 2) }) },
+      maximumBytes: 8
+    })
+    await expect(chirp.read('chirp://sha256.example', 3n, 4n)).rejects.toMatchObject({
+      code: 'ERR_LCH_CONTENT_UNAVAILABLE'
+    })
+
+    const ignoredRange = new UniversalContentSource({
+      endpointPolicy: {
+        resolve: publicResolver,
+        connect: async () => new Response(Uint8Array.of(1), { status: 200 })
+      },
+      maximumBytes: 8
+    })
+    await expect(ignoredRange.read('https://storage.example/object', 3n, 4n)).rejects.toMatchObject(
+      { code: 'ERR_LCH_CONTENT_UNAVAILABLE' }
+    )
+
+    const exactRange = new UniversalContentSource({
+      endpointPolicy: {
+        resolve: publicResolver,
+        connect: async () =>
+          new Response(Uint8Array.of(4, 5), {
+            status: 206,
+            headers: { 'content-range': 'bytes 3-4/10', 'content-length': '2' }
+          })
+      },
+      maximumBytes: 8
+    })
+    await expect(exactRange.read('https://storage.example/object', 3n, 5n)).resolves.toEqual(
+      Uint8Array.of(4, 5)
+    )
   })
 
   it('tries every resolved UHRP host until one succeeds', async () => {

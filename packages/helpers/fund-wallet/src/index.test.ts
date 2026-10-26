@@ -282,6 +282,19 @@ describe('fundWallet', () => {
       'did not return a complete funding transaction'
     )
   })
+
+  it('does not report success when the destination rejects the funding transaction', async () => {
+    const runtime = makeRuntime(500)
+    const io = makeIO()
+    vi.mocked(runtime.remoteWallet.internalizeAction).mockResolvedValueOnce({
+      accepted: false
+    } as never)
+
+    await expect(fundWallet(runtime.options, runtime.dependencies, io)).rejects.toThrow(
+      'did not accept the funding transaction'
+    )
+    expect(io.logs.flat().join(' ')).not.toContain('Wallet funded!')
+  })
 })
 
 describe('runCli', () => {

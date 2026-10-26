@@ -32,7 +32,7 @@ describe('BsvDid', () => {
     expect(document.assertionMethod).toEqual([`${did}#${decoded.multibaseValue}`])
   })
 
-  test('normalizes hexadecimal and byte-array public-key inputs', () => {
+  test('accepts compressed hexadecimal, byte-array and public-key object inputs', () => {
     const publicKeyObject = PrivateKey.fromRandom().toPublicKey()
     const publicKey = publicKeyObject.toDER() as number[]
     const publicKeyHex = publicKey.map(byte => byte.toString(16).padStart(2, '0')).join('')
@@ -68,6 +68,56 @@ describe('BsvDid', () => {
     ]
 
     for (const did of invalidInputs) expect(() => decodeDidKey(did)).toThrow()
+  })
+
+  test('rejects each malformed DID component with its precise boundary error', () => {
+    const validKey = new PrivateKey(1).toPublicKey().toDER() as number[]
+    const multibase = encodeBase58Multibase([...SECP256K1_PUB_MULTICODEC_PREFIX, ...validKey])
+    const malformedGrammar = [
+      'did:key',
+      `web:key:${multibase}`,
+      `did:web:${multibase}`,
+      `did:key:${multibase}:extra`
+    ]
+
+    expect(() => decodeDidKey(1 as unknown as string)).toThrow(
+      'did:key identifier must be a string'
+    )
+    for (const did of malformedGrammar) {
+      expect(() => decodeDidKey(did)).toThrow('Invalid did:key identifier')
+    }
+    expect(() =>
+      decodeDidKey(`did:key:${encodeBase58Multibase([0xe8, 0x01, ...validKey])}`)
+    ).toThrow('Unsupported did:key multicodec')
+    expect(() =>
+      decodeDidKey(`did:key:${encodeBase58Multibase([0xe7, 0x02, ...validKey])}`)
+    ).toThrow('Unsupported did:key multicodec')
+    expect(() =>
+      decodeDidKey(
+        `did:key:${encodeBase58Multibase([
+          ...SECP256K1_PUB_MULTICODEC_PREFIX,
+          ...validKey.slice(1)
+        ])}`
+      )
+    ).toThrow('Invalid secp256k1 public key length')
+  })
+
+  test('rejects malformed verification-method bounds and extra fragments precisely', () => {
+    const did = publicKeyToDidKey(new PrivateKey(1).toPublicKey())
+    const verificationMethod = verificationMethodForDid(did)
+
+    expect(() => didFromVerificationMethod(1 as unknown as string)).toThrow(
+      'Verification method must be a string'
+    )
+    expect(() => didFromVerificationMethod('x'.repeat(4_097))).toThrow(
+      'Verification method has an invalid length'
+    )
+    expect(() => didFromVerificationMethod('x'.repeat(1_025))).toThrow(
+      'Verification method must be a DID URL with a fragment'
+    )
+    expect(() => didFromVerificationMethod(`${verificationMethod}#extra`)).toThrow(
+      'Verification method must be a DID URL with a fragment'
+    )
   })
 
   test('hashes both text and byte-array values', () => {

@@ -1,7 +1,13 @@
-import { WalletInterface, Curve, BigNumber, PublicKey, Hash, Utils } from '@bsv/sdk'
+import { hash160 } from '@bsv/sdk/primitives/Hash'
+import { toArray } from '@bsv/sdk/primitives/utils'
+import { WalletInterface, Curve, BigNumber, PublicKey } from '@bsv/sdk'
 import { SpecificLinkage } from './types.js'
 
-interface VerifiedLinkage { identityKey: string, derivedKey: string, pubKeyHash: number[] }
+interface VerifiedLinkage {
+  identityKey: string
+  derivedKey: string
+  pubKeyHash: number[]
+}
 
 /**
  * Decrypt the linkage scalar L and reconstruct `base + L*G`.
@@ -12,21 +18,24 @@ interface VerifiedLinkage { identityKey: string, derivedKey: string, pubKeyHash:
  * the linkage names — is the one thing an output linkage and an input linkage
  * disagree on, so the caller supplies it.
  */
-async function deriveLinkedKey (
+async function deriveLinkedKey(
   linkage: SpecificLinkage,
   verifierWallet: WalletInterface,
   identityKey: string
 ): Promise<VerifiedLinkage> {
   const { plaintext } = await verifierWallet.decrypt({
     ciphertext: linkage.encryptedLinkage,
-    protocolID: [2, `specific linkage revelation ${linkage.protocolID[0]} ${linkage.protocolID[1]}`],
+    protocolID: [
+      2,
+      `specific linkage revelation ${linkage.protocolID[0]} ${linkage.protocolID[1]}`
+    ],
     keyID: linkage.keyID,
     counterparty: linkage.prover
   })
   const offset = new Curve().g.mul(new BigNumber(plaintext))
   const sum = PublicKey.fromString(identityKey).add(offset)
   const derivedKey = new PublicKey(sum.x, sum.y).toString()
-  return { identityKey, derivedKey, pubKeyHash: Hash.hash160(Utils.toArray(derivedKey, 'hex')) }
+  return { identityKey, derivedKey, pubKeyHash: hash160(toArray(derivedKey, 'hex')) }
 }
 
 /**
@@ -34,7 +43,7 @@ async function deriveLinkedKey (
  * so the derived key is `counterparty + L*G` and the party named is the
  * counterparty.
  */
-export async function verifyKeyLinkage (
+export async function verifyKeyLinkage(
   linkage: SpecificLinkage,
   verifierWallet: WalletInterface
 ): Promise<VerifiedLinkage> {
@@ -50,14 +59,14 @@ export async function verifyKeyLinkage (
  * the key of whoever PAID that coin — it never matches the coin being spent,
  * and under sender blinding it is a one-time key that is not an identity at all.
  */
-export async function verifyInputKeyLinkage (
+export async function verifyInputKeyLinkage(
   linkage: SpecificLinkage,
   verifierWallet: WalletInterface
 ): Promise<VerifiedLinkage> {
   return await deriveLinkedKey(linkage, verifierWallet, linkage.prover)
 }
 
-export async function linkageControlsPubKeyHash (
+export async function linkageControlsPubKeyHash(
   linkage: SpecificLinkage,
   verifierWallet: WalletInterface,
   pubKeyHash: number[]

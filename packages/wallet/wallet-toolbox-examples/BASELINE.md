@@ -54,14 +54,20 @@
 
 ## Current Contract
 
-As of 2026-07-26, the historical test and lint gaps above are retired:
+As of 2026-09-18, the historical test and lint gaps above are retired:
 
-- five focused tests cover explicit and filename-based command dispatch,
-  missing/non-function targets, and synchronous/asynchronous errors;
+- 19 focused tests across five suites cover inert imports, explicit and
+  filename-based command dispatch, synchronous/asynchronous errors, externally
+  signed transaction binding, PushDrop/no-send runtime data ownership, and
+  protected SQLite backup targets;
 - test and coverage commands require Jest to discover tests;
 - Oxlint runs with warnings denied;
 - formatting is a read-only Prettier check; and
-- the examples have a dedicated no-emit typecheck profile.
+- the examples have a dedicated no-emit typecheck profile;
+- credential templates contain placeholders only and generated `.env` files are
+  documented as private root-key material; and
+- mainnet, storage-authority, output-release, and sensitive-log boundaries are
+  explicitly documented.
 
 ## Migration Gate Checklist (MBGA §13.3)
 

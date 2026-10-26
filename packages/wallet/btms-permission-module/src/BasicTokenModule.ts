@@ -1,9 +1,9 @@
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 import {
-  Hash,
   LockingScript,
   PushDrop,
   Transaction,
-  Utils,
   type CreateActionArgs,
   type CreateActionInput,
   type CreateActionOutput,
@@ -54,6 +54,9 @@ import {
  * - Unmarked actions and short signature payloads require user approval
  */
 export class BasicTokenModule implements PermissionsModule {
+  private static readonly MAX_AUTHORIZATION_ENTRIES = 1024
+  private static readonly MAX_SIGNATURE_DATA_BYTES = 8 * 1024 * 1024
+  private static readonly BIP143_TRAILER_BYTES = 8 + 4 + 32 + 4 + 4
   private readonly requestTokenAccess: (app: string, message: string) => Promise<boolean>
   private readonly btms?: Pick<BTMS, 'getAssetInfo'>
 
@@ -111,6 +114,57 @@ export class BasicTokenModule implements PermissionsModule {
   private clearAuthorization(originator: string): void {
     this.sessionAuthorizations.delete(originator)
     this.authorizedTransactions.delete(originator)
+  }
+
+  /** Store one originator entry while keeping all authorization maps bounded. */
+  private makeAuthorizationRoom(originator: string): void {
+    if (this.sessionAuthorizations.has(originator) || this.authorizedTransactions.has(originator)) {
+      return
+    }
+    while (
+      this.sessionAuthorizations.size >= BasicTokenModule.MAX_AUTHORIZATION_ENTRIES ||
+      this.authorizedTransactions.size >= BasicTokenModule.MAX_AUTHORIZATION_ENTRIES
+    ) {
+      const oldest =
+        this.sessionAuthorizations.keys().next().value ??
+        this.authorizedTransactions.keys().next().value
+      if (typeof oldest !== 'string') break
+      this.clearAuthorization(oldest)
+    }
+  }
+
+  private async requireApproval(
+    originator: string,
+    message: string,
+    denial: string
+  ): Promise<void> {
+    const approved = await this.requestTokenAccess(originator, message)
+    if (approved !== true) throw new Error(denial)
+  }
+
+  private addTokenAmounts(left: number, right: number): number {
+    const total = left + right
+    if (!Number.isSafeInteger(total) || total < 0) {
+      throw new Error('BTMS token amount total exceeds the safe integer range')
+    }
+    return total
+  }
+
+  private isDenseByteArray(value: unknown, maxLength: number): value is number[] {
+    if (!Array.isArray(value) || value.length > maxLength) return false
+    for (let i = 0; i < value.length; i++) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(i))
+      if (
+        descriptor == null ||
+        !('value' in descriptor) ||
+        !Number.isInteger(descriptor.value) ||
+        descriptor.value < 0 ||
+        descriptor.value > 255
+      ) {
+        return false
+      }
+    }
+    return true
   }
 
   /**
@@ -224,6 +278,7 @@ export class BasicTokenModule implements PermissionsModule {
 
     try {
       const transaction = Transaction.fromAtomicBEEF(tx)
+      this.makeAuthorizationRoom(originator)
       this.authorizedTransactions.set(originator, {
         reference,
         authorizedDigests: this.computeAuthorizedDigests(transaction),
@@ -246,7 +301,7 @@ export class BasicTokenModule implements PermissionsModule {
 
     const digests = new Set<string>()
     for (let inputIndex = 0; inputIndex < transaction.inputs.length; inputIndex++) {
-      digests.add(Utils.toHex(Hash.sha256(transaction.preimage(inputIndex))))
+      digests.add(toHex(sha256(transaction.preimage(inputIndex))))
     }
     return digests
   }
@@ -372,10 +427,11 @@ export class BasicTokenModule implements PermissionsModule {
     let { totalInputAmount, inputAmountSource } = inputResult
     let sendAmount = outputResult.hasTokenOutputs ? outputResult.outputSendAmount : 0
     const changeAmount = outputResult.hasTokenOutputs ? outputResult.outputChangeAmount : 0
+    const totalOutputAmount = this.addTokenAmounts(sendAmount, changeAmount)
 
     // If we have token outputs, derive total input amount from them
-    if (sendAmount + changeAmount > 0 && totalInputAmount === 0) {
-      totalInputAmount = sendAmount + changeAmount
+    if (totalOutputAmount > 0 && totalInputAmount === 0) {
+      totalInputAmount = totalOutputAmount
       inputAmountSource = 'derived'
     }
 
@@ -437,7 +493,7 @@ export class BasicTokenModule implements PermissionsModule {
         assetIdMismatch = true
         continue
       }
-      beefInputAmount += parsed.amount
+      beefInputAmount = this.addTokenAmounts(beefInputAmount, parsed.amount)
       ;({ tokenName, iconURL } = this.applyMetadata(parsed, tokenName, iconURL))
     }
 
@@ -528,9 +584,9 @@ export class BasicTokenModule implements PermissionsModule {
         typeof output.basket === 'string' &&
         output.basket.startsWith(P_BASKET_PREFIX)
       ) {
-        outputChangeAmount += parsed.amount
+        outputChangeAmount = this.addTokenAmounts(outputChangeAmount, parsed.amount)
       } else {
-        outputSendAmount += parsed.amount
+        outputSendAmount = this.addTokenAmounts(outputSendAmount, parsed.amount)
       }
     }
 
@@ -608,11 +664,7 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     const message = JSON.stringify(promptData)
-    const approved = await this.requestTokenAccess(originator, message)
-
-    if (!approved) {
-      throw new Error('User denied permission to spend tokens')
-    }
+    await this.requireApproval(originator, message, 'User denied permission to spend tokens')
 
     this.grantSessionAuthorization(originator)
   }
@@ -639,11 +691,7 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     const message = JSON.stringify(promptData)
-    const approved = await this.requestTokenAccess(originator, message)
-
-    if (!approved) {
-      throw new Error('User denied permission to burn tokens')
-    }
+    await this.requireApproval(originator, message, 'User denied permission to burn tokens')
 
     this.grantSessionAuthorization(originator)
   }
@@ -663,11 +711,7 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     const message = `Spend BTMS tokens\n\nApp: ${originator}`
-    const approved = await this.requestTokenAccess(originator, message)
-
-    if (!approved) {
-      throw new Error('User denied permission to spend BTMS tokens')
-    }
+    await this.requireApproval(originator, message, 'User denied permission to spend BTMS tokens')
 
     this.grantSessionAuthorization(originator)
   }
@@ -699,6 +743,12 @@ export class BasicTokenModule implements PermissionsModule {
     }
     if (!originator || typeof originator !== 'string') {
       throw new Error('Invalid originator')
+    }
+    if (!Array.isArray(args.data)) {
+      throw new TypeError('Signature request is missing data')
+    }
+    if (!this.isDenseByteArray(args.data, BasicTokenModule.MAX_SIGNATURE_DATA_BYTES)) {
+      throw new TypeError('Signature data must be a bounded dense byte array')
     }
 
     const hasTransactionBinding = this.authorizedTransactions.has(originator)
@@ -756,6 +806,9 @@ export class BasicTokenModule implements PermissionsModule {
     if (!Array.isArray(args.data)) {
       throw new TypeError('Signature request is missing data')
     }
+    if (!this.isDenseByteArray(args.data, BasicTokenModule.MAX_SIGNATURE_DATA_BYTES)) {
+      throw new TypeError('Signature data must be a bounded dense byte array')
+    }
 
     let digest: number[]
     if (args.data.length === 32) {
@@ -763,12 +816,12 @@ export class BasicTokenModule implements PermissionsModule {
       digest = args.data
     } else if (args.data.length >= 157) {
       // Retain compatibility with callers that supply the full BIP-143 preimage.
-      digest = Hash.sha256(args.data)
+      digest = sha256(args.data)
     } else {
       throw new Error('Signature data is neither a 32-byte digest nor a full BIP-143 preimage')
     }
 
-    if (!authorizedTx.authorizedDigests.has(Utils.toHex(digest))) {
+    if (!authorizedTx.authorizedDigests.has(toHex(digest))) {
       throw new Error('Signature request does not match the approved transaction')
     }
   }
@@ -834,6 +887,8 @@ export class BasicTokenModule implements PermissionsModule {
     }
     const now = Date.now()
     this.cleanupExpiredAuthorizations(now)
+    this.makeAuthorizationRoom(originator)
+    this.sessionAuthorizations.delete(originator)
     this.sessionAuthorizations.set(originator, now)
   }
 
@@ -877,7 +932,10 @@ export class BasicTokenModule implements PermissionsModule {
    * @returns true if this is a token issuance signature
    */
   private isIssuanceFromPreimage(preimage: number[]): boolean {
-    if (!Array.isArray(preimage) || preimage.length < 157) {
+    if (
+      !this.isDenseByteArray(preimage, BasicTokenModule.MAX_SIGNATURE_DATA_BYTES) ||
+      preimage.length < 157
+    ) {
       return false
     }
 
@@ -893,8 +951,19 @@ export class BasicTokenModule implements PermissionsModule {
 
       const { value: scriptLength, nextOffset: scriptDataOffset } = varint
 
+      const firstLengthByte = preimage[scriptCodeLenOffset]
+      if (
+        (firstLengthByte === 0xfd && scriptLength < 0xfd) ||
+        (firstLengthByte === 0xfe && scriptLength <= 0xffff)
+      ) {
+        return false
+      }
+
       // Validate scriptLength
-      if (scriptLength > 10000 || scriptDataOffset + scriptLength > preimage.length) {
+      if (
+        scriptLength > 10000 ||
+        scriptDataOffset + scriptLength + BasicTokenModule.BIP143_TRAILER_BYTES !== preimage.length
+      ) {
         return false
       }
 
@@ -904,7 +973,7 @@ export class BasicTokenModule implements PermissionsModule {
       const decoded = PushDrop.decode(lockingScript)
 
       if (decoded.fields.length >= 1) {
-        const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
+        const assetId = toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
         return assetId === ISSUE_MARKER
       }
     } catch {
@@ -989,11 +1058,7 @@ export class BasicTokenModule implements PermissionsModule {
     }
 
     const message = JSON.stringify(promptData)
-    const approved = await this.requestTokenAccess(originator, message)
-
-    if (!approved) {
-      throw new Error('User denied permission to access BTMS tokens')
-    }
+    await this.requireApproval(originator, message, 'User denied permission to access BTMS tokens')
 
     this.grantSessionAuthorization(originator)
   }
@@ -1065,7 +1130,7 @@ export class BasicTokenModule implements PermissionsModule {
       const lockingScript = LockingScript.fromHex(output.lockingScript)
       const decoded = PushDrop.decode(lockingScript)
       if (decoded.fields.length >= 1) {
-        const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
+        const assetId = toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
         return assetId === ISSUE_MARKER
       }
     } catch {
@@ -1101,8 +1166,8 @@ export class BasicTokenModule implements PermissionsModule {
       }
 
       // Extract assetId and amount
-      const assetId = Utils.toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
-      const amountStr = Utils.toUTF8(decoded.fields[BTMS_FIELD.AMOUNT])
+      const assetId = toUTF8(decoded.fields[BTMS_FIELD.ASSET_ID])
+      const amountStr = toUTF8(decoded.fields[BTMS_FIELD.AMOUNT])
       const amount = Number(amountStr)
 
       // Validate amount
@@ -1119,7 +1184,7 @@ export class BasicTokenModule implements PermissionsModule {
       let metadata: ParsedTokenInfo['metadata']
       if (decoded.fields.length >= 3) {
         try {
-          const potentialMetadata = Utils.toUTF8(decoded.fields[BTMS_FIELD.METADATA])
+          const potentialMetadata = toUTF8(decoded.fields[BTMS_FIELD.METADATA])
           // Only parse if it looks like JSON (starts with {)
           if (
             potentialMetadata &&

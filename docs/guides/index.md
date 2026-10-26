@@ -3,8 +3,8 @@ id: guides-overview
 title: 'Guides'
 kind: meta
 version: '1.0.0'
-last_updated: '2026-08-28'
-last_verified: '2026-08-28'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 status: stable
 tags: [guides, tutorials, how-to]
@@ -15,6 +15,17 @@ tags: [guides, tutorials, how-to]
 Comprehensive step-by-step walkthroughs for building production applications
 with the ts-stack. Guides use current public APIs, runnable examples, and
 explicit operational assumptions.
+
+## Wallet recovery learning path
+
+1. [Wallet backup and recovery](wallet-backup-recovery.md): inventory keys, data,
+   product state and independent recovery access.
+2. [BRC-38/39 wallet data portability](wallet-data-portability.md): implement
+   encrypted exports, preview and explicit restore/merge using current APIs.
+3. [Recovery drill and acceptance checklist](wallet-recovery-drill.md): prove
+   clean-device/provider-loss recovery and document limits.
+4. [AI-agent implementation brief](wallet-recovery-agent-brief.md): give a coding
+   agent the source map, constraints and acceptance criteria.
 
 ## Available Guides
 
@@ -58,6 +69,14 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 
 **Time:** ~45 minutes | **Level:** Advanced
 
+### 7. [Understand and Contribute Registry Metadata](./registry-metadata.md)
+
+Document protocols through the BRC process, request accurate optional descriptions,
+and keep registry stewardship separate from wallet permissions. Includes exact
+lookup identities, publisher choice, updates and wallet fallback expectations.
+
+**Level:** Beginner to Intermediate
+
 ## Recommended Learning Path
 
 1. Start with **Wallet-Aware App** if you're new to wallets and transactions
@@ -78,3 +97,8 @@ creator, issuer, Payee, wallet, evidence, Delivery, and storage roles.
 **Want to implement a protocol?** See [Conformance Testing](../conformance/).
 
 **Looking for infrastructure examples?** Check [Infrastructure Components](../infrastructure/).
+
+## Identity, DIDs and credentials
+
+- [Unified integration and implementer guidance](identity-did-vc.md)
+- [Breaking API and service migration](identity-did-vc-migration.md)

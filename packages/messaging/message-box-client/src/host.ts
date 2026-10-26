@@ -1,5 +1,29 @@
 const MAX_HOST_LENGTH = 2048
 
+function hasControlCharacter(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true
+  }
+  return false
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '')
+  if (normalized === 'localhost' || normalized.endsWith('.localhost') || normalized === '::1') {
+    return true
+  }
+  const octets = normalized.split('.').map(Number)
+  return (
+    octets.length === 4 &&
+    octets.every(octet => Number.isInteger(octet) && octet >= 0 && octet <= 255) &&
+    octets[0] === 127
+  )
+}
+
 function isPrivateIpv4(hostname: string): boolean {
   const octets = hostname.split('.').map(Number)
   if (
@@ -61,14 +85,20 @@ function isLocalHostname(hostname: string): boolean {
 /**
  * Validates and canonicalizes an explicitly configured Message Box base URL.
  *
- * HTTP remains supported for operator-controlled local development. Overlay
- * advertisements use the stricter `normalizeOverlayMessageBoxHost` boundary.
+ * HTTP remains supported only for loopback development. Authenticated wallet
+ * traffic to every non-loopback server requires HTTPS. Overlay advertisements
+ * use the stricter `normalizeOverlayMessageBoxHost` boundary.
  */
 export function normalizeMessageBoxHost(host: string): string {
   if (typeof host !== 'string') throw new TypeError('Message Box host must be a string')
 
-  const candidate = host.trim()
-  if (candidate === '' || candidate.length > MAX_HOST_LENGTH) {
+  const candidate = host
+  if (
+    candidate === '' ||
+    candidate.length > MAX_HOST_LENGTH ||
+    candidate.trim() !== candidate ||
+    hasControlCharacter(candidate)
+  ) {
     throw new TypeError('Message Box host must be a non-empty URL of at most 2048 characters')
   }
 
@@ -79,8 +109,11 @@ export function normalizeMessageBoxHost(host: string): string {
     throw new TypeError('Message Box host must be an absolute HTTP(S) URL')
   }
 
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new TypeError('Message Box host must use HTTP or HTTPS')
+  if (
+    url.protocol !== 'https:' &&
+    !(url.protocol === 'http:' && isLoopbackHostname(url.hostname))
+  ) {
+    throw new TypeError('Message Box host requires HTTPS except on localhost')
   }
   if (url.username !== '' || url.password !== '') {
     throw new TypeError('Message Box host must not contain credentials')

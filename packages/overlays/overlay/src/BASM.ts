@@ -118,6 +118,7 @@ export interface BASMPeerSyncReport {
 }
 
 type AdmittedTxLike = string | AdmittedTxRef
+const MAX_BASM_ROOT_LEAVES = 100_000
 
 function sha256d(buffer: Buffer): Buffer {
   const first = createHash('sha256').update(buffer).digest()
@@ -140,15 +141,29 @@ function internalToDisplayHex(hash: Buffer): string {
 }
 
 function normalizeAdmittedTxids(admitted: AdmittedTxLike[]): string[] {
-  return admitted
-    .map((item, originalIndex) => {
-      if (typeof item === 'string') {
-        return { txid: item, blockIndex: originalIndex }
-      }
-      return item
-    })
-    .sort((a, b) => a.blockIndex - b.blockIndex)
-    .map(item => item.txid.toLowerCase())
+  if (!Array.isArray(admitted) || admitted.length > MAX_BASM_ROOT_LEAVES) {
+    throw new TypeError(`BASM admission sets are capped at ${MAX_BASM_ROOT_LEAVES} entries`)
+  }
+  const normalized = admitted.map((item, originalIndex) => {
+    const candidate = typeof item === 'string' ? { txid: item, blockIndex: originalIndex } : item
+    if (
+      typeof candidate !== 'object' ||
+      candidate === null ||
+      typeof candidate.txid !== 'string' ||
+      !Number.isSafeInteger(candidate.blockIndex) ||
+      candidate.blockIndex < 0
+    ) {
+      throw new TypeError(`BASM admission at index ${originalIndex} is invalid`)
+    }
+    assertHashHex(candidate.txid, `BASM admission at index ${originalIndex}`)
+    return { txid: candidate.txid.toLowerCase(), blockIndex: candidate.blockIndex }
+  })
+  const txids = new Set(normalized.map(item => item.txid))
+  const blockIndexes = new Set(normalized.map(item => item.blockIndex))
+  if (txids.size !== normalized.length || blockIndexes.size !== normalized.length) {
+    throw new TypeError('BASM admission sets must contain unique txids and block indexes')
+  }
+  return normalized.sort((a, b) => a.blockIndex - b.blockIndex).map(item => item.txid)
 }
 
 /**

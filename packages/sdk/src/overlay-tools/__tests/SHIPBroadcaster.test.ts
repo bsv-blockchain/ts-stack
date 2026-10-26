@@ -1,9 +1,10 @@
 import SHIPCast, { HTTPSOverlayBroadcastFacilitator } from '../../overlay-tools/SHIPBroadcaster'
 import LookupResolver from '../../overlay-tools/LookupResolver'
-import { PrivateKey } from '../../primitives/index'
+import { PrivateKey, Utils } from '../../primitives/index'
 import { Transaction } from '../../transaction/index'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
 import { CompletedProtoWallet } from '../../auth/certificates/__tests/CompletedProtoWallet'
+import PushDrop from '../../script/templates/PushDrop'
 
 const mockFacilitator = {
   send: jest.fn()
@@ -24,6 +25,7 @@ describe('SHIPCast', () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore()
+    jest.useRealTimers()
   })
 
   it('uses the configured HTTP client and canonical comma-separated X-Topics header', async () => {
@@ -64,6 +66,268 @@ describe('SHIPCast', () => {
     expect(httpClient).not.toHaveBeenCalled()
   })
 
+  it.each([
+    ['not a URL', 'valid absolute URL'],
+    ['ftp://overlay.example', 'HTTPS facilitator'],
+    ['https://user:secret@overlay.example', 'HTTPS facilitator'],
+    ['https://overlay.example/path', 'HTTPS facilitator'],
+    ['https://overlay.example?target=other', 'HTTPS facilitator'],
+    ['https://overlay.example#fragment', 'HTTPS facilitator']
+  ])('rejects unsafe facilitator target %s before transport', async (url, message) => {
+    const httpClient = jest.fn()
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(facilitator.send(url, { beef: [1], topics: ['tm_foo'] })).rejects.toThrow(message)
+    expect(httpClient).not.toHaveBeenCalled()
+  })
+
+  it('allows explicit local HTTP while retaining the canonical submit endpoint', async () => {
+    const httpClient = jest.fn().mockResolvedValue(
+      new Response(JSON.stringify({ tm_foo: { outputsToAdmit: [0], coinsToRetain: [] } }), {
+        status: 200
+      })
+    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(
+      httpClient as unknown as typeof fetch,
+      true
+    )
+
+    await expect(
+      facilitator.send('http://localhost:8080', { beef: [1], topics: ['tm_foo'] })
+    ).resolves.toEqual({ tm_foo: { outputsToAdmit: [0], coinsToRetain: [] } })
+    expect(httpClient).toHaveBeenCalledWith(
+      'http://localhost:8080/submit',
+      expect.objectContaining({ redirect: 'error' })
+    )
+  })
+
+  it.each([
+    ['a typed array', new Uint8Array([1])],
+    ['an empty array', []],
+    [
+      'a sparse array',
+      (() => {
+        const value: number[] = []
+        value.length = 1
+        return value
+      })()
+    ],
+    ['a fractional byte', [1.5]],
+    ['a negative byte', [-1]],
+    ['an oversized byte', [256]]
+  ])('rejects %s as BEEF before transport', async (_name, beef) => {
+    const httpClient = jest.fn()
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', {
+        beef: beef as number[],
+        topics: ['tm_foo']
+      })
+    ).rejects.toThrow('BEEF must be a non-empty byte array')
+    expect(httpClient).not.toHaveBeenCalled()
+  })
+
+  it('does not invoke accessors while validating BEEF bytes', async () => {
+    const getter = jest.fn(() => 1)
+    const beef: number[] = []
+    Object.defineProperty(beef, 0, { configurable: true, enumerable: true, get: getter })
+    beef.length = 1
+    const httpClient = jest.fn()
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef, topics: ['tm_foo'] })
+    ).rejects.toThrow('BEEF must be a non-empty byte array')
+    expect(getter).not.toHaveBeenCalled()
+    expect(httpClient).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    new Uint8Array([1]),
+    [256],
+    (() => {
+      const value: number[] = []
+      value.length = 1
+      return value
+    })()
+  ])('rejects malformed off-chain values before transport', async offChainValues => {
+    const httpClient = jest.fn()
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', {
+        beef: [1],
+        topics: ['tm_foo'],
+        offChainValues: offChainValues as number[]
+      })
+    ).rejects.toThrow('off-chain values must be a byte array')
+    expect(httpClient).not.toHaveBeenCalled()
+  })
+
+  it('encodes bounded off-chain values and parses a chunked UTF-8 response', async () => {
+    const json = JSON.stringify({
+      tm_foo: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [1] }
+    })
+    const bytes = new TextEncoder().encode(json)
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.subarray(0, 7))
+        controller.enqueue(bytes.subarray(7))
+        controller.close()
+      }
+    })
+    const httpClient = jest.fn().mockResolvedValue(
+      new Response(body, {
+        status: 200,
+        headers: { 'Content-Length': String(bytes.byteLength) }
+      })
+    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', {
+        beef: [1, 2],
+        topics: ['tm_foo'],
+        offChainValues: [3, 4]
+      })
+    ).resolves.toEqual({
+      tm_foo: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [1] }
+    })
+    expect(httpClient).toHaveBeenCalledWith(
+      'https://overlay.example/submit',
+      expect.objectContaining({
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'X-Topics': 'tm_foo',
+          'x-includes-off-chain-values': 'true'
+        },
+        body: new Uint8Array([2, 1, 2, 3, 4])
+      })
+    )
+  })
+
+  it.each(['01', '-1', String(1024 * 1024 + 1)])(
+    'rejects unsafe declared response length %s before reading',
+    async contentLength => {
+      const httpClient = jest.fn().mockResolvedValue(
+        new Response('{}', {
+          status: 200,
+          headers: { 'Content-Length': contentLength }
+        })
+      )
+      const facilitator = new HTTPSOverlayBroadcastFacilitator(
+        httpClient as unknown as typeof fetch
+      )
+
+      await expect(
+        facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+      ).rejects.toThrow('maximum permitted size')
+    }
+  )
+
+  it('cancels an oversized streamed response', async () => {
+    const cancel = jest.fn()
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array(1024 * 1024 + 1))
+      },
+      cancel
+    })
+    const httpClient = jest.fn().mockResolvedValue(new Response(body, { status: 200 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toThrow('maximum permitted size')
+    expect(cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['invalid UTF-8', new Uint8Array([0xc3, 0x28]), 'not valid UTF-8'],
+    ['malformed JSON', new TextEncoder().encode('{'), 'not valid JSON']
+  ])('rejects %s response bytes', async (_name, bytes, message) => {
+    const httpClient = jest.fn().mockResolvedValue(new Response(bytes, { status: 200 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toThrow(message)
+  })
+
+  it('rejects failed HTTP responses', async () => {
+    const httpClient = jest.fn().mockResolvedValue(new Response('unavailable', { status: 503 }))
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+
+    await expect(
+      facilitator.send('https://overlay.example', { beef: [1], topics: ['tm_foo'] })
+    ).rejects.toThrow('Failed to facilitate broadcast')
+  })
+
+  it('aborts a facilitator request at its fixed deadline', async () => {
+    jest.useFakeTimers()
+    const httpClient = jest.fn(
+      async (_url: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+        await new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new DOMException('aborted', 'AbortError'))
+          })
+        })
+    )
+    const facilitator = new HTTPSOverlayBroadcastFacilitator(httpClient as unknown as typeof fetch)
+    const request = facilitator.send('https://overlay.example', {
+      beef: [1],
+      topics: ['tm_foo']
+    })
+    const rejection = expect(request).rejects.toThrow('SHIP request timed out')
+
+    await jest.advanceTimersByTimeAsync(30_000)
+    await rejection
+    expect(jest.getTimerCount()).toBe(0)
+  })
+
+  it('rejects unsafe specific-host acknowledgment maps without reading accessors', () => {
+    const getter = jest.fn(() => ['tm_foo'])
+    const accessorMap: Record<string, unknown> = {}
+    Object.defineProperty(accessorMap, 'https://overlay.example', {
+      enumerable: true,
+      get: getter
+    })
+    expect(
+      () =>
+        new SHIPCast(['tm_foo'], {
+          requireAcknowledgmentFromSpecificHostsForTopics: accessorMap as never
+        })
+    ).toThrow('must be a plain object')
+    expect(getter).not.toHaveBeenCalled()
+
+    const tooManyHosts = Object.fromEntries(
+      Array.from({ length: 33 }, (_, index) => [`https://host-${index}.example`, 'all'])
+    )
+    expect(
+      () =>
+        new SHIPCast(['tm_foo'], {
+          requireAcknowledgmentFromSpecificHostsForTopics: tooManyHosts as never
+        })
+    ).toThrow('too many hosts')
+
+    expect(
+      () =>
+        new SHIPCast(['tm_foo'], {
+          requireAcknowledgmentFromSpecificHostsForTopics: {
+            'https://overlay.example': 'all',
+            'https://overlay.example/': 'all'
+          }
+        })
+    ).toThrow('duplicate host')
+  })
+
+  it('rejects an unknown network preset before creating default transports', () => {
+    expect(() => new SHIPCast(['tm_foo'], { networkPreset: 'unknown' as never })).toThrow(
+      'network preset is invalid'
+    )
+  })
+
   it('reports the all-host acknowledgment failure directly', () => {
     const broadcaster = new SHIPCast(['tm_foo'], {
       requireAcknowledgmentFromAllHostsForTopics: 'all'
@@ -79,13 +343,72 @@ describe('SHIPCast', () => {
     })
   })
 
+  it('accepts BRC-207 per-asset topic names and keeps rejecting noncanonical ones', () => {
+    const assetTopic = `tm_color_${'0123456789abcdef'.repeat(4)}_0`
+    expect(
+      () =>
+        new SHIPCast([assetTopic, 'tm_uhrp_files'], {
+          requireAcknowledgmentFromAnyHostForTopics: [assetTopic]
+        })
+    ).not.toThrow()
+    for (const topic of [
+      'tm_',
+      'tm__x',
+      'tm_x_',
+      'tm_Color',
+      'tm_' + 'a'.repeat(297),
+      `color_${'0123456789abcdef'.repeat(4)}_0`
+    ]) {
+      expect(() => new SHIPCast([topic])).toThrow(
+        new Error('Broadcast topics must contain unique canonical tm_ topic names.')
+      )
+    }
+  })
+
   it('Handles constructor errors', () => {
     expect(() => new SHIPCast([])).toThrow(
-      new Error('At least one topic is required for broadcast.')
+      new Error('Broadcast topics must be a bounded array of canonical topic names.')
     )
     expect(() => new SHIPCast(['badprefix_foo'])).toThrow(
-      new Error('Every topic must start with "tm_".')
+      new Error('Broadcast topics must contain unique canonical tm_ topic names.')
     )
+    const sparse: string[] = []
+    sparse.length = 1
+    expect(() => new SHIPCast(sparse)).toThrow('canonical tm_ topic names')
+    expect(
+      () =>
+        new SHIPCast(['tm_foo'], {
+          requireAcknowledgmentFromAnyHostForTopics: ['tm_other']
+        })
+    ).toThrow('may only reference topics included in this broadcast')
+  })
+
+  it('owns routing and acknowledgment configuration snapshots', () => {
+    const topics = ['tm_foo']
+    const allHosts = ['tm_foo']
+    const specificHost = ['tm_foo']
+    const hostRequirements = { 'https://shiphost.com/': specificHost }
+    const broadcaster = new SHIPCast(topics, {
+      requireAcknowledgmentFromAllHostsForTopics: allHosts,
+      requireAcknowledgmentFromSpecificHostsForTopics: hostRequirements
+    })
+
+    topics[0] = 'tm_attacker'
+    allHosts[0] = 'tm_attacker'
+    specificHost[0] = 'tm_attacker'
+    delete hostRequirements['https://shiphost.com/']
+
+    expect((broadcaster as any).topics).toEqual(['tm_foo'])
+    expect(
+      (broadcaster as any).checkAllHostsRequirement({
+        'https://shiphost.com': new Set(['tm_foo'])
+      })
+    ).toBeNull()
+    expect(
+      (broadcaster as any).checkSpecificHostsRequirement({
+        'https://shiphost.com': new Set(['tm_foo'])
+      })
+    ).toBeNull()
   })
 
   it('should broadcast to a single SHIP host found via resolver', async () => {
@@ -244,7 +567,7 @@ describe('SHIPCast', () => {
       resolver: mockResolver as unknown as LookupResolver
     })
     await expect(async () => await b2.broadcast(testTx)).rejects.toThrow(
-      'SHIP answer is not an output list.'
+      'SHIP answer is not a bounded output list.'
     )
     expect(mockFacilitator.send).not.toHaveBeenCalled()
 
@@ -260,7 +583,7 @@ describe('SHIPCast', () => {
       resolver: mockResolver as unknown as LookupResolver
     })
     await expect(async () => await b3.broadcast(testTx)).rejects.toThrow(
-      'answer.outputs is not iterable'
+      'SHIP answer is not a bounded output list.'
     )
     expect(mockFacilitator.send).not.toHaveBeenCalled()
 
@@ -353,6 +676,63 @@ describe('SHIPCast', () => {
       5000
     )
 
+    expect(mockFacilitator.send).not.toHaveBeenCalled()
+  })
+
+  it('does not route a transaction to an unauthenticated SHIP advertisement', async () => {
+    const key = new PrivateKey(44)
+    const wallet = new CompletedProtoWallet(key)
+    const unauthenticated = await new PushDrop(wallet).lock(
+      [
+        Utils.toArray('SHIP', 'utf8'),
+        Utils.toArray(key.toPublicKey().toString(), 'hex'),
+        Utils.toArray('https://attacker.example', 'utf8'),
+        Utils.toArray('tm_foo', 'utf8')
+      ],
+      [2, 'Service Host Interconnect'],
+      '1',
+      'self'
+    )
+    const advertisementTx = new Transaction(
+      1,
+      [],
+      [{ lockingScript: unauthenticated, satoshis: 1 }],
+      0
+    )
+    const validScript = await new OverlayAdminTokenTemplate(wallet).lock(
+      'SHIP',
+      'https://wrong-value.example',
+      'tm_foo'
+    )
+    const wrongValueTx = new Transaction(1, [], [{ lockingScript: validScript, satoshis: 2 }], 0)
+    const mismatchedTxidTx = new Transaction(
+      1,
+      [],
+      [{ lockingScript: validScript, satoshis: 1 }],
+      0
+    )
+    mockResolver.query.mockReturnValueOnce({
+      type: 'output-list',
+      outputs: [
+        { beef: advertisementTx.toBEEF(), outputIndex: 0 },
+        { beef: wrongValueTx.toBEEF(), outputIndex: 0 },
+        {
+          beef: mismatchedTxidTx.toBEEF(),
+          outputIndex: 0,
+          txid: '00'.repeat(32)
+        }
+      ]
+    })
+
+    const broadcaster = new SHIPCast(['tm_foo'], {
+      facilitator: mockFacilitator,
+      resolver: mockResolver as unknown as LookupResolver
+    })
+    await expect(broadcaster.broadcast(new Transaction(1, [], [], 0))).resolves.toEqual({
+      status: 'error',
+      code: 'ERR_NO_HOSTS_INTERESTED',
+      description: 'No mainnet hosts are interested in receiving this transaction.'
+    })
     expect(mockFacilitator.send).not.toHaveBeenCalled()
   })
 

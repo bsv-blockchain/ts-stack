@@ -1,12 +1,14 @@
+import { Reader, Writer, toArray, toBase64, toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 import fs from 'node:fs'
+import path from 'node:path'
 import mime from 'mime-types'
 import {
-  Utils,
   Peer,
   SessionManager,
   PublicKey,
   Telemetry,
   normalizeBRC100ByteFields,
+  snapshotAuthMessage,
   stringifyBRC100,
   type AsyncSessionManager,
   type AuthMessage,
@@ -37,8 +39,8 @@ export { writeBodyToWriter } from './authMiddlewareHelpers.js'
 const WELL_KNOWN_AUTH_PATH = '/.well-known/auth'
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_MAX_PENDING_REQUESTS = 1_000
+const DEFAULT_MAX_REQUEST_BYTES = 8 * 1024 * 1024
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
-const MAX_AUTH_HEADER_LENGTH = 4_096
 const TRACEPARENT_PATTERN = /^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$/i
 
 function parseTraceparent(
@@ -75,6 +77,8 @@ interface ActiveCertificateRequest {
 export interface AuthTransportLimits {
   requestTimeoutMs: number
   maxPendingRequests: number
+  /** Maximum handshake/plain-data and encoded request-body bytes; excludes HTTP headers. */
+  maxRequestBytes: number
   /**
    * Maximum encoded application-response bytes retained for BRC-104 signing.
    * Set to `-1` only when the embedding service enforces an equivalent bound
@@ -86,6 +90,41 @@ export interface AuthTransportLimits {
 export interface AuthRequest extends Request {
   auth?: {
     identityKey: PubKeyHex
+  }
+}
+
+export interface CertificateApprovalStore {
+  /** Persist application approval for one exact authenticated session. */
+  approve: (sessionNonce: string, identityKey: PubKeyHex) => void | Promise<void>
+  /** Return exact boolean true only when that session/identity pair was approved. */
+  isApproved: (sessionNonce: string, identityKey: PubKeyHex) => boolean | Promise<boolean>
+}
+
+/**
+ * Bounded process-local certificate approval state. Multi-instance services
+ * using `onCertificatesReceived` must inject a shared store instead.
+ */
+export class InMemoryCertificateApprovalStore implements CertificateApprovalStore {
+  private readonly approvals = new Map<string, PubKeyHex>()
+
+  constructor(private readonly maxApprovals: number = 10_000) {
+    if (!Number.isSafeInteger(maxApprovals) || maxApprovals < 1) {
+      throw new RangeError('maxApprovals must be a positive safe integer.')
+    }
+  }
+
+  approve(sessionNonce: string, identityKey: PubKeyHex): void {
+    if (this.approvals.has(sessionNonce)) this.approvals.delete(sessionNonce)
+    while (this.approvals.size >= this.maxApprovals) {
+      const oldest = this.approvals.keys().next().value as string | undefined
+      if (oldest === undefined) break
+      this.approvals.delete(oldest)
+    }
+    this.approvals.set(sessionNonce, identityKey)
+  }
+
+  isApproved(sessionNonce: string, identityKey: PubKeyHex): boolean {
+    return this.approvals.get(sessionNonce) === identityKey
   }
 }
 
@@ -105,6 +144,13 @@ export interface AuthMiddlewareOptions {
     res: Response,
     next: NextFunction
   ) => void | Promise<void>
+
+  /**
+   * Application certificate approvals are session-bound. Required for
+   * horizontally scaled services when `onCertificatesReceived` is configured;
+   * the default store is bounded and process-local.
+   */
+  certificateApprovalStore?: CertificateApprovalStore
 
   /**
    * Optional logger (e.g., console). If not provided, logging is disabled.
@@ -145,15 +191,38 @@ class AuthProtocolError extends Error {
 function singleHeader(req: Request, name: string, required = true): string | undefined {
   const value = req.headers[name]
   if (value === undefined && !required) return undefined
-  if (
-    typeof value !== 'string' ||
-    value.length === 0 ||
-    value.length > MAX_AUTH_HEADER_LENGTH ||
-    containsUnsafeHeaderCharacter(value)
-  ) {
+  if (typeof value !== 'string' || value.length === 0 || containsUnsafeHeaderCharacter(value)) {
     throw new AuthProtocolError(`Invalid ${name} header.`)
   }
   return value
+}
+
+function isBoundRequestHeader(name: string): boolean {
+  const normalized = name.toLowerCase()
+  return (
+    normalized.startsWith('x-bsv-') ||
+    normalized === 'content-type' ||
+    normalized === 'authorization'
+  )
+}
+
+function assertNoDuplicateBoundRequestHeaders(req: Request): void {
+  const rawHeaders: unknown = req.rawHeaders
+  if (!Array.isArray(rawHeaders)) return
+  const seen = new Set<string>()
+  for (let index = 0; index < rawHeaders.length; index += 2) {
+    const name = rawHeaders[index]
+    const value = rawHeaders[index + 1]
+    if (typeof name !== 'string' || typeof value !== 'string') {
+      throw new AuthProtocolError('The authentication request headers are malformed.')
+    }
+    const normalized = name.toLowerCase()
+    if (!isBoundRequestHeader(normalized)) continue
+    if (seen.has(normalized)) {
+      throw new AuthProtocolError('Duplicate signed authentication request header.')
+    }
+    seen.add(normalized)
+  }
 }
 
 function containsUnsafeHeaderCharacter(value: string): boolean {
@@ -169,10 +238,10 @@ function isCanonicalBase64(value: string, decodedLength?: number): boolean {
     return false
   }
   try {
-    const decoded = Utils.toArray(value, 'base64')
+    const decoded = toArray(value, 'base64')
     return (
       (decodedLength === undefined || decoded.length === decodedLength) &&
-      Utils.toBase64(decoded) === value
+      toBase64(decoded) === value
     )
   } catch {
     return false
@@ -188,7 +257,91 @@ function isCompressedPublicKey(value: string): value is PubKeyHex {
   }
 }
 
+function assertBoundedRequestValue(value: unknown, maxBytes: number): void {
+  if (maxBytes === -1) return
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }]
+  const seen = new WeakSet<object>()
+  let nodes = 0
+  let bytes = 0
+
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    nodes += 1
+    if (nodes > 100_000 || current.depth > 64) {
+      throw new AuthProtocolError('The authentication request exceeds structural limits.')
+    }
+    const candidate = current.value
+    if (candidate === null || (candidate === undefined && current.depth === 0)) {
+      bytes += 4
+    } else if (typeof candidate === 'string') {
+      bytes += Buffer.byteLength(candidate, 'utf8')
+    } else if (typeof candidate === 'number') {
+      if (!Number.isFinite(candidate) || Object.is(candidate, -0)) {
+        throw new AuthProtocolError('The authentication request contains an ambiguous number.')
+      }
+      bytes += 16
+    } else if (typeof candidate === 'boolean') {
+      bytes += 16
+    } else if (candidate instanceof Uint8Array) {
+      bytes += candidate.byteLength
+    } else if (typeof candidate === 'object') {
+      if (seen.has(candidate)) {
+        throw new AuthProtocolError('The authentication request must not contain cycles.')
+      }
+      seen.add(candidate)
+      const prototype = Object.getPrototypeOf(candidate)
+      if (!Array.isArray(candidate) && prototype !== Object.prototype && prototype !== null) {
+        throw new AuthProtocolError('The authentication request must contain plain data.')
+      }
+      if (Array.isArray(candidate) && candidate.length > 100_000) {
+        throw new AuthProtocolError('The authentication request exceeds structural limits.')
+      }
+      if (Array.isArray(candidate)) {
+        for (let index = 0; index < candidate.length; index += 1) {
+          const descriptor = Object.getOwnPropertyDescriptor(candidate, index)
+          if (
+            descriptor === undefined ||
+            !Object.prototype.hasOwnProperty.call(descriptor, 'value')
+          ) {
+            throw new AuthProtocolError(
+              'The authentication request must not contain sparse arrays.'
+            )
+          }
+        }
+      }
+      if (Object.getOwnPropertySymbols(candidate).length > 0) {
+        throw new AuthProtocolError('The authentication request must contain JSON-compatible data.')
+      }
+      const descriptors = Object.getOwnPropertyDescriptors(candidate)
+      for (const [key, descriptor] of Object.entries(descriptors)) {
+        if (Array.isArray(candidate) && key === 'length') continue
+        if (descriptor.get !== undefined || descriptor.set !== undefined) {
+          throw new AuthProtocolError('The authentication request must contain plain data.')
+        }
+        if (descriptor.enumerable !== true) {
+          throw new AuthProtocolError(
+            'The authentication request must contain JSON-compatible data.'
+          )
+        }
+        if (Array.isArray(candidate) && !/^(?:0|[1-9][0-9]*)$/u.test(key)) {
+          throw new AuthProtocolError(
+            'The authentication request must contain JSON-compatible data.'
+          )
+        }
+        bytes += Buffer.byteLength(key, 'utf8')
+        pending.push({ value: descriptor.value, depth: current.depth + 1 })
+      }
+    } else {
+      throw new AuthProtocolError('The authentication request must contain plain data.')
+    }
+    if (bytes > maxBytes) {
+      throw new AuthProtocolError('The authentication request exceeds the byte limit.')
+    }
+  }
+}
+
 function validateGeneralAuthRequest(req: Request): string {
+  assertNoDuplicateBoundRequestHeaders(req)
   const requestId = singleHeader(req, 'x-bsv-auth-request-id')!
   const version = singleHeader(req, 'x-bsv-auth-version')!
   const identityKey = singleHeader(req, 'x-bsv-auth-identity-key')!
@@ -198,12 +351,13 @@ function validateGeneralAuthRequest(req: Request): string {
   if (!isCanonicalBase64(requestId, 32)) {
     throw new AuthProtocolError('Invalid x-bsv-auth-request-id header.')
   }
-  if (version.length > 32 || !isCompressedPublicKey(identityKey)) {
+  if (version !== '0.1' || !isCompressedPublicKey(identityKey)) {
     throw new AuthProtocolError('Invalid authentication identity or version.')
   }
   if (
-    !isCanonicalBase64(nonce) ||
-    !isCanonicalBase64(yourNonce) ||
+    !isCanonicalBase64(nonce, 32) ||
+    !isCanonicalBase64(yourNonce, 48) ||
+    signature.length > 2_048 ||
     !/^(?:[0-9a-fA-F]{2})+$/.test(signature)
   ) {
     throw new AuthProtocolError('Invalid authentication nonce or signature.')
@@ -211,44 +365,77 @@ function validateGeneralAuthRequest(req: Request): string {
   return requestId
 }
 
-function validateHandshakeMessage(req: Request): {
+function validateHandshakeMessage(
+  req: Request,
+  maxRequestBytes: number
+): {
   message: AuthMessage
   requestId: string
 } {
+  assertNoDuplicateBoundRequestHeaders(req)
+  const contentType = singleHeader(req, 'content-type')?.split(';', 1)[0].trim().toLowerCase()
+  if (req.method !== 'POST' || contentType !== 'application/json') {
+    throw new AuthProtocolError('The BRC-104 handshake requires a JSON POST request.')
+  }
   if (req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) {
     throw new AuthProtocolError('The BRC-104 handshake body must be an object.')
   }
-  const message = normalizeBRC100ByteFields(req.body, [
-    'payload',
-    'signature'
-  ]) as Partial<AuthMessage>
-  if (
-    typeof message.messageType !== 'string' ||
-    message.messageType.length === 0 ||
-    message.messageType.length > 64 ||
-    typeof message.version !== 'string' ||
-    message.version.length === 0 ||
-    message.version.length > 32 ||
-    typeof message.identityKey !== 'string' ||
-    !isCompressedPublicKey(message.identityKey)
-  ) {
+  assertBoundedRequestValue(req.body, maxRequestBytes)
+  const serialized = stringifyBRC100(req.body)
+  if (maxRequestBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > maxRequestBytes) {
+    throw new AuthProtocolError('The BRC-104 handshake exceeds the byte limit.')
+  }
+  let message: AuthMessage
+  try {
+    message = snapshotAuthMessage(
+      normalizeBRC100ByteFields(JSON.parse(serialized), ['payload', 'signature'])
+    )
+  } catch {
     throw new AuthProtocolError('The BRC-104 handshake message is malformed.')
   }
   const requestIdHeader = singleHeader(req, 'x-bsv-auth-request-id', false)
   const requestId = requestIdHeader ?? message.initialNonce
-  if (
-    typeof requestId !== 'string' ||
-    requestId.length === 0 ||
-    requestId.length > MAX_AUTH_HEADER_LENGTH ||
-    !isCanonicalBase64(requestId)
-  ) {
+  if (typeof requestId !== 'string' || requestId.length === 0 || !isCanonicalBase64(requestId)) {
     throw new AuthProtocolError('The BRC-104 handshake request identifier is invalid.')
   }
-  return { message: message as AuthMessage, requestId }
+  return { message, requestId }
 }
 
 function safeErrorDetails(error: unknown): Record<string, unknown> {
-  return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
+  return { errorType: error instanceof Error ? 'error' : typeof error }
+}
+
+function safeOwnErrorMessage(error: unknown): string {
+  if (typeof error === 'string') return error.slice(0, 256)
+  if (!(error instanceof Error)) return ''
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'message')
+    return descriptor !== undefined && typeof descriptor.value === 'string' ? descriptor.value : ''
+  } catch {
+    return ''
+  }
+}
+
+function safeOwnErrorCode(error: unknown): string {
+  if (!(error instanceof Error)) return ''
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(error, 'code')
+    return descriptor !== undefined && typeof descriptor.value === 'string'
+      ? descriptor.value.slice(0, 64)
+      : ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * General-message failures that mean the presented session cannot be used.
+ * AuthFetch drops its cached peer and re-handshakes only after a 401.
+ */
+function isGeneralAuthenticationFailure(error: unknown): boolean {
+  if (safeOwnErrorCode(error) === 'ERR_INVALID_HMAC') return true
+  const message = safeOwnErrorMessage(error)
+  return /nonce|signature|session|auth version/i.test(message) || message === 'HMAC is not valid'
 }
 
 function canWriteResponse(res: Response): boolean {
@@ -264,26 +451,135 @@ class ResponseFileTooLargeError extends Error {
 
 type BoundedFileReadResult = { ok: true; data: Buffer } | { ok: false; error: Error }
 
+interface BoundedFileReadOptions {
+  root?: string
+  dotfiles?: 'allow' | 'deny' | 'ignore'
+  start?: number
+  end?: number
+}
+
+function fileAccessError(message: string, code: 'EACCES' | 'ENOENT'): NodeJS.ErrnoException {
+  const error = new Error(message) as NodeJS.ErrnoException
+  error.code = code
+  return error
+}
+
+function isWithinRoot(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate)
+  return (
+    relative === '' ||
+    (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative))
+  )
+}
+
+function containsDotfileSegment(relativePath: string): boolean {
+  return relativePath
+    .split(/[\\/]+/u)
+    .some(segment => segment.length > 1 && segment.startsWith('.') && segment !== '..')
+}
+
 function readFileWithinLimit(
-  path: string,
+  filePath: string,
   maxBytes: number,
+  options: BoundedFileReadOptions,
   callback: (result: BoundedFileReadResult) => void
 ): void {
-  const stream = fs.createReadStream(path)
-  const chunks: Buffer[] = []
-  let totalBytes = 0
+  let finished = false
+  const finish = (result: BoundedFileReadResult): void => {
+    if (finished) return
+    finished = true
+    callback(result)
+  }
 
-  stream.on('data', (buffer: Buffer) => {
-    if (maxBytes !== -1 && totalBytes + buffer.length > maxBytes) {
-      stream.destroy()
-      callback({ ok: false, error: new ResponseFileTooLargeError() })
+  const root = options.root === undefined ? undefined : path.resolve(options.root)
+  const candidate = root === undefined ? path.resolve(filePath) : path.resolve(root, filePath)
+  if (root !== undefined && !isWithinRoot(root, candidate)) {
+    finish({
+      ok: false,
+      error: fileAccessError('The response file is outside the configured root.', 'EACCES')
+    })
+    return
+  }
+
+  const relativeForDotfileCheck = root === undefined ? filePath : path.relative(root, candidate)
+  if (options.dotfiles !== 'allow' && containsDotfileSegment(relativeForDotfileCheck)) {
+    const denied = options.dotfiles === 'deny'
+    finish({
+      ok: false,
+      error: fileAccessError(
+        denied ? 'Access to the response dotfile is denied.' : 'The response file was not found.',
+        denied ? 'EACCES' : 'ENOENT'
+      )
+    })
+    return
+  }
+
+  const streamResolvedFile = (resolvedCandidate: string): void => {
+    const stream = fs.createReadStream(resolvedCandidate, {
+      ...(options.start === undefined ? {} : { start: options.start }),
+      ...(options.end === undefined ? {} : { end: options.end })
+    })
+    const chunks: Buffer[] = []
+    let totalBytes = 0
+
+    stream.on('data', (buffer: Buffer) => {
+      if (maxBytes !== -1 && totalBytes + buffer.length > maxBytes) {
+        stream.destroy()
+        finish({ ok: false, error: new ResponseFileTooLargeError() })
+        return
+      }
+      totalBytes += buffer.length
+      chunks.push(buffer)
+    })
+    stream.once('error', error => finish({ ok: false, error }))
+    stream.once('end', () => finish({ ok: true, data: Buffer.concat(chunks, totalBytes) }))
+  }
+
+  if (root === undefined) {
+    streamResolvedFile(candidate)
+    return
+  }
+
+  // Express's `root` option is a filesystem confinement boundary. Resolve both
+  // sides before reading so a symlink inside the root cannot silently select a
+  // file outside it.
+  fs.realpath(root, (rootError, resolvedRoot) => {
+    if (rootError != null) {
+      finish({ ok: false, error: rootError })
       return
     }
-    totalBytes += buffer.length
-    chunks.push(buffer)
+    fs.realpath(candidate, (candidateError, resolvedCandidate) => {
+      if (candidateError != null) {
+        finish({ ok: false, error: candidateError })
+        return
+      }
+      if (!isWithinRoot(resolvedRoot, resolvedCandidate)) {
+        finish({
+          ok: false,
+          error: fileAccessError(
+            'The response file resolves outside the configured root.',
+            'EACCES'
+          )
+        })
+        return
+      }
+      const resolvedRelative = path.relative(resolvedRoot, resolvedCandidate)
+      if (options.dotfiles !== 'allow' && containsDotfileSegment(resolvedRelative)) {
+        const denied = options.dotfiles === 'deny'
+        finish({
+          ok: false,
+          error: fileAccessError(
+            denied
+              ? 'Access to the response dotfile is denied.'
+              : 'The response file was not found.',
+            denied ? 'EACCES' : 'ENOENT'
+          )
+        })
+        return
+      }
+      streamResolvedFile(resolvedCandidate)
+    })
   })
-  stream.once('error', error => callback({ ok: false, error }))
-  stream.once('end', () => callback({ ok: true, data: Buffer.concat(chunks, totalBytes) }))
 }
 
 /**
@@ -292,17 +588,20 @@ function readFileWithinLimit(
  */
 class ResponseWriterWrapper {
   private statusCode: number = 200
-  private headers: Record<string, string> = {}
+  private headers: Record<string, string> = Object.create(null) as Record<string, string>
   private body: number[] = []
+  private rejected = false
 
   constructor(private readonly maxResponseBytes: number) {}
 
   status(code: number): this {
+    if (this.rejected) return this
     this.statusCode = code
     return this
   }
 
   set(key: string | Record<string, string>, value?: string): this {
+    if (this.rejected) return this
     if (typeof key === 'object' && key !== null) {
       for (const [k, v] of Object.entries(key)) {
         this.headers[k.toLowerCase()] = String(v)
@@ -322,7 +621,7 @@ class ResponseWriterWrapper {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'application/json'
     }
-    this.setBody(Utils.toArray(stringifyBRC100(data), 'utf8'))
+    this.setBody(toArray(stringifyBRC100(data), 'utf8'))
     return this
   }
 
@@ -330,7 +629,7 @@ class ResponseWriterWrapper {
     if (!this.headers['content-type']) {
       this.headers['content-type'] = 'text/plain'
     }
-    this.setBody(Utils.toArray(data, 'utf8'))
+    this.setBody(toArray(data, 'utf8'))
     return this
   }
 
@@ -359,7 +658,17 @@ class ResponseWriterWrapper {
     this.setTooLargeError()
   }
 
+  append(body: number[]): void {
+    if (this.rejected) return
+    if (this.exceedsLimit(this.body.length + body.length)) {
+      this.setTooLargeError()
+      return
+    }
+    this.body = this.body.concat(body)
+  }
+
   private setBody(body: number[]): void {
+    if (this.rejected) return
     if (!this.exceedsLimit(body.length)) {
       this.body = body
       return
@@ -369,9 +678,11 @@ class ResponseWriterWrapper {
   }
 
   private setTooLargeError(): void {
+    if (this.rejected) return
+    this.rejected = true
     this.statusCode = 413
     this.headers['content-type'] = 'application/json'
-    this.body = Utils.toArray(
+    this.body = toArray(
       JSON.stringify({
         status: 'error',
         code: 'ERR_RESPONSE_TOO_LARGE',
@@ -380,6 +691,18 @@ class ResponseWriterWrapper {
       'utf8'
     )
   }
+}
+
+function responseChunkToBytes(chunk: unknown, encoding?: unknown): number[] {
+  if (typeof chunk === 'string') {
+    const selectedEncoding = typeof encoding === 'string' ? (encoding as BufferEncoding) : 'utf8'
+    if (!Buffer.isEncoding(selectedEncoding)) {
+      throw new TypeError('The authenticated response chunk encoding is invalid.')
+    }
+    return Array.from(Buffer.from(chunk, selectedEncoding))
+  }
+  if (chunk instanceof Uint8Array) return Array.from(chunk)
+  throw new TypeError('Authenticated response chunks must be strings or byte arrays.')
 }
 
 /**
@@ -395,11 +718,14 @@ export class ExpressTransport implements Transport {
   private readonly activeGeneralRequests = new Map<string, ActiveGeneralRequest>()
   private readonly activeCertificateRequests = new Map<string, ActiveCertificateRequest>()
   private readonly openGeneralHandleTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
+  private readonly certificateWaitKeysBySession = new Map<string, Set<string>>()
 
   private messageCallback?: (message: AuthMessage) => Promise<void>
   private readonly logger: typeof console | undefined
   private readonly logLevel: LogLevel
   private readonly limits: AuthTransportLimits
+  private readonly certificateApprovalStore: CertificateApprovalStore
+  private requireApplicationCertificateApproval = false
 
   /**
    * Constructs a new ExpressTransport instance.
@@ -414,7 +740,8 @@ export class ExpressTransport implements Transport {
     allowUnauthenticated: boolean = false,
     logger?: typeof console,
     logLevel?: LogLevel,
-    limits: Partial<AuthTransportLimits> = {}
+    limits: Partial<AuthTransportLimits> = {},
+    certificateApprovalStore: CertificateApprovalStore = new InMemoryCertificateApprovalStore()
   ) {
     if (
       logger !== undefined &&
@@ -424,12 +751,16 @@ export class ExpressTransport implements Transport {
     }
     const requestTimeoutMs = limits.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
     const maxPendingRequests = limits.maxPendingRequests ?? DEFAULT_MAX_PENDING_REQUESTS
+    const maxRequestBytes = limits.maxRequestBytes ?? DEFAULT_MAX_REQUEST_BYTES
     const maxResponseBytes = limits.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
     if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs < 1) {
       throw new RangeError('requestTimeoutMs must be a positive safe integer.')
     }
     if (!Number.isSafeInteger(maxPendingRequests) || maxPendingRequests < 1) {
       throw new RangeError('maxPendingRequests must be a positive safe integer.')
+    }
+    if (!Number.isSafeInteger(maxRequestBytes) || (maxRequestBytes !== -1 && maxRequestBytes < 1)) {
+      throw new RangeError('maxRequestBytes must be -1 or a positive safe integer.')
     }
     if (
       !Number.isSafeInteger(maxResponseBytes) ||
@@ -440,7 +771,16 @@ export class ExpressTransport implements Transport {
     this.allowUnauthenticated = allowUnauthenticated
     this.logger = logger
     this.logLevel = logLevel || 'error' // Default to 'error' if not provided
-    this.limits = { requestTimeoutMs, maxPendingRequests, maxResponseBytes }
+    this.limits = { requestTimeoutMs, maxPendingRequests, maxRequestBytes, maxResponseBytes }
+    if (
+      certificateApprovalStore === null ||
+      typeof certificateApprovalStore !== 'object' ||
+      typeof certificateApprovalStore.approve !== 'function' ||
+      typeof certificateApprovalStore.isApproved !== 'function'
+    ) {
+      throw new TypeError('certificateApprovalStore must provide approve and isApproved methods.')
+    }
+    this.certificateApprovalStore = certificateApprovalStore
   }
 
   /**
@@ -599,8 +939,8 @@ export class ExpressTransport implements Transport {
    * Handles a general (authenticated application) AuthMessage response.
    */
   private async sendGeneralMessage(message: AuthMessage): Promise<void> {
-    const reader = new Utils.Reader(message.payload)
-    const requestId = Utils.toBase64(reader.read(32))
+    const reader = new Reader(message.payload)
+    const requestId = toBase64(reader.read(32))
 
     const handle = this.openGeneralHandles.get(requestId)
     if (handle === undefined) {
@@ -610,7 +950,7 @@ export class ExpressTransport implements Transport {
     let { res, next } = handle
     this.clearOpenGeneralHandle(requestId)
 
-    const statusCode = reader.readVarIntNum()
+    const statusCode = reader.readVarIntNumStrict(false)
     ;(res as any).__status(statusCode)
 
     const responseHeaders = this.readResponseHeaders(reader)
@@ -618,7 +958,7 @@ export class ExpressTransport implements Transport {
     responseHeaders['x-bsv-auth-identity-key'] = message.identityKey
     responseHeaders['x-bsv-auth-nonce'] = message.nonce!
     responseHeaders['x-bsv-auth-your-nonce'] = message.yourNonce!
-    responseHeaders['x-bsv-auth-signature'] = Utils.toHex(message.signature!)
+    responseHeaders['x-bsv-auth-signature'] = toHex(message.signature!)
     responseHeaders['x-bsv-auth-request-id'] = requestId
 
     if (message.requestedCertificates) {
@@ -632,7 +972,7 @@ export class ExpressTransport implements Transport {
     }
 
     let responseBody: number[] | undefined
-    const responseBodyBytes = reader.readVarIntNum()
+    const responseBodyBytes = reader.readVarIntNumStrict()
     if (responseBodyBytes > 0) {
       responseBody = reader.read(responseBodyBytes)
     }
@@ -653,16 +993,16 @@ export class ExpressTransport implements Transport {
   /**
    * Reads response headers from a binary reader.
    */
-  private readResponseHeaders(reader: Utils.Reader): Record<string, string> {
+  private readResponseHeaders(reader: Reader): Record<string, string> {
     const responseHeaders: Record<string, string> = {}
-    const nHeaders = reader.readVarIntNum()
+    const nHeaders = reader.readVarIntNumStrict(false)
     for (let i = 0; i < nHeaders; i++) {
-      const nHeaderKeyBytes = reader.readVarIntNum()
+      const nHeaderKeyBytes = reader.readVarIntNumStrict(false)
       const headerKeyBytes = reader.read(nHeaderKeyBytes)
-      const headerKey = Utils.toUTF8(headerKeyBytes)
-      const nHeaderValueBytes = reader.readVarIntNum()
+      const headerKey = toUTF8(headerKeyBytes)
+      const nHeaderValueBytes = reader.readVarIntNumStrict(false)
       const headerValueBytes = reader.read(nHeaderValueBytes)
-      const headerValue = Utils.toUTF8(headerValueBytes)
+      const headerValue = toUTF8(headerValueBytes)
       responseHeaders[headerKey] = headerValue
     }
     return responseHeaders
@@ -690,7 +1030,7 @@ export class ExpressTransport implements Transport {
       'x-bsv-auth-identity-key': message.identityKey,
       'x-bsv-auth-nonce': message.nonce!,
       'x-bsv-auth-your-nonce': message.yourNonce!,
-      'x-bsv-auth-signature': Utils.toHex(message.signature!)
+      'x-bsv-auth-signature': toHex(message.signature!)
     }
 
     if (typeof message.requestedCertificates === 'object') {
@@ -757,6 +1097,9 @@ export class ExpressTransport implements Transport {
       next: NextFunction
     ) => void | Promise<void>
   ): Promise<void> {
+    if (typeof onCertificatesReceived === 'function') {
+      this.requireApplicationCertificateApproval = true
+    }
     this.log('debug', 'Handling incoming request', {
       pathLength: req.path.length,
       method: req.method,
@@ -775,6 +1118,10 @@ export class ExpressTransport implements Transport {
         await this.handleWellKnownAuth(req, res, next, onCertificatesReceived)
       } else if (req.headers['x-bsv-auth-request-id'] !== undefined) {
         this.handleGeneralMessage(req, res, next)
+      } else if (
+        Object.keys(req.headers).some(name => name.toLowerCase().startsWith('x-bsv-auth-'))
+      ) {
+        throw new AuthProtocolError('Partial authentication headers are not accepted.')
       } else {
         this.handleUnauthenticated(req, res, next)
       }
@@ -803,7 +1150,7 @@ export class ExpressTransport implements Transport {
       next: NextFunction
     ) => void | Promise<void>
   ): Promise<void> {
-    const { message, requestId } = validateHandshakeMessage(req)
+    const { message, requestId } = validateHandshakeMessage(req, this.limits.maxRequestBytes)
     // A later handshake phase can legitimately reuse the initial request ID
     // while its certificate listener is still active. Only a simultaneously
     // open HTTP response handle represents a duplicate request.
@@ -815,14 +1162,14 @@ export class ExpressTransport implements Transport {
     })
     this.addNonGeneralHandle(requestId, res, next)
 
-    try {
-      if (!(await this.peer!.sessionManager.hasSession(message.identityKey))) {
+    if (message.messageType === 'initialRequest') {
+      try {
         this.registerCertificateListener(req, res, next, requestId, message, onCertificatesReceived)
+      } catch (error) {
+        this.removeNonGeneralHandle(requestId)
+        this.clearActiveCertificateRequest(requestId)
+        throw error
       }
-    } catch (error) {
-      this.removeNonGeneralHandle(requestId)
-      this.clearActiveCertificateRequest(requestId)
-      throw error
     }
 
     if (this.messageCallback) {
@@ -864,20 +1211,27 @@ export class ExpressTransport implements Transport {
   ): void {
     let listenerId = -1
     listenerId = this.peer!.listenForCertificatesReceived(
-      (senderPublicKey: string, certs: VerifiableCertificate[]) => {
+      async (
+        senderPublicKey: string,
+        certs: VerifiableCertificate[],
+        sessionNonce?: string,
+        peerNonce?: string
+      ) => {
         if (senderPublicKey !== message.identityKey) return
+        if (peerNonce !== undefined && peerNonce !== message.initialNonce) return
         this.clearActiveCertificateRequest(requestId)
         this.log('debug', 'Certificates received event triggered', {
           certCount: certs?.length
         })
-        void this.handleCertificatesForPeer(
+        await this.handleCertificatesForPeer(
           senderPublicKey,
           certs,
           req,
           res,
           next,
           message,
-          onCertificatesReceived
+          onCertificatesReceived,
+          sessionNonce
         )
           .catch(error => {
             this.log('error', 'Error in certificate listener callback', safeErrorDetails(error))
@@ -910,7 +1264,7 @@ export class ExpressTransport implements Transport {
     certs: VerifiableCertificate[],
     req: AuthRequest,
     res: Response,
-    next: NextFunction,
+    _next: NextFunction,
     message: AuthMessage,
     onCertificatesReceived?: (
       senderPublicKey: string,
@@ -918,7 +1272,8 @@ export class ExpressTransport implements Transport {
       req: AuthRequest,
       res: Response,
       next: NextFunction
-    ) => void | Promise<void>
+    ) => void | Promise<void>,
+    sessionNonce?: string
   ): Promise<void> {
     if (!Array.isArray(certs) || certs.length === 0) {
       this.log('warn', 'No certificates provided by peer')
@@ -937,33 +1292,57 @@ export class ExpressTransport implements Transport {
     }
 
     this.log('info', 'Certificates successfully received from peer', { certCount: certs.length })
+    const approvalScope = sessionNonce ?? message.initialNonce ?? message.identityKey
     let continued = false
+    let continuationArgument: unknown
     const continueOnce = ((argument?: unknown) => {
       if (continued) return
       continued = true
-      if (argument === 'route' || argument === 'router') {
-        next(argument)
-      } else if (argument !== undefined) {
-        next(argument)
-      } else {
-        next()
-      }
+      continuationArgument = argument
     }) as NextFunction
     if (typeof onCertificatesReceived === 'function') {
       await onCertificatesReceived(senderPublicKey, certs, req, res, continueOnce)
+    } else {
+      continueOnce()
     }
+    if (!continued) return
+    if (continuationArgument !== undefined) {
+      this.continueCertificateWaits(approvalScope, continuationArgument)
+      return
+    }
+    await this.certificateApprovalStore.approve(approvalScope, senderPublicKey as PubKeyHex)
+    if (
+      (await this.certificateApprovalStore.isApproved(
+        approvalScope,
+        senderPublicKey as PubKeyHex
+      )) !== true
+    ) {
+      throw new Error('Certificate approval store did not retain the application approval.')
+    }
+    this.continueCertificateWaits(approvalScope)
+  }
 
-    const identityKey = message.identityKey
-    if (typeof identityKey === 'string') {
-      const nextFn = this.openNextHandlers.get(identityKey)
-      if (typeof nextFn !== 'function') return
-      const timeoutHandle = this.openNextHandlerTimeouts.get(identityKey)
-      if (timeoutHandle != null) {
-        clearTimeout(timeoutHandle)
-        this.openNextHandlerTimeouts.delete(identityKey)
-      }
-      if (!continued) nextFn()
-      this.openNextHandlers.delete(identityKey)
+  private removeCertificateWait(sessionNonce: string, waitKey: string): void {
+    const timeoutHandle = this.openNextHandlerTimeouts.get(waitKey)
+    if (timeoutHandle != null) clearTimeout(timeoutHandle)
+    this.openNextHandlerTimeouts.delete(waitKey)
+    this.openNextHandlers.delete(waitKey)
+    const waitKeys = this.certificateWaitKeysBySession.get(sessionNonce)
+    waitKeys?.delete(waitKey)
+    if (waitKeys?.size === 0) this.certificateWaitKeysBySession.delete(sessionNonce)
+  }
+
+  private continueCertificateWaits(sessionNonce: string, argument?: unknown): void {
+    const tracked = this.certificateWaitKeysBySession.get(sessionNonce)
+    // Preserve compatibility for callers that directly populated the public
+    // map while middleware-created waits use unique request IDs.
+    const waitKeys = tracked === undefined ? [sessionNonce] : [...tracked]
+    for (const waitKey of waitKeys) {
+      const nextFn = this.openNextHandlers.get(waitKey)
+      this.removeCertificateWait(sessionNonce, waitKey)
+      if (typeof nextFn !== 'function') continue
+      if (argument === undefined) nextFn()
+      else nextFn(argument)
     }
   }
 
@@ -976,14 +1355,19 @@ export class ExpressTransport implements Transport {
     if (this.activeGeneralRequests.has(expectedRequestId)) {
       throw new AuthProtocolError('Duplicate authentication request identifier.')
     }
-    const message = buildAuthMessageFromRequest(req, this.logger, this.logLevel)
+    const message = buildAuthMessageFromRequest(
+      req,
+      this.logger,
+      this.logLevel,
+      this.limits.maxRequestBytes
+    )
     this.log('debug', 'Received general message with x-bsv-auth-request-id')
 
     const listenerId = this.peer!.listenForGeneralMessages(
       (senderPublicKey: string, payload: number[]) => {
         try {
           if (senderPublicKey !== message.identityKey) return
-          const requestId = Utils.toBase64(new Utils.Reader(payload).read(32))
+          const requestId = toBase64(new Reader(payload).read(32))
           if (requestId === expectedRequestId) {
             this.clearActiveGeneralRequest(expectedRequestId)
             this.setupAuthenticatedResponse(req, res, next, senderPublicKey, requestId)
@@ -1017,8 +1401,7 @@ export class ExpressTransport implements Transport {
         .then(async () => await messageCallback(message))
         .catch(err => {
           this.clearActiveGeneralRequest(expectedRequestId)
-          const msg = err instanceof Error ? err.message : String(err)
-          const isAuthError = /nonce|signature|session|auth version/i.test(msg)
+          const isAuthError = isGeneralAuthenticationFailure(err)
           this.log('error', 'Error in messageCallback (general message)', {
             ...safeErrorDetails(err),
             isAuthError
@@ -1056,6 +1439,7 @@ export class ExpressTransport implements Transport {
       if (responseSent) return
       responseSent = true
       try {
+        this.captureNativeResponseState(res, wrapper)
         const responsePayload = buildResponsePayload(
           requestId,
           wrapper.getStatusCode(),
@@ -1107,8 +1491,24 @@ export class ExpressTransport implements Transport {
       next,
       senderPublicKey,
       wrapper,
-      buildAndSendResponse
+      buildAndSendResponse,
+      requestId,
+      sessionNonce
     ).catch(next)
+  }
+
+  private captureNativeResponseState(res: Response, wrapper: ResponseWriterWrapper): void {
+    if (Number.isSafeInteger(res.statusCode) && res.statusCode >= 200 && res.statusCode <= 599) {
+      wrapper.status(res.statusCode)
+    }
+    const getHeaders: unknown = (res as unknown as { getHeaders?: unknown }).getHeaders
+    if (typeof getHeaders !== 'function') return
+    const headers: unknown = Reflect.apply(getHeaders, res, [])
+    if (headers === null || typeof headers !== 'object' || Array.isArray(headers)) return
+    for (const [name, value] of Object.entries(headers)) {
+      if (value === undefined) continue
+      wrapper.set(name, Array.isArray(value) ? value.join(', ') : String(value))
+    }
   }
 
   /**
@@ -1124,13 +1524,16 @@ export class ExpressTransport implements Transport {
     this.checkRes(res, 'needs to be clear', next)
     ;(res as any).__status = res.status
     res.status = n => {
+      ;(res as any).__status.call(res, n)
       wrapper.status(n)
       return res
     }
 
     ;(res as any).__set = res.set
-    ;(res as any).set = (keyOrHeaders: string | Record<string, string>, value?: string) => {
-      wrapper.set(keyOrHeaders, value)
+    ;(res as any).set = (...args: [string | Record<string, string>, string?]) => {
+      // Express selects its header-map overload by argument count.
+      ;(res as any).__set.apply(res, args)
+      wrapper.set(...args)
       return res
     }
 
@@ -1159,42 +1562,170 @@ export class ExpressTransport implements Transport {
     }
 
     ;(res as any).__end = res.end
-    ;(res as any).end = () => {
-      buildAndSendResponse()
+    ;(res as any).end = (chunk?: unknown, encodingOrCallback?: unknown, callback?: unknown) => {
+      let selectedEncoding = encodingOrCallback
+      let selectedCallback = callback
+      if (typeof chunk === 'function') {
+        selectedCallback = chunk
+        chunk = undefined
+        selectedEncoding = undefined
+      } else if (typeof encodingOrCallback === 'function') {
+        selectedCallback = encodingOrCallback
+        selectedEncoding = undefined
+      }
+      if (chunk !== undefined && chunk !== null) {
+        wrapper.append(responseChunkToBytes(chunk, selectedEncoding))
+      }
+      void buildAndSendResponse().then(() => {
+        if (typeof selectedCallback === 'function') selectedCallback()
+      })
       return res
     }
 
+    ;(res as any).__write = res.write
+    ;(res as any).write = (chunk: unknown, encodingOrCallback?: unknown, callback?: unknown) => {
+      const selectedEncoding =
+        typeof encodingOrCallback === 'string' ? encodingOrCallback : undefined
+      const selectedCallback =
+        typeof encodingOrCallback === 'function' ? encodingOrCallback : callback
+      wrapper.append(responseChunkToBytes(chunk, selectedEncoding))
+      if (typeof selectedCallback === 'function') selectedCallback()
+      return true
+    }
+
+    ;(res as any).__writeHead = res.writeHead
+    ;(res as any).writeHead = (
+      statusCode: number,
+      statusMessageOrHeaders?: unknown,
+      possibleHeaders?: unknown
+    ) => {
+      res.status(statusCode)
+      const headers =
+        statusMessageOrHeaders !== null && typeof statusMessageOrHeaders === 'object'
+          ? statusMessageOrHeaders
+          : possibleHeaders
+      if (Array.isArray(headers)) {
+        for (let index = 0; index < headers.length; index += 2) {
+          const name = headers[index]
+          const value = headers[index + 1]
+          if (typeof name !== 'string' || value === undefined) {
+            throw new TypeError('Authenticated response writeHead headers are malformed.')
+          }
+          res.set(name, String(value))
+        }
+      } else if (headers !== null && typeof headers === 'object') {
+        for (const [name, value] of Object.entries(headers)) {
+          if (value !== undefined)
+            res.set(name, Array.isArray(value) ? value.join(', ') : String(value))
+        }
+      }
+      return res
+    }
+
+    ;(res as any).__flushHeaders = res.flushHeaders
+    ;(res as any).flushHeaders = () => undefined
+
     ;(res as any).__sendFile = res.sendFile
     ;(res as any).sendFile = (
-      path: string,
+      filePath: string,
       optionsOrCallback?: unknown,
-      callback?: (error: Error) => void
+      callback?: (error?: Error) => void
     ) => {
       const errorCallback =
         typeof optionsOrCallback === 'function'
-          ? (optionsOrCallback as (error: Error) => void)
+          ? (optionsOrCallback as (error?: Error) => void)
           : callback
-      readFileWithinLimit(path, this.limits.maxResponseBytes, result => {
-        if (!result.ok) {
-          if (result.error instanceof ResponseFileTooLargeError) {
-            wrapper.rejectTooLarge()
-            buildAndSendResponse()
+      const rawOptions =
+        optionsOrCallback !== null && typeof optionsOrCallback === 'object'
+          ? (optionsOrCallback as Record<string, unknown>)
+          : {}
+
+      try {
+        if (typeof filePath !== 'string' || filePath.length === 0) {
+          throw new TypeError('path argument is required to res.sendFile')
+        }
+        if (rawOptions.root === undefined && !path.isAbsolute(filePath)) {
+          throw new TypeError('path must be absolute or specify root to res.sendFile')
+        }
+        if (rawOptions.root !== undefined && typeof rawOptions.root !== 'string') {
+          throw new TypeError('sendFile root must be a string')
+        }
+        if (
+          rawOptions.dotfiles !== undefined &&
+          rawOptions.dotfiles !== 'allow' &&
+          rawOptions.dotfiles !== 'deny' &&
+          rawOptions.dotfiles !== 'ignore'
+        ) {
+          throw new TypeError('sendFile dotfiles must be allow, deny, or ignore')
+        }
+        for (const rangeName of ['start', 'end'] as const) {
+          const value = rawOptions[rangeName]
+          if (value !== undefined && (!Number.isSafeInteger(value) || (value as number) < 0)) {
+            throw new RangeError(`sendFile ${rangeName} must be a non-negative safe integer`)
+          }
+        }
+        if (
+          typeof rawOptions.start === 'number' &&
+          typeof rawOptions.end === 'number' &&
+          rawOptions.end < rawOptions.start
+        ) {
+          throw new RangeError('sendFile end must not be before start')
+        }
+        if (rawOptions.headers !== undefined) {
+          if (
+            rawOptions.headers === null ||
+            typeof rawOptions.headers !== 'object' ||
+            Array.isArray(rawOptions.headers)
+          ) {
+            throw new TypeError('sendFile headers must be an object')
+          }
+          for (const [name, value] of Object.entries(rawOptions.headers)) {
+            if (value !== undefined) wrapper.set(name, String(value))
+          }
+        }
+      } catch (error) {
+        const reported = error instanceof Error ? error : new Error('Invalid sendFile options.')
+        if (errorCallback != null) errorCallback(reported)
+        else next(reported)
+        return res
+      }
+
+      readFileWithinLimit(
+        filePath,
+        this.limits.maxResponseBytes,
+        {
+          ...(typeof rawOptions.root === 'string' ? { root: rawOptions.root } : {}),
+          ...(rawOptions.dotfiles === 'allow' ||
+          rawOptions.dotfiles === 'deny' ||
+          rawOptions.dotfiles === 'ignore'
+            ? { dotfiles: rawOptions.dotfiles }
+            : {}),
+          ...(typeof rawOptions.start === 'number' ? { start: rawOptions.start } : {}),
+          ...(typeof rawOptions.end === 'number' ? { end: rawOptions.end } : {})
+        },
+        result => {
+          if (!result.ok) {
+            if (result.error instanceof ResponseFileTooLargeError) {
+              wrapper.rejectTooLarge()
+              void buildAndSendResponse().then(() => errorCallback?.())
+              return
+            }
+            this.log('error', 'Error reading file in sendFile', safeErrorDetails(result.error))
+            if (errorCallback != null) errorCallback(result.error)
+            else {
+              wrapper.status(500)
+              void buildAndSendResponse()
+            }
             return
           }
-          this.log('error', 'Error reading file in sendFile', {
-            errorName: result.error.name
-          })
-          if (errorCallback != null) return errorCallback(result.error)
-          wrapper.status(500)
-          buildAndSendResponse()
-          return
-        }
 
-        const mimeType = mime.lookup(path) || 'application/octet-stream'
-        wrapper.set('Content-Type', mimeType)
-        wrapper.send(result.data)
-        buildAndSendResponse()
-      })
+          const mimeType = mime.lookup(filePath) || 'application/octet-stream'
+          wrapper.set('Content-Type', mimeType)
+          wrapper.send(result.data)
+          void buildAndSendResponse().then(() => errorCallback?.())
+        }
+      )
+      return res
     }
   }
 
@@ -1205,36 +1736,51 @@ export class ExpressTransport implements Transport {
     next: NextFunction,
     senderPublicKey: string,
     wrapper: ResponseWriterWrapper,
-    buildAndSendResponse: () => Promise<void>
+    buildAndSendResponse: () => Promise<void>,
+    requestId: string = senderPublicKey,
+    sessionNonce: string = senderPublicKey
   ): Promise<void> {
-    const hasSession = await (this.peer?.sessionManager.hasSession(senderPublicKey) ?? false)
     const needsCertificates = this.peer?.certificatesToRequest?.certifiers?.length
     this.log('debug', 'Checking if we need to wait for certificates', {
-      hasSession,
-      needsCertificates
+      needsCertificates,
+      requiresApplicationApproval: this.requireApplicationCertificateApproval
     })
 
-    if (!needsCertificates || hasSession) {
-      this.log('debug', 'Calling next() immediately - no certificate wait needed', {
-        hasSession
-      })
+    if (!needsCertificates || !this.requireApplicationCertificateApproval) {
+      this.log('debug', 'Calling next() immediately - no application certificate wait needed')
+      next()
+      return
+    }
+
+    if (
+      (await this.certificateApprovalStore.isApproved(
+        sessionNonce,
+        senderPublicKey as PubKeyHex
+      )) === true
+    ) {
       next()
       return
     }
 
     this.log('debug', 'Storing next handler to wait for certificates')
-    const existingTimeout = this.openNextHandlerTimeouts.get(senderPublicKey)
+    const waitKey = requestId
+    const existingTimeout = this.openNextHandlerTimeouts.get(waitKey)
     if (existingTimeout != null) {
       clearTimeout(existingTimeout)
-      this.openNextHandlerTimeouts.delete(senderPublicKey)
+      this.openNextHandlerTimeouts.delete(waitKey)
     }
-    this.openNextHandlers.set(senderPublicKey, next)
+    this.openNextHandlers.set(waitKey, next)
+    let waitKeys = this.certificateWaitKeysBySession.get(sessionNonce)
+    if (waitKeys === undefined) {
+      waitKeys = new Set()
+      this.certificateWaitKeysBySession.set(sessionNonce, waitKeys)
+    }
+    waitKeys.add(waitKey)
 
     const timeoutHandle = setTimeout(() => {
-      if (this.openNextHandlers.has(senderPublicKey)) {
+      if (this.openNextHandlers.has(waitKey)) {
         this.log('warn', 'Certificate request timed out')
-        this.openNextHandlers.delete(senderPublicKey)
-        this.openNextHandlerTimeouts.delete(senderPublicKey)
+        this.removeCertificateWait(sessionNonce, waitKey)
         wrapper.status(408).json({
           status: 'error',
           code: 'CERTIFICATE_TIMEOUT',
@@ -1244,7 +1790,7 @@ export class ExpressTransport implements Transport {
       }
     }, this.limits.requestTimeoutMs)
     timeoutHandle.unref?.()
-    this.openNextHandlerTimeouts.set(senderPublicKey, timeoutHandle)
+    this.openNextHandlerTimeouts.set(waitKey, timeoutHandle)
   }
 
   /**
@@ -1280,6 +1826,9 @@ export class ExpressTransport implements Transport {
         typeof res.__text === 'function' ||
         typeof res.__send === 'function' ||
         typeof res.__end === 'function' ||
+        typeof res.__write === 'function' ||
+        typeof res.__writeHead === 'function' ||
+        typeof res.__flushHeaders === 'function' ||
         typeof res.__sendFile === 'function'
       ) {
         const e = new Error(
@@ -1296,6 +1845,9 @@ export class ExpressTransport implements Transport {
       typeof res.__json !== 'function' ||
       typeof res.__send !== 'function' ||
       typeof res.__end !== 'function' ||
+      typeof res.__write !== 'function' ||
+      typeof res.__writeHead !== 'function' ||
+      typeof res.__flushHeaders !== 'function' ||
       typeof res.__sendFile !== 'function'
     ) {
       const e = new Error(
@@ -1316,6 +1868,9 @@ export class ExpressTransport implements Transport {
     ;(res as any).text = (res as any).__text
     res.send = (res as any).__send
     res.end = (res as any).__end
+    res.write = (res as any).__write
+    res.writeHead = (res as any).__writeHead
+    res.flushHeaders = (res as any).__flushHeaders
     res.sendFile = (res as any).__sendFile
     return res
   }
@@ -1327,7 +1882,8 @@ export class ExpressTransport implements Transport {
 function buildAuthMessageFromRequest(
   req: Request,
   logger?: typeof console,
-  logLevel?: LogLevel
+  logLevel?: LogLevel,
+  maxRequestBytes: number = DEFAULT_MAX_REQUEST_BYTES
 ): AuthMessage {
   const debugLog = makeDebugLogger(logger, logLevel)
   debugLog('[buildAuthMessageFromRequest] Building message from request...', {
@@ -1335,12 +1891,17 @@ function buildAuthMessageFromRequest(
     method: req.method
   })
 
-  const writer = new Utils.Writer()
+  if (!/^[A-Z!#$%&'*+.^_`|~-]{1,32}$/u.test(req.method)) {
+    throw new AuthProtocolError('The authenticated request method is invalid.')
+  }
+  assertBoundedRequestValue(req.body, maxRequestBytes)
+
+  const writer = new Writer()
   const requestNonce = singleHeader(req, 'x-bsv-auth-request-id')!
-  const requestNonceBytes = Utils.toArray(requestNonce, 'base64')
+  const requestNonceBytes = toArray(requestNonce, 'base64')
   writer.write(requestNonceBytes)
   writer.writeVarIntNum(req.method.length)
-  writer.write(Utils.toArray(req.method))
+  writer.write(toArray(req.method))
 
   const protocol = req.protocol
   const host = req.get('host')
@@ -1358,9 +1919,16 @@ function buildAuthMessageFromRequest(
   }
   const parsedUrl = new URL(`${protocol}://${host}${req.originalUrl}`)
 
-  writeUrlToWriter(parsedUrl, writer)
-  writeRequestHeadersToWriter(req, writer)
-  writeBodyToWriter(req, writer, logger, logLevel)
+  let encodedBodyBytes: number
+  try {
+    writeUrlToWriter(parsedUrl, writer)
+    writeRequestHeadersToWriter(req, writer)
+    const bodyStart = writer.getLength()
+    writeBodyToWriter(req, writer, logger, logLevel)
+    encodedBodyBytes = writer.getLength() - bodyStart
+  } catch {
+    throw new AuthProtocolError('The authenticated request cannot be represented canonically.')
+  }
 
   const authMessage = {
     messageType: 'general' as const,
@@ -1369,7 +1937,13 @@ function buildAuthMessageFromRequest(
     nonce: singleHeader(req, 'x-bsv-auth-nonce')!,
     yourNonce: singleHeader(req, 'x-bsv-auth-your-nonce')!,
     payload: writer.toArray(),
-    signature: Utils.toArray(singleHeader(req, 'x-bsv-auth-signature')!, 'hex')
+    signature: toArray(singleHeader(req, 'x-bsv-auth-signature')!, 'hex')
+  }
+
+  // HTTP headers have already passed the server/edge transport policy. The
+  // body budget must not become a second size ceiling for received payments.
+  if (maxRequestBytes !== -1 && encodedBodyBytes > maxRequestBytes) {
+    throw new AuthProtocolError('The authenticated request body exceeds the byte limit.')
   }
 
   debugLog('[buildAuthMessageFromRequest] AuthMessage built', {
@@ -1397,8 +1971,8 @@ function buildResponsePayload(
     responseBodyLength: responseBody.length
   })
 
-  const writer = new Utils.Writer()
-  writer.write(Utils.toArray(requestId, 'base64'))
+  const writer = new Writer()
+  writer.write(toArray(requestId, 'base64'))
   writer.writeVarIntNum(responseStatus)
 
   // Filter out headers that should NOT be signed:
@@ -1411,7 +1985,11 @@ function buildResponsePayload(
       (lowerKey.startsWith('x-bsv-') || lowerKey === 'authorization') &&
       !lowerKey.startsWith('x-bsv-auth')
     ) {
-      includedHeaders.push([lowerKey, String(value)])
+      const headerValue = String(value)
+      if (containsUnsafeHeaderCharacter(headerValue)) {
+        throw new AuthProtocolError('The authenticated response contains an invalid header value.')
+      }
+      includedHeaders.push([lowerKey, headerValue])
     }
   })
 
@@ -1449,6 +2027,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     allowUnauthenticated,
     certificatesToRequest,
     onCertificatesReceived,
+    certificateApprovalStore,
     logger,
     logLevel,
     transportLimits,
@@ -1478,7 +2057,8 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     allowUnauthenticated ?? false,
     logger,
     logLevel,
-    transportLimits
+    transportLimits,
+    certificateApprovalStore
   )
 
   const sessionMgr = sessionManager || new SessionManager()
@@ -1494,7 +2074,19 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions): RequestHan
     )
   }
 
-  const peer = new Peer(wallet, transport, certificatesToRequest, sessionMgr)
+  // HTTP transport admission owns header capacity. Keep metadata/signature
+  // validation while avoiding a second general-payload ceiling after receipt.
+  const peer = new Peer(
+    wallet,
+    transport,
+    certificatesToRequest,
+    sessionMgr,
+    undefined,
+    undefined,
+    {
+      maxGeneralPayloadBytes: null
+    }
+  )
   transport.setPeer(peer)
   const telemetry = new Telemetry(telemetryConfig)
 

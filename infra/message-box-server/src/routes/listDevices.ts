@@ -102,7 +102,7 @@ export default {
           .limit(limit)
           .offset(offset)
 
-        Logger.log(`[DEBUG] Found ${devices.length} registered devices for ${identityKey}`)
+        Logger.log('[DEBUG] Registered device query completed.')
 
         return res.status(200).json({
           status: 'success',
@@ -114,16 +114,16 @@ export default {
             fcmToken: `...${device.fcmToken.slice(-10)}`
           }))
         })
-      } catch (dbError: any) {
-        Logger.error('[ERROR] Database error during device listing:', dbError)
+      } catch {
+        Logger.error('[ERROR] Database error during device listing.')
         return res.status(500).json({
           status: 'error',
           code: 'ERR_DATABASE_ERROR',
           description: 'Failed to retrieve devices.'
         })
       }
-    } catch (error) {
-      Logger.error('[ERROR] Internal Server Error in listDevices:', error)
+    } catch {
+      Logger.error('[ERROR] Internal Server Error in listDevices.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',

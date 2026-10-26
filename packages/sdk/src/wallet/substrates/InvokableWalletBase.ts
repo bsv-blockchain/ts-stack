@@ -51,6 +51,8 @@ import {
   GetVersionResult
 } from '../Wallet.interfaces.js'
 import { CallType } from './WalletWireCalls.js'
+import { validateWalletArgs } from '../WalletArgumentValidation.js'
+import { snapshotWalletResultRequest } from '../WalletResultValidation.js'
 
 /**
  * Abstract base class for WalletInterface substrates that delegate all
@@ -60,7 +62,20 @@ import { CallType } from './WalletWireCalls.js'
  * the specific transport (e.g. XDM postMessage, ReactNative bridge).
  */
 export abstract class InvokableWalletBase implements WalletInterface {
-  abstract invoke(call: CallType, args: any): Promise<any>
+  /**
+   * Transport hook used by the built-in substrates. It is deliberately
+   * concrete so existing third-party subclasses that implement the historical
+   * public `invoke(call, args)` contract continue to compile unchanged.
+   */
+  protected async invokeRaw(_call: CallType, _args: any, _bindingRequest: unknown): Promise<any> {
+    throw new Error('This substrate must implement invoke() or invokeRaw().')
+  }
+
+  async invoke(call: CallType, args: any): Promise<any> {
+    validateWalletArgs(call, args)
+    const bindingRequest = snapshotWalletResultRequest(call, args)
+    return await this.invokeRaw(call, args, bindingRequest)
+  }
 
   async createAction(args: CreateActionArgs): Promise<CreateActionResult> {
     return await this.invoke('createAction', args)
@@ -94,11 +109,15 @@ export abstract class InvokableWalletBase implements WalletInterface {
     return await this.invoke('getPublicKey', args)
   }
 
-  async revealCounterpartyKeyLinkage(args: RevealCounterpartyKeyLinkageArgs): Promise<RevealCounterpartyKeyLinkageResult> {
+  async revealCounterpartyKeyLinkage(
+    args: RevealCounterpartyKeyLinkageArgs
+  ): Promise<RevealCounterpartyKeyLinkageResult> {
     return await this.invoke('revealCounterpartyKeyLinkage', args)
   }
 
-  async revealSpecificKeyLinkage(args: RevealSpecificKeyLinkageArgs): Promise<RevealSpecificKeyLinkageResult> {
+  async revealSpecificKeyLinkage(
+    args: RevealSpecificKeyLinkageArgs
+  ): Promise<RevealSpecificKeyLinkageResult> {
     return await this.invoke('revealSpecificKeyLinkage', args)
   }
 
@@ -138,11 +157,15 @@ export abstract class InvokableWalletBase implements WalletInterface {
     return await this.invoke('proveCertificate', args)
   }
 
-  async relinquishCertificate(args: RelinquishCertificateArgs): Promise<RelinquishCertificateResult> {
+  async relinquishCertificate(
+    args: RelinquishCertificateArgs
+  ): Promise<RelinquishCertificateResult> {
     return await this.invoke('relinquishCertificate', args)
   }
 
-  async discoverByIdentityKey(args: DiscoverByIdentityKeyArgs): Promise<DiscoverCertificatesResult> {
+  async discoverByIdentityKey(
+    args: DiscoverByIdentityKeyArgs
+  ): Promise<DiscoverCertificatesResult> {
     return await this.invoke('discoverByIdentityKey', args)
   }
 

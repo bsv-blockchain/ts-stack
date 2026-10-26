@@ -1,13 +1,12 @@
-import { Random, Telemetry, TelemetrySpan, Validation, WalletLoggerInterface } from '@bsv/sdk'
+import { validateInteger, validateOptionalInteger, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
+import { Random, Telemetry, TelemetrySpan, WalletLoggerInterface } from '@bsv/sdk'
 import { WalletError } from '../../sdk/WalletError'
 import { StorageFeeModel } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INSUFFICIENT_FUNDS, WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { validateStorageFeeModel } from '../StorageProvider'
 import { transactionInputSize, transactionOutputSize, transactionSize, varUintSize } from './utils'
-/**
- * An output of this satoshis amount will be adjusted to the largest fundable amount.
- */
-export const maxPossibleSatoshis = 2099999999999999
+import { maxPossibleSatoshis } from './maxPossibleSatoshis'
+export { maxPossibleSatoshis }
 
 /**
  * Maximum number of change outputs to create in a single transaction.
@@ -139,6 +138,7 @@ interface SurplusChangeShapingRequest {
   targetNetCount: number
   netChangeCount: () => number
   maxChangeOutputs: number
+  dustFloor: number
   feeTarget: (addedChangeInputs?: number, addedChangeOutputs?: number) => number
   rand: (min: number, max: number) => number
 }
@@ -166,7 +166,7 @@ interface ChangeRecaptureRequest extends SurplusChangeMaterializationRequest {
  */
 function materializeSurplusChangeOutput(request: SurplusChangeMaterializationRequest): void {
   const { params, result } = request
-  if (!params.surplusPoolShaping || result.changeOutputs.length > 0) return
+  if (!params.surplusPoolShaping || result.changeOutputs.length > 0 || params.surplusToFee === true) return
 
   const availableAfterOutputFee = request.feeExcess(0, 1)
   if (availableAfterOutputFee < request.dustFloor) return
@@ -187,6 +187,8 @@ async function requireViableChangeOrRetainBoundedFee(request: ChangeRecaptureReq
   const { params, result } = request
   const feeExcessNow = request.feeExcess()
   if (result.changeOutputs.length > 0 || feeExcessNow <= 0) return
+  // The caller sized its funding exactly and asked for any surplus as fee.
+  if (params.surplusToFee === true) return
 
   const hasOnlyUnreturnableShapingSurplus =
     params.surplusPoolShaping === true && request.feeExcess(0, 1) < request.dustFloor
@@ -205,6 +207,9 @@ function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
   if (request.targetNetCount <= request.netChangeCount()) return
 
   const originalSatoshis = result.changeOutputs[0].satoshis
+  // Legacy baskets can target less than the dust floor. Split outputs below it
+  // would later be folded away, leaving the fee sized for outputs that no longer exist.
+  const perOutputFloor = Math.max(request.dustFloor, params.changeInitialSatoshis)
   const desiredOutputs = Math.min(
     request.maxChangeOutputs,
     Math.max(1, request.targetNetCount + result.allocatedChangeInputs.length)
@@ -213,17 +218,12 @@ function shapeSurplusChangeOutputs(request: SurplusChangeShapingRequest): void {
     const addedOutputs = count - 1
     const addedFee = request.feeTarget(0, addedOutputs) - request.feeTarget()
     const distributable = originalSatoshis - addedFee
-    if (distributable < count * params.changeInitialSatoshis) continue
+    if (distributable < count * perOutputFloor) continue
     result.changeOutputs = Array.from({ length: count }, () => ({
-      satoshis: params.changeInitialSatoshis,
+      satoshis: perOutputFloor,
       lockingScriptLength: params.changeLockingScriptLength
     }))
-    distributeExcessFees(
-      result.changeOutputs,
-      params.changeInitialSatoshis,
-      distributable - count * params.changeInitialSatoshis,
-      request.rand
-    )
+    distributeExcessFees(result.changeOutputs, perOutputFloor, distributable - count * perOutputFloor, request.rand)
     break
   }
 }
@@ -356,10 +356,12 @@ async function generateChangeSdkCore(
      * Applies the per-transaction limit so that the UTXO pool grows
      * gradually rather than all at once.
      */
-    const maxChangeOutputs =
+    let maxChangeOutputs =
       params.maxChangeOutputs === -1
         ? Number.MAX_SAFE_INTEGER
         : (params.maxChangeOutputs ?? maxChangeOutputsPerTransaction)
+    // No change output is ever added; surplus stays in the fee.
+    if (params.surplusToFee === true) maxChangeOutputs = 0
     const surplusPoolShaping = params.surplusPoolShaping === true
 
     const randomVals = [...(params.randomVals || [])]
@@ -684,6 +686,7 @@ async function generateChangeSdkCore(
       targetNetCount,
       netChangeCount,
       maxChangeOutputs,
+      dustFloor,
       feeTarget,
       rand
     })
@@ -742,7 +745,8 @@ export function validateGenerateChangeSdkResult(
     r.changeOutputs.length === 0 &&
     r.fee > feeRequired &&
     r.fee - feeWithChangeOutput < dustFloor
-  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus) {
+  const isSurplusToFee = params.surplusToFee === true && r.changeOutputs.length === 0 && r.fee > feeRequired
+  if (feeRequired !== r.fee && !isBoundedUnreturnableShapingSurplus && !isSurplusToFee) {
     log += `required fee error ${feeRequired} !== ${r.fee};`
     ok = false
   }
@@ -808,6 +812,13 @@ export interface GenerateChangeSdkParams {
   maxChangeOutputs?: number
 
   /**
+   * When true, no change outputs are created and any surplus beyond the
+   * required fee is paid as fee. Set only by callers that have already sized
+   * their funding exactly, e.g. a BRC-177 protected action.
+   */
+  surplusToFee?: boolean
+
+  /**
    * When true, targetNetCount shapes only genuine post-funding surplus. The
    * planner will not add inputs merely to reach the desired pool count.
    */
@@ -857,14 +868,14 @@ export function validateGenerateChangeSdkParams(
   const r: ValidateGenerateChangeSdkParamsResult = {}
 
   params.fixedInputs.forEach((x, i) => {
-    Validation.validateSatoshis(x.satoshis, `fixedInputs[${i}].satoshis`)
-    Validation.validateInteger(x.unlockingScriptLength, `fixedInputs[${i}].unlockingScriptLength`, undefined, 0)
+    validateSatoshis(x.satoshis, `fixedInputs[${i}].satoshis`)
+    validateInteger(x.unlockingScriptLength, `fixedInputs[${i}].unlockingScriptLength`, undefined, 0)
   })
 
   if (!Array.isArray(params.fixedOutputs)) throw new WERR_INVALID_PARAMETER('fixedOutputs', 'an array of objects')
   params.fixedOutputs.forEach((x, i) => {
-    Validation.validateSatoshis(x.satoshis, `fixedOutputs[${i}].satoshis`)
-    Validation.validateInteger(x.lockingScriptLength, `fixedOutputs[${i}].lockingScriptLength`, undefined, 0)
+    validateSatoshis(x.satoshis, `fixedOutputs[${i}].satoshis`)
+    validateInteger(x.lockingScriptLength, `fixedOutputs[${i}].lockingScriptLength`, undefined, 0)
     if (x.satoshis === maxPossibleSatoshis) {
       if (r.hasMaxPossibleOutput !== undefined) {
         throw new WERR_INVALID_PARAMETER(
@@ -879,19 +890,19 @@ export function validateGenerateChangeSdkParams(
   params.feeModel = validateStorageFeeModel(params.feeModel)
   if (params.feeModel.model !== 'sat/kb') throw new WERR_INVALID_PARAMETER('feeModel.model', "'sat/kb'")
 
-  Validation.validateOptionalInteger(params.targetNetCount, 'targetNetCount')
+  validateOptionalInteger(params.targetNetCount, 'targetNetCount')
   if (params.maxChangeOutputs !== -1) {
-    Validation.validateOptionalInteger(params.maxChangeOutputs, 'maxChangeOutputs', 1)
+    validateOptionalInteger(params.maxChangeOutputs, 'maxChangeOutputs', 1)
   }
   if (params.maxMigrationInputs !== -1) {
-    Validation.validateOptionalInteger(params.maxMigrationInputs, 'maxMigrationInputs', 0)
+    validateOptionalInteger(params.maxMigrationInputs, 'maxMigrationInputs', 0)
   }
 
-  Validation.validateSatoshis(params.changeFirstSatoshis, 'changeFirstSatoshis', 1)
-  Validation.validateSatoshis(params.changeInitialSatoshis, 'changeInitialSatoshis', 1)
+  validateSatoshis(params.changeFirstSatoshis, 'changeFirstSatoshis', 1)
+  validateSatoshis(params.changeInitialSatoshis, 'changeInitialSatoshis', 1)
 
-  Validation.validateInteger(params.changeLockingScriptLength, 'changeLockingScriptLength')
-  Validation.validateInteger(params.changeUnlockingScriptLength, 'changeUnlockingScriptLength')
+  validateInteger(params.changeLockingScriptLength, 'changeLockingScriptLength')
+  validateInteger(params.changeUnlockingScriptLength, 'changeUnlockingScriptLength')
 
   return r
 }

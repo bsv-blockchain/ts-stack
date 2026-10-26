@@ -24,19 +24,22 @@ const MockedTransaction = Transaction as jest.Mocked<typeof Transaction>
 // --- Helpers ----------------------------------------------------------------
 
 const MAX_DOUBLE_SPEND_RETRIES = 5
+const ORIGINAL_TXID = 'cc'.repeat(32)
+const COMPETING_TXID_A = 'aa'.repeat(32)
+const COMPETING_TXID_B = 'bb'.repeat(32)
 
-function makeMockBroadcaster (): jest.Mocked<TopicBroadcaster> {
+function makeMockBroadcaster(): jest.Mocked<TopicBroadcaster> {
   return {
     broadcast: jest.fn()
   } as unknown as jest.Mocked<TopicBroadcaster>
 }
 
-function makeDoubleSpendError (
+function makeDoubleSpendError(
   competingBeef: number[] | null = [0x01, 0x02],
-  competingTxs: string[] | null = ['competingtxid111111111111111111111111111111111111111111111111111111']
+  competingTxs: string[] | null = [COMPETING_TXID_A]
 ): WERR_REVIEW_ACTIONS {
   const result: ReviewActionResult = {
-    txid: 'originaltxid1111111111111111111111111111111111111111111111111111111',
+    txid: ORIGINAL_TXID,
     status: 'doubleSpend',
     ...(competingBeef != null && { competingBeef }),
     ...(competingTxs != null && { competingTxs })
@@ -44,9 +47,9 @@ function makeDoubleSpendError (
   return new WERR_REVIEW_ACTIONS([result], [])
 }
 
-function makeNonDoubleSpendError (name: string = 'WERR_REVIEW_ACTIONS'): WERR_REVIEW_ACTIONS {
+function makeNonDoubleSpendError(name: string = 'WERR_REVIEW_ACTIONS'): WERR_REVIEW_ACTIONS {
   const result: ReviewActionResult = {
-    txid: 'originaltxid1111111111111111111111111111111111111111111111111111111',
+    txid: ORIGINAL_TXID,
     status: 'serviceError'
   }
   const err = new WERR_REVIEW_ACTIONS([result], [])
@@ -64,7 +67,18 @@ describe('withDoubleSpendRetry', () => {
     jest.clearAllMocks()
     broadcaster = makeMockBroadcaster()
     mockCompetingTx = {}
-    ;(MockedTransaction.fromBEEF as jest.Mock).mockReturnValue(mockCompetingTx as Transaction)
+    ;(MockedTransaction.fromBEEF as jest.Mock).mockImplementation(
+      (_beef: number[], txid: string) => {
+        const transaction = { id: jest.fn().mockReturnValue(txid) }
+        if (txid === COMPETING_TXID_A) mockCompetingTx = transaction
+        return transaction
+      }
+    )
+    broadcaster.broadcast.mockImplementation(async transaction => ({
+      status: 'success',
+      txid: transaction.id('hex'),
+      message: 'Competing transaction synchronized.'
+    }))
   })
 
   // --- Happy path -----------------------------------------------------------
@@ -121,6 +135,26 @@ describe('withDoubleSpendRetry', () => {
       expect(operation).toHaveBeenCalledTimes(1)
       expect(broadcaster.broadcast).not.toHaveBeenCalled()
     })
+
+    it('rethrows a name-spoofed plain object without inspecting attacker fields', async () => {
+      const spoof = {
+        name: 'WERR_REVIEW_ACTIONS',
+        reviewActionResults: [
+          { status: 'doubleSpend', competingBeef: [1], competingTxs: [COMPETING_TXID_A] }
+        ]
+      }
+      const operation = jest.fn().mockRejectedValue(spoof)
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toBe(spoof)
+      expect(operation).toHaveBeenCalledTimes(1)
+      expect(broadcaster.broadcast).not.toHaveBeenCalled()
+    })
+
+    it('rethrows null without masking the original rejection', async () => {
+      const operation = jest.fn().mockRejectedValue(null)
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toBeNull()
+      expect(operation).toHaveBeenCalledTimes(1)
+    })
   })
 
   // --- WERR_REVIEW_ACTIONS without doubleSpend rethrown immediately ---------
@@ -136,12 +170,33 @@ describe('withDoubleSpendRetry', () => {
     })
 
     it('rethrows WERR_REVIEW_ACTIONS where doubleSpend result has no competingBeef', async () => {
-      const error = makeDoubleSpendError(null, ['competingtxid'])
+      const error = makeDoubleSpendError(null, [COMPETING_TXID_A])
       const operation = jest.fn().mockRejectedValue(error)
 
       await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(error)
       expect(operation).toHaveBeenCalledTimes(1)
       expect(broadcaster.broadcast).not.toHaveBeenCalled()
+    })
+
+    it('rethrows sparse competing transaction arrays', async () => {
+      const competingTxs: string[] = []
+      competingTxs.length = 1
+      const error = makeDoubleSpendError([1, 2], competingTxs)
+      const operation = jest.fn().mockRejectedValue(error)
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(error)
+      expect(broadcaster.broadcast).not.toHaveBeenCalled()
+    })
+
+    it('rethrows malformed or sparse BEEF bytes', async () => {
+      const beef: number[] = []
+      beef.length = 2
+      beef[1] = 256
+      const error = makeDoubleSpendError(beef, [COMPETING_TXID_A])
+      const operation = jest.fn().mockRejectedValue(error)
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(error)
+      expect(MockedTransaction.fromBEEF).not.toHaveBeenCalled()
     })
 
     it('rethrows WERR_REVIEW_ACTIONS where doubleSpend result has no competingTxs', async () => {
@@ -168,13 +223,12 @@ describe('withDoubleSpendRetry', () => {
   describe('retries after broadcasting the competing transaction', () => {
     it('broadcasts the competing tx and retries the operation when doubleSpend is detected', async () => {
       const competingBeef = [0xbe, 0xef]
-      const competingTxId = 'competingtxid111111111111111111111111111111111111111111111111111111'
+      const competingTxId = COMPETING_TXID_A
       const doubleSpendError = makeDoubleSpendError(competingBeef, [competingTxId])
 
-      broadcaster.broadcast.mockResolvedValue({ status: 'success', txid: competingTxId } as any)
-
       const expectedResult = { done: true }
-      const operation = jest.fn()
+      const operation = jest
+        .fn()
         .mockRejectedValueOnce(doubleSpendError) // first attempt: double-spend
         .mockResolvedValueOnce(expectedResult) // second attempt: success
 
@@ -187,28 +241,29 @@ describe('withDoubleSpendRetry', () => {
       expect(broadcaster.broadcast).toHaveBeenCalledWith(mockCompetingTx)
     })
 
-    it('calls Transaction.fromBEEF with competingBeef and the first competingTx', async () => {
+    it('authenticates and broadcasts every unique competing transaction', async () => {
       const competingBeef = [0x01, 0x02, 0x03]
-      const firstTxId = 'firstcompetingtxid1111111111111111111111111111111111111111111111111'
-      const secondTxId = 'secondcompetingtxid111111111111111111111111111111111111111111111111'
+      const firstTxId = COMPETING_TXID_A
+      const secondTxId = COMPETING_TXID_B
       const doubleSpendError = makeDoubleSpendError(competingBeef, [firstTxId, secondTxId])
 
-      broadcaster.broadcast.mockResolvedValue({ status: 'success', txid: firstTxId } as any)
-      const operation = jest.fn()
+      const operation = jest
+        .fn()
         .mockRejectedValueOnce(doubleSpendError)
         .mockResolvedValueOnce('ok')
 
       await withDoubleSpendRetry(operation, broadcaster)
 
-      // Only the first competingTx should be used
       expect(MockedTransaction.fromBEEF).toHaveBeenCalledWith(competingBeef, firstTxId)
+      expect(MockedTransaction.fromBEEF).toHaveBeenCalledWith(competingBeef, secondTxId)
+      expect(broadcaster.broadcast).toHaveBeenCalledTimes(2)
     })
 
     it('retries multiple times until success', async () => {
       const doubleSpendError = makeDoubleSpendError()
-      broadcaster.broadcast.mockResolvedValue({ status: 'success' } as any)
 
-      const operation = jest.fn()
+      const operation = jest
+        .fn()
         .mockRejectedValueOnce(doubleSpendError) // attempt 1
         .mockRejectedValueOnce(doubleSpendError) // attempt 2
         .mockRejectedValueOnce(doubleSpendError) // attempt 3
@@ -227,7 +282,6 @@ describe('withDoubleSpendRetry', () => {
   describe('throws after MAX_DOUBLE_SPEND_RETRIES is exceeded', () => {
     it('throws the error after MAX_DOUBLE_SPEND_RETRIES (5) failed attempts', async () => {
       const doubleSpendError = makeDoubleSpendError()
-      broadcaster.broadcast.mockResolvedValue({ status: 'success' } as any)
 
       // Operation always double-spends — should fail after maxRetries
       const operation = jest.fn().mockRejectedValue(doubleSpendError)
@@ -244,35 +298,86 @@ describe('withDoubleSpendRetry', () => {
 
     it('throws after custom maxRetries value is exceeded', async () => {
       const doubleSpendError = makeDoubleSpendError()
-      broadcaster.broadcast.mockResolvedValue({ status: 'success' } as any)
       const operation = jest.fn().mockRejectedValue(doubleSpendError)
 
-      await expect(
-        withDoubleSpendRetry(operation, broadcaster, 2)
-      ).rejects.toThrow(doubleSpendError)
+      await expect(withDoubleSpendRetry(operation, broadcaster, 2)).rejects.toThrow(
+        doubleSpendError
+      )
 
       expect(operation).toHaveBeenCalledTimes(2)
       expect(broadcaster.broadcast).toHaveBeenCalledTimes(1)
     })
+
+    it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 101])(
+      'rejects unsafe maxRetries value %s before invoking the operation',
+      async maxRetries => {
+        const operation = jest.fn().mockResolvedValue('no')
+        await expect(withDoubleSpendRetry(operation, broadcaster, maxRetries)).rejects.toThrow(
+          'maxRetries must be an integer'
+        )
+        expect(operation).not.toHaveBeenCalled()
+      }
+    )
   })
 
   // --- Broadcaster interaction -----------------------------------------------
 
   describe('broadcaster.broadcast is called with the correct transaction', () => {
     it('passes the Transaction.fromBEEF result to broadcaster.broadcast', async () => {
-      const competingTxMock = { id: jest.fn().mockReturnValue('abc') }
+      const competingTxMock = { id: jest.fn().mockReturnValue(COMPETING_TXID_A) }
       ;(MockedTransaction.fromBEEF as jest.Mock).mockReturnValue(competingTxMock)
 
-      const doubleSpendError = makeDoubleSpendError([0xaa, 0xbb], ['txid'])
-      broadcaster.broadcast.mockResolvedValue({ status: 'success' } as any)
+      const doubleSpendError = makeDoubleSpendError([0xaa, 0xbb], [COMPETING_TXID_A])
 
-      const operation = jest.fn()
+      const operation = jest
+        .fn()
         .mockRejectedValueOnce(doubleSpendError)
         .mockResolvedValueOnce('done')
 
       await withDoubleSpendRetry(operation, broadcaster)
 
       expect(broadcaster.broadcast).toHaveBeenCalledWith(competingTxMock)
+    })
+
+    it('does not retry the operation when the overlay rejects conflict synchronization', async () => {
+      broadcaster.broadcast.mockResolvedValue({
+        status: 'error',
+        code: 'ERR_REJECTED',
+        description: 'The host rejected the transaction.'
+      })
+      const operation = jest.fn().mockRejectedValue(makeDoubleSpendError())
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(
+        'Failed to synchronize competing transaction'
+      )
+      expect(operation).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not retry after a mismatched synchronization acknowledgment', async () => {
+      broadcaster.broadcast.mockResolvedValue({
+        status: 'success',
+        txid: COMPETING_TXID_B,
+        message: 'Wrong transaction.'
+      })
+      const operation = jest.fn().mockRejectedValue(makeDoubleSpendError())
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(
+        'ERR_INVALID_RESPONSE'
+      )
+      expect(operation).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not broadcast evidence whose parsed transaction ID differs', async () => {
+      ;(MockedTransaction.fromBEEF as jest.Mock).mockReturnValue({
+        id: jest.fn().mockReturnValue(COMPETING_TXID_B)
+      })
+      const operation = jest.fn().mockRejectedValue(makeDoubleSpendError())
+
+      await expect(withDoubleSpendRetry(operation, broadcaster)).rejects.toThrow(
+        'does not match its transaction ID'
+      )
+      expect(broadcaster.broadcast).not.toHaveBeenCalled()
+      expect(operation).toHaveBeenCalledTimes(1)
     })
   })
 })

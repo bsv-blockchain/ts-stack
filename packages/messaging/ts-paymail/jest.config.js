@@ -4,7 +4,16 @@ export default {
   testEnvironment: 'node',
   testPathIgnorePatterns: ['dist/', 'dist-*/'],
   testTimeout: 30000,
-  collectCoverageFrom: ['src/**/*.ts', '!src/**/__tests/**'],
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/__tests/**',
+    'docs/examples/src/client/sendP2P.ts',
+    'docs/examples/src/client/sendP2PBeef.ts',
+    'docs/examples/src/mockUser.ts',
+    'docs/examples/src/server/receiveBeefTransaction.ts',
+    'docs/examples/src/server/receiveTransaction.ts',
+    'docs/examples/src/wocClient.ts'
+  ],
   coverageThreshold: {
     global: {
       branches: 85,

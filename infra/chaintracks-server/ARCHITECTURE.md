@@ -219,7 +219,8 @@ The main thread continuously processes headers from two queues:
 ### Header Queues
 
 1. **liveHeaders** - Headers pushed by live ingestors (high priority)
-2. **baseHeaders** - Headers submitted via `/addHeaderHex` endpoint (low priority)
+2. **baseHeaders** - Strictly parsed, copied, deduplicated headers submitted via
+   `/addHeaderHex` (low priority; bounded queue and process-global admission rate)
 
 ### Processing Algorithm
 

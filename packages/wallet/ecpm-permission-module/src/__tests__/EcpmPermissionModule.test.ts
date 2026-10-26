@@ -2,13 +2,13 @@ import {
   BigNumber,
   CachedKeyDeriver,
   Curve,
+  Point,
   PrivateKey,
   type GetPublicKeyArgs,
   type PubKeyHex
 } from '@bsv/sdk'
 import { jest } from '@jest/globals'
-import { EcpmPermissionModule } from '../EcpmPermissionModule.js'
-import { createEcpmModule } from '../index.js'
+import { createEcpmModule, EcpmPermissionModule } from '../index.js'
 
 const curve = new Curve()
 const point = (scalar: number): PubKeyHex =>
@@ -66,6 +66,7 @@ describe('EcpmPermissionModule', () => {
       originator: 'poker.example'
     }
 
+    expect(module).toBeInstanceOf(EcpmPermissionModule)
     await expect(module.onRequest(request)).resolves.toEqual({ args: request.args })
     await expect(module.onResponse({ publicKey: point(4) })).resolves.toEqual({
       publicKey: point(4)
@@ -445,6 +446,27 @@ describe('EcpmPermissionModule', () => {
     )
   })
 
+  it('rejects decoded points that are infinite or fail curve validation', async () => {
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(911))
+    })
+    jest.spyOn(Point, 'fromString').mockReturnValueOnce({
+      isInfinity: () => true,
+      validate: () => true
+    } as never)
+    await expect(execute(module, requestArgs(point(2), 'apply'))).rejects.toThrow(
+      'ECPM: point is not a finite secp256k1 point'
+    )
+
+    jest.spyOn(Point, 'fromString').mockReturnValueOnce({
+      isInfinity: () => false,
+      validate: () => false
+    } as never)
+    await expect(execute(module, requestArgs(point(2), 'apply'))).rejects.toThrow(
+      'ECPM: point is not a finite secp256k1 point'
+    )
+  })
+
   it('rejects a malformed counterparty before key derivation', async () => {
     const module = new EcpmPermissionModule({
       keyDeriver: new CachedKeyDeriver(new PrivateKey(92))
@@ -481,6 +503,9 @@ describe('EcpmPermissionModule', () => {
     await expect(
       execute(module, requestArgs(point(2), 'apply', { protocolID: [0, 42 as never] }))
     ).rejects.toThrow('ECPM: invalid protocolID')
+    await expect(
+      execute(module, requestArgs(point(2), 'apply', { keyID: 42 as never }))
+    ).rejects.toThrow('ECPM: keyID is required')
   })
 
   it('rejects the field-prime x boundary and uppercase counterparties', async () => {
@@ -514,6 +539,30 @@ describe('EcpmPermissionModule', () => {
         })
       )
     ).rejects.toThrow(/authorization handler/)
+  })
+
+  it('ignores an ambient authorization handler inherited by constructor options', async () => {
+    const ambientAuthorize = jest.fn(async () => true)
+    const previous = Object.getOwnPropertyDescriptor(Object.prototype, 'authorize')
+    Object.defineProperty(Object.prototype, 'authorize', {
+      configurable: true,
+      enumerable: true,
+      value: ambientAuthorize
+    })
+    try {
+      const module = new EcpmPermissionModule({
+        keyDeriver: new CachedKeyDeriver(new PrivateKey(105))
+      })
+      const levelOne = requestArgs(point(2), 'apply', {
+        protocolID: [1, `p ecpm apply ${point(2)} mental poker deal`]
+      })
+
+      await expect(execute(module, levelOne)).rejects.toThrow(/authorization handler/)
+      expect(ambientAuthorize).not.toHaveBeenCalled()
+    } finally {
+      if (previous === undefined) delete (Object.prototype as { authorize?: unknown }).authorize
+      else Object.defineProperty(Object.prototype, 'authorize', previous)
+    }
   })
 
   it('fails closed when a privileged key provider is missing or invalid', async () => {
@@ -574,5 +623,88 @@ describe('EcpmPermissionModule', () => {
           authorizationTTL: 0
         })
     ).toThrow(/authorizationTTL/)
+    expect(
+      () =>
+        new EcpmPermissionModule({
+          keyDeriver: new CachedKeyDeriver(new PrivateKey(106)),
+          authorize: false as never
+        })
+    ).toThrow(/authorize must be a function/)
+    expect(
+      () =>
+        new EcpmPermissionModule({
+          keyDeriver: new CachedKeyDeriver(new PrivateKey(107)),
+          privilegedKeyDeriver: false as never
+        })
+    ).toThrow(/privilegedKeyDeriver must be a function/)
+    expect(
+      () =>
+        new EcpmPermissionModule(
+          Object.create({ keyDeriver: new CachedKeyDeriver(new PrivateKey(108)) }) as never
+        )
+    ).toThrow(/plain data object/)
+  })
+
+  it('rejects accessor-bearing requests and unsafe originator text without invoking accessors', async () => {
+    const module = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(102))
+    })
+    const getter = jest.fn(() => [0, 'p ecpm apply invalid'])
+    const args = Object.defineProperty({ keyID: 'key' }, 'protocolID', {
+      enumerable: true,
+      get: getter
+    })
+
+    await expect(execute(module, args as GetPublicKeyArgs)).rejects.toThrow(
+      'must not contain accessors'
+    )
+    expect(getter).not.toHaveBeenCalled()
+    await expect(
+      execute(module, requestArgs(point(2)), 'getPublicKey', 'bad\norigin')
+    ).rejects.toThrow('originator is invalid')
+
+    const symbolArgs = requestArgs(point(2)) as GetPublicKeyArgs & { [key: symbol]: boolean }
+    symbolArgs[Symbol('ambient')] = true
+    await expect(execute(module, symbolArgs)).rejects.toThrow('must not contain symbol properties')
+
+    await expect(
+      module.handleRequest!(
+        Object.create({
+          method: 'getPublicKey',
+          args: requestArgs(point(2)),
+          originator: 'poker.example'
+        }),
+        async () => undefined
+      )
+    ).rejects.toThrow('ECPM request must be a plain data object')
+  })
+
+  it('caps cached and pending authorization state', async () => {
+    const authorize = jest.fn(async () => true)
+    const instance = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(103)),
+      authorize
+    })
+    const authorizedArgs = requestArgs(point(2), 'apply', {
+      protocolID: [1, `p ecpm apply ${point(2)} bounded poker game`]
+    })
+    for (let i = 0; i < 1025; i++) {
+      await execute(instance, authorizedArgs, 'getPublicKey', `origin-${i}.example`)
+    }
+    expect(authorize).toHaveBeenCalledTimes(1025)
+    await execute(instance, authorizedArgs, 'getPublicKey', 'origin-0.example')
+    expect(authorize).toHaveBeenCalledTimes(1026)
+
+    const never = new Promise<boolean>(() => {})
+    const pendingModule = new EcpmPermissionModule({
+      keyDeriver: new CachedKeyDeriver(new PrivateKey(104)),
+      authorize: async () => await never
+    })
+    for (let i = 0; i < 64; i++) {
+      void observe(execute(pendingModule, authorizedArgs, 'getPublicKey', `pending-${i}.example`))
+    }
+    await expect(
+      execute(pendingModule, authorizedArgs, 'getPublicKey', 'pending-overflow.example')
+    ).rejects.toThrow('authorization queue is full')
   })
 })

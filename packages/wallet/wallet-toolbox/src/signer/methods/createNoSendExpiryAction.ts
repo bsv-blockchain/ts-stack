@@ -1,4 +1,6 @@
-import { Beef, PublicKey, Random, Script, Transaction, Utils, Validation } from '@bsv/sdk'
+import { type ValidCreateActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, PublicKey, Random, Script, Transaction } from '@bsv/sdk'
+import { toBase64 } from '@bsv/sdk/primitives/utils'
 import { Wallet, PendingSignAction, PendingStorageInput } from '../../Wallet'
 import { AuthId, StorageCreateActionResult } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_REVIEW_ACTIONS } from '../../sdk/WERR_errors'
@@ -9,10 +11,11 @@ import { completeSignedTransaction, verifyUnlockScripts } from './completeSigned
 import { CreateActionResultX, processAction } from './createAction'
 import { setResultBeef } from './resultBeef'
 import { makeNoSendExpiryFundingArgs } from '../../storage/methods/noSendExpiry'
+import { setExactActionSpend } from '../../utility/exactActionSpend'
 
 function pendingFromPlan(
   wallet: Wallet,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   dcr: StorageCreateActionResult
 ): PendingSignAction {
   const { tx, amount, pdi } = buildSignableTransaction(dcr, args, wallet)
@@ -24,7 +27,7 @@ function beefForPending(prior: PendingSignAction): Beef {
   const beef =
     prior.dcr.inputBeef instanceof Uint8Array
       ? Beef.fromBinaryView(prior.dcr.inputBeef)
-      : Beef.fromBinary(prior.dcr.inputBeef)
+      : Beef.fromBinaryStrict(prior.dcr.inputBeef)
   beef.mergeTransaction(prior.tx)
   return beef
 }
@@ -33,7 +36,7 @@ async function completeFunding(
   wallet: Wallet,
   auth: AuthId,
   prior: PendingSignAction,
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): Promise<{ txid: string; beef: Beef }> {
   prior.tx = await completeSignedTransaction(prior, {}, wallet)
   const txid = prior.tx.id('hex')
@@ -64,10 +67,10 @@ function findAnchorInput(prior: PendingSignAction, anchorTxid: string, anchorVou
 }
 
 function randomDerivation(): string {
-  return Utils.toBase64(Random(16))
+  return toBase64(Random(16))
 }
 
-export function targetForStorage(args: Validation.ValidCreateActionArgs): Validation.ValidCreateActionArgs {
+export function targetForStorage(args: ValidCreateActionArgs): ValidCreateActionArgs {
   const target = {
     ...args,
     inputs: args.inputs.map(input => {
@@ -192,7 +195,7 @@ async function armReclaim(
 export async function createNoSendExpiryAction(
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
 ): Promise<CreateActionResultX> {
   const capabilities = await wallet.storage.getCapabilities()
   if (capabilities.brc177NoSendExpiry?.version !== 1) {
@@ -255,15 +258,17 @@ export async function createNoSendExpiryAction(
 
   try {
     target = pendingFromPlan(wallet, targetArgs, activated.action)
-    const reclaim = await makeReclaim(
-      wallet,
-      funding.tx,
-      target,
-      activated.anchorTxid,
-      activated.anchorVout,
-      prepared.reclaimSatoshis
-    )
-    await armReclaim(wallet, target, completedFunding.beef, reclaim, prepared.reclaimSatoshis)
+    if (activated.expiry.mode !== 'never') {
+      const reclaim = await makeReclaim(
+        wallet,
+        funding.tx,
+        target,
+        activated.anchorTxid,
+        activated.anchorVout,
+        prepared.reclaimSatoshis
+      )
+      await armReclaim(wallet, target, completedFunding.beef, reclaim, prepared.reclaimSatoshis)
+    }
   } catch (error) {
     await wallet.storage.abortAction({ reference: activated.action.reference }).catch(() => undefined)
     throw error
@@ -273,12 +278,14 @@ export async function createNoSendExpiryAction(
     try {
       const tx = makeSignableBeef(target.tx)
       wallet.pendingSignActions[target.reference] = target
-      return {
+      const result: CreateActionResultX = {
         signableTransaction: {
           reference: target.reference,
           tx
         }
       }
+      setExactActionSpend(result, target.amount)
+      return result
     } catch (error) {
       await wallet.storage.abortAction({ reference: target.reference }).catch(() => undefined)
       throw error
@@ -298,6 +305,7 @@ export async function createNoSendExpiryAction(
       sendWithResults: processed.sendWithResults,
       notDelayedResults: processed.notDelayedResults
     }
+    setExactActionSpend(result, target.amount)
     setResultBeef(result, beef)
     return result
   } catch (error) {

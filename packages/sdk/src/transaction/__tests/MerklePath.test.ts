@@ -1,5 +1,5 @@
 import ChainTracker from '../ChainTracker'
-import MerklePath from '../../transaction/MerklePath'
+import MerklePath, { MerklePathLeaf } from '../../transaction/MerklePath'
 import { hash256 } from '../../primitives/Hash'
 import { toHex, toArray } from '../../primitives/utils'
 import invalidBumps from './bump.invalid.vectors'
@@ -125,6 +125,45 @@ describe('MerklePath combination compatibility', () => {
       'You cannot combine paths which do not have the same root.'
     )
   })
+
+  it('supports safe offsets beyond the 32-bit domain and rejects unsafe integers', () => {
+    const txid = '33'.repeat(32)
+    // A lone leaf is only legal at offset 0, so the wide offset is stored beside one.
+    const wide = new MerklePath(
+      100,
+      [
+        [
+          { offset: 0, hash: '00'.repeat(32), txid: true },
+          { offset: 0x100000000, hash: txid, txid: true }
+        ]
+      ],
+      true,
+      false
+    )
+    expect(wide.path[0][1].offset).toBe(0x100000000)
+    // Truncating 2^32 to 32 bits would yield offset 0 and accept this as a coinbase.
+    expect(() => new MerklePath(100, [[{ offset: 0x100000000, hash: txid, txid: true }]])).toThrow(
+      'Missing hash for index 4294967296 at height 0'
+    )
+    expect(
+      () => new MerklePath(100, [[{ offset: Number.MAX_SAFE_INTEGER + 1, hash: txid, txid: true }]])
+    ).toThrow('Invalid offset')
+  })
+
+  it('owns constructor and combined proof leaves', () => {
+    const txid = '55'.repeat(32)
+    const source = [[{ offset: 0, hash: txid, txid: true }]]
+    const path = new MerklePath(100, source)
+    source[0][0].hash = '66'.repeat(32)
+    expect(path.computeRoot(txid)).toBe(txid)
+
+    const [pathA, pathB] = buildSplitPaths()
+    pathA.combine(pathB)
+    const pathBLeaf = pathB.path[0].find(leaf => leaf.hash === BRC74TXID3)
+    if (pathBLeaf == null) throw new Error('Expected the second path transaction leaf')
+    pathBLeaf.hash = '77'.repeat(32)
+    expect(pathA.computeRoot(BRC74TXID3)).toBe(BRC74Root)
+  })
 })
 
 const BRC74JSONTrimmed = {
@@ -151,31 +190,26 @@ const BLOCK_125632 = {
   ]
 }
 
-const BRC74Root =
-  '57aab6e6fb1b697174ffb64e062c4728f2ffd33ddcfa02a43b64d8cd29b483b4'
-const BRC74TXID1 =
-  '304e737fdfcb017a1a322e78b067ecebb5e07b44f0a36ed1f01264d2014f7711'
-const BRC74TXID2 =
-  'd888711d588021e588984e8278a2decf927298173a06737066e43f3e75534e00'
-const BRC74TXID3 =
-  '98c9c5dd79a18f40837061d5e0395ffb52e700a2689e641d19f053fc9619445e'
+const BRC74Root = '57aab6e6fb1b697174ffb64e062c4728f2ffd33ddcfa02a43b64d8cd29b483b4'
+const BRC74TXID1 = '304e737fdfcb017a1a322e78b067ecebb5e07b44f0a36ed1f01264d2014f7711'
+const BRC74TXID2 = 'd888711d588021e588984e8278a2decf927298173a06737066e43f3e75534e00'
+const BRC74TXID3 = '98c9c5dd79a18f40837061d5e0395ffb52e700a2689e641d19f053fc9619445e'
 
 class FakeChainTracker implements ChainTracker {
-  async isValidRootForHeight (root: string, height: number): Promise<boolean> {
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
     return (
-      root ===
-        'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02' &&
+      root === 'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02' &&
       height === 10000
     )
   }
 
-  async currentHeight (): Promise<number> {
+  async currentHeight(): Promise<number> {
     return 10100
   }
 }
 
 /** Splits BRC74JSON into two partial paths (A covers txid2, B covers txid3) ready to combine. */
-function buildSplitPaths (): [MerklePath, MerklePath] {
+function buildSplitPaths(): [MerklePath, MerklePath] {
   const path0A = [...BRC74JSON.path[0]]
   const path0B = [...BRC74JSON.path[0]]
   const path1A = [...BRC74JSON.path[1]]
@@ -213,17 +247,52 @@ describe('MerklePath', () => {
     const path = new MerklePath(BRC74JSON.blockHeight, BRC74JSON.path)
     const tracker = {
       isValidRootForHeight: jest.fn(
-        async (root, height) =>
-          root === BRC74Root && height === BRC74JSON.blockHeight
+        async (root, height) => root === BRC74Root && height === BRC74JSON.blockHeight
       ),
       currentHeight: jest.fn(async () => 2029209)
     }
     const result = await path.verify(BRC74TXID1, tracker)
     expect(result).toBe(true)
-    expect(tracker.isValidRootForHeight).toHaveBeenCalledWith(
-      BRC74Root,
-      BRC74JSON.blockHeight
+    expect(tracker.isValidRootForHeight).toHaveBeenCalledWith(BRC74Root, BRC74JSON.blockHeight)
+  })
+  it('Snapshots the proof height and chain tracker methods before awaiting', async () => {
+    const txid = '11'.repeat(32)
+    const path = MerklePath.fromCoinbaseTxidAndHeight(txid, 100)
+    let releaseHeight: (height: number) => void = () => {}
+    const currentHeight = jest.fn(
+      async () =>
+        await new Promise<number>(resolve => {
+          releaseHeight = resolve
+        })
     )
+    const isValidRootForHeight = jest.fn(async (root, height) => root === txid && height === 100)
+    const tracker = { currentHeight, isValidRootForHeight }
+
+    const pending = path.verify(txid, tracker)
+    path.blockHeight = 999
+    tracker.isValidRootForHeight = jest.fn(async () => false)
+    releaseHeight(300)
+
+    await expect(pending).resolves.toBe(true)
+    expect(isValidRootForHeight).toHaveBeenCalledWith(txid, 100)
+  })
+  it('Rejects malformed chain heights and non-boolean root verdicts', async () => {
+    const txid = '22'.repeat(32)
+    const path = MerklePath.fromCoinbaseTxidAndHeight(txid, 100)
+    const malformedHeightTracker = {
+      currentHeight: jest.fn(async () => '300' as unknown as number),
+      isValidRootForHeight: jest.fn(async () => true)
+    }
+    await expect(path.verify(txid, malformedHeightTracker)).rejects.toThrow(
+      'ChainTracker current height must be a non-negative safe integer'
+    )
+    expect(malformedHeightTracker.isValidRootForHeight).not.toHaveBeenCalled()
+
+    const nonBooleanVerdictTracker = {
+      currentHeight: jest.fn(async () => 300),
+      isValidRootForHeight: jest.fn(async () => 'false' as unknown as boolean)
+    }
+    await expect(path.verify(txid, nonBooleanVerdictTracker)).resolves.toBe(false)
   })
   it('Combines two paths', () => {
     const [pathA, pathB] = buildSplitPaths()
@@ -251,12 +320,14 @@ describe('MerklePath', () => {
     const tx2 = 'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc'
     const tx3 = 'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
     const root4 = merkleHash(merkleHash(tx3 + tx2) + merkleHash(tx1 + tx0))
-    const mp = new MerklePath(100, [[
-      { offset: 0, txid: true, hash: tx0 },
-      { offset: 1, txid: true, hash: tx1 },
-      { offset: 2, txid: true, hash: tx2 },
-      { offset: 3, txid: true, hash: tx3 }
-    ]])
+    const mp = new MerklePath(100, [
+      [
+        { offset: 0, txid: true, hash: tx0 },
+        { offset: 1, txid: true, hash: tx1 },
+        { offset: 2, txid: true, hash: tx2 },
+        { offset: 3, txid: true, hash: tx3 }
+      ]
+    ])
     expect(mp.computeRoot(tx0)).toEqual(root4)
     expect(mp.computeRoot(tx1)).toEqual(root4)
     expect(mp.computeRoot(tx2)).toEqual(root4)
@@ -281,12 +352,59 @@ describe('MerklePath', () => {
       'fdd2040101000202ef57aa9f29c8141ae17935c88434457b2117890f23efba0d0e0cba7a7a37d5'
     )
     expect(
-      path.computeRoot(
-        'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02'
-      )
-    ).toEqual(
-      'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02'
+      path.computeRoot('d5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02')
+    ).toEqual('d5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02')
+  })
+  it('accepts a lone leaf only at offset 0 (the block of one transaction)', () => {
+    const txid = 'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02'
+    const leaf = '02ef57aa9f29c8141ae17935c88434457b2117890f23efba0d0e0cba7a7a37d5'
+    const offsetZero = 'fdd2040101' + '00' + '02' + leaf
+    expect(MerklePath.fromHex(offsetZero).computeRoot(txid)).toEqual(txid)
+    expect(() => MerklePath.fromHex('fdd2040101' + '01' + '02' + leaf)).toThrow(
+      'Missing hash for index 1 at height 0'
     )
+    expect(() => MerklePath.fromHex('fdd2040101' + '05' + '02' + leaf)).toThrow(
+      'Missing hash for index 5 at height 0'
+    )
+    expect(
+      () => new MerklePath(1234, [[{ offset: 1, hash: txid, txid: true }]], true, false)
+    ).toThrow('Missing hash for index 1 at height 0')
+
+    const mutated = MerklePath.fromHex(offsetZero)
+    mutated.path[0][0].offset = 1
+    expect(() => mutated.computeRoot(txid)).toThrow('Missing hash for index 1 at height 0')
+  })
+  it('refuses to combine a one-transaction proof with a non-zero lone leaf', () => {
+    const txid = 'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02'
+    const offsetZero =
+      'fdd2040101000202ef57aa9f29c8141ae17935c88434457b2117890f23efba0d0e0cba7a7a37d5'
+    const good = MerklePath.fromHex(offsetZero)
+    const forged = MerklePath.fromHex(offsetZero)
+    forged.path[0][0].offset = 1
+    expect(() => good.combine(forged)).toThrow('Missing hash for index 1 at height 0')
+    expect(good.toHex()).toEqual(offsetZero)
+    expect(good.computeRoot(txid)).toEqual(txid)
+  })
+  it('rejects a combined path whose root no longer matches the header', () => {
+    const txid = 'd5377a7aba0c0e0dbaef230f8917217b453484c83579e11a14c8299faa57ef02'
+    const offsetZero =
+      'fdd2040101000202ef57aa9f29c8141ae17935c88434457b2117890f23efba0d0e0cba7a7a37d5'
+    const good = MerklePath.fromHex(offsetZero)
+    const other = MerklePath.fromHex(offsetZero)
+    // A second leaf at offset 1 makes the merged root the txid hashed with itself.
+    // Reporting the original txid from this path simulates the shortcut that hid that.
+    other.path[0].push({ offset: 1, hash: txid, txid: true })
+    other.computeRoot = () => txid
+    expect(() => good.combine(other)).toThrow(
+      'You cannot combine paths which do not have the same root.'
+    )
+    expect(good.toHex()).toEqual(offsetZero)
+    expect(good.computeRoot(txid)).toEqual(txid)
+
+    const again = MerklePath.fromHex(offsetZero)
+    again.combine(MerklePath.fromHex(offsetZero))
+    expect(again.computeRoot(txid)).toEqual(txid)
+    expect(again.toHex()).toEqual(offsetZero)
   })
   it('Creates a valid MerklePath from a txid', () => {
     expect(() =>
@@ -338,11 +456,7 @@ describe('MerklePath', () => {
       merkleHash(tx[9] + tx[8]),
       merkleHash(tx[10] + tx[10]) // tx[10] duplicated — odd count at level 0
     ]
-    const L2 = [
-      merkleHash(L1[1] + L1[0]),
-      merkleHash(L1[3] + L1[2]),
-      merkleHash(L1[5] + L1[4])
-    ]
+    const L2 = [merkleHash(L1[1] + L1[0]), merkleHash(L1[3] + L1[2]), merkleHash(L1[5] + L1[4])]
     const L3 = [
       merkleHash(L2[1] + L2[0]),
       merkleHash(L2[2] + L2[2]) // L2 count = 3 (odd) — last node duplicated
@@ -352,19 +466,28 @@ describe('MerklePath', () => {
     // Build minimal per-txid MerklePaths for tx[2], tx[5], and tx[8].
     // tx[8] exercises the odd-level duplication at level 2 ({offset:3, duplicate:true}).
     const mpTx2 = new MerklePath(height, [
-      [{ offset: 2, txid: true, hash: tx[2] }, { offset: 3, hash: tx[3] }],
+      [
+        { offset: 2, txid: true, hash: tx[2] },
+        { offset: 3, hash: tx[3] }
+      ],
       [{ offset: 0, hash: L1[0] }],
       [{ offset: 1, hash: L2[1] }],
       [{ offset: 1, hash: L3[1] }]
     ])
     const mpTx5 = new MerklePath(height, [
-      [{ offset: 4, hash: tx[4] }, { offset: 5, txid: true, hash: tx[5] }],
+      [
+        { offset: 4, hash: tx[4] },
+        { offset: 5, txid: true, hash: tx[5] }
+      ],
       [{ offset: 3, hash: L1[3] }],
       [{ offset: 0, hash: L2[0] }],
       [{ offset: 1, hash: L3[1] }]
     ])
     const mpTx8 = new MerklePath(height, [
-      [{ offset: 8, txid: true, hash: tx[8] }, { offset: 9, hash: tx[9] }],
+      [
+        { offset: 8, txid: true, hash: tx[8] },
+        { offset: 9, hash: tx[9] }
+      ],
       [{ offset: 5, hash: L1[5] }],
       [{ offset: 3, duplicate: true }], // tx[8] is last odd node at level 2
       [{ offset: 0, hash: L3[0] }]
@@ -374,7 +497,10 @@ describe('MerklePath', () => {
     expect(mpTx8.computeRoot(tx[8])).toBe(merkleroot)
 
     // Combine into one compound path (combine() trims automatically)
-    const compound = new MerklePath(height, mpTx2.path.map(l => [...l]))
+    const compound = new MerklePath(
+      height,
+      mpTx2.path.map(l => [...l])
+    )
     compound.combine(mpTx5)
     compound.combine(mpTx8)
     expect(compound.computeRoot(tx[2])).toBe(merkleroot)
@@ -395,7 +521,9 @@ describe('MerklePath', () => {
         if (h === 0) {
           const sib = source.findOrComputeLeaf(0, sibOffset)
           if (sib == null) throw new Error('Missing sibling at level 0')
-          return [{ offset: txOffset, txid: true, hash: txHash }, sib].sort((a, b) => a.offset - b.offset)
+          return [{ offset: txOffset, txid: true, hash: txHash }, sib].sort(
+            (a, b) => a.offset - b.offset
+          )
         }
         const sib = source.findOrComputeLeaf(h, sibOffset)
         return sib == null ? [] : [sib]
@@ -492,6 +620,20 @@ describe('MerklePath', () => {
     })
   })
 
+  it('does not infer a missing sibling from empty upper levels', () => {
+    const txid = 'aa'.repeat(32)
+    const path = new MerklePath(1, [[{ offset: 0, hash: txid, txid: true }], []], true, false)
+    const sourceIndex = path.path.map(level => new Map(level.map(leaf => [leaf.offset, leaf])))
+    const hashCache = new Map<string, MerklePathLeaf | undefined>()
+
+    // An incomplete multi-level proof must not gain the one-transaction shortcut
+    // or the implicit odd-node duplication reserved for complete level-zero paths.
+    expect(() => path.computeRoot(txid)).toThrow('Missing hash for index 0 at height 0')
+    expect(path.cachedFindLeaf(1, 0, sourceIndex, hashCache, 0)).toBeUndefined()
+    expect(hashCache.has('1:0')).toBe(true)
+    expect(hashCache.get('1:0')).toBeUndefined()
+  })
+
   it('findOrComputeLeaf duplicates leaf0 when leaf1 carries both a hash and duplicate=true', () => {
     // Covers the leaf1.duplicate === true branch inside findOrComputeLeaf.
     // That branch is reached when leaf1.hash is non-null (bypassing the null-check above it)
@@ -500,10 +642,12 @@ describe('MerklePath', () => {
     const tx1 = 'bb'.repeat(32)
 
     // Build a minimal valid path so the constructor does not throw.
-    const mp = new MerklePath(1, [[
-      { offset: 0, txid: true, hash: tx0 },
-      { offset: 1, hash: tx1 }
-    ]])
+    const mp = new MerklePath(1, [
+      [
+        { offset: 0, txid: true, hash: tx0 },
+        { offset: 1, hash: tx1 }
+      ]
+    ])
 
     // Mutate: give the sibling leaf at offset 1 both a hash and duplicate=true.
     // findOrComputeLeaf(1, 0) will:
@@ -515,5 +659,14 @@ describe('MerklePath', () => {
 
     const result = mp.findOrComputeLeaf(1, 0)
     expect(result?.hash).toBe(merkleHash(tx0 + tx0))
+
+    // Extraction's indexed reconstruction must honor the same duplicate marker,
+    // even when a supplied sibling hash would otherwise produce a different root.
+    const sourceIndex = mp.path.map(level => new Map(level.map(leaf => [leaf.offset, leaf])))
+    const hashCache = new Map<string, MerklePathLeaf | undefined>()
+    const cached = mp.cachedFindLeaf(1, 0, sourceIndex, hashCache, 1)
+    expect(cached?.hash).toBe(merkleHash(tx0 + tx0))
+    expect(cached?.hash).not.toBe(merkleHash(tx1 + tx0))
+    expect(mp.cachedFindLeaf(1, 0, sourceIndex, hashCache, 1)).toBe(cached)
   })
 })

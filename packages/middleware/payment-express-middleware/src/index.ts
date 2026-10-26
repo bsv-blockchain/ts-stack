@@ -1,4 +1,5 @@
-import { Beef, createNonce, PublicKey, Utils, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
+import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
+import { Beef, createNonce, PublicKey, verifyNonce, type AtomicBEEF } from '@bsv/sdk'
 import type { RequestHandler, Response } from 'express'
 import type {
   BSVPayment,
@@ -8,20 +9,13 @@ import type {
 } from './types.js'
 
 const PAYMENT_VERSION = '1.0'
-const DEFAULT_MAX_PAYMENT_HEADER_BYTES = 64 * 1024
 const DEFAULT_REPLAY_CAPACITY = 100_000
-const MAX_NONCE_LENGTH = 512
 
 interface ParsedPayment {
   payment: BSVPayment
   transaction: AtomicBEEF
   transactionId: string
   satoshis: number
-}
-
-interface InternalizeResult {
-  accepted?: boolean
-  isMerge?: boolean
 }
 
 export class InMemoryPaymentReplayStore implements PaymentReplayStore {
@@ -55,7 +49,7 @@ function isCanonicalBase64(value: string): boolean {
     return false
   }
   try {
-    return Utils.toBase64(Utils.toArray(value, 'base64')) === value
+    return toBase64(toArray(value, 'base64')) === value
   } catch {
     return false
   }
@@ -76,8 +70,9 @@ function paymentHeader(req: PaymentRequest): string | null | undefined {
   return typeof value === 'string' ? value : null
 }
 
-function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefined {
-  if (Buffer.byteLength(raw, 'utf8') > maxBytes) return undefined
+function parsePaymentHeader(raw: string): BSVPayment | undefined {
+  // The HTTP server and edge own transport budgets. A payment that has already
+  // arrived must be validated, not discarded by a second header-size policy.
   let value: unknown
   try {
     value = JSON.parse(raw)
@@ -90,8 +85,6 @@ function parsePaymentHeader(raw: string, maxBytes: number): BSVPayment | undefin
     typeof record.derivationPrefix !== 'string' ||
     typeof record.derivationSuffix !== 'string' ||
     typeof record.transaction !== 'string' ||
-    record.derivationPrefix.length > MAX_NONCE_LENGTH ||
-    record.derivationSuffix.length > MAX_NONCE_LENGTH ||
     !isCanonicalBase64(record.derivationPrefix) ||
     !isCanonicalBase64(record.derivationSuffix) ||
     !isCanonicalBase64(record.transaction)
@@ -110,10 +103,15 @@ function parseAtomicPayment(
   requiredSatoshis: number
 ): ParsedPayment | undefined {
   try {
-    const transaction = Utils.toArray(payment.transaction, 'base64') as AtomicBEEF
-    const beef = Beef.fromBinary(transaction)
-    const transactionId = beef.atomicTxid
+    const suppliedTransaction = toArray(payment.transaction, 'base64') as AtomicBEEF
+    const suppliedBeef = Beef.fromBinaryStrict(suppliedTransaction)
+    const transactionId = suppliedBeef.atomicTxid
     if (typeof transactionId !== 'string') return undefined
+    // Historical Atomic BEEF writers could retain unrelated branches after
+    // the subject prefix. Give the wallet and downstream receipt only the
+    // declared payment transaction and its dependency closure.
+    const transaction = suppliedBeef.toBinaryAtomic(transactionId) as AtomicBEEF
+    const beef = Beef.fromBinaryStrict(transaction)
     const atomicTransaction = beef.findTxid(transactionId)?.tx
     const satoshis = atomicTransaction?.outputs[0]?.satoshis
     if (typeof satoshis !== 'number' || satoshis < requiredSatoshis) return undefined
@@ -139,7 +137,37 @@ function sendError(
 }
 
 function safeErrorContext(error: unknown): Record<string, unknown> {
-  return error instanceof Error ? { errorName: error.name } : { errorType: typeof error }
+  try {
+    return error instanceof Error ? { errorName: 'Error' } : { errorType: typeof error }
+  } catch {
+    return { errorType: 'unknown' }
+  }
+}
+
+function emitLog(
+  logger: PaymentMiddlewareOptions['logger'],
+  level: 'error' | 'warn',
+  message: string,
+  context?: Record<string, unknown>
+): void {
+  try {
+    const method = logger?.[level]
+    if (context === undefined) method?.call(logger, message)
+    else method?.call(logger, message, context)
+  } catch {
+    // Diagnostics are never part of payment authorization or delivery.
+  }
+}
+
+function isNewlyAcceptedInternalization(result: unknown): boolean {
+  if (result === null || typeof result !== 'object' || Array.isArray(result)) return false
+  const accepted = Object.getOwnPropertyDescriptor(result, 'accepted')
+  if (accepted === undefined || !Object.hasOwn(accepted, 'value') || accepted.value !== true) {
+    return false
+  }
+  const isMerge = Object.getOwnPropertyDescriptor(result, 'isMerge')
+  if (isMerge === undefined) return true
+  return Object.hasOwn(isMerge, 'value') && isMerge.value === false
 }
 
 function isPaymentLogger(value: unknown): boolean {
@@ -174,7 +202,7 @@ async function issuePaymentChallenge(
         description: 'A BSV payment is required. Provide the X-BSV-Payment header.'
       })
   } catch (error) {
-    logger?.error?.('Failed to create a payment challenge.', safeErrorContext(error))
+    emitLog(logger, 'error', 'Failed to create a payment challenge.', safeErrorContext(error))
     sendError(res, 503, 'ERR_PAYMENT_UNAVAILABLE', 'Payment processing is temporarily unavailable.')
   }
 }
@@ -191,7 +219,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     calculateRequestPrice = () => 100,
     wallet,
     replayStore = new InMemoryPaymentReplayStore(),
-    maxPaymentHeaderBytes = DEFAULT_MAX_PAYMENT_HEADER_BYTES,
     logger
   } = options
 
@@ -207,9 +234,6 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
   }
   if (replayStore === null || typeof replayStore.claim !== 'function') {
     throw new TypeError('A replay store with an atomic claim method is required.')
-  }
-  if (!Number.isSafeInteger(maxPaymentHeaderBytes) || maxPaymentHeaderBytes < 1) {
-    throw new RangeError('maxPaymentHeaderBytes must be a positive safe integer.')
   }
   if (!isPaymentLogger(logger)) {
     throw new TypeError('logger error and warn properties must be functions when provided.')
@@ -232,7 +256,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     try {
       requestPrice = await calculateRequestPrice(paymentRequest)
     } catch (error) {
-      logger?.error?.('Payment pricing failed.', safeErrorContext(error))
+      emitLog(logger, 'error', 'Payment pricing failed.', safeErrorContext(error))
       sendError(
         res,
         500,
@@ -248,7 +272,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
     if (!isPositiveSafeInteger(requestPrice)) {
-      logger?.error?.('Payment pricing returned an invalid value.', { requestPrice })
+      emitLog(logger, 'error', 'Payment pricing returned an invalid value.', { requestPrice })
       sendError(res, 500, 'ERR_PAYMENT_INTERNAL', 'The configured payment price is invalid.')
       return
     }
@@ -264,7 +288,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    const payment = parsePaymentHeader(rawPayment, maxPaymentHeaderBytes)
+    const payment = parsePaymentHeader(rawPayment)
     if (payment === undefined) {
       sendError(res, 400, 'ERR_MALFORMED_PAYMENT', 'The X-BSV-Payment header is malformed.')
       return
@@ -274,7 +298,12 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
     try {
       validPrefix = await verifyNonce(payment.derivationPrefix, wallet)
     } catch (error) {
-      logger?.warn?.('Payment derivation-prefix verification failed.', safeErrorContext(error))
+      emitLog(
+        logger,
+        'warn',
+        'Payment derivation-prefix verification failed.',
+        safeErrorContext(error)
+      )
     }
     if (!validPrefix) {
       sendError(
@@ -297,30 +326,8 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       return
     }
 
-    let claimed: boolean
     try {
-      const claimResult: unknown = await replayStore.claim(parsed.transactionId)
-      if (typeof claimResult !== 'boolean') {
-        throw new TypeError('The replay store returned an invalid claim result.')
-      }
-      claimed = claimResult
-    } catch (error) {
-      logger?.error?.('Payment replay claim failed.', safeErrorContext(error))
-      sendError(
-        res,
-        503,
-        'ERR_PAYMENT_UNAVAILABLE',
-        'Payment processing is temporarily unavailable.'
-      )
-      return
-    }
-    if (!claimed) {
-      sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
-      return
-    }
-
-    try {
-      const result = (await wallet.internalizeAction({
+      const result: unknown = await wallet.internalizeAction({
         tx: parsed.transaction,
         outputs: [
           {
@@ -334,17 +341,44 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
           }
         ],
         description: 'Payment for request'
-      })) as InternalizeResult
+      })
 
-      if (result.accepted !== true || result.isMerge === true) {
+      if (!isNewlyAcceptedInternalization(result)) {
         sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was not newly accepted.')
+        return
+      }
+
+      // The wallet is the authority that validates the remittance and records
+      // whether it was newly accepted. Claim only after that validation so an
+      // attacker cannot poison a transaction ID by pairing a public BEEF with
+      // invalid derivation material. A buggy wallet that accepts a duplicate is
+      // still contained by the independent atomic replay store.
+      let claimed: boolean
+      try {
+        const claimResult: unknown = await replayStore.claim(parsed.transactionId)
+        if (typeof claimResult !== 'boolean') {
+          throw new TypeError('The replay store returned an invalid claim result.')
+        }
+        claimed = claimResult
+      } catch (error) {
+        emitLog(logger, 'error', 'Payment replay claim failed.', safeErrorContext(error))
+        sendError(
+          res,
+          503,
+          'ERR_PAYMENT_UNAVAILABLE',
+          'Payment processing is temporarily unavailable.'
+        )
+        return
+      }
+      if (!claimed) {
+        sendError(res, 409, 'ERR_PAYMENT_REPLAYED', 'This payment was already used.')
         return
       }
 
       paymentRequest.payment = {
         satoshisPaid: parsed.satoshis,
         accepted: true,
-        tx: payment.transaction,
+        tx: toBase64(parsed.transaction),
         txid: parsed.transactionId
       }
       res.set({
@@ -352,7 +386,7 @@ export function createPaymentMiddleware(options: PaymentMiddlewareOptions): Requ
       })
       next()
     } catch (error) {
-      logger?.warn?.('Payment internalization failed.', safeErrorContext(error))
+      emitLog(logger, 'warn', 'Payment internalization failed.', safeErrorContext(error))
       sendError(res, 400, 'ERR_PAYMENT_FAILED', 'The payment could not be accepted.')
     }
   }

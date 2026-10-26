@@ -34,6 +34,14 @@ function connectOutcome(url: string, ms = 1500): Promise<'open' | 'error' | 'tim
   })
 }
 
+function openSocket(url: string, protocols?: string[]): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(url, protocols)
+    ws.once('open', () => resolve(ws))
+    ws.once('error', reject)
+  })
+}
+
 describe('WebSocketRelay upgrade routing', () => {
   let server: http.Server
   let port: number
@@ -110,5 +118,37 @@ describe('WebSocketRelay upgrade routing', () => {
     expect(server.listenerCount('upgrade')).toBe(before + 1)
     relay.close()
     expect(server.listenerCount('upgrade')).toBe(before)
+  })
+
+  it('revokes both live roles immediately when a topic expires', async () => {
+    const relay = new WebSocketRelay(server)
+    const mobile = await openSocket(`ws://localhost:${port}/ws?topic=expiring&role=mobile`)
+    const desktop = await openSocket(`ws://localhost:${port}/ws?topic=expiring&role=desktop`)
+    const mobileClosed = new Promise<number>(resolve => mobile.once('close', resolve))
+    const desktopClosed = new Promise<number>(resolve => desktop.once('close', resolve))
+
+    relay.removeTopic('expiring')
+
+    await expect(mobileClosed).resolves.toBe(1008)
+    await expect(desktopClosed).resolves.toBe(1008)
+    relay.close()
+  })
+
+  it('authenticates desktop sockets through a non-echoed bearer subprotocol', async () => {
+    const relay = new WebSocketRelay(server)
+    const token = 'A'.repeat(32)
+    relay.onValidateDesktopToken((_topic, candidate) => candidate === token)
+
+    const desktop = await openSocket(`ws://localhost:${port}/ws?topic=secure&role=desktop`, [
+      'bsv-wallet-relay',
+      `bsv-wallet-relay-token.${token}`
+    ])
+
+    expect(desktop.protocol).toBe('bsv-wallet-relay')
+    expect(desktop.url).not.toContain(token)
+    const closed = new Promise(resolve => desktop.once('close', resolve))
+    desktop.close()
+    await closed
+    relay.close()
   })
 })

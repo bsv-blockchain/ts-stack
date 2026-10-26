@@ -7,9 +7,16 @@ export {
   BRC29_PROTOCOL_ID,
   DEFAULT_PAYMENT_WINDOW_MS
 } from './constants.js'
-export { createPaymentMiddleware, validatePayment, send402 } from './server.js'
+export {
+  InMemoryPaymentReplayStore,
+  createPaymentMiddleware,
+  validatePayment,
+  send402
+} from './server.js'
 export type {
   PaymentMiddlewareOptions,
+  PaymentReplayStore,
+  PaymentLogger,
   PaymentResult,
   PaymentError,
   PaymentRequest,

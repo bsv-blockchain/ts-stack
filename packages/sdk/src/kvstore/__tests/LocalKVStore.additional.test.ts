@@ -27,6 +27,7 @@ import {
   SignActionResult
 } from '../../wallet/Wallet.interfaces.js'
 import Transaction from '../../transaction/Transaction.js'
+import { completeBoundAction } from '../../wallet/completeBoundAction.js'
 
 // ---- Constants mirrored from the existing test ----
 const testLockingScriptHex = 'mockLockingScriptHex'
@@ -61,13 +62,16 @@ jest.mock('../../transaction/Transaction.js', () => ({
 }))
 
 jest.mock('../../primitives/utils.js', () => ({
+  ...jest.requireActual('../../primitives/utils.js'),
   toArray: jest.fn((str: string, encoding = 'utf8') =>
     Array.from(Buffer.from(str, encoding as BufferEncoding))
   ),
-  toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
+  toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8')),
+  toUTF8Strict: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
 }))
 
 jest.mock('../../wallet/WalletClient.js', () => jest.fn())
+jest.mock('../../wallet/completeBoundAction.js')
 
 // ---- Typed mock aliases ----
 const MockedPushDrop = PushDrop as jest.MockedClass<typeof PushDrop> & {
@@ -76,12 +80,15 @@ const MockedPushDrop = PushDrop as jest.MockedClass<typeof PushDrop> & {
 const MockedPushDropDecode = MockedPushDrop.decode
 const MockedUtils = Utils as jest.Mocked<typeof Utils>
 const MockedTransaction = Transaction as jest.Mocked<typeof Transaction>
+const MockedCompleteBoundAction = completeBoundAction as jest.MockedFunction<
+  typeof completeBoundAction
+>
 
 // ---- Beef mock ----
-// LocalKVStore uses `Beef.fromBinary` internally. We mock only the relevant behaviour.
+// LocalKVStore uses strict BEEF framing internally. We mock only the relevant behaviour.
 jest.mock('../../transaction/Beef.js', () => ({
   Beef: {
-    fromBinary: jest.fn(() => ({
+    fromBinaryStrict: jest.fn(() => ({
       findTxid: jest.fn(() => ({
         tx: {
           outputs: [{ lockingScript: { toHex: () => testLockingScriptHex } }]
@@ -102,6 +109,15 @@ const createMockWallet = (): jest.Mocked<WalletInterface> =>
     relinquishOutput: jest.fn()
   }) as unknown as jest.Mocked<WalletInterface>
 
+function authenticatedFixtures(result: ListOutputsResult): any[] {
+  return result.outputs.map(output => ({
+    outpoint: output.outpoint,
+    output,
+    lockingScript: { toHex: () => output.lockingScript ?? testLockingScriptHex },
+    valueField: [1]
+  }))
+}
+
 const testContext = 'test-kv-context'
 const testKey = 'myTestKey'
 const testValue = 'myTestDataValue'
@@ -115,7 +131,61 @@ describe('LocalKVStore – additional coverage', () => {
     jest.clearAllMocks()
     mockWallet = createMockWallet()
     kvStore = new LocalKVStore(mockWallet, testContext, true)
+    kvStore['authenticateOutputs'] = jest.fn(async (_key, result) =>
+      result.outputs.map(output => {
+        const decoded = MockedPushDropDecode({})
+        if (decoded.fields.length < 1 || decoded.fields.length > 2) {
+          throw new Error('Invalid token.')
+        }
+        return {
+          outpoint: output.outpoint,
+          output,
+          lockingScript: { toHex: () => output.lockingScript ?? testLockingScriptHex },
+          valueField: decoded.fields[0]
+        }
+      })
+    )
+    MockedCompleteBoundAction.mockImplementation(async (wallet, args, options, originator) => {
+      const created = await wallet.createAction(args, originator)
+      const partialBytes = created.signableTransaction?.tx ?? created.tx
+      if (partialBytes == null) {
+        if ((args.inputs?.length ?? 0) > 0)
+          throw new Error('Wallet did not return a signable transaction when expected.')
+        return {
+          id: () => created.txid ?? '0'.repeat(64),
+          outputs: (args.outputs ?? []).map(output => ({
+            satoshis: output.satoshis,
+            lockingScript: { toHex: () => output.lockingScript }
+          }))
+        } as unknown as Transaction
+      }
+      const partial = Transaction.fromAtomicBEEF(partialBytes)
+      const spends: Record<number, { unlockingScript: string }> = {}
+      for (const [index, input] of (args.inputs ?? []).entries()) {
+        const signer = options.inputSigners?.[input.outpoint]
+        if (signer != null) {
+          const script = await signer(partial, index)
+          spends[index] = { unlockingScript: typeof script === 'string' ? script : script.toHex() }
+        }
+      }
+      const signed = await wallet.signAction(
+        { reference: created.signableTransaction?.reference ?? 'ref', spends },
+        originator
+      )
+      if (signed?.txid == null && signed?.tx == null) {
+        throw new Error('signAction must return a valid transaction')
+      }
+      const resultTxid = signed?.txid ?? created.txid ?? '0'.repeat(64)
+      return {
+        id: () => resultTxid,
+        outputs: (args.outputs ?? []).map(output => ({
+          satoshis: output.satoshis,
+          lockingScript: { toHex: () => output.lockingScript }
+        }))
+      } as unknown as Transaction
+    })
     MockedPushDropDecode.mockClear()
+    MockedPushDropDecode.mockReturnValue({ fields: [[1], [2]] })
   })
 
   // ---------------------------------------------------------------------------
@@ -157,6 +227,7 @@ describe('LocalKVStore – additional coverage', () => {
 
     it('returns decoded non-encrypted value when encrypt=false', async () => {
       const kvStoreNoEnc = new LocalKVStore(mockWallet, testContext, false)
+      kvStoreNoEnc['authenticateOutputs'] = kvStore['authenticateOutputs']
 
       // Provide a real BEEF-like binary so Beef.fromBinary is called
       const fakeBEEF = [1, 2, 3]
@@ -173,7 +244,7 @@ describe('LocalKVStore – additional coverage', () => {
 
       const result = await kvStoreNoEnc.get(testKey)
       expect(result).toBe(testRawValue)
-      expect(MockedUtils.toUTF8).toHaveBeenCalledWith(rawValueBytes)
+      expect(MockedUtils.toUTF8Strict).toHaveBeenCalledWith(rawValueBytes)
     })
 
     it('returns decrypted value when encrypt=true', async () => {
@@ -227,7 +298,7 @@ describe('LocalKVStore – additional coverage', () => {
       await expect(kvStore.get(testKey)).rejects.toThrow('Invalid value found')
     })
 
-    it('uses the last output when multiple outputs are present', async () => {
+    it('rejects ambiguous multiple outputs until set collapses them', async () => {
       const kvStoreNoEnc = new LocalKVStore(mockWallet, testContext, false)
       const fakeBEEF = [1, 2, 3]
       mockWallet.listOutputs.mockResolvedValue({
@@ -243,8 +314,7 @@ describe('LocalKVStore – additional coverage', () => {
       MockedPushDropDecode.mockReturnValue({ fields: [rawValueBytes] })
       MockedUtils.toUTF8.mockReturnValue('latestValue')
 
-      const result = await kvStoreNoEnc.get(testKey)
-      expect(result).toBe('latestValue')
+      await expect(kvStoreNoEnc.get(testKey)).rejects.toThrow('ambiguous')
     })
   })
 
@@ -265,7 +335,8 @@ describe('LocalKVStore – additional coverage', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: testValue, // same value as what we're setting
         outpoint: existingOutpoint,
-        lor: mockedLor
+        lor: mockedLor,
+        authenticated: authenticatedFixtures(mockedLor)
       })
 
       const result = await kvStore.set(testKey, testValue)
@@ -277,7 +348,7 @@ describe('LocalKVStore – additional coverage', () => {
       expect(mockWallet.signAction).not.toHaveBeenCalled()
     })
 
-    it('throws when value matches but outpoint is undefined (invalid state)', async () => {
+    it('throws when an authenticated matching value has no outpoint', async () => {
       const mockedLor: ListOutputsResult = {
         totalOutputs: 0,
         outputs: [],
@@ -288,7 +359,8 @@ describe('LocalKVStore – additional coverage', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: testValue, // same as what we want to set
         outpoint: undefined, // but no outpoint – invalid state
-        lor: mockedLor
+        lor: mockedLor,
+        authenticated: [{ outpoint: undefined }]
       })
 
       await expect(kvStore.set(testKey, testValue)).rejects.toThrow(
@@ -315,7 +387,8 @@ describe('LocalKVStore – additional coverage', () => {
       delayedKvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: 'different', // force actual createAction call
         outpoint: undefined,
-        lor: { outputs: [], totalOutputs: 0, BEEF: undefined }
+        lor: { outputs: [], totalOutputs: 0, BEEF: undefined },
+        authenticated: []
       })
 
       await delayedKvStore.set(testKey, testValue)
@@ -347,7 +420,8 @@ describe('LocalKVStore – additional coverage', () => {
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: undefined,
         outpoint: undefined,
-        lor: { outputs: [], totalOutputs: 0, BEEF: undefined }
+        lor: { outputs: [], totalOutputs: 0, BEEF: undefined },
+        authenticated: []
       })
 
       const result = await kvStore.set(testKey, testValue)
@@ -373,15 +447,17 @@ describe('LocalKVStore – additional coverage', () => {
       mockWallet.createAction.mockResolvedValue({ txid: 'shouldNotReach' } as CreateActionResult)
 
       const existingOutpoint = 'existing.0'
+      const existingResult: ListOutputsResult = {
+        outputs: [{ satoshis: 1, spendable: true, outpoint: existingOutpoint }],
+        totalOutputs: 1,
+        BEEF: [1, 2, 3]
+      }
       const lookupValueReal = kvStore['lookupValue']
       kvStore['lookupValue'] = jest.fn().mockResolvedValue({
         value: 'old',
         outpoint: existingOutpoint,
-        lor: {
-          outputs: [{ satoshis: 1, spendable: true, outpoint: existingOutpoint }],
-          totalOutputs: 1,
-          BEEF: [1, 2, 3]
-        }
+        lor: existingResult,
+        authenticated: authenticatedFixtures(existingResult)
       })
 
       await expect(kvStore.set(testKey, testValue)).rejects.toThrow('outputs with tag')
@@ -408,7 +484,8 @@ describe('LocalKVStore – additional coverage', () => {
       storeWithOriginator['lookupValue'] = jest.fn().mockResolvedValue({
         value: undefined,
         outpoint: undefined,
-        lor: { outputs: [], totalOutputs: 0, BEEF: undefined }
+        lor: { outputs: [], totalOutputs: 0, BEEF: undefined },
+        authenticated: []
       })
 
       await storeWithOriginator.set(testKey, testValue)
@@ -571,7 +648,8 @@ describe('LocalKVStore – additional coverage', () => {
         return {
           value: undefined,
           outpoint: undefined,
-          lor: { outputs: [], totalOutputs: 0, BEEF: undefined }
+          lor: { outputs: [], totalOutputs: 0, BEEF: undefined },
+          authenticated: []
         }
       })
 
@@ -601,12 +679,6 @@ describe('LocalKVStore – additional coverage', () => {
 
   describe('getLockingScript – throws when txid not found in BEEF', () => {
     it('throws "beef must contain txid" when findTxid returns null', async () => {
-      // Override the Beef mock for this test to return null for findTxid
-      const BeefModule = require('../../transaction/Beef.js')
-      BeefModule.Beef.fromBinary.mockReturnValueOnce({
-        findTxid: jest.fn(() => null)
-      })
-
       const fakeBEEF = [1, 2, 3]
       mockWallet.listOutputs.mockResolvedValue({
         outputs: [{ outpoint: 'missingtxid.0', satoshis: 1, spendable: true }],
@@ -614,7 +686,9 @@ describe('LocalKVStore – additional coverage', () => {
         BEEF: fakeBEEF
       } as any)
 
-      MockedPushDropDecode.mockReturnValue({ fields: [[1, 2, 3]] })
+      kvStore['authenticateOutputs'] = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('beef must contain txid'))
 
       await expect(kvStore.get(testKey)).rejects.toThrow('Invalid value found')
     })

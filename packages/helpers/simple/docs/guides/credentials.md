@@ -1,299 +1,32 @@
-# Verifiable Credentials
+# Encrypted certificate credentials
 
-`@bsv/simple` supports W3C Verifiable Credentials backed by BSV `MasterCertificate` cryptography. Credentials can be issued, verified, and revoked on-chain.
+Simple exports existing BRC-52 certificates using the proposed BRC-203 envelope in `@bsv/did/brc52`. The envelope contains the original certificate binary and its deterministic encrypted credential graph; the explicit disclosure API can add a separately assessed verifier-keyring object. The certifier signature and ciphertext remain unchanged. It contains no invented timestamp, plaintext subject claim, generic proof, or subject/master keyring.
 
-## Overview
-
-| Component | Role |
-|-----------|------|
-| `CredentialSchema` | Defines the fields, validation, and computed values for a credential type |
-| `CredentialIssuer` | Issues, verifies, and revokes credentials |
-| `MemoryRevocationStore` | Stores revocation secrets in memory (browser/tests) |
-| `FileRevocationStore` | Stores revocation secrets on disk (server only) |
-| `toVerifiableCredential()` | Wraps a BSV certificate into W3C VC format |
-| `toVerifiablePresentation()` | Wraps VCs into a W3C VP |
-
-## Defining a Schema
+The custom securing mechanism, vocabulary, and outpoint status type are proposed and unregistered. Generic W3C, Data Integrity, JOSE, COSE, SD-JWT, and status-list verifiers cannot be assumed to verify this envelope. Local adapter tests do not establish full external conformance or deployed interoperability.
 
 ```typescript
-import { CredentialSchema } from '@bsv/simple/browser'
+import { verifyBRC52Envelope } from '@bsv/did/brc52'
 
-const schema = new CredentialSchema({
-  id: 'employee-badge',
-  name: 'EmployeeBadge',
-  description: 'Company employee verification',
-  fields: [
-    { key: 'name', label: 'Full Name', type: 'text', required: true },
-    { key: 'email', label: 'Email', type: 'email', required: true },
-    { key: 'department', label: 'Department', type: 'select', options: [
-      { value: 'engineering', label: 'Engineering' },
-      { value: 'design', label: 'Design' },
-      { value: 'sales', label: 'Sales' }
-    ]},
-    { key: 'startDate', label: 'Start Date', type: 'date' }
-  ],
-  validate: (values) => {
-    if (!values.email?.includes('@')) return 'Invalid email'
-    return null
-  },
-  computedFields: (values) => ({
-    ...values,
-    issuedAt: new Date().toISOString(),
-    verified: 'true'
-  })
-})
-```
-
-### Schema Methods
-
-```typescript
-// Validate field values
-const error = schema.validate({ name: '', email: 'bad' })
-// 'Full Name is required'
-
-// Add computed fields
-const all = schema.computeFields({ name: 'Alice', email: 'alice@co.com' })
-// { name: 'Alice', email: 'alice@co.com', issuedAt: '2024-...', verified: 'true' }
-
-// Get info
-const info = schema.getInfo()
-// { id: 'employee-badge', name: 'EmployeeBadge', certificateTypeBase64: '...', fieldCount: 4 }
-```
-
-### Field Types
-
-| Type | Description |
-|------|-------------|
-| `text` | Free-form text |
-| `email` | Email address |
-| `date` | Date string |
-| `number` | Numeric value |
-| `textarea` | Multi-line text |
-| `checkbox` | Boolean flag |
-| `select` | Dropdown with predefined options |
-
-## Creating an Issuer
-
-```typescript
-import { CredentialIssuer, MemoryRevocationStore } from '@bsv/simple/browser'
-
-const issuer = await CredentialIssuer.create({
-  privateKey: issuerPrivateKeyHex,
-  schemas: [schema.getConfig()],
-  revocation: {
-    enabled: true,
-    wallet: walletInstance.getClient(),    // for creating revocation UTXOs
-    store: new MemoryRevocationStore()
-  }
-})
-
-console.log('Issuer DID:', issuer.getInfo().did)
-console.log('Schemas:', issuer.getInfo().schemas)
-```
-
-### Issuer Configuration
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `privateKey` | `string` | Yes | Hex-encoded private key |
-| `schemas` | `CredentialSchemaConfig[]` | No | Schema definitions |
-| `revocation.enabled` | `boolean` | No | Enable on-chain revocation |
-| `revocation.wallet` | `WalletInterface` | If enabled | Wallet for creating revocation UTXOs |
-| `revocation.store` | `RevocationStore` | No | Custom store (default: MemoryRevocationStore) |
-
-## Issuing a Credential
-
-```typescript
-const vc = await issuer.issue(
-  subjectIdentityKey,
-  'employee-badge',
-  { name: 'Alice Smith', email: 'alice@company.com', department: 'engineering' }
-)
-
-console.log('VC type:', vc.type)
-// ['VerifiableCredential', 'EmployeeBadge']
-
-console.log('Subject:', vc.credentialSubject.id)
-// 'did:bsv:02abc...'
-
-console.log('Issuer:', vc.issuer)
-// 'did:bsv:03def...'
-```
-
-### What Happens During Issuance
-
-1. Fields are validated against the schema
-2. Computed fields are merged in
-3. If revocation is enabled:
-   - A random 32-byte secret is generated
-   - The SHA-256 hash of the secret creates a hash-lock script: `OP_SHA256 <hash> OP_EQUAL`
-   - A 1-satoshi UTXO is created with this script
-   - The secret is saved to the revocation store
-4. A `MasterCertificate` is issued using the BSV SDK
-5. The certificate is wrapped in a W3C Verifiable Credential envelope
-
-### Verifiable Credential Structure
-
-```typescript
-{
-  '@context': ['https://www.w3.org/2018/credentials/v1'],
-  type: ['VerifiableCredential', 'EmployeeBadge'],
-  issuer: 'did:bsv:03def...',
-  issuanceDate: '2024-02-01T12:00:00.000Z',
-  credentialSubject: {
-    id: 'did:bsv:02abc...',
-    name: 'Alice Smith',
-    email: 'alice@company.com',
-    department: 'engineering',
-    issuedAt: '2024-02-01T12:00:00.000Z',
-    verified: 'true'
-  },
-  credentialStatus: {
-    id: 'bsv:txid123.0',
-    type: 'BSVHashLockRevocation2024'
-  },
-  proof: {
-    type: 'BSVMasterCertificateProof2024',
-    created: '2024-02-01T12:00:00.000Z',
-    proofPurpose: 'assertionMethod',
-    verificationMethod: 'did:bsv:03def...#key-1',
-    signatureValue: 'signature_hex'
-  },
-  _bsv: {
-    certificate: { /* full CertificateData */ }
-  }
+// Existing envelope JSON received through your application's transport.
+function verifyCredential(envelopeJson: string) {
+  const result = verifyBRC52Envelope('application/json', envelopeJson)
+  if (!result.verified) throw new Error(result.errors.join('; '))
+  return result.verifiedDocument
 }
 ```
 
-## Verifying a Credential
+`envelopeJson` is an application-provided string or UTF-8 bytes, not an arbitrary object with executable accessors. Successful verification returns `verifiedDocument` and `mediaType: 'application/vc'`. It authenticates the original derived BRC-52 signature and requires the entire supplied graph to match its signed certificate. Integrity alone establishes neither issuer trust, disclosure authorization, nor current revocation status.
 
-```typescript
-const result = await issuer.verify(vc)
+For an existing connected wallet, `await wallet.acquireCredential(config)` authenticates the remote certificate, binds certifier/subject/type, acquires it through the wallet, then returns a verified envelope. `await wallet.listCredentials({ certifiers, types })` returns verified envelopes from stored certificate cores. Stored keyrings remain in their existing custody boundary and are not exported. Malformed or signature-mismatched cores fail closed; a structured record that cannot reproduce its signed bytes must be recovered from original binary, not re-signed or normalized into a new assertion.
 
-console.log('Valid:', result.valid)
-console.log('Revoked:', result.revoked)
-console.log('Errors:', result.errors)
-console.log('Issuer:', result.issuer)
-console.log('Subject:', result.subject)
-```
+`CredentialSchema` retains its declared field validation, computed fields, canonical 32-byte certificate types, and explicit historical aliases for storage migration. Existing certifier issuance, acquisition, and wallet persistence continue to use BRC-52 operations. `CredentialIssuer.issueCertificate(subjectKey, schemaId, fields)` returns the certificate delivery data for the authenticated certify endpoint. `CredentialIssuer.issue(...)` returns `{ credential, keyringForSubject }`: deliver the encrypted subject keyring only to the authorized subject, separately from the credential graph. Issuance and revocation can perform wallet operations and require explicit application authorization; examples here do not perform them.
 
-Verification checks:
-1. W3C `@context` is present
-2. `VerifiableCredential` type is present
-3. Proof and signature are present
-4. BSV certificate data is present
-5. Revocation status (if applicable)
+The issuer's `verify(envelopeJson)` is the integrity verifier above. It never infers spent status from an absent local revocation secret. `getRevocationRecordStatus(serial)` reports local `retained` or `unknown`; this is not chain status. The handler's status endpoint reports `status: 'unknown'` alongside that local record state. Use the explicit status-source API in `@bsv/did/brc52` for disabled, unknown, current/unspent, and revoked/spent evidence under the verifier's freshness and provider policy.
 
-## Revoking a Credential
+The HTTP verification route accepts `{ credential: envelopeJson }`, with the original JSON text kept as a string inside the request. Preserve received envelope text; parsing and reserializing it can hide duplicate members. Send the body through the Web `Request` stream so the handler can reject duplicate request members and invalid UTF-8 before use. Custom framework adapters that supply only an already parsed `json()` result must establish strict request decoding themselves. Read `verification.verified`, then apply reliance policy; a successful HTTP response alone is insufficient.
 
-```typescript
-const { txid } = await issuer.revoke(cert.serialNumber)
-console.log('Revoked, txid:', txid)
-```
+The streamed verify request has a separate 256 KiB strict JSON budget, including its wrapper and escaping. Increasing `maxRequestBytes` does not increase this parser budget. Large valid envelopes can exceed this route's budget once wrapped; use the direct `issuer.verify(originalText)` or `verifyBRC52Envelope` API under the BRC-203 envelope bounds. Other issuance/certification routes retain their configured request limits.
 
-Revocation spends the hash-lock UTXO by revealing the secret. Once spent, the credential is permanently revoked on-chain.
+Selective disclosure requires explicit user permission, a chosen verifier, and BRC-100/BRC-103 authentication plus verifier-specific keyring generation. Ciphertext remains in the authenticated graph; plaintext disclosure results and verifier keyrings remain separate. Never export the master keyring or treat wallet field selection as holder authentication. This profile has no zero-knowledge or unlinkable disclosure: stable issuer/subject keys, serial, ciphertext, and outpoint can correlate presentations. Direct status queries can expose verifier interest.
 
-```typescript
-// Check revocation status
-const isRevoked = await issuer.isRevoked(cert.serialNumber)
-console.log('Is revoked:', isRevoked)
-```
-
-## Wallet-Side: Acquiring Credentials
-
-Wallets acquire credentials from remote issuers:
-
-```typescript
-const vc = await wallet.acquireCredential({
-  serverUrl: 'https://issuer.example.com',
-  schemaId: 'employee-badge',
-  fields: { name: 'Alice', email: 'alice@co.com' },
-  replaceExisting: true
-})
-```
-
-### List Credentials
-
-```typescript
-const vcs = await wallet.listCredentials({
-  certifiers: [issuerPublicKey],
-  types: [schema.getInfo().certificateTypeBase64]
-})
-
-for (const vc of vcs) {
-  console.log(vc.credentialSubject)
-}
-```
-
-### Create a Presentation
-
-Bundle credentials for sharing:
-
-```typescript
-const presentation = wallet.createPresentation(vcs)
-
-console.log('Holder:', presentation.holder)
-console.log('Credentials:', presentation.verifiableCredential.length)
-```
-
-## Server-Side Revocation Store
-
-For production servers, use `FileRevocationStore` to persist secrets to disk:
-
-```typescript
-const { FileRevocationStore } = await import('@bsv/simple/server')
-
-const issuer = await CredentialIssuer.create({
-  privateKey: key,
-  schemas: [schema.getConfig()],
-  revocation: {
-    enabled: true,
-    wallet: serverWallet.getClient(),
-    store: new FileRevocationStore('.revocation-secrets.json')
-  }
-})
-```
-
-> **Important:** Add `.revocation-secrets.json` to `.gitignore`. These secrets control credential revocation.
-
-## Complete Example
-
-```typescript
-import { createWallet, CredentialSchema, CredentialIssuer, MemoryRevocationStore } from '@bsv/simple/browser'
-
-const wallet = await createWallet()
-
-// Define schema
-const schema = new CredentialSchema({
-  id: 'age-check',
-  name: 'AgeVerification',
-  fields: [
-    { key: 'name', label: 'Name', type: 'text', required: true },
-    { key: 'over18', label: 'Over 18', type: 'checkbox', required: true }
-  ]
-})
-
-// Create issuer (in production, this runs on a server)
-const issuer = await CredentialIssuer.create({
-  privateKey: 'a1b2c3...',
-  schemas: [schema.getConfig()],
-  revocation: { enabled: false }
-})
-
-// Issue credential
-const vc = await issuer.issue(
-  wallet.getIdentityKey(),
-  'age-check',
-  { name: 'Alice', over18: 'true' }
-)
-
-// List from wallet
-const vcs = await wallet.listCredentials({
-  certifiers: [issuer.getInfo().publicKey],
-  types: [schema.getInfo().certificateTypeBase64]
-})
-
-// Create presentation
-const vp = wallet.createPresentation(vcs)
-console.log('Presentation holder:', vp.holder)
-```
+See [migration guidance](identity-credential-migration.md), [the API](../api-reference/credentials.md), and the unified repository guidance for dependency pins and implementation limits.

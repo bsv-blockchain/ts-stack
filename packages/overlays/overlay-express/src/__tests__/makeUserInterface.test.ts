@@ -50,7 +50,7 @@ describe('makeUserInterface', () => {
       const html = makeUserInterface(config)
 
       // HOST is set as a JS variable; URLs are built at runtime in the browser
-      expect(html).toContain("const HOST = 'https://custom-host.com'")
+      expect(html).toContain('const HOST = "https://custom-host.com"')
       expect(html).toContain("HOST + '/listTopicManagers'")
       expect(html).toContain('/getDocumentationForTopicManager')
     })
@@ -62,7 +62,7 @@ describe('makeUserInterface', () => {
       const html = makeUserInterface(config)
 
       expect(html).toContain('https://example.com/favicon.ico')
-      expect(html).toContain("const faviconUrl = 'https://example.com/favicon.ico'")
+      expect(html).toContain('const faviconUrl = "https://example.com/favicon.ico"')
     })
 
     it('should use custom colors', () => {
@@ -181,6 +181,44 @@ describe('makeUserInterface', () => {
 
       expect(html).toContain('handleUrlHash')
       expect(html).toContain('window.location.hash')
+    })
+
+    it('emits syntactically valid nonce-bound JavaScript with pinned CDN assets', () => {
+      const nonce = 'A'.repeat(24)
+      const html = makeUserInterface({ scriptNonce: nonce })
+      const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
+      const inlineScript = scripts[scripts.length - 1]?.[1]
+
+      expect(inlineScript).toBeDefined()
+      expect(() => new Function(inlineScript)).not.toThrow()
+      expect(html.match(new RegExp(`nonce="${nonce}"`, 'g'))).toHaveLength(3)
+      expect(html.match(/integrity="sha384-/g)).toHaveLength(3)
+      expect(html).not.toContain("import('https://cdn.jsdelivr.net")
+    })
+
+    it('keeps configuration and markdown out of executable HTML contexts', () => {
+      const html = makeUserInterface({
+        host: "';window.pwned=true;//</script>",
+        faviconUrl: '"><script>window.pwned=true</script>',
+        defaultContent: '`</script><script>window.pwned=true</script>`'
+      })
+
+      expect(html).not.toContain("const HOST = \"';window.pwned=true;//</script>\"")
+      expect(html).not.toContain('<script>window.pwned=true</script>')
+      expect(html).toContain('sanitizeRenderedHtml')
+      expect(html).toContain('data-ui-action="remove-token"')
+      expect(html).not.toMatch(/\son(?:click|keydown)=/i)
+    })
+
+    it.each([
+      'additionalStyles',
+      'backgroundColor',
+      'primaryColor',
+      'fontFamily'
+    ] as const)('rejects HTML delimiters in CSS configuration field %s', field => {
+      expect(() => makeUserInterface({
+        [field]: '</style><script>window.pwned=true</script>'
+      })).toThrow('must not contain HTML delimiters')
     })
   })
 })

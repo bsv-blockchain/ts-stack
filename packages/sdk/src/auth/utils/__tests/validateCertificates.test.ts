@@ -5,9 +5,7 @@ import { PrivateKey } from '../../../primitives/index'
 import { AuthMessage } from '../../../auth/types'
 
 let mockVerify = jest.fn(async () => await Promise.resolve(true))
-let mockDecryptFields = jest.fn(
-  async () => await Promise.resolve({ field1: 'decryptedValue1' })
-)
+let mockDecryptFields = jest.fn(async () => await Promise.resolve({ field1: 'decryptedValue1' }))
 const mockInstances: Array<{
   type: string
   serialNumber: string
@@ -50,9 +48,7 @@ describe('validateCertificates', () => {
 
     // Reset state
     mockVerify = jest.fn(async () => await Promise.resolve(true))
-    mockDecryptFields = jest.fn(
-      async () => await Promise.resolve({ field1: 'decryptedValue1' })
-    )
+    mockDecryptFields = jest.fn(async () => await Promise.resolve({ field1: 'decryptedValue1' }))
 
     verifierWallet = new ProtoWallet(new PrivateKey(1)) as unknown as WalletInterface
     message = {
@@ -74,13 +70,9 @@ describe('validateCertificates', () => {
   })
 
   it('completes without errors for valid input', async () => {
-    await expect(
-      validateCertificates(verifierWallet, message)
-    ).resolves.not.toThrow()
+    await expect(validateCertificates(verifierWallet, message)).resolves.not.toThrow()
 
-    expect(VerifiableCertificate).toHaveBeenCalledTimes(
-      message.certificates!.length
-    )
+    expect(VerifiableCertificate).toHaveBeenCalledTimes(message.certificates!.length)
     expect(mockVerify).toHaveBeenCalledTimes(message.certificates!.length)
     expect(mockDecryptFields).toHaveBeenCalledWith(verifierWallet, undefined, undefined, undefined)
   })
@@ -98,6 +90,14 @@ describe('validateCertificates', () => {
 
     await expect(validateCertificates(verifierWallet, message)).rejects.toThrow(
       'The signature for the certificate with serial number valid_serial is invalid!'
+    )
+  })
+
+  it('accepts only a literal signature-verification success', async () => {
+    mockVerify.mockResolvedValueOnce('true' as unknown as boolean)
+
+    await expect(validateCertificates(verifierWallet, message)).rejects.toThrow(
+      'signature for the certificate'
     )
   })
 
@@ -125,20 +125,38 @@ describe('validateCertificates', () => {
     ).rejects.toThrow('Certificate with type requested_type was not requested')
   })
 
-  it('decrypts fields without throwing errors', async () => {
+  it('requires a non-empty subset of the requested revealed fields', async () => {
+    const certificatesRequested = {
+      certifiers: ['valid_certifier'],
+      types: { requested_type: ['field1'] }
+    }
+
+    mockDecryptFields.mockResolvedValueOnce({})
     await expect(
-      validateCertificates(verifierWallet, message)
-    ).resolves.not.toThrow()
+      validateCertificates(verifierWallet, message, certificatesRequested)
+    ).rejects.toThrow('non-empty requested field set')
+
+    mockDecryptFields.mockResolvedValueOnce({ field1: 'value', extra: 'value' })
+    await expect(
+      validateCertificates(verifierWallet, message, certificatesRequested)
+    ).rejects.toThrow('non-empty requested field set')
+  })
+
+  it('decrypts fields without throwing errors', async () => {
+    await expect(validateCertificates(verifierWallet, message)).resolves.not.toThrow()
     for (const instance of mockInstances) {
-      expect(instance.decryptFields).toHaveBeenCalledWith(verifierWallet, undefined, undefined, undefined)
+      expect(instance.decryptFields).toHaveBeenCalledWith(
+        verifierWallet,
+        undefined,
+        undefined,
+        undefined
+      )
     }
   })
 
   it('throws an error if a field decryption fails', async () => {
     mockDecryptFields.mockRejectedValue(new Error('Decryption failed'))
-    await expect(validateCertificates(verifierWallet, message)).rejects.toThrow(
-      'Decryption failed'
-    )
+    await expect(validateCertificates(verifierWallet, message)).rejects.toThrow('Decryption failed')
   })
 
   it('handles multiple certificates properly', async () => {
@@ -154,14 +172,45 @@ describe('validateCertificates', () => {
 
     message.certificates!.push(anotherCertificate)
 
-    await expect(
-      validateCertificates(verifierWallet, message)
-    ).resolves.not.toThrow()
+    await expect(validateCertificates(verifierWallet, message)).resolves.not.toThrow()
 
     expect(VerifiableCertificate).toHaveBeenCalledTimes(2)
     expect(mockVerify).toHaveBeenCalledTimes(2)
     for (const instance of mockInstances) {
-      expect(instance.decryptFields).toHaveBeenCalledWith(verifierWallet, undefined, undefined, undefined)
+      expect(instance.decryptFields).toHaveBeenCalledWith(
+        verifierWallet,
+        undefined,
+        undefined,
+        undefined
+      )
     }
+  })
+
+  it('owns the message and policy before asynchronous verification', async () => {
+    let release!: () => void
+    let verificationStarted!: () => void
+    const verificationStartedPromise = new Promise<void>(resolve => {
+      verificationStarted = resolve
+    })
+    const releasePromise = new Promise<void>(resolve => {
+      release = resolve
+    })
+    mockVerify.mockImplementationOnce(async () => {
+      verificationStarted()
+      await releasePromise
+      return true
+    })
+    const policy = {
+      certifiers: ['valid_certifier'],
+      types: { requested_type: ['field1'] }
+    }
+
+    const validating = validateCertificates(verifierWallet, message, policy)
+    await verificationStartedPromise
+    message.identityKey = 'different_subject'
+    policy.types.requested_type = ['different_field']
+    release()
+
+    await expect(validating).resolves.toBeUndefined()
   })
 })

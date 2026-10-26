@@ -9,10 +9,12 @@ status: stable
 tags: ['spec', 'auth', 'brc-103', 'brc-31']
 ---
 
-# BRC-31 Mutual Authentication Handshake
+# BRC-103 Mutual Authentication Handshake
 
-> BRC-31 (implemented via BRC-103 `Peer` + BRC-104 HTTP transport)
-> enables cryptographic handshakes between client and server. Both parties
+> This page's historical path retains “brc-31”, but the protocol documented
+> here is BRC-103 `Peer` over the BRC-104 HTTP transport. BRC-31 Authrite is a
+> separate protocol. BRC-103 enables cryptographic handshakes between client
+> and server. Both parties
 > prove control of identity keys using signatures, and authenticated
 > application messages are signed and verified. No shared password is
 > required.
@@ -52,20 +54,38 @@ separate timestamp field.
 **Phase 1 — Initial Exchange (non-general)**
 
 1. **Client → Server** `POST /.well-known/auth` with `initialRequest` message
-   - Client's public key in `x-bsv-auth-identity-key` header
-   - Client's nonce in `x-bsv-auth-nonce` header
-   - Client signature over the nonce in `x-bsv-auth-signature` header
+   - JSON contains `version`, `messageType`, `identityKey`,
+     `initialNonce`, and `requestedCertificates`
+   - The v0.1 initial request is unsigned and uses no general-message auth headers
 
-2. **Server → Server** (validates nonce, generates its own nonce)
-   - Returns 200 with `initialResponse` message
-   - Server's public key in `x-bsv-auth-identity-key` response header
-   - Server's nonce in `x-bsv-auth-nonce` response header
-   - Server signature (covering client's nonce and server's nonce) in `x-bsv-auth-signature` header
-   - If requesting certificates: `x-bsv-auth-requested-certificates` header with certificate types
+2. **Server → Client** (validates nonce, generates its own nonce)
+   - Returns 200 with a JSON `initialResponse` message
+   - Response includes the server identity, both nonces, and a signature over
+     the nonce pair
+   - Optional certificates and certificate requests are JSON members
 
 3. **Client → Server** (if server requested certificates)
    - `POST /.well-known/auth` with certificate payload
    - Server waits up to 30 seconds; if timeout returns 408
+
+The v0.1 initial-response signature does not bind its optional certificates or
+certificate request. Built-in wallet proving encrypts revealed keys to the
+destination identity, but certificate callbacks must treat an initial sender
+identity as claimed and must not disclose plaintext or authorize side effects.
+The requested set can be modified in transit. Every authentication and
+authorization decision must therefore be based on the certificates and fields
+actually disclosed and validated, never on what the request appears to have
+asked for. Use a signed post-handshake request when request integrity itself is
+needed, while still evaluating only the resulting disclosures.
+
+`RequestedCertificateSet` is an allowlist, not a completeness assertion.
+Validation does not prove that every listed type or field was supplied.
+The protocol deliberately lets each party choose what to request, what to
+provide, and how much to disclose. The library facilitates and standardizes
+that selective revelation; it does not declare any claims sufficient at the
+application level. Applications must inspect the actual validated certificates
+and decrypted fields and terminate or constrain the session, access, or
+operation whenever they do not satisfy local policy.
 
 **Phase 2 — General Authenticated Requests**
 
@@ -82,6 +102,22 @@ After handshake succeeds, every request/response carries:
 - **Response headers** (same pattern, server signs):
   - `x-bsv-auth-identity-key`, `x-bsv-auth-nonce`, `x-bsv-auth-your-nonce`, `x-bsv-auth-request-id`, `x-bsv-auth-signature`
   - Signature covers `requestId || statusCode || headers || body`
+
+The BRC-104 v0.1 request frame signs the method, pathname, query, body, and
+only the declared header subset: non-auth `x-bsv-*`, normalized `content-type`,
+and `Authorization`. It does not sign scheme/authority (`Host`), cookies,
+forwarding headers, or arbitrary standard headers. Pin the expected authority
+at a trusted edge; never select a tenant or grant authority from omitted
+metadata; and carry required application authorization inputs in exact signed
+fields. Distinct virtual security principals should use distinct server
+identity keys. This signed subset is deliberate: application libraries often
+run inside webpages and browsers where scheme, authority, cookie, forwarding,
+and response-routing metadata is unavailable or not safely observable when the
+signature is created. The response frame likewise signs only non-auth
+`x-bsv-*` and `Authorization`, so an authenticated decision must not exist
+solely in an unsigned redirect, cookie, content type, or other standard
+response header. A valid protocol signature authenticates only the documented
+subset, not the complete browser or proxy request context.
 
 ## Key types / endpoints
 

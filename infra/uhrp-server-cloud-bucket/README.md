@@ -14,23 +14,115 @@ bucket object layouts remain compatible. Public object membership is served
 from a bounded, expiring commit index rather than reparsing the full closure on
 every request. Tune it with `CHIRP_COMMIT_CACHE_ROOTS`,
 `CHIRP_COMMIT_CACHE_OBJECTS`, and `CHIRP_COMMIT_CACHE_SECONDS`.
+Authenticated staging is bounded by atomic host-wide, per-identity,
+per-session object, and per-session byte quotas. Commits for the same root are
+serialized across instances through generation-guarded bucket locks. Tune the
+limits with `CHIRP_MAX_ACTIVE_SESSIONS`,
+`CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY`,
+`CHIRP_MAX_STAGED_OBJECTS_PER_SESSION`, and
+`CHIRP_MAX_STAGED_BYTES_PER_SESSION`; invalid or non-positive values fail
+startup.
+
+UHRP and CHIRP renewal keep the existing retention timestamp or advance it to the renewed expiry plus five minutes. Metadata updates use metageneration preconditions and bounded retries; a short extension never reduces Google Cloud Storage `customTime`.
+
+Signed ownership metadata accepts the ordinary `/cdn/<object>` location and the
+exact CHIRP root route `/chirp/v1/<root>/objects/<root>`. A CHIRP root identifier
+must equal the advertised content hash identifier; unrelated objects, query
+strings and credentials are rejected. Renewal reads the actual CHIRP root
+object, extends its committed closure and rejects an inactive root. It does not
+create or rely on a duplicate CDN copy.
+
+Renewal pricing reads that same verified storage object: ordinary advertisements
+use `cdn/<object>`, and CHIRP root advertisements use
+`chirp/v1/objects/<root>`. Both paths retain the signed-owner and current provider
+size checks; a missing root fails closed without a CDN fallback.
+
+Authenticated staged-object HEAD responses have no body, including existence
+and validation-error responses. Authentication signs the same empty bytes
+that HTTP sends, allowing clients to verify both present and absent objects
+before an upload. Other methods retain their existing JSON error responses.
+
+Authenticated staged-object PUTs parse bounded identity bytes before BRC-103
+verification. The handler stages those same verified bytes rather than rereading
+the consumed request stream. The parser is scoped to staged-object PUTs, rejects
+compressed bodies, and retains the `CHIRP_OBJECT_MAX_BODY_BYTES` ceiling
+(default 4 MiB). JSON routes, HMAC streaming `/put`, and bodyless HEAD responses
+retain their existing behavior. Use SDK 2.8.9 or later for full-size authenticated
+CHIRP chunks; its HTTP transport keeps its existing framing and response limits.
+No object, session, advertisement or persistence migration is required.
+
+## Advertisement, ownership, and upload trust
+
+The public UHRP token authenticates the host identity, content hash, HTTPS
+location, expiry, size, and host-derived locking key. Uploader identity and the
+GCS object identifier are not wire fields, so owner-only list, find, and renew
+operations additionally require locally server-signed wallet metadata bound to
+the exact token, BEEF output, and tags. Unsigned legacy metadata is not accepted
+as ownership evidence. Owner listings omit those rows and report
+`legacyAdvertisementsPending` for the current raw wallet page; `nextOffset`
+lets clients continue through older rows to verified records. Signed rows still
+fail closed on signature, source-output, selector, or tag disagreement.
+
+The four ownership/lookup tags must match signed metadata. Older insertions
+may lack descriptive name, size, and type tags; their size and type remain
+authenticated in the envelope, and present descriptive tags must agree.
+
+## Recover legacy ownership without replacing transactions
+
+The 0.2.45 operator tool can add signed metadata to an existing output without
+spending, rebroadcasting, or extending its hosting commitment. Run it with the
+service identity and private runtime configuration, first without `--apply`:
+
+```sh
+node out/src/cli/migrateLegacyAdvertisements.js
+node out/src/cli/migrateLegacyAdvertisements.js --apply
+```
+
+It verifies the token signature and host key, source output, exact configured
+location, provider ownership receipt, size, retention, generation, and streamed
+SHA-256 content before signing. A second metadata read detects generation
+races. The wallet merges the envelope into the original output and read-back
+confirms its outpoint, value, and spendable state. Lookup tags are checked
+against provider ownership; they never supply ownership authority.
+
+The scan and each stream are bounded. Summaries contain counts only. A failed
+row makes the command exit nonzero and needs private operator investigation;
+expired, invalid, missing, or changed objects must not be silently reissued or
+given new retention. Already verified records are idempotent. Keep a private
+pre-migration inventory and validate owner list/find/renew plus public lookup
+and retrieval in staging before production. Earlier images cannot manage
+legacy records without signed metadata; forward-fix recovery rather than
+rolling back verification. Public token bytes and object contents are unchanged.
+
+Paid upload capabilities are valid for at most 15 minutes and never beyond the
+purchased retention window. Their signatures bind the exact content length,
+uploader metadata, safe binary response type, attachment disposition, and a
+zero-generation precondition, preventing size substitution and URL replay to
+overwrite an object. Billable renewal size is checked against both signed
+advertisement metadata and current GCS metadata, and pricing errors fail closed.
 
 This guide walks you through deploying **UHRP Storage Server** on Google Cloud Platform (GCP) with continuous delivery via GitHub Actions. When you finish, you’ll have:
 
--   A single‑region **Cloud Storage bucket** that stores all UHRP data.
-    
--   A **Cloud Run** service that handles uploads, billing, and API requests.
+- A single‑region **Cloud Storage bucket** that stores all UHRP data.
+
+- A **Cloud Run** service that handles uploads, billing, and API requests.
 
 - A **Cloud Run** service that handles the broadcasting and advertising of your UHRP data.
-    
--   An **HTTP Load Balancer** that fronts both the bucket (static files) and Cloud Run (dynamic API) behind a custom HTTPS domain.
-    
--   A GitHub Actions workflow (`deploy.yaml`) that rebuilds and redeploys automatically whenever you push to the `master` or `production` branch.
-    
 
-> **Security note** The IAM roles in this tutorial are intentionally permissive to minimise friction. Feel free to tighten them once everything works.
+- An **HTTP Load Balancer** that fronts both the bucket (static files) and Cloud Run (dynamic API) behind a custom HTTPS domain.
 
-----------
+- The protected root `infra-release.yaml` workflow that publishes immutable,
+  scanned images for a separate operator-owned deployment process.
+
+> **Security note** This imported deployment walkthrough is historical context,
+> not authorization to grant project Owner or store service-account JSON keys.
+> Current deployments must use a reviewed protected release workflow, GitHub
+> OIDC/Google Workload Identity Federation, separate least-privilege
+> deploy/runtime/notifier identities, and Secret Manager for application
+> secrets. Do not place cloud credentials in repository secrets or generated
+> service manifests.
+
+---
 
 ## Prerequisites
 
@@ -46,286 +138,286 @@ Optional but recommended for the HTTPS front‑end (e.g. `storage.example.com`).
 **gcloud CLI**
 Only required for the few shell commands shown below. Everything else uses the Cloud Console UI.
 
-----------
+---
 
-## 1 Get the code into your GitHub
+## 1 Use the TS Stack source repository
 
-1.  **Fork** the original repository or clone and push:
-    
+1.  **Fork or clone** the TS Stack repository:
+
     ```bash
-    git clone https://github.com/bitcoin-sv/storage-server.git
-    cd storage-server
-    git remote remove origin
-    git remote add origin <your‑github‑repo‑url.git>
-    git push origin master   # or production for your mainnet branch
+    git clone https://github.com/bsv-blockchain/ts-stack.git
+    cd ts-stack/infra/uhrp-server-cloud-bucket
     ```
-    
-2.  Verify that your repo contains `.github/workflows/deploy.yaml`. All future pushes to **`master`** or **`production`** will trigger this workflow.
 
-----------
+2.  Review the root `.github/workflows/infra-release.yaml` image-release
+    workflow and the operator-owned Cloud Run deployment configuration. The
+    retired package-local setup/deploy workflows are intentionally absent.
 
-## 2 Add GitHub repository secrets
+---
 
-Before GCP resources can be provisioned, you must first create your Google Cloud Project, then create a temporary bootstrapping service account, and set up environment secrets in your GitHub repository.
+## 2 Configure federated deployment and managed secrets
 
-### 2.1 Create a Google Cloud Project and bootstrap service account
+Before provisioning, create the Google Cloud project and a Workload Identity
+Federation trust restricted to the protected repository/environment. Do not
+create downloadable service-account keys.
+
+### 2.1 Create a Google Cloud Project and deployment identities
 
 1.  **Create a new GCP project**
-    
-    -   Go to the [Google Cloud Console](https://console.cloud.google.com/).
 
-    -   In the top bar, click the **Project selector** → **New Project**.
+    - Go to the [Google Cloud Console](https://console.cloud.google.com/).
 
-    -   Give your project a name (e.g., `uhrp-storage-server`)
+    - In the top bar, click the **Project selector** → **New Project**.
 
-    -   Click **Create**.
-        
+    - Give your project a name (e.g., `uhrp-storage-server`)
+
+    - Click **Create**.
+
 2.  **Enable billing**
-    
-    -   In the left menu, open **Billing**.
 
-    -   Link the project to an existing billing account (or create one if this is your first project).
+    - In the left menu, open **Billing**.
 
-    -   Without this step, required APIs and services will not function.
-        
-3.  **Create a temporary bootstrap service account**
-    
-    -   Go to **IAM & Admin > Service Accounts > Create**.
+    - Link the project to an existing billing account (or create one if this is your first project).
 
-    -   Name it something like `uhrp-bootstrap`.
+    - Without this step, required APIs and services will not function.
 
-    -   Assign the **Owner** role.
-        > This account is only used to seed your initial secrets. Delete it afterwards.
-        
-    - On the **Keys** tab, click **Add key → JSON** and download the key file.
-        
+3.  **Create separate keyless identities**
 
-----------
+    - Bind the deployment identity through GitHub OIDC/Workload Identity
+      Federation and restrict its principal set to the reviewed repository and
+      protected deployment environment.
+    - Grant only the Artifact Registry, Cloud Run deployment, and service
+      account impersonation permissions used by the release workflow.
+    - Give the runtime object access only to its one bucket plus
+      `iam.serviceAccounts.signBlob` for short-lived signed upload URLs. Give
+      the notifier read access only to finalized objects and permission to
+      invoke the storage service.
+    - Keep bootstrap administration outside CI and remove it after provisioning.
+
+---
 
 ### 2.2 Prepare your environment file
 
 1.  From the repo root, copy the example environment file:
-    
+
     ```bash
     cp secrets/.env.example secrets/staging.env   # or prod.env for production
     ```
-    
+
 2.  Open the new file and fill in the required values for your environment.
-Refer to the inline comments in `.env.example` and update the fields as appropriate.
+    Refer to the inline comments in `.env.example` and update the fields as appropriate.
 
-| Secret | What it's for | Example |
-| -- | -- | -- |
-| **ADMIN_TOKEN** | Token required for communication between the storage-server service and the notifier service | `super‑secret‑admin‑token` |
-| **BSV_NETWORK** | Which Bitcoin SV network the server talks to | `mainnet`, `testnet`, or `ttn`/`teratestnet`|
-| **GOOGLE_PROJECT_ID** | Your GCP project ID | `my‑gcp‑project` |
-| **GCP_BUCKET_NAME** | The name for the Storage Bucket that will be created during setup | `my-uhrp-bucket` |
-| **GCR_HOST** | Hostname used within Google Cloud's Artifact Registry for your selected region | `us-west1-docker.pkg.dev` |
-| **GCR_IMAGE_NAME** | Repository and image name (repo/image) for the Artifact Repository | `uhrp/uhrp-storage` |
-| **NODE_ENV** | Node environment string passed to the app | `staging` or `production` |
-| **HOSTING_DOMAIN** | Public HTTPS domain for your load balancer. You will need access to register an A record for this domain | `storage.example.com` |
-| **SERVER_PRIVATE_KEY** | 32‑byte hex private key used to sign on‑chain ops | `your-server-private-key` |
-| **MIN_HOSTING_MINUTES** | Minimum expiration period for uploaded files | `15` |
-| **PRICE_PER_GB_MO** | Monthly price (USD) for user per GB stored | `0.03` |
-| **WALLET_STORAGE_URL** | URL of the Toolbox Wallet storage server | `https://staging-storage.babbage.systems` |
-| **HTTP_PORT** | Port your app listens on inside the container | `8080` |
-| **TRUST_PROXY_HOPS** | Optional trusted reverse-proxy hop count (0–10); omit for direct-socket IPs | `1` |
-| **UHRP_PRE_AUTH_RATE_LIMIT_MAX** | Optional per-IP requests per pre-auth window (default 300/minute) | `300` |
-| **UHRP_PRE_AUTH_RATE_LIMIT_WINDOW_MS** | Optional pre-auth window in milliseconds | `60000` |
-| **UHRP_AUTHENTICATED_RATE_LIMIT_MAX** | Optional per-identity requests per authenticated window (default 1,000/minute) | `1000` |
-| **UHRP_AUTHENTICATED_RATE_LIMIT_WINDOW_MS** | Optional authenticated window in milliseconds | `60000` |
-| **DOCKERHUB_USERNAME** | *OPTIONAL* Docker account username for GitHub Actions | `my-docker-username` |
-| **DOCKERHUB_PASSWORD** | *OPTIONAL* Docker account password | `my-docker-password` |
+| Secret                                      | What it's for                                                                                            | Example                                      |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **ADMIN_TOKEN**                             | Token required for communication between the storage-server service and the notifier service             | `super‑secret‑admin‑token`                   |
+| **BSV_NETWORK**                             | Which Bitcoin SV network the server talks to                                                             | `mainnet`, `testnet`, or `ttn`/`teratestnet` |
+| **GOOGLE_PROJECT_ID**                       | Your GCP project ID                                                                                      | `my‑gcp‑project`                             |
+| **GCP_BUCKET_NAME**                         | The name for the Storage Bucket that will be created during setup                                        | `my-uhrp-bucket`                             |
+| **GCR_HOST**                                | Hostname used within Google Cloud's Artifact Registry for your selected region                           | `us-west1-docker.pkg.dev`                    |
+| **GCR_IMAGE_NAME**                          | Repository and image name (repo/image) for the Artifact Repository                                       | `uhrp/uhrp-storage`                          |
+| **NODE_ENV**                                | Node environment string passed to the app                                                                | `staging` or `production`                    |
+| **HOSTING_DOMAIN**                          | Public HTTPS domain for your load balancer. You will need access to register an A record for this domain | `storage.example.com`                        |
+| **SERVER_PRIVATE_KEY**                      | 32‑byte hex private key used to sign on‑chain ops                                                        | `your-server-private-key`                    |
+| **MIN_HOSTING_MINUTES**                     | Minimum expiration period for uploaded files                                                             | `15`                                         |
+| **PRICE_PER_GB_MO**                         | Canonical positive-decimal monthly price (USD) per GB stored, up to `1000000`                            | `0.03`                                       |
+| **WALLET_STORAGE_URL**                      | URL of the Toolbox Wallet storage server                                                                 | `https://staging-storage.babbage.systems`    |
+| **HTTP_PORT**                               | Port your app listens on inside the container                                                            | `8080`                                       |
+| **TRUST_PROXY_HOPS**                        | Optional trusted reverse-proxy hop count (0–10); omit for direct-socket IPs                              | `1`                                          |
+| **UHRP_PRE_AUTH_RATE_LIMIT_MAX**            | Optional per-IP requests per pre-auth window (default 300/minute)                                        | `300`                                        |
+| **UHRP_PRE_AUTH_RATE_LIMIT_WINDOW_MS**      | Optional pre-auth window in milliseconds                                                                 | `60000`                                      |
+| **UHRP_AUTHENTICATED_RATE_LIMIT_MAX**       | Optional per-identity requests per authenticated window (default 1,000/minute)                           | `1000`                                       |
+| **UHRP_AUTHENTICATED_RATE_LIMIT_WINDOW_MS** | Optional authenticated window in milliseconds                                                            | `60000`                                      |
+| **CHIRP_MAX_ACTIVE_SESSIONS**               | Optional host-wide active CHIRP staging-session ceiling                                                  | `1024`                                       |
+| **CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY**  | Optional active staging-session ceiling per authenticated identity                                       | `8`                                          |
+| **CHIRP_MAX_STAGED_OBJECTS_PER_SESSION**    | Optional staged-object ceiling for one upload session                                                    | `4096`                                       |
+| **CHIRP_MAX_STAGED_BYTES_PER_SESSION**      | Optional staged-byte ceiling for one upload session                                                      | `17179869184`                                |
+| **DOCKERHUB_USERNAME**                      | _OPTIONAL_ Docker account username for GitHub Actions                                                    | `my-docker-username`                         |
+| **DOCKERHUB_PASSWORD**                      | _OPTIONAL_ Docker account password                                                                       | `my-docker-password`                         |
 
-> You don’t need to fill in `GCP_STORAGE_CREDS` or the `GCR_PUSH_KEY` yet. These will be generated later when you create Runtime and Deployer service accounts.
+> Cloud Run should use Application Default Credentials from its bound runtime
+> service account. `GCP_STORAGE_CREDS`, `GCR_PUSH_KEY`, and `GCP_BOOTSTRAP_KEY`
+> are legacy settings and must not be populated in Cloud Run or CI.
 
 Invalid or unbounded rate-limit/proxy values fail startup. Forwarding headers
 remain ignored unless `TRUST_PROXY_HOPS` is explicitly configured. The
 in-memory store is per process; replicated deployments must enforce an
 aggregate policy at their trusted ingress until a shared store is configured.
 
-----------
+---
 
-### 2.3 Push secrets into GitHub
+### 2.3 Configure settings and managed secrets
 
-After setting the .env variables, run the sync-secrets script with your chosen environment.
+Put non-secret deployment settings in the protected environment. Store
+`ADMIN_TOKEN`, `SERVER_PRIVATE_KEY`, and wallet credentials in Google Secret
+Manager and mount/reference them at runtime. The legacy `sync-secrets` scripts
+must not be used to upload long-lived Google credentials.
 
-```bash
-npm run secrets:staging   # or npm run secrets:prod
-```
+---
 
-This will read `staging.env` or `prod.env` and push the values into your GitHub Actions secrets automatically.
+## 3 Provision through operator-owned infrastructure
 
-----------
-
-### 2.4 Verify secrets
-
-Go to **GitHub → Settings → Secrets and variables → Actions** and confirm that all variables from your env file are now present under your repository.
-
-----------
-
-### 2.5 Add the bootstrap key manually
-
-In addition to syncing secrets from your `.env` file, you must also add the **bootstrap service account key** to your repository manually:
-
-1.  Open the JSON file you downloaded when creating the bootstrap service account.
-    
-2.  Copy the **entire file contents** (including `{` and `}`) into your clipboard.
-    
-3.  Go to **GitHub → Settings → Secrets and variables → Actions → New repository secret**.
-    
-4.  Name the secret `GCP_BOOTSTRAP_KEY`
-        
-5.  Paste the raw JSON string as the value and click **Save**.
-
-----------
-
-## 3 Understand the GitHub setup workflow
-
-The **Setup GCP** workflow (`.github/workflows/setup.yaml`) automates the initial provisioning of Google Cloud resources. When triggered, it performs the following:
+The historical package-local `setup.yaml` workflow was retired because it used
+broad static credentials. Provision these resources through reviewed,
+operator-owned infrastructure as code:
 
 1.  **Enable required APIs**
     All required GCP services (Cloud Run, Eventarc, Pub/Sub, Artifact Registry, etc.) are enabled automatically.
-    
+
 2.  **Create a Google Cloud Storage bucket**  
     A single-region bucket is created with **Autoclass enabled** and **soft-delete disabled**, using the name provided in your `.env` file.  
     It also applies the CORS configuration from `bucket-cors-config.json`.
-    
+
 3.  **Set up IAM accounts**
-    
+
     - Grants Eventarc and Pub/Sub the project bindings they require.
-        
+
     - Creates two service accounts:
-        
-        - **Deployer** (used by GitHub Actions to build & deploy).
-            
-        - **Runtime** (used by Cloud Run to access the bucket).
-            
+
+      - **Deployer** (used by GitHub Actions to build & deploy).
+
+      - **Runtime** (used by Cloud Run to access the bucket).
+
 4.  **Create an Artifact Registry repository**  
     A regional Docker repository is created for your container images.
-    
-----------
 
-### 3.1 Run the Setup GCP workflow
+---
 
-Finally, go to **GitHub → Actions → Setup GCP**, choose your **environment** (`staging` or `prod`) and specify the **region** (e.g., `us-west1`).
+### 3.1 Run the reviewed provisioning workflow
 
-When the workflow completes successfully, your project will have all required GCP resources and secrets in place. You can now proceed to deploy the server normally.
+Use the environment-specific operator workflow and verify its proposed IAM,
+bucket, Eventarc, Artifact Registry, load-balancer, and Secret Manager changes
+before applying. There is no supported package-local bootstrap action.
 
-### 3.2 Generate keys and update your env file
+### 3.2 Verify keyless identities
 
-After the workflow finishes:
+After provisioning, verify that the deploy workflow exchanges GitHub's OIDC
+token for a short-lived Google credential, the runtime uses its attached
+service account through Application Default Credentials, and neither identity
+has a user-managed key. Verify the runtime bucket and `signBlob` grants and the
+notifier's bucket-read/invoker grants independently.
 
-1.  Go to **IAM & Admin > Service Accounts**, select both the **Deployer** and **Runtime** accounts, and generate a **JSON key** for each.
-    
-2.  Paste the raw JSON for each into your env file:
-    
-| Secret | What it's for | Example |
-| -- | -- | -- |
-| **GCP_STORAGE_CREDS** | JSON Key for the **Runtime** service account that Cloud Run uses to access the bucket | `{ "type": "service_account", ... "compute@developer.gserviceaccount.com" ... }` |
-| **GCR_PUSH_KEY** | JSON Key for the **Deployer** service account that is used by GitHub Action to deploy the project | `{ "type": "service_account", ... "iam.gserviceaccount.com" ... }` |
+---
 
-3.  Re-run the secrets sync for your environment:
-    
-    ```bash
-    npm run secrets:staging # or npm run secrets:prod
-    ```
-4. The bootstrap service account is no longer needed. Remove it from both the Google Cloud Project IAM Service Accounts list and the GitHub Repository Secrets list.
+## 4 Understand release and deployment separation
 
-----------
+The protected root `infra-release.yaml` workflow will build, scan, attest, sign,
+and publish an immutable Linux/amd64 image. The separate operator deployment
+must:
 
+1.  Authenticate to GCP through the protected Workload Identity Federation
+    provider and `GOOGLE_PROJECT_ID`; no JSON key is used.
 
-## 4 Understand the GitHub Actions workflow
+2.  Select the verified image by digest rather than a mutable branch tag.
 
-`deploy.yaml` will:
+3.  Configure non-secret values and Secret Manager references without
+    materializing secret values into a generated manifest.
 
-1.  Authenticate to GCP using `GCR_PUSH_KEY` and `GOOGLE_PROJECT_ID`.
-    
-2.  Build & push the Docker image `<GCR_HOST>/<PROJECT>/<IMAGE_NAME>:branch‑sha`.
-    
-3.  Generate a `service.<branch>.yaml` manifest with all environment variables.
-    
 4.  Deploy/replace the Cloud Run service in the bucket’s region.
-    
-5.  Deploy the notifier Cloud Run service.
-    
 
-Every push to the **`master`** branch triggers the staging deployment. A push to **`production`** does the same but reads only the production secrets.
+5.  Deploy the notifier Cloud Run function on Node.js 24, matching its package
+    runtime contract. The release sync includes its separate manifest and npm
+    lockfile, so deploy the reviewed notifier source with the synchronized SDK
+    floor. Its advertisement requests use `Authorization: Bearer <ADMIN_TOKEN>`;
+    sending the token only in a JSON body is unsupported. Validate the notifier
+    against the staging server before promoting the same source to production.
 
-----------
+Source pushes do not implicitly authorize a Cloud Run deployment. Promotion is
+an explicit operator-owned action against a verified image digest.
 
-## 5 Trigger the first deployment
+---
 
-1.  Commit any change and push to `master` or `production`.
-    
-2.  Watch **GitHub > Actions** → _Deployment_ run. Green check = success.
-    
-3.  In GCP **Cloud Run > Services**, verify a new service appears in your chosen region. Click its URL to confirm the server responds.
-    
-----------
+## 5 Validate the first deployment
+
+1. Publish and verify the image through the protected root release workflow.
+2. Promote the exact digest with the operator-owned deployment system.
+3. Verify Cloud Run uses the intended runtime identity, Secret Manager refs,
+   internal/load-balancer ingress policy, and zero user-managed service-account
+   keys.
+4. Exercise health/readiness, paid size-bound upload, public retrieval,
+   owner-scoped list/find, renewal, advertisement, and notifier failure paths.
+
+---
 
 ## 6 Create an HTTPS load balancer
 
 ### 6.1 Frontend configuration
 
-| Setting | Value |
-| -- | -- |
-| **Protocol** | HTTPS |
-| **IP version** | IPv4 |
-| **IP address** | **Create a new static IP** (e.g., `staging-uhrp-ingress-ip`)|
-| **Port** | 443 | 
+| Setting         | Value                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------ |
+| **Protocol**    | HTTPS                                                                                      |
+| **IP version**  | IPv4                                                                                       |
+| **IP address**  | **Create a new static IP** (e.g., `staging-uhrp-ingress-ip`)                               |
+| **Port**        | 443                                                                                        |
 | **Certificate** | **Create new → Google‑managed** (enter your `HOSTING_DOMAIN`, e.g., `storage.example.com`) |
-| **Redirect** | Enable **HTTP → HTTPS** redirect |
+| **Redirect**    | Enable **HTTP → HTTPS** redirect                                                           |
 
 ### 6.2 Backend configuration
 
 #### 6.2.1 Backend Service → Cloud Run
-| Field | Value |
-| -- | -- |
-| **Backend type** | Serverless network endpoint group (SNEG) |
-| **Serverless network endpoint groups** | Create new |
-| **Cloud Run region** | Same region as your bucket |
-| **Cloud Run service** | Select the service deployed by GitHub Actions (the main storage service, **not** the notifier) |
-| **Cloud CDN** | **Disabled** |
-| **Security policy** | **Default** |
+
+| Field                                  | Value                                                                                          |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Backend type**                       | Serverless network endpoint group (SNEG)                                                       |
+| **Serverless network endpoint groups** | Create new                                                                                     |
+| **Cloud Run region**                   | Same region as your bucket                                                                     |
+| **Cloud Run service**                  | Select the service deployed by GitHub Actions (the main storage service, **not** the notifier) |
+| **Cloud CDN**                          | **Disabled**                                                                                   |
+| **Security policy**                    | **Default**                                                                                    |
 
 Save to create the backend service (e.g., `uhrp-backend-service`).
 
 #### 6.2.2 Backend **bucket** → Cloud Storage
-| Field | Value |
-| -- | -- |
-| **Bucket** | Your previously created bucket  |
-| **Cloud CDN** | **Enabled** (leave defaults) |
+
+| Field         | Value                          |
+| ------------- | ------------------------------ |
+| **Bucket**    | Your previously created bucket |
+| **Cloud CDN** | **Enabled** (leave defaults)   |
 
 ### 6.3 Host & path rules
 
 Add a rule that routes CDN requests to the bucket and everything else to Cloud Run:
 
-| Host | Path | Backend
-| -- | -- | -- |
-| `*` | `/cdn/*` | **Backend bucket** |
+| Host | Path     | Backend            |
+| ---- | -------- | ------------------ |
+| `*`  | `/cdn/*` | **Backend bucket** |
 
 ### 6.4 Create and test
 
 Click **Create** and wait a few minutes. Then:
 
 1.  Create an **A record** pointing your hosting domain to the load‑balancer IP (This may take a few hours).
-    
+
 2.  Wait for DNS propagation. The Google‑managed certificate will turn **Active** automatically.
-    
-3.  Test: Go to https://uhrp-ui.bapp.dev/ and test uploading and downloading with your hosting domain. 
 
-Everything is now live, secure, and fronted by a global HTTPS load balancer.
+3.  Test: Go to https://uhrp-ui.bapp.dev/ and test uploading and downloading with your hosting domain.
 
-----------
+The service is ready for traffic only after the IAM, secret, upload-binding,
+route, and failure-path checks above pass.
+
+---
 
 ## 7 Next steps & hardening
 
--   Restrict Cloud Run to accept traffic **only** from the load balancer’s identity instead of `allUsers`.
-    
--   Replace broad roles with narrower ones (e.g., Storage Object Viewer instead of Admin). Be sure to update the bucket IAM accordingly.
-        
--   Set up monitoring & alerts in **Cloud Monitoring**.
-    
-----------
+- Restrict Cloud Run to accept traffic **only** from the load balancer’s identity instead of `allUsers`.
+
+- Replace broad roles with narrower ones (e.g., Storage Object Viewer instead of Admin). Be sure to update the bucket IAM accordingly.
+
+- Set up monitoring & alerts in **Cloud Monitoring**.
+
+---
 
 © 2025 – Feel free to adapt, improve, and PR!
+
+Advertisement, owner metadata and renewal operations use the same `GCP_STORAGE_CREDS`/`GCP_PROJECT_ID` identity as signed uploads. When credentials are explicitly configured, those operations must not fall back to the runtime metadata server. Unset credentials retain ADC for installations that intentionally use a runtime service account. Malformed configured credentials fail without logging their contents.
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

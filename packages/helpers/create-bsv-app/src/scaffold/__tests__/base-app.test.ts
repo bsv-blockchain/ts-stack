@@ -2,13 +2,15 @@ import { describe, expect, test, beforeEach, afterEach } from '@jest/globals'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import ts from 'typescript'
 import {
   assembleBaseFile,
   assembleAndWrite,
   bsvImport,
   newBuilder,
   MAIN_TEMPLATE,
-  APP_TEMPLATE
+  APP_TEMPLATE,
+  serverConfig
 } from '../base-app.js'
 
 const CTX = {
@@ -20,6 +22,18 @@ const CTX = {
 }
 
 describe('assembleBaseFile', () => {
+  test('generated server configuration is syntactically valid', () => {
+    const result = ts.transpileModule(serverConfig(CTX), {
+      fileName: 'config.ts',
+      reportDiagnostics: true,
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
+    })
+    expect(
+      (result.diagnostics ?? []).map(diagnostic =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')
+      )
+    ).toEqual([])
+  })
   test('fills imports + wrap, removes empty markers', () => {
     const b = newBuilder()
     b.main.imports.push("import { WalletProviders } from './bsv/WalletProviders'")
@@ -119,6 +133,7 @@ describe('assembleAndWrite', () => {
     expect(serverIndex).toContain("app.get('/api/identity'")
     expect(serverIndex).toContain('getPublicKey({ identityKey: true })')
     expect(serverIndex).toContain('cors({ origin: CLIENT_ORIGIN })')
+    expect(serverIndex).toContain('CORS controls browser sharing only')
     // raw http server + setup slot so capabilities can attach a WS upgrade, then listen on it
     expect(serverIndex).toContain('const server = http.createServer(app)')
     expect(serverIndex).toContain('attachWs(server)')
@@ -132,6 +147,10 @@ describe('assembleAndWrite', () => {
     const cfg = readFileSync(join(dir, 'server/src/bsv/config.ts'), 'utf8')
     expect(cfg).toContain('SERVER_PRIVATE_KEY')
     expect(cfg).toContain('CLIENT_ORIGIN')
+    expect(cfg).toContain('SERVER_PRIVATE_KEY is required in production')
+    expect(cfg).toContain('CLIENT_ORIGIN is required in production')
+    expect(cfg).toContain('PORT must be an integer from 1 to 65535')
+    expect(cfg).toContain('credential-free HTTPS')
     expect(r.client).toEqual(
       expect.arrayContaining(['src/main.tsx', 'src/App.tsx', 'src/bsv/Home.tsx'])
     )

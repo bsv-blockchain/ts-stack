@@ -53,7 +53,12 @@ export interface UnprovenAppliedTransactionCandidate {
   txid: string
   topic: string
   firstSeenHeight?: number
-  outputs: Array<{ txid: string, outputIndex: number }>
+  outputs: Array<{ txid: string; outputIndex: number }>
+}
+
+export interface UnprovenQueryLimits {
+  maxCandidates: number
+  maxOutputs: number
 }
 
 /**
@@ -77,7 +82,13 @@ export interface Storage {
    * @param spent — Whether the output must be spent to be returned (optional)
    * @param includeBEEF — Whether to include the BEEF data for the output (optional)
    */
-  findOutput: (txid: string, outputIndex: number, topic?: string, spent?: boolean, includeBEEF?: boolean) => Promise<Output | null>
+  findOutput: (
+    txid: string,
+    outputIndex: number,
+    topic?: string,
+    spent?: boolean,
+    includeBEEF?: boolean
+  ) => Promise<Output | null>
 
   /**
    * Finds multiple outputs from storage by txid/output index pairs.
@@ -86,7 +97,7 @@ export interface Storage {
    * @param includeBEEF — Whether to include the BEEF data for the outputs (optional)
    */
   findOutputsByOutpoints?: (
-    outpoints: Array<{ txid: string, outputIndex: number }>,
+    outpoints: Array<{ txid: string; outputIndex: number }>,
     includeBEEF?: boolean
   ) => Promise<Output[]>
 
@@ -95,7 +106,11 @@ export interface Storage {
    * @param txid — TXID of the outputs to find
    * @param includeBEEF — Whether to include the BEEF data for the outputs (optional)
    */
-  findOutputsForTransaction: (txid: string, includeBEEF?: boolean) => Promise<Output[]>
+  findOutputsForTransaction: (
+    txid: string,
+    includeBEEF?: boolean,
+    limit?: number
+  ) => Promise<Output[]>
 
   /**
    * Finds current UTXOs that have been admitted into a given topic
@@ -105,7 +120,12 @@ export interface Storage {
    * @param includeBEEF — Whether to include the BEEF data for the outputs (optional)
    * @returns A promise that resolves to an array of matching UTXOs.
    */
-  findUTXOsForTopic: (topic: string, since?: number, limit?: number, includeBEEF?: boolean) => Promise<Output[]>
+  findUTXOsForTopic: (
+    topic: string,
+    since?: number,
+    limit?: number,
+    includeBEEF?: boolean
+  ) => Promise<Output[]>
 
   /**
    * Deletes an output from storage
@@ -116,24 +136,38 @@ export interface Storage {
   deleteOutput: (txid: string, outputIndex: number, topic: string) => Promise<void>
 
   /**
-  * Updates a UTXO as spent
-  * @param txid — TXID of the output to update
-  * @param outputIndex — Index of the output to update
-  * @param topic — Topic in which the output should be updated
-  */
-  markUTXOAsSpent: (txid: string, outputIndex: number, topic: string) => Promise<void>
+   * Updates a UTXO as spent
+   * @param txid — TXID of the output to update
+   * @param outputIndex — Index of the output to update
+   * @param topic — Topic in which the output should be updated
+   * @param spendingTxid — Optional transaction claiming the spend. Repeating
+   * the same claim is idempotent; a different spender must still fail.
+   * @throws If the topical output does not exist or was spent by a different
+   * transaction. Storage implementations must make this check and update atomic.
+   */
+  markUTXOAsSpent: (
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    spendingTxid?: string
+  ) => Promise<void>
 
   /**
-  * Updates which outputs are consumed by this output
-  * @param txid — TXID of the output to update
-  * @param outputIndex — Index of the output to update
-  * @param topic — Topic in which the output should be updated
-  * @param consumedBy — The new set of outputs consumed by this output
-  */
-  updateConsumedBy: (txid: string, outputIndex: number, topic: string, consumedBy: Array<{
-    txid: string
-    outputIndex: number
-  }>) => Promise<void>
+   * Updates which outputs are consumed by this output
+   * @param txid — TXID of the output to update
+   * @param outputIndex — Index of the output to update
+   * @param topic — Topic in which the output should be updated
+   * @param consumedBy — The new set of outputs consumed by this output
+   */
+  updateConsumedBy: (
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    consumedBy: Array<{
+      txid: string
+      outputIndex: number
+    }>
+  ) => Promise<void>
 
   /**
    * Updates the beef data for a transaction
@@ -149,7 +183,12 @@ export interface Storage {
    * @param topic— Topic in which the output should be updated
    * @param blockHeight - height of the block the transaction associated with this output was included in
    */
-  updateOutputBlockHeight?: (txid: string, outputIndex: number, topic: string, blockHeight: number) => Promise<void>
+  updateOutputBlockHeight?: (
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    blockHeight: number
+  ) => Promise<void>
 
   /**
    * Upserts transaction-level data used for compact BEEF, raw-tx BASM fetches,
@@ -178,7 +217,12 @@ export interface Storage {
   /**
    * Returns proven topic transactions admitted in one block, in canonical block order.
    */
-  findAdmittedTransactionsForBlock?: (topic: string, blockHeight: number, blockHash?: string) => Promise<AdmittedTxRef[]>
+  findAdmittedTransactionsForBlock?: (
+    topic: string,
+    blockHeight: number,
+    blockHash?: string,
+    limit?: number
+  ) => Promise<AdmittedTxRef[]>
 
   /**
    * Persists or replaces a topic block anchor for one height.
@@ -188,12 +232,21 @@ export interface Storage {
   /**
    * Returns one topic block anchor.
    */
-  findTopicBlockAnchor?: (topic: string, blockHeight: number, blockHash?: string) => Promise<TopicBlockAnchor | undefined>
+  findTopicBlockAnchor?: (
+    topic: string,
+    blockHeight: number,
+    blockHash?: string
+  ) => Promise<TopicBlockAnchor | undefined>
 
   /**
    * Returns topic block anchors across a closed height range.
    */
-  findTopicBlockAnchors?: (topic: string, fromHeight: number, toHeight: number) => Promise<TopicBlockAnchor[]>
+  findTopicBlockAnchors?: (
+    topic: string,
+    fromHeight: number,
+    toHeight: number,
+    limit?: number
+  ) => Promise<TopicBlockAnchor[]>
 
   /**
    * Returns the latest known topic anchor tip.
@@ -208,19 +261,25 @@ export interface Storage {
   /**
    * Returns direct Merkle paths for the requested txids.
    */
-  findTransactionMerklePaths?: (txids: string[]) => Promise<Array<{
-    txid: string
-    merklePath: string
-    blockHeight?: number
-    blockHash?: string
-    blockIndex?: number
-    merkleRoot?: string
-  }>>
+  findTransactionMerklePaths?: (txids: string[]) => Promise<
+    Array<{
+      txid: string
+      merklePath: string
+      blockHeight?: number
+      blockHash?: string
+      blockIndex?: number
+      merkleRoot?: string
+    }>
+  >
 
   /**
    * Finds topic-applied transactions with no direct proof old enough to evict.
    */
-  findUnprovenAppliedTransactions?: (cutoffHeight: number, topic?: string) => Promise<UnprovenAppliedTransactionCandidate[]>
+  findUnprovenAppliedTransactions?: (
+    cutoffHeight: number,
+    topic?: string,
+    limits?: UnprovenQueryLimits
+  ) => Promise<UnprovenAppliedTransactionCandidate[]>
 
   /**
    * Deletes a topic-applied transaction record.
@@ -231,13 +290,29 @@ export interface Storage {
    * Returns proven topic-applied transactions whose proof anchors to the given
    * block hash. Used to demote admissions when that block is reorged out.
    */
-  findProvenAppliedTransactionsByBlockHash?: (blockHash: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number }>>
+  findProvenAppliedTransactionsByBlockHash?: (
+    blockHash: string,
+    limit?: number
+  ) => Promise<Array<{ txid: string; topic: string; blockHeight: number }>>
 
   /**
    * Returns proven topic-applied transactions in a closed block-height range,
    * including the proof's block hash and merkle root for revalidation sweeps.
    */
-  findProvenAppliedTransactionsInRange?: (fromHeight: number, toHeight: number, topic?: string) => Promise<Array<{ txid: string, topic: string, blockHeight: number, blockHash?: string, merkleRoot?: string }>>
+  findProvenAppliedTransactionsInRange?: (
+    fromHeight: number,
+    toHeight: number,
+    topic?: string,
+    limit?: number
+  ) => Promise<
+    Array<{
+      txid: string
+      topic: string
+      blockHeight: number
+      blockHash?: string
+      merkleRoot?: string
+    }>
+  >
 
   /**
    * Demotes a proven applied transaction back to unproven: clears the block

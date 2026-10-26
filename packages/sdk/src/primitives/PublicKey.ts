@@ -1,5 +1,5 @@
 import Point from './Point.js'
-import PrivateKey from './PrivateKey.js'
+import type PrivateKey from './PrivateKey.js'
 import Curve from './Curve.js'
 import { verify } from './ECDSA.js'
 import BigNumber from './BigNumber.js'

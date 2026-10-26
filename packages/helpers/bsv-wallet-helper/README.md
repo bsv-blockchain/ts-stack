@@ -173,7 +173,7 @@ await new TransactionBuilder(buyerWallet, 'Purchase listing')
   .build()
 ```
 
-📖 See the OrdLock section in **[TransactionBuilder documentation](./docs/Transaction-builder.md)** for the mechanics and required output ordering.
+📖 See the OrdLock section in **[TransactionBuilder documentation](./docs/transaction-builder.md)** for the mechanics and required output ordering.
 
 **Note:** For wallet-compatible multisig scripts, see [`@bsv/templates`](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates).
 
@@ -272,11 +272,20 @@ const unlockingTemplate = p2pkh.unlock({
 
 **Why?** Each set of derivation parameters produces a different private key from the seed key -> different public key. The unlocking signature must match the exact public key hash used in the locking script.
 
+`counterparty` scopes a bilateral derivation; it does not transfer key
+ownership to that peer. Wallet-backed locking and unlocking request the local
+side of the scoped derivation (`forSelf: true`). Persist the counterparty
+identity with the other derivation parameters, but treat the resulting key as
+locally controlled.
+
 ### Best Practices
 
 1. **Store derivation parameters** alongside the locking script
 2. **Use the same parameters** when unlocking
 3. **Or use direct public key** for both lock and unlock if not using wallet derivation
+4. **Preserve authenticated prevout context**: if explicit source metadata and
+   an embedded source transaction are both present, their transaction ID,
+   output index, satoshi amount, and locking script must agree exactly
 
 ```typescript
 // Recommended: Store params with your UTXO

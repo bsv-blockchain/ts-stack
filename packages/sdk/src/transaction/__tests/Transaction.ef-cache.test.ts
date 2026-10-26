@@ -13,15 +13,28 @@ async function buildTransaction (): Promise<Transaction> {
 }
 
 describe('Transaction EF serialization cache', () => {
+  it('does not expose its memoized raw transaction bytes', async () => {
+    const tx = await buildTransaction()
+    const returned = tx.toUint8Array()
+    const canonical = returned.slice()
+    const expectedTxid = Transaction.fromBinary(canonical).id('hex')
+
+    returned[0] ^= 0xff
+
+    expect(tx.toUint8Array()).toEqual(canonical)
+    expect(tx.id('hex')).toBe(expectedTxid)
+  })
+
   it('memoizes typed EF bytes and retains number-array compatibility', async () => {
     const tx = await buildTransaction()
     const first = tx.toEFBinary()
-    expect(tx.toEFBinary()).toBe(first)
-    expect(tx.toEFUint8Array()).toBe(first)
+    expect(tx.toEFBinary()).not.toBe(first)
+    expect(tx.toEFBinary()).toEqual(first)
+    expect(tx.toEFUint8Array()).not.toBe(first)
+    expect(tx.toEFUint8Array()).toEqual(first)
     expect(tx.toEF()).toEqual(Array.from(first))
-    const copy = first.slice()
-    copy[0] ^= 0xff
-    expect(tx.toEFBinary()[0]).not.toBe(copy[0])
+    first[0] ^= 0xff
+    expect(tx.toEFBinary()[0]).not.toBe(first[0])
   })
 
   it('invalidates when a referenced source output changes', async () => {

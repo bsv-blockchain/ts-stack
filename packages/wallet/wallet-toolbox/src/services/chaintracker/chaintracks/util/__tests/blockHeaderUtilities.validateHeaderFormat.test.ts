@@ -1,5 +1,5 @@
 import { BlockHeader } from '../../../../../sdk/WalletServices.interfaces'
-import { validateHeaderFormat } from '../blockHeaderUtilities'
+import { validateBaseBlockHeaderFormat, validateHeaderFormat } from '../blockHeaderUtilities'
 
 function makeHeader(): BlockHeader {
   return {
@@ -37,5 +37,32 @@ describe('validateHeaderFormat integer boundaries', () => {
     const header = makeHeader()
     header.previousHash = '00'
     expect(() => validateHeaderFormat(header)).toThrow('Header previousHash must be 32 hex bytes.')
+  })
+
+  it('rejects non-hex hashes and non-exact records before serialization', () => {
+    const invalidHex = makeHeader()
+    invalidHex.previousHash = 'zz'.repeat(32)
+    expect(() => validateHeaderFormat(invalidHex)).toThrow('previousHash must be 32 hex bytes')
+
+    const extra = { ...makeHeader(), constructor: 'attacker-controlled' }
+    expect(() => validateHeaderFormat(extra)).toThrow('exactly the required data properties')
+  })
+
+  it('rejects accessor-backed base headers without invoking the accessor', () => {
+    const getter = jest.fn(() => 1)
+    const header = makeHeader()
+    const base = Object.defineProperty(
+      {
+        previousHash: header.previousHash,
+        merkleRoot: header.merkleRoot,
+        time: header.time,
+        bits: header.bits,
+        nonce: header.nonce
+      },
+      'version',
+      { enumerable: true, get: getter }
+    )
+    expect(() => validateBaseBlockHeaderFormat(base as never)).toThrow('exactly the required data properties')
+    expect(getter).not.toHaveBeenCalled()
   })
 })

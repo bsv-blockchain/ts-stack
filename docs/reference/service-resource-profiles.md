@@ -3,8 +3,8 @@ id: service-resource-profiles
 title: 'Service Resource Profiles, Scaling, and Message Box Economics'
 kind: reference
 version: '1.0.0'
-last_updated: '2026-08-10'
-last_verified: '2026-09-10'
+last_updated: '2026-09-21'
+last_verified: '2026-09-21'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, resource-safety, scaling, message-box, brc-105]
@@ -169,7 +169,11 @@ layer.
 Legacy WebSocket sends remain available when monetization is disabled. On a
 monetized server they receive `ERR_PAYMENT_REQUIRES_AUTHFETCH`, which makes the
 Message Box Client immediately use its existing AuthFetch HTTP fallback. Live
-sends are independently bounded by
+sockets require canonical room/message fields and are independently bounded by
+`MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS`,
+`MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS_PER_IDENTITY`,
+`MESSAGE_BOX_WEBSOCKET_MAX_ROOMS_PER_CONNECTION`,
+`MESSAGE_BOX_WEBSOCKET_CONTROL_RATE_LIMIT`,
 `MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS`,
 `MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT` (per minute, per socket), and
 `MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS`.

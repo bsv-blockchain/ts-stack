@@ -14,8 +14,17 @@ describe('OutputTagMap class method tests', () => {
       ctxs.push(await _tu.createLegacyWalletMySQLCopy('OutputTagMapTests'))
       ctxs2.push(await _tu.createLegacyWalletMySQLCopy('OutputTagMapTests2'))
     }
+    if (env.runPostgres) {
+      ctxs.push(await _tu.createLegacyWalletPostgresCopy('OutputTagMapTests'))
+      ctxs2.push(await _tu.createLegacyWalletPostgresCopy('OutputTagMapTests2'))
+    }
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('OutputTagMapTests'))
     ctxs2.push(await _tu.createLegacyWalletSQLiteCopy('OutputTagMapTests2'))
+  })
+
+  // Tests insert rows with explicit ids; keep Postgres sequences ahead of them.
+  afterEach(async () => {
+    for (const ctx of [...ctxs, ...ctxs2]) await _tu.advancePostgresSequences(ctx.activeStorage)
   })
 
   afterAll(async () => {

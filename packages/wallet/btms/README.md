@@ -88,11 +88,11 @@ for (const asset of assets) {
 
 BTMS uses a 3-field PushDrop token format that aligns with the `BTMSTopicManager`:
 
-| Field | Description                               |
-| ----- | ----------------------------------------- |
-| 0     | Asset ID (or `"ISSUE"` for new tokens)    |
-| 1     | Amount (positive integer as UTF-8 string) |
-| 2     | Metadata (optional JSON string)           |
+| Field | Description                                                      |
+| ----- | ---------------------------------------------------------------- |
+| 0     | Asset ID (or `"ISSUE"` for new tokens)                           |
+| 1     | Amount (canonical positive base-10 safe integer as UTF-8 string) |
+| 2     | Metadata (optional JSON string)                                  |
 
 ### Issuance
 
@@ -104,6 +104,14 @@ When transferring tokens, field 0 contains the canonical asset ID. The TopicMana
 
 - Total output amounts cannot exceed input amounts for the same asset
 - Metadata must match across inputs/outputs for the same asset
+
+Amounts must use canonical decimal digits with no sign, decimal point, exponent,
+or leading zero, and must be at most `Number.MAX_SAFE_INTEGER`
+(`9007199254740991`). This is both the per-output and public API ceiling.
+Balance, history, selection, proof, and change calculations fail closed if an
+aggregate would exceed that exact-integer range. Custom change strategies are
+accepted only when every output is a positive safe integer and their exact sum
+equals the requested change.
 
 ## API Reference
 

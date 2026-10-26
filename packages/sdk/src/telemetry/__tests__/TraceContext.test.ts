@@ -9,12 +9,8 @@ describe('W3C trace context', () => {
     expect(value).toBe(`00-${traceId}-${spanId}-01`)
     expect(parseTraceparent(value)).toEqual({ traceId, spanId, traceFlags: 1 })
     expect(formatTraceparent({ traceId, spanId })).toBe(`00-${traceId}-${spanId}-01`)
-    expect(formatTraceparent({ traceId, spanId, traceFlags: -1 })).toBe(
-      `00-${traceId}-${spanId}-00`
-    )
-    expect(formatTraceparent({ traceId, spanId, traceFlags: 999 })).toBe(
-      `00-${traceId}-${spanId}-ff`
-    )
+    expect(formatTraceparent({ traceId, spanId, traceFlags: -1 })).toBeUndefined()
+    expect(formatTraceparent({ traceId, spanId, traceFlags: 999 })).toBeUndefined()
   })
 
   it.each([
@@ -33,5 +29,21 @@ describe('W3C trace context', () => {
   it('does not format invalid identifiers', () => {
     expect(formatTraceparent({ traceId: 'invalid', spanId })).toBeUndefined()
     expect(formatTraceparent({ traceId, spanId: 'invalid' })).toBeUndefined()
+    expect(formatTraceparent({ traceId, spanId, traceFlags: 1.5 })).toBeUndefined()
+    expect(formatTraceparent({ traceId, spanId, traceFlags: Number.NaN })).toBeUndefined()
+  })
+
+  it('does not invoke accessors while formatting untrusted context', () => {
+    let invoked = false
+    const context = { spanId } as any
+    Object.defineProperty(context, 'traceId', {
+      get: () => {
+        invoked = true
+        throw new Error('trace getter executed')
+      }
+    })
+
+    expect(formatTraceparent(context)).toBeUndefined()
+    expect(invoked).toBe(false)
   })
 })

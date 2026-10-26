@@ -44,10 +44,34 @@ console.log(profile.name, profile.avatar)
 console.log(capabilities)
 ```
 
-The default HTTP client enforces a 30-second timeout. Capability documents are
-cached per client instance. Supply a custom `HttpClient`, DNS resolver options,
-or localhost port to the constructor when testing or integrating a different
-transport.
+The default HTTP client requires HTTPS outside exact `localhost` development,
+rejects redirects and private-network destinations, pins the complete approved
+DNS result set for Node requests, and applies its 30-second deadline while
+streaming at most 1 MiB of response data. Capability documents are coalesced,
+cached for five minutes, and held under a 256-domain LRU ceiling per client.
+`HttpClient` exposes explicit response-size, private-network, and resolver
+options for controlled integration and testing; private-network access is
+never enabled implicitly.
+
+The DNS pinning guarantee applies to Node, where the client controls lookup
+and the transport connection. Browser builds cannot replace the browser's DNS
+resolution or socket selection; use them only for ordinary user-initiated
+Paymail origins. Applications that accept attacker-selected Paymail domains or
+need an SSRF boundary must proxy requests through the Node client (or an
+equivalent server-side egress policy).
+
+Discovery accepts only the exact `bsvalias: "1.0"` document shape with a
+bounded own-data map of string or boolean capabilities. DNS-over-HTTPS SRV
+answers must belong to the exact queried owner name even when DNSSEC reports
+the response authenticated; an authenticated but unrelated RRset is not a
+delegation for the requested Paymail domain.
+
+Public-profile avatar values are restricted to credential-free public HTTPS
+URLs without fragments or literal/local hosts. They remain untrusted media
+locations: the package does not fetch or authenticate the referenced bytes.
+Use them only in a non-navigating image context, never as HTML/iframe/script
+input, and use a DNS-pinned media proxy with MIME and size enforcement when the
+application needs stronger content isolation.
 
 ## Server router
 
@@ -95,7 +119,40 @@ app.listen(3000)
 
 `baseUrl` is the externally reachable origin advertised in the
 `/.well-known/bsvalias` capability document. `basePath` can be supplied when
-the router is mounted below the origin root.
+the router is mounted below the origin root. Production origins must use
+HTTPS; plain HTTP is accepted only for exact `localhost` development. The
+router validates every Paymail handle before domain logic, returns 400 for
+malformed JSON, and rejects conflicting sender-validation configuration.
+The router snapshots its validated origin, path, route descriptors, capability
+codes, handlers, and sender-validation mode during construction. Mutating the
+legacy public configuration fields or caller-owned route arrays afterwards
+does not rewrite the mounted routes or discovery authority. Capability codes
+must be unique, and capability metadata is copied before a derived BFRC is
+computed.
+
+Payment-destination handlers must return canonical hexadecimal scripts and
+non-negative integer outputs whose total exactly equals the requested amount.
+Ordinal-destination handlers must return exactly the requested number of
+scripts. The router snapshots request amounts, transaction encodings, and
+identity parameters before invoking application code, so handler mutation
+cannot move a response check away from the wire request.
+Transaction-receive handlers must return the txid of the raw or BEEF
+transaction passed to them; an unrelated acknowledgement is treated as an
+internal handler failure rather than sent to the client.
+
+The router cannot determine an application's reference-token semantics or
+crediting policy. Before broadcasting, crediting, or acknowledging a
+transaction, domain logic must validate that its outputs satisfy the exact
+recipient and reference, apply application-specific transaction policy, and
+claim the txid/outpoints idempotently in durable state.
+
+Transaction-negotiation requests are public, untrusted protocol input. The
+route validates their structural fields and transaction framing, not sender
+identity, thread authorization, freshness, supported embedded protocols,
+Merkle/miner evidence, or callback-token ownership. Domain logic must validate
+those policies before storing, notifying, signing, broadcasting, or using a
+`reply_to` destination; a public-looking HTTPS peer-channel URL is not an
+authentication verdict.
 
 ### Cross-origin deployment
 
@@ -119,9 +176,30 @@ boundary.
 
 `createP2PSignature` produces the compact Base64 Bitcoin Signed Message form
 accepted by the raw, BEEF, and ordinal receive routes when signature
-verification is enabled. The receiver verifies the transaction-ID signature
+verification is enabled. `verifySignature` defaults to `false` for legacy
+compatibility; in that mode metadata is untrusted and must never authorize a
+sender. The receiver verifies the transaction-ID signature
 locally before performing the Paymail ownership lookup for the declared public
-key, so malformed signatures cannot trigger outbound discovery work.
+key, so malformed signatures cannot trigger outbound discovery work. The
+router historically derives its `requestSenderValidation` advertisement from
+these receive routes; an explicit value must agree with them.
+
+That historical advertisement reuses BRFC `6745385c3fc0`, which the upstream
+Paymail specification defines for signed, timestamped Basic Address Resolution
+requests—not for P2P transaction metadata. Treat it only as this package's
+legacy statement about its configured receive routes. It does not prove
+standards-compliant payer validation, timestamp checking, or replay defense.
+Correcting the meaning requires a coordinated capability-document migration;
+silently removing or reinterpreting the deployed code would break wire
+discovery behavior.
+
+The legacy Paymail signature preimage contains only the transaction ID. It
+does not cryptographically bind the route recipient, reference, sender handle,
+or endpoint authority. Treat it only as proof that the resolved key signed
+that transaction ID, and independently enforce recipient/output/reference and
+replay checks in domain logic. Full contextual sender authorization requires a
+new versioned signature preimage and coordinated protocol migration; silently
+changing the existing preimage would break deployed signatures.
 
 ## Development and verification
 

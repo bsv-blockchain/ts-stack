@@ -5,6 +5,16 @@ import { WalletPermissionsManager, PermissionRequest, PermissionToken } from '..
 // Re-mock @bsv/sdk with our fixture classes (MockTransaction, MockLockingScript, etc.)
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
+const ActualSDK = jest.requireActual<typeof import('@bsv/sdk')>('@bsv/sdk')
+const tokenSourceTransaction = new ActualSDK.Transaction()
+for (let i = 0; i < 3; i++) {
+  tokenSourceTransaction.addOutput({ satoshis: 1, lockingScript: ActualSDK.Script.fromHex('51') })
+}
+const tokenSourceBeef = new ActualSDK.Beef()
+tokenSourceBeef.mergeTransaction(tokenSourceTransaction)
+const tokenSourceTxid = tokenSourceTransaction.id('hex')
+const tokenSourceBeefBytes = tokenSourceBeef.toBinary()
+
 describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocation', () => {
   let underlying: ReturnType<typeof mockUnderlyingWallet>
   let manager: WalletPermissionsManager
@@ -339,8 +349,8 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
     it('should spend the old token input and create a new protocol token output with updated expiry', async () => {
       // Suppose the user has an old protocol token:
       const oldToken: PermissionToken = {
-        tx: [],
-        txid: 'oldTokenTX',
+        tx: tokenSourceBeefBytes,
+        txid: tokenSourceTxid,
         outputIndex: 2,
         outputScript: '76a914...ac', // not used by the mock
         satoshis: 1,
@@ -381,12 +391,12 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       })
 
       // We expect createAction with:
-      //  - 1 input referencing oldToken "oldTokenTX.2"
+      //  - 1 input referencing the old token outpoint
       //  - 1 output with the new script
       expect(underlying.createAction).toHaveBeenCalledTimes(1)
       const createArgs = underlying.createAction.mock.calls[0][0]
       expect(createArgs.inputs).toHaveLength(1)
-      expect(createArgs.inputs[0].outpoint).toBe('oldTokenTX.2')
+      expect(createArgs.inputs[0].outpoint).toBe(`${tokenSourceTxid}.2`)
       expect(createArgs.outputs).toHaveLength(1)
       // The new basket is still "admin protocol-permission"
       expect(createArgs.outputs[0].basket).toBe('admin protocol-permission')
@@ -399,8 +409,8 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
 
     it('should allow updating the authorizedAmount in DSAP renewal', async () => {
       const oldToken: PermissionToken = {
-        tx: [],
-        txid: 'dsap-old-tx',
+        tx: tokenSourceBeefBytes,
+        txid: tokenSourceTxid,
         outputIndex: 0,
         outputScript: 'sample script',
         satoshis: 1,
@@ -433,7 +443,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       // check
       const { inputs, outputs } = underlying.createAction.mock.calls[0][0]
       expect(inputs).toHaveLength(1)
-      expect(inputs[0].outpoint).toBe('dsap-old-tx.0')
+      expect(inputs[0].outpoint).toBe(`${tokenSourceTxid}.0`)
 
       expect(outputs).toHaveLength(1)
       expect(outputs[0].basket).toBe('admin spending-authorization')
@@ -463,8 +473,8 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
     it('should create a transaction that consumes (spends) the old token with no new outputs', async () => {
       // A sample old token
       const oldToken: PermissionToken = {
-        tx: [],
-        txid: 'revocableToken.txid',
+        tx: tokenSourceBeefBytes,
+        txid: tokenSourceTxid,
         outputIndex: 1,
         outputScript: 'fakePushdropScript',
         satoshis: 1,
@@ -482,7 +492,7 @@ describe('WalletPermissionsManager - On-Chain Token Creation, Renewal & Revocati
       expect(underlying.createAction).toHaveBeenCalledTimes(1)
       const createArgs = underlying.createAction.mock.calls[0][0]
       expect(createArgs.inputs).toHaveLength(1)
-      expect(createArgs.inputs[0].outpoint).toBe('revocableToken.txid.1')
+      expect(createArgs.inputs[0].outpoint).toBe(`${tokenSourceTxid}.1`)
 
       // No new outputs => final array is empty
       expect(createArgs.outputs ?? []).toHaveLength(0)

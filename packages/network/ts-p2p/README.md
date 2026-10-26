@@ -1,6 +1,6 @@
 # @bsv/teranode-listener
 
-BSV BLOCKCHAIN | A TypeScript library for subscribing to Teranode P2P topics in a private DHT network
+BSV BLOCKCHAIN | A TypeScript library for subscribing to Teranode P2P topics over libp2p
 
 A robust npm package that enables subscription to Teranode P2P topics using libp2p with private network support, DHT, and gossipsub messaging.
 
@@ -18,9 +18,9 @@ A robust npm package that enables subscription to Teranode P2P topics using libp
 
 ## Overview
 
-The `@bsv/teranode-listener` package provides a simple yet powerful interface for connecting to Teranode's private P2P network. It handles:
+The `@bsv/teranode-listener` package provides a simple yet powerful interface for connecting to the Teranode P2P network. It handles:
 
-- **Private Network Access**: Secure connections using pre-shared keys (PSK)
+- **PNET compatibility**: Connect with the public Teranode mainnet PNET value or a private deployment's own PSK
 - **DHT Integration**: Distributed hash table for peer discovery
 - **Topic Subscription**: Subscribe to specific topics and receive real-time messages
 - **Peer Management**: Automatic peer discovery and connection management
@@ -72,7 +72,7 @@ console.log('Listener started and waiting for messages...')
 
 ### Decoding messages
 
-By default, callbacks receive the raw GossipSub bytes (`Uint8Array`). Pass `decodeMessages: true` to have the listener decode the two-layer JSON wire format for you. Callbacks then receive a typed `DecodedMessage` (the sender name plus a typed payload):
+By default, callbacks receive the raw GossipSub bytes (`Uint8Array`). Pass `decodeMessages: true` to have the listener perform bounded, canonical two-layer JSON decoding. Callbacks then receive a `DecodedMessage` (the unverified sender-name field plus a structurally safe payload). TypeScript payload types are compile-time aids, not schema validation or proof of publisher identity:
 
 ```typescript
 import { TeranodeListener, type BlockMessage, type DecodedMessage } from '@bsv/teranode-listener'
@@ -90,6 +90,13 @@ await listener.start()
 ```
 
 The exported `decodeMessage()` / `tryDecodeMessage()` helpers can also be used to decode a message manually. Frames that are not valid JSON (e.g. libp2p control frames) are skipped when `decodeMessages` is on.
+
+Listener construction snapshots and validates the supplied callbacks,
+configuration, topic list, and address arrays. Later caller mutation cannot
+silently change the network or decoding policy, and boolean controls accept
+only literal booleans. Concurrent `start()` or `stop()` calls share one
+lifecycle transition; a failed start cleans up its partial node and may be
+retried.
 
 ### Function-Based API
 
@@ -253,7 +260,7 @@ The package comes with production-ready defaults for Teranode mainnet:
 
 - **`bootstrapPeers`**: `['/dns4/teranode-bootstrap.bsvb.tech/tcp/9901/p2p/12D3KooWESmhNAN8s6NPdGNvJH3zJ4wMKDxapXKNUe2DzkAwKYqK']`
 - **`staticPeers`**: Array of known active Teranode mainnet peers (TAAL, BSVB, etc.)
-- **`sharedKey`**: Teranode mainnet pre-shared key
+- **`sharedKey`**: public 32-byte Teranode mainnet PNET compatibility value
 - **`topics`**: all six `bitcoin/mainnet-*` topics listed in the `Topic` type
 - **`listenAddresses`**: `['/ip4/127.0.0.1/tcp/9901']`
 - **`dhtProtocolID`**: `/teranode`
@@ -265,11 +272,11 @@ All parameters are optional and can be overridden:
 
 - **`bootstrapPeers`**: Array of multiaddr strings for initial peer discovery
 - **`staticPeers`**: Additional peers to maintain persistent connections with
-- **`sharedKey`**: Hexadecimal string representing the pre-shared key for network access
+- **`sharedKey`**: exactly 64 hexadecimal characters representing a 32-byte PNET value
 - **`topics`**: Array of topic strings to subscribe to
 - **`listenAddresses`**: Network addresses to listen on
 - **`dhtProtocolID`**: Custom DHT protocol identifier
-- **`usePrivateDHT`**: Whether to use private DHT networking
+- **`usePrivateDHT`**: Whether to enable the Kademlia DHT service; `false` now omits that network service entirely
 
 ### Pre-Shared Key Format
 
@@ -280,6 +287,13 @@ The `sharedKey` should be provided as a hexadecimal string without the PSK heade
 /base16/
 <your-hex-key>
 ```
+
+The default mainnet value is published in this package so every consumer can
+join the same network. It is not a secret, membership credential, peer
+allowlist, or message signature. PNET and Noise protect compatible transport;
+they do not make a received event authoritative. A custom network can use a
+secret PSK to restrict initial membership, but applications must still verify
+security-critical transaction, block, and chain claims independently.
 
 ## Examples
 
@@ -397,6 +411,23 @@ const config = {
 await startSubscriber(config)
 console.log('Connected to custom private network...')
 ```
+
+## Security boundary
+
+- Treat every topic, envelope sender name, and payload field as untrusted.
+- The callback `from` value is the libp2p propagation peer, which may be a
+  relay; it is not proof that the peer authored the application payload.
+- `decodeMessages` bounds and structurally validates JSON, but it does not
+  authenticate a publisher or validate each topic-specific schema.
+- The internal subtree-format implementation bounds node and byte counts,
+  preserves exact unsigned 64-bit values, and verifies aggregate totals,
+  conflicts, and the canonical Bitcoin Merkle root before accepting bytes.
+  These checks establish internal consistency, not who authored a subtree.
+- Verify hashes, headers, transactions, Merkle evidence, heights, and chain
+  state through an independent trusted chain tracker before changing durable
+  or financial state.
+- Keep the default loopback listen address unless inbound P2P reachability is
+  explicitly required and protected at the network edge.
 
 ## Development
 

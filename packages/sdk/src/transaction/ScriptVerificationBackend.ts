@@ -2,35 +2,26 @@ import type SpendVerifierInterface from '../script/SpendVerifierInterface.js'
 import type BdkVerifierInterface from './BdkVerifierInterface.js'
 
 /** Backend shape shared by transaction-graph and individual-Spend routing. */
-export type ScriptVerificationBackend =
-  BdkVerifierInterface & SpendVerifierInterface
+export type ScriptVerificationBackend = BdkVerifierInterface & SpendVerifierInterface
 
-interface OptionalBackendGlobal {
-  __bsvSdkScriptVerificationBackendV1?: ScriptVerificationBackend
-}
-
-function backendGlobal (): typeof globalThis & OptionalBackendGlobal {
-  return globalThis as typeof globalThis & OptionalBackendGlobal
-}
+// Keep verifier authority inside this module. A public global slot allowed any
+// unrelated dependency to replace verification after the host configured it.
+let registeredBackend: ScriptVerificationBackend | undefined
 
 /** Installs a process/page-wide optional script backend. */
-export function registerScriptVerificationBackend (
-  backend: ScriptVerificationBackend
-): void {
-  backendGlobal().__bsvSdkScriptVerificationBackendV1 = backend
+export function registerScriptVerificationBackend(backend: ScriptVerificationBackend): void {
+  if (registeredBackend != null && registeredBackend !== backend) {
+    throw new Error('A different script verification backend is already registered')
+  }
+  registeredBackend = backend
 }
 
 /** Removes `backend` if it is still the active optional implementation. */
-export function unregisterScriptVerificationBackend (
-  backend: ScriptVerificationBackend
-): void {
-  const registry = backendGlobal()
-  if (registry.__bsvSdkScriptVerificationBackendV1 === backend) {
-    delete registry.__bsvSdkScriptVerificationBackendV1
-  }
+export function unregisterScriptVerificationBackend(backend: ScriptVerificationBackend): void {
+  if (registeredBackend === backend) registeredBackend = undefined
 }
 
 /** Returns the currently registered optional script backend, if any. */
-export function scriptVerificationBackend (): ScriptVerificationBackend | undefined {
-  return backendGlobal().__bsvSdkScriptVerificationBackendV1
+export function scriptVerificationBackend(): ScriptVerificationBackend | undefined {
+  return registeredBackend
 }

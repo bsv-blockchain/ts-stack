@@ -1,9 +1,7 @@
 import { build, context } from 'esbuild'
 import { rm } from 'node:fs/promises'
-
-const watch = process.argv.includes('--watch')
-
-await rm(new URL('./dist', import.meta.url), { recursive: true, force: true })
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const shared = {
   bundle: true,
@@ -12,8 +10,22 @@ const shared = {
     client: 'src/client.ts',
     react: 'src/react.tsx'
   },
-  external: ['@bsv/sdk', 'crypto', 'express', 'http', 'qrcode', 'react', 'react/jsx-runtime', 'ws'],
+  external: [
+    '@bsv/sdk',
+    '@noble/curves/secp256k1.js',
+    '@noble/hashes/hmac.js',
+    '@noble/hashes/sha2.js',
+    'crypto',
+    'express',
+    'http',
+    'qrcode',
+    'react',
+    'react/jsx-runtime',
+    'ws'
+  ],
   logLevel: 'info',
+  mangleProps: /^_/,
+  minify: true,
   platform: 'node',
   sourcemap: true,
   splitting: false,
@@ -34,10 +46,27 @@ const builds = [
   }
 ]
 
-if (watch) {
-  const contexts = await Promise.all(builds.map(options => context(options)))
+export async function buildWalletRelay({
+  watch = process.argv.includes('--watch'),
+  buildImplementation = build,
+  contextImplementation = context,
+  removeImplementation = rm
+} = {}) {
+  await removeImplementation(new URL('./dist', import.meta.url), { recursive: true, force: true })
+
+  if (!watch) {
+    await Promise.all(builds.map(options => buildImplementation(options)))
+    return
+  }
+
+  const contexts = await Promise.all(builds.map(options => contextImplementation(options)))
   await Promise.all(contexts.map(buildContext => buildContext.watch()))
   console.log('Watching wallet relay entry points for changes...')
-} else {
-  await Promise.all(builds.map(options => build(options)))
+}
+
+if (
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  await buildWalletRelay()
 }

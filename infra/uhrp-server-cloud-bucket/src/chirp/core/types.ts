@@ -48,6 +48,7 @@ export type CHIRPByteSource =
 export interface CHIRPBuildOptions {
   mediaType?: string
   sink?: CHIRPObjectSink
+  signal?: AbortSignal
 }
 
 export interface CHIRPBuildResult {

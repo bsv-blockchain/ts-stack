@@ -80,7 +80,7 @@ Generated starters can include these composable capabilities:
 
 New generated projects include `wallet-connect` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
 
-The generated development server uses a bounded, expiring, single-use nonce store for replay protection. Replace it with an atomic Redis or database implementation before running multiple server processes.
+The generated development server uses a bounded, expiring, single-use nonce store for replay protection. Replace it with an atomic Redis or database implementation before running multiple server processes. Generated API calls reject redirects, remain on the configured origin, enforce a whole-response deadline and byte ceilings, and strictly decode JSON. Automatic server-key discovery trusts that configured HTTPS origin; pass an independently validated key to the generated hooks when the application needs identity pinning.
 
 ## Modes
 
@@ -167,7 +167,7 @@ The file is authoritative except that an explicit `--mode` flag overrides its mo
 npx create-bsv-app --ui --dir my-app
 ```
 
-The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline.
+The UI listens only on `127.0.0.1`, shows the same registry-backed choices, and submits to the same pipeline. Its generated page carries a per-process, cryptographically random session token. The server accepts generation and planning requests only from its exact loopback origin with that token, a JSON content type, and a body of at most 64 KiB. It also rejects DNS-rebinding Host values and does not expose manifest-derived values as executable HTML. These checks are part of the local security boundary: do not proxy or embed the UI in another site.
 
 ## Flags
 
@@ -205,7 +205,7 @@ npm run install:apps # install both packages again
 
 Use the selected package manager in place of `npm` when applicable.
 
-The generated client reads `VITE_API_URL` and `VITE_BSV_NETWORK`. The generated server reads `SERVER_PRIVATE_KEY`, `PORT`, `CLIENT_ORIGIN`, and `BSV_NETWORK`. Development defaults work locally; set a stable private key and explicit production values before deployment.
+The generated client reads `VITE_API_URL` and `VITE_BSV_NETWORK`. The generated server reads `SERVER_PRIVATE_KEY`, `PORT`, `CLIENT_ORIGIN`, and `BSV_NETWORK`. Local development defaults work only outside production. Production startup requires an explicit HTTPS `VITE_API_URL`, a stable canonical `SERVER_PRIVATE_KEY`, and an explicit HTTPS `CLIENT_ORIGIN`; the generated configuration rejects malformed ports, origins, networks, and keys rather than silently changing security authority. `CLIENT_ORIGIN` controls browser sharing through CORS—it is not authentication or authorization.
 
 ## Manifest and provenance
 

@@ -112,4 +112,26 @@ describe('buildPage', () => {
     })
     expect(html).toContain('scaffolded separately')
   })
+
+  test('serializes manifest-derived values without allowing inline script breakout', () => {
+    const payload = '</script><script>window.__injected__ = true</script>\u2028'
+    const html = buildPage({
+      schema: serializeSchema(null),
+      seed: { name: payload },
+      sessionToken: 'abcdefghijklmnopqrstuvwxyz012345',
+      scriptNonce: 'abcdefghijklmnopqrstuvwxyz012345'
+    })
+
+    expect(html).not.toContain(payload)
+    expect(html).not.toContain('</script><script>window.__injected__')
+    expect(html).toContain('\\u003c/script>\\u003cscript>')
+    expect(html).toContain('\\u2028')
+    expect(html).toContain('<script nonce="abcdefghijklmnopqrstuvwxyz012345">')
+  })
+
+  test('rejects an unsafe script nonce supplied by a caller', () => {
+    expect(() =>
+      buildPage({ schema: [], seed: {}, scriptNonce: '"><script>alert(1)</script>' })
+    ).toThrow('scriptNonce must be a base64url token')
+  })
 })

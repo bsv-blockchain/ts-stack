@@ -1,46 +1,64 @@
 import { PaymailClient, ReceiveBeefTransactionRoute } from '@bsv/paymail'
 import { Transaction } from '@bsv/sdk'
 import { fetchUser } from '../mockUser.js'
+import { wocHeadersClient } from '../wocClient.js'
 
-const WocHeadersClient = {
-  currentHeight: async () => {
-    const headers = (await (
-      await fetch('https://api.whatsonchain.com/v1/bsv/main/block/headers')
-    ).json()) as Array<{ height: number }>
-    const [latest] = headers
-    if (!latest) throw new Error('WhatsOnChain returned no headers')
-    return latest.height
-  },
-  isValidRootForHeight: async (merkleRoot: string, height: number) => {
-    try {
-      const { merkleroot } = (await (
-        await fetch(`https://api.whatsonchain.com/v1/bsv/main/block/height/${height}`)
-      ).json()) as { merkleroot: string }
-      return merkleroot === merkleRoot
-    } catch (error) {
-      console.error('error fetching merkleroot', error)
-      return false
-    }
+interface ReceiveBeefTransactionUser {
+  transactionPaysReference: (tx: Transaction, reference: string) => boolean
+  broadcastTransaction: (tx: Transaction) => Promise<void>
+  processTransaction: (tx: Transaction, reference: string) => number
+}
+
+export interface ReceiveBeefTransactionExampleDependencies {
+  fetchUser: (name: string, domain: string) => Promise<ReceiveBeefTransactionUser>
+  parseTransaction: (beef: string) => Transaction
+  chainTracker: Parameters<Transaction['verify']>[0]
+  paymailClient: PaymailClient
+}
+
+const defaultDependencies: ReceiveBeefTransactionExampleDependencies = {
+  fetchUser,
+  parseTransaction: beef => Transaction.fromHexBEEF(beef),
+  chainTracker: wocHeadersClient,
+  paymailClient: new PaymailClient()
+}
+
+export async function receiveBeefTransaction(
+  params: { paymail: string; [key: string]: string },
+  body: { beef: string; reference: string },
+  dependencies: ReceiveBeefTransactionExampleDependencies = defaultDependencies
+): Promise<{ txid: string }> {
+  const { name, domain } = ReceiveBeefTransactionRoute.getNameAndDomain(params)
+  const user = await dependencies.fetchUser(name, domain)
+  const tx = dependencies.parseTransaction(body.beef)
+  if (!(await tx.verify(dependencies.chainTracker))) {
+    throw new Error('BEEF transaction verification failed')
+  }
+  if (!user.transactionPaysReference(tx, body.reference)) {
+    throw new Error('Transaction does not pay the referenced recipient destination')
+  }
+  await user.broadcastTransaction(tx)
+  user.processTransaction(tx, body.reference)
+  return {
+    txid: tx.id('hex')
   }
 }
 
-const receiveBeefTransactionRoute = new ReceiveBeefTransactionRoute({
-  domainLogicHandler: async (params, body) => {
-    const { name, domain } = ReceiveBeefTransactionRoute.getNameAndDomain(params)
-    const user = await fetchUser(name, domain)
-    const { beef, reference } = body as { beef: string; reference: string }
-    const tx = Transaction.fromHexBEEF(beef)
-    if (!(await tx.verify(WocHeadersClient))) {
-      throw new Error('BEEF transaction verification failed')
-    }
-    await user.broadcastTransaction(tx)
-    user.processTransaction(tx, reference)
-    return {
-      txid: tx.id('hex')
-    }
-  },
-  verifySignature: false,
-  paymailClient: new PaymailClient()
-})
+export function createReceiveBeefTransactionRoute(
+  dependencies: ReceiveBeefTransactionExampleDependencies = defaultDependencies
+): ReceiveBeefTransactionRoute {
+  return new ReceiveBeefTransactionRoute({
+    domainLogicHandler: async (params, body) =>
+      await receiveBeefTransaction(
+        params,
+        body as { beef: string; reference: string },
+        dependencies
+      ),
+    verifySignature: true,
+    paymailClient: dependencies.paymailClient
+  })
+}
+
+const receiveBeefTransactionRoute = createReceiveBeefTransactionRoute()
 
 export default receiveBeefTransactionRoute

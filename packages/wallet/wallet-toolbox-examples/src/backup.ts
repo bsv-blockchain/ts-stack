@@ -1,4 +1,5 @@
 import { Setup, SetupEnv, SetupWallet } from '@bsv/wallet-toolbox'
+import { chmodSync, closeSync, constants, lstatSync, openSync } from 'node:fs'
 
 import { runArgv2Function } from './runArgv2Function'
 
@@ -18,11 +19,19 @@ export async function backupWalletClient(env: SetupEnv, identityKey: string): Pr
     env,
     rootKeyHex: env.devKeys[identityKey]
   })
-  await backupToSQLite(setup)
-  await setup.wallet.destroy()
+  try {
+    await backupToSQLite(setup)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 
 /**
+ * Writes sensitive wallet history to SQLite. The destination must be inside a
+ * trusted, owner-only directory because SQLite may create journal files beside
+ * the database. Existing symbolic or multiply linked targets are rejected and the database
+ * itself is restricted to mode `0600` before it is opened.
+ *
  * @publicbody
  */
 export async function backupToSQLite(
@@ -33,6 +42,7 @@ export async function backupToSQLite(
   const env = Setup.getEnv(setup.chain)
   filePath ||= `backup_${setup.identityKey}.sqlite`
   databaseName ||= `${setup.identityKey} backup`
+  preparePrivateBackupFile(filePath)
 
   const backup = await Setup.createStorageKnex({
     env,
@@ -46,4 +56,25 @@ export async function backupToSQLite(
   await setup.storage.updateBackups()
 }
 
-runArgv2Function(module.exports)
+function preparePrivateBackupFile(filePath: string): void {
+  if (filePath === ':memory:' || filePath.startsWith('file:')) {
+    throw new Error('A wallet backup must use an ordinary persistent file path')
+  }
+  try {
+    const details = lstatSync(filePath)
+    if (!details.isFile() || details.isSymbolicLink() || details.nlink !== 1) {
+      throw new Error('The wallet backup path must be a singly linked regular file')
+    }
+    chmodSync(filePath, 0o600)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    const descriptor = openSync(
+      filePath,
+      constants.O_CREAT | constants.O_EXCL | constants.O_RDWR,
+      0o600
+    )
+    closeSync(descriptor)
+  }
+}
+
+if (require.main === module) void runArgv2Function(module.exports)

@@ -1,4 +1,14 @@
-import { Beef, CachedKeyDeriver, PrivateKey, Script, Transaction, Utils, Validation } from '@bsv/sdk'
+import {
+  Beef,
+  CachedKeyDeriver,
+  PrivateKey,
+  Script,
+  Transaction,
+  Utils,
+  Validation,
+  WalletWireProcessor,
+  WalletWireTransceiver
+} from '@bsv/sdk'
 import { Knex, knex as makeKnex } from 'knex'
 import { Wallet } from '../../../src/Wallet'
 import { MockServices } from '../../../src/mockchain/MockServices'
@@ -9,7 +19,9 @@ import { WalletStorageManager } from '../../../src/storage/WalletStorageManager'
 import { processNoSendExpiryLifecycle } from '../../../src/storage/methods/noSendExpiryLifecycle'
 import { ScriptTemplateBRC29 } from '../../../src/utility/ScriptTemplateBRC29'
 import { randomBytesHex, verifyOne } from '../../../src/utility/utilityHelpers'
+import { getExactActionSpend } from '../../../src/utility/exactActionSpend'
 import { asArray } from '../../../src/utility/utilityHelpers.noBuffer'
+import { transactionSize } from '../../../src/storage/methods/utils'
 
 function memoryKnex(_name: string): Knex {
   return makeKnex({
@@ -196,6 +208,70 @@ describe('BRC-177 noSend expiry reference implementation', () => {
       }
     } as const
   }
+
+  // Mirrors noSendExpiry.ts: P2PKH reclaim (107-byte unlock, 25-byte lock)
+  // priced at no less than 1000 sat/kB, leaving at least twice the reclaim's
+  // fee at the storage's own rate.
+  function reclaimFloor(ctx: WalletHarness): { reclaimFee: number; minimumOutput: number } {
+    const satsPerKb = ctx.active.feeModel.value!
+    const size = transactionSize([107], [25])
+    const reclaimFee = Math.ceil((size / 1000) * Math.max(satsPerKb, 1000))
+    const minimumOutput = Math.max(1, Math.ceil((size / 1000) * satsPerKb) * 2)
+    return { reclaimFee, minimumOutput }
+  }
+
+  function reclaimFloorSatoshis(ctx: WalletHarness): number {
+    const { reclaimFee, minimumOutput } = reclaimFloor(ctx)
+    return reclaimFee + minimumOutput
+  }
+
+  function protectedActionNeed(
+    ctx: WalletHarness,
+    inputs: Array<{ satoshis: number; unlockingScriptLength: number }>,
+    outputs: Array<{ satoshis: number; lockingScriptLength: number }>
+  ): number {
+    const size = transactionSize(
+      [...inputs.map(input => input.unlockingScriptLength), 107],
+      outputs.map(output => output.lockingScriptLength)
+    )
+    const fee = Math.ceil((size / 1000) * ctx.active.feeModel.value!)
+    return (
+      outputs.reduce((sum, output) => sum + output.satoshis, 0) +
+      fee -
+      inputs.reduce((sum, input) => sum + input.satoshis, 0)
+    )
+  }
+
+  async function anchorOf(ctx: WalletHarness, txid: string) {
+    const target = verifyOne(await ctx.active.findTransactions({ partial: { txid } }))
+    return verifyOne(
+      await ctx.active.findOutputs({
+        partial: { txid: target.noSendExpiryAnchorTxid, vout: target.noSendExpiryAnchorVout }
+      })
+    )
+  }
+
+  test.each([false, true])('binary BRC-100 returns the protected action (signAndProcess=%s)', async signAndProcess => {
+    const ctx = await createHarness()
+    try {
+      const create = jest.spyOn(ctx.wallet, 'createAction')
+      const wire = new WalletWireTransceiver(new WalletWireProcessor(ctx.wallet))
+      const received = await wire.createAction(protectedArgs(3600, signAndProcess), 'wallet.example')
+      const local = await create.mock.results[0].value
+      expect(getExactActionSpend(local)).toBeGreaterThanOrEqual(5000)
+      expect(Object.getOwnPropertySymbols(local)).toEqual([])
+      expect(Object.getOwnPropertySymbols(received)).toEqual([])
+      if (signAndProcess) {
+        expect(received.txid).toBe(local.txid)
+        expect(Array.from(received.tx!)).toEqual(Array.from(local.tx!))
+      } else {
+        expect(received.signableTransaction?.reference).toBe(local.signableTransaction.reference)
+        expect(Array.from(received.signableTransaction!.tx)).toEqual(Array.from(local.signableTransaction.tx))
+      }
+    } finally {
+      await ctx.destroy()
+    }
+  })
 
   async function expectArmFailure(
     mutate: (
@@ -879,6 +955,93 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }
   })
 
+  test('never releases without a deadline or reclaim, funds only the action, and cannot be aborted once released', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction({
+        ...protectedArgs(3600),
+        labels: ['p nosend expiry never'],
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'Small protected recipient output' }]
+      })
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      expect(target.noSendExpiryMode).toBe('never')
+      expect(target.noSendExpiryState).toBe('signed')
+      expect(target.noSendExpiryDeadline ?? undefined).toBeUndefined()
+      expect(target.noSendExpiryReclaimRawTx ?? undefined).toBeUndefined()
+      const need = protectedActionNeed(ctx, [], [{ satoshis: 1, lockingScriptLength: 1 }])
+      expect(need).toBeLessThan(reclaimFloorSatoshis(ctx))
+      expect((await anchorOf(ctx, created.txid!)).satoshis).toBe(need)
+
+      const statusSpy = jest.spyOn(services, 'getStatusForTxids')
+      await expect(processNoSendExpiryLifecycle(ctx.active)).resolves.toMatchObject({ inspected: 0 })
+      expect(statusSpy).not.toHaveBeenCalled()
+      statusSpy.mockRestore()
+      await expect(ctx.wallet.abortAction({ reference: created.txid! })).rejects.toThrow('permanently sent')
+      const after = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      expect(after.noSendExpiryState).toBe('signed')
+      expect(after.status).toBe('nosend')
+
+      // Still refused once the recipient's broadcast has been observed.
+      await ctx.active.updateTransaction(after.transactionId, { noSendExpiryState: 'broadcast' })
+      await expect(ctx.wallet.abortAction({ reference: created.txid! })).rejects.toThrow('permanently sent')
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('storage createAction refuses caller-supplied BRC-177 metadata', async () => {
+    const ctx = await createHarness()
+    try {
+      const { user } = await ctx.active.findOrInsertUser(ctx.wallet.identityKey)
+      const forged = {
+        brc177: { kind: 'protected', expiry: { mode: 'never', value: null, label: 'p nosend expiry never' } }
+      } as unknown as Parameters<typeof ctx.active.createAction>[1]
+      await expect(
+        ctx.active.createAction({ identityKey: ctx.wallet.identityKey, userId: user.userId, isActive: true }, forged)
+      ).rejects.toThrow('without BRC-177 metadata')
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('never signs through signAction, and an unreleased never action can still be cancelled', async () => {
+    const ctx = await createHarness()
+    try {
+      const pending = await ctx.wallet.createAction({
+        ...protectedArgs(3600, false),
+        labels: ['p nosend expiry never']
+      })
+      const reference = pending.signableTransaction!.reference
+      expect(verifyOne(await ctx.active.findTransactions({ partial: { reference } })).noSendExpiryState).toBe(
+        'unsigned'
+      )
+      const signed = await ctx.wallet.signAction({ reference, spends: {} })
+      expect(verifyOne(await ctx.active.findTransactions({ partial: { txid: signed.txid } })).noSendExpiryState).toBe(
+        'signed'
+      )
+
+      const unreleased = await ctx.wallet.createAction({
+        ...protectedArgs(3600, false),
+        labels: ['p nosend expiry never']
+      })
+      const unreleasedReference = unreleased.signableTransaction!.reference
+      await expect(ctx.wallet.abortAction({ reference: unreleasedReference })).resolves.toEqual({
+        aborted: true
+      })
+      const cancelled = verifyOne(await ctx.active.findTransactions({ partial: { reference: unreleasedReference } }))
+      expect(cancelled.status).toBe('failed')
+      const anchor = verifyOne(
+        await ctx.active.findOutputs({
+          partial: { txid: cancelled.noSendExpiryAnchorTxid, vout: cancelled.noSendExpiryAnchorVout }
+        })
+      )
+      expect(anchor.spendable).toBe(true)
+      expect(anchor.spentBy).toBeUndefined()
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
   test('timestamp expiry remains the exact absolute deadline after pre-funding', async () => {
     const ctx = await createHarness()
     try {
@@ -1057,6 +1220,93 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     }, 'changed before signature release')
   })
 
+  test('accepts a 1-sat protected output with an anchor sized for the reclaim', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction({
+        ...protectedArgs(3600),
+        outputs: [
+          {
+            satoshis: 1,
+            lockingScript: '51',
+            outputDescription: 'Small protected recipient output'
+          }
+        ]
+      })
+      expect(protectedActionNeed(ctx, [], [{ satoshis: 1, lockingScriptLength: 1 }])).toBeLessThan(
+        reclaimFloorSatoshis(ctx)
+      )
+      expect((await anchorOf(ctx, created.txid!)).satoshis).toBe(reclaimFloorSatoshis(ctx))
+      const targetTx = Transaction.fromAtomicBEEF(created.tx!)
+      expect(targetTx.inputs).toHaveLength(1)
+      expect(targetTx.outputs).toHaveLength(1)
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('sizes the anchor to cover the reclaim for a value-neutral protected action', async () => {
+    const ctx = await createHarness()
+    try {
+      // A 1-sat output the caller can later spend: OP_DROP OP_1, unlocked by OP_1.
+      const source = await ctx.wallet.createAction({
+        description: 'BRC-177 value-neutral source',
+        outputs: [{ satoshis: 1, lockingScript: '7551', outputDescription: 'Caller token' }],
+        options: { randomizeOutputs: false, acceptDelayedBroadcast: false }
+      })
+      const created = await ctx.wallet.createAction({
+        description: 'BRC-177 value-neutral transfer',
+        labels: ['p nosend expiry seconds 3600'],
+        inputBEEF: source.tx,
+        inputs: [{ outpoint: `${source.txid}.0`, unlockingScript: '51', inputDescription: 'Caller token' }],
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'Transferred token' }],
+        options: { noSend: true, randomizeOutputs: false }
+      })
+
+      const need = protectedActionNeed(
+        ctx,
+        [{ satoshis: 1, unlockingScriptLength: 1 }],
+        [{ satoshis: 1, lockingScriptLength: 1 }]
+      )
+      const anchor = await anchorOf(ctx, created.txid!)
+      expect(need).toBeLessThan(reclaimFloorSatoshis(ctx))
+      expect(anchor.satoshis).toBe(reclaimFloorSatoshis(ctx))
+
+      const targetTx = Transaction.fromAtomicBEEF(created.tx!)
+      expect(targetTx.inputs).toHaveLength(2)
+      expect(targetTx.inputs.map(input => `${input.sourceTXID}.${input.sourceOutputIndex}`).sort()).toEqual(
+        [`${source.txid}.0`, `${anchor.txid}.${anchor.vout}`].sort()
+      )
+      expect(targetTx.outputs).toHaveLength(1)
+      expect(targetTx.outputs[0].satoshis).toBe(1)
+      const target = verifyOne(await ctx.active.findTransactions({ partial: { txid: created.txid } }))
+      const outputs = await ctx.active.findOutputs({ partial: { transactionId: target.transactionId } })
+      expect(outputs.filter(output => output.change)).toHaveLength(0)
+
+      // The armed reclaim is accepted by the processor once the deadline passes.
+      expect(target.noSendExpiryState).toBe('signed')
+      expect(target.noSendExpiryReclaimSatoshis).toBe(reclaimFloor(ctx).minimumOutput)
+      await ctx.active.updateTransaction(target.transactionId, { noSendExpiryDeadline: 0 })
+      const run = await processNoSendExpiryLifecycle(ctx.active)
+      expect(run.reclaimActivated).toBe(1)
+      expect(await services.storage.getTransaction(target.noSendExpiryReclaimTxid!)).toBeDefined()
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
+  test('keeps the exact anchor when the protected action needs more than the reclaim floor', async () => {
+    const ctx = await createHarness()
+    try {
+      const created = await ctx.wallet.createAction(protectedArgs(3600))
+      const need = protectedActionNeed(ctx, [], [{ satoshis: 5_000, lockingScriptLength: 1 }])
+      expect(need).toBeGreaterThan(reclaimFloorSatoshis(ctx))
+      expect((await anchorOf(ctx, created.txid!)).satoshis).toBe(need)
+    } finally {
+      await ctx.destroy()
+    }
+  })
+
   test('preserves exact-anchor semantics when the active storage charges a commission', async () => {
     const ctx = await createHarness()
     try {
@@ -1159,7 +1409,7 @@ describe('BRC-177 noSend expiry reference implementation', () => {
     await expectArmFailure((_ctx, args) => {
       const rawTx = [...asArray(args.reclaimRawTx), 0]
       return { ...args, reclaimRawTx: rawTx, reclaimTxid: Transaction.fromBinary(rawTx).id('hex') }
-    }, 'valid signature for the revocation anchor')
+    }, 'Serialized transaction contains trailing data')
     await expectArmFailure((_ctx, args) => ({ ...args, reclaimTxid: '00'.repeat(32) }), 'hash of reclaimRawTx')
     await expectArmFailure(
       (_ctx, args) => ({ ...args, reclaimSatoshis: args.reclaimSatoshis - 1 }),
@@ -1286,20 +1536,6 @@ describe('BRC-177 noSend expiry reference implementation', () => {
           labels: [`p nosend expiry seconds ${Number.MAX_SAFE_INTEGER}`]
         })
       ).rejects.toThrow('safely schedulable')
-      expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
-
-      await expect(
-        ctx.wallet.createAction({
-          ...protectedArgs(3600),
-          outputs: [
-            {
-              satoshis: 1,
-              lockingScript: '51',
-              outputDescription: 'Too-small protected recipient output'
-            }
-          ]
-        })
-      ).rejects.toThrow('leaves at least')
       expect(await services.storage.getUnminedTransactions()).toHaveLength(unminedBefore)
 
       const created = await ctx.wallet.createAction(protectedArgs(3600))

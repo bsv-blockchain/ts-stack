@@ -1,4 +1,5 @@
-import { Beef, Script, Validation } from '@bsv/sdk'
+import { type ValidCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, Script } from '@bsv/sdk'
 import {
   AbortActionBatchResult,
   ActionBatchCommitAction,
@@ -171,7 +172,7 @@ function sourceOutputFromBeef(
   const output = tx?.outputs[outpoint.vout]
   if (output == null) return undefined
   return {
-    satoshis: Validation.validateSatoshis(output.satoshis, 'source output satoshis'),
+    satoshis: validateSatoshis(output.satoshis, 'source output satoshis'),
     lockingScript: output.lockingScript
   }
 }
@@ -179,14 +180,14 @@ function sourceOutputFromBeef(
 async function resolveExplicitOutputs(
   storage: StorageProvider,
   userId: number,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   allowDeferredProofs: boolean
 ): Promise<{ outputs: TableOutput[]; inputSatoshis: number }> {
   const byOutpoint = await storage.findOutputsByOutpoints(
     userId,
     args.inputs.map(input => input.outpoint)
   )
-  const beef = args.inputBEEF == null ? new Beef() : Beef.fromBinary(args.inputBEEF)
+  const beef = args.inputBEEF == null ? new Beef() : Beef.fromBinaryStrict(args.inputBEEF)
   const outputs: TableOutput[] = []
   let inputSatoshis = 0
   for (const input of args.inputs) {
@@ -210,7 +211,7 @@ async function resolveExplicitOutputs(
 async function resolveNoSendChangeOutputs(
   storage: StorageProvider,
   userId: number,
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): Promise<{ outputs: TableOutput[]; inputSatoshis: number }> {
   const outpoints = args.options.noSendChange
   const byOutpoint = await storage.findOutputsByOutpoints(userId, outpoints)
@@ -231,7 +232,7 @@ async function resolveNoSendChangeOutputs(
 
 function estimateFirstActionTarget(
   storage: StorageProvider,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   inputSatoshis: number,
   outputScriptLengths?: number[]
 ): number {
@@ -363,7 +364,7 @@ async function reserveOutputs(
 
 async function makeFundingResult(
   storage: StorageProvider,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   outputs: TableOutput[]
 ): Promise<{ outputs: ActionBatchFundingOutput[]; beef?: Uint8Array }> {
   const beef = new Beef()
@@ -610,7 +611,7 @@ export async function extendActionBatch(
   }
 }
 
-function argsToFundingShape(includeSourceTransactions: boolean): Validation.ValidCreateActionArgs {
+function argsToFundingShape(includeSourceTransactions: boolean): ValidCreateActionArgs {
   return {
     inputs: [],
     outputs: [],

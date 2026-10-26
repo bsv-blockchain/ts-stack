@@ -107,6 +107,27 @@ describe('authorized-output settlement profile', () => {
     ).rejects.toThrow(/Evidence provider does not match/u)
   })
 
+  it('requires owned settlement bundle and wallet result fields', async () => {
+    const fixture = await authorizedFixture()
+    const inheritedBundle = Object.create(fixture.bundle)
+    await expect(
+      validateAuthorizedOutputEvidence(inheritedBundle, fixture.demand, fixture.atomicBeef)
+    ).rejects.toMatchObject({ code: 'ERR_LCH_FRAMING' })
+
+    const authorizer = new WalletAuthorizedOutputPayee({
+      wallet: {
+        getPublicKey: async () =>
+          Object.create({ publicKey: new PrivateKey(216).toPublicKey().toString() })
+      } as never,
+      signer: fixture.payeeSigner,
+      now: () => 1_000n,
+      random: length => new Uint8Array(length).fill(4)
+    })
+    await expect(authorizer.authorize(fixture.demand, fixture.policy)).rejects.toMatchObject({
+      code: 'ERR_LCH_FRAMING'
+    })
+  })
+
   it('binds one idempotent Authorization to the exact Demand and expiry', async () => {
     const fixture = await authorizedFixture()
     await expect(
@@ -118,6 +139,12 @@ describe('authorized-output settlement profile', () => {
     expect(await fixture.authorizer.authorize(fixture.demand, fixture.policy)).toEqual(
       fixture.bundle.authorization
     )
+    fixture.bundle.authorization.body.satoshis = 99
+    await expect(
+      fixture.authorizer.authorize(fixture.demand, fixture.policy)
+    ).resolves.toMatchObject({
+      body: { satoshis: 7 }
+    })
   })
 })
 

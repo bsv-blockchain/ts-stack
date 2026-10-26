@@ -10,6 +10,10 @@ const RESOURCE_ENV = [
   'MESSAGE_BOX_MAX_INBOX_MESSAGES',
   'MESSAGE_BOX_NOTIFICATION_RECIPIENT_CONCURRENCY',
   'MESSAGE_BOX_FCM_SEND_CONCURRENCY',
+  'MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS',
+  'MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS_PER_IDENTITY',
+  'MESSAGE_BOX_WEBSOCKET_MAX_ROOMS_PER_CONNECTION',
+  'MESSAGE_BOX_WEBSOCKET_CONTROL_RATE_LIMIT',
   'MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS',
   'MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT',
   'MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS',
@@ -54,6 +58,10 @@ describe('Message Box resource safety configuration', () => {
   it('bounds WebSocket writes and notification fan-out by default', () => {
     expect(readMessageBoxResourceConfig()).toEqual(
       expect.objectContaining({
+        webSocketMaxConnections: 1_000,
+        webSocketMaxConnectionsPerIdentity: 25,
+        webSocketMaxRoomsPerConnection: 128,
+        webSocketControlRateLimit: 600,
         webSocketMaxConcurrentSends: 4,
         webSocketSendRateLimit: 300,
         webSocketMaxRecipientConnections: 25,
@@ -62,11 +70,19 @@ describe('Message Box resource safety configuration', () => {
       })
     )
 
+    process.env.MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS = 'unlimited'
+    process.env.MESSAGE_BOX_WEBSOCKET_MAX_CONNECTIONS_PER_IDENTITY = '-1'
+    process.env.MESSAGE_BOX_WEBSOCKET_MAX_ROOMS_PER_CONNECTION = '-1'
+    process.env.MESSAGE_BOX_WEBSOCKET_CONTROL_RATE_LIMIT = '-1'
     process.env.MESSAGE_BOX_WEBSOCKET_MAX_CONCURRENT_SENDS = 'unlimited'
     process.env.MESSAGE_BOX_WEBSOCKET_SEND_RATE_LIMIT = '-1'
     process.env.MESSAGE_BOX_WEBSOCKET_MAX_RECIPIENT_CONNECTIONS = '-1'
     expect(readMessageBoxResourceConfig()).toEqual(
       expect.objectContaining({
+        webSocketMaxConnections: -1,
+        webSocketMaxConnectionsPerIdentity: -1,
+        webSocketMaxRoomsPerConnection: -1,
+        webSocketControlRateLimit: -1,
         webSocketMaxConcurrentSends: -1,
         webSocketSendRateLimit: -1,
         webSocketMaxRecipientConnections: -1

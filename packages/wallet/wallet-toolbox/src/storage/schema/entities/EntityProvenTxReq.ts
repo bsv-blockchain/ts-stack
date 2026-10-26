@@ -289,7 +289,7 @@ export class EntityProvenTxReq extends EntityBase<TableProvenTxReq> {
     this.updated_at = new Date()
     this.updateApi()
     if (this.id === 0) {
-      await storage.insertProvenTxReq(this.api)
+      await storage.insertProvenTxReq(this.api, trx)
     }
     const update: Partial<TableProvenTxReq> = { ...this.api }
     await storage.updateProvenTxReq(this.id, update, trx)

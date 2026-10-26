@@ -1,12 +1,11 @@
+import { toArray, toHex as bytesToHex } from '@bsv/sdk/primitives/utils'
 import {
   LockingScript,
-  Utils,
   WalletInterface,
   ScriptTemplate,
   Transaction,
   UnlockingScript
 } from '@bsv/sdk'
-
 import P2PKH from './p2pkh'
 import { ORDINAL_MAP_PREFIX } from '../utils/constants'
 import {
@@ -30,7 +29,35 @@ export interface MAP {
 }
 
 const toHex = (str: string) => {
-  return Utils.toHex(Utils.toArray(str))
+  return bytesToHex(toArray(str))
+}
+
+function decodeCanonicalBase64(value: string): Buffer {
+  if (
+    value.length === 0 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
+  ) {
+    throw new Error('Invalid file data: dataB64 must be canonical base64')
+  }
+  const decoded = Buffer.from(value, 'base64')
+  if (decoded.length === 0 || decoded.toString('base64') !== value) {
+    throw new Error('Invalid file data: dataB64 must be canonical base64')
+  }
+  return decoded
+}
+
+function requirePlainDataObject(value: object, name: string): PropertyDescriptorMap {
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error(`${name} must be a plain data object`)
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value)
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (!('value' in descriptor) || descriptor.get != null || descriptor.set != null) {
+      throw new Error(`${name}.${key} must be a data property`)
+    }
+  }
+  return descriptors
 }
 
 function validateInscription(inscription: Inscription | undefined): void {
@@ -38,11 +65,20 @@ function validateInscription(inscription: Inscription | undefined): void {
   if (typeof inscription !== 'object' || inscription === null) {
     throw new Error('inscription must be an object with dataB64 and contentType properties')
   }
+  requirePlainDataObject(inscription, 'inscription')
   if (!inscription.dataB64 || typeof inscription.dataB64 !== 'string') {
     throw new Error('inscription.dataB64 is required and must be a base64 string')
   }
   if (!inscription.contentType || typeof inscription.contentType !== 'string') {
     throw new Error('inscription.contentType is required and must be a string (MIME type)')
+  }
+  decodeCanonicalBase64(inscription.dataB64)
+  if (
+    inscription.contentType.includes(String.fromCharCode(0)) ||
+    inscription.contentType.includes('\r') ||
+    inscription.contentType.includes('\n')
+  ) {
+    throw new Error('inscription.contentType must not contain control characters')
   }
 }
 
@@ -51,11 +87,17 @@ function validateMetadata(metadata: MAP | undefined): void {
   if (typeof metadata !== 'object' || metadata === null) {
     throw new Error('metadata must be an object')
   }
+  const descriptors = requirePlainDataObject(metadata, 'metadata')
   if (!metadata.app || typeof metadata.app !== 'string') {
     throw new Error('metadata.app is required and must be a string')
   }
   if (!metadata.type || typeof metadata.type !== 'string') {
     throw new Error('metadata.type is required and must be a string')
+  }
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (descriptor.enumerable && typeof descriptor.value !== 'string') {
+      throw new Error(`metadata.${key} must be a string`)
+    }
   }
 }
 
@@ -143,7 +185,7 @@ export default class OrdP2PKH implements ScriptTemplate {
 
 function ordinalEnvelope(inscription: Inscription | undefined): string {
   if (inscription?.dataB64 === undefined || inscription?.contentType === undefined) return ''
-  const fileHex = Buffer.from(inscription.dataB64, 'base64').toString('hex').trim()
+  const fileHex = decodeCanonicalBase64(inscription.dataB64).toString('hex')
   if (!fileHex) throw new Error('Invalid file data')
   const fileMediaType = toHex(inscription.contentType)
   if (!fileMediaType) throw new Error('Invalid media type')
@@ -177,6 +219,8 @@ export const applyInscription = (
   metaData?: MAP,
   withSeparator = false
 ): LockingScript => {
+  validateInscription(inscription)
+  validateMetadata(metaData)
   const envelope = ordinalEnvelope(inscription)
   const separator = envelope !== '' && withSeparator ? 'OP_CODESEPARATOR ' : ''
   const prefix = envelope !== '' ? `${envelope} ` : ''

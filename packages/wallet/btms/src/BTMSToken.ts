@@ -1,3 +1,4 @@
+import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
 /**
  * BTMSToken - Token Encoding and Decoding
  *
@@ -12,13 +13,11 @@
 import {
   LockingScript,
   PushDrop,
-  Utils,
   WalletInterface,
   WalletClient,
   WalletProtocol,
   WalletCounterparty
 } from '@bsv/sdk'
-
 import type { BTMSTokenDecodeResult, DecodedBTMSToken } from './types.js'
 import { BTMS_PROTOCOL_ID, ISSUE_MARKER, MIN_TOKEN_AMOUNT, MAX_TOKEN_AMOUNT } from './constants.js'
 
@@ -156,13 +155,13 @@ export class BTMSToken {
       }
 
       // Decode fields
-      const assetId = Utils.toUTF8(fields[0])
-      const amountStr = Utils.toUTF8(fields[1])
+      const assetId = toUTF8(fields[0])
+      const amountStr = toUTF8(fields[1])
 
       // Try to get metadata from field 2 if it looks like JSON
       let metadata: string | undefined
       if (fields.length >= 3) {
-        const potentialMetadata = Utils.toUTF8(fields[2])
+        const potentialMetadata = toUTF8(fields[2])
         // Only treat as metadata if it starts with { (JSON object)
         if (potentialMetadata.startsWith('{')) {
           metadata = potentialMetadata
@@ -171,7 +170,12 @@ export class BTMSToken {
 
       // Validate amount
       const amount = Number(amountStr)
-      if (!Number.isFinite(amount) || amount < MIN_TOKEN_AMOUNT || !Number.isInteger(amount)) {
+      if (
+        !/^[1-9]\d*$/.test(amountStr) ||
+        !Number.isSafeInteger(amount) ||
+        amount < MIN_TOKEN_AMOUNT ||
+        amount > MAX_TOKEN_AMOUNT
+      ) {
         return {
           valid: false,
           error: `Invalid amount: ${amountStr}`
@@ -254,11 +258,8 @@ export class BTMSToken {
   // ---------------------------------------------------------------------------
 
   private validateAmount(amount: number): void {
-    if (!Number.isFinite(amount)) {
-      throw new TypeError('Amount must be a finite number')
-    }
-    if (!Number.isInteger(amount)) {
-      throw new TypeError('Amount must be an integer')
+    if (!Number.isSafeInteger(amount)) {
+      throw new TypeError('Amount must be a safe integer')
     }
     if (amount < MIN_TOKEN_AMOUNT) {
       throw new Error(`Amount must be at least ${MIN_TOKEN_AMOUNT}`)
@@ -279,26 +280,20 @@ export class BTMSToken {
     amount: number,
     metadata?: Record<string, unknown>
   ): number[][] {
-    const fields: number[][] = [
-      Utils.toArray(assetId, 'utf8'),
-      Utils.toArray(String(amount), 'utf8')
-    ]
+    const fields: number[][] = [toArray(assetId, 'utf8'), toArray(String(amount), 'utf8')]
 
     if (metadata && Object.keys(metadata).length > 0) {
-      fields.push(Utils.toArray(JSON.stringify(metadata), 'utf8'))
+      fields.push(toArray(JSON.stringify(metadata), 'utf8'))
     }
 
     return fields
   }
 
   private buildFieldsRaw(assetId: string, amount: number, metadata?: string): number[][] {
-    const fields: number[][] = [
-      Utils.toArray(assetId, 'utf8'),
-      Utils.toArray(String(amount), 'utf8')
-    ]
+    const fields: number[][] = [toArray(assetId, 'utf8'), toArray(String(amount), 'utf8')]
 
     if (metadata) {
-      fields.push(Utils.toArray(metadata, 'utf8'))
+      fields.push(toArray(metadata, 'utf8'))
     }
 
     return fields

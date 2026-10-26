@@ -10,12 +10,12 @@ import { Beef } from '@bsv/sdk'
  * run against the returned closure at each wallet trust boundary.
  */
 export function canonicalizeAtomicBeef(bytes: number[] | Uint8Array): Beef {
-  const received = bytes instanceof Uint8Array ? Beef.fromBinaryView(bytes) : Beef.fromBinary(bytes)
+  const received = bytes instanceof Uint8Array ? Beef.fromBinaryView(bytes) : Beef.fromBinaryStrict(bytes)
   const txid = received.atomicTxid
 
   // Preserve the existing validation path and error identity for malformed
   // envelopes whose subject is absent or cannot be resolved.
   if (txid == null || received.findTxid(txid) == null || received.isAtomic(txid)) return received
 
-  return Beef.fromBinary(received.toBinaryAtomic(txid))
+  return Beef.fromBinaryStrict(received.toBinaryAtomic(txid))
 }

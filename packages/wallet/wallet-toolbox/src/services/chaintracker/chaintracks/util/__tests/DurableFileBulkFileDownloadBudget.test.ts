@@ -38,6 +38,32 @@ describe('DurableFileBulkFileDownloadBudget', () => {
     expect(state.consumedBytes).toBe(60)
   })
 
+  test('serializes reservations across independent instances sharing one ledger', async () => {
+    const first = new DurableFileBulkFileDownloadBudget({ maxBytes: 100, stateFile })
+    const second = new DurableFileBulkFileDownloadBudget({ maxBytes: 100, stateFile })
+    const results = await Promise.allSettled([first.consume(60), second.consume(60)])
+
+    expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter(result => result.status === 'rejected')).toHaveLength(1)
+    const state = JSON.parse(await fs.readFile(stateFile, 'utf8')) as { consumedBytes: number }
+    expect(state.consumedBytes).toBe(60)
+  })
+
+  test('fails closed rather than reclaiming an abandoned cross-process lock', async () => {
+    const lockFolder = `${stateFile}.lock`
+    await fs.mkdir(lockFolder)
+    await fs.writeFile(path.join(lockFolder, 'owner'), 'abandoned')
+    const budget = new DurableFileBulkFileDownloadBudget({
+      maxBytes: 100,
+      stateFile,
+      lockTimeoutMsecs: 10,
+      lockRetryMsecs: 2
+    })
+
+    await expect(budget.consume(1)).rejects.toThrow('never reclaimed automatically')
+    await expect(fs.readFile(path.join(lockFolder, 'owner'), 'utf8')).resolves.toBe('abandoned')
+  })
+
   test('fails closed when durable state is corrupt', async () => {
     await fs.writeFile(stateFile, '{not-json')
     const budget = new DurableFileBulkFileDownloadBudget({ maxBytes: 100, stateFile })
@@ -58,6 +84,18 @@ describe('DurableFileBulkFileDownloadBudget', () => {
     )
     expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: 1, stateFile: ' ' })).toThrow(
       /stateFile parameter.*non-empty path/
+    )
+    expect(
+      () =>
+        new DurableFileBulkFileDownloadBudget({
+          maxBytes: 1,
+          stateFile,
+          lockTimeoutMsecs: 1,
+          lockRetryMsecs: 2
+        })
+    ).toThrow(/lockRetryMsecs parameter.*lockTimeoutMsecs/)
+    expect(() => new DurableFileBulkFileDownloadBudget({ maxBytes: 1, stateFile, now: () => Number.NaN })).toThrow(
+      /now\(\) parameter.*non-negative safe integer/
     )
   })
 

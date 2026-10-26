@@ -1,22 +1,22 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { LockingScript, PushDrop } from '@bsv/sdk'
+import { LockingScript } from '@bsv/sdk'
 import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 import {
-  decodeRegistryUtf8Fields,
-  verifyRegistryToken
+  authenticateRegistryToken,
+  registryText,
+  registryUrl
 } from '../shared/registryTokenValidation.js'
 
 async function validateBasketMapOutput(lockingScript: LockingScript): Promise<void> {
-  const { lockingPublicKey, fields } = PushDrop.decode(lockingScript)
-
-  const [, , , , , registryOperator] = decodeRegistryUtf8Fields(fields, 6)
-  await verifyRegistryToken({
-    fields,
-    lockingPublicKey,
-    registryOperator,
-    protocolID: [1, 'basketmap'],
-    linkageError: 'BasketMap token not linked to registry operator!'
-  })
+  const [basketID, name, iconURL, description, documentationURL] = await authenticateRegistryToken(
+    'basket',
+    lockingScript
+  )
+  registryText(basketID, 'Basket ID', 1, 300)
+  registryText(name, 'Basket name', 1, 300)
+  registryUrl(iconURL, 'Basket icon URL')
+  registryText(description, 'Basket description')
+  registryUrl(documentationURL, 'Basket documentation URL')
 }
 
 export default class BasketMapTopicManager implements TopicManager {

@@ -7,7 +7,7 @@
  * This class also listens for `'authMessage'` events from the server.
  */
 import { Socket as IoClientSocket } from 'socket.io-client'
-import { AuthMessage, Transport } from '@bsv/sdk'
+import type { AuthMessage, Transport } from '@bsv/sdk/auth/types'
 
 const DEFAULT_MAX_PENDING_MESSAGES = 32
 

@@ -1,4 +1,12 @@
 import { PublicKey } from '@bsv/sdk'
+import {
+  containsControlCharacter,
+  isCanonicalMessageBox,
+  MAX_MESSAGE_BOX_BYTES
+} from './messageFields.js'
+
+export const MAX_WEB_SOCKET_MESSAGE_BOX_BYTES = MAX_MESSAGE_BOX_BYTES
+export const MAX_WEB_SOCKET_ROOM_BYTES = 66 + 1 + MAX_WEB_SOCKET_MESSAGE_BOX_BYTES
 
 export class WebSocketPolicyError extends Error {
   constructor(public readonly reason: string) {
@@ -34,15 +42,31 @@ export function authenticatedWebSocketIdentity(
 }
 
 export function isIdentityOwnedRoom(identityKey: string, roomId: unknown): roomId is string {
-  if (typeof roomId !== 'string' || roomId.trim() === '') return false
+  if (
+    typeof roomId !== 'string' ||
+    roomId.trim() === '' ||
+    Buffer.byteLength(roomId, 'utf8') > MAX_WEB_SOCKET_ROOM_BYTES
+  ) {
+    return false
+  }
   const prefix = `${identityKey}-`
-  return roomId.startsWith(prefix) && roomId.length > prefix.length
+  if (!roomId.startsWith(prefix) || roomId.length <= prefix.length) return false
+  const messageBox = roomId.slice(prefix.length)
+  return isCanonicalMessageBox(messageBox) && !containsControlCharacter(identityKey)
 }
 
 export function messageBoxFromRecipientRoom(
   recipient: string,
   roomId: unknown
 ): string | undefined {
-  if (!isIdentityOwnedRoom(recipient, roomId)) return undefined
-  return roomId.slice(recipient.length + 1)
+  let canonicalRecipient: string
+  try {
+    canonicalRecipient = PublicKey.fromString(recipient).toString()
+  } catch {
+    return undefined
+  }
+  if (canonicalRecipient !== recipient || !isIdentityOwnedRoom(canonicalRecipient, roomId)) {
+    return undefined
+  }
+  return roomId.slice(canonicalRecipient.length + 1)
 }

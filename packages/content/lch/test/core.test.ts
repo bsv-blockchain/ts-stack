@@ -98,6 +98,7 @@ describe('publisher and reader reference flow', () => {
 
     const representation = protectedAsset.asset.representation as Record<string, unknown>
     representation.plaintextDigest = new Uint8Array(32)
+    protectedAsset.assetId = await objectId('asset', protectedAsset.asset)
     const wrongDigest = await publisher.publish(
       protectedAsset,
       [
@@ -113,6 +114,27 @@ describe('publisher and reader reference flow', () => {
     const inspected = await reader.inspect(wrongDigest.bytes)
     await expect(reader.decrypt(inspected, protectedAsset.keys)).rejects.toMatchObject({
       code: 'ERR_LCH_CONTENT_DIGEST'
+    })
+  })
+
+  it('rejects a signed representation whose encryption descriptor cannot produce its length', async () => {
+    const signer = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(3)),
+      random: length => new Uint8Array(length).fill(9)
+    })
+    const publisher = new LCHPublisher(signer)
+    const protectedAsset = await publisher.protect(Uint8Array.of(1, 2, 3), {
+      mediaType: 'application/octet-stream',
+      name: 'invalid.bin',
+      rights: [{ interest: 'binary', holder: { name: 'Creator' }, controller: signer.identityKey }],
+      segmentSize: 2,
+      random: length => new Uint8Array(length).fill(length + 2)
+    })
+    const representation = protectedAsset.asset.representation as Record<string, unknown>
+    const descriptor = representation.encryption as Record<string, unknown>
+    descriptor.segmentCount = 1
+    await expect(publisher.publish(protectedAsset, [{ mode: 'inline' }])).rejects.toMatchObject({
+      code: 'ERR_LCH_KEY'
     })
   })
 })

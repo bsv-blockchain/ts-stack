@@ -4,10 +4,15 @@ import { appendFile, readFile, writeFile } from 'node:fs/promises'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+import { collectExecutionLedger } from './ci-execution-ledger.mjs'
+
 const DEFAULT_REPOSITORY = 'bsv-blockchain/ts-stack'
 const DEFAULT_SAMPLE_SIZE = 20
 const FULL_SCOPE_MINIMUM_JOBS = 50
-const MAX_RUNS = 100
+const PAGE_SIZE = 100
+const MAX_CANDIDATE_PAGES = 10
+
+class PerformanceCollectionError extends Error {}
 
 function secondsBetween(start, end) {
   if (!start || !end) return null
@@ -76,7 +81,7 @@ export function measureRun(run, jobs) {
     )
     .reduce((sum, step) => sum + (step.durationSeconds ?? 0), 0)
   const prepareJob = measuredJobs.find(job =>
-    /^(?:Build, lint, and policy|Prepare(?:\s*\/|$))/i.test(job.name)
+    /^(?:Build workspace$|Build, lint, and policy|Prepare(?:\s*\/|$))/i.test(job.name)
   )
   const executedJobs = jobs.filter(job => job.conclusion !== 'skipped')
   return {
@@ -322,54 +327,84 @@ async function githubJson(url, token) {
       Authorization: `Bearer ${token}`,
       'User-Agent': 'ts-stack-ci-performance',
       'X-GitHub-Api-Version': '2022-11-28'
-    }
+    },
+    signal: AbortSignal.timeout(30_000)
   })
   if (!response.ok) {
-    throw new Error(`GitHub API ${response.status} for ${url}: ${await response.text()}`)
+    throw new PerformanceCollectionError(
+      `GitHub API returned HTTP ${response.status} while collecting CI performance evidence.`
+    )
   }
   return await response.json()
 }
 
-async function collectReport({
+async function collectJobs(apiRoot, run, request) {
+  const jobs = []
+  for (let page = 1; page <= 10; page++) {
+    const data = await request(
+      `${apiRoot}/actions/runs/${run.id}/jobs?per_page=${PAGE_SIZE}&page=${page}`
+    )
+    const batch = data.jobs ?? []
+    jobs.push(...batch)
+    if (batch.length < PAGE_SIZE || jobs.length >= data.total_count) return jobs
+  }
+  throw new PerformanceCollectionError(
+    'CI run exceeds the bounded job-page limit; refusing partial timing evidence.'
+  )
+}
+
+export function sampleErrors(report) {
+  const expected = report.classification.sampleSizePerClass
+  return ['fullScope', 'targeted'].flatMap(name => {
+    const count = report.groups[name]?.runs.length ?? 0
+    return count === expected
+      ? []
+      : [`Only ${count} ${name} successful PR runs were available; expected ${expected}`]
+  })
+}
+
+export async function collectReport({
   repository,
   workflow,
   token,
   sampleSize = DEFAULT_SAMPLE_SIZE,
-  minimumJobs = FULL_SCOPE_MINIMUM_JOBS
+  minimumJobs = FULL_SCOPE_MINIMUM_JOBS,
+  maximumPages = MAX_CANDIDATE_PAGES,
+  request = url => githubJson(url, token)
 }) {
   const apiRoot = `https://api.github.com/repos/${repository}`
   const encodedWorkflow = encodeURIComponent(workflow)
-  const runData = await githubJson(
-    `${apiRoot}/actions/workflows/${encodedWorkflow}/runs?event=pull_request&status=success&per_page=${MAX_RUNS}`,
-    token
-  )
-  const candidates = (runData.workflow_runs ?? []).filter(
-    run => run.status === 'completed' && run.conclusion === 'success'
-  )
   const groups = { fullScope: [], targeted: [] }
-  const batchSize = 8
-  for (let index = 0; index < candidates.length; index += batchSize) {
-    const batch = candidates.slice(index, index + batchSize)
-    const measured = await Promise.all(
-      batch.map(async run => {
-        const data = await githubJson(`${run.jobs_url}?per_page=100`, token)
-        return measureRun(run, data.jobs ?? [])
-      })
+  const seenHeads = new Set()
+  let candidatePages = 0
+  let examinedRuns = 0
+  const complete = () => Object.values(groups).every(runs => runs.length === sampleSize)
+  for (let page = 1; page <= maximumPages && !complete(); page++) {
+    const runData = await request(
+      `${apiRoot}/actions/workflows/${encodedWorkflow}/runs?event=pull_request&status=success&per_page=${PAGE_SIZE}&page=${page}`
     )
-    for (const run of measured) {
-      const classification = classifyRun(run, minimumJobs)
-      if (groups[classification].length < sampleSize) groups[classification].push(run)
-    }
-    if (Object.values(groups).every(runs => runs.length === sampleSize)) break
-  }
-  for (const [name, runs] of Object.entries(groups)) {
-    if (runs.length !== sampleSize) {
-      throw new Error(
-        `Only ${runs.length} ${name} successful PR runs were available; expected ${sampleSize}`
+    candidatePages++
+    const pageRuns = runData.workflow_runs ?? []
+    const candidates = pageRuns.filter(run => {
+      if (run.status !== 'completed' || run.conclusion !== 'success' || seenHeads.has(run.head_sha))
+        return false
+      seenHeads.add(run.head_sha)
+      return true
+    })
+    for (let index = 0; index < candidates.length && !complete(); index += 8) {
+      const batch = candidates.slice(index, index + 8)
+      const measured = await Promise.all(
+        batch.map(async run => measureRun(run, await collectJobs(apiRoot, run, request)))
       )
+      examinedRuns += measured.length
+      for (const run of measured) {
+        const classification = classifyRun(run, minimumJobs)
+        if (groups[classification].length < sampleSize) groups[classification].push(run)
+      }
     }
+    if (pageRuns.length < PAGE_SIZE) break
   }
-  return createReport({
+  const report = createReport({
     repository,
     workflow,
     collectedAt: new Date().toISOString(),
@@ -377,6 +412,13 @@ async function collectReport({
     minimumJobs,
     groups
   })
+  report.collection = {
+    candidatePages,
+    maximumPages,
+    examinedRuns,
+    uniqueCandidateHeads: seenHeads.size
+  }
+  return report
 }
 
 function renderSummary(report, comparisons) {
@@ -410,29 +452,70 @@ function option(arguments_, name) {
   return index === -1 ? undefined : arguments_[index + 1]
 }
 
+export async function collectPerformanceEvidence({
+  repository,
+  workflow,
+  token,
+  executionLedger = false,
+  sampleSize = DEFAULT_SAMPLE_SIZE,
+  request = url => githubJson(url, token)
+}) {
+  const [report, ledger] = await Promise.allSettled([
+    collectReport({ repository, workflow, token, sampleSize, request }),
+    executionLedger
+      ? collectExecutionLedger({ repository, workflow, request })
+      : Promise.resolve(null)
+  ])
+  return {
+    report: report.status === 'fulfilled' ? report.value : null,
+    ledger: ledger.status === 'fulfilled' ? ledger.value : null,
+    collectionErrors: [
+      ...(report.status === 'rejected' ? ['Successful-run collection failed.'] : []),
+      ...(ledger.status === 'rejected' ? ['Execution ledger collection failed.'] : [])
+    ]
+  }
+}
+
 async function main(arguments_) {
   const baselinePath = option(arguments_, '--baseline')
   const outputPath = option(arguments_, '--output')
+  const ledgerPath = option(arguments_, '--execution-ledger-output')
   const writeBaselinePath = option(arguments_, '--write-baseline')
   const workflow = option(arguments_, '--workflow') ?? 'ci.yml'
   if (!arguments_.includes('--collect')) {
     throw new Error(
       'Usage: ci-performance.mjs --collect [--baseline file] [--output file] ' +
-        '[--write-baseline file] [--workflow ci.yml]'
+        '[--execution-ledger-output file] [--write-baseline file] [--workflow ci.yml]'
     )
   }
   const token = process.env.GITHUB_TOKEN
   if (!token) throw new Error('GITHUB_TOKEN is required for --collect')
-  const report = await collectReport({
-    repository: process.env.GITHUB_REPOSITORY ?? DEFAULT_REPOSITORY,
+  const repository = process.env.GITHUB_REPOSITORY ?? DEFAULT_REPOSITORY
+  const { report, ledger, collectionErrors } = await collectPerformanceEvidence({
+    repository,
     workflow,
-    token
+    token,
+    executionLedger: Boolean(ledgerPath)
   })
+  if (ledgerPath && ledger) {
+    await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`)
+    const summary =
+      `Execution ledger: ${ledger.window.runCount} recent PR runs, ` +
+      `${ledger.summary.attemptCount} attempts, ` +
+      `${(ledger.summary.knownExecutionSeconds / 60).toFixed(2)} known runner-minutes, ` +
+      `${ledger.summary.unmeasuredJobCount} jobs with unknown/incomplete duration. ` +
+      'Execution is a lower bound, not billed cost or passing qualification.\n'
+    process.stdout.write(summary)
+    if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary)
+  }
+  if (!report) throw new PerformanceCollectionError(collectionErrors.join('\n'))
   if (outputPath) await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`)
   if (writeBaselinePath) {
+    const errors = [...sampleErrors(report), ...validateBaseline(createBaseline(report))]
+    if (errors.length > 0) throw new PerformanceCollectionError(errors.join('\n'))
     await writeFile(writeBaselinePath, `${JSON.stringify(createBaseline(report), null, 2)}\n`)
   }
-  let comparisons = []
+  let comparisons = sampleErrors(report)
   if (baselinePath) {
     const baseline = JSON.parse(await readFile(baselinePath, 'utf8'))
     comparisons = compareToBaseline(report, baseline)
@@ -442,14 +525,18 @@ async function main(arguments_) {
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(process.env.GITHUB_STEP_SUMMARY, summary)
   }
-  if (comparisons.length > 0) throw new Error(comparisons.join('\n'))
+  if (comparisons.length > 0 || collectionErrors.length > 0) {
+    throw new PerformanceCollectionError([...comparisons, ...collectionErrors].join('\n'))
+  }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   try {
     await main(process.argv.slice(2))
-  } catch {
-    console.error('CI performance command failed.')
+  } catch (error) {
+    console.error(
+      error instanceof PerformanceCollectionError ? error.message : 'CI performance command failed.'
+    )
     process.exitCode = 1
   }
 }

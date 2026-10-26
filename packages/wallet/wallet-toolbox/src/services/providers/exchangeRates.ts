@@ -1,272 +1,206 @@
-import { FiatExchangeRates, WalletServicesOptions } from '../../sdk/WalletServices.interfaces'
-
+import { createPublicHTTPSFetch } from '@bsv/sdk'
+import type { FiatExchangeRates, WalletServicesOptions } from '../../sdk/WalletServices.interfaces'
 import { WERR_BAD_REQUEST, WERR_MISSING_PARAMETER } from '../../sdk/WERR_errors'
+import {
+  MAX_FIAT_FUTURE_SKEW_MS,
+  MAX_FIAT_RESPONSE_RATES,
+  normalizeFiatCurrencies,
+  normalizeFiatExchangeRates,
+  normalizeFiatRate,
+  normalizeFiatTimestamp
+} from '../fiatRateValidation'
 
-export async function updateChaintracksFiatExchangeRates (
-  targetCurrencies: string[],
-  options: WalletServicesOptions
-): Promise<FiatExchangeRates> {
-  const url = options.chaintracksFiatExchangeRatesUrl
+const EXCHANGE_RATES_ORIGIN = 'https://api.exchangeratesapi.io'
+const MAX_EXCHANGE_RATE_RESPONSE_BYTES = 256 * 1024
+const EXCHANGE_RATE_TIMEOUT_MS = 15_000
+const API_KEY_MAX_LENGTH = 4_096
 
-  if (!url) throw new WERR_MISSING_PARAMETER('options.chaintracksFiatExchangeRatesUrl')
-
-  const response = await fetch(url)
-  const data = await response.json()
-  const r = { status: response.status, data }
-
-  if (r.status !== 200 || r.data?.status !== 'success') {
-    throw new WERR_BAD_REQUEST(`${url} returned status ${r.status}`)
+function plainRecord(value: unknown, name: string): Record<string, unknown> {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new WERR_BAD_REQUEST(`${name} returned malformed data`)
   }
-
-  const rates = r.data.value as FiatExchangeRates
-  rates.timestamp = new Date(rates.timestamp)
-
-  return rates
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new WERR_BAD_REQUEST(`${name} returned malformed data`)
+  }
+  const result = Object.create(null) as Record<string, unknown>
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (typeof key !== 'string' || descriptor == null || !('value' in descriptor)) {
+      throw new WERR_BAD_REQUEST(`${name} returned malformed data`)
+    }
+    result[key] = descriptor.value
+  }
+  return result
 }
 
-export async function updateExchangeratesapi (
+function configuredRateUrl(value: string): URL {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new WERR_BAD_REQUEST('Fiat exchange-rate URL is invalid')
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '' || url.hash !== '') {
+    throw new WERR_BAD_REQUEST('Fiat exchange-rate URL must be credential-free HTTPS')
+  }
+  return url
+}
+
+async function readBoundedJson(response: Response): Promise<unknown> {
+  const declared = response.headers.get('content-length')
+  if (declared != null && (!/^(0|[1-9]\d*)$/.test(declared) || Number(declared) > MAX_EXCHANGE_RATE_RESPONSE_BYTES)) {
+    throw new WERR_BAD_REQUEST('Fiat exchange-rate response is too large')
+  }
+
+  const reader = response.body?.getReader()
+  if (reader == null) throw new WERR_BAD_REQUEST('Fiat exchange-rate response has no body')
+  const decoder = new TextDecoder()
+  let total = 0
+  let text = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.byteLength
+      if (total > MAX_EXCHANGE_RATE_RESPONSE_BYTES) {
+        await reader.cancel()
+        throw new WERR_BAD_REQUEST('Fiat exchange-rate response is too large')
+      }
+      text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+  } finally {
+    reader.releaseLock()
+  }
+
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    throw new WERR_BAD_REQUEST('Fiat exchange-rate response is malformed JSON')
+  }
+}
+
+async function fetchRateJson(url: URL, fetchClient?: typeof fetch): Promise<unknown> {
+  const client = fetchClient ?? createPublicHTTPSFetch(url.origin)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), EXCHANGE_RATE_TIMEOUT_MS)
+  try {
+    const response = await client(url, { redirect: 'error', signal: controller.signal })
+    if (response.status !== 200) {
+      throw new WERR_BAD_REQUEST(`Fiat exchange-rate provider returned status ${response.status}`)
+    }
+    return await readBoundedJson(response)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function updateChaintracksFiatExchangeRates(
   targetCurrencies: string[],
   options: WalletServicesOptions
 ): Promise<FiatExchangeRates> {
-  if (!options.exchangeratesapiKey) throw new WERR_MISSING_PARAMETER('options.exchangeratesapiKey')
+  const configuredUrl = options.chaintracksFiatExchangeRatesUrl
+  if (configuredUrl == null || configuredUrl === '') {
+    throw new WERR_MISSING_PARAMETER('options.chaintracksFiatExchangeRatesUrl')
+  }
+  const targets = normalizeFiatCurrencies(targetCurrencies)
+  const data = plainRecord(
+    await fetchRateJson(configuredRateUrl(configuredUrl), options.fiatExchangeRatesFetch),
+    'Chaintracks fiat provider'
+  )
+  if (data.status !== 'success') {
+    throw new WERR_BAD_REQUEST('Chaintracks fiat provider returned a failure status')
+  }
+  return normalizeFiatExchangeRates(data.value, targets)
+}
 
-  // Always update all rates in one request.
-  const unique = Array.from(new Set([...targetCurrencies, 'USD', 'EUR', 'GBP']))
-  const iorates = await getExchangeRatesIo(options.exchangeratesapiKey, unique)
+export async function updateExchangeratesapi(
+  targetCurrencies: string[],
+  options: WalletServicesOptions
+): Promise<FiatExchangeRates> {
+  const key = options.exchangeratesapiKey
+  if (key == null || key === '') throw new WERR_MISSING_PARAMETER('options.exchangeratesapiKey')
 
-  if (!iorates.success) throw new WERR_BAD_REQUEST(`getExchangeRatesIo returned success ${iorates.success}`)
-
-  const base = iorates.base
-  const usdPerBase = base === 'USD' ? 1 : iorates.rates.USD
-  if (!usdPerBase || typeof usdPerBase !== 'number') {
-    throw new WERR_BAD_REQUEST('getExchangeRatesIo missing rate for \'USD\'')
+  const unique = normalizeFiatCurrencies(targetCurrencies, ['USD', 'EUR', 'GBP'])
+  const iorates = await getExchangeRatesIo(key, unique, options.fiatExchangeRatesFetch)
+  if (iorates.success !== true) {
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo returned a failure status')
   }
 
-  const r: FiatExchangeRates = {
-    timestamp: new Date(iorates.timestamp * 1000),
-    base: 'USD',
-    rates: {}
-  }
-
+  const usdPerBase = iorates.base === 'USD' ? 1 : normalizeFiatRate(iorates.rates.USD, 'USD')
+  const rates: Record<string, number> = { USD: 1 }
   for (const currency of unique) {
-    if (currency === 'USD') {
-      r.rates.USD = 1
-      continue
-    }
-
-    const curPerBase = currency === base ? 1 : iorates.rates[currency]
-    if (!curPerBase || typeof curPerBase !== 'number') {
-      throw new WERR_BAD_REQUEST(`getExchangeRatesIo missing rate for '${currency}'`)
-    }
-
-    r.rates[currency] = curPerBase / usdPerBase
+    if (currency === 'USD') continue
+    const curPerBase = currency === iorates.base ? 1 : normalizeFiatRate(iorates.rates[currency], currency)
+    rates[currency] = normalizeFiatRate(curPerBase / usdPerBase, currency)
   }
 
-  return r
+  return normalizeFiatExchangeRates(
+    {
+      timestamp: new Date(iorates.timestamp * 1000),
+      base: 'USD',
+      rates
+    },
+    unique
+  )
 }
 
 export interface ExchangeRatesIoApi {
-  success: boolean
+  success: true
   timestamp: number
   base: 'EUR' | 'USD'
   date: string
   rates: Record<string, number>
 }
 
-export async function getExchangeRatesIo (key: string, symbols?: string[]): Promise<ExchangeRatesIoApi> {
-  const list = (symbols != null) && (symbols.length > 0) ? symbols.join(',') : ''
-  const symbolsParam = list ? `&symbols=${encodeURIComponent(list)}` : ''
-  const url = `https://api.exchangeratesapi.io/v1/latest?access_key=${key}${symbolsParam}`
-
-  const response = await fetch(url)
-  const data = await response.json()
-  const r = { status: response.status, data }
-
-  if (r.status !== 200 || !r.data) {
-    throw new WERR_BAD_REQUEST(`getExchangeRatesIo returned status ${r.status}`)
+export async function getExchangeRatesIo(
+  key: string,
+  symbols?: string[],
+  fetchClient?: typeof fetch
+): Promise<ExchangeRatesIoApi> {
+  if (typeof key !== 'string' || key.length === 0 || key.length > API_KEY_MAX_LENGTH || /\p{Cc}/u.test(key)) {
+    throw new WERR_BAD_REQUEST('Exchange-rates API key is invalid')
   }
+  const normalizedSymbols = normalizeFiatCurrencies(symbols ?? [])
+  const url = new URL('/v1/latest', EXCHANGE_RATES_ORIGIN)
+  url.searchParams.set('access_key', key)
+  if (normalizedSymbols.length > 0) url.searchParams.set('symbols', normalizedSymbols.join(','))
 
-  const rates = r.data as ExchangeRatesIoApi
+  const data = plainRecord(await fetchRateJson(url, fetchClient), 'getExchangeRatesIo')
+  if (data.success !== true || (data.base !== 'EUR' && data.base !== 'USD')) {
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo returned malformed data')
+  }
+  if (
+    !Number.isSafeInteger(data.timestamp) ||
+    (data.timestamp as number) * 1000 > Date.now() + MAX_FIAT_FUTURE_SKEW_MS
+  ) {
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo returned an invalid timestamp')
+  }
+  if (
+    typeof data.date !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(data.date) ||
+    new Date((data.timestamp as number) * 1000).toISOString().slice(0, 10) !== data.date
+  ) {
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo returned an invalid date')
+  }
+  normalizeFiatTimestamp((data.timestamp as number) * 1000)
 
-  return rates
+  const rawRates = plainRecord(data.rates, 'getExchangeRatesIo rates')
+  if (Object.keys(rawRates).length > MAX_FIAT_RESPONSE_RATES) {
+    throw new WERR_BAD_REQUEST('getExchangeRatesIo returned too many rates')
+  }
+  const rates: Record<string, number> = {}
+  for (const symbol of normalizedSymbols) {
+    if (symbol !== data.base) rates[symbol] = normalizeFiatRate(rawRates[symbol], symbol)
+  }
+  if (data.base === 'EUR') rates.USD = normalizeFiatRate(rawRates.USD, 'USD')
+
+  return {
+    success: true,
+    timestamp: data.timestamp as number,
+    base: data.base,
+    date: data.date,
+    rates
+  }
 }
-
-/*
-{
-    "success": true,
-    "timestamp": 1702405384,
-    "base": "EUR",
-    "date": "2023-12-12",
-    "rates": {
-        "AED": 3.96261,
-        "AFN": 74.453362,
-        "ALL": 101.807155,
-        "AMD": 435.489459,
-        "ANG": 1.944069,
-        "AOA": 897.226337,
-        "ARS": 395.468082,
-        "AUD": 1.646886,
-        "AWG": 1.942271,
-        "AZN": 1.832044,
-        "BAM": 1.95407,
-        "BBD": 2.177971,
-        "BDT": 118.654929,
-        "BGN": 1.956827,
-        "BHD": 0.406753,
-        "BIF": 3078.499675,
-        "BMD": 1.079039,
-        "BND": 1.446102,
-        "BOB": 7.4534,
-        "BRL": 5.35741,
-        "BSD": 1.07874,
-        "BTC": 0.000026145469,
-        "BTN": 89.916078,
-        "BWP": 14.715901,
-        "BYN": 3.553337,
-        "BYR": 21149.174075,
-        "BZD": 2.174364,
-        "CAD": 1.468287,
-        "CDF": 2875.640503,
-        "CHF": 0.945353,
-        "CLF": 0.034313,
-        "CLP": 948.09775,
-        "CNY": 7.743512,
-        "COP": 4307.525658,
-        "CRC": 569.093422,
-        "CUC": 1.079039,
-        "CUP": 28.594547,
-        "CVE": 110.978933,
-        "CZK": 24.507795,
-        "DJF": 191.766554,
-        "DKK": 7.457544,
-        "DOP": 61.505535,
-        "DZD": 145.236415,
-        "EGP": 33.367028,
-        "ERN": 16.185592,
-        "ETB": 60.199033,
-        "EUR": 1,
-        "FJD": 2.416779,
-        "FKP": 0.859886,
-        "GBP": 0.859574,
-        "GEL": 2.880527,
-        "GGP": 0.859886,
-        "GHS": 12.980915,
-        "GIP": 0.859886,
-        "GMD": 72.726644,
-        "GNF": 9285.134874,
-        "GTQ": 8.443457,
-        "GYD": 225.859997,
-        "HKD": 8.426031,
-        "HNL": 26.685156,
-        "HRK": 7.598132,
-        "HTG": 142.513142,
-        "HUF": 382.707793,
-        "IDR": 16801.292339,
-        "ILS": 4.007585,
-        "IMP": 0.859886,
-        "INR": 89.987955,
-        "IQD": 1414.081256,
-        "IRR": 45602.907562,
-        "ISK": 151.109018,
-        "JEP": 0.859886,
-        "JMD": 167.700721,
-        "JOD": 0.765366,
-        "JPY": 157.115675,
-        "KES": 165.523229,
-        "KGS": 96.379362,
-        "KHR": 4440.24707,
-        "KMF": 493.571281,
-        "KPW": 971.097551,
-        "KRW": 1417.685123,
-        "KWD": 0.332733,
-        "KYD": 0.8989,
-        "KZT": 493.04112,
-        "LAK": 22368.488843,
-        "LBP": 16154.243871,
-        "LKR": 352.747636,
-        "LRD": 203.02122,
-        "LSL": 20.582684,
-        "LTL": 3.186123,
-        "LVL": 0.6527,
-        "LYD": 5.211954,
-        "MAD": 10.976529,
-        "MDL": 19.340873,
-        "MGA": 4939.301335,
-        "MKD": 61.507276,
-        "MMK": 2265.283559,
-        "MNT": 3705.780074,
-        "MOP": 8.676817,
-        "MRU": 42.727878,
-        "MUR": 47.690625,
-        "MVR": 16.584924,
-        "MWK": 1816.023037,
-        "MXN": 18.69803,
-        "MYR": 5.052606,
-        "MZN": 68.249194,
-        "NAD": 20.588506,
-        "NGN": 865.924709,
-        "NIO": 39.6024,
-        "NOK": 11.848426,
-        "NPR": 143.865605,
-        "NZD": 1.761931,
-        "OMR": 0.415394,
-        "PAB": 1.07864,
-        "PEN": 4.073376,
-        "PGK": 4.025102,
-        "PHP": 59.974075,
-        "PKR": 306.446851,
-        "PLN": 4.334063,
-        "PYG": 7963.910929,
-        "QAR": 3.928776,
-        "RON": 4.973399,
-        "RSD": 117.196649,
-        "RUB": 97.248412,
-        "RWF": 1351.496966,
-        "SAR": 4.047186,
-        "SBD": 9.12268,
-        "SCR": 14.561036,
-        "SDG": 648.5028,
-        "SEK": 11.285032,
-        "SGD": 1.449037,
-        "SHP": 1.312921,
-        "SLE": 24.488188,
-        "SLL": 21311.029931,
-        "SOS": 616.131981,
-        "SRD": 40.655509,
-        "STD": 22333.938945,
-        "SYP": 14029.21897,
-        "SZL": 20.587826,
-        "THB": 38.597298,
-        "TJS": 11.757734,
-        "TMT": 3.776638,
-        "TND": 3.377493,
-        "TOP": 2.551714,
-        "TRY": 31.312865,
-        "TTD": 7.321483,
-        "TWD": 34.012943,
-        "TZS": 2697.598652,
-        "UAH": 39.917867,
-        "UGX": 4102.367289,
-        "USD": 1.079039,
-        "UYU": 42.422631,
-        "UZS": 13299.161683,
-        "VEF": 3838024.202021,
-        "VES": 38.392542,
-        "VND": 26188.28851,
-        "VUV": 129.693288,
-        "WST": 2.964402,
-        "XAF": 655.37362,
-        "XAG": 0.047456,
-        "XAU": 0.000545,
-        "XCD": 2.916158,
-        "XDR": 0.811478,
-        "XOF": 657.134976,
-        "XPF": 119.331742,
-        "YER": 270.110528,
-        "ZAR": 20.470755,
-        "ZMK": 9712.646776,
-        "ZMW": 26.319693,
-        "ZWL": 347.450277
-    }
-}
-*/

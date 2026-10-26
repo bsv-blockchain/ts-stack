@@ -1,4 +1,6 @@
-import {
+import type LockingScript from '@bsv/sdk/script/LockingScript'
+import type { LookupNetworkPreset } from '@bsv/sdk/overlay-tools/LookupResolver'
+import type {
   AtomicBEEF,
   Base64String,
   BasketStringUnder300Bytes,
@@ -7,13 +9,11 @@ import {
   DescriptionString5to50Bytes,
   HexString,
   LabelStringUnder300Bytes,
-  LockingScript,
   OutputTagStringUnder300Bytes,
   PositiveIntegerOrZero,
   PubKeyHex,
-  WalletInterface,
-  type LookupNetworkPreset
-} from '@bsv/sdk'
+  WalletInterface
+} from '@bsv/sdk/wallet/Wallet.interfaces'
 import type { AuthSocketClientOptions } from '@bsv/authsocket-client'
 
 /**
@@ -56,6 +56,15 @@ export interface MessageBoxClientOptions {
   host?: string
 
   /**
+   * Optional BRC-103 server identity pins keyed by Message Box base URL.
+   * Keys are normalized to their URL origin, so route-prefixed URLs on the
+   * same origin must name the same identity. When omitted, the first mutually
+   * authenticated identity observed for each origin is authoritative for this
+   * client instance; later identity changes fail closed.
+   */
+  serverIdentityKeysByHost?: Readonly<Record<string, PubKeyHex>>
+
+  /**
    * If true, enables detailed logging to the console.
    * @default false
    */
@@ -87,6 +96,35 @@ export interface MessageBoxClientOptions {
 }
 
 /**
+ * What the live socket is doing, as the client knows it. Reported rather than
+ * inferred: before this, a consumer could only find out by sending.
+ *
+ * - `connecting` — a socket exists and has not authenticated yet.
+ * - `live` — authenticated; `rooms` are the rooms joined on it (see
+ *   {@link LiveStatus.rooms}).
+ * - `reconnecting` — dropped, and something will restore it: Socket.IO's own
+ *   retry, or a rebuild this client has scheduled.
+ * - `closed` — dropped, and nothing will restore it. A deliberate
+ *   `disconnectWebSocket()`, a drop under `managerOptions.reconnection: false`,
+ *   or a rebuild that was tried and failed. The next call that needs a socket
+ *   still builds one.
+ */
+export type LiveConnectionState = 'connecting' | 'live' | 'reconnecting' | 'closed'
+
+/** A live-socket state and the rooms joined on it, as `onLiveStatus` reports it. */
+export interface LiveStatus {
+  state: LiveConnectionState
+  /**
+   * Rooms joined on the current socket: requested and not refused by the
+   * server. Recorded when requested, before the server answers; a `joinFailed`
+   * removes one. Empty unless `state` is `live`.
+   */
+  rooms: readonly string[]
+  /** Socket.IO's disconnect reason, when the state came from a drop. */
+  reason?: string
+}
+
+/**
  * Represents a decrypted message received from a MessageBox.
  * Includes metadata such as sender identity, timestamps, and optional acknowledgment status.
  *
@@ -99,7 +137,31 @@ export interface PeerMessage {
   created_at: string
   updated_at: string
   acknowledged?: boolean
+  /**
+   * What `listMessages` or `listMessagesLite` did with the payment this message
+   * carried. Set only on messages that carried one.
+   */
+  paymentOutcome?: PeerMessagePaymentOutcome
+  /**
+   * The payment from the stored-message envelope, exactly as the server
+   * returned it: shaped like {@link Payment} when well formed, but not
+   * validated, so validate it before use (after a `'failed'` outcome it may be
+   * malformed). Kept whenever `paymentOutcome` is not `'internalized'`: the
+   * message holds the only copy of its derivation data, so store the payment
+   * before acknowledging the message.
+   */
+  payment?: Record<string, unknown>
 }
+
+/**
+ * How the list call processed a message's payment (not whether it was later
+ * spent or refunded):
+ * - `'internalized'`: the wallet accepted the payment.
+ * - `'failed'`: internalizing threw or the wallet did not accept it.
+ * - `'skipped'`: not attempted (`acceptPayments: false`, or `listMessagesLite`).
+ * - `'no-wallet-outputs'`: it has no `wallet payment` outputs to internalize.
+ */
+export type PeerMessagePaymentOutcome = 'internalized' | 'failed' | 'skipped' | 'no-wallet-outputs'
 
 /**
  * Parameters required to send a message.
@@ -121,6 +183,8 @@ export interface SendMessageParams {
   skipEncryption?: boolean
   /** Optional: Enable permission and fee checking (default: false for backwards compatibility) */
   checkPermissions?: boolean
+  /** Optional caller-enforced ceiling for an automatically created permission payment. */
+  maximumPayment?: PositiveIntegerOrZero
 }
 
 /**
@@ -131,6 +195,8 @@ export interface SendMessageParams {
 export interface SendMessageResponse {
   status: string
   messageId: string
+  /** Optional bounded informational message returned by the server. */
+  message?: string
 }
 
 /**
@@ -155,6 +221,8 @@ export interface AcknowledgeMessageParams {
 export interface ListMessagesParams {
   messageBox: string
   host?: string
+  /** Optional exact message identifier for a bounded indexed lookup. */
+  messageId?: string
   acceptPayments?: boolean
   /** Starting message offset. `skip` is an equivalent compatibility alias. */
   offset?: number
@@ -299,6 +367,10 @@ export type PaymentRequestMessage = PaymentRequestNew | PaymentRequestCancellati
  * Carried in the 'payment_request_responses' message box.
  */
 export interface PaymentRequestResponse {
+  /** Authenticated envelope message ID. Present on list/live receive results, absent on send bodies. */
+  messageId?: string
+  /** Authenticated envelope sender. Present on list/live receive results, absent on send bodies. */
+  sender?: string
   /** The requestId of the original PaymentRequestMessage this responds to. */
   requestId: string
   /** Status of the response. */

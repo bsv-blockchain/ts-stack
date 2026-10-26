@@ -7,7 +7,6 @@ ENVIRONMENT='npm-production'
 PKGS=(
   "@bsv/amountinator"
   "@bsv/wallet-helper"
-  "@bsv/did-client"
   "@bsv/fund-wallet"
   "@bsv/simple"
   "@bsv/templates"
@@ -15,6 +14,7 @@ PKGS=(
   "@bsv/authsocket"
   "@bsv/message-box-client"
   "@bsv/paymail"
+  "@bsv/webrtpay"
   "@bsv/402-pay"
   "@bsv/auth-express-middleware"
   "@bsv/payment-express-middleware"

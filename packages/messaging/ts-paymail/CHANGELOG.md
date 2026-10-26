@@ -15,6 +15,9 @@ All notable changes to this project will be documented in this file. The format 
 - (Include new features or significant user-visible enhancements here.)
 
 ### Changed
+- Fix the CommonJS build's `@bsv/sdk` default-import interop so P2P
+  signature helpers construct SDK keys and signatures instead of failing with
+  `.default is not a constructor`.
 - Ship the Express declaration dependency needed by strict TypeScript
   consumers of the Paymail router API.
 
@@ -28,7 +31,26 @@ All notable changes to this project will be documented in this file. The format 
 - (Document bugs that were fixed since the last release.)
 
 ### Security
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- Harden Paymail discovery and capability requests against private-network
+  pivots, DNS rebinding, redirects, unbounded or slow response bodies, unsafe
+  endpoints, unrelated DoH answer owners, malformed capability value graphs,
+  and unbounded capability caches.
+- Bind PKI, public-key ownership, payment destinations, and transaction
+  acknowledgements to the exact request, while preserving raw, BRC-62 BEEF,
+  and BRC-95 Atomic BEEF compatibility.
+- Make inbound routing fail closed for malformed identities, sender-validation
+  configuration drift, invalid financial outputs, malformed JSON,
+  non-canonical signatures/keys, handler mutation, and unrelated handler txids.
+- Snapshot mounted routes and discovery configuration at construction, reject
+  duplicate capability codes, and copy capability metadata before deriving its
+  identifier so later local mutation cannot rewrite advertised authority.
+- Require exact ordinal destination counts and strict negotiation booleans,
+  restrict public-profile URLs away from literal/local hosts, and harden the
+  private server example's sender/reference/replay checks.
+- Document that legacy P2P signatures cover only a transaction ID, that
+  Transaction Negotiation v1 is unauthenticated input, and that the package's
+  historical reuse of BRFC `6745385c3fc0` is not the timestamped Basic Address
+  Resolution assurance defined by the upstream specification.
 
 ---
 

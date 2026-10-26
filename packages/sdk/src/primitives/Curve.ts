@@ -1016,7 +1016,7 @@ export default class Curve {
     return {
       beta,
       lambda,
-      basis: this._resolveEndomorphismBasis(conf, lambda)
+      basis: this.#_resolveEndomorphismBasis(conf, lambda)
     }
   }
 
@@ -1059,7 +1059,7 @@ export default class Curve {
     return lambdas[1]
   }
 
-  private _resolveEndomorphismBasis(
+  #_resolveEndomorphismBasis(
     conf: EndomorphismConfig,
     lambda: BigNumber
   ): Array<{ a: BigNumber; b: BigNumber }> {

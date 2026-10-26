@@ -2,6 +2,7 @@ import { Response } from 'express'
 import { Logger } from '../utils/logger.js'
 import { AuthRequest } from '@bsv/auth-express-middleware'
 import { runtimeDeps } from '../runtimeDeps.js'
+import { isExactBoundedText } from '../security/messageFields.js'
 
 export const MAX_FCM_TOKEN_LENGTH = 500
 export const MAX_DEVICE_ID_LENGTH = 255
@@ -33,10 +34,12 @@ export interface RegisterDeviceRequest extends AuthRequest {
  *             properties:
  *               fcmToken:
  *                 type: string
- *                 description: Firebase Cloud Messaging token
+ *                 maxLength: 500
+ *                 description: Exact control-free Firebase Cloud Messaging token; surrounding whitespace is not normalized
  *               deviceId:
  *                 type: string
- *                 description: Optional device identifier
+ *                 maxLength: 255
+ *                 description: Optional exact control-free device identifier; surrounding whitespace is not normalized
  *               platform:
  *                 type: string
  *                 description: Device platform (ios, android, web)
@@ -89,32 +92,22 @@ export default {
       const { fcmToken, deviceId, platform } = req.body
 
       // Validate required fields
-      if (fcmToken == null || typeof fcmToken !== 'string' || fcmToken.trim() === '') {
+      if (!isExactBoundedText(fcmToken, MAX_FCM_TOKEN_LENGTH)) {
         Logger.log('[DEBUG] Invalid FCM token provided')
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_FCM_TOKEN',
-          description: 'fcmToken is required and must be a non-empty string.'
+          description: `fcmToken must be an exact, control-free string of at most ${MAX_FCM_TOKEN_LENGTH} bytes.`
         })
       }
 
-      const normalizedFcmToken = fcmToken.trim()
-      if (normalizedFcmToken.length > MAX_FCM_TOKEN_LENGTH) {
-        return res.status(400).json({
-          status: 'error',
-          code: 'ERR_INVALID_FCM_TOKEN',
-          description: `fcmToken must not exceed ${MAX_FCM_TOKEN_LENGTH} characters.`
-        })
-      }
+      const normalizedFcmToken = fcmToken
 
-      if (
-        deviceId != null &&
-        (typeof deviceId !== 'string' || deviceId.trim().length > MAX_DEVICE_ID_LENGTH)
-      ) {
+      if (deviceId != null && !isExactBoundedText(deviceId, MAX_DEVICE_ID_LENGTH)) {
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_DEVICE_ID',
-          description: `deviceId must be a string of at most ${MAX_DEVICE_ID_LENGTH} characters.`
+          description: `deviceId must be an exact, control-free string of at most ${MAX_DEVICE_ID_LENGTH} bytes.`
         })
       }
 
@@ -149,7 +142,7 @@ export default {
         }
 
         const values = {
-          device_id: deviceId?.trim() ?? null,
+          device_id: deviceId ?? null,
           platform: platform ?? null,
           updated_at: now,
           active: true,
@@ -170,25 +163,23 @@ export default {
           deviceRegistrationId = Number(insertedId)
         }
 
-        Logger.log(
-          `[DEBUG] Device registered successfully for authenticated identity with token ending in ...${normalizedFcmToken.slice(-10)}`
-        )
+        Logger.log('[DEBUG] Device registered successfully for authenticated identity.')
 
         return res.status(200).json({
           status: 'success',
           message: 'Device registered successfully for push notifications',
           deviceId: deviceRegistrationId
         })
-      } catch (dbError: any) {
-        Logger.error('[ERROR] Database error during device registration:', dbError)
+      } catch {
+        Logger.error('[ERROR] Database error during device registration.')
         return res.status(500).json({
           status: 'error',
           code: 'ERR_DATABASE_ERROR',
           description: 'Failed to register device.'
         })
       }
-    } catch (error) {
-      Logger.error('[ERROR] Internal Server Error in registerDevice:', error)
+    } catch {
+      Logger.error('[ERROR] Internal Server Error in registerDevice.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL',

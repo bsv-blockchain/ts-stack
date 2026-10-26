@@ -244,15 +244,6 @@ Status key: ✅ = checked against local source/package docs/tests and patched if
 - ✅ CB-0154 (typescript) [82-85] Convert user currency to satoshis — `const sats = await converter.convertToSatoshis(10)  // If preferred = 'USD', USD→SATS`
 - ✅ CB-0155 (typescript) [88-93] Static converter (no auto-refresh) — `const staticConverter = new CurrencyConverter(0)  // refreshInterval = 0`
 
-## docs/packages/helpers/did-client.md
-
-- ✅ CB-0156 (bash) [24-26] Install — `npm install @bsv/did-client`
-- ✅ CB-0157 (typescript) [30-54] Quick start — `import { DIDClient } from '@bsv/did-client'`
-- ✅ CB-0158 (typescript) [69-80] Create a DID token — `const createResult = await didClient.createDID(`
-- ✅ CB-0159 (typescript) [83-96] Find DID tokens on overlay — `const foundDIDs = await didClient.findDID(`
-- ✅ CB-0160 (typescript) [99-103] Query by outpoint — `const byOutpoint = await didClient.findDID({`
-- ✅ CB-0161 (typescript) [106-114] Revoke DID by serial number — `const revokeResult = await didClient.revokeDID({`
-- ✅ CB-0162 (typescript) [117-125] Pagination and filtering — `const page1 = await didClient.findDID({`
 
 ## docs/packages/helpers/fund-wallet.md
 
@@ -393,8 +384,8 @@ Status key: ✅ = checked against local source/package docs/tests and patched if
 - ✅ CB-0246 (bash) [20-22] Install — `npm install @bsv/overlay-topics`
 - ✅ CB-0247 (typescript) [26-40] Quick start — `import { HelloWorldTopicManager, createHelloWorldLookupService } from '@bsv/overlay-topics'`
 - ✅ CB-0248 (typescript) [55-78] Register multiple topics in OverlayExpress — `import OverlayExpress from '@bsv/overlay-express'`
-- ✅ CB-0249 (typescript) [82-103] Query by topic — `// DID query`
-- ✅ CB-0250 (typescript) [107-111] Manual topic manager use — `const manager = new DIDTopicManager()`
+- ✅ CB-0249 (typescript) [82-103] Query by topic — `// Identity discovery query`
+- ✅ CB-0250 (typescript) [107-111] Manual topic manager use — `const manager = new IdentityTopicManager()`
 
 ## docs/packages/overlays/overlay.md
 

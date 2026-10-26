@@ -621,6 +621,41 @@ describe('SimplifiedFetchTransport deserializeRequestPayload', () => {
     expect(typeof result.requestId).toBe('string')
     expect(result.requestId.length).toBeGreaterThan(0)
   })
+
+  test('rejects trailing bytes and an excessive declared header count', () => {
+    expect(() => transport.deserializeRequestPayload([...buildGeneralPayload(), 0])).toThrow(
+      'trailing bytes'
+    )
+
+    const writer = new Utils.Writer()
+    writer.write(Array.from({ length: 32 }).fill(0))
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(513)
+    expect(() => transport.deserializeRequestPayload(writer.toArray())).toThrow(
+      'header count exceeds its limit'
+    )
+  })
+
+  test('rejects duplicate request headers rather than silently overwriting signed data', () => {
+    const writer = new Utils.Writer()
+    writer.write(Array.from({ length: 32 }).fill(0))
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(0)
+    writer.writeVarIntNum(2)
+    for (const value of ['first', 'second']) {
+      const key = Utils.toArray('x-bsv-name', 'utf8')
+      const encodedValue = Utils.toArray(value, 'utf8')
+      writer.writeVarIntNum(key.length)
+      writer.write(key)
+      writer.writeVarIntNum(encodedValue.length)
+      writer.write(encodedValue)
+    }
+    writer.writeVarIntNum(-1)
+    expect(() => transport.deserializeRequestPayload(writer.toArray())).toThrow('duplicate header')
+  })
 })
 
 // ─── onData callback registration ────────────────────────────────────────────
@@ -915,5 +950,51 @@ describe('SimplifiedFetchTransport callback containment', () => {
     await expect(transport.send(makeAuthMessage('initialRequest'))).rejects.toThrow(
       'invalid handshake'
     )
+  })
+})
+
+describe('BRC-104 response body-length wire encoding', () => {
+  async function receive(response: Response): Promise<number[]> {
+    const transport = new SimplifiedFetchTransport('https://api.example.com', async () => response)
+    const received: AuthMessage[] = []
+    await transport.onData(async message => {
+      received.push(message)
+    })
+    await transport.send(makeGeneralMessage())
+    expect(received).toHaveLength(1)
+    return received[0].payload!
+  }
+
+  function response(status: number, body: number[] = [], requestId?: string): Response {
+    return new Response(body.length > 0 ? new Uint8Array(body) : null, {
+      status,
+      headers: {
+        'x-bsv-auth-version': '0.1',
+        'x-bsv-auth-identity-key': 'server-key',
+        'x-bsv-auth-signature': 'aabbcc',
+        ...(requestId === undefined ? {} : { 'x-bsv-auth-request-id': requestId })
+      }
+    })
+  }
+
+  // Independent CompactSize byte vectors for BRC-104 sections 6.7.3 and 6.9.
+  // Exercise the public HTTP receive path, including its body reader and headers.
+  test.each([
+    [204, [0xcc]],
+    [401, [0xfd, 0x91, 0x01]],
+    [403, [0xfd, 0x93, 0x01]],
+    [404, [0xfd, 0x94, 0x01]]
+  ])('bodyless HTTP %i encodes -1 with no trailing bytes', async (status, statusBytes) => {
+    const expected = [...statusBytes, 0, ...Array<number>(9).fill(0xff)]
+    expect(await receive(response(status))).toEqual(expected)
+    const requestIdBytes = Array.from({ length: 32 }, (_, i) => i)
+    expect(await receive(response(status, [], Utils.toBase64(requestIdBytes)))).toEqual([
+      ...requestIdBytes,
+      ...expected
+    ])
+  })
+
+  test('a non-empty body retains its true length and exact bytes', async () => {
+    expect(await receive(response(404, [1, 2, 3]))).toEqual([0xfd, 0x94, 0x01, 0, 3, 1, 2, 3])
   })
 })

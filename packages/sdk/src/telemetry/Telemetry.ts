@@ -1,5 +1,6 @@
 import Random from '../primitives/Random.js'
 import { toHex } from '../primitives/utils.js'
+import { isPlainRecord } from '../primitives/SafeRecord.js'
 
 export type TelemetrySeverity = 'debug' | 'info' | 'warn' | 'error'
 
@@ -65,7 +66,9 @@ export interface TelemetryEventInput {
 
 /**
  * Generic integration point for Sentry, OpenTelemetry, crash reporters, or a
- * consumer's own support-event pipeline.
+ * consumer's own support-event pipeline. The sink is optional diagnostics,
+ * never an authorization or application-result participant; failures are
+ * contained by `Telemetry`.
  */
 export interface TelemetrySink {
   capture: (event: Readonly<TelemetryEvent>) => void | Promise<void>
@@ -76,6 +79,8 @@ export interface TelemetrySink {
  *
  * Node applications can adapt AsyncLocalStorage. Browser and React Native
  * consumers can instead use the explicit carrier helpers on `Telemetry`.
+ * `Telemetry.withSpan` invokes application work at most once and ignores a
+ * manager's substituted result or failures outside that application callback.
  */
 export interface TelemetryContextManager {
   active: () => TelemetrySpanContext | undefined
@@ -145,9 +150,11 @@ const MAX_ATTRIBUTES = 64
 const MAX_ATTRIBUTE_LENGTH = 512
 const MAX_ERROR_LENGTH = 2048
 const MAX_STACK_LENGTH = 8192
+const MAX_SANITIZER_LENGTH = 64 * 1024
 let fallbackCorrelationSequence = 0
 const carrierContexts = new WeakMap<object, TelemetrySpanContext>()
 const synchronousContextStack: TelemetrySpanContext[] = []
+const systemDateNow = Date.now.bind(Date)
 
 const SENSITIVE_TERMS = [
   'password',
@@ -166,7 +173,19 @@ const SENSITIVE_TERMS = [
   'authtoken',
   'accesstoken',
   'refreshtoken',
+  'token',
   'bearer',
+  'authorization',
+  'credential',
+  'cookie',
+  'session',
+  'apikey',
+  'key',
+  'signature',
+  'hmac',
+  'derivation',
+  'certificate',
+  'revocation',
   'otp',
   'onetime',
   'pin'
@@ -178,6 +197,8 @@ const SENSITIVE_LABEL_PATTERNS = SENSITIVE_TERMS.map(term => {
 })
 
 const BEARER_TOKEN = /\bBearer\s+[a-z0-9._~+/=-]+/gi
+const BASIC_AUTH = /\bBasic\s+[a-z0-9+/=]+/gi
+const URL_CREDENTIALS = /([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi
 const WIF_PRIVATE_KEY = /\b[KL][1-9A-HJ-NP-Za-km-z]{50,51}\b/g
 const EXTENDED_PRIVATE_KEY = /\b(?:xprv|tprv)[1-9A-HJ-NP-Za-km-z]+\b/g
 const HEX_256_BIT_VALUE = /\b[0-9a-fA-F]{64}\b/g
@@ -195,7 +216,25 @@ const severityRank: Record<TelemetrySeverity, number> = {
   error: 40
 }
 
+function ownDataValue(record: Record<string, unknown>, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key)
+  if (descriptor == null || !Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+    return undefined
+  }
+  return descriptor.value
+}
+
+function telemetrySeverity(
+  value: unknown,
+  fallback: TelemetrySeverity = 'info'
+): TelemetrySeverity {
+  return value === 'debug' || value === 'info' || value === 'warn' || value === 'error'
+    ? value
+    : fallback
+}
+
 function truncate(value: string, maxLength: number): string {
+  if (maxLength <= 0) return ''
   if (value.length <= maxLength) return value
   return `${value.slice(0, maxLength)}…`
 }
@@ -203,24 +242,34 @@ function truncate(value: string, maxLength: number): string {
 /**
  * Removes common secret encodings from diagnostic text. Unlabelled 256-bit
  * hex values are redacted because they may be private or presentation keys.
+ * This defense in depth does not make arbitrary payloads safe to log: callers
+ * must still emit only operational metadata.
  */
 export function sanitizeTelemetryText(value: string, maxLength: number = MAX_ERROR_LENGTH): string {
+  if (typeof value !== 'string') return ''
+  const safeMaximum =
+    Number.isSafeInteger(maxLength) && maxLength >= 0
+      ? Math.min(maxLength, MAX_SANITIZER_LENGTH)
+      : MAX_ERROR_LENGTH
   // Bound sanitizer work before applying regular expressions. Any suffix past
   // this window cannot reach the emitted value, even after redaction.
-  const bounded = value.slice(0, Math.max(maxLength * 2, maxLength + 256))
+  const bounded = value.slice(0, Math.max(safeMaximum * 2, safeMaximum + 256))
+  const credentialHeadersRedacted = bounded
+    .replace(BEARER_TOKEN, 'Bearer [REDACTED]')
+    .replace(BASIC_AUTH, 'Basic [REDACTED]')
+    .replace(URL_CREDENTIALS, '$1[REDACTED]@')
   const labelsRedacted = SENSITIVE_LABEL_PATTERNS.reduce(
     (sanitized, pattern) => sanitized.replace(pattern, '$1[REDACTED]'),
-    bounded
+    credentialHeadersRedacted
   )
   return truncate(
     labelsRedacted
-      .replace(BEARER_TOKEN, 'Bearer [REDACTED]')
       .replace(WIF_PRIVATE_KEY, REDACTED)
       .replace(EXTENDED_PRIVATE_KEY, REDACTED)
       .replace(HEX_256_BIT_VALUE, REDACTED)
       .replace(LARGE_ENCODED_BLOB, REDACTED)
       .replace(SERIALIZED_BYTE_ARRAY, REDACTED),
-    maxLength
+    safeMaximum
   )
 }
 
@@ -248,6 +297,27 @@ function sanitizeSpanId(value: unknown): string | undefined {
   return normalized
 }
 
+function sanitizeSpanContext(value: unknown): TelemetrySpanContext | undefined {
+  if (!isPlainRecord(value)) return undefined
+  const traceId = sanitizeTraceId(ownDataValue(value, 'traceId'))
+  const spanId = sanitizeSpanId(ownDataValue(value, 'spanId'))
+  const traceFlags = ownDataValue(value, 'traceFlags')
+  if (
+    traceId === undefined ||
+    spanId === undefined ||
+    (traceFlags !== undefined &&
+      (!Number.isSafeInteger(traceFlags) ||
+        (traceFlags as number) < 0 ||
+        (traceFlags as number) > 255))
+  )
+    return undefined
+  return Object.freeze({
+    traceId,
+    spanId,
+    ...(traceFlags !== undefined ? { traceFlags: traceFlags as number } : {})
+  })
+}
+
 function sanitizeDuration(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
@@ -265,13 +335,18 @@ function sanitizeAttributeValue(name: string, value: unknown): TelemetryAttribut
 function sanitizeAttributes(
   attributes: Readonly<Record<string, unknown>> | undefined
 ): Readonly<Record<string, TelemetryAttributeValue>> | undefined {
-  if (attributes == null) return undefined
-  const safe: Record<string, TelemetryAttributeValue> = {}
+  if (!isPlainRecord(attributes)) return undefined
+  const safe: Record<string, TelemetryAttributeValue> = Object.create(null)
   let count = 0
-  for (const [rawName, value] of Object.entries(attributes)) {
-    if (count >= MAX_ATTRIBUTES) break
+  let inspected = 0
+  for (const rawName of Reflect.ownKeys(attributes)) {
+    if (inspected >= MAX_ATTRIBUTES) break
+    inspected += 1
+    if (typeof rawName !== 'string') continue
     const name = sanitizeName(rawName, '')
     if (name.length === 0) continue
+    if (Object.prototype.hasOwnProperty.call(safe, name)) continue
+    const value = ownDataValue(attributes, rawName)
     const sanitized = sanitizeAttributeValue(name, value)
     if (sanitized === undefined) continue
     safe[name] = sanitized
@@ -280,28 +355,28 @@ function sanitizeAttributes(
   return count > 0 ? safe : undefined
 }
 
-interface ErrorCandidate {
-  name?: unknown
-  message?: unknown
-  code?: unknown
-  stack?: unknown
-}
-
 function sanitizeOptionalErrorText(value: unknown, maxLength: number): string | undefined {
   return typeof value === 'string' ? sanitizeTelemetryText(value, maxLength) : undefined
 }
 
-function sanitizeErrorCandidate(candidate: ErrorCandidate, includeStack: boolean): TelemetryError {
+function sanitizeErrorCandidate(
+  candidate: Record<string, unknown>,
+  includeStack: boolean
+): TelemetryError {
+  const candidateName = ownDataValue(candidate, 'name')
+  const candidateMessage = ownDataValue(candidate, 'message')
+  const candidateCode = ownDataValue(candidate, 'code')
+  const candidateStack = ownDataValue(candidate, 'stack')
   const message =
-    typeof candidate.message === 'string' && candidate.message.length > 0
-      ? candidate.message
+    typeof candidateMessage === 'string' && candidateMessage.length > 0
+      ? candidateMessage
       : 'Unknown error'
-  const code = sanitizeOptionalErrorText(candidate.code, 120)
+  const code = sanitizeOptionalErrorText(candidateCode, 120)
   const stack = includeStack
-    ? sanitizeOptionalErrorText(candidate.stack, MAX_STACK_LENGTH)
+    ? sanitizeOptionalErrorText(candidateStack, MAX_STACK_LENGTH)
     : undefined
   return {
-    name: sanitizeName(candidate.name, 'Error'),
+    name: sanitizeName(candidateName, 'Error'),
     message: sanitizeTelemetryText(message),
     ...(code !== undefined ? { code } : {}),
     ...(stack !== undefined ? { stack } : {})
@@ -310,8 +385,8 @@ function sanitizeErrorCandidate(candidate: ErrorCandidate, includeStack: boolean
 
 function sanitizeError(error: unknown, includeStack: boolean): TelemetryError | undefined {
   if (error == null) return undefined
-  if (error instanceof Error || typeof error === 'object') {
-    return sanitizeErrorCandidate(error as ErrorCandidate, includeStack)
+  if (typeof error === 'object') {
+    return sanitizeErrorCandidate(error as Record<string, unknown>, includeStack)
   }
   return {
     name: 'Error',
@@ -324,36 +399,37 @@ function sanitizeEvent(
   now: () => number,
   includeErrorStack: boolean
 ): TelemetryEvent {
-  const severity = event.severity ?? 'info'
-  const correlationId = sanitizeCorrelationId(event.correlationId)
-  const traceId = sanitizeTraceId(event.traceId)
-  const spanId = sanitizeSpanId(event.spanId)
-  const parentSpanId = sanitizeSpanId(event.parentSpanId)
-  const startTimestamp = sanitizeDuration(event.startTimestamp)
-  const durationMs = sanitizeDuration(event.durationMs)
-  const attributes = sanitizeAttributes(event.attributes)
-  const error = sanitizeError(event.error, includeErrorStack)
+  if (!isPlainRecord(event)) throw new TypeError('Telemetry event must be a plain data object.')
+  const severity = telemetrySeverity(ownDataValue(event, 'severity'))
+  const correlationId = sanitizeCorrelationId(ownDataValue(event, 'correlationId'))
+  const traceId = sanitizeTraceId(ownDataValue(event, 'traceId'))
+  const spanId = sanitizeSpanId(ownDataValue(event, 'spanId'))
+  const parentSpanId = sanitizeSpanId(ownDataValue(event, 'parentSpanId'))
+  const startTimestamp = sanitizeDuration(ownDataValue(event, 'startTimestamp'))
+  const durationMs = sanitizeDuration(ownDataValue(event, 'durationMs'))
+  const attributes = sanitizeAttributes(
+    ownDataValue(event, 'attributes') as Readonly<Record<string, unknown>> | undefined
+  )
+  const error = sanitizeError(ownDataValue(event, 'error'), includeErrorStack)
+  const timestamp = ownDataValue(event, 'timestamp')
+  const type = ownDataValue(event, 'type')
+  const spanKind = ownDataValue(event, 'spanKind')
+  const spanStatus = ownDataValue(event, 'spanStatus')
   return {
-    name: sanitizeName(event.name, 'unknown'),
-    component: sanitizeName(event.component, 'unknown'),
+    name: sanitizeName(ownDataValue(event, 'name'), 'unknown'),
+    component: sanitizeName(ownDataValue(event, 'component'), 'unknown'),
     severity,
-    timestamp:
-      typeof (event as TelemetryEvent).timestamp === 'number' &&
-      Number.isFinite((event as TelemetryEvent).timestamp)
-        ? (event as TelemetryEvent).timestamp
-        : now(),
-    ...(event.type === 'span' || event.type === 'event' ? { type: event.type } : {}),
+    timestamp: typeof timestamp === 'number' && Number.isFinite(timestamp) ? timestamp : now(),
+    ...(type === 'span' || type === 'event' ? { type } : {}),
     ...(correlationId !== undefined ? { correlationId } : {}),
     ...(traceId !== undefined ? { traceId } : {}),
     ...(spanId !== undefined ? { spanId } : {}),
     ...(parentSpanId !== undefined ? { parentSpanId } : {}),
-    ...(event.spanKind === 'internal' || event.spanKind === 'client' || event.spanKind === 'server'
-      ? { spanKind: event.spanKind }
+    ...(spanKind === 'internal' || spanKind === 'client' || spanKind === 'server'
+      ? { spanKind }
       : {}),
-    ...(event.spanStatus === 'ok' ||
-    event.spanStatus === 'error' ||
-    event.spanStatus === 'cancelled'
-      ? { spanStatus: event.spanStatus }
+    ...(spanStatus === 'ok' || spanStatus === 'error' || spanStatus === 'cancelled'
+      ? { spanStatus }
       : {}),
     ...(startTimestamp !== undefined ? { startTimestamp } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
@@ -363,8 +439,19 @@ function sanitizeEvent(
 }
 
 function defaultHighResolutionNow(): number {
-  const perf = globalThis.performance
-  return perf != null && typeof perf.now === 'function' ? perf.now() : Date.now()
+  try {
+    const perf = globalThis.performance
+    const value = perf != null && typeof perf.now === 'function' ? perf.now() : systemDateNow()
+    return Number.isFinite(value) ? value : systemDateNow()
+  } catch {
+    return systemDateNow()
+  }
+}
+
+function nextFallbackSequence(): number {
+  fallbackCorrelationSequence = (fallbackCorrelationSequence + 1) % Number.MAX_SAFE_INTEGER
+  if (fallbackCorrelationSequence === 0) fallbackCorrelationSequence = 1
+  return fallbackCorrelationSequence
 }
 
 function randomTraceId(): string {
@@ -381,11 +468,26 @@ function mergeAttributes(
   third: Readonly<Record<string, unknown>> | undefined
 ): Readonly<Record<string, unknown>> | undefined {
   if (first == null && second == null && third == null) return undefined
-  return {
-    ...first,
-    ...second,
-    ...third
+  const merged: Record<string, unknown> = Object.create(null)
+  let count = 0
+  for (const source of [first, second, third]) {
+    if (!isPlainRecord(source)) continue
+    let inspected = 0
+    for (const key of Reflect.ownKeys(source)) {
+      if (inspected >= MAX_ATTRIBUTES) break
+      inspected += 1
+      if (typeof key !== 'string') continue
+      const descriptor = Object.getOwnPropertyDescriptor(source, key)
+      if (descriptor != null && Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        if (!Object.prototype.hasOwnProperty.call(merged, key)) {
+          if (count >= MAX_ATTRIBUTES) continue
+          count += 1
+        }
+        merged[key] = descriptor.value
+      }
+    }
   }
+  return merged
 }
 
 /**
@@ -412,11 +514,11 @@ export class TelemetrySpan {
     const now = telemetry.wallClock()
     this.startedAt = now()
     this.startedAtHighResolution = telemetry.monotonicClock()()
-    this.context = {
+    this.context = Object.freeze({
       traceId: parent?.traceId ?? telemetry.createTraceId(),
       spanId: telemetry.createSpanId(),
       ...(parent?.traceFlags !== undefined ? { traceFlags: parent.traceFlags } : {})
-    }
+    })
     this.parentSpanId = parent?.spanId
     this.runtimeStart = telemetry.runtimeSnapshot()
   }
@@ -454,29 +556,35 @@ export class TelemetrySpan {
   end(options: TelemetrySpanEndOptions = {}): void {
     if (this.ended) return
     this.ended = true
-
-    const runtimeAttributes = this.telemetry.runtimeDiff(
-      this.runtimeStart,
-      this.telemetry.runtimeSnapshot()
-    )
-    const durationMs = Math.max(0, this.telemetry.monotonicClock()() - this.startedAtHighResolution)
-    const status = options.status ?? (options.error == null ? 'ok' : 'error')
-    this.telemetry.capture({
-      name: this.name,
-      component: this.component,
-      severity: options.severity ?? (status === 'error' ? 'error' : 'info'),
-      type: 'span',
-      correlationId: this.correlationId,
-      traceId: this.context.traceId,
-      spanId: this.context.spanId,
-      parentSpanId: this.parentSpanId,
-      spanKind: this.kind,
-      spanStatus: status,
-      startTimestamp: this.startedAt,
-      durationMs,
-      attributes: mergeAttributes(this.initialAttributes, runtimeAttributes, options.attributes),
-      error: options.error
-    })
+    try {
+      const runtimeAttributes = this.telemetry.runtimeDiff(
+        this.runtimeStart,
+        this.telemetry.runtimeSnapshot()
+      )
+      const durationMs = Math.max(
+        0,
+        this.telemetry.monotonicClock()() - this.startedAtHighResolution
+      )
+      const status = options.status ?? (options.error == null ? 'ok' : 'error')
+      this.telemetry.capture({
+        name: this.name,
+        component: this.component,
+        severity: options.severity ?? (status === 'error' ? 'error' : 'info'),
+        type: 'span',
+        correlationId: this.correlationId,
+        traceId: this.context.traceId,
+        spanId: this.context.spanId,
+        parentSpanId: this.parentSpanId,
+        spanKind: this.kind,
+        spanStatus: status,
+        startTimestamp: this.startedAt,
+        durationMs,
+        attributes: mergeAttributes(this.initialAttributes, runtimeAttributes, options.attributes),
+        error: options.error
+      })
+    } catch {
+      // Ending diagnostics must never change application behavior.
+    }
   }
 }
 
@@ -495,21 +603,38 @@ export class Telemetry {
   }
 
   get enabled(): boolean {
-    if (this.config.sink == null) return false
-    if (typeof this.config.enabled !== 'function') return this.config.enabled !== false
     try {
-      return this.config.enabled()
+      if (this.config.sink == null) return false
+      const enabled = this.config.enabled
+      if (typeof enabled !== 'function') return enabled === undefined || enabled === true
+      return enabled() === true
     } catch {
       return false
     }
   }
 
   wallClock(): () => number {
-    return this.config.now ?? Date.now
+    return () => {
+      try {
+        const value = (this.config.now ?? systemDateNow)()
+        return typeof value === 'number' && Number.isFinite(value) ? value : systemDateNow()
+      } catch {
+        return systemDateNow()
+      }
+    }
   }
 
   monotonicClock(): () => number {
-    return this.config.highResolutionNow ?? defaultHighResolutionNow
+    return () => {
+      try {
+        const value = (this.config.highResolutionNow ?? defaultHighResolutionNow)()
+        return typeof value === 'number' && Number.isFinite(value)
+          ? value
+          : defaultHighResolutionNow()
+      } catch {
+        return defaultHighResolutionNow()
+      }
+    }
   }
 
   createCorrelationId(): string {
@@ -520,8 +645,7 @@ export class Telemetry {
       }
       return toHex(Random(16))
     } catch {
-      fallbackCorrelationSequence = (fallbackCorrelationSequence + 1) % Number.MAX_SAFE_INTEGER
-      return `${Date.now().toString(36)}-${fallbackCorrelationSequence.toString(36)}`
+      return `${systemDateNow().toString(36)}-${nextFallbackSequence().toString(36)}`
     }
   }
 
@@ -530,7 +654,11 @@ export class Telemetry {
       const custom = sanitizeTraceId(this.config.traceIdFactory?.())
       return custom ?? randomTraceId()
     } catch {
-      return randomTraceId()
+      const sequence = nextFallbackSequence()
+      return (
+        systemDateNow().toString(16).padStart(16, '0').slice(-16) +
+        sequence.toString(16).padStart(16, '0').slice(-16)
+      )
     }
   }
 
@@ -539,25 +667,34 @@ export class Telemetry {
       const custom = sanitizeSpanId(this.config.spanIdFactory?.())
       return custom ?? randomSpanId()
     } catch {
-      return randomSpanId()
+      return nextFallbackSequence().toString(16).padStart(16, '0').slice(-16)
     }
   }
 
   activeContext(): TelemetrySpanContext | undefined {
     try {
-      return this.config.contextManager?.active() ?? synchronousContextStack.at(-1)
+      return sanitizeSpanContext(
+        this.config.contextManager?.active() ?? synchronousContextStack.at(-1)
+      )
     } catch {
-      return synchronousContextStack.at(-1)
+      return sanitizeSpanContext(synchronousContextStack.at(-1))
     }
   }
 
   contextFor(carrier: object | undefined): TelemetrySpanContext | undefined {
-    if (carrier == null) return undefined
+    if (carrier == null || (typeof carrier !== 'object' && typeof carrier !== 'function'))
+      return undefined
     return carrierContexts.get(carrier)
   }
 
   bindContext(carrier: object, context: TelemetrySpanContext): void {
-    carrierContexts.set(carrier, context)
+    if (carrier == null || (typeof carrier !== 'object' && typeof carrier !== 'function')) return
+    try {
+      const safeContext = sanitizeSpanContext(context)
+      if (safeContext !== undefined) carrierContexts.set(carrier, safeContext)
+    } catch {
+      // Invalid diagnostic context must not affect application behavior.
+    }
   }
 
   linkContext(source: object | undefined, target: object | undefined): void {
@@ -567,7 +704,10 @@ export class Telemetry {
   }
 
   startSpan(name: string, options: TelemetrySpanOptions): TelemetrySpan {
-    const parent = options.parent ?? this.contextFor(options.carrier) ?? this.activeContext()
+    const parent =
+      sanitizeSpanContext(options.parent) ??
+      this.contextFor(options.carrier) ??
+      this.activeContext()
     const correlationId = options.correlationId ?? parent?.traceId ?? this.createCorrelationId()
     const span = new TelemetrySpan(
       this,
@@ -588,39 +728,81 @@ export class Telemetry {
     callback: (span: TelemetrySpan) => T
   ): T {
     const span = this.startSpan(name, options)
-    const invoke = (): T => callback(span)
-    let result: T
+    let callbackStarted = false
+    let callbackCompleted = false
+    let callbackFailed = false
+    let callbackResult!: T
+    let callbackError: unknown
+    const invoke = (): T => {
+      if (callbackStarted) {
+        if (callbackCompleted) return callbackResult
+        throw new Error('Telemetry context manager invoked a callback recursively.')
+      }
+      callbackStarted = true
+      try {
+        callbackResult = callback(span)
+        callbackCompleted = true
+        return callbackResult
+      } catch (error) {
+        callbackFailed = true
+        callbackError = error
+        throw error
+      }
+    }
+    const invokeSynchronously = (): T => {
+      synchronousContextStack.push(span.context)
+      try {
+        return invoke()
+      } finally {
+        synchronousContextStack.pop()
+      }
+    }
+
     try {
-      if (this.config.contextManager != null) {
-        result = this.config.contextManager.run(span.context, invoke)
-      } else {
-        synchronousContextStack.push(span.context)
+      let manager: TelemetryContextManager | undefined
+      try {
+        manager = this.config.contextManager
+      } catch {
+        // Fall back to the built-in synchronous propagation below.
+      }
+      if (manager != null) {
         try {
-          result = invoke()
-        } finally {
-          synchronousContextStack.pop()
+          const run = manager.run
+          if (typeof run === 'function') run.call(manager, span.context, invoke)
+        } catch (error) {
+          if (callbackFailed) throw callbackError
+          if (callbackStarted && !callbackCompleted) throw error
         }
       }
+      if (callbackFailed) throw callbackError
+      const result = callbackStarted ? callbackResult : invokeSynchronously()
+
+      let then: unknown
+      try {
+        then = result == null ? undefined : (result as unknown as PromiseLike<unknown>).then
+      } catch (error) {
+        span.end({ status: 'error', error })
+        throw error
+      }
+      if (typeof then === 'function') {
+        return Promise.resolve(result as unknown as PromiseLike<unknown>).then(
+          value => {
+            span.end()
+            return value
+          },
+          error => {
+            span.end({ status: 'error', error })
+            throw error
+          }
+        ) as T
+      }
+
+      span.end()
+      return result
     } catch (error) {
       span.end({ status: 'error', error })
       throw error
     }
-
-    if (result != null && typeof (result as unknown as PromiseLike<unknown>).then === 'function') {
-      return Promise.resolve(result as unknown as PromiseLike<unknown>).then(
-        value => {
-          span.end()
-          return value
-        },
-        error => {
-          span.end({ status: 'error', error })
-          throw error
-        }
-      ) as T
-    }
-
-    span.end()
-    return result
   }
 
   runtimeSnapshot(): unknown {
@@ -643,26 +825,19 @@ export class Telemetry {
   }
 
   capture(input: TelemetryEventInput): void {
-    if (!this.enabled) return
-    const minimum = this.config.minimumSeverity ?? 'info'
-    const severity = input.severity ?? 'info'
-    if (severityRank[severity] < severityRank[minimum]) return
-
-    const now = this.config.now ?? Date.now
-    const includeStack = this.config.includeErrorStack === true
-    let event = sanitizeEvent(input, now, includeStack)
     try {
+      if (!this.enabled) return
+      const minimum = telemetrySeverity(this.config.minimumSeverity)
+      const now = this.wallClock()
+      const includeStack = this.config.includeErrorStack === true
+      let event = sanitizeEvent(input, now, includeStack)
+      if (severityRank[event.severity] < severityRank[minimum]) return
       const transformed = this.config.beforeSend?.(event)
       if (transformed === null) return
       // Re-sanitize even when the hook returns undefined. TypeScript readonly
       // types do not prevent a JavaScript consumer from mutating the supplied
       // object in place.
       event = sanitizeEvent(transformed ?? event, now, includeStack)
-    } catch {
-      return
-    }
-
-    try {
       const result = this.config.sink?.capture(event)
       if (result != null && typeof (result as PromiseLike<void>).then === 'function') {
         void Promise.resolve(result).catch(() => {

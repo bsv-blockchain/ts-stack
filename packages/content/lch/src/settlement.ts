@@ -1,4 +1,7 @@
-import { P2PKH, PublicKey, Transaction, type AtomicBEEF, type WalletInterface } from '@bsv/sdk'
+import PublicKey from '@bsv/sdk/primitives/PublicKey'
+import P2PKH from '@bsv/sdk/script/templates/P2PKH'
+import Transaction from '@bsv/sdk/transaction/Transaction'
+import type { AtomicBEEF, WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 import { LCH_SETTLEMENT_PROFILES, LCH_TRANSACTION_EVIDENCE_POLICIES } from './constants.js'
 import {
   validatePaymentDelivery,
@@ -18,6 +21,14 @@ import type {
   LCHValue,
   SignedObject
 } from './types.js'
+import {
+  ownDataValue,
+  requiredOwnDataValue,
+  snapshotBytes,
+  snapshotSignedObject,
+  snapshotStringArray,
+  snapshotStringSet
+} from './boundary.js'
 
 const MAX_UINT64 = 0xffffffffffffffffn
 
@@ -49,19 +60,24 @@ export class MemoryPaymentAuthorizationStore implements PaymentAuthorizationStor
   }
 
   async get(demandId: string): Promise<SignedObject | undefined> {
-    return this.authorizations.get(demandId)
+    const authorization = this.authorizations.get(demandId)
+    return authorization === undefined
+      ? undefined
+      : snapshotSignedObject(authorization, 'Stored Payment Authorization')
   }
 
   async putIfAbsent(demandId: string, authorization: SignedObject): Promise<SignedObject> {
     const existing = this.authorizations.get(demandId)
-    if (existing !== undefined) return existing
+    if (existing !== undefined)
+      return snapshotSignedObject(existing, 'Stored Payment Authorization')
     lchAssert(
       this.authorizations.size < this.maximumEntries,
       'ERR_LCH_PAYMENT',
       'Payment Authorization store capacity is exhausted'
     )
-    this.authorizations.set(demandId, authorization)
-    return authorization
+    const owned = snapshotSignedObject(authorization, 'Payment Authorization')
+    this.authorizations.set(demandId, owned)
+    return snapshotSignedObject(owned, 'Stored Payment Authorization')
   }
 }
 
@@ -73,34 +89,108 @@ export interface WalletAuthorizedOutputPayeeOptions {
   now?: () => bigint
   random?: (length: number) => Uint8Array
   allowInsecureLocalOrigins?: readonly string[]
+  supportedCriticalIdentifiers?: ReadonlySet<string>
 }
 
 /** Creates idempotent, Payee-signed destinations for offline-capable settlement. */
 export class WalletAuthorizedOutputPayee {
+  private readonly wallet: Pick<WalletInterface, 'getPublicKey'>
+  private readonly signer: LCHSigner
   private readonly store: PaymentAuthorizationStore
   private readonly now: () => bigint
   private readonly random: (length: number) => Uint8Array
+  private readonly verifier?: LCHSignatureVerifier
+  private readonly validationOptions: AcquisitionValidationOptions
 
-  constructor(private readonly options: WalletAuthorizedOutputPayeeOptions) {
-    this.store = options.store ?? new MemoryPaymentAuthorizationStore()
-    this.now = options.now ?? (() => BigInt(Math.floor(Date.now() / 1000)))
-    this.random = options.random ?? secureRandom
+  constructor(options: WalletAuthorizedOutputPayeeOptions) {
+    const wallet = ownDataValue(options, 'wallet', 'Authorized Output Payee options')
+    const signer = ownDataValue(options, 'signer', 'Authorized Output Payee options')
+    const store = ownDataValue(options, 'store', 'Authorized Output Payee options')
+    const verifier = ownDataValue(options, 'verifier', 'Authorized Output Payee options')
+    const now = ownDataValue(options, 'now', 'Authorized Output Payee options')
+    const random = ownDataValue(options, 'random', 'Authorized Output Payee options')
+    lchAssert(
+      wallet !== null &&
+        typeof wallet === 'object' &&
+        typeof (wallet as Pick<WalletInterface, 'getPublicKey'>).getPublicKey === 'function',
+      'ERR_LCH_PAYMENT',
+      'Authorized Output Payee wallet is invalid'
+    )
+    lchAssert(
+      signer !== null &&
+        typeof signer === 'object' &&
+        (signer as LCHSigner).identityKey instanceof Uint8Array &&
+        typeof (signer as LCHSigner).sign === 'function',
+      'ERR_LCH_SIGNATURE',
+      'Authorized Output Payee signer is invalid'
+    )
+    lchAssert(
+      store === undefined ||
+        (store !== null &&
+          typeof store === 'object' &&
+          typeof (store as PaymentAuthorizationStore).get === 'function' &&
+          typeof (store as PaymentAuthorizationStore).putIfAbsent === 'function'),
+      'ERR_LCH_PAYMENT',
+      'Payment Authorization store is invalid'
+    )
+    lchAssert(
+      verifier === undefined ||
+        (verifier !== null &&
+          typeof verifier === 'object' &&
+          typeof (verifier as LCHSignatureVerifier).verify === 'function'),
+      'ERR_LCH_SIGNATURE',
+      'Payment verifier is invalid'
+    )
+    lchAssert(
+      now === undefined || typeof now === 'function',
+      'ERR_LCH_PAYMENT',
+      'Payment clock is invalid'
+    )
+    lchAssert(
+      random === undefined || typeof random === 'function',
+      'ERR_LCH_KEY',
+      'Payment random source is invalid'
+    )
+    const configuredWallet = wallet as Pick<WalletInterface, 'getPublicKey'>
+    this.wallet = { getPublicKey: configuredWallet.getPublicKey.bind(configuredWallet) }
+    const configuredSigner = signer as LCHSigner
+    this.signer = {
+      identityKey: snapshotBytes(configuredSigner.identityKey, 'Payment Authorization signer'),
+      sign: configuredSigner.sign.bind(configuredSigner)
+    }
+    this.store =
+      (store as PaymentAuthorizationStore | undefined) ?? new MemoryPaymentAuthorizationStore()
+    this.verifier = verifier as LCHSignatureVerifier | undefined
+    this.now = (now as (() => bigint) | undefined) ?? (() => BigInt(Math.floor(Date.now() / 1000)))
+    this.random = (random as ((length: number) => Uint8Array) | undefined) ?? secureRandom
+    this.validationOptions = snapshotAcquisitionOptions(options, 'Authorized Output Payee options')
   }
 
   async authorize(demand: SignedObject, policy: AuthorizedOutputPolicy): Promise<SignedObject> {
-    const demandId = await validatePaymentDemand(demand, this.options.verifier, {
-      allowInsecureLocalOrigins: this.options.allowInsecureLocalOrigins
-    })
+    demand = snapshotSignedObject(demand, 'Payment Demand')
+    policy = snapshotAuthorizedOutputPolicy(policy)
+    const demandId = await validatePaymentDemand(demand, this.verifier, this.validationOptions)
     const demandIdHex = toHex(demandId)
+    const authorizedAt = this.now()
     const existing = await this.store.get(demandIdHex)
-    if (existing !== undefined) return existing
+    if (existing !== undefined) {
+      const ownedExisting = snapshotSignedObject(existing, 'Stored Payment Authorization')
+      await validatePaymentAuthorization(
+        ownedExisting,
+        demand,
+        authorizedAt,
+        this.verifier,
+        this.validationOptions
+      )
+      return ownedExisting
+    }
     lchAssert(
       demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
       'ERR_LCH_PROFILE_UNSUPPORTED',
       'Payment Demand does not permit authorized-output settlement'
     )
     const payee = memberBytes(demand.body, 'payee', 33, 'Demand Payee')
-    equal(payee, this.options.signer.identityKey, 'Payment Authorization Payee')
+    equal(payee, this.signer.identityKey, 'Payment Authorization Payee')
     bytes(policy.evidenceProvider, 33, 'Evidence provider')
     bytes(policy.deliveryProvider, 33, 'Delivery provider')
     endpoint(policy.evidenceEndpoint, policy.allowInsecureLocalEndpoint)
@@ -114,24 +204,29 @@ export class WalletAuthorizedOutputPayee {
       'Transaction evidence policy is unsupported'
     )
     const minimumTransactionState = policy.minimumTransactionState ?? 'accepted'
-    const authorizedAt = this.now()
     const authorizedUntil = uint(demand.body.expiresAt, 'Demand expiry')
     lchAssert(
       authorizedAt < authorizedUntil,
       'ERR_LCH_PAYMENT',
       'Payment Demand expired before authorization'
     )
-    const derivationSuffix = this.random(32)
-    bytes(derivationSuffix, 32, 'Derivation suffix')
+    const returnedDerivationSuffix = this.random(32)
+    bytes(returnedDerivationSuffix, 32, 'Derivation suffix')
+    const derivationSuffix = snapshotBytes(returnedDerivationSuffix, 'Derivation suffix')
     const derivationPrefix = memberBytes(demand.body, 'derivationPrefix', 32, 'Derivation prefix')
     const buyer = memberBytes(demand.body, 'buyer', 33, 'Demand buyer')
     const keyID = `${toBase64Url(derivationPrefix)} ${toBase64Url(derivationSuffix)}`
-    const { publicKey } = await this.options.wallet.getPublicKey({
-      protocolID: [...BRC29_PAYMENT_PROTOCOL],
-      keyID,
-      counterparty: toHex(buyer),
-      forSelf: true
-    })
+    const publicKey = requiredOwnDataValue(
+      await this.wallet.getPublicKey({
+        protocolID: [...BRC29_PAYMENT_PROTOCOL],
+        keyID,
+        counterparty: toHex(buyer),
+        forSelf: true
+      }),
+      'publicKey',
+      'Wallet getPublicKey result'
+    )
+    lchAssert(typeof publicKey === 'string', 'ERR_LCH_PAYMENT', 'Wallet public key is invalid')
     const lockingScript = new P2PKH()
       .lock(PublicKey.fromString(publicKey).toAddress())
       .toUint8Array()
@@ -159,12 +254,19 @@ export class WalletAuthorizedOutputPayee {
         deliveryEndpoint: policy.deliveryEndpoint,
         retrievalEndpoint: policy.retrievalEndpoint
       },
-      this.options.signer
+      this.signer
     )
-    const stored = await this.store.putIfAbsent(demandIdHex, authorization)
-    await validatePaymentAuthorization(stored, demand, authorizedAt, this.options.verifier, {
-      allowInsecureLocalOrigins: this.options.allowInsecureLocalOrigins
-    })
+    const stored = snapshotSignedObject(
+      await this.store.putIfAbsent(demandIdHex, authorization),
+      'Stored Payment Authorization'
+    )
+    await validatePaymentAuthorization(
+      stored,
+      demand,
+      authorizedAt,
+      this.verifier,
+      this.validationOptions
+    )
     return stored
   }
 }
@@ -283,10 +385,15 @@ export interface StoredPaymentDelivery {
 export async function validatePaymentDeliveryRetrieval(
   request: SignedObject,
   authorization: SignedObject,
-  verifier: LCHSignatureVerifier = new PublicBRC77Verifier()
+  verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
+  options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  request = snapshotSignedObject(request, 'Payment Delivery Retrieval')
+  authorization = snapshotSignedObject(authorization, 'Payment Authorization')
+  options = snapshotAcquisitionOptions(options, 'Settlement validation options')
   const payee = memberBytes(request.body, 'payee', 33, 'Retrieval Payee')
-  await verifySignedObject('payment-delivery-retrieval', request, verifier, payee)
+  await verifySignedObject('payment-delivery-retrieval', request, verifier, payee, options)
+  await verifySignedObject('payment-authorization', authorization, verifier, payee, options)
   equal(
     memberBytes(request.body, 'authorizationId', 32, 'Payment Authorization ID'),
     await objectId('payment-authorization', authorization.body),
@@ -305,6 +412,9 @@ export async function validatePaymentAuthorization(
   verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
   options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  authorization = snapshotSignedObject(authorization, 'Payment Authorization')
+  demand = snapshotSignedObject(demand, 'Payment Demand')
+  options = snapshotAcquisitionOptions(options, 'Settlement validation options')
   const demandId = await validatePaymentDemand(demand, verifier, options)
   lchAssert(
     demand.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
@@ -312,7 +422,7 @@ export async function validatePaymentAuthorization(
     'Payment Demand does not permit authorized-output settlement'
   )
   const payee = memberBytes(authorization.body, 'payee', 33, 'Authorization Payee')
-  await verifySignedObject('payment-authorization', authorization, verifier, payee)
+  await verifySignedObject('payment-authorization', authorization, verifier, payee, options)
   lchAssert(
     authorization.body.settlementProfile === LCH_SETTLEMENT_PROFILES.authorizedOutput,
     'ERR_LCH_PROFILE_UNSUPPORTED',
@@ -381,43 +491,46 @@ export async function validateAuthorizedOutputEvidence(
   verifier: LCHSignatureVerifier = new PublicBRC77Verifier(),
   options: AcquisitionValidationOptions = {}
 ): Promise<Uint8Array> {
+  demand = snapshotSignedObject(demand, 'Payment Demand')
+  atomicBeef = atomicBeef.slice()
+  options = snapshotAcquisitionOptions(options, 'Settlement validation options')
+  const authorization = snapshotSignedObject(
+    requiredOwnDataValue(bundle, 'authorization', 'Authorized Output Evidence'),
+    'Payment Authorization'
+  )
+  const delivery = snapshotSignedObject(
+    requiredOwnDataValue(bundle, 'delivery', 'Authorized Output Evidence'),
+    'Payment Delivery'
+  )
+  const transactionEvidence = snapshotSignedObject(
+    requiredOwnDataValue(bundle, 'transactionEvidence', 'Authorized Output Evidence'),
+    'Transaction Evidence'
+  )
+  const deliveryAcknowledgement = snapshotSignedObject(
+    requiredOwnDataValue(bundle, 'deliveryAcknowledgement', 'Authorized Output Evidence'),
+    'Payment Delivery Acknowledgement'
+  )
   const authorizationId = await validatePaymentAuthorization(
-    bundle.authorization,
+    authorization,
     demand,
     undefined,
     verifier,
     options
   )
-  const deliveryId = await validatePaymentDelivery(bundle.delivery, verifier)
+  const deliveryId = await validatePaymentDelivery(delivery, verifier, options)
   const demandId = await objectId('payment-demand', demand.body)
+  equal(memberBytes(delivery.body, 'demandId', 32, 'Delivery Demand ID'), demandId, 'Demand ID')
+  equalMember(delivery.body, demand.body, 'requestId', 32, 'Request ID')
+  equalMember(delivery.body, demand.body, 'buyer', 33, 'Buyer')
+  equalMember(delivery.body, authorization.body, 'derivationPrefix', 32, 'Derivation prefix')
+  equalMember(delivery.body, authorization.body, 'derivationSuffix', 32, 'Derivation suffix')
   equal(
-    memberBytes(bundle.delivery.body, 'demandId', 32, 'Delivery Demand ID'),
-    demandId,
-    'Demand ID'
-  )
-  equalMember(bundle.delivery.body, demand.body, 'requestId', 32, 'Request ID')
-  equalMember(bundle.delivery.body, demand.body, 'buyer', 33, 'Buyer')
-  equalMember(
-    bundle.delivery.body,
-    bundle.authorization.body,
-    'derivationPrefix',
-    32,
-    'Derivation prefix'
-  )
-  equalMember(
-    bundle.delivery.body,
-    bundle.authorization.body,
-    'derivationSuffix',
-    32,
-    'Derivation suffix'
-  )
-  equal(
-    memberBytes(bundle.delivery.body, 'atomicBeef', undefined, 'Delivery Atomic BEEF'),
+    memberBytes(delivery.body, 'atomicBeef', undefined, 'Delivery Atomic BEEF'),
     atomicBeef,
     'Completion Atomic BEEF'
   )
   const transaction = parseAtomicBeef(atomicBeef)
-  const outputIndex = index(bundle.delivery.body.outputIndex)
+  const outputIndex = index(delivery.body.outputIndex)
   const output = transaction.outputs[outputIndex]
   lchAssert(output?.satoshis !== undefined, 'ERR_LCH_PAYMENT', 'Authorized output is absent')
   lchAssert(
@@ -427,20 +540,21 @@ export async function validateAuthorizedOutputEvidence(
   )
   equal(
     output.lockingScript.toUint8Array(),
-    memberBytes(bundle.authorization.body, 'lockingScript', undefined, 'Authorized locking script'),
+    memberBytes(authorization.body, 'lockingScript', undefined, 'Authorized locking script'),
     'Authorized output locking script'
   )
   await validateTransactionEvidence(
-    bundle.transactionEvidence,
-    bundle.authorization,
+    transactionEvidence,
+    authorization,
     authorizationId,
     transaction,
-    verifier
+    verifier,
+    options
   )
   await validateDeliveryAcknowledgement(
-    bundle.deliveryAcknowledgement,
-    bundle.authorization,
-    bundle.delivery,
+    deliveryAcknowledgement,
+    authorization,
+    delivery,
     authorizationId,
     deliveryId,
     verifier,
@@ -454,25 +568,28 @@ export async function validateTransactionEvidence(
   authorization: SignedObject,
   authorizationId: Uint8Array,
   transaction: Transaction,
-  verifier: LCHSignatureVerifier
+  verifier: LCHSignatureVerifier,
+  options: AcquisitionValidationOptions = {}
 ): Promise<void> {
+  evidence = snapshotSignedObject(evidence, 'Transaction Evidence')
+  authorization = snapshotSignedObject(authorization, 'Payment Authorization')
+  bytes(authorizationId, 32, 'Payment Authorization ID')
+  authorizationId = snapshotBytes(authorizationId, 'Payment Authorization ID')
+  options = snapshotAcquisitionOptions(options, 'Settlement validation options')
+  const transactionId = fromHex(transaction.id('hex'))
   const provider = memberBytes(evidence.body, 'provider', 33, 'Evidence provider')
   equal(
     provider,
     memberBytes(authorization.body, 'evidenceProvider', 33, 'Authorized evidence provider'),
     'Evidence provider'
   )
-  await verifySignedObject('transaction-evidence', evidence, verifier, provider)
+  await verifySignedObject('transaction-evidence', evidence, verifier, provider, options)
   equal(
     memberBytes(evidence.body, 'authorizationId', 32, 'Payment Authorization ID'),
     authorizationId,
     'Payment Authorization ID'
   )
-  equal(
-    memberBytes(evidence.body, 'txid', 32, 'Transaction ID'),
-    fromHex(transaction.id('hex')),
-    'Transaction ID'
-  )
+  equal(memberBytes(evidence.body, 'txid', 32, 'Transaction ID'), transactionId, 'Transaction ID')
   const state = memberString(evidence.body, 'state') as LCHTransactionState
   const minimum = memberString(authorization.body, 'minimumTransactionState') as LCHTransactionState
   lchAssert(
@@ -505,13 +622,21 @@ export async function validateDeliveryAcknowledgement(
   verifier: LCHSignatureVerifier,
   options: AcquisitionValidationOptions
 ): Promise<void> {
+  acknowledgement = snapshotSignedObject(acknowledgement, 'Payment Delivery Acknowledgement')
+  authorization = snapshotSignedObject(authorization, 'Payment Authorization')
+  delivery = snapshotSignedObject(delivery, 'Payment Delivery')
+  bytes(authorizationId, 32, 'Payment Authorization ID')
+  bytes(deliveryId, 32, 'Payment Delivery ID')
+  authorizationId = snapshotBytes(authorizationId, 'Payment Authorization ID')
+  deliveryId = snapshotBytes(deliveryId, 'Payment Delivery ID')
+  options = snapshotAcquisitionOptions(options, 'Settlement validation options')
   const provider = memberBytes(acknowledgement.body, 'provider', 33, 'Delivery provider')
   equal(
     provider,
     memberBytes(authorization.body, 'deliveryProvider', 33, 'Authorized delivery provider'),
     'Delivery provider'
   )
-  await verifySignedObject('payment-delivery-ack', acknowledgement, verifier, provider)
+  await verifySignedObject('payment-delivery-ack', acknowledgement, verifier, provider, options)
   equal(
     memberBytes(acknowledgement.body, 'authorizationId', 32, 'Payment Authorization ID'),
     authorizationId,
@@ -662,4 +787,63 @@ function endpoint(value: string, allowInsecureLocal = false): void {
     'ERR_LCH_ENDPOINT',
     'Settlement endpoint must be HTTPS without userinfo or fragment'
   )
+}
+
+function snapshotAcquisitionOptions(value: object, name: string): AcquisitionValidationOptions {
+  return {
+    allowInsecureLocalOrigins: snapshotStringArray(
+      ownDataValue(value, 'allowInsecureLocalOrigins', name),
+      `${name}.allowInsecureLocalOrigins`
+    ),
+    supportedCriticalIdentifiers: snapshotStringSet(
+      ownDataValue(value, 'supportedCriticalIdentifiers', name),
+      `${name}.supportedCriticalIdentifiers`
+    )
+  }
+}
+
+function snapshotAuthorizedOutputPolicy(value: unknown): AuthorizedOutputPolicy {
+  const name = 'Authorized Output Policy'
+  const evidenceProvider = requiredOwnDataValue(value, 'evidenceProvider', name)
+  const deliveryProvider = requiredOwnDataValue(value, 'deliveryProvider', name)
+  bytes(evidenceProvider, 33, 'Evidence provider')
+  bytes(deliveryProvider, 33, 'Delivery provider')
+  const evidenceEndpoint = requiredOwnDataValue(value, 'evidenceEndpoint', name)
+  const deliveryEndpoint = requiredOwnDataValue(value, 'deliveryEndpoint', name)
+  const retrievalEndpoint = requiredOwnDataValue(value, 'retrievalEndpoint', name)
+  lchAssert(
+    typeof evidenceEndpoint === 'string' &&
+      typeof deliveryEndpoint === 'string' &&
+      typeof retrievalEndpoint === 'string',
+    'ERR_LCH_ENDPOINT',
+    'Authorized Output Policy endpoints are invalid'
+  )
+  const evidencePolicy = ownDataValue(value, 'evidencePolicy', name)
+  const minimumTransactionState = ownDataValue(value, 'minimumTransactionState', name)
+  const allowInsecureLocalEndpoint = ownDataValue(value, 'allowInsecureLocalEndpoint', name)
+  lchAssert(
+    evidencePolicy === undefined || typeof evidencePolicy === 'string',
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Authorized Output evidence policy is invalid'
+  )
+  lchAssert(
+    minimumTransactionState === undefined || minimumTransactionState === 'accepted',
+    'ERR_LCH_PROFILE_UNSUPPORTED',
+    'Authorized Output minimum transaction state is invalid'
+  )
+  lchAssert(
+    allowInsecureLocalEndpoint === undefined || typeof allowInsecureLocalEndpoint === 'boolean',
+    'ERR_LCH_ENDPOINT',
+    'Authorized Output endpoint policy is invalid'
+  )
+  return {
+    evidenceProvider: snapshotBytes(evidenceProvider, 'Evidence provider'),
+    evidenceEndpoint,
+    ...(evidencePolicy === undefined ? {} : { evidencePolicy }),
+    ...(minimumTransactionState === undefined ? {} : { minimumTransactionState }),
+    deliveryProvider: snapshotBytes(deliveryProvider, 'Delivery provider'),
+    deliveryEndpoint,
+    retrievalEndpoint,
+    ...(allowInsecureLocalEndpoint === undefined ? {} : { allowInsecureLocalEndpoint })
+  }
 }

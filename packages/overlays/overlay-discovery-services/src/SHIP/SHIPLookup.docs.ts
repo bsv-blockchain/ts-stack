@@ -28,17 +28,26 @@ When you call \`lookup(question)\` on the SHIP Lookup Service, you must include:
 
 1. **\`question.service\`** set to \`"ls_ship"\`.
 2. **\`question.query\`**: Can be one of the following:
-   - \`"findAll"\` (string literal): Returns **all** known SHIP records.
+   - \`"findAll"\` (string literal): Returns up to 1,000 known SHIP records.
    - An object of type:
      \`\`\`ts
      interface SHIPQuery {
+       findAll?: boolean
        domain?: string
        topics?: string[]
+       identityKey?: string
+       limit?: number
+       skip?: number
+       sortOrder?: 'asc' | 'desc'
      }
      \`\`\`
      where:
      - \`domain\` is an optional string. If provided, results will match that domain/advertisedURI.
      - \`topics\` is an optional string array. If provided, results will match any of those \`tm_\` topics.
+     - \`identityKey\` is an optional compressed secp256k1 public key.
+     - \`limit\` is an integer from 0 through 1,000 and defaults to 1,000. Zero returns no rows.
+     - \`skip\` is an integer from 0 through 1,000,000.
+     - \`sortOrder\` is \`asc\` or \`desc\` by creation time and defaults to \`desc\`.
 
 ### Examples
 
@@ -88,7 +97,8 @@ When you call \`lookup(question)\` on the SHIP Lookup Service, you must include:
 - **Topic Prefix**: The SHIP manager expects topics to start with \`tm_\`. If you see no results, ensure you used the correct prefix.
 - **Strict Matching**: Domain matching requires an exact string match. If you have a different protocol (https vs https+bsvauth vs https+bsvauth+smf), be sure to store/lookup accordingly.
 - **Partial Queries**: If you only provide \`topics\`, domain-based filtering is not applied, and vice versa.
-- **Multiple Topics**: Since \`topics\` is an array, the storage will return all records matching **any** listed topic.
+- **Multiple Topics**: Since \`topics\` is an array, the storage will return records matching **any** listed topic. The array must contain 1–100 unique valid \`tm_\` names.
+- **Bounded Results**: Both the legacy \`"findAll"\` form and object queries return at most 1,000 rows. Use \`limit\` and \`skip\` for explicit pagination.
 
 ---
 

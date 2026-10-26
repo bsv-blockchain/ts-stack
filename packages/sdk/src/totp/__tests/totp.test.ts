@@ -14,6 +14,31 @@ describe('totp generation and validation', () => {
   beforeEach(() => jest.useFakeTimers())
   afterEach(() => jest.resetAllMocks())
 
+  test('retains the historical two-digit unpadded default', () => {
+    jest.setSystemTime(1365324707000)
+
+    const passcode = TOTP.generate(secret)
+    expect(passcode).toBe('29')
+    expect(passcode).toHaveLength(2)
+    expect(TOTP.validate(secret, passcode)).toBe(true)
+    expect(TOTP.validate(secret, passcode.slice(1))).toBe(false)
+
+    expect(TOTP.generate(secret, { digits: 2 })).toBe('29')
+    expect(TOTP.validate(secret, '29', { digits: 2 })).toBe(true)
+  })
+
+  test('secure methods opt in to six zero-padded digits without changing legacy output', () => {
+    const timestamp = 1365324707000
+    const legacy = TOTP.generate(secret, { timestamp })
+    const secure = TOTP.generateSecure(secret, { timestamp })
+
+    expect(legacy).toBe('29')
+    expect(secure).toBe('089029')
+    expect(TOTP.validate(secret, legacy, { timestamp })).toBe(true)
+    expect(TOTP.validateSecure(secret, secure, { timestamp })).toBe(true)
+    expect(TOTP.validateSecure(secret, legacy, { timestamp })).toBe(false)
+  })
+
   test.each([
     {
       time: 0,
@@ -55,6 +80,7 @@ describe('totp generation and validation', () => {
     expect(TOTP.validate(secret, passcode, options)).toEqual(true)
 
     const checkAdjacentWindow = (timeOfGeneration: number, expected: boolean): void => {
+      if (timeOfGeneration < 0) return
       jest.setSystemTime(timeOfGeneration)
       const adjacentTimewindowPasscode = TOTP.generate(secret, options)
 
@@ -93,5 +119,54 @@ describe('totp generation and validation', () => {
 
     // Ensure the code path executes constantTimeEquals and returns true
     expect(TOTP.validate(secret, correct, options)).toBe(true)
+  })
+
+  test('rejects unsafe resource and numeric options before HMAC work', () => {
+    expect(() => TOTP.generate(secret, { ...options, digits: 0 })).toThrow(RangeError)
+    expect(() => TOTP.generate(secret, { ...options, digits: 1.5 })).toThrow(RangeError)
+    expect(() => TOTP.generate(secret, { ...options, period: 0 })).toThrow(RangeError)
+    expect(() => TOTP.generate(secret, { ...options, period: Number.POSITIVE_INFINITY })).toThrow(
+      RangeError
+    )
+    expect(() => TOTP.generate(secret, { ...options, timestamp: -1 })).toThrow(RangeError)
+    expect(() => TOTP.generate(secret, { ...options, timestamp: Number.NaN })).toThrow(RangeError)
+    expect(() => TOTP.generate(secret, { ...options, algorithm: 'MD5' as any })).toThrow(TypeError)
+    expect(() =>
+      TOTP.validate(secret, '000000', { ...options, skew: Number.POSITIVE_INFINITY })
+    ).toThrow(RangeError)
+    expect(() => TOTP.validate(secret, '000000', { ...options, skew: 101 })).toThrow(RangeError)
+  })
+
+  test('requires owned dense bounded byte secrets and data-only options', () => {
+    expect(() => TOTP.generate([], options)).toThrow(RangeError)
+    const sparseSecret = [1, 2]
+    delete sparseSecret[0]
+    expect(() => TOTP.generate(sparseSecret, options)).toThrow(TypeError)
+    expect(() => TOTP.generate([0, 256], options)).toThrow(TypeError)
+    expect(() =>
+      TOTP.generate(
+        Array.from({ length: 1025 }, () => 1),
+        options
+      )
+    ).toThrow(RangeError)
+
+    let invoked = false
+    const hostileOptions = { ...options }
+    Object.defineProperty(hostileOptions, 'period', {
+      enumerable: true,
+      get: () => {
+        invoked = true
+        return 30
+      }
+    })
+    expect(() => TOTP.generate(secret, hostileOptions)).toThrow(TypeError)
+    expect(invoked).toBe(false)
+  })
+
+  test('does not derive negative or unsafe adjacent counters near the epoch boundary', () => {
+    const epochOptions = { ...options, timestamp: 0, skew: 100 }
+    const passcode = TOTP.generate(secret, epochOptions)
+
+    expect(TOTP.validate(secret, passcode, epochOptions)).toBe(true)
   })
 })

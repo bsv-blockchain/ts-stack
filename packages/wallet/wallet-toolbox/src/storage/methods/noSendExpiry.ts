@@ -1,4 +1,6 @@
-import { Beef, Transaction, TransactionSignature, Utils, Validation } from '@bsv/sdk'
+import { type ValidCreateActionArgs, validateCreateActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, Transaction, TransactionSignature } from '@bsv/sdk'
+import { toArray, toBase64, toHex } from '@bsv/sdk/primitives/utils'
 import {
   AuthId,
   StorageActivateNoSendExpiryArgs,
@@ -24,7 +26,7 @@ const CONSERVATIVE_RECLAIM_SATS_PER_KB = 1000
 const MAX_RECLAIM_RAW_TX_BYTES = 1000
 
 export function validateNoSendExpiryRequest(
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): ReturnType<typeof parseBrc177NoSendExpiryLabels> {
   const expiry = parseBrc177NoSendExpiryLabels(args.labels)
   if (expiry == null) return undefined
@@ -53,7 +55,7 @@ export function makeNoSendExpiryFundingArgs(
   const attributionLabels = protectedLabels.filter(
     label => label.startsWith('admin originator ') || label.startsWith('admin month ')
   )
-  const args = Validation.validateCreateActionArgs({
+  const args = validateCreateActionArgs({
     description: 'BRC-177 expiry anchor funding',
     labels: [...new Set(['admin brc177 funding', ...attributionLabels])],
     options: {
@@ -95,14 +97,19 @@ function feeForSize(storage: StorageProvider, size: number, minimumSatsPerKb = 0
   return Math.ceil((size / 1000) * satsPerKb)
 }
 
-function reclaimValues(
-  storage: StorageProvider,
-  anchorSatoshis: number
-): { reclaimFee: number; reclaimSatoshis: number } {
+function reclaimFloor(storage: StorageProvider): { reclaimFee: number; minimumOutput: number } {
   const reclaimSize = transactionSize([MANAGED_INPUT_UNLOCKING_SCRIPT_LENGTH], [MANAGED_OUTPUT_LOCKING_SCRIPT_LENGTH])
   const reclaimFee = feeForSize(storage, reclaimSize, CONSERVATIVE_RECLAIM_SATS_PER_KB)
   const currentFee = feeForSize(storage, reclaimSize)
   const minimumOutput = Math.max(1, currentFee * 2)
+  return { reclaimFee, minimumOutput }
+}
+
+function reclaimValues(
+  storage: StorageProvider,
+  anchorSatoshis: number
+): { reclaimFee: number; reclaimSatoshis: number } {
+  const { reclaimFee, minimumOutput } = reclaimFloor(storage)
   const reclaimSatoshis = anchorSatoshis - reclaimFee
   if (reclaimSatoshis < minimumOutput) {
     throw new WERR_INVALID_PARAMETER(
@@ -116,7 +123,8 @@ function reclaimValues(
 async function estimateAnchorSatoshis(
   storage: StorageProvider,
   userId: number,
-  target: Validation.ValidCreateActionArgs
+  target: ValidCreateActionArgs,
+  reclaimable: boolean
 ): Promise<number> {
   const { xinputs } = await validateRequiredInputs(storage, userId, target)
   const xoutputs = validateRequiredOutputs(storage, userId, target)
@@ -126,17 +134,25 @@ async function estimateAnchorSatoshis(
   )
   const inputSatoshis = xinputs.reduce((sum, input) => sum + input.satoshis, 0)
   const outputSatoshis = xoutputs.reduce((sum, output) => sum + output.satoshis, 0)
-  const anchorSatoshis = outputSatoshis + feeForSize(storage, size) - inputSatoshis
-  if (!Number.isSafeInteger(anchorSatoshis) || anchorSatoshis <= 0) {
+  const actionSatoshis = outputSatoshis + feeForSize(storage, size) - inputSatoshis
+  if (!Number.isSafeInteger(actionSatoshis) || actionSatoshis <= 0) {
     throw new WERR_INVALID_PARAMETER('inputs', 'a BRC-177 action requiring a positive, exactly sized revocation anchor')
   }
-  return anchorSatoshis
+  // A `never` anchor is never reclaimed, so it needs no reclaim-fee allowance.
+  if (!reclaimable) return actionSatoshis
+  // BRC-177 Prefunding step 2: the anchor MUST both fund the protected action
+  // and be reclaimable net of the reclaim fee. When the reclaim floor is the
+  // larger need (e.g. a value-neutral token transfer), that MUST outweighs the
+  // spec's SHOULD against material overpayment: the protected action creates
+  // no change, so the surplus is paid as fee if the action is broadcast.
+  const { reclaimFee, minimumOutput } = reclaimFloor(storage)
+  return Math.max(actionSatoshis, reclaimFee + minimumOutput)
 }
 
 export async function prepareNoSendExpiry(
   storage: StorageProvider,
   auth: AuthId,
-  target: Validation.ValidCreateActionArgs
+  target: ValidCreateActionArgs
 ): Promise<StoragePrepareNoSendExpiryResult> {
   const expiry = validateNoSendExpiryRequest(target)
   if (expiry == null) {
@@ -152,8 +168,11 @@ export async function prepareNoSendExpiry(
     throw new WERR_INVALID_PARAMETER('labels', 'a BRC-177 blockheight later than the current best-chain height')
   }
   const userId = verifyId(auth.userId)
-  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target)
-  const { reclaimFee, reclaimSatoshis } = reclaimValues(storage, anchorSatoshis)
+  const reclaimable = expiry.mode !== 'never'
+  const anchorSatoshis = await estimateAnchorSatoshis(storage, userId, target, reclaimable)
+  const { reclaimFee, reclaimSatoshis } = reclaimable
+    ? reclaimValues(storage, anchorSatoshis)
+    : { reclaimFee: 0, reclaimSatoshis: 0 }
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
   const funding = await createAction(storage, auth, fundingArgs)
@@ -170,7 +189,8 @@ export async function prepareNoSendExpiry(
 async function resolveDeadline(
   storage: StorageProvider,
   expiry: NonNullable<ReturnType<typeof parseBrc177NoSendExpiryLabels>>
-): Promise<number> {
+): Promise<number | null> {
+  if (expiry.mode === 'never') return null
   if (expiry.mode === 'blockheight') {
     const height = await storage.getServices().getHeight()
     if (expiry.value <= height) {
@@ -217,11 +237,12 @@ export async function activateNoSendExpiry(
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor is not available managed change')
   }
 
-  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target)
+  const reclaimable = expiry.mode !== 'never'
+  const expectedAnchor = await estimateAnchorSatoshis(storage, userId, args.target, reclaimable)
   if (Number(anchor.satoshis) !== expectedAnchor) {
     throw new WERR_INVALID_OPERATION('BRC-177 revocation anchor no longer exactly funds the protected action')
   }
-  reclaimValues(storage, expectedAnchor)
+  if (reclaimable) reclaimValues(storage, expectedAnchor)
   const deadline = await resolveDeadline(storage, expiry)
   const target = {
     ...args.target,
@@ -256,11 +277,11 @@ export async function activateNoSendExpiry(
 function validateDerivation(value: string, name: string): void {
   let bytes: number[]
   try {
-    bytes = Utils.toArray(value, 'base64')
+    bytes = toArray(value, 'base64')
   } catch {
     throw new WERR_INVALID_PARAMETER(name, 'a 16-byte base64 derivation')
   }
-  if (bytes.length !== 16 || Utils.toBase64(bytes) !== value) {
+  if (bytes.length !== 16 || toBase64(bytes) !== value) {
     throw new WERR_INVALID_PARAMETER(name, 'a canonical 16-byte base64 derivation')
   }
 }
@@ -275,7 +296,7 @@ function hasCanonicalAllP2pkhUnlock(reclaim: Transaction): boolean {
     return (
       signature.scope === (TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID) &&
       signature.hasLowS() &&
-      Utils.toHex(signature.toChecksigFormat()) === Utils.toHex(checksig)
+      toHex(signature.toChecksigFormat()) === toHex(checksig)
     )
   } catch {
     return false
@@ -293,7 +314,7 @@ function parseCanonicalReclaim(args: StorageArmNoSendExpiryArgs): { reclaim: Tra
   } catch {
     throw new WERR_INVALID_PARAMETER('reclaimRawTx', 'a valid serialized reclaim transaction')
   }
-  if (Utils.toHex(reclaim.toUint8Array()) !== Utils.toHex(rawTx)) {
+  if (toHex(reclaim.toUint8Array()) !== toHex(rawTx)) {
     throw new WERR_INVALID_PARAMETER('reclaimRawTx', 'a canonical serialized reclaim transaction')
   }
   if (reclaim.id('hex') !== args.reclaimTxid) {

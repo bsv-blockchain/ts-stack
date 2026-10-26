@@ -132,6 +132,40 @@ describe('NodeBulkFileDataValidator', () => {
     }
   })
 
+  test('snapshots queued request bytes and metadata before asynchronous dispatch', async () => {
+    const validator = new NodeBulkFileDataValidator({
+      maxWorkers: 1,
+      maxQueue: 2,
+      workerPath: lifecycleWorkerPath
+    })
+    const firstData = Uint8Array.from(genesisBuffer('main'))
+    const queuedData = Uint8Array.from(genesisBuffer('main'))
+    const first = validator.validate({ ...request(firstData), fileName: 'slow.headers' })
+    const queuedRequest = request(queuedData)
+    const second = validator.validate(queuedRequest)
+
+    queuedData[0] ^= 1
+    queuedRequest.fileHash = 'ff'.repeat(32)
+    try {
+      await expect(first).resolves.toMatchObject({ lastHeaderHash: request(firstData).lastHash })
+      await expect(second).resolves.toMatchObject({
+        data: Uint8Array.from(genesisBuffer('main')),
+        fileHash: request(Uint8Array.from(genesisBuffer('main'))).fileHash
+      })
+    } finally {
+      await validator.destroy()
+    }
+  })
+
+  test('portable validation returns an owned immutable snapshot', async () => {
+    const validator = new InlineBulkFileDataValidator()
+    const data = Uint8Array.from(genesisBuffer('main'))
+    const result = await validator.validate(request(data))
+
+    data[0] ^= 1
+    expect(result.data).toEqual(Uint8Array.from(genesisBuffer('main')))
+  })
+
   test('returns rejected bytes for quarantine without weakening validation', async () => {
     const validator = new NodeBulkFileDataValidator({
       workerPath: compiledWorkerPath
@@ -171,7 +205,9 @@ describe('NodeBulkFileDataValidator', () => {
 
   test.each([
     ['maxWorkers', { maxWorkers: 0 }],
+    ['maxWorkers', { maxWorkers: 33 }],
     ['maxQueue', { maxQueue: Number.NaN }],
+    ['maxQueue', { maxQueue: 1025 }],
     ['taskTimeoutMsecs', { taskTimeoutMsecs: 1.5 }]
   ])('rejects invalid %s before starting the worker pool', (_name, options) => {
     expect(() => new NodeBulkFileDataValidator(options)).toThrow('must be a positive safe integer')

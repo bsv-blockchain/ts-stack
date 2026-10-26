@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from 'express'
-import path from 'node:path'
 import fs from 'node:fs'
-import { getWallet } from './walletSingleton'
-import { Utils } from '@bsv/sdk'
 import { log } from '../logger'
-import { CDN_ROOT } from './cdnObjectPath'
+import { resolveCdnObjectPath } from './cdnObjectPath'
 import { profileValue, readResourceLimit, readResourceProfile } from '../security/edgePolicy'
+import { listVerifiedAdvertisements } from './storedAdvertisements'
 
 /**
  * Cache to store MIME types for object identifiers to avoid repeated database lookups
@@ -30,18 +28,16 @@ const FILE_SIGNATURES = [
   { bytes: [0x50, 0x4b], mimeType: 'application/zip' }
 ] as const
 
-function latestAdvertisedMimeType(outputs: Array<{ tags?: string[] }>): string | null {
+function latestAdvertisedMimeType(
+  advertisements: Awaited<ReturnType<typeof listVerifiedAdvertisements>>['advertisements']
+): string | null {
   let mimeType: string | null = null
   let maxExpiry = 0
-  for (const output of outputs) {
-    const contentTypeTag = output.tags?.find(tag => tag.startsWith('content_type_'))
-    const expiryTag = output.tags?.find(tag => tag.startsWith('expiry_time_'))
-    if (contentTypeTag == null || expiryTag == null) continue
-
-    const expiryTime = Number.parseInt(expiryTag.substring('expiry_time_'.length), 10) || 0
+  for (const advertisement of advertisements) {
+    const { expiryTime, contentType } = advertisement.metadata
     if (expiryTime <= Date.now() / 1000 || expiryTime <= maxExpiry) continue
     maxExpiry = expiryTime
-    mimeType = contentTypeTag.substring('content_type_'.length)
+    mimeType = contentType
   }
   return mimeType
 }
@@ -82,16 +78,13 @@ async function getMimeTypeFromAdvertisement(objectIdentifier: string): Promise<s
   }
 
   try {
-    const wallet = await getWallet()
-    const { outputs } = await wallet.listOutputs({
-      basket: 'uhrp advertisements',
-      tags: [`object_identifier_${Utils.toHex(Utils.toArray(objectIdentifier, 'utf8'))}`],
-      tagQueryMode: 'all',
-      includeTags: true,
-      limit: 50
+    const { advertisements } = await listVerifiedAdvertisements({
+      objectIdentifier,
+      limit: 50,
+      offset: 0
     })
 
-    const mimeType = latestAdvertisedMimeType(outputs)
+    const mimeType = latestAdvertisedMimeType(advertisements)
 
     // Cache the result (even if null)
     if (mimeType != null) cacheMimeType(cacheKey, mimeType)
@@ -152,27 +145,9 @@ function detectMimeTypeFromContent(filePath: string): string {
   }
 }
 
-function resolveCdnFilePath(objectIdentifier: string): string | null {
-  try {
-    const decodedIdentifier = decodeURIComponent(objectIdentifier)
-    if (!decodedIdentifier || decodedIdentifier.includes('\0')) {
-      return null
-    }
-
-    const filePath = path.resolve(CDN_ROOT, decodedIdentifier)
-    const relativePath = path.relative(CDN_ROOT, filePath)
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-      return null
-    }
-
-    return filePath
-  } catch {
-    return null
-  }
-}
-
 /**
- * Middleware to set correct MIME type for CDN files
+ * Middleware to set the correct MIME type for canonical CDN objects. Reads
+ * use the same object-name and root-confinement policy as PUT /put.
  */
 export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: NextFunction) => {
   // Only handle requests to /cdn/ path
@@ -180,14 +155,26 @@ export const cdnMimeTypeMiddleware = async (req: Request, res: Response, next: N
     return next()
   }
 
-  const objectIdentifier = req.path.substring('/cdn/'.length)
+  // UHRP hosts serve arbitrary untrusted bytes. Prevent an uploaded HTML/SVG
+  // document from acquiring the API origin's ambient browser authority.
+  res.setHeader('Content-Disposition', 'attachment')
+  res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'")
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+
+  let objectIdentifier = req.path.substring('/cdn/'.length)
+
+  try {
+    objectIdentifier = decodeURIComponent(objectIdentifier)
+  } catch {
+    return next()
+  }
 
   // Skip if no object identifier
   if (!objectIdentifier) {
     return next()
   }
 
-  const filePath = resolveCdnFilePath(objectIdentifier)
+  const filePath = resolveCdnObjectPath(objectIdentifier)
   if (filePath == null) {
     return next()
   }

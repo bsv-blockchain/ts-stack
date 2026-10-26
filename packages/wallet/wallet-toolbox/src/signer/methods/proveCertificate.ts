@@ -1,14 +1,15 @@
-import { MasterCertificate, ProveCertificateResult, Validation } from '@bsv/sdk'
+import { type ValidListCertificatesArgs, type ValidProveCertificateArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { MasterCertificate, ProveCertificateResult } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { AuthId } from '../../sdk/WalletStorage.interfaces'
 
-export async function proveCertificate (
+export async function proveCertificate(
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidProveCertificateArgs
+  vargs: ValidProveCertificateArgs
 ): Promise<ProveCertificateResult> {
-  const lcargs: Validation.ValidListCertificatesArgs = {
+  const lcargs: ValidListCertificatesArgs = {
     partial: {
       type: vargs.type,
       serialNumber: vargs.serialNumber,

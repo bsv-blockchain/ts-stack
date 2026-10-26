@@ -20,7 +20,8 @@ const mockSocket = {
   emit: jest.fn(),
   disconnect: jest.fn(),
   connected: true,
-  off: jest.fn()
+  off: jest.fn(),
+  serverIdentityKey: '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 }
 
 jest.unstable_mockModule('@bsv/authsocket-client', () => ({
@@ -31,14 +32,17 @@ const { MessageBoxClient } = await import('../MessageBoxClient.js')
 
 const { AuthSocketClient } = await import('@bsv/authsocket-client')
 const authSocketClientMock = AuthSocketClient as unknown as jest.Mock
+const validHmac = Array<number>(32).fill(1)
+const validHmacHex = '01'.repeat(32)
+const SERVER_IDENTITY_KEY = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 
 // MOCK: WalletClient methods globally
 jest.spyOn(WalletClient.prototype, 'createHmac').mockResolvedValue({
-  hmac: Array.from(new Uint8Array([1, 2, 3]))
+  hmac: validHmac
 })
 
 jest.spyOn(WalletClient.prototype, 'getPublicKey').mockResolvedValue({
-  publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+  publicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 })
 
 jest.spyOn(WalletClient.prototype, 'encrypt').mockResolvedValue({
@@ -77,7 +81,7 @@ jest.spyOn(WalletClient.prototype, 'createAction').mockResolvedValue({
 // MOCK: AuthFetch responses
 const defaultMockResponse: Partial<Response> = {
   json: async () => ({ status: 'success', message: 'Mocked response' }),
-  headers: new Headers(),
+  headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
   ok: true,
   status: 200
 }
@@ -196,6 +200,26 @@ describe('MessageBoxClient', () => {
     )
   }, 10000)
 
+  it('shares an explicit server identity pin with the WebSocket transport', async () => {
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech/api',
+      serverIdentityKeysByHost: {
+        'https://message-box-us-1.bsvb.tech/other': SERVER_IDENTITY_KEY
+      }
+    })
+    await messageBoxClient.init()
+
+    const connection = messageBoxClient.initializeConnection()
+    setTimeout(() => socketOnMap.authenticationSuccess?.({ status: 'ok' }), 10)
+    await connection
+
+    expect(authSocketClientMock).toHaveBeenCalledWith(
+      'https://message-box-us-1.bsvb.tech/api',
+      expect.objectContaining({ expectedServerIdentityKey: SERVER_IDENTITY_KEY })
+    )
+  }, 10000)
+
   it('Passes only client-owned options to AuthSocketClient when socketOptions is omitted', async () => {
     const messageBoxClient = new MessageBoxClient({
       walletClient: mockWalletClient,
@@ -303,7 +327,7 @@ describe('MessageBoxClient', () => {
 
     // Manually set identity key
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     // Simulate WebSocket not initialized
     ;(messageBoxClient as any).socket = null
@@ -311,7 +335,7 @@ describe('MessageBoxClient', () => {
     // Expect it to fall back to HTTP and succeed
     const result = await messageBoxClient.sendLiveMessage(
       {
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: 'test_inbox',
         body: 'Test message'
       },
@@ -322,7 +346,7 @@ describe('MessageBoxClient', () => {
     expect(result).toEqual({
       status: 'success',
       message: 'Mocked response',
-      messageId: '010203'
+      messageId: validHmacHex
     })
   })
 
@@ -352,7 +376,7 @@ describe('MessageBoxClient', () => {
 
     expect(messageBoxClient.testSocket?.emit).toHaveBeenCalledWith(
       'joinRoom',
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798-test_inbox'
     )
   }, 10000)
 
@@ -378,7 +402,7 @@ describe('MessageBoxClient', () => {
 
     // Kick off sending a message (this sets up the ack listener)
     const sendPromise = messageBoxClient.sendLiveMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+      recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
       messageBox: 'test_inbox',
       body: 'Test message'
     })
@@ -386,7 +410,7 @@ describe('MessageBoxClient', () => {
     // Simulate WebSocket acknowledgment
     setTimeout(() => {
       socketOnMap[
-        'sendMessageAck-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+        'sendMessageAck-0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798-test_inbox'
       ]?.({
         status: 'success',
         messageId: 'mocked123'
@@ -399,10 +423,10 @@ describe('MessageBoxClient', () => {
     expect(emitSpy).toHaveBeenCalledWith(
       'sendMessage',
       expect.objectContaining({
-        roomId: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox',
+        roomId: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798-test_inbox',
         message: expect.objectContaining({
-          messageId: '010203',
-          recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+          messageId: validHmacHex,
+          recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
           body: expect.stringMatching(/encrypted/)
         })
       })
@@ -423,19 +447,19 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => ({
         status: 'success',
         message: 'Your message has been sent!'
       }),
-      headers: new Headers(),
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
       ok: true,
       status: 200
     } as unknown as Response)
 
     const result = await messageBoxClient.sendMessage({
-      recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+      recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
       messageBox: 'test_inbox',
       body: { data: 'test' }
     })
@@ -451,11 +475,11 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => JSON.parse(VALID_LIST_AND_READ_RESULT.body),
-      headers: new Headers(),
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
       ok: true,
       status: 200
     } as unknown as Response)
@@ -473,11 +497,11 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       json: async () => JSON.parse(VALID_ACK_RESULT.body),
-      headers: new Headers(),
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
       ok: true,
       status: 200
     } as unknown as Response)
@@ -500,23 +524,61 @@ describe('MessageBoxClient', () => {
     await messageBoxClient.init()
 
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       status: 500,
       statusText: 'Internal Server Error',
       ok: false,
       json: async () => ({ status: 'error', description: 'Internal Server Error' }),
-      headers: new Headers()
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY })
     } as unknown as Response)
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: 'test_inbox',
         body: 'Test Message'
       })
-    ).rejects.toThrow('Message sending failed: HTTP 500 - Internal Server Error')
+    ).rejects.toThrow('Message Box send failed with HTTP 500.')
+  })
+
+  it('reports a well-formed server failure code but never its free-text description', async () => {
+    const messageBoxClient = new MessageBoxClient({
+      walletClient: mockWalletClient,
+      host: 'https://message-box-us-1.bsvb.tech',
+      enableLogging: false
+    })
+    await messageBoxClient.init()
+
+    ;(messageBoxClient as any).myIdentityKey =
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
+    const failWith = (body: unknown): void => {
+      jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
+        status: 400,
+        statusText: 'Bad Request',
+        ok: false,
+        json: async () => body,
+        headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY })
+      } as unknown as Response)
+    }
+    const send = async (): Promise<unknown> =>
+      await messageBoxClient.sendMessage({
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
+        messageBox: 'test_inbox',
+        body: 'Test Message'
+      })
+
+    failWith({ status: 'error', code: 'ERR_DUPLICATE_MESSAGE', description: 'Duplicate message.' })
+    await expect(send()).rejects.toThrow(
+      /^Message Box send failed with HTTP 400 \(ERR_DUPLICATE_MESSAGE\)\.$/
+    )
+
+    for (const code of ['duplicate', 'ERR_', `ERR_${'A'.repeat(65)}`, 'ERR_X\n<b>', 42]) {
+      failWith({ status: 'error', code, description: '<script>untrusted</script>' })
+      await expect(send()).rejects.toThrow(/^Message Box send failed with HTTP 400\.$/)
+    }
   })
 
   it('throws when every host fails', async () => {
@@ -535,6 +597,7 @@ describe('MessageBoxClient', () => {
       ok: false,
       status: 500,
       statusText: 'Internal Server Error',
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
       json: async () => ({ status: 'error', description: 'DB down' })
     } as unknown as Response)
 
@@ -565,11 +628,13 @@ describe('MessageBoxClient', () => {
             ok: false,
             status: 500,
             statusText: 'Internal Server Error',
+            headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
             json: async () => ({ status: 'error', description: 'DB down' })
           } as unknown as Response)
         : await Promise.resolve({
             ok: true,
             status: 200,
+            headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
             json: async () => ({ status: 'success', messages: [] })
           } as unknown as Response)
     )
@@ -585,10 +650,11 @@ describe('MessageBoxClient', () => {
     })
     await messageBoxClient.init()
     ;(messageBoxClient as any).myIdentityKey =
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
     jest.spyOn(messageBoxClient.authFetch, 'fetch').mockResolvedValue({
       status: 500,
+      headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
       json: async () => ({ status: 'error', description: 'Failed to acknowledge messages' })
     } as unknown as Response)
 
@@ -607,7 +673,7 @@ describe('MessageBoxClient', () => {
 
     // Mock identity key properly
     jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({
-      publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      publicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
     })
 
     // Mock socket with `on` method capturing event handlers
@@ -619,12 +685,12 @@ describe('MessageBoxClient', () => {
     // Mock `initializeConnection` so it assigns `socket` & identity key
     jest.spyOn(messageBoxClient, 'initializeConnection').mockImplementation(async () => {
       Object.defineProperty(messageBoxClient, 'testIdentityKey', {
-        get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+        get: () => '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
       })
       Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket })
       ;(messageBoxClient as any).socket = mockSocket // Ensures internal socket is set
       ;(messageBoxClient as any).myIdentityKey =
-        '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
+        '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' // Ensures identity key is set
     })
 
     const onMessageMock = jest.fn()
@@ -637,7 +703,7 @@ describe('MessageBoxClient', () => {
     // Ensure `joinRoom` event was emitted with the correct identity key
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'joinRoom',
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798-test_inbox'
     )
 
     // Simulate receiving a message
@@ -647,12 +713,16 @@ describe('MessageBoxClient', () => {
     const sendMessageCallback = mockSocket.on.mock.calls.find(
       ([eventName]) =>
         eventName ===
-        'sendMessage-02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4-test_inbox'
+        'sendMessage-0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798-test_inbox'
     )?.[1] // Extract the callback function
 
     if (typeof sendMessageCallback === 'function') {
       sendMessageCallback(receivedMessage)
     }
+
+    // The body is read before any subscriber is called, so delivery is always
+    // a tick later. It used to be synchronous for an unencrypted message only.
+    await new Promise(resolve => setTimeout(resolve, 0))
 
     // Ensure `onMessage` was called with the received message
     expect(onMessageMock).toHaveBeenCalledWith(receivedMessage)
@@ -668,7 +738,7 @@ describe('MessageBoxClient', () => {
 
     // Simulate identity key
     jest.spyOn(mockWalletClient, 'getPublicKey').mockResolvedValue({
-      publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      publicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
     })
 
     // Simulate connection + disconnection + auth success
@@ -696,12 +766,12 @@ describe('MessageBoxClient', () => {
     // Mock `initializeConnection` so it assigns `socket` & identity key
     jest.spyOn(messageBoxClient, 'initializeConnection').mockImplementation(async () => {
       Object.defineProperty(messageBoxClient, 'testIdentityKey', {
-        get: () => '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+        get: () => '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
       })
       Object.defineProperty(messageBoxClient, 'testSocket', { get: () => mockSocket })
       ;(messageBoxClient as any).socket = mockSocket // Ensures internal socket is set
       ;(messageBoxClient as any).myIdentityKey =
-        '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4' // Ensures identity key is set
+        '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' // Ensures identity key is set
     })
 
     // Mock socket to ensure WebSocket validation does not fail
@@ -762,7 +832,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: '', // Empty messageBox
         body: 'Test message'
       })
@@ -770,7 +840,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: '   ', // Whitespace messageBox
         body: 'Test message'
       })
@@ -778,7 +848,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: null as any, // Null messageBox
         body: 'Test message'
       })
@@ -795,7 +865,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: 'test_inbox',
         body: '' // Empty body
       })
@@ -803,7 +873,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: 'test_inbox',
         body: '   ' // Whitespace body
       })
@@ -811,7 +881,7 @@ describe('MessageBoxClient', () => {
 
     await expect(
       messageBoxClient.sendMessage({
-        recipient: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4',
+        recipient: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798',
         messageBox: 'test_inbox',
         body: null as any // Null body
       })
@@ -986,7 +1056,7 @@ describe('MessageBoxClient', () => {
     await client.anointHost('https://fresh.host')
 
     expect(querySpy).toHaveBeenCalledWith(
-      '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+      '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
     )
   })
 
@@ -1035,7 +1105,7 @@ describe('MessageBoxClient', () => {
       mergeBeef: jest.fn(),
       toBinary: jest.fn().mockReturnValue([9, 9, 9])
     }
-    jest.spyOn(Beef, 'fromBinary').mockImplementation(() => mergedBeef as any)
+    jest.spyOn(Beef, 'fromBinaryStrict').mockImplementation(() => mergedBeef as any)
 
     const fromAtomicSpy = jest.spyOn(Transaction, 'fromAtomicBEEF')
     fromAtomicSpy.mockReturnValueOnce({} as any).mockReturnValueOnce({} as any)
@@ -1083,8 +1153,8 @@ describe('MessageBoxClient', () => {
   })
 
   describe('message box quotes', () => {
-    const recipientA = '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
-    const recipientB = '03b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    const recipientA = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+    const recipientB = SERVER_IDENTITY_KEY
 
     const makeClient = (): MessageBoxClient =>
       new MessageBoxClient({
@@ -1093,7 +1163,8 @@ describe('MessageBoxClient', () => {
       })
 
     const DEFAULT_QUOTE_HEADERS: Record<string, string> = {
-      'x-bsv-auth-identity-key': 'delivery-agent'
+      'x-bsv-auth-identity-key':
+        '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
     }
     const makeQuoteResponse = (
       body: unknown,
@@ -1123,7 +1194,8 @@ describe('MessageBoxClient', () => {
       ).resolves.toEqual({
         recipientFee: 12,
         deliveryFee: 3,
-        deliveryAgentIdentityKey: 'delivery-agent'
+        deliveryAgentIdentityKey:
+          '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
       })
 
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -1132,7 +1204,7 @@ describe('MessageBoxClient', () => {
       )
     })
 
-    it('throws when a single-recipient quote response has no delivery-agent key', async () => {
+    it('throws when a single-recipient quote response has no authenticated server key', async () => {
       const client = makeClient()
       jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
         makeQuoteResponse(
@@ -1152,7 +1224,7 @@ describe('MessageBoxClient', () => {
           },
           'https://quote.box'
         )
-      ).rejects.toThrow('Delivery agent did not provide their identity key')
+      ).rejects.toThrow('mutually authenticated response')
     })
 
     it('aggregates a multi-recipient quote payload', async () => {
@@ -1211,14 +1283,14 @@ describe('MessageBoxClient', () => {
         },
         blockedRecipients: [recipientB],
         deliveryAgentIdentityKeyByHost: {
-          'https://quote.box': 'delivery-agent'
+          'https://quote.box': '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
         }
       })
     })
 
     it('expands a single quote payload across all recipients in a host group', async () => {
       const client = makeClient()
-      jest.spyOn(client.authFetch, 'fetch').mockResolvedValue(
+      jest.spyOn(client.authFetch, 'fetch').mockImplementation(async () =>
         makeQuoteResponse({
           quote: {
             deliveryFee: 5,

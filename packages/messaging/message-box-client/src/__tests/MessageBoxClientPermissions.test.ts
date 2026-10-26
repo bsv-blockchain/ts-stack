@@ -2,9 +2,12 @@ import { jest } from '@jest/globals'
 import type { WalletInterface } from '@bsv/sdk'
 import { MessageBoxClient } from '../MessageBoxClient.js'
 
+const SERVER_IDENTITY_KEY = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+const CLIENT_IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
 const wallet = {
   getPublicKey: jest.fn().mockResolvedValue({
-    publicKey: '02b463b8ef7f03c47fba2679c7334d13e4939b8ca30dbb6bbd22e34ea3e9b1b0e4'
+    publicKey: '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
   })
 } as unknown as WalletInterface
 
@@ -13,7 +16,7 @@ function jsonResponse(body: unknown, init: Partial<Response> = {}): Response {
     ok: true,
     status: 200,
     statusText: 'OK',
-    headers: new Headers(),
+    headers: new Headers({ 'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY }),
     json: async () => body,
     ...init
   } as Response
@@ -76,7 +79,7 @@ describe('MessageBoxClient permission contract', () => {
         status: 'success',
         permissions: [
           {
-            sender: 'sender-key',
+            sender: SERVER_IDENTITY_KEY,
             message_box: 'inbox',
             recipient_fee: -1,
             created_at: '2026-07-26T00:00:00.000Z',
@@ -88,7 +91,7 @@ describe('MessageBoxClient permission contract', () => {
 
     await expect(client.listMessageBoxPermissions()).resolves.toEqual([
       expect.objectContaining({
-        sender: 'sender-key',
+        sender: SERVER_IDENTITY_KEY,
         messageBox: 'inbox',
         recipientFee: -1,
         status: 'blocked'
@@ -119,15 +122,15 @@ describe('MessageBoxClient permission contract', () => {
 
     await client.getMessageBoxPermission(
       {
-        recipient: '03recipient',
-        sender: '02sender',
+        recipient: SERVER_IDENTITY_KEY,
+        sender: CLIENT_IDENTITY_KEY,
         messageBox: 'notifications'
       },
       'https://message-box.example/api'
     )
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://message-box.example/api/permissions/get?messageBox=notifications&sender=02sender',
+      `https://message-box.example/api/permissions/get?messageBox=notifications&sender=${CLIENT_IDENTITY_KEY}`,
       { method: 'GET' }
     )
   })

@@ -3,8 +3,8 @@ id: service-operations
 title: 'Service Operations Contract'
 kind: reference
 version: '2.0.0'
-last_updated: '2026-08-12'
-last_verified: '2026-08-12'
+last_updated: '2026-09-21'
+last_verified: '2026-09-21'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, operations, observability, slo, recovery]
@@ -13,7 +13,7 @@ tags: [reference, infrastructure, operations, observability, slo, recovery]
 # Service Operations Contract
 
 This page is generated from `governance/service-operations.json`. CI verifies
-all seven released services against their configuration, secret, telemetry,
+all eight released services against their configuration, secret, telemetry,
 container, health, lifecycle, recovery, and checked-in workload contracts.
 
 ## Public service boundary
@@ -35,6 +35,7 @@ and CSP remains an independent document/UI policy rather than API authorization.
 | `uhrp-server-cloud-bucket` | HTTP_PORT (default 8080)                                 | `/healthz` | `/ready`        | implemented | [guide](../infrastructure/uhrp-server-cloud-bucket.md)                                                         |
 | `wab`                      | PORT (default 8080)                                      | `/healthz` | `/info`         | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wab/deploy/README.md)                       |
 | `wallet-infra`             | HTTP_PORT (default 8081; samples set 8080 without nginx) | `/healthz` | `/`             | implemented | [guide](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md) |
+| `webrtpay-relay`           | PORT (default 8787)                                      | `/health`  | `/ready`        | implemented | [guide](../infrastructure/webrtpay-relay.md)                                                                   |
 
 Health endpoints are public and non-sensitive. They do not replace protocol
 authentication, administrative authorization, rate limits, or dependency-aware
@@ -54,16 +55,16 @@ example documents `DEPLOY_ENV`, `LOG_LEVEL`, `OTEL_CONSOLE_EXPORTERS`, `OTEL_DIA
 | Dependency                                    | Aligned direct range |
 | --------------------------------------------- | -------------------- |
 | `@opentelemetry/api`                          | `^1.9.1`             |
-| `@opentelemetry/api-logs`                     | `^0.221.0`           |
-| `@opentelemetry/auto-instrumentations-node`   | `^0.79.0`            |
-| `@opentelemetry/exporter-logs-otlp-http`      | `^0.221.0`           |
-| `@opentelemetry/exporter-metrics-otlp-http`   | `^0.221.0`           |
-| `@opentelemetry/exporter-trace-otlp-http`     | `^0.221.0`           |
-| `@opentelemetry/instrumentation-runtime-node` | `^0.34.0`            |
-| `@opentelemetry/resources`                    | `^2.10.0`            |
-| `@opentelemetry/sdk-logs`                     | `^0.221.0`           |
-| `@opentelemetry/sdk-metrics`                  | `^2.10.0`            |
-| `@opentelemetry/sdk-node`                     | `^0.221.0`           |
+| `@opentelemetry/api-logs`                     | `^0.222.0`           |
+| `@opentelemetry/auto-instrumentations-node`   | `^0.80.0`            |
+| `@opentelemetry/exporter-logs-otlp-http`      | `^0.222.0`           |
+| `@opentelemetry/exporter-metrics-otlp-http`   | `^0.222.0`           |
+| `@opentelemetry/exporter-trace-otlp-http`     | `^0.222.0`           |
+| `@opentelemetry/instrumentation-runtime-node` | `^0.35.0`            |
+| `@opentelemetry/resources`                    | `^2.11.0`            |
+| `@opentelemetry/sdk-logs`                     | `^0.222.0`           |
+| `@opentelemetry/sdk-metrics`                  | `^2.11.0`            |
+| `@opentelemetry/sdk-node`                     | `^0.222.0`           |
 | `@opentelemetry/sdk-trace-base`               | `^2.10.0`            |
 | `@opentelemetry/semantic-conventions`         | `^1.43.0`            |
 | `pino`                                        | `^10.3.1`            |
@@ -153,12 +154,12 @@ Incident handling follows this evidence-preserving sequence:
 - authenticated WebSocket handshakes or delivery failures spike
 - database serialization retries are sustained or exhaust their bounded retry budget
 - wallet storage, database, or Firebase dependency failures consume error budget
-- State: Knex database plus optional Firebase device registrations.
-- Migration/startup: Migrations complete before listen; back up and verify the target schema first.
-- Backup/restore: Use the selected database engine's consistent snapshot and restore procedure.
-- RPO starting point: 15 minutes for messages and permissions; device registrations follow the same backup boundary when enabled.
-- RTO starting point: 4 hours from a verified database backup and wallet configuration.
-- Restore validation: Verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.
+- State: Knex database including message, permission, replay-claim, resource-lock, and exact-request payment-intent state, plus optional Firebase device registrations.
+- Migration/startup: Migrations complete before listen; back up and verify the target schema first. The 2026-09-21 payment-intent migration changes the paid-send recovery contract and must be present before the new code accepts legacy server-delivery payments. Do not run mixed-version replicas or perform an image-only rollback after paid-send traffic; prefer roll-forward. Payment-intent rows are durable idempotency and recovery evidence and must not be pruned independently of the corresponding payment replay and message retention records.
+- Backup/restore: Use consistent database snapshots plus continuous point-in-time/binlog retention and independently retained wallet transaction and audit evidence spanning each snapshot through the present. A snapshot alone is insufficient once a paid-send wallet mutation may have occurred.
+- RPO starting point: 15 minutes for ordinary messages, permissions, and optional device registrations. Paid-send replay claims and payment intents require zero silent loss: reconstruct every post-snapshot row from point-in-time database logs and independent wallet/audit evidence, or keep paid sends disabled while the unresolved recovery window is reconciled.
+- RTO starting point: 4 hours from verified database and wallet evidence, after paid-send reconciliation is complete or paid sends remain disabled.
+- Restore validation: Before enabling paid sends, reconstruct and reconcile every post-snapshot wallet action, replay claim, and prepared, wallet_accepted, or completed intent; prove exact-request recovery without repeat wallet mutation. Then verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT disconnect authenticated WebSockets, drain HTTP, close Knex, and flush telemetry. The standalone compatibility adapter uses only the published AuthSocket public socket surface and automatically delegates to AuthSocketServer.close() when that API is available.
 - Scaling: Multiple replicas require shared BRC-103 sessions, database-backed rate limits, and a verified WebSocket routing strategy.
 - Disruption: Preserve at least one ready replica only after shared session and WebSocket behavior is proven.
@@ -169,7 +170,7 @@ Incident handling follows this evidence-preserving sequence:
 ### overlay-server
 
 - Configuration: required `HOSTING_URL`, `KNEX_URL`, `MONGO_URL`, `NETWORK`, `NODE_NAME`, `SERVER_PRIVATE_KEY`, `WALLET_STORAGE_URL`; optional
-  `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARCADE_DEPLOYMENT_ID`, `ARCADE_URL`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `CHAINTRACKS_URL`, `GASP_ENABLED`; secret-bearing
+  `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARCADE_DEPLOYMENT_ID`, `ARCADE_URL`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `CHAINTRACKS_URL`, `GASP_ENABLED`, `DISCOVERY_ROOT`; secret-bearing
   `ADMIN_TOKEN`, `ARCADE_API_KEY`, `ARC_API_KEY`, `ARC_CALLBACK_TOKEN`, `KNEX_URL`, `MONGO_URL`, `OTEL_EXPORTER_OTLP_HEADERS`, `SERVER_PRIVATE_KEY`.
 - Telemetry: ESM bootstrap
   `src/telemetry.ts`, logger
@@ -180,16 +181,17 @@ Incident handling follows this evidence-preserving sequence:
 - query each enabled lookup service
 - ingest and classify provider callbacks
 - reconcile GASP/BASM state across a reorganization
+- discover SHIP/SLAP services through default SDK network presets when operating as a discovery root
 - Alerts:
 - readiness dependency checks fail or provider callback processing errors repeat
 - unproven rows age beyond policy or maintenance repeatedly fails
 - BASM tip, reorg stream, or GASP synchronization becomes stale
 - State: Knex transaction state and MongoDB lookup-service state.
-- Migration/startup: Overlay migrations complete before listen; preserve both stores as one release boundary.
-- Backup/restore: Take coordinated MySQL and MongoDB backups before schema or image changes.
-- RPO starting point: 15 minutes across a coordinated SQL and MongoDB backup boundary.
+- Migration/startup: Stop writes and complete every Overlay migration before listen. Before the 2026-09-17 topical-uniqueness migration, preflight exact duplicate output keys (txid, outputIndex, topic) and applied-transaction keys (txid, topic); reconcile each duplicate from transaction, topic, and lookup evidence rather than auto-deleting security state. Apply that migration before the additive 2026-09-20 spentBy migration, then verify the constraints and column before restoring writes. Preserve both stores and the spent/spentBy relationship as one release boundary. Prefer roll-forward: an old image does not know these migration names, so a bare prior-digest rollback can fail migration-list validation. To restore an old image, stop writes and either use the new migration source to reverse spentBy and topical uniqueness in reverse order after exporting and reconciling all spend evidence, or restore coordinated pre-migration MySQL and MongoDB backups.
+- Backup/restore: Take a coordinated, restorable MySQL and MongoDB backup before schema or image changes, with point-in-time logs or equivalent evidence spanning the maintenance window. Retain output spent and spentBy values together so recovery or rollback cannot erase which transaction consumed an output.
+- RPO starting point: 15 minutes across a coordinated SQL and MongoDB backup boundary, provided output spent/spentBy evidence remains mutually consistent; keep writes disabled while any recovery gap is reconciled.
 - RTO starting point: 4 hours from mutually consistent backups and verified provider configuration.
-- Restore validation: Verify schema versions, topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.
+- Restore validation: Verify schema versions, the topical unique constraints, absence of exact duplicate output and applied-transaction keys, and consistent spent/spentBy evidence before enabling writes. Then verify topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT idempotently stop synchronization and maintenance work, drain HTTP, close Knex and MongoDB, and flush telemetry. The standalone compatibility adapter delegates to OverlayExpress.close() when available without requiring an unpublished dependency.
 - Scaling: Background GASP/BASM/maintenance ownership and BRC-103 sessions must be coordinated before adding replicas.
 - Disruption: Operate as a singleton unless leader election and shared sessions are proven; record a maintenance window for voluntary disruption.
@@ -281,11 +283,11 @@ Incident handling follows this evidence-preserving sequence:
 - share encryption, retrieval, or deletion failures repeat
 - database migration or pool failures consume error budget
 - State: Authentication, identity-link, pending-registration, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.
-- Migration/startup: Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.
-- Backup/restore: Take an encrypted database snapshot, retain the presentation-key vault key separately, and test identity/share and presentation-key recovery without logging secrets.
-- RPO starting point: 15 minutes for authentication and encrypted share state.
+- Migration/startup: Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds. The faucet-claim backfill is not mixed-version compatible: block traffic, drain and stop every old replica, take a restorable backup, apply the migration with one new replica, then deploy only the new image before restoring traffic. Never run an old image against the migrated database; roll forward or restore the old image and pre-migration database together while stopped.
+- Backup/restore: Take an encrypted database snapshot, retain the presentation-key vault key separately, and retain point-in-time database logs plus wallet/audit evidence sufficient to reconstruct every faucet claim and payment after the snapshot without logging secrets.
+- RPO starting point: 15 minutes for authentication and encrypted share state; zero silent loss for faucet claims and payments, because every post-snapshot wallet action must be replayed from point-in-time logs or reconciled before faucet traffic resumes.
 - RTO starting point: 4 hours from a verified encrypted backup and independently retained encryption keys.
-- Restore validation: Verify migration and vault reconciliation state, legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
+- Restore validation: Keep faucet traffic disabled while verifying migration and vault reconciliation state. Correlate every wallet action after the restored snapshot with its payment row and authentication identities, reconstruct the payment and receivedFaucet markers, or conservatively mark every plausible identity before re-enabling the faucet. Then verify legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.
 - Lifecycle status: **implemented** — SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.
 - Scaling: Multiple replicas require shared rate limits and any authentication challenge/session state to remain database-backed.
 - Disruption: Preserve at least one ready replica after shared abuse-control state is verified.
@@ -322,6 +324,37 @@ Incident handling follows this evidence-preserving sequence:
 - Topology: Separate monitor leadership and its private optional admin listener from horizontally safe API capacity when production demand justifies it.
 - Operator guide:
   [infra/wallet-infra/guides/kube_samples/README.md](https://github.com/bsv-blockchain/ts-stack/blob/main/infra/wallet-infra/guides/kube_samples/README.md)
+
+### webrtpay-relay
+
+- Configuration: required `PUBLIC_URLS`; optional
+  `CLOUDFLARE_TURN_API_TOKEN`, `CLOUDFLARE_TURN_KEY_ID`, `CONNECTIONS_PER_48_PER_MINUTE`, `CONNECTIONS_PER_IP_PER_MINUTE`, `HOST`, `MAX_OVER_RATE_FRAMES`, `MAX_SOCKETS`, `MAX_UNAUTHENTICATED_SOCKETS`, `PORT`, `SIGNALS_PER_PAIR_PER_MINUTE`, `SIGNALS_PER_RECIPIENT_PER_MINUTE`, `SOCKETS_PER_48`, `SOCKETS_PER_IP`, `STUN_URLS`, `TRUSTED_IP_HEADER`, `TURN_PER_48_PER_HOUR`, `TURN_PER_HOUR`, `TURN_PER_IP_PER_HOUR`, `TURN_PROVIDER`, `TURN_SECRET`, `TURN_TTL`, `TURN_URLS`; secret-bearing
+  `CLOUDFLARE_TURN_API_TOKEN`, `OTEL_EXPORTER_OTLP_HEADERS`, `TURN_SECRET`.
+- Telemetry: ESM bootstrap
+  `src/telemetry.ts`, logger
+  `src/logger.ts`, preload
+  `--import ./dist/telemetry.js`.
+- Critical journeys:
+- authenticate a socket by BRC-100 identity key against PUBLIC_URLS
+- forward an encrypted signalling envelope to every socket of the recipient identity
+- issue short-lived TURN credentials within the per-source and global budgets
+- Alerts:
+- authentication failures rise after a PUBLIC_URLS, proxy, or TLS change
+- admission refusals (HTTP 429/503) or rate_limited replies remain saturated
+- the TURN provider repeatedly fails or the hourly TURN budget is exhausted
+- event-loop delay or open-socket count remains above the operator alert threshold
+- State: Stateless. Sockets, authenticated identities, and rate-limit buckets live only in process memory; nothing is written to disk or a database.
+- Migration/startup: No schema or data migration. Roll forward or back by replacing the image; clients reconnect and re-authenticate.
+- Backup/restore: Nothing to back up. Retain the deployment configuration and the TURN secrets in the secret manager.
+- RPO starting point: Not applicable: the relay holds no durable state.
+- RTO starting point: Minutes: the time to start a replacement container with the same configuration and public url.
+- Restore validation: Verify /health and /ready, a client authenticating against each PUBLIC_URLS entry, a signal delivered between two test identities, and TURN issuance when a provider is configured.
+- Lifecycle status: **implemented** — SIGTERM/SIGINT close every WebSocket, stop the listener, and flush telemetry.
+- Scaling: Run one replica per public url: two clients meet only on the same replica, and per-source limits are per process. Scale vertically with the limit variables.
+- Disruption: A restart drops every socket; clients reconnect and re-authenticate. Schedule replacements when brief signalling interruption is acceptable.
+- Topology: Keep the listener reachable only through the TLS-terminating proxy that sets TRUSTED_IP_HEADER.
+- Operator guide:
+  [docs/infrastructure/webrtpay-relay.md](../infrastructure/webrtpay-relay.md)
 
 ## Stateful example boundary
 

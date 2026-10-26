@@ -103,6 +103,24 @@ describe('decodeMessage', () => {
     const notJson = textEncoder.encode('this is not json {')
     expect(() => decodeMessage(notJson)).toThrow()
   })
+
+  it('rejects JSON numbers whose parsed value is ambiguous', () => {
+    const unsafeInteger = textEncoder.encode(
+      JSON.stringify({
+        name: 'sender',
+        data: Buffer.from('{"height":9007199254740993}', 'utf8').toString('base64')
+      })
+    )
+    const negativeZero = textEncoder.encode(
+      JSON.stringify({
+        name: 'sender',
+        data: Buffer.from('{"height":-0}', 'utf8').toString('base64')
+      })
+    )
+
+    expect(() => decodeMessage(unsafeInteger)).toThrow('ambiguous number')
+    expect(() => decodeMessage(negativeZero)).toThrow('ambiguous number')
+  })
 })
 
 describe('tryDecodeMessage', () => {

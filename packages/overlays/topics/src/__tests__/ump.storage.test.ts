@@ -174,7 +174,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
       ])
     )
     await expect(
-      db.collection('ump_identity_reservation_migrations').findOne({
+      db.collection<any>('ump_identity_reservation_migrations').findOne({
         _id: 'legacy-ump-reservations-v1'
       })
     ).resolves.not.toBeNull()
@@ -328,7 +328,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
       })
     ).resolves.toBe(2)
     await expect(
-      db.collection('ump_identity_reservations').findOne({
+      db.collection<any>('ump_identity_reservations').findOne({
         _id: `presentation:${'11'.repeat(32)}`
       })
     ).resolves.toMatchObject({ ownerOutpoint: 'owner.0' })
@@ -367,7 +367,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     await store.reserve(claim('replacement.0', '33'.repeat(32), '44'.repeat(32)), [])
     race.mockRestore()
     await expect(
-      db.collection('ump_identity_reservations').findOne({
+      db.collection<any>('ump_identity_reservations').findOne({
         _id: `presentation:${'33'.repeat(32)}`
       })
     ).resolves.toMatchObject({ ownerOutpoint: 'replacement.0' })
@@ -394,13 +394,14 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     const restarted = new MongoUMPIdentityStore(db)
     await restarted.reserve(claim('after-restart.0', '77'.repeat(32), '99'.repeat(32)), [])
     await expect(
-      db.collection('ump_identity_reservations').findOne({
+      db.collection<any>('ump_identity_reservations').findOne({
         _id: `presentation:${'77'.repeat(32)}`
       })
     ).resolves.toMatchObject({ ownerOutpoint: 'after-restart.0' })
   })
 
   it('persists, confirms, looks up, spends, and evicts UMP records', async () => {
+    const txid = 'aa'.repeat(32)
     const identityStore: UMPIdentityReservationStore = {
       reserve: jest.fn(async () => undefined),
       confirm: jest.fn(async () => undefined),
@@ -412,7 +413,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     const payload = {
       mode: 'locking-script',
       topic: 'tm_users',
-      txid: 'aa',
+      txid,
       outputIndex: 2,
       lockingScript
     } as any
@@ -422,16 +423,22 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     )
     await service.outputAdmittedByTopic({ ...payload, topic: 'other' })
     await service.outputAdmittedByTopic(payload)
-    expect(identityStore.confirm).toHaveBeenCalledWith('aa.2')
+    expect(identityStore.confirm).toHaveBeenCalledWith(`${txid}.2`)
     await expect(
-      service.lookup({ query: { presentationHash: '11'.repeat(32) } } as any)
-    ).resolves.toEqual([{ txid: 'aa', outputIndex: 2 }])
+      service.lookup({ service: 'ls_users', query: { presentationHash: '11'.repeat(32) } } as any)
+    ).resolves.toEqual([{ txid, outputIndex: 2, history: expect.any(Function) }])
     await expect(
-      service.lookup({ query: { recoveryHash: '22'.repeat(32) } } as any)
+      service.lookup({ service: 'ls_users', query: { recoveryHash: '22'.repeat(32) } } as any)
     ).resolves.toHaveLength(1)
-    await expect(service.lookup({ query: { outpoint: 'aa.2' } } as any)).resolves.toHaveLength(1)
-    await expect(service.lookup({} as any)).rejects.toThrow('valid query')
-    await expect(service.lookup({ query: {} } as any)).rejects.toThrow('presentationHash')
+    await expect(
+      service.lookup({ service: 'ls_users', query: { outpoint: `${txid}.2` } } as any)
+    ).resolves.toHaveLength(1)
+    await expect(service.lookup({ service: 'ls_users' } as any)).rejects.toThrow(
+      'query must be an object'
+    )
+    await expect(service.lookup({ service: 'ls_users', query: {} } as any)).rejects.toThrow(
+      'presentationHash'
+    )
 
     await expect(service.outputSpent({ mode: 'locking-script' } as any)).rejects.toThrow(
       'Invalid payload'
@@ -440,14 +447,14 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     await service.outputSpent({
       mode: 'none',
       topic: 'tm_users',
-      txid: 'aa',
+      txid,
       outputIndex: 2
     } as any)
-    expect(identityStore.release).toHaveBeenCalledWith('aa.2')
+    expect(identityStore.release).toHaveBeenCalledWith(`${txid}.2`)
 
     await service.outputAdmittedByTopic(payload)
-    await service.outputEvicted('aa', 2)
-    expect(identityStore.release).toHaveBeenLastCalledWith('aa.2')
+    await service.outputEvicted(txid, 2)
+    expect(identityStore.release).toHaveBeenLastCalledWith(`${txid}.2`)
     await expect(service.getDocumentation()).resolves.toContain('UMP Lookup Service')
     await expect(service.getMetaData()).resolves.toMatchObject({ name: 'UMP Lookup Service' })
   })
@@ -497,7 +504,7 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
       abort: async () => undefined,
       release: async () => undefined
     }
-    await db.collection('ump').insertMany(
+    await db.collection<any>('ump').insertMany(
       Array.from({ length: 105 }, (_, index) => ({
         _id: index,
         txid: `tx-${index}`,
@@ -509,10 +516,13 @@ describe('MongoUMPIdentityStore and UMP lookup lifecycle', () => {
     const service = createUMPLookupService(db, identityStore)
 
     const results = await service.lookup({
+      service: 'ls_users',
       query: { presentationHash: 'aa'.repeat(32) }
     } as any)
     expect(results).toHaveLength(100)
-    expect(results[0]).toEqual({ txid: 'tx-104', outputIndex: 0 })
-    expect(results).not.toContainEqual({ txid: 'tx-0', outputIndex: 0 })
+    expect(results[0]).toEqual({ txid: 'tx-104', outputIndex: 0, history: expect.any(Function) })
+    expect(results).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ txid: 'tx-0', outputIndex: 0 })])
+    )
   })
 })

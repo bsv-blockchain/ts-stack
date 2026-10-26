@@ -10,6 +10,7 @@ import { AuthRequest } from '@bsv/auth-express-middleware'
 import knexLib from 'knex'
 import knexConfig from '../../../knexfile.js'
 import { bindMessageBoxRuntime } from '../../runtimeDeps.js'
+import { log } from '../../utils/logger.js'
 
 // Ensure proper handling of mock-knex
 const testKnex =
@@ -163,6 +164,20 @@ describe('listMessages', () => {
       })
     )
   })
+
+  it.each([' inbox', 'inbox ', 'in\nbox', 'in\u0085box'])(
+    'rejects an ambiguous messageBox name %#',
+    async messageBox => {
+      validReq.body.messageBox = messageBox
+
+      await listMessages.func(validReq, mockRes as Response)
+
+      expect(mockRes.status).toHaveBeenCalledWith(400)
+      expect(mockRes.json).toHaveBeenCalledWith(
+        expect.objectContaining({ code: 'ERR_INVALID_MESSAGEBOX' })
+      )
+    }
+  )
 
   it.each([
     [{ limit: MAX_LIST_MESSAGES_PAGE_SIZE + 1 }, 'ERR_INVALID_LIMIT'],
@@ -324,8 +339,9 @@ describe('listMessages', () => {
   })
 
   it('Throws unknown errors', async () => {
+    const errorLog = jest.spyOn(log, 'error').mockImplementation(() => undefined)
     queryTracker.on('query', () => {
-      throw new Error('Failed')
+      throw new Error('sensitive database detail')
     })
 
     await listMessages.func(validReq, mockRes as Response)
@@ -338,5 +354,10 @@ describe('listMessages', () => {
         description: 'An internal error has occurred while listing messages.'
       })
     )
+    expect(errorLog).toHaveBeenCalledWith(
+      { operation: 'messages.list', outcome: 'error' },
+      'Failed to list messages'
+    )
+    expect(JSON.stringify(errorLog.mock.calls)).not.toContain('sensitive database detail')
   })
 })

@@ -12,22 +12,46 @@ function fixture() {
   tx.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
   const txid = tx.id('hex')
   const oldPath = new MerklePath(100, [[{ offset: 0, hash: txid, txid: true }]])
-  const currentPath = new MerklePath(101, [[{ offset: 0, hash: txid, txid: true },
-    { offset: 1, hash: 'ab'.repeat(32) }]])
-  const header = (root: string) => toBinaryBaseBlockHeader({ version: 1,
-    previousHash: '0'.repeat(64), merkleRoot: root, time: 1, bits: 0, nonce: 0 })
+  const currentPath = new MerklePath(101, [
+    [
+      { offset: 0, hash: txid, txid: true },
+      { offset: 1, hash: 'ab'.repeat(32) }
+    ]
+  ])
+  const header = (root: string) =>
+    toBinaryBaseBlockHeader({ version: 1, previousHash: '0'.repeat(64), merkleRoot: root, time: 1, bits: 0, nonce: 0 })
   const currentRoot = currentPath.computeRoot(txid)
   const currentHeader = header(currentRoot)
-  const candidate = { provenTxId: 7, created_at: new Date(0), updated_at: new Date(1), txid,
-    rawTx: tx.toBinary(), merklePath: oldPath.toBinary(), merkleRoot: txid,
-    blockHash: asString(doubleSha256BE(header(txid))), height: 100, index: 0 }
+  const candidate = {
+    provenTxId: 7,
+    created_at: new Date(0),
+    updated_at: new Date(1),
+    txid,
+    rawTx: tx.toBinary(),
+    merklePath: oldPath.toBinary(),
+    merkleRoot: txid,
+    blockHash: asString(doubleSha256BE(header(txid))),
+    height: 100,
+    index: 0
+  }
   const getMerklePath = jest.fn(async () => ({ merklePath: currentPath }))
   const isValidRootForHeight = jest.fn(async (root: string, height: number) => root === currentRoot && height === 101)
   const getHeaderForHeight = jest.fn(async () => [...currentHeader])
-  const services = { getMerklePath, getHeaderForHeight,
-    getChainTracker: async () => ({ isValidRootForHeight }) } as unknown as WalletServices
-  return { candidate, currentPath, currentRoot, currentHeader, getMerklePath,
-    isValidRootForHeight, getHeaderForHeight, storage: { getServices: () => services } }
+  const services = {
+    getMerklePath,
+    getHeaderForHeight,
+    getChainTracker: async () => ({ isValidRootForHeight })
+  } as unknown as WalletServices
+  return {
+    candidate,
+    currentPath,
+    currentRoot,
+    currentHeader,
+    getMerklePath,
+    isValidRootForHeight,
+    getHeaderForHeight,
+    storage: { getServices: () => services }
+  }
 }
 
 test('refreshes stale RPC proof metadata only after fully validating the current proof', async () => {
@@ -35,17 +59,26 @@ test('refreshes stale RPC proof metadata only after fully validating the current
   const original = { ...f.candidate }
   const page = [f.candidate]
   await validateSyncProofs(f.storage, page)
-  expect(page[0]).toEqual({ ...original, height: 101, merklePath: f.currentPath.toBinary(),
-    merkleRoot: f.currentRoot, blockHash: asString(doubleSha256BE(f.currentHeader)) })
+  expect(page[0]).toEqual({
+    ...original,
+    height: 101,
+    merklePath: f.currentPath.toBinary(),
+    merkleRoot: f.currentRoot,
+    blockHash: asString(doubleSha256BE(f.currentHeader))
+  })
   expect(page[0].rawTx).toBe(original.rawTx)
   expect(f.candidate).toEqual(original)
   expect(f.getMerklePath).toHaveBeenCalledWith(original.txid)
-  expect(f.isValidRootForHeight.mock.calls).toEqual([[original.merkleRoot, 100], [f.currentRoot, 101]])
+  expect(f.isValidRootForHeight.mock.calls).toEqual([
+    [original.merkleRoot, 100],
+    [f.currentRoot, 101]
+  ])
   expect(() => assertSyncProofReplacementAuthorized(page[0])).not.toThrow()
 })
 
 test.each(['missing proof', 'orphaned replacement', 'wrong header', 'lookup failure'])(
-  'preserves the original record and rejects a stale proof after %s', async failure => {
+  'preserves the original record and rejects a stale proof after %s',
+  async failure => {
     const f = fixture()
     const before = structuredClone(f.candidate)
     if (failure === 'missing proof') f.getMerklePath.mockResolvedValue({ merklePath: undefined! })
@@ -68,6 +101,20 @@ test('does not refresh a forged transaction or change direct-call proof validati
   expect(f.getMerklePath).not.toHaveBeenCalled()
 })
 
+test('rejects a truthy non-boolean active-root verdict', async () => {
+  const f = fixture()
+  f.isValidRootForHeight.mockResolvedValue('true' as unknown as boolean)
+  await expect(
+    validateSyncProof(f.storage, {
+      ...f.candidate,
+      height: 101,
+      merklePath: f.currentPath.toBinary(),
+      merkleRoot: f.currentRoot,
+      blockHash: asString(doubleSha256BE(f.currentHeader)),
+      index: 0
+    })
+  ).rejects.toThrow('Merkle root is not active')
+})
 
 test('retries an orphan proof on another provider independently for concurrent lookups', async () => {
   const f = fixture()
@@ -77,7 +124,8 @@ test('retries an orphan proof on another provider independently for concurrent l
   const stale = jest.fn(async () => ({ merklePath: MerklePath.fromBinary(f.candidate.merklePath) }))
   const active = jest.fn(async () => ({ merklePath: f.currentPath }))
   services.getMerklePathServices = new ServiceCollection('getMerklePath', [
-    { name: 'stale', service: stale }, { name: 'active', service: active }
+    { name: 'stale', service: stale },
+    { name: 'active', service: active }
   ])
   const page = Array.from({ length: 3 }, () => structuredClone(f.candidate))
   await validateSyncProofs({ getServices: () => services }, page)
@@ -95,9 +143,12 @@ test('exhausts providers once without accepting an invalid proof or partially ch
   services.getChainTracker = f.storage.getServices().getChainTracker
   services.getHeaderForHeight = f.getHeaderForHeight
   const stale = jest.fn(async () => ({ merklePath: MerklePath.fromBinary(f.candidate.merklePath) }))
-  const unavailable = jest.fn(async () => { throw new Error('synthetic outage') })
+  const unavailable = jest.fn(async () => {
+    throw new Error('synthetic outage')
+  })
   services.getMerklePathServices = new ServiceCollection('getMerklePath', [
-    { name: 'stale', service: stale }, { name: 'unavailable', service: unavailable }
+    { name: 'stale', service: stale },
+    { name: 'unavailable', service: unavailable }
   ])
   const page = [f.candidate]
   const before = structuredClone(page)

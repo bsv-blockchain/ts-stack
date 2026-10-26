@@ -4,7 +4,10 @@ These tokens are defined by a UTXO-based protocol on top of PushDrop.
 
 First the asset ID is pushed, in the format <txid>.<vout> (hex dot dec) or 'ISSUE" for new assets.
 
-Then the amount is pushed.
+Then the amount is pushed as canonical positive base-10 digits. Signs, leading
+zeros, decimal points, exponents, zero, and values above 9007199254740991 are
+invalid. Input and output totals are also required to remain within this exact-
+integer range.
 
 Optionally, metadata is pushed. If pushed in the issuance, it must be maintained in all future outputs.
 Some PushDrop outputs may also include a trailing signature field; this is not treated as token metadata.

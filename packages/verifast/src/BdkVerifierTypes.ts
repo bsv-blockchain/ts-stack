@@ -1,10 +1,8 @@
-import type {
-  DigestVerification,
-  Script,
-  Spend,
-  SpendVerificationContext,
-  Transaction
-} from '@bsv/sdk'
+import type { DigestVerification } from '@bsv/sdk/primitives/AsyncCryptoBackend'
+import type Script from '@bsv/sdk/script/Script'
+import type Spend from '@bsv/sdk/script/Spend'
+import type SpendVerificationContext from '@bsv/sdk/script/SpendVerificationContext'
+import type Transaction from '@bsv/sdk/transaction/Transaction'
 
 /** Height used when an input's source UTXO mined-height is unobtainable (post-Chronicle). */
 export const POST_CHRONICLE_HEIGHT_FALLBACK = 943816

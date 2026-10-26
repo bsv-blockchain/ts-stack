@@ -1,4 +1,5 @@
-import { InternalizeActionArgs, InternalizeOutput, P2PKH, WalletProtocol, Validation } from '@bsv/sdk'
+import { type ValidInternalizeActionArgs, validateInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { InternalizeActionArgs, InternalizeOutput, P2PKH, WalletProtocol } from '@bsv/sdk'
 import { Wallet } from '../../Wallet'
 import { AuthId, StorageInternalizeActionResult } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
@@ -47,7 +48,7 @@ export async function internalizeAction(
   auth: AuthId,
   args: InternalizeActionArgs
 ): Promise<StorageInternalizeActionResult> {
-  const vargs = Validation.validateInternalizeActionArgs(args)
+  const vargs = validateInternalizeActionArgs(args)
 
   const { ab, tx, txid } = await validateAtomicBeef()
   const brc29ProtocolID: WalletProtocol = [2, '3241645161d8']
@@ -70,12 +71,12 @@ export async function internalizeAction(
 
   const r: StorageInternalizeActionResult = await wallet.storage.internalizeAction({
     ...args,
-    tx: ab.toBinaryAtomic(txid)
+    tx: ab.toUint8ArrayAtomic(txid)
   })
 
   return r
 
-  function setupWalletPaymentForOutput(o: InternalizeOutput, _dargs: Validation.ValidInternalizeActionArgs) {
+  function setupWalletPaymentForOutput(o: InternalizeOutput, _dargs: ValidInternalizeActionArgs) {
     const p = o.paymentRemittance
     const output = tx.outputs[o.outputIndex]
     if (p == null) throw new WERR_INVALID_PARAMETER('paymentRemittance', `valid for protocol ${o.protocol}`)
@@ -89,7 +90,7 @@ export async function internalizeAction(
     }
   }
 
-  function setupBasketInsertionForOutput(o: InternalizeOutput, _dargs: Validation.ValidInternalizeActionArgs) {
+  function setupBasketInsertionForOutput(o: InternalizeOutput, _dargs: ValidInternalizeActionArgs) {
     const insertion = o.insertionRemittance
     if (insertion == null) throw new WERR_INVALID_PARAMETER('insertionRemittance', `valid for protocol ${o.protocol}`)
     if (insertion.basket === 'default') {
@@ -111,7 +112,6 @@ export async function internalizeAction(
     // configured chain tracker instead of accepting caller-supplied known txids.
     const txValid = await ab.verify(await wallet.getServices().getChainTracker(), false)
     if (!txValid || !ab.atomicTxid) {
-      console.log(`internalizeAction beef is invalid: ${ab.toLogString()}`)
       throw new WERR_INVALID_PARAMETER('tx', 'valid AtomicBEEF')
     }
     const txid = ab.atomicTxid

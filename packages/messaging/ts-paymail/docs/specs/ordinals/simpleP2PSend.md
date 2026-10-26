@@ -23,6 +23,10 @@ The `.well-known/bsvalias` document is updated to include a declaration of the e
 }
 ```
 
+The response MUST contain exactly one destination for each ordinal requested.
+Clients and servers MUST reject a different count rather than guessing whether
+a script may be reused.
+
 The capability `cc2154bfa6a2` returns a URI template where the client must perform a POST request with the number of ordinals to be sent.
 
 
@@ -97,6 +101,14 @@ The request body structure:
   "note": "optional-note"
 }
 ```
+
+The legacy compact signature authenticates only the transaction ID. It does
+not bind the Paymail recipient, reference, sender handle, or endpoint. A
+receiver MUST independently verify that the transaction pays the destinations
+associated with the exact recipient/reference, reject or idempotently handle
+replayed transaction IDs and outpoints, and apply its own ordinal transaction
+policy before acknowledging. Contextual signature binding requires a new
+versioned protocol and cannot be inferred from this version's signature.
 
 ### Conclusion
 

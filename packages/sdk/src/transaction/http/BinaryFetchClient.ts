@@ -1,5 +1,11 @@
 import { HttpClient, HttpClientRequestOptions, HttpClientResponse } from './HttpClient.js'
 import { HttpsModuleLike, executeNodejsRequest } from './NodejsHttpRequestUtils.js'
+import {
+  type HttpClientLimits,
+  normalizeHttpClientLimits,
+  readFetchResponseText,
+  timedRequestSignal
+} from './HttpClientResponseUtils.js'
 
 /** Node Https module interface limited to options needed by ts-sdk */
 export interface BinaryHttpsNodejs {
@@ -57,36 +63,51 @@ export interface FetchOptions {
   headers?: Record<string, string>
   /** An object or null to set request's body. */
   body?: Buffer | Uint8Array | Blob | null
+  redirect?: 'error'
+  signal?: AbortSignal
 }
 
 /**
  * Adapter for Node Https module to be used as HttpClient
  */
 export class BinaryFetchClient implements HttpClient {
-  constructor(private readonly fetch: Fetch) {}
+  private readonly limits: Required<HttpClientLimits>
+
+  constructor(
+    private readonly fetch: Fetch,
+    limits: HttpClientLimits = {}
+  ) {
+    this.limits = normalizeHttpClientLimits(limits)
+  }
 
   async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+    const timed = timedRequestSignal(options.signal, this.limits.timeoutMs)
     const fetchOptions: FetchOptions = {
       method: options.method,
       headers: options.headers,
-      body: options.data
+      body: options.data,
+      redirect: 'error',
+      signal: timed.signal
     }
+    try {
+      const res = await this.fetch(url, fetchOptions)
+      const data = await readFetchResponseText(res, this.limits.maxResponseBytes)
 
-    const res = await this.fetch(url, fetchOptions)
-    const data = await res.text()
-
-    return {
-      ok: res.ok,
-      status: res.status,
-      statusText: res.statusText,
-      data: data as D
+      return {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        data: data as D
+      }
+    } finally {
+      timed.dispose()
     }
   }
 }
 
 export function binaryHttpClient(): HttpClient {
   const noHttpClient: HttpClient = {
-    async request(..._): Promise<HttpClientResponse> {
+    async request(): Promise<HttpClientResponse> {
       throw new Error('No method available to perform HTTP request')
     }
   }

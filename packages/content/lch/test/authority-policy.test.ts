@@ -13,6 +13,8 @@ import {
 } from '../src/index.js'
 
 const bytes = (value: number, length: number): Uint8Array => new Uint8Array(length).fill(value)
+const identity = (value: number): Uint8Array =>
+  Uint8Array.from(new PrivateKey(value).toPublicKey().encode(true) as number[])
 
 describe('authority and pinned policy validation', () => {
   it('validates signatures, scope, and a fresh unspent observation', async () => {
@@ -22,7 +24,7 @@ describe('authority and pinned policy validation', () => {
       version: 1,
       assetId: bytes(2, 32),
       grantor: signer.identityKey,
-      grantee: bytes(3, 33),
+      grantee: identity(3),
       interests: ['master'],
       capabilities: ['issueOffer'],
       notBefore: 1_000,
@@ -61,7 +63,7 @@ describe('authority and pinned policy validation', () => {
       version: 1,
       assetId: bytes(2, 32),
       grantor: signer.identityKey,
-      grantee: bytes(3, 33),
+      grantee: identity(3),
       interests: ['master'],
       capabilities: ['issueOffer'],
       notBefore: 1,
@@ -127,7 +129,7 @@ describe('authority and pinned policy validation', () => {
     const widened: AuthorityBody = {
       ...root,
       grantor: delegateSigner.identityKey,
-      grantee: bytes(12, 33),
+      grantee: identity(12),
       usageProfiles: ['fixed', 'training'],
       notAfter: 201,
       mayDelegate: false,
@@ -164,6 +166,47 @@ describe('authority and pinned policy validation', () => {
     ).rejects.toMatchObject({ code: 'ERR_LCH_AUTHORITY' })
   })
 
+  it('treats an Authority notAfter timestamp as an exclusive boundary', async () => {
+    const signer = await WalletBRC77Signer.create({
+      wallet: new ProtoWallet(new PrivateKey(40)),
+      random: length => bytes(40, length)
+    })
+    const actor = identity(41)
+    const assetId = bytes(42, 32)
+    const body: AuthorityBody = {
+      version: 1,
+      assetId,
+      grantor: signer.identityKey,
+      grantee: actor,
+      interests: ['master'],
+      capabilities: ['issueOffer'],
+      notBefore: 100,
+      notAfter: 200,
+      mayDelegate: false,
+      nonce: bytes(43, 16)
+    }
+    const signed = await signObject(
+      'authority',
+      body as unknown as Record<string, LCHValue>,
+      signer
+    )
+    await expect(
+      validateAuthorityChain(
+        [{ body, signatures: signed.signatures }],
+        {
+          controller: signer.identityKey,
+          actor,
+          assetId,
+          interest: 'master',
+          capability: 'issueOffer',
+          now: 200n,
+          network: 'mainnet'
+        },
+        new PublicBRC77Verifier()
+      )
+    ).rejects.toMatchObject({ code: 'ERR_LCH_AUTHORITY' })
+  })
+
   it('requires delegated intervals and remaining depth to narrow', async () => {
     const rootSigner = await WalletBRC77Signer.create({
       wallet: new ProtoWallet(new PrivateKey(21)),
@@ -190,7 +233,7 @@ describe('authority and pinned policy validation', () => {
     const child: AuthorityBody = {
       ...root,
       grantor: delegateSigner.identityKey,
-      grantee: bytes(25, 33),
+      grantee: identity(25),
       notBefore: 101,
       notAfter: 199,
       remainingDepth: 0,

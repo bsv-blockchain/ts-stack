@@ -1,4 +1,5 @@
-import { ListCertificatesResult, OriginatorDomainNameStringUnder250Bytes, Validation } from '@bsv/sdk'
+import { type ValidListCertificatesArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { ListCertificatesResult, OriginatorDomainNameStringUnder250Bytes } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
 import { TableCertificate } from '../schema/tables/TableCertificate'
 import { AuthId, FindCertificatesArgs } from '../../sdk/WalletStorage.interfaces'
@@ -7,7 +8,7 @@ import { Paged } from '../../sdk/types'
 export async function listCertificates(
   storage: StorageProvider,
   auth: AuthId,
-  vargs: Validation.ValidListCertificatesArgs,
+  vargs: ValidListCertificatesArgs,
   _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListCertificatesResult> {
   const paged: Paged = { limit: vargs.limit, offset: vargs.offset }

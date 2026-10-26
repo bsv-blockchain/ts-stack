@@ -1,4 +1,5 @@
-import { Hash, Utils } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toHex } from '@bsv/sdk/primitives/utils'
 import { parseJsonRpc, stringifyJsonRpc } from './BinaryJson'
 
 /** Versioned transport framing; the reconstructed BRC-40 request/response is unchanged. */
@@ -26,7 +27,7 @@ export const SYNC_TRANSFER_MAX_BYTES = 64 * 1024 * 1024
 export const SYNC_TRANSFER_PART_BYTES = 256 * 1024
 
 export function syncTransferDigest(bytes: Uint8Array): string {
-  return Utils.toHex(Hash.sha256(bytes))
+  return toHex(sha256(bytes))
 }
 
 interface BinaryField {

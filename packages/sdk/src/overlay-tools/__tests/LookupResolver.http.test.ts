@@ -41,6 +41,7 @@ function structuralOutputListFixture(scriptBytes = 48 * 1024): {
 
 function configuredResolver(url: string): LookupResolver {
   return new LookupResolver({
+    networkPreset: 'local',
     facilitator: new HTTPSOverlayLookupFacilitator(fetch, true),
     hostOverrides: { ls_http: [url] }
   })

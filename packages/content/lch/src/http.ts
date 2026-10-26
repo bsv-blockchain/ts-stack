@@ -9,7 +9,8 @@ import type {
   StoredPaymentDelivery,
   TransactionEvidenceRequest
 } from './settlement.js'
-import type { LCHValue, SignedObject } from './types.js'
+import type { LCHValue, SignedObject, UnverifiedLicenseResponse } from './types.js'
+import { ownDataValue, requiredOwnDataValue } from './boundary.js'
 
 export const LCH_CBOR_MEDIA_TYPE = 'application/vnd.bsv.lch+cbor'
 
@@ -55,11 +56,42 @@ export interface LCHHttpServerOptions {
 
 export class LCHHttpServer {
   private readonly maximumRequestBytes: number
+  private readonly handlers: LCHHttpHandlers
+  private readonly allowOrigin: string
 
-  constructor(private readonly options: LCHHttpServerOptions) {
-    this.maximumRequestBytes = options.maximumRequestBytes ?? LCH_LIMITS.headerBytes
+  constructor(options: LCHHttpServerOptions) {
+    const handlers = requiredOwnDataValue(options, 'handlers', 'HTTP server options')
+    const maximumRequestBytes = ownDataValue(options, 'maximumRequestBytes', 'HTTP server options')
+    const allowOrigin = ownDataValue(options, 'allowOrigin', 'HTTP server options')
     lchAssert(
-      Number.isSafeInteger(this.maximumRequestBytes) && this.maximumRequestBytes > 0,
+      handlers !== null && typeof handlers === 'object',
+      'ERR_LCH_DELIVERY',
+      'HTTP server handlers are invalid'
+    )
+    lchAssert(
+      allowOrigin === undefined || typeof allowOrigin === 'string',
+      'ERR_LCH_ENDPOINT',
+      'HTTP server CORS origin is invalid'
+    )
+    const configuredHandlers = handlers as LCHHttpHandlers
+    this.handlers = {
+      preflightLicense: optionalHandler(configuredHandlers, 'preflightLicense'),
+      quote: optionalHandler(configuredHandlers, 'quote'),
+      preflightDemand: optionalHandler(configuredHandlers, 'preflightDemand'),
+      authorizePayment: optionalHandler(configuredHandlers, 'authorizePayment'),
+      paymentDelivery: optionalHandler(configuredHandlers, 'paymentDelivery'),
+      storeDelivery: optionalHandler(configuredHandlers, 'storeDelivery'),
+      retrieveDelivery: optionalHandler(configuredHandlers, 'retrieveDelivery'),
+      attestTransaction: optionalHandler(configuredHandlers, 'attestTransaction'),
+      complete: optionalHandler(configuredHandlers, 'complete'),
+      recover: optionalHandler(configuredHandlers, 'recover')
+    }
+    this.allowOrigin = (allowOrigin as string | undefined) ?? '*'
+    this.maximumRequestBytes = (maximumRequestBytes as number | undefined) ?? LCH_LIMITS.headerBytes
+    lchAssert(
+      Number.isSafeInteger(this.maximumRequestBytes) &&
+        this.maximumRequestBytes > 0 &&
+        this.maximumRequestBytes <= LCH_LIMITS.headerBytes,
       'ERR_LCH_FRAMING',
       'HTTP request limit is invalid'
     )
@@ -95,22 +127,19 @@ export class LCHHttpServer {
     headers: Record<string, string>
   ): Promise<Response> {
     if (type === 'license-request-preflight') {
-      await required(this.options.handlers.preflightLicense, type)(signed(value))
+      await required(this.handlers.preflightLicense, type)(signed(value))
       return new Response(null, { status: 204, headers })
     }
     if (type === 'license-request') {
-      const quote = await required(this.options.handlers.quote, type)(signed(value))
+      const quote = await required(this.handlers.quote, type)(signed(value))
       return cborResponse('quote', quote as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-demand') {
-      const readiness = await required(this.options.handlers.preflightDemand, type)(signed(value))
+      const readiness = await required(this.handlers.preflightDemand, type)(signed(value))
       return cborResponse('payment-readiness', readiness as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-authorization-request') {
-      const authorization = await required(
-        this.options.handlers.authorizePayment,
-        type
-      )(signed(value))
+      const authorization = await required(this.handlers.authorizePayment, type)(signed(value))
       return cborResponse(
         'payment-authorization',
         authorization as unknown as LCHValue,
@@ -119,12 +148,12 @@ export class LCHHttpServer {
       )
     }
     if (type === 'payment-delivery') {
-      const receipt = await required(this.options.handlers.paymentDelivery, type)(signed(value))
+      const receipt = await required(this.handlers.paymentDelivery, type)(signed(value))
       return cborResponse('payment-receipt', receipt as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-delivery-store') {
       const acknowledgement = await required(
-        this.options.handlers.storeDelivery,
+        this.handlers.storeDelivery,
         type
       )(deliveryStoreRequest(value))
       return cborResponse(
@@ -135,23 +164,23 @@ export class LCHHttpServer {
       )
     }
     if (type === 'payment-delivery-retrieval') {
-      const stored = await required(this.options.handlers.retrieveDelivery, type)(signed(value))
+      const stored = await required(this.handlers.retrieveDelivery, type)(signed(value))
       if (stored === undefined) return errorResponse(404, 'ERR_LCH_DELIVERY', headers)
       return cborResponse('payment-delivery-stored', stored as unknown as LCHValue, 200, headers)
     }
     if (type === 'transaction-evidence-request') {
       const evidence = await required(
-        this.options.handlers.attestTransaction,
+        this.handlers.attestTransaction,
         type
       )(transactionEvidenceRequest(value))
       return cborResponse('transaction-evidence', evidence as unknown as LCHValue, 200, headers)
     }
     if (type === 'payment-completion') {
-      const license = await required(this.options.handlers.complete, type)(completion(value))
+      const license = await required(this.handlers.complete, type)(completion(value))
       return cborResponse('license', license as unknown as LCHValue, 200, headers)
     }
     if (type === 'license-recovery') {
-      const license = await required(this.options.handlers.recover, type)(recoveryRequest(value))
+      const license = await required(this.handlers.recover, type)(recoveryRequest(value))
       if (license === undefined) return errorResponse(404, 'ERR_LCH_LICENSE', headers)
       return cborResponse('license', license as unknown as LCHValue, 200, headers)
     }
@@ -160,7 +189,7 @@ export class LCHHttpServer {
 
   private corsHeaders(): Record<string, string> {
     return {
-      'access-control-allow-origin': this.options.allowOrigin ?? '*',
+      'access-control-allow-origin': this.allowOrigin,
       'access-control-expose-headers': 'content-type',
       'cache-control': 'no-store'
     }
@@ -173,6 +202,19 @@ function errorStatus(code: LCHErrorCode): number {
   return 422
 }
 
+function optionalHandler<K extends keyof LCHHttpHandlers>(
+  handlers: LCHHttpHandlers,
+  key: K
+): LCHHttpHandlers[K] {
+  const value = ownDataValue(handlers, key, 'HTTP server handlers')
+  lchAssert(
+    value === undefined || typeof value === 'function',
+    'ERR_LCH_DELIVERY',
+    `HTTP ${key} handler is invalid`
+  )
+  return value as LCHHttpHandlers[K]
+}
+
 export interface LCHHttpClientOptions {
   endpointPolicy?: EndpointPolicy
   maximumResponseBytes?: number
@@ -180,11 +222,28 @@ export interface LCHHttpClientOptions {
 
 export class LCHHttpAcquisitionClient {
   private readonly maximumResponseBytes: number
+  private readonly endpointPolicy?: EndpointPolicy
 
-  constructor(private readonly options: LCHHttpClientOptions = {}) {
-    this.maximumResponseBytes = options.maximumResponseBytes ?? LCH_LIMITS.headerBytes
+  constructor(options: LCHHttpClientOptions = {}) {
+    const maximumResponseBytes = ownDataValue(
+      options,
+      'maximumResponseBytes',
+      'HTTP client options'
+    )
+    const endpointPolicy = ownDataValue(options, 'endpointPolicy', 'HTTP client options')
     lchAssert(
-      Number.isSafeInteger(this.maximumResponseBytes) && this.maximumResponseBytes > 0,
+      endpointPolicy === undefined ||
+        (endpointPolicy !== null && typeof endpointPolicy === 'object'),
+      'ERR_LCH_ENDPOINT',
+      'HTTP endpoint policy is invalid'
+    )
+    this.maximumResponseBytes =
+      (maximumResponseBytes as number | undefined) ?? LCH_LIMITS.headerBytes
+    this.endpointPolicy = endpointPolicy as EndpointPolicy | undefined
+    lchAssert(
+      Number.isSafeInteger(this.maximumResponseBytes) &&
+        this.maximumResponseBytes > 0 &&
+        this.maximumResponseBytes <= LCH_LIMITS.headerBytes,
       'ERR_LCH_FRAMING',
       'HTTP response limit is invalid'
     )
@@ -292,15 +351,26 @@ export class LCHHttpAcquisitionClient {
     )
   }
 
-  async recover(endpoint: string, requestId: Uint8Array): Promise<SignedObject | undefined> {
+  /** Returns raw recovery data that has not been authenticated as a License. */
+  async recoverUnverified(
+    endpoint: string,
+    requestId: Uint8Array
+  ): Promise<UnverifiedLicenseResponse | undefined> {
     const response = await this.request(endpoint, 'license-recovery', { requestId })
     if (response.status === 404) return undefined
     await requireResponse(response, 200, 'license', this.maximumResponseBytes)
-    return signed(
-      decodeDeterministicCbor(
-        await boundedBytes(response, this.maximumResponseBytes, 'ERR_LCH_DELIVERY')
+    return {
+      unverifiedLicense: signed(
+        decodeDeterministicCbor(
+          await boundedBytes(response, this.maximumResponseBytes, 'ERR_LCH_DELIVERY')
+        )
       )
-    )
+    }
+  }
+
+  /** @deprecated Use recoverUnverified; transport recovery is never trusted License evidence. */
+  recover(endpoint: string, requestId: Uint8Array): Promise<UnverifiedLicenseResponse | undefined> {
+    return this.recoverUnverified(endpoint, requestId)
   }
 
   private async post(
@@ -312,22 +382,31 @@ export class LCHHttpAcquisitionClient {
   ): Promise<LCHValue> {
     const response = await this.request(endpoint, type, value)
     await requireResponse(response, status, responseType, this.maximumResponseBytes)
-    if (status === 204) return null
+    if (status === 204) {
+      await response.body?.cancel().catch(() => undefined)
+      return null
+    }
     return decodeDeterministicCbor(
       await boundedBytes(response, this.maximumResponseBytes, 'ERR_LCH_DELIVERY')
     )
   }
 
   private request(endpoint: string, type: LCHHttpMessageType, value: LCHValue): Promise<Response> {
+    const encoded = encodeDeterministicCbor(value)
+    lchAssert(
+      encoded.length <= LCH_LIMITS.headerBytes,
+      'ERR_LCH_FRAMING',
+      'HTTP request exceeds the LCH message limit'
+    )
     return fetchLCH(
       endpoint,
       {
         method: 'POST',
         headers: { 'content-type': mediaType(type), accept: LCH_CBOR_MEDIA_TYPE },
-        body: encodeDeterministicCbor(value).slice().buffer
+        body: encoded.slice().buffer
       },
       'identity',
-      this.options.endpointPolicy
+      this.endpointPolicy
     )
   }
 }
@@ -369,6 +448,7 @@ async function requireResponse(
     } catch {
       // Preserve the transport-level error when an error envelope is itself malformed.
     }
+    await response.body?.cancel().catch(() => undefined)
     throw new LCHError(code, `LCH endpoint returned ${response.status}`)
   }
   if (type !== undefined)
@@ -420,12 +500,17 @@ async function boundedBytes(
   const reader = message.body.getReader()
   const chunks: Uint8Array[] = []
   let total = 0
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    total += value.length
-    lchAssert(total <= maximum, code, 'LCH HTTP body exceeds its limit')
-    chunks.push(value)
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      total += value.length
+      lchAssert(total <= maximum, code, 'LCH HTTP body exceeds its limit')
+      chunks.push(value)
+    }
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined)
+    throw error
   }
   const result = new Uint8Array(total)
   let offset = 0

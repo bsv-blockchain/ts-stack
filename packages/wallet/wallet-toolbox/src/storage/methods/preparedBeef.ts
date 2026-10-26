@@ -1,4 +1,6 @@
-import { Beef, Hash, TelemetrySpan, Utils } from '@bsv/sdk'
+import { Beef, TelemetrySpan } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toHex } from '@bsv/sdk/primitives/utils'
 import type { StorageProvider } from '../StorageProvider'
 import type { TablePreparedBeef } from '../schema/tables/TablePreparedBeef.interfaces'
 import { beefForTxids } from '../../utility/beefForTxids'
@@ -133,7 +135,7 @@ export function validatePreparedBeefPolicy(options?: PreparedBeefOptions): Prepa
 }
 
 function checksum(bytes: Uint8Array): string {
-  return Utils.toHex(Hash.sha256(Array.from(bytes)))
+  return toHex(sha256(Array.from(bytes)))
 }
 
 function validRootTransaction(beef: Beef, rootTxid: string): boolean {
@@ -160,8 +162,7 @@ function estimatedBeefBytes(beef: Beef): number {
 }
 
 function isAdmissibleBeef(beef: Beef, policy: PreparedBeefPolicy): boolean {
-  return beef.txs.length <= policy.maxArtifactTransactions &&
-    estimatedBeefBytes(beef) <= policy.maxArtifactBytes
+  return beef.txs.length <= policy.maxArtifactTransactions && estimatedBeefBytes(beef) <= policy.maxArtifactBytes
 }
 
 async function exceedsPreparedLookupByteBudget(
@@ -171,9 +172,9 @@ async function exceedsPreparedLookupByteBudget(
 ): Promise<boolean> {
   if (rootTxids.length <= 1) return false
   const lookupBytes = await storage.readPreparedBeefLookupByteLength(userId, rootTxids)
-  return !Number.isSafeInteger(lookupBytes) ||
-    lookupBytes < 0 ||
-    lookupBytes > storage.preparedBeefPolicy.maxLookupBytes
+  return (
+    !Number.isSafeInteger(lookupBytes) || lookupBytes < 0 || lookupBytes > storage.preparedBeefPolicy.maxLookupBytes
+  )
 }
 
 /**
@@ -197,7 +198,8 @@ export async function lookupPreparedBeefs(
     !storage.preparedBeefPolicy.readEnabled ||
     storage.preparedBeefReadsEnabled?.() === false ||
     result.missingTxids.length === 0
-  ) return result
+  )
+    return result
 
   return await storage.telemetry.withSpan(
     'wallet.storage.prepared_beef.lookup',
@@ -256,7 +258,7 @@ export async function lookupPreparedBeefs(
             ) {
               throw new Error('prepared BEEF metadata mismatch')
             }
-            const fragment = Beef.fromBinary(bytes)
+            const fragment = Beef.fromBinaryStrict(bytes)
             if (!validRootTransaction(fragment, rootTxid)) throw new Error('prepared BEEF root is incomplete')
             candidates.push({ rootTxid, fragment, byteLength: bytes.length })
           } catch {
@@ -338,12 +340,11 @@ export class PreparedBeefCoordinator {
     if (!Number.isSafeInteger(preparation.userId) || preparation.userId < 1) return false
     if (preparation.rootTxids.some(rootTxid => !/^[0-9a-f]{64}$/i.test(rootTxid))) return false
     const key = (rootTxid: string): string => `${preparation.userId}:${rootTxid}`
-    const rootTxids = [...new Set(preparation.rootTxids)]
-      .filter(rootTxid => !this.pendingRoots.has(key(rootTxid)))
+    const rootTxids = [...new Set(preparation.rootTxids)].filter(rootTxid => !this.pendingRoots.has(key(rootTxid)))
     if (rootTxids.length === 0) return preparation.rootTxids.length > 0
     const globalCapacity = this.storage.preparedBeefPolicy.maxQueueSize - this.admittedRoots
-    const userCapacity = this.storage.preparedBeefPolicy.maxQueueSizePerUser -
-      (this.pendingRootsByUser.get(preparation.userId) ?? 0)
+    const userCapacity =
+      this.storage.preparedBeefPolicy.maxQueueSizePerUser - (this.pendingRootsByUser.get(preparation.userId) ?? 0)
     const admitted = rootTxids.slice(0, Math.max(0, Math.min(globalCapacity, userCapacity)))
     if (admitted.length === 0) return false
     // Deliberately retain identifiers only. A canonical source BEEF can carry
@@ -366,7 +367,8 @@ export class PreparedBeefCoordinator {
       this.stopped ||
       !this.storage.preparedBeefPolicy.writeEnabled ||
       !this.storage.preparedBeefPolicy.backfillEnabled
-    ) return
+    )
+      return
     this.backfillStarted = true
     this.schedule(this.storage.preparedBeefPolicy.backfillIntervalMs)
   }
@@ -453,9 +455,11 @@ export class PreparedBeefCoordinator {
         if (!this.enqueue({ userId, rootTxids })) break
       }
     } catch (error) {
-      this.storage.telemetry.startSpan('wallet.storage.prepared_beef.backfill', {
-        component: 'wallet-storage'
-      }).end({ status: 'error', error })
+      this.storage.telemetry
+        .startSpan('wallet.storage.prepared_beef.backfill', {
+          component: 'wallet-storage'
+        })
+        .end({ status: 'error', error })
       this.backfillStarted = false
     }
   }
@@ -571,26 +575,29 @@ export class PreparedBeefCoordinator {
     // Proof state changed after verification when this returns false. The
     // invalidation won the race, so do not add a failure marker that suppresses
     // a later backfill retry.
-    return await this.storage.upsertPreparedBeef(row, proofEpoch) ? bytes.length : undefined
+    return (await this.storage.upsertPreparedBeef(row, proofEpoch)) ? bytes.length : undefined
   }
 
   private async persistFailureMarker(userId: number, rootTxid: string, proofEpoch: number): Promise<void> {
     const now = new Date()
     const bytes = new Uint8Array()
-    await this.storage.upsertPreparedBeef({
-      created_at: now,
-      updated_at: now,
-      preparedBeefId: 0,
-      userId,
-      rootTxid,
-      beef: [],
-      checksum: checksum(bytes),
-      formatVersion: PREPARED_BEEF_FORMAT_VERSION,
-      state: 'failed',
-      txCount: 0,
-      bumpCount: 0,
-      byteLength: 0
-    }, proofEpoch)
+    await this.storage.upsertPreparedBeef(
+      {
+        created_at: now,
+        updated_at: now,
+        preparedBeefId: 0,
+        userId,
+        rootTxid,
+        beef: [],
+        checksum: checksum(bytes),
+        formatVersion: PREPARED_BEEF_FORMAT_VERSION,
+        state: 'failed',
+        txCount: 0,
+        bumpCount: 0,
+        byteLength: 0
+      },
+      proofEpoch
+    )
   }
 
   private resolveIdle(): void {

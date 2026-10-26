@@ -12,6 +12,8 @@ tags: [mandala, brc-92, overlay, plan]
 
 # Mandala Token Regulated-Transfer Overlay — Implementation Plan (Plan 2 of 2)
 
+> **Superseded (2026-10):** Mandala moved to BRC-162 binary tokens — see @bsv/templates 2.0.0 Bsv21Binary and @bsv/overlay-topics 2.0.0.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a `tm_mandala` topic manager and `ls_mandala` lookup service to `@bsv/overlay-topics` that admit BRC-92 Mandala FT transfers only after verifying off-chain `revealSpecificKeyLinkage` data, enforcing token conservation and the admin authorization chain, and screening both transfer sides against an injected sanctions list — while retaining the (already-encrypted) linkage data.

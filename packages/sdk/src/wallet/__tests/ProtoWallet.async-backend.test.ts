@@ -4,6 +4,7 @@ import {
   KeyDeriver,
   PrivateKey,
   ProtoWallet,
+  PublicKey,
   registerAsyncCryptoBackend,
   unregisterAsyncCryptoBackend
 } from '../../../mod'
@@ -52,7 +53,7 @@ describe('ProtoWallet optional async backend boundaries', () => {
   const protocolID: [0, string] = [0, 'async backend boundary']
   const keyID = 'test'
 
-  it('canonicalizes lenient DER before accelerated verification', async () => {
+  it('rejects non-canonical DER before accelerated verification', async () => {
     const wallet = new ProtoWallet(new PrivateKey(42))
     let fixture: { digest: number[]; canonical: number[]; nonCanonical: number[] } | undefined
     for (let suffix = 0; suffix < 256 && fixture === undefined; suffix++) {
@@ -82,8 +83,8 @@ describe('ProtoWallet optional async backend boundaries', () => {
           keyID,
           counterparty: 'self'
         })
-      ).resolves.toEqual({ valid: true })
-      expect(Array.from(verifyDigest.mock.calls[0][2])).toEqual(fixture.canonical)
+      ).rejects.toThrow('canonical DER-encoded ECDSA signature')
+      expect(verifyDigest).not.toHaveBeenCalled()
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }
@@ -107,6 +108,33 @@ describe('ProtoWallet optional async backend boundaries', () => {
       ).rejects.toThrow()
       expect(signDigest).not.toHaveBeenCalled()
       expect(verifyDigest).not.toHaveBeenCalled()
+    } finally {
+      unregisterAsyncCryptoBackend(backend)
+    }
+  })
+
+  it('rejects a truthy non-boolean backend verification verdict', async () => {
+    const wallet = new ProtoWallet(new PrivateKey(42))
+    const backend = backendFor(['verifyDigest'], {
+      verifyDigest: async () => 'false' as unknown as boolean
+    })
+    registerAsyncCryptoBackend(backend)
+    try {
+      const { signature } = await wallet.createSignature({
+        hashToDirectlySign: Array.from({ length: 32 }).fill(1),
+        protocolID,
+        keyID,
+        counterparty: 'self'
+      })
+      await expect(
+        wallet.verifySignature({
+          hashToDirectlyVerify: Array.from({ length: 32 }).fill(1),
+          signature,
+          protocolID,
+          keyID,
+          counterparty: 'self'
+        })
+      ).rejects.toThrow('Signature is not valid')
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }
@@ -158,6 +186,61 @@ describe('ProtoWallet optional async backend boundaries', () => {
       await expect(keyDeriver.deriveSymmetricKeyAsync(protocolID, keyID, 'anyone')).rejects.toThrow(
         'expected 33'
       )
+    } finally {
+      unregisterAsyncCryptoBackend(backend)
+    }
+  })
+
+  it('snapshots direct async derivation domains and root authority before yielding', async () => {
+    const originalRoot = new PrivateKey(42)
+    const keyDeriver = new KeyDeriver(originalRoot)
+    const counterparty = new PrivateKey(69).toPublicKey()
+    const mutableProtocol: [0, string] = [0, 'original async derivation']
+    const expected = new KeyDeriver(originalRoot).derivePublicKey(
+      mutableProtocol,
+      keyID,
+      counterparty
+    )
+    let resume!: () => void
+    const gate = new Promise<void>(resolve => {
+      resume = resolve
+    })
+    const backend = backendFor(
+      ['multiplyPublicKey', 'publicKeyFromPrivate', 'tweakPrivateKeyAdd', 'tweakPublicKeyAdd'],
+      {
+        multiplyPublicKey: async (publicKey, privateKey) => {
+          await gate
+          return Uint8Array.from(
+            PublicKey.fromDER(Array.from(publicKey))
+              .deriveSharedSecret(new PrivateKey(Array.from(privateKey)))
+              .encode(true) as number[]
+          )
+        },
+        tweakPublicKeyAdd: async (publicKey, tweak) =>
+          Uint8Array.from(
+            PublicKey.fromDER(Array.from(publicKey))
+              .add(new PrivateKey(Array.from(tweak)).toPublicKey())
+              .encode(true) as number[]
+          ),
+        tweakPrivateKeyAdd: async (privateKey, tweak) =>
+          Uint8Array.from(
+            new PrivateKey(
+              new PrivateKey(Array.from(privateKey)).add(new PrivateKey(Array.from(tweak)))
+            ).toArray('be', 32)
+          ),
+        publicKeyFromPrivate: async privateKey =>
+          Uint8Array.from(
+            new PrivateKey(Array.from(privateKey)).toPublicKey().encode(true) as number[]
+          )
+      }
+    )
+    registerAsyncCryptoBackend(backend)
+    try {
+      const pending = keyDeriver.derivePublicKeyAsync(mutableProtocol, keyID, counterparty, false)
+      mutableProtocol[1] = 'substituted async derivation'
+      keyDeriver.rootKey = new PrivateKey(99)
+      resume()
+      await expect(pending).resolves.toEqual(expected)
     } finally {
       unregisterAsyncCryptoBackend(backend)
     }

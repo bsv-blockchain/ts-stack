@@ -15,3 +15,6 @@ export * from './WalletError.js'
 export { Validation } // NOSONAR -- direct namespace re-exports fail the Metro consumer gate.
 export * from './substrates/index.js'
 export * from './WalletLoggerInterface.js'
+export * from './completeBoundAction.js'
+export * from './WalletArgumentValidation.js'
+export * from './WalletResultValidation.js'

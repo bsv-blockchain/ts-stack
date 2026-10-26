@@ -12,41 +12,41 @@ The [Model Context Protocol](https://modelcontextprotocol.io) is an open standar
 
 ## Available Resources
 
-| URI | Description |
-|-----|-------------|
-| `simple://api/wallet` | WalletCore, BrowserWallet, and ServerWallet method reference |
-| `simple://api/tokens` | Token create, list, send, redeem, and MessageBox transfer |
-| `simple://api/inscriptions` | Text, JSON, file-hash, and image-hash inscriptions |
-| `simple://api/messagebox` | MessageBox certification, payments, and identity registry |
-| `simple://api/certification` | Certifier class and certificate management |
-| `simple://api/did` | DID class and wallet DID methods |
-| `simple://api/credentials` | Schema, Issuer, Verifiable Credentials/Presentations |
-| `simple://api/overlay` | Overlay networks, SHIP/SLAP, broadcasting |
-| `simple://guide/nextjs` | Complete Next.js integration guide |
-| `simple://guide/gotchas` | Critical pitfalls and non-obvious behaviors |
-| `simple://patterns` | Common code patterns and recipes |
+| URI                          | Description                                                  |
+| ---------------------------- | ------------------------------------------------------------ |
+| `simple://api/wallet`        | WalletCore, BrowserWallet, and ServerWallet method reference |
+| `simple://api/tokens`        | Token create, list, send, redeem, and MessageBox transfer    |
+| `simple://api/inscriptions`  | Text, JSON, file-hash, and image-hash inscriptions           |
+| `simple://api/messagebox`    | MessageBox certification, payments, and identity registry    |
+| `simple://api/certification` | Certifier class and certificate management                   |
+| `simple://api/did`           | DID class and wallet DID methods                             |
+| `simple://api/credentials`   | Schemas, issuer, encrypted BRC-203 envelopes                 |
+| `simple://api/overlay`       | Overlay networks, SHIP/SLAP, broadcasting                    |
+| `simple://guide/nextjs`      | Complete Next.js integration guide                           |
+| `simple://guide/gotchas`     | Critical pitfalls and non-obvious behaviors                  |
+| `simple://patterns`          | Common code patterns and recipes                             |
 
 ## Available Tools
 
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `scaffold_nextjs_config` | `features: string[]` | Generate `next.config.ts`, package.json additions |
-| `generate_wallet_setup` | `target`, `framework` | Wallet initialization code (browser or server) |
-| `generate_payment_handler` | `type`, `basket?` | Payment handler (simple, multi-output, server-funding) |
-| `generate_token_handler` | `operations: string[]` | Token handler functions |
-| `generate_inscription_handler` | `types: string[]` | Inscription handler functions |
-| `generate_messagebox_setup` | `features: string[]`, `registryUrl?` | MessageBox integration code |
-| `generate_server_route` | `actions: string[]`, `walletPersistence` | Next.js API route handler |
-| `generate_credential_issuer` | `schemaFields`, `revocation` | CredentialIssuer setup code |
-| `generate_did_integration` | `features: string[]` | DID integration code |
+| Tool                           | Parameters                               | Description                                            |
+| ------------------------------ | ---------------------------------------- | ------------------------------------------------------ |
+| `scaffold_nextjs_config`       | `features: string[]`                     | Generate `next.config.ts`, package.json additions      |
+| `generate_wallet_setup`        | `target`, `framework`                    | Wallet initialization code (browser or server)         |
+| `generate_payment_handler`     | `type`, `basket?`                        | Payment handler (simple, multi-output, server-funding) |
+| `generate_token_handler`       | `operations: string[]`                   | Token handler functions                                |
+| `generate_inscription_handler` | `types: string[]`                        | Inscription handler functions                          |
+| `generate_messagebox_setup`    | `features: string[]`, `registryUrl?`     | MessageBox integration code                            |
+| `generate_server_route`        | `actions: string[]`, `walletPersistence` | Next.js API route handler                              |
+| `generate_credential_issuer`   | `schemaFields`, `revocation`             | CredentialIssuer setup code                            |
+| `generate_did_integration`     | `features: string[]`                     | DID integration code                                   |
 
 ## Available Prompts
 
-| Prompt | Description |
-|--------|-------------|
-| `integrate_simple` | Full walkthrough for adding `@bsv/simple` to a project |
-| `add_bsv_feature` | Generate code for a specific feature (payments, tokens, etc.) |
-| `debug_simple` | Debugging help with common gotchas checklist |
+| Prompt             | Description                                                   |
+| ------------------ | ------------------------------------------------------------- |
+| `integrate_simple` | Full walkthrough for adding `@bsv/simple` to a project        |
+| `add_bsv_feature`  | Generate code for a specific feature (payments, tokens, etc.) |
+| `debug_simple`     | Debugging help with common gotchas checklist                  |
 
 ## Running the MCP Server
 

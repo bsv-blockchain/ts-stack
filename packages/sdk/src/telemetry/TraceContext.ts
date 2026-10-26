@@ -12,12 +12,33 @@ function validSpanId(value: string): boolean {
 }
 
 /**
- * Encodes the current span using the W3C Trace Context `traceparent` format.
+ * Encodes a canonical current span using the W3C Trace Context `traceparent`
+ * format. Invalid, accessor-backed, or out-of-range context fields are rejected
+ * rather than coerced into a different trace identity.
  */
 export function formatTraceparent(context: TelemetrySpanContext): string | undefined {
-  if (!validTraceId(context.traceId) || !validSpanId(context.spanId)) return undefined
-  const flags = Math.max(0, Math.min(255, context.traceFlags ?? 1))
-  return `${TRACEPARENT_VERSION}-${context.traceId.toLowerCase()}-${context.spanId.toLowerCase()}-${flags.toString(16).padStart(2, '0')}`
+  try {
+    if (context == null || typeof context !== 'object') return undefined
+    const traceDescriptor = Object.getOwnPropertyDescriptor(context, 'traceId')
+    const spanDescriptor = Object.getOwnPropertyDescriptor(context, 'spanId')
+    const flagsDescriptor = Object.getOwnPropertyDescriptor(context, 'traceFlags')
+    const traceId = traceDescriptor?.value
+    const spanId = spanDescriptor?.value
+    const traceFlags = flagsDescriptor == null ? 1 : flagsDescriptor.value
+    if (
+      typeof traceId !== 'string' ||
+      typeof spanId !== 'string' ||
+      !validTraceId(traceId) ||
+      !validSpanId(spanId) ||
+      !Number.isSafeInteger(traceFlags) ||
+      traceFlags < 0 ||
+      traceFlags > 255
+    )
+      return undefined
+    return `${TRACEPARENT_VERSION}-${traceId.toLowerCase()}-${spanId.toLowerCase()}-${traceFlags.toString(16).padStart(2, '0')}`
+  } catch {
+    return undefined
+  }
 }
 
 /**

@@ -2,10 +2,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
 import {
   concretePublicEntrypoints,
+  nodeModeDefaultImports,
+  resolutionProbe,
   typeProblemsForModes,
   validateManifestArtifactContract,
   validatePackedFiles,
@@ -245,4 +248,72 @@ test('packed consumers use the exact transitive workspace runtime closure', () =
       ),
     /unknown workspace dependency @bsv\/missing/
   )
+})
+
+test('CommonJS interop policy finds Node-mode default bindings that are read', () => {
+  const rolldown = [
+    'const require_runtime = require("../_virtual/_rolldown/runtime.cjs");',
+    'let _bsv_sdk_script_LockingScript = require("@bsv/sdk/script/LockingScript");',
+    '_bsv_sdk_script_LockingScript = require_runtime.__toESM(_bsv_sdk_script_LockingScript, 1);',
+    'let _bsv_sdk_primitives_Hash = require("@bsv/sdk/primitives/Hash");',
+    '_bsv_sdk_primitives_Hash = require_runtime.__toESM(_bsv_sdk_primitives_Hash, 1);',
+    'const script = new _bsv_sdk_script_LockingScript.default();',
+    'const digest = _bsv_sdk_primitives_Hash.sha256([]);'
+  ].join('\n')
+  assert.deepEqual(nodeModeDefaultImports(rolldown), ['@bsv/sdk/script/LockingScript'])
+
+  const esbuild = [
+    "var import_OP = __toESM(require('@bsv/sdk/script/OP'), 1);",
+    'var import_express = __toESM(require("express"));',
+    'const code = import_OP.default.OP_RETURN;',
+    'const app = (0, import_express.default)();'
+  ].join('\n')
+  assert.deepEqual(nodeModeDefaultImports(esbuild), ['@bsv/sdk/script/OP'])
+})
+
+test('CommonJS interop policy ignores Babel-style interop and named-only reads', () => {
+  const source = [
+    'let _bsv_sdk_script = require("@bsv/sdk/script");',
+    'let _bsv_sdk_primitives_PublicKey = require("@bsv/sdk/primitives/PublicKey");',
+    '_bsv_sdk_primitives_PublicKey = require_runtime.__toESM(_bsv_sdk_primitives_PublicKey);',
+    'let _bsv_sdk_primitives_Hash = require("@bsv/sdk/primitives/Hash");',
+    '_bsv_sdk_primitives_Hash = require_runtime.__toESM(_bsv_sdk_primitives_Hash, 1);',
+    'new _bsv_sdk_script.LockingScript();',
+    '_bsv_sdk_primitives_PublicKey.default.fromString("");',
+    '_bsv_sdk_primitives_Hash.sha256([]);',
+    '_bsv_sdk_primitives_Hash.defaultish;'
+  ].join('\n')
+  assert.deepEqual(nodeModeDefaultImports(source), [])
+})
+
+test('one resolution probe checks every entrypoint and names each failure', async () => {
+  const consumer = await fs.mkdtemp(path.join(os.tmpdir(), 'resolution-probe-'))
+  try {
+    const packageRoot = path.join(consumer, 'node_modules', '@bsv', 'example')
+    await fs.mkdir(path.join(packageRoot, 'dist'), { recursive: true })
+    await fs.writeFile(
+      path.join(packageRoot, 'package.json'),
+      JSON.stringify({
+        name: '@bsv/example',
+        exports: { '.': './dist/index.js', './a': './dist/a.js' }
+      })
+    )
+    await fs.writeFile(path.join(packageRoot, 'dist', 'index.js'), 'module.exports = 1\n')
+    await fs.writeFile(path.join(packageRoot, 'dist', 'a.js'), 'module.exports = 2\n')
+    const probe = specifiers =>
+      spawnSync(
+        process.execPath,
+        ['--eval', resolutionProbe('specifier => require.resolve(specifier)', specifiers)],
+        { cwd: consumer, encoding: 'utf8' }
+      )
+
+    assert.equal(probe(['@bsv/example', '@bsv/example/a']).status, 0)
+    const failed = probe(['@bsv/example', '@bsv/example/missing', '@bsv/example/gone'])
+    assert.equal(failed.status, 1)
+    assert.match(failed.stderr, /^@bsv\/example\/missing: /m)
+    assert.match(failed.stderr, /^@bsv\/example\/gone: /m)
+    assert.doesNotMatch(failed.stderr, /^@bsv\/example: /m)
+  } finally {
+    await fs.rm(consumer, { recursive: true, force: true })
+  }
 })

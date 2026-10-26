@@ -147,8 +147,7 @@ describe('identity overlay verification', () => {
     duplicateSpend.addOutput({ satoshis: 19, lockingScript: fixture.certificateTransaction.outputs[0].lockingScript })
     await duplicateSpend.sign()
 
-    // SDK graph/value/script verification alone currently accepts duplicate outpoints.
-    await expect(duplicateSpend.verify(fixture.confirmedTracker)).resolves.toBe(true)
+    await expect(duplicateSpend.verify(fixture.confirmedTracker)).rejects.toThrow('more than once')
     await expect(parseResults(answer(outputFor(duplicateSpend.toBEEF())), fixture.confirmedTracker)).resolves.toEqual(
       []
     )
@@ -208,7 +207,7 @@ describe('identity overlay verification', () => {
     identityChild.addOutput({ satoshis: 9, lockingScript: fixture.certificateTransaction.outputs[0].lockingScript })
     await identityChild.sign()
 
-    await expect(identityChild.verify(fixture.confirmedTracker)).resolves.toBe(true)
+    await expect(identityChild.verify(fixture.confirmedTracker)).rejects.toThrow('more than once')
     await expect(parseResults(answer(outputFor(identityChild.toBEEF())), fixture.confirmedTracker)).resolves.toEqual([])
   })
 

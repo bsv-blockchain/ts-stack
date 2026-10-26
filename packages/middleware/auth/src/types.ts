@@ -26,6 +26,8 @@ export interface AuthProof {
  *
  * Arrays are always treated as structured data (JSON), never as raw byte arrays —
  * pass binary as a typed array or `ArrayBuffer`.
+ * Structured bodies reject non-finite numbers and negative zero because JSON
+ * would silently collapse them to `null` or `0`.
  *
  * Client and verifier MUST bind identical bytes: the client signs the exact body
  * it sends, and the verifier binds the raw body it received (not a re-parsed and
@@ -57,14 +59,18 @@ export type ConsumeNonce = (nonce: string, expiresAt: Date) => boolean | Promise
 
 export interface AuthProofOptions {
   /**
-   * Signing protocol (security level 2 = bound to counterparty). MUST match on
-   * client and server. Protocol names may only contain letters, numbers, spaces.
+   * Signing protocol. The exact tuple MUST match on client and server. The
+   * explicit counterparty cryptographically scopes derivation at every level;
+   * the level controls wallet consent (0 silent, 1 per app, 2 per counterparty).
+   * Protocol names may contain only ASCII letters, numbers, and spaces.
    */
   protocol?: WalletProtocol
   /** Proof validity window in ms (default 120000 = 2 min). */
   windowMs?: number
   /** Clock-skew tolerance in ms for the expiry bound (default 30000). */
   clockSkewMs?: number
+  /** Maximum normalized request-body bytes bound into one proof (default 8 MiB). */
+  maxBodyBytes?: number
 }
 
 /** Client wallet methods needed to create a proof. */

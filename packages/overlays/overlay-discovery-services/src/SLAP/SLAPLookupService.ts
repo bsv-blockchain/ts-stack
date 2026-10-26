@@ -1,3 +1,4 @@
+import { toHex, toUTF8Strict } from '@bsv/sdk/primitives/utils'
 import {
   LookupService,
   LookupQuestion,
@@ -8,15 +9,36 @@ import {
   SpendNotificationMode
 } from '@bsv/overlay'
 
-import { PushDrop, Utils } from '@bsv/sdk'
+import { decodeCanonicalPushDrop } from '@bsv/sdk'
 import { SLAPStorage } from './SLAPStorage.js'
 import { SLAPQuery } from '../types.js'
 import SLAPLookupDocs from './SLAPLookup.docs.js'
+import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
+import { isValidTopicOrServiceName } from '../utils/isValidTopicOrServiceName.js'
 import {
   definedProperties,
+  MAX_DISCOVERY_LOOKUP_RESULTS,
+  MAX_QUERY_NAME_BYTES,
+  requireLookupQuery,
+  validateOptionalBoolean,
+  validateOptionalPublicKey,
   validateOptionalString,
   validatePaginationQuery
 } from '../utils/lookupQueryValidation.js'
+
+function validateCallbackOutpoint(txid: unknown, outputIndex: unknown): [string, number] {
+  if (typeof txid !== 'string' || !/^[0-9a-fA-F]{64}$/.test(txid)) {
+    throw new Error('Invalid callback transaction ID')
+  }
+  if (
+    !Number.isSafeInteger(outputIndex) ||
+    (outputIndex as number) < 0 ||
+    (outputIndex as number) > 0xffffffff
+  ) {
+    throw new Error('Invalid callback output index')
+  }
+  return [txid.toLowerCase(), outputIndex as number]
+}
 
 /**
  * Implements the SLAP lookup service
@@ -32,13 +54,19 @@ export class SLAPLookupService implements LookupService {
 
   async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
-    const { txid, outputIndex, lockingScript, topic } = payload
+    const { lockingScript, topic } = payload
     if (topic !== 'tm_slap') return
-    const result = PushDrop.decode(lockingScript)
-    const protocol = Utils.toUTF8(result.fields[0])
-    const identityKey = Utils.toHex(result.fields[1])
-    const domain = Utils.toUTF8(result.fields[2])
-    const service = Utils.toUTF8(result.fields[3])
+    const [txid, outputIndex] = validateCallbackOutpoint(payload.txid, payload.outputIndex)
+    if (!(await isAdmissibleDiscoveryOutput(lockingScript, 'SLAP'))) return
+    const result = decodeCanonicalPushDrop(lockingScript, {
+      fieldCount: 5,
+      maximumFieldBytes: 4096,
+      maximumPayloadBytes: 8192
+    })
+    const protocol = toUTF8Strict(result.fields[0])
+    const identityKey = toHex(result.fields[1])
+    const domain = toUTF8Strict(result.fields[2])
+    const service = toUTF8Strict(result.fields[3])
     if (protocol !== 'SLAP') return
 
     await this.storage.storeSLAPRecord(txid, outputIndex, identityKey, domain, service)
@@ -46,42 +74,48 @@ export class SLAPLookupService implements LookupService {
 
   async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
-    const { topic, txid, outputIndex } = payload
+    const { topic } = payload
     if (topic !== 'tm_slap') return
+    const [txid, outputIndex] = validateCallbackOutpoint(payload.txid, payload.outputIndex)
     await this.storage.deleteSLAPRecord(txid, outputIndex)
   }
 
   async outputEvicted(txid: string, outputIndex: number): Promise<void> {
-    await this.storage.deleteSLAPRecord(txid, outputIndex)
+    const [validatedTxid, validatedOutputIndex] = validateCallbackOutpoint(txid, outputIndex)
+    await this.storage.deleteSLAPRecord(validatedTxid, validatedOutputIndex)
   }
 
   async lookup(question: LookupQuestion): Promise<LookupFormula> {
-    if (question.query === undefined || question.query === null) {
-      throw new Error('A valid query must be provided!')
+    const query = requireLookupQuery(question, 'ls_slap', [
+      'findAll',
+      'domain',
+      'service',
+      'identityKey',
+      'limit',
+      'skip',
+      'sortOrder'
+    ])
+    if (query === 'findAll') {
+      return await this.storage.findAll(MAX_DISCOVERY_LOOKUP_RESULTS, 0, 'desc')
     }
-    if (question.service !== 'ls_slap') {
-      throw new Error('Lookup service not supported!')
-    }
-
-    if (question.query === 'findAll') return await this.storage.findAll()
-    if (typeof question.query !== 'object') {
-      // Keep the historical concrete Error class: consumers may branch on it.
-      throw new Error( // NOSONAR -- compatibility requires Error rather than TypeError
-        'Invalid query format. Query must be "findAll" string or an object with valid parameters.'
-      )
-    }
-    return await this.lookupObject(question.query as SLAPQuery)
+    return await this.lookupObject(query as SLAPQuery)
   }
 
   private async lookupObject(query: SLAPQuery): Promise<LookupFormula> {
-    validatePaginationQuery(query)
-    const { limit, skip, sortOrder } = query
-    if (query.findAll) return await this.storage.findAll(limit, skip, sortOrder)
+    const { limit, skip, sortOrder } = validatePaginationQuery(query)
+    const findAll = validateOptionalBoolean(query.findAll, 'query.findAll')
+    if (limit === 0) return []
+    if (findAll) return await this.storage.findAll(limit, skip, sortOrder)
 
-    validateOptionalString(query.domain, 'query.domain')
-    validateOptionalString(query.service, 'query.service')
-    validateOptionalString(query.identityKey, 'query.identityKey')
-    const { domain, service, identityKey } = query
+    const domain = validateOptionalString(query.domain, 'query.domain')
+    const service = validateOptionalString(query.service, 'query.service', MAX_QUERY_NAME_BYTES)
+    if (
+      service !== undefined &&
+      (!isValidTopicOrServiceName(service) || !service.startsWith('ls_'))
+    ) {
+      throw new Error('query.service must be a valid ls_ service name')
+    }
+    const identityKey = validateOptionalPublicKey(query.identityKey, 'query.identityKey')
     const queryParams = definedProperties({ domain, service, identityKey, limit, skip, sortOrder })
     return await this.storage.findRecord(queryParams)
   }

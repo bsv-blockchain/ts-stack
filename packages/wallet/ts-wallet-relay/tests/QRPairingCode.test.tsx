@@ -81,6 +81,20 @@ describe('QRPairingCode', () => {
     expect(wrapper).toHaveAttribute('type', 'button')
     expect(wrapper).toBeEnabled()
   })
+
+  it('rejects executable deep links and non-PNG active content before rendering', () => {
+    expect(() =>
+      render(<QRPairingCode qrDataUrl={MOCK_DATA_URL} pairingUri="javascript://pair?topic=owned" />)
+    ).toThrow(/non-web wallet deep-link scheme/)
+    expect(() =>
+      render(
+        <QRPairingCode
+          qrDataUrl="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="
+          pairingUri={MOCK_PAIRING_URI}
+        />
+      )
+    ).toThrow(/PNG data URL/)
+  })
 })
 
 describe('useQRPairing', () => {
@@ -109,5 +123,11 @@ describe('useQRPairing', () => {
   it('returns the pairingUri unchanged', () => {
     const { result } = renderHook(() => useQRPairing(MOCK_PAIRING_URI))
     expect(result.current.pairingUri).toBe(MOCK_PAIRING_URI)
+  })
+
+  it('rejects a web-executable URL even when a custom opener is supplied', () => {
+    expect(() =>
+      renderHook(() => useQRPairing('javascript://pair?topic=owned', { openUrl: jest.fn() }))
+    ).toThrow(/non-web wallet deep-link scheme/)
   })
 })

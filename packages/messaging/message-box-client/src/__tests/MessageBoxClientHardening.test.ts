@@ -1,4 +1,10 @@
-import { PrivateKey, type WalletInterface } from '@bsv/sdk'
+import {
+  LockingScript,
+  PrivateKey,
+  Transaction,
+  UnlockingScript,
+  type WalletInterface
+} from '@bsv/sdk'
 import { jest } from '@jest/globals'
 import { MessageBoxClient } from '../MessageBoxClient.js'
 import type { SendListParams } from '../types/permissions.js'
@@ -22,12 +28,39 @@ function jsonResponse(body: unknown, init: Partial<Response> = {}): Response {
 function createWallet(): jest.Mocked<WalletInterface> {
   return {
     getPublicKey: jest.fn().mockResolvedValue({ publicKey: identityKey }),
-    createHmac: jest.fn().mockResolvedValue({ hmac: [1, 2, 3] }),
+    createHmac: jest.fn().mockResolvedValue({ hmac: Array<number>(32).fill(1) }),
     encrypt: jest.fn().mockResolvedValue({ ciphertext: [1, 2, 3] }),
     decrypt: jest.fn().mockResolvedValue({
       plaintext: Array.from(Buffer.from('{"secret":true}', 'utf8'))
     }),
-    createAction: jest.fn().mockResolvedValue({ tx: [1, 2, 3] }),
+    createAction: jest.fn(async (args: Parameters<WalletInterface['createAction']>[0]) => {
+      const outputs = (args.outputs ?? []).map(output => ({
+        satoshis: output.satoshis,
+        lockingScript: LockingScript.fromHex(output.lockingScript)
+      }))
+      const totalOutputSatoshis = outputs.reduce((total, output) => total + output.satoshis, 0)
+      const fundingTransaction = new Transaction(
+        1,
+        [],
+        [{ satoshis: totalOutputSatoshis, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+        0
+      )
+      const transaction = new Transaction(
+        1,
+        totalOutputSatoshis === 0
+          ? []
+          : [
+              {
+                sourceTransaction: fundingTransaction,
+                sourceOutputIndex: 0,
+                unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+              }
+            ],
+        outputs,
+        0
+      )
+      return { txid: transaction.id('hex'), tx: transaction.toAtomicBEEF() }
+    }),
     internalizeAction: jest.fn().mockResolvedValue({ accepted: true })
   } as unknown as jest.Mocked<WalletInterface>
 }
@@ -86,9 +119,17 @@ describe('MessageBoxClient hardening branches', () => {
 
     it('returns a structured result when every recipient is blocked', async () => {
       jest.spyOn(client, 'getMessageBoxQuote').mockResolvedValue({
-        quotesByRecipient: [],
+        quotesByRecipient: [recipientA, recipientB].map(recipient => ({
+          recipient,
+          messageBox: 'inbox',
+          recipientFee: -1,
+          deliveryFee: 0,
+          status: 'blocked' as const
+        })),
         blockedRecipients: [recipientA, recipientB],
-        deliveryAgentIdentityKeyByHost: undefined as never,
+        deliveryAgentIdentityKeyByHost: {
+          'https://message-box.example/api': identityKey
+        },
         totals: { deliveryFees: 0, recipientFees: 0, totalForPayableRecipients: 0 }
       })
 
@@ -135,7 +176,7 @@ describe('MessageBoxClient hardening branches', () => {
       }
       await expect(
         client.sendMessageToRecipients(params, 'https://message-box.example/api')
-      ).rejects.toThrow('Missing delivery agent identity keys')
+      ).rejects.toThrow('Delivery-agent identity map')
 
       quote.mockResolvedValueOnce({
         quotesByRecipient: [
@@ -178,7 +219,7 @@ describe('MessageBoxClient hardening branches', () => {
       })
       await expect(
         client.sendMessageToRecipients(params, 'https://message-box.example/api')
-      ).rejects.toThrow('Could not determine server delivery agent identity key')
+      ).rejects.toThrow('Delivery-agent identity')
     })
 
     it('reports success, partial success, and zero-result server responses', async () => {
@@ -192,7 +233,7 @@ describe('MessageBoxClient hardening branches', () => {
         })),
         blockedRecipients: [],
         deliveryAgentIdentityKeyByHost: {
-          'https://different.example': identityKey
+          'https://message-box.example/api': identityKey
         },
         totals: { deliveryFees: 2, recipientFees: 0, totalForPayableRecipients: 2 }
       })
@@ -203,9 +244,20 @@ describe('MessageBoxClient hardening branches', () => {
       })
       fetchMock
         .mockResolvedValueOnce(
-          jsonResponse({ status: 'success', results: [{ recipientA }, { recipientB }] })
+          jsonResponse({
+            status: 'success',
+            results: [recipientA, recipientB].map(recipient => ({
+              recipient,
+              messageId: '01'.repeat(32)
+            }))
+          })
         )
-        .mockResolvedValueOnce(jsonResponse({ status: 'success', results: [{ recipientA }] }))
+        .mockResolvedValueOnce(
+          jsonResponse({
+            status: 'success',
+            results: [{ recipient: recipientA, messageId: '01'.repeat(32) }]
+          })
+        )
         .mockResolvedValueOnce(jsonResponse({ status: 'success', results: [] }))
 
       const params: SendListParams = {
@@ -229,7 +281,7 @@ describe('MessageBoxClient hardening branches', () => {
       const sentBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
       expect(sentBody.message).toMatchObject({
         recipients: [recipientA, recipientB],
-        messageId: ['010203', '010203'],
+        messageId: ['01'.repeat(32), '01'.repeat(32)],
         body: '{"hello":"world"}'
       })
     })
@@ -275,7 +327,7 @@ describe('MessageBoxClient hardening branches', () => {
         )
       ).resolves.toMatchObject({
         status: 'error',
-        failed: [{ recipient: recipientA, error: 'blocked by server' }]
+        failed: [{ recipient: recipientA, error: 'Batch send failed.' }]
       })
 
       fetchMock.mockResolvedValueOnce(
@@ -293,7 +345,7 @@ describe('MessageBoxClient hardening branches', () => {
         )
       ).resolves.toMatchObject({
         status: 'error',
-        failed: [{ recipient: recipientA, error: 'HTTP 503 - Unavailable' }]
+        failed: [{ recipient: recipientA, error: 'Batch send failed.' }]
       })
     })
 
@@ -325,7 +377,7 @@ describe('MessageBoxClient hardening branches', () => {
         deliveryAgentIdentityKey: identityKey
       })
 
-      expect(payment.tx).toEqual([1, 2, 3])
+      expect(Transaction.fromAtomicBEEF(payment.tx).outputs).toHaveLength(2)
       expect(payment.outputs).toHaveLength(2)
       expect(wallet.createAction).toHaveBeenCalledWith(
         expect.objectContaining({ outputs: expect.arrayContaining([expect.any(Object)]) }),
@@ -333,24 +385,20 @@ describe('MessageBoxClient hardening branches', () => {
       )
     })
 
-    it('normalizes typed and historical JSON wallet transactions in paid messages', async () => {
-      wallet.createAction.mockResolvedValueOnce({ tx: new Uint8Array([4, 5, 6]) })
-      const typed = await (client as any).createMessagePayment(recipientA, {
-        recipientFee: 1,
-        deliveryFee: 0,
-        deliveryAgentIdentityKey: identityKey
-      })
-      wallet.createAction.mockResolvedValueOnce({
-        tx: JSON.parse(JSON.stringify(new Uint8Array([7, 8, 9])))
-      } as never)
-      const historical = await (client as any).createMessagePayment(recipientA, {
-        recipientFee: 1,
-        deliveryFee: 0,
-        deliveryAgentIdentityKey: identityKey
-      })
-
-      expect(typed.tx).toEqual([4, 5, 6])
-      expect(historical.tx).toEqual([7, 8, 9])
+    it('rejects malformed typed and historical JSON wallet transactions', async () => {
+      for (const tx of [
+        new Uint8Array([4, 5, 6]),
+        JSON.parse(JSON.stringify(new Uint8Array([7, 8, 9])))
+      ]) {
+        wallet.createAction.mockResolvedValueOnce({ txid: '00'.repeat(32), tx } as never)
+        await expect(
+          (client as any).createMessagePayment(recipientA, {
+            recipientFee: 1,
+            deliveryFee: 0,
+            deliveryAgentIdentityKey: identityKey
+          })
+        ).rejects.toThrow(/BEEF|array of bytes/)
+      }
     })
 
     it('rejects a zero-fee payment and a wallet action without a transaction', async () => {
@@ -369,12 +417,12 @@ describe('MessageBoxClient hardening branches', () => {
           deliveryFee: 0,
           deliveryAgentIdentityKey: identityKey
         })
-      ).rejects.toThrow('Failed to create payment transaction')
+      ).rejects.toThrow('Invalid createAction result')
     })
 
     it('constructs a batch payment and skips missing or zero-fee recipient quotes', async () => {
       const payment = await (client as any).createMessagePaymentBatch(
-        [recipientA, recipientB, identityKey],
+        [recipientA, recipientB],
         new Map([
           [recipientA, { recipientFee: 2, deliveryFee: 3 }],
           [recipientB, { recipientFee: 0, deliveryFee: 3 }]
@@ -382,7 +430,8 @@ describe('MessageBoxClient hardening branches', () => {
         identityKey
       )
 
-      expect(payment.tx).toEqual([1, 2, 3])
+      expect(Transaction.fromAtomicBEEF(payment.tx).outputs).toHaveLength(2)
+      expect(Transaction.fromAtomicBEEF(payment.tx).outputs[0].satoshis).toBe(6)
       expect(payment.outputs).toHaveLength(2)
     })
   })
@@ -704,10 +753,10 @@ describe('MessageBoxClient hardening branches', () => {
       ).rejects.toThrow('HTTP 503')
       await expect(
         client.getMessageBoxQuote(quoteParams, 'https://message-box.example/api')
-      ).rejects.toThrow('bad quote')
+      ).rejects.toThrow('Message Box server rejected the quote request.')
       await expect(
         client.getMessageBoxQuote(quoteParams, 'https://message-box.example/api')
-      ).rejects.toThrow('did not provide their identity key')
+      ).rejects.toThrow('mutually authenticated response')
     })
 
     it('rejects malformed list-permission payloads and maps paid permissions', async () => {
@@ -731,8 +780,8 @@ describe('MessageBoxClient hardening branches', () => {
                 sender: recipientA,
                 messageBox: 'notifications',
                 recipientFee: 2,
-                createdAt: 'created',
-                updatedAt: 'updated'
+                createdAt: '2026-09-18T00:00:00.000Z',
+                updatedAt: '2026-09-18T00:00:00.000Z'
               }
             ]
           })
@@ -895,7 +944,7 @@ describe('MessageBoxClient hardening branches', () => {
       expect(order).toEqual(['internalize', 'ack'])
       expect(wallet.internalizeAction).toHaveBeenCalledWith(expect.anything(), 'app.example')
       acknowledge.mockClear()
-      for (const result of [{ accepted: false }, {}]) {
+      for (const result of [{ accepted: false }, {}, { accepted: 'true' }]) {
         wallet.internalizeAction.mockResolvedValueOnce(result as never)
         await expect(client.acknowledgeNotification(message)).resolves.toBe(false)
       }
@@ -916,6 +965,94 @@ describe('MessageBoxClient hardening branches', () => {
       expect(acknowledge).not.toHaveBeenCalled()
     })
 
+    it('accepts payment BEEF above the generic data-graph limit without invoking accessors', async () => {
+      jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('success')
+      const largeTx = new Uint8Array(1_000_001).fill(1)
+      const payment = {
+        tx: largeTx,
+        outputs: [{ outputIndex: 0, protocol: 'wallet payment' }]
+      }
+      await expect(
+        client.acknowledgeNotification({
+          messageId: 'large-payment',
+          sender: recipientA,
+          body: { message: 'hello', payment }
+        } as any)
+      ).resolves.toBe(true)
+      expect(wallet.internalizeAction).toHaveBeenCalledWith(
+        expect.objectContaining({ tx: expect.any(Array) }),
+        undefined
+      )
+      const request = wallet.internalizeAction.mock.calls[0]![0]
+      expect(request.tx).toHaveLength(largeTx.length)
+
+      const txGetter = jest.fn(() => largeTx)
+      const accessorPayment = Object.defineProperty(
+        { outputs: [{ outputIndex: 0, protocol: 'wallet payment' }] },
+        'tx',
+        { enumerable: true, get: txGetter }
+      )
+      await expect(
+        client.acknowledgeNotification({
+          messageId: 'accessor-payment',
+          sender: recipientA,
+          body: { message: 'hello', payment: accessorPayment }
+        } as any)
+      ).resolves.toBe(false)
+      expect(txGetter).not.toHaveBeenCalled()
+    })
+
+    it('ignores ambient notification payments and wallet acceptance', async () => {
+      const acknowledge = jest.spyOn(client, 'acknowledgeMessage').mockResolvedValue('ok')
+      const previousPayment = Object.getOwnPropertyDescriptor(Object.prototype, 'payment')
+      const previousAccepted = Object.getOwnPropertyDescriptor(Object.prototype, 'accepted')
+      Object.defineProperties(Object.prototype, {
+        payment: {
+          configurable: true,
+          value: { tx: [1, 2, 3], outputs: [{ outputIndex: 0, protocol: 'wallet payment' }] }
+        },
+        accepted: { configurable: true, value: true }
+      })
+      try {
+        await expect(
+          client.acknowledgeNotification({
+            messageId: 'ambient-payment',
+            sender: recipientA,
+            body: { message: 'hello' }
+          } as any)
+        ).resolves.toBe(false)
+        expect(wallet.internalizeAction).not.toHaveBeenCalled()
+        expect(acknowledge).toHaveBeenCalledTimes(1)
+
+        wallet.internalizeAction.mockResolvedValueOnce({} as never)
+        await expect(
+          client.acknowledgeNotification({
+            messageId: 'ambient-acceptance',
+            sender: recipientA,
+            body: {
+              message: 'hello',
+              payment: {
+                tx: [1, 2, 3],
+                outputs: [{ outputIndex: 0, protocol: 'wallet payment' }]
+              }
+            }
+          } as any)
+        ).resolves.toBe(false)
+        expect(acknowledge).toHaveBeenCalledTimes(1)
+      } finally {
+        if (previousPayment === undefined) {
+          delete (Object.prototype as { payment?: unknown }).payment
+        } else {
+          Object.defineProperty(Object.prototype, 'payment', previousPayment)
+        }
+        if (previousAccepted === undefined) {
+          delete (Object.prototype as { accepted?: unknown }).accepted
+        } else {
+          Object.defineProperty(Object.prototype, 'accepted', previousAccepted)
+        }
+      }
+    })
+
     it.each([
       [{ fcmToken: '' }, 'fcmToken is required'],
       [{ fcmToken: 'x'.repeat(501) }, 'must not exceed 500'],
@@ -928,24 +1065,35 @@ describe('MessageBoxClient hardening branches', () => {
     it('registers and lists bounded device pages', async () => {
       fetchMock
         .mockResolvedValueOnce(
-          jsonResponse({ status: 'success', message: 'registered', deviceId: 'device-1' })
+          jsonResponse({ status: 'success', message: 'registered', deviceId: 1 })
         )
         .mockResolvedValueOnce(
           jsonResponse({
             status: 'success',
-            devices: [{ fcmToken: 'token', platform: 'web', deviceId: 'device-1' }]
+            devices: [
+              {
+                id: 1,
+                fcmToken: '...vice-token',
+                platform: 'web',
+                deviceId: 'device-1',
+                active: true,
+                createdAt: '2026-09-18T00:00:00.000Z',
+                updatedAt: '2026-09-18T00:00:00.000Z',
+                lastUsed: '2026-09-18T00:00:00.000Z'
+              }
+            ]
           })
         )
 
       await expect(
         client.registerDevice(
-          { fcmToken: ' token ', platform: 'web', deviceId: ' device-1 ' },
+          { fcmToken: 'token', platform: 'web', deviceId: 'device-1' },
           'https://message-box.example/api'
         )
       ).resolves.toEqual({
         status: 'success',
         message: 'registered',
-        deviceId: 'device-1'
+        deviceId: 1
       })
       await expect(
         client.listRegisteredDevices('https://message-box.example/api', {
@@ -1015,9 +1163,9 @@ describe('MessageBoxClient hardening branches', () => {
           'https://message-box.example/api'
         )
 
-      await expect(send()).rejects.toThrow('Response body has already been used')
+      await expect(send()).rejects.toThrow('Failed to send message.')
       await expect(send()).rejects.toThrow('HTTP 503')
-      await expect(send()).rejects.toThrow('server rejected message')
+      await expect(send()).rejects.toThrow('Message Box server rejected the message.')
     })
 
     it('wraps a non-Error permission lookup rejection', async () => {
@@ -1035,7 +1183,7 @@ describe('MessageBoxClient hardening branches', () => {
           },
           'https://message-box.example/api'
         )
-      ).rejects.toThrow('Permission check failed: Unknown error')
+      ).rejects.toThrow('Message Box permission check failed.')
       await expect(
         client.sendMessage(
           {
@@ -1046,7 +1194,7 @@ describe('MessageBoxClient hardening branches', () => {
           },
           'https://message-box.example/api'
         )
-      ).rejects.toThrow('Permission check failed: lookup failed')
+      ).rejects.toThrow('Message Box permission check failed.')
     })
 
     it('handles successful and failed WebSocket acknowledgements', async () => {
@@ -1067,12 +1215,15 @@ describe('MessageBoxClient hardening branches', () => {
         status: 'success',
         messageId: 'fallback'
       })
-      const waitForAckHandler = async (
-        previous?: (response?: unknown) => void
-      ): Promise<(response?: unknown) => void> => {
-        for (let attempt = 0; attempt < 20; attempt++) {
-          const handler = listeners.get(`sendMessageAck-${recipientA}-inbox`)
-          if (handler != null && handler !== previous) return handler
+      // One acknowledgement listener serves the room, and each send queues
+      // behind it, so wait for the send to be queued rather than for a
+      // listener of its own.
+      const ackEvent = `sendMessageAck-${recipientA}-inbox`
+      const waitForAckHandler = async (): Promise<(response?: unknown) => void> => {
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const queued = ((client as any).pendingAcks.get(ackEvent) ?? []).length
+          const handler = listeners.get(ackEvent)
+          if (handler != null && queued > 0) return handler
           await new Promise(resolve => setImmediate(resolve))
         }
         throw new Error('WebSocket acknowledgement handler was not registered')
@@ -1097,13 +1248,50 @@ describe('MessageBoxClient hardening branches', () => {
         recipient: recipientA,
         messageBox: 'inbox',
         body: 'hello',
-        skipEncryption: true
+        skipEncryption: true,
+        maximumPayment: 7
       })
-      const failedAck = await waitForAckHandler(successfulAck)
+      const failedAck = await waitForAckHandler()
+      expect(failedAck).toBe(successfulAck)
       failedAck({ status: 'error' })
       await expect(fallbackSend).resolves.toMatchObject({ messageId: 'fallback' })
-      expect(fallback).toHaveBeenCalled()
+      expect(fallback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipient: recipientA,
+          messageBox: 'inbox',
+          body: 'hello',
+          skipEncryption: true,
+          maximumPayment: 7
+        }),
+        undefined
+      )
     })
+
+    it.each([
+      { recipient: recipientA, messageBox: ' inbox', body: 'hello' },
+      { recipient: recipientA, messageBox: 'in\nbox', body: 'hello' },
+      { recipient: recipientA, messageBox: 'inbox', messageId: ' id', body: 'hello' },
+      { recipient: recipientA, messageBox: 'inbox', messageId: 'id\u0085', body: 'hello' }
+    ])('rejects ambiguous live-delivery fields before connection side effects %#', async params => {
+      const initialize = jest.spyOn(client, 'initializeConnection')
+
+      await expect(client.sendLiveMessage(params)).rejects.toThrow()
+
+      expect(initialize).not.toHaveBeenCalled()
+      expect(wallet.createHmac).not.toHaveBeenCalled()
+      expect(wallet.encrypt).not.toHaveBeenCalled()
+    })
+
+    it.each([' inbox', 'inbox ', 'in\nbox', 'in\u0085box'])(
+      'rejects ambiguous room names before opening a socket %#',
+      async messageBox => {
+        const initialize = jest.spyOn(client, 'initializeConnection')
+
+        await expect(client.joinRoom(messageBox)).rejects.toThrow()
+
+        expect(initialize).not.toHaveBeenCalled()
+      }
+    )
 
     it('rejects live delivery when HMAC generation fails', async () => {
       ;(client as any).socket = {

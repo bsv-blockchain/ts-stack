@@ -259,14 +259,35 @@ export class MongoOverlayStorage implements Storage {
       )
   }
 
-  async markUTXOAsSpent(txid: string, outputIndex: number, topic: string): Promise<void> {
-    await this.db
+  async markUTXOAsSpent(
+    txid: string,
+    outputIndex: number,
+    topic: string,
+    spendingTxid?: string
+  ): Promise<void> {
+    const id = this.outputId(topic, txid, outputIndex)
+    const result = await this.db.collection<IdDocument>(MongoCollectionNames.outputs).updateOne(
+      { _id: id, state: 'unspent' },
+      {
+        $set: {
+          state: 'spent',
+          ...(spendingTxid === undefined ? {} : { spender: spendingTxid }),
+          updatedAt: new Date()
+        }
+      },
+      { writeConcern: { w: 'majority', j: true } }
+    )
+    if (result.modifiedCount === 1) return
+    const existing = await this.db
       .collection<IdDocument>(MongoCollectionNames.outputs)
-      .updateOne(
-        { _id: this.outputId(topic, txid, outputIndex), state: 'unspent' },
-        { $set: { state: 'spent', updatedAt: new Date() } },
-        { writeConcern: { w: 'majority', j: true } }
-      )
+      .findOne({ _id: id }, { projection: { state: 1, spender: 1 } })
+    if (
+      spendingTxid !== undefined &&
+      existing?.state === 'spent' &&
+      existing.spender === spendingTxid
+    )
+      return
+    throw new Error('Unable to atomically mark an unspent topical output as spent')
   }
 
   async updateConsumedBy(
@@ -426,8 +447,16 @@ export class MongoOverlayStorage implements Storage {
     const txid = document.txid as string
     const outputIndex = String(document.outputIndex)
     const [outputsConsumed, consumedBy] = await Promise.all([
-      this.readConsumptionEdges(topic, { consumerTxid: txid, consumerOutputIndex: outputIndex }, 'source'),
-      this.readConsumptionEdges(topic, { sourceTxid: txid, sourceOutputIndex: outputIndex }, 'consumer')
+      this.readConsumptionEdges(
+        topic,
+        { consumerTxid: txid, consumerOutputIndex: outputIndex },
+        'source'
+      ),
+      this.readConsumptionEdges(
+        topic,
+        { sourceTxid: txid, sourceOutputIndex: outputIndex },
+        'consumer'
+      )
     ])
     const output: Output = {
       txid,
@@ -458,7 +487,9 @@ export class MongoOverlayStorage implements Storage {
    */
   private async readConsumptionEdges(
     topic: string,
-    match: { sourceTxid: string; sourceOutputIndex: string } | { consumerTxid: string; consumerOutputIndex: string },
+    match:
+      | { sourceTxid: string; sourceOutputIndex: string }
+      | { consumerTxid: string; consumerOutputIndex: string },
     side: 'source' | 'consumer'
   ): Promise<Array<{ txid: string; outputIndex: number }>> {
     const edges = await this.db

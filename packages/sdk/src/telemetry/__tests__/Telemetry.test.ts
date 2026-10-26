@@ -1,4 +1,9 @@
-import { Telemetry, TelemetryEvent, TelemetrySpanContext } from '../Telemetry'
+import {
+  sanitizeTelemetryText,
+  Telemetry,
+  TelemetryEvent,
+  TelemetrySpanContext
+} from '../Telemetry'
 
 describe('Telemetry', () => {
   it('is disabled by default and isolates sink failures', async () => {
@@ -55,6 +60,12 @@ describe('Telemetry', () => {
       sink: { capture: jest.fn() }
     })
     expect(failClosed.enabled).toBe(false)
+    expect(
+      new Telemetry({
+        enabled: (() => 'yes') as any,
+        sink: { capture: jest.fn() }
+      }).enabled
+    ).toBe(false)
   })
 
   it('redacts secret-bearing attributes and diagnostic text', () => {
@@ -107,6 +118,68 @@ describe('Telemetry', () => {
     expect(JSON.stringify(captured)).not.toContain(privateKey)
     expect(JSON.stringify(captured)).not.toContain(snapshot)
     expect(JSON.stringify(captured)).not.toContain(serializedPrivateKey)
+  })
+
+  it('redacts generic credentials, authorization headers, and URL userinfo', () => {
+    const secret = 'short-sensitive-value'
+    const text = [
+      `apiKey=${secret}`,
+      'Authorization: Basic dXNlcjpwYXNz',
+      'Bearer header.payload.signature',
+      'https://alice:password@example.test/path',
+      'https://access-token@example.test/path',
+      `cookie=${secret}`
+    ].join(' ')
+
+    const sanitized = sanitizeTelemetryText(text)
+
+    expect(sanitized).not.toContain(secret)
+    expect(sanitized).not.toContain('dXNlcjpwYXNz')
+    expect(sanitized).not.toContain('header.payload.signature')
+    expect(sanitized).not.toContain('alice:password')
+    expect(sanitized).not.toContain('access-token@')
+    expect(sanitizeTelemetryText('visible', Number.POSITIVE_INFINITY)).toBe('visible')
+    expect(sanitizeTelemetryText('visible', 0)).toBe('')
+  })
+
+  it('does not invoke event, attribute, or error accessors', () => {
+    const captured: TelemetryEvent[] = []
+    const telemetry = new Telemetry({ sink: { capture: event => captured.push(event) } })
+    let invoked = 0
+    const attributes: Record<string, unknown> = { safe: 'yes' }
+    Object.defineProperty(attributes, 'apiKey', {
+      enumerable: true,
+      get: () => {
+        invoked++
+        return 'secret'
+      }
+    })
+    const error: Record<string, unknown> = {}
+    Object.defineProperty(error, 'message', {
+      enumerable: true,
+      get: () => {
+        invoked++
+        return 'secret error'
+      }
+    })
+
+    telemetry.capture({ name: 'safe', component: 'test', attributes, error })
+    expect(invoked).toBe(0)
+    expect(captured[0]).toMatchObject({
+      attributes: { safe: 'yes' },
+      error: { name: 'Error', message: 'Unknown error' }
+    })
+
+    const hostile = new Proxy(
+      {},
+      {
+        getPrototypeOf: () => {
+          throw new Error('prototype trap executed')
+        }
+      }
+    )
+    expect(() => telemetry.capture(hostile as any)).not.toThrow()
+    expect(captured).toHaveLength(1)
   })
 
   it('filters by severity and re-sanitizes beforeSend enrichment', () => {
@@ -293,6 +366,69 @@ describe('Telemetry', () => {
     expect(events.map(event => event.name)).toEqual(['child', 'root'])
   })
 
+  it('contains context-manager faults without suppressing, duplicating, or replacing work', () => {
+    let calls = 0
+    const callback = (): number => {
+      calls += 1
+      return 42
+    }
+    const before = new Telemetry({
+      sink: { capture: () => {} },
+      contextManager: {
+        active: () => undefined,
+        run: () => {
+          throw new Error('failed before callback')
+        }
+      }
+    })
+    expect(before.withSpan('before', { component: 'test' }, callback)).toBe(42)
+
+    const after = new Telemetry({
+      sink: { capture: () => {} },
+      contextManager: {
+        active: () => undefined,
+        run: (_context, runCallback) => {
+          runCallback()
+          runCallback()
+          throw new Error('failed after callback')
+        }
+      }
+    })
+    expect(after.withSpan('after', { component: 'test' }, callback)).toBe(42)
+
+    const substituting = new Telemetry({
+      sink: { capture: () => {} },
+      contextManager: {
+        active: () => undefined,
+        run: ((_context: TelemetrySpanContext, runCallback: () => number) => {
+          runCallback()
+          return 99
+        }) as any
+      }
+    })
+    expect(substituting.withSpan('substitution', { component: 'test' }, callback)).toBe(42)
+    expect(calls).toBe(3)
+
+    const swallowing = new Telemetry({
+      sink: { capture: () => {} },
+      contextManager: {
+        active: () => undefined,
+        run: ((_context: TelemetrySpanContext, runCallback: () => never) => {
+          try {
+            runCallback()
+          } catch {
+            return undefined
+          }
+        }) as any
+      }
+    })
+    expect(() =>
+      swallowing.withSpan('swallowed', { component: 'test' }, () => {
+        throw new Error('application failure')
+      })
+    ).toThrow('application failure')
+  })
+
   it('records rejected promises once and never lets an error hook replace the error', async () => {
     const captured: TelemetryEvent[] = []
     const telemetry = new Telemetry({
@@ -382,6 +518,15 @@ describe('Telemetry', () => {
     telemetry.bindContext(unbound, span.context)
     telemetry.linkContext(unbound, target)
     expect(telemetry.contextFor(target)).toEqual(span.context)
+    const hostileContext = new Proxy(
+      {},
+      {
+        getPrototypeOf: () => {
+          throw new Error('invalid context')
+        }
+      }
+    )
+    expect(() => telemetry.bindContext(target, hostileContext as any)).not.toThrow()
     span.capture('defensive.event', { disposition: 'observed' }, 'debug')
     span.end({ status: 'cancelled' })
     span.end({ status: 'error' })
@@ -450,5 +595,27 @@ describe('Telemetry', () => {
         Object.defineProperty(globalThis, 'performance', performanceDescriptor)
       }
     }
+  })
+
+  it('contains hostile clocks and keeps published span context immutable', () => {
+    const events: TelemetryEvent[] = []
+    const telemetry = new Telemetry({
+      sink: { capture: event => events.push(event) },
+      now: () => {
+        throw new Error('wall clock failed')
+      },
+      highResolutionNow: () => Number.NaN
+    })
+
+    const result = telemetry.withSpan('clock.failure', { component: 'test' }, span => {
+      expect(Object.isFrozen(span.context)).toBe(true)
+      expect(() => Reflect.set(span.context, 'traceId', '0'.repeat(32))).not.toThrow()
+      return 42
+    })
+
+    expect(result).toBe(42)
+    expect(events).toHaveLength(1)
+    expect(events[0].durationMs).toBeGreaterThanOrEqual(0)
+    expect(events[0].traceId).toMatch(/^[0-9a-f]{32}$/)
   })
 })

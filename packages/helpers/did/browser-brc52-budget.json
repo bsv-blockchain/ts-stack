@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/did",
+  "entry": "./brc52",
+  "requiredExports": [
+    "BRC52_DISABLED_OUTPOINT",
+    "BRC52_ENVELOPE_PROFILE",
+    "BRC52_LIMITS",
+    "BRC52_VOCABULARY",
+    "BRC52MemoryNonceStore",
+    "exportBRC52Envelope",
+    "exportBRC52StructuredCertificate",
+    "parseBRC52Envelope",
+    "verifyBRC52CertificateBinary",
+    "verifyBRC52Envelope",
+    "evaluateBRC52Status",
+    "produceBRC52Disclosure",
+    "receiveBRC52Disclosure"
+  ],
+  "prohibitedExports": [],
+  "maximumBytes": {
+    "vite": {
+      "raw": 250000,
+      "gzip": 77000,
+      "brotli": 65000
+    },
+    "esbuild": {
+      "raw": 195000,
+      "gzip": 73000,
+      "brotli": 62000
+    }
+  }
+}

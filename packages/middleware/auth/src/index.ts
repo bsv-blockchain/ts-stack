@@ -12,7 +12,12 @@ export {
 // Ergonomic class wrappers — construct once with options, then call methods.
 export { AuthProofClient, AuthProofServer } from './auth.js'
 
-export { DEFAULT_PROTOCOL, DEFAULT_WINDOW_MS, DEFAULT_CLOCK_SKEW_MS } from './constants.js'
+export {
+  DEFAULT_PROTOCOL,
+  DEFAULT_WINDOW_MS,
+  DEFAULT_CLOCK_SKEW_MS,
+  DEFAULT_MAX_BODY_BYTES
+} from './constants.js'
 
 export type {
   AuthProof,

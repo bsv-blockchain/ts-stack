@@ -53,6 +53,7 @@ describe('canonical Merkle path acquisition', () => {
       .add({ name: 'stale', service: staleProvider })
       .add({ name: 'canonical', service: canonicalProvider })
     jest.spyOn(services, 'getChainTracker').mockResolvedValue(tracker)
+    jest.spyOn(services, 'hashToHeader').mockResolvedValue(canonical.header!)
 
     const result = await services.getMerklePath(txid)
 
@@ -127,6 +128,7 @@ describe('canonical Merkle path acquisition', () => {
       service: jest.fn(async () => canonical)
     })
     jest.spyOn(services, 'getChainTracker').mockResolvedValue(tracker)
+    jest.spyOn(services, 'hashToHeader').mockResolvedValue(canonical.header!)
 
     for (const requestedTxid of [txid, canonicalSibling]) {
       const result = await services.getMerklePath(requestedTxid)
@@ -151,8 +153,8 @@ describe('canonical Merkle path acquisition', () => {
   test('returns the fallback validation error and combines provider notes', async () => {
     const stale = resultFor(staleSibling, 'stale')
     const fallback = resultFor(staleSibling, 'fallback')
-    stale.notes = ['stale-note']
-    fallback.notes = ['fallback-note']
+    stale.notes = [{ what: 'stale-note' }]
+    fallback.notes = [{ what: 'fallback-note' }]
     const services = {
       getMerklePath: jest.fn(async () => stale),
       getValidatedMerklePath: jest.fn(async () => fallback)
@@ -166,7 +168,7 @@ describe('canonical Merkle path acquisition', () => {
 
     expect(result.merklePath).toBeUndefined()
     expect(result.error).toBeDefined()
-    expect(result.notes).toEqual(['stale-note', 'fallback-note'])
+    expect(result.notes).toEqual([{ what: 'stale-note' }, { what: 'fallback-note' }])
   })
 
   test('array results remove stale paths before persistence', async () => {
@@ -180,5 +182,32 @@ describe('canonical Merkle path acquisition', () => {
     await validateCanonicalMerklePathResult(txid, result, trackerFor(canonical.header!.merkleRoot))
 
     expect(result.merklePath).toEqual(canonical.merklePath)
+  })
+
+  test('does not invoke accessors on a malformed fallback envelope', async () => {
+    const stale = resultFor(staleSibling, 'stale')
+    let invoked = false
+    const fallback = { merklePath: stale.merklePath }
+    Object.defineProperty(fallback, 'notes', {
+      enumerable: true,
+      get: () => {
+        invoked = true
+        return []
+      }
+    })
+    const services = {
+      getMerklePath: jest.fn(async () => stale),
+      getValidatedMerklePath: jest.fn(async () => fallback)
+    } as unknown as WalletServices
+
+    const result = await getCanonicalMerklePath(
+      services,
+      trackerFor(resultFor(canonicalSibling, 'canonical').header!.merkleRoot),
+      txid
+    )
+
+    expect(result.error).toBeDefined()
+    expect(result.notes).toEqual([])
+    expect(invoked).toBe(false)
   })
 })

@@ -6,6 +6,6 @@
     "types": ["jest", "node"]
   },
   "files": [],
-  "include": ["mod.ts", "src/**/*.ts", "__tests/**/*.ts"],
+  "include": ["mod.ts", "src/**/*.ts", "__tests/**/*.ts", "test/**/*.ts"],
   "exclude": ["dist", "node_modules"]
 }

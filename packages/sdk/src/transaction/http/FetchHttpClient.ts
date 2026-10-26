@@ -1,8 +1,11 @@
+import { HttpClient, HttpClientRequestOptions, HttpClientResponse } from './HttpClient.js'
 import {
-  HttpClient,
-  HttpClientRequestOptions,
-  HttpClientResponse
-} from './HttpClient.js'
+  type HttpClientLimits,
+  normalizeHttpClientLimits,
+  readFetchResponseText,
+  timedRequestSignal
+} from './HttpClientResponseUtils.js'
+import { utf8ByteLength } from '../../primitives/UTF8.js'
 
 /** fetch function interface limited to options needed by ts-sdk */
 /**
@@ -23,35 +26,68 @@ export interface FetchOptions {
   headers?: Record<string, string>
   /** An object or null to set request's body. */
   body?: string | null
+  /** Redirects are prohibited so credentials cannot escape the configured endpoint. */
+  redirect?: 'error'
+  /** Cancels both the request and response-body read. */
+  signal?: AbortSignal
 }
 
 /**
  * Adapter for Node Https module to be used as HttpClient
  */
 export class FetchHttpClient implements HttpClient {
-  constructor(private readonly fetch: Fetch) { }
+  private readonly limits: Required<HttpClientLimits>
 
-  async request<D>(
-    url: string,
-    options: HttpClientRequestOptions
-  ): Promise<HttpClientResponse<D>> {
+  constructor(
+    private readonly fetch: Fetch,
+    limits: HttpClientLimits = {}
+  ) {
+    this.limits = normalizeHttpClientLimits(limits)
+  }
+
+  async request<D>(url: string, options: HttpClientRequestOptions): Promise<HttpClientResponse<D>> {
+    const timed = timedRequestSignal(options.signal, this.limits.timeoutMs)
     const fetchOptions: FetchOptions = {
       method: options.method,
       headers: options.headers,
-      body: JSON.stringify(options.data)
+      body: options.data === undefined ? null : JSON.stringify(options.data),
+      redirect: 'error',
+      signal: timed.signal
     }
+    try {
+      const res = await this.fetch(url, fetchOptions)
+      const legacyResponse = res as unknown as {
+        body?: ReadableStream<Uint8Array> | null
+        headers?: { get?: (name: string) => string | null | undefined }
+        json?: () => Promise<unknown>
+      }
+      const mediaType = legacyResponse.headers?.get?.('Content-Type')
+      let data: unknown
+      if (
+        !('body' in legacyResponse) &&
+        typeof legacyResponse.json === 'function' &&
+        (mediaType == null || mediaType.startsWith('application/json'))
+      ) {
+        data = await legacyResponse.json()
+        if (utf8ByteLength(JSON.stringify(data)) > this.limits.maxResponseBytes) {
+          throw new Error('HTTP response exceeds the configured size limit')
+        }
+      } else {
+        const text = await readFetchResponseText(res, this.limits.maxResponseBytes)
+        data =
+          text !== '' && (mediaType?.startsWith('application/json') ?? false)
+            ? JSON.parse(text)
+            : text
+      }
 
-    const res = await this.fetch(url, fetchOptions)
-    const mediaType = res.headers.get('Content-Type')
-    const data = mediaType?.startsWith('application/json') ?? false
-      ? await res.json()
-      : await res.text()
-
-    return {
-      ok: res.ok,
-      status: res.status,
-      statusText: res.statusText,
-      data: data as D
+      return {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+        data: data as D
+      }
+    } finally {
+      timed.dispose()
     }
   }
 }

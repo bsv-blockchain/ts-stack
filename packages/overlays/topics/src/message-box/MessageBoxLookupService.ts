@@ -1,3 +1,4 @@
+import { toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 /**
  * MessageBox Lookup Service
  *
@@ -21,21 +22,22 @@ import {
   OutputSpent
 } from '@bsv/overlay'
 
-import { MessageBoxQuery, MessageBoxStorage } from './MessageBoxStorage.js'
-import { PushDrop, Utils } from '@bsv/sdk'
+import { MessageBoxStorage } from './MessageBoxStorage.js'
+import { PushDrop } from '@bsv/sdk'
 import docs from './MessageBoxLookupDocs.md.js'
 import { Db } from 'mongodb'
+import { readString, requireLookupQuery, requirePublicKey } from '../shared/queryValidation.js'
 
 /**
  * Implements the SHIP-compatible overlay `LookupService` for MessageBox advertisements.
  */
-class MessageBoxLookupService implements LookupService {
+export class MessageBoxLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'none'
 
-  constructor (public storage: MessageBoxStorage) { }
+  constructor(public storage: MessageBoxStorage) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid payload')
     const { topic, txid, outputIndex, lockingScript } = payload
     if (topic !== 'tm_messagebox') return
@@ -45,22 +47,17 @@ class MessageBoxLookupService implements LookupService {
       const [identityKeyBuf, hostBuf] = decoded.fields
 
       const ad = {
-        identityKey: Utils.toHex(identityKeyBuf),
-        host: Utils.toUTF8(hostBuf)
+        identityKey: toHex(identityKeyBuf),
+        host: toUTF8(hostBuf)
       }
 
-      await this.storage.storeRecord(
-        ad.identityKey,
-        ad.host,
-        txid,
-        outputIndex
-      )
+      await this.storage.storeRecord(ad.identityKey, ad.host, txid, outputIndex)
     } catch (e) {
       console.error('[LOOKUP ERROR] Failed to process outputAdded:', e)
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'none') throw new Error('Invalid payload')
     const { txid, outputIndex, topic } = payload
     if (topic === 'tm_messagebox') {
@@ -68,31 +65,27 @@ class MessageBoxLookupService implements LookupService {
     }
   }
 
-  async outputEvicted (
-    txid: string,
-    outputIndex: number
-  ): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (question.service !== 'ls_messagebox') {
-      throw new Error('Unsupported lookup service')
-    }
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, 'ls_messagebox', ['identityKey', 'host'])
+    const identityKey = requirePublicKey(
+      readString(query, 'identityKey', { maxBytes: 66 }),
+      'identityKey'
+    )
+    if (identityKey === undefined) throw new Error('identityKey query missing')
+    const host = readString(query, 'host', { maxBytes: 2048 })
 
-    const query = question.query as MessageBoxQuery
-    if (!query?.identityKey) {
-      throw new Error('identityKey query missing')
-    }
-
-    return await this.storage.findAdvertisements(query.identityKey, query.host)
+    return await this.storage.findAdvertisements(identityKey, host)
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return docs
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -106,7 +99,7 @@ class MessageBoxLookupService implements LookupService {
   }
 }
 
-function create (mongoDb: Db): MessageBoxLookupService {
+function create(mongoDb: Db): MessageBoxLookupService {
   return new MessageBoxLookupService(new MessageBoxStorage(mongoDb))
 }
 export default create

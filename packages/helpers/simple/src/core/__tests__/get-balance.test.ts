@@ -3,6 +3,7 @@ import { WalletInterface } from '@bsv/sdk'
 
 const VALID_KEY_1 = '030dbed53c3613c887ad36e8bde365c2e58f6196735a589cd09d6bc316fa550df4'
 const WALLET_BALANCE_BASKET = '893b7646de0e1c9f741bd6e9169b76a8847ae34adef7bef1e6a285371206d2e8'
+const outpoint = (n: number): string => `${n.toString(16).padStart(64, '0')}.0`
 
 // Concrete subclass for testing
 class TestWallet extends WalletCore {
@@ -38,7 +39,10 @@ describe('WalletCore getBalance', () => {
 
       await wallet.getBalance()
 
-      expect(mockClient.listOutputs).toHaveBeenCalledWith({ basket: WALLET_BALANCE_BASKET })
+      expect(mockClient.listOutputs).toHaveBeenCalledWith({
+        basket: WALLET_BALANCE_BASKET,
+        limit: 1
+      })
     })
 
     it('should return totalOutputs as totalSatoshis and spendableSatoshis', async () => {
@@ -63,14 +67,11 @@ describe('WalletCore getBalance', () => {
       expect(result.spendableSatoshis).toBe(0)
     })
 
-    it('should handle undefined totalOutputs gracefully', async () => {
+    it('should reject a response without an authoritative total', async () => {
       mockClient.listOutputs.mockResolvedValue({ outputs: [] })
       const wallet = new TestWallet(mockClient)
 
-      const result = await wallet.getBalance()
-
-      expect(result.totalSatoshis).toBe(0)
-      expect(result.spendableSatoshis).toBe(0)
+      await expect(wallet.getBalance()).rejects.toThrow('totalOutputs')
     })
 
     it('should handle large balances', async () => {
@@ -96,16 +97,20 @@ describe('WalletCore getBalance', () => {
 
       await wallet.getBalance('tokens')
 
-      expect(mockClient.listOutputs).toHaveBeenCalledWith({ basket: 'tokens' })
+      expect(mockClient.listOutputs).toHaveBeenCalledWith({
+        basket: 'tokens',
+        limit: 10000,
+        offset: 0
+      })
     })
 
     it('should sum satoshis from all outputs', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 3,
         outputs: [
-          { satoshis: 100, spendable: true, outpoint: 'a.0' },
-          { satoshis: 200, spendable: true, outpoint: 'b.0' },
-          { satoshis: 300, spendable: true, outpoint: 'c.0' }
+          { satoshis: 100, spendable: true, outpoint: outpoint(1) },
+          { satoshis: 200, spendable: true, outpoint: outpoint(2) },
+          { satoshis: 300, spendable: true, outpoint: outpoint(3) }
         ]
       })
       const wallet = new TestWallet(mockClient)
@@ -118,14 +123,73 @@ describe('WalletCore getBalance', () => {
       expect(result.spendableOutputs).toBe(3)
     })
 
+    it('should read every declared page instead of returning a partial balance', async () => {
+      mockClient.listOutputs
+        .mockResolvedValueOnce({
+          totalOutputs: 2,
+          outputs: [{ satoshis: 100, spendable: true, outpoint: outpoint(1) }]
+        })
+        .mockResolvedValueOnce({
+          totalOutputs: 2,
+          outputs: [{ satoshis: 250, spendable: false, outpoint: outpoint(2) }]
+        })
+      const wallet = new TestWallet(mockClient)
+
+      await expect(wallet.getBalance('paged')).resolves.toEqual({
+        totalSatoshis: 350,
+        totalOutputs: 2,
+        spendableSatoshis: 100,
+        spendableOutputs: 1
+      })
+      expect(mockClient.listOutputs).toHaveBeenNthCalledWith(2, {
+        basket: 'paged',
+        limit: 10000,
+        offset: 1
+      })
+    })
+
+    it('should fail closed on duplicate outputs or a changing page total', async () => {
+      mockClient.listOutputs
+        .mockResolvedValueOnce({
+          totalOutputs: 2,
+          outputs: [{ satoshis: 100, spendable: true, outpoint: outpoint(1) }]
+        })
+        .mockResolvedValueOnce({
+          totalOutputs: 2,
+          outputs: [{ satoshis: 100, spendable: true, outpoint: outpoint(1) }]
+        })
+      const wallet = new TestWallet(mockClient)
+
+      await expect(wallet.getBalance('duplicated')).rejects.toThrow('duplicate output')
+
+      mockClient.listOutputs.mockReset()
+      mockClient.listOutputs
+        .mockResolvedValueOnce({
+          totalOutputs: 2,
+          outputs: [{ satoshis: 100, spendable: true, outpoint: outpoint(1) }]
+        })
+        .mockResolvedValueOnce({
+          totalOutputs: 3,
+          outputs: [{ satoshis: 100, spendable: true, outpoint: outpoint(2) }]
+        })
+      await expect(wallet.getBalance('changing')).rejects.toThrow('changed while')
+    })
+
+    it('should refuse an unbounded basket instead of returning a partial balance', async () => {
+      mockClient.listOutputs.mockResolvedValue({ totalOutputs: 100001, outputs: [] })
+      const wallet = new TestWallet(mockClient)
+
+      await expect(wallet.getBalance('huge')).rejects.toThrow('more than 100000 outputs')
+    })
+
     it('should separate spendable from non-spendable outputs', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 4,
         outputs: [
-          { satoshis: 100, spendable: true, outpoint: 'a.0' },
-          { satoshis: 200, spendable: false, outpoint: 'b.0' },
-          { satoshis: 300, spendable: true, outpoint: 'c.0' },
-          { satoshis: 400, spendable: false, outpoint: 'd.0' }
+          { satoshis: 100, spendable: true, outpoint: outpoint(1) },
+          { satoshis: 200, spendable: false, outpoint: outpoint(2) },
+          { satoshis: 300, spendable: true, outpoint: outpoint(3) },
+          { satoshis: 400, spendable: false, outpoint: outpoint(4) }
         ]
       })
       const wallet = new TestWallet(mockClient)
@@ -150,70 +214,55 @@ describe('WalletCore getBalance', () => {
       expect(result.spendableOutputs).toBe(0)
     })
 
-    it('should handle outputs with undefined satoshis', async () => {
+    it('should reject outputs with undefined satoshis', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 2,
         outputs: [
-          { satoshis: 500, spendable: true, outpoint: 'a.0' },
-          { spendable: true, outpoint: 'b.0' } // no satoshis field
+          { satoshis: 500, spendable: true, outpoint: outpoint(1) },
+          { spendable: true, outpoint: outpoint(2) } // no satoshis field
         ]
       })
       const wallet = new TestWallet(mockClient)
 
-      const result = await wallet.getBalance('tokens')
-
-      expect(result.totalSatoshis).toBe(500)
-      expect(result.spendableSatoshis).toBe(500)
+      await expect(wallet.getBalance('tokens')).rejects.toThrow('satoshis')
     })
 
-    it('should treat outputs without spendable field as spendable', async () => {
+    it('should reject outputs without an explicit spendable verdict', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 2,
         outputs: [
-          { satoshis: 100, outpoint: 'a.0' }, // no spendable field
-          { satoshis: 200, spendable: false, outpoint: 'b.0' }
+          { satoshis: 100, outpoint: outpoint(1) }, // no spendable field
+          { satoshis: 200, spendable: false, outpoint: outpoint(2) }
         ]
       })
       const wallet = new TestWallet(mockClient)
 
-      const result = await wallet.getBalance('tokens')
-
-      expect(result.totalSatoshis).toBe(300)
-      expect(result.totalOutputs).toBe(2)
-      expect(result.spendableSatoshis).toBe(100)
-      expect(result.spendableOutputs).toBe(1)
+      await expect(wallet.getBalance('tokens')).rejects.toThrow('spendable')
     })
 
-    it('should use outputs array length as fallback for totalOutputs', async () => {
+    it('should reject a response without totalOutputs', async () => {
       mockClient.listOutputs.mockResolvedValue({
         outputs: [
-          { satoshis: 100, spendable: true, outpoint: 'a.0' },
-          { satoshis: 200, spendable: true, outpoint: 'b.0' }
+          { satoshis: 100, spendable: true, outpoint: outpoint(1) },
+          { satoshis: 200, spendable: true, outpoint: outpoint(2) }
         ]
       })
       const wallet = new TestWallet(mockClient)
 
-      const result = await wallet.getBalance('tokens')
-
-      expect(result.totalOutputs).toBe(2)
+      await expect(wallet.getBalance('tokens')).rejects.toThrow('totalOutputs')
     })
 
-    it('should handle null result from listOutputs', async () => {
+    it('should reject a null result from listOutputs', async () => {
       mockClient.listOutputs.mockResolvedValue(null)
       const wallet = new TestWallet(mockClient)
 
-      const result = await wallet.getBalance('tokens')
-
-      expect(result.totalSatoshis).toBe(0)
-      expect(result.totalOutputs).toBe(0)
-      expect(result.spendableSatoshis).toBe(0)
-      expect(result.spendableOutputs).toBe(0)
+      await expect(wallet.getBalance('tokens')).rejects.toThrow('Invalid listOutputs result')
     })
 
     it('should handle single output basket', async () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 1,
-        outputs: [{ satoshis: 1, spendable: true, outpoint: 'a.0' }]
+        outputs: [{ satoshis: 1, spendable: true, outpoint: outpoint(1) }]
       })
       const wallet = new TestWallet(mockClient)
 
@@ -229,8 +278,8 @@ describe('WalletCore getBalance', () => {
       mockClient.listOutputs.mockResolvedValue({
         totalOutputs: 2,
         outputs: [
-          { satoshis: 500, spendable: false, outpoint: 'a.0' },
-          { satoshis: 300, spendable: false, outpoint: 'b.0' }
+          { satoshis: 500, spendable: false, outpoint: outpoint(1) },
+          { satoshis: 300, spendable: false, outpoint: outpoint(2) }
         ]
       })
       const wallet = new TestWallet(mockClient)

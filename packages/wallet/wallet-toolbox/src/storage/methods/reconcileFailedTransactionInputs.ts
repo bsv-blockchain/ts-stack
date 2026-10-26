@@ -1,5 +1,5 @@
 import { Transaction, WalletLoggerInterface } from '@bsv/sdk'
-import * as sdk from '../../sdk'
+import type * as sdk from '../../sdk'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
 import { TableOutput } from '../schema/tables'
@@ -21,7 +21,7 @@ interface LocalInput {
   outpoint: { txid: string; vout: number }
 }
 
-async function quarantineLocalInputs (
+async function quarantineLocalInputs(
   localInputs: LocalInput[],
   storage: StorageProvider,
   trx?: sdk.TrxToken
@@ -38,7 +38,7 @@ async function quarantineLocalInputs (
   }
 }
 
-async function findLocalInputs (
+async function findLocalInputs(
   req: EntityProvenTxReq,
   storage: StorageProvider,
   trx?: sdk.TrxToken
@@ -82,7 +82,7 @@ async function findLocalInputs (
  * the same inputs into another action. A later validated mined proof remains
  * able to repair the transaction through the ordinary proof recovery path.
  */
-export async function quarantineReqInputs (
+export async function quarantineReqInputs(
   req: EntityProvenTxReq,
   storage: StorageProvider,
   trx?: sdk.TrxToken,
@@ -103,7 +103,7 @@ export async function quarantineReqInputs (
  * failed-child transition releases its allocations. Other inputs may still be
  * valid UTXOs and must remain reusable.
  */
-export async function quarantineReqInputsFromFailedParents (
+export async function quarantineReqInputsFromFailedParents(
   req: EntityProvenTxReq,
   failedParentTxids: string[],
   storage: StorageProvider,
@@ -129,7 +129,7 @@ export async function quarantineReqInputsFromFailedParents (
  * Provider errors and a collection with no providers are inconclusive and
  * never count as spent.
  */
-export async function markConfirmedStaleReqInputs (
+export async function markConfirmedStaleReqInputs(
   req: EntityProvenTxReq,
   storage: StorageProvider,
   services: sdk.WalletServices,
@@ -145,31 +145,27 @@ export async function markConfirmedStaleReqInputs (
     if (!uniqueInputs.has(key)) uniqueInputs.set(key, localInput)
   }
 
-  await mapWithConcurrency(
-    [...uniqueInputs.values()],
-    UTXO_PROVIDER_MAX_CONCURRENCY,
-    async ({ output, outpoint }) => {
-      const key = `${outpoint.txid}.${outpoint.vout}`
-      if (output.lockingScript == null) {
-        try {
-          await storage.validateOutputScript(output, trx)
-        } catch {
-          verdicts.set(key, 'inconclusive')
-          return
-        }
-      }
-      if (output.lockingScript == null) {
+  await mapWithConcurrency([...uniqueInputs.values()], UTXO_PROVIDER_MAX_CONCURRENCY, async ({ output, outpoint }) => {
+    const key = `${outpoint.txid}.${outpoint.vout}`
+    if (output.lockingScript == null) {
+      try {
+        await storage.validateOutputScript(output, trx)
+      } catch {
         verdicts.set(key, 'inconclusive')
         return
       }
-      const classification = await classifyOutputUtxo(services, output)
-      let verdict: 'inconclusive' | 'stale' | 'utxo'
-      if (classification.verdict === 'unknown') verdict = 'inconclusive'
-      else if (classification.verdict === 'unspent') verdict = 'utxo'
-      else verdict = 'stale'
-      verdicts.set(key, verdict)
     }
-  )
+    if (output.lockingScript == null) {
+      verdicts.set(key, 'inconclusive')
+      return
+    }
+    const classification = await classifyOutputUtxo(services, output)
+    let verdict: 'inconclusive' | 'stale' | 'utxo'
+    if (classification.verdict === 'unknown') verdict = 'inconclusive'
+    else if (classification.verdict === 'unspent') verdict = 'utxo'
+    else verdict = 'stale'
+    verdicts.set(key, verdict)
+  })
 
   const staleOutpoints = new Set<string>()
   for (const { output, outpoint } of localInputs) {

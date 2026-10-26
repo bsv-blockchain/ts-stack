@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 
@@ -29,7 +31,7 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
   assert.equal(workflow.match(/- name: Build workspace/g)?.length, 1)
   assert.match(
     workflow,
-    /^      browser-packages: \$\{\{ steps\.scope\.outputs\.browser-packages \}\}$/m
+    /^      browser-packages: \$\{\{ steps\.lanes\.outputs\.browser-packages \}\}$/m
   )
   assert.match(workflow, /^  browser-packages:$/m)
   assert.match(
@@ -64,9 +66,18 @@ test('CI shares one audited build across coverage and browser consumer lanes', (
 test('CI skips empty duplicate lanes without weakening the aggregate gate', () => {
   const workflow = readFileSync(CI_PATH, 'utf8')
 
-  assert.match(workflow, /^    if: needs\.prepare\.outputs\.standard-packages != '\[\]'$/m)
-  assert.match(workflow, /^    if: needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m)
-  assert.match(workflow, /^    if: needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m)
+  assert.match(
+    workflow,
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.standard-packages != '\[\]'$/m
+  )
+  assert.match(
+    workflow,
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.dependent-test-packages != '\[\]'$/m
+  )
+  assert.match(
+    workflow,
+    /^    if: always\(\) && !cancelled\(\) && needs\.prepare\.result == 'success' && needs\.prepare\.outputs\.coverage-other-packages != '\[\]'$/m
+  )
   assert.match(
     workflow,
     /^      matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.coverage-other-matrix\) \}\}$/m
@@ -94,13 +105,28 @@ test('CI push jobs survive intentionally skipped pull-request-only gates', () =>
   const workflow = readFileSync(CI_PATH, 'utf8')
   const jobs = Object.fromEntries(workflowJobBlocks(workflow).map(job => [job.name, job.source]))
   const directGateCondition =
-    "always() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
+    "always() && !cancelled() && needs.early-gates.result == 'success' && needs.scope.result == 'success'"
 
-  assert.ok(jobs.prepare.includes(`    if: ${directGateCondition}\n`))
+  // Lint, policy and typecheck wait for every early gate and the shared build.
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.policy, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.policy, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.policy, /name: Typecheck workspace/)
   assert.ok(jobs['infra-scope'].includes(`    if: ${directGateCondition}\n`))
+  // The build overlaps the repository-health contract; test lanes still wait
+  // for every early gate and the shared build before they start.
+  // The build waits for nothing; it builds every package from the cache.
+  assert.doesNotMatch(jobs.build, /^    needs:/m)
+  assert.match(jobs.build, /scripts\/build-output-cache\.mjs names/)
+  for (const prerequisite of ['early-gates', 'scope', 'build'])
+    assert.match(jobs.prepare, new RegExp(`^      - ${prerequisite}$`, 'm'))
+  assert.match(jobs.prepare, /needs\.early-gates\.result == 'success' &&$/m)
+  assert.match(jobs.prepare, /needs\.build\.result == 'success'$/m)
+  for (const gate of ['merge-gate', 'build-and-test'])
+    assert.match(jobs[gate], /^      - policy$/m, gate)
   for (const jobName of ['docs-validate', 'conformance']) {
     assert.match(jobs[jobName], /^    if: >-$/m)
-    assert.match(jobs[jobName], /^      always\(\) &&$/m)
+    assert.match(jobs[jobName], /^      always\(\) && !cancelled\(\) &&$/m)
     assert.match(jobs[jobName], /^      needs\.early-gates\.result == 'success' &&$/m)
     assert.match(jobs[jobName], /^      needs\.scope\.result == 'success' &&$/m)
   }
@@ -112,10 +138,20 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 
   assert.ok(jobs.length > 0)
   for (const job of jobs) {
-    assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    if (job.name === 'mutation-tests') {
+      assert.match(
+        job.source,
+        /^    timeout-minutes: \$\{\{ contains\(fromJSON\('[^']+'\), matrix\.target\) && 90 \|\| 45 \}\}$/m
+      )
+    } else {
+      assert.match(job.source, /^    timeout-minutes: \d+$/m, `${job.name} must have a timeout`)
+    }
   }
   assert.match(workflow, /^      has-infra: \$\{\{ steps\.scope\.outputs\.has-infra \}\}$/m)
-  assert.match(workflow, /^    if: needs\.infra-scope\.outputs\.has-infra == 'true'$/m)
+  assert.match(
+    workflow,
+    /^    if: always\(\) && !cancelled\(\) && needs\.infra-scope\.result == 'success' && needs\.infra-scope\.outputs\.has-infra == 'true'$/m
+  )
   assert.match(workflow, /\( "\$INFRA_RESULT" != "success" && "\$INFRA_RESULT" != "skipped" \)/)
 })
 
@@ -128,4 +164,314 @@ test('specialized workflows are bounded and required conformance checks always r
   assert.match(conformance, /^    timeout-minutes: 30$/m)
   assert.match(runtime, /^    timeout-minutes: 10$/m)
   assert.match(runtime, /^    if: needs\.scope\.outputs\.has-runtime == 'true'$/m)
+})
+
+test('all selected execution jobs survive skipped ancestors and expose a strict final gate', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  const jobs = workflowJobBlocks(workflow)
+  const selected = jobs.filter(
+    job => job.name === 'mutation-tests' || /^    needs: (?:prepare|infra-scope)$/m.test(job.source)
+  )
+  assert.equal(selected.length, 15)
+  for (const job of selected) {
+    if (job.name === 'mutation-tests') continue // Its analyzer prerequisite is tested below.
+    assert.match(
+      job.source,
+      /^    if: always\(\) && !cancelled\(\) && needs\.(?:prepare|infra-scope)\.result == 'success'(?: && |$)/m,
+      job.name
+    )
+  }
+  assert.match(workflow, /^  workflow_dispatch:$/m)
+  assert.doesNotMatch(workflow, /fail-fast: true/)
+  const gate = jobs.find(job => job.name === 'merge-gate').source
+  for (const job of selected) assert.ok(gate.includes(`      - ${job.name}\n`), job.name)
+  assert.match(gate, /CI_NEEDS: \$\{\{ toJSON\(needs\) \}\}/)
+  assert.match(gate, /run: node scripts\/ci-result-gate\.mjs/)
+})
+
+test('fork PRs retain advisory Codecov reports without a privileged workflow', () => {
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  for (const step of [
+    'Upload coverage to Codecov',
+    'Wait for Codecov to merge the uploaded report',
+    'Publish finalized Codecov notifications'
+  ]) {
+    assert.ok(
+      workflow.includes(
+        `      - name: ${step}\n        if: steps.cov.outputs.has-coverage == 'true'\n`
+      )
+    )
+  }
+  assert.doesNotMatch(workflow, /pull_request_target|id-token:\s*write/)
+  assert.match(workflow, /run: >-\n          node scripts\/patch-coverage\.mjs/)
+})
+
+test('analysis gates mutation without serializing the shared build or external reporting', () => {
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  assert.doesNotMatch(jobs['early-gates'], /sonar-zero-findings|SONAR_RESULT/)
+  assert.doesNotMatch(jobs.prepare, /      - sonar-zero-findings/)
+  assert.match(jobs['mutation-tests'], /      - sonar-zero-findings/)
+  assert.match(jobs['merge-gate'], /      - sonar-zero-findings/)
+  assert.match(jobs['merge-gate'], /      - package-artifacts/)
+  assert.doesNotMatch(jobs.prepare, /name: Verify changed package artifacts/)
+  assert.match(jobs['package-artifacts'], /name: Verify changed package artifacts/)
+  assert.match(
+    jobs['package-artifacts'],
+    /name: Compile documentation examples against exact package tarballs/
+  )
+  assert.match(jobs['coverage-upload'], /--target 90/)
+  assert.doesNotMatch(jobs['coverage-upload'], /Wait for Codecov/)
+  assert.match(jobs['coverage-report'], /continue-on-error: true/)
+  assert.doesNotMatch(jobs['merge-gate'], /      - coverage-report/)
+})
+
+function mutationEligibility(options = {}) {
+  const { event, prepare, sonar, targets, labels, diagnosticInput, workflowCancelled } = {
+    event: 'pull_request',
+    prepare: 'success',
+    sonar: 'success',
+    targets: '["selected"]',
+    labels: [],
+    diagnosticInput: false,
+    workflowCancelled: false,
+    ...options
+  }
+  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    candidate => candidate.name === 'mutation-tests'
+  ).source
+  const folded = /^    if: >-\n((?:      .*\n)+)/m.exec(job)
+  const source = folded
+    ? folded[1]
+        .trim()
+        .split('\n')
+        .map(line => line.trim())
+        .join(' ')
+    : /^    if: (.*)$/m.exec(job)[1]
+  // Evaluate the actual authored job expression, not a second copy of the policy.
+  const expression = source
+    .replaceAll(
+      'needs.prepare.outputs.mutation-targets',
+      'needs.prepare.outputs["mutation-targets"]'
+    )
+    .replaceAll('needs.sonar-zero-findings.result', 'needs["sonar-zero-findings"].result')
+    .replaceAll('github.event.pull_request.labels.*.name', 'labels')
+    .replaceAll('inputs.mutation-diagnostics', 'inputs["mutation-diagnostics"]')
+  const evaluate = new Function(
+    'needs',
+    'github',
+    'inputs',
+    'labels',
+    'always',
+    'cancelled',
+    'contains',
+    `return Boolean(${expression})`
+  )
+  return evaluate(
+    {
+      prepare: { result: prepare, outputs: { 'mutation-targets': targets } },
+      'sonar-zero-findings': { result: sonar }
+    },
+    { event_name: event },
+    { 'mutation-diagnostics': diagnosticInput },
+    labels,
+    () => true,
+    () => workflowCancelled,
+    (values, value) => values.includes(value)
+  )
+}
+
+test('mutation defaults to successful exact-head PR analysis and a successful shared build', () => {
+  assert.equal(mutationEligibility(), true)
+  for (const sonar of ['failure', 'cancelled', 'skipped', 'in_progress', undefined, '']) {
+    assert.equal(mutationEligibility({ sonar }), false, `PR analysis: ${sonar}`)
+  }
+  for (const prepare of ['failure', 'cancelled', 'skipped', undefined]) {
+    assert.equal(mutationEligibility({ prepare, labels: ['ci:mutation-diagnostics'] }), false)
+  }
+  for (const targets of ['[]', '', undefined]) {
+    assert.equal(mutationEligibility({ targets }), false)
+  }
+  assert.equal(mutationEligibility({ workflowCancelled: true }), false)
+})
+
+test('main and full manual mutation survive only the intentional PR analysis skip', () => {
+  for (const event of ['push', 'workflow_dispatch']) {
+    assert.equal(mutationEligibility({ event, sonar: 'skipped' }), true)
+    for (const sonar of ['failure', 'cancelled', undefined]) {
+      assert.equal(mutationEligibility({ event, sonar }), false)
+    }
+  }
+})
+
+test('explicit diagnostics collect analyzer failures without bypassing build or cancellation', () => {
+  for (const sonar of ['failure', 'cancelled', 'skipped', undefined]) {
+    assert.equal(mutationEligibility({ sonar, labels: ['ci:mutation-diagnostics'] }), true)
+    assert.equal(mutationEligibility({ sonar, diagnosticInput: true }), false)
+    assert.equal(
+      mutationEligibility({ event: 'workflow_dispatch', sonar, diagnosticInput: true }),
+      true
+    )
+  }
+  assert.equal(mutationEligibility({ sonar: 'failure', labels: ['unrelated'] }), false)
+  assert.equal(
+    mutationEligibility({
+      sonar: 'failure',
+      labels: ['ci:mutation-diagnostics'],
+      workflowCancelled: true
+    }),
+    false
+  )
+  assert.equal(
+    mutationEligibility({ event: 'workflow_dispatch', prepare: 'failure', diagnosticInput: true }),
+    false
+  )
+  assert.equal(
+    mutationEligibility({ event: 'workflow_dispatch', targets: '[]', diagnosticInput: true }),
+    false
+  )
+  const workflow = readFileSync(CI_PATH, 'utf8')
+  assert.match(workflow, /^      mutation-diagnostics:\n/m)
+  assert.match(workflow, /mutation-diagnostics:[\s\S]*?type: boolean\n        default: false/)
+  assert.doesNotMatch(workflow, /pull_request_target/)
+})
+
+test('every HTTP latency scenario retains its own required coverage execution', () => {
+  const jobs = Object.fromEntries(
+    workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).map(job => [job.name, job.source])
+  )
+  const wallet = jobs['coverage-wallet']
+  const suite = readFileSync(
+    join(
+      REPOSITORY_ROOT,
+      'packages/wallet/wallet-toolbox/src/storage/sync/syncTransferHttp.test.ts'
+    ),
+    'utf8'
+  )
+  const latencies = JSON.parse(suite.match(/test\.each\((\[[\d, ]+\])\)/)[1])
+  const selected = [...wallet.matchAll(/id: sync-http-(\d+), latency: (\d+)/g)]
+  assert.deepEqual(
+    selected.map(match => Number(match[2])),
+    latencies
+  )
+  assert.ok(selected.every(match => match[1] === match[2]))
+  // Every planned shard has a matrix row, so no test file can go unrun.
+  const shardRows = wallet.match(/id: shard-\d+, shard: \d+/g).length
+  assert.equal(Number(wallet.match(/--shard="\$WALLET_SHARD\/(\d+)"/)[1]), shardRows)
+  assert.match(
+    wallet,
+    /--testSequencer="\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(wallet, /JEST_SHARD_LANE=wallet-toolbox-coverage/)
+  assert.match(
+    wallet,
+    /--runInBand --runTestsByPath src\/storage\/sync\/syncTransferHttp\.test\.ts/
+  )
+  assert.match(wallet, /--testNamePattern="with \$SYNC_LATENCY ms request latency"/)
+  assert.match(wallet, /args=\(--coverage --coverageDirectory=coverage\/\$\{\{ matrix\.id \}\}\)/)
+  assert.match(wallet, /name: coverage-wallet-\$\{\{ matrix\.id \}\}/)
+  assert.doesNotMatch(wallet, /continue-on-error|passWithNoTests/)
+})
+
+test('the mutation quality job accepts skipped execution only for explicitly empty scope', () => {
+  const job = workflowJobBlocks(readFileSync(CI_PATH, 'utf8')).find(
+    candidate => candidate.name === 'mutation-quality'
+  ).source
+  assert.match(job, /MUTATION_TARGETS: \$\{\{ needs\.prepare\.outputs\.mutation-targets \}\}/)
+  const script = /        run: \|\n([\s\S]*?)(?=\n      -|$)/
+    .exec(job)[1]
+    .split('\n')
+    .map(line => line.replace(/^          /, ''))
+    .join('\n')
+  for (const targets of ['[]', '["selected"]', '']) {
+    for (const result of ['success', 'skipped', 'failure', 'cancelled', '']) {
+      const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
+        env: {
+          NODE_EXECUTABLE: process.execPath,
+          MUTATION_MATRIX: '{"include":[]}',
+          PARTITION_TARGETS: '[]',
+          PREPARE_RESULT: 'success',
+          MUTATION_TARGETS: targets,
+          MUTATION_RESULT: result,
+          MUTATION_CLASSIFICATION: '{"deferred":[]}',
+          GITHUB_STEP_SUMMARY: '/dev/null',
+          PATH: '/usr/bin:/bin:/usr/sbin:/sbin'
+        },
+        encoding: 'utf8'
+      })
+      assert.equal(execution.error, undefined)
+      const permitted = result === 'success' || (result === 'skipped' && targets === '[]')
+      assert.equal(execution.status === 0, permitted, `${targets}: ${result}`)
+    }
+  }
+  const failedBuild = spawnSync('/bin/bash', ['-e', '-c', script], {
+    env: { PREPARE_RESULT: 'failure', MUTATION_TARGETS: '[]', MUTATION_RESULT: 'skipped' }
+  })
+  assert.notEqual(failedBuild.status, 0)
+})
+
+// Extract one step's `run: |` block from the raw workflow text, as the other
+// checks here read the workflow without a YAML dependency.
+function stepScript(workflow, name) {
+  const lines = workflow.split('\n')
+  const at = lines.findIndex(line => line.trim() === `- name: ${name}`)
+  assert.ok(at >= 0, name)
+  const run = lines.findIndex((line, index) => index > at && line.trim() === 'run: |')
+  const indent = lines[run + 1].match(/^ */)[0].length
+  const body = []
+  for (const line of lines.slice(run + 1)) {
+    if (line.trim() !== '' && line.match(/^ */)[0].length < indent) break
+    body.push(line.slice(indent))
+  }
+  return body.join('\n')
+}
+
+test('infra image builds back off longer only for registry rate limits', () => {
+  const script = stepScript(readFileSync(CI_PATH, 'utf8'), 'Build Linux image')
+    .replaceAll('${{ strategy.job-index }}', '0')
+    .replaceAll('${{ matrix.component }}', 'wab')
+  const scenario = outcomes => {
+    const directory = mkdtempSync(join(tmpdir(), 'ts-stack-image-retry-'))
+    writeFileSync(join(directory, 'outcomes'), outcomes.join('\n') + '\n')
+    // Each docker call consumes one scripted outcome; sleep only records.
+    writeFileSync(
+      join(directory, 'docker'),
+      `#!/bin/bash\noutcome=$(head -n1 "${directory}/outcomes"); sed -i.bak 1d "${directory}/outcomes"\n` +
+        `echo call >> "${directory}/calls"\n` +
+        `case "$outcome" in ok) exit 0;; 429) echo "429 Too Many Requests" >&2; exit 1;; *) echo "error: build failed" >&2; exit 1;; esac\n`
+    )
+    writeFileSync(join(directory, 'sleep'), `#!/bin/bash\necho "$1" >> "${directory}/sleeps"\n`)
+    chmodSync(join(directory, 'docker'), 0o755)
+    chmodSync(join(directory, 'sleep'), 0o755)
+    const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+      env: { PATH: `${directory}:${process.env.PATH}`, RUNNER_TEMP: directory },
+      encoding: 'utf8'
+    })
+    const lines = file => {
+      try {
+        return readFileSync(join(directory, file), 'utf8').trim().split('\n').filter(Boolean)
+      } catch {
+        return []
+      }
+    }
+    return { status: run.status, calls: lines('calls').length, sleeps: lines('sleeps').map(Number) }
+  }
+  assert.deepEqual(scenario(['ok']), { status: 0, calls: 1, sleeps: [] })
+  assert.deepEqual(scenario(['429', '429', '429', 'ok']), {
+    status: 0,
+    calls: 4,
+    sleeps: [15, 30, 60]
+  })
+  assert.deepEqual(scenario(['429', '429', '429', '429', '429']), {
+    status: 1,
+    calls: 5,
+    sleeps: [15, 30, 60, 120]
+  })
+  // A genuine build failure keeps the short retry and does not wait minutes.
+  assert.deepEqual(scenario(['fail', 'fail', 'fail', 'ok']), {
+    status: 1,
+    calls: 3,
+    sleeps: [5, 10]
+  })
 })

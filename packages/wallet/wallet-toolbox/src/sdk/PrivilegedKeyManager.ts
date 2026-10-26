@@ -1,6 +1,5 @@
 import {
   Random,
-  Utils,
   PrivateKey,
   CreateHmacArgs,
   CreateHmacResult,
@@ -22,6 +21,7 @@ import {
   WalletEncryptArgs,
   WalletEncryptResult
 } from '@bsv/sdk'
+import { toHex } from '@bsv/sdk/primitives/utils'
 
 /**
  * PrivilegedKeyManager
@@ -247,7 +247,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
    */
   private generateRandomPropName(): string {
     // E.g., 8 random hex characters for the property name
-    const randomHex = Utils.toHex(Random(4))
+    const randomHex = toHex(Random(4))
     const extraBytes = Random(3)
     const extraNum = ((extraBytes[0] << 16) | (extraBytes[1] << 8) | extraBytes[2]) % 1000000
     return `_${randomHex}_${extraNum}`
@@ -287,7 +287,7 @@ export class PrivilegedKeyManager implements ProtoWallet {
       if (rawKeyBytes?.length === 32) {
         // Convert 32 raw bytes back to a PrivateKey
         // (Leading zeros are preserved, but PrivateKey() will parse it as a big integer.)
-        const hexKey = Utils.toHex([...rawKeyBytes]) // 64 hex chars
+        const hexKey = toHex([...rawKeyBytes]) // 64 hex chars
         rawKeyBytes.fill(0) // Zero ephemeral copy
         this.scheduleKeyDestruction()
         return new PrivateKey(hexKey, 'hex')

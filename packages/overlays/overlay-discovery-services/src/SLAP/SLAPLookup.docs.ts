@@ -26,16 +26,25 @@ You will typically provide a [LookupQuestion](https://www.npmjs.com/package/@bsv
 
 ### \`question.query\` Options
 
-1. **\`"findAll"\`** (string literal): Returns every SLAP record in the database.
+1. **\`"findAll"\`** (string literal): Returns up to 1,000 SLAP records.
 2. **\`SLAPQuery\` object**:
    \`\`\`ts
    interface SLAPQuery {
+     findAll?: boolean
      domain?: string
      service?: string
+     identityKey?: string
+     limit?: number
+     skip?: number
+     sortOrder?: 'asc' | 'desc'
    }
    \`\`\`
    - \`domain\`: Optional. If provided, only returns records whose \`advertisedURI\` matches this domain.
    - \`service\`: Optional. Must be a string starting with \`ls_\`.
+   - \`identityKey\`: Optional compressed secp256k1 public key.
+   - \`limit\`: Integer from 0 through 1,000; defaults to 1,000 and zero returns no rows.
+   - \`skip\`: Integer from 0 through 1,000,000.
+   - \`sortOrder\`: \`asc\` or \`desc\` by creation time; defaults to \`desc\`.
 
 ### Example Usages
 
@@ -84,6 +93,7 @@ You will typically provide a [LookupQuestion](https://www.npmjs.com/package/@bsv
 
 - **Strict Matching**: Domain matching requires an exact string match. If you have a different protocol (https vs https+bsvauth vs https+bsvauth+smf), be sure to store/lookup accordingly.
 - **Must Start with \`ls_\`**: The \`service\` field in the original SLAP advertisement must begin with \`ls_\`. If you query for something that doesn’t match exactly, you may get zero results.
+- **Bounded Results**: Both the legacy \`"findAll"\` form and object queries return at most 1,000 rows. Use bounded \`limit\` and \`skip\` values to paginate.
 
 ---
 

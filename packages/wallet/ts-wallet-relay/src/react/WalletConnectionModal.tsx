@@ -67,8 +67,8 @@ export function WalletConnectionModal({
       if (cancelled) return
       try {
         const wallet = new WalletClient('auto')
-        const ok = await wallet.isAuthenticated()
-        if (!ok) throw new Error('not authenticated')
+        const result = await wallet.isAuthenticated()
+        if (result?.authenticated !== true) throw new Error('not authenticated')
         if (!cancelled) {
           setStatus('available')
           onLocalWalletRef.current(wallet)

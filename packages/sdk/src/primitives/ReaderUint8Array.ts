@@ -1,5 +1,6 @@
 import BigNumber from './BigNumber.js'
 import { Reader } from './utils.js'
+import strictCompactSize from './readVarIntNumStrict.js'
 
 /**
  * Reader for serialized Uint8Array binary data.
@@ -7,9 +8,9 @@ import { Reader } from './utils.js'
 export class ReaderUint8Array {
   public bin: Uint8Array
   public pos: number
-  private readonly length: number
+  readonly #length: number
 
-  static makeReader (bin: Uint8Array | number[], pos: number = 0): Reader | ReaderUint8Array {
+  static makeReader(bin: Uint8Array | number[], pos: number = 0): Reader | ReaderUint8Array {
     if (bin instanceof Uint8Array) {
       return new ReaderUint8Array(bin, pos)
     }
@@ -19,7 +20,7 @@ export class ReaderUint8Array {
     throw new Error('ReaderUint8Array.makeReader: bin must be Uint8Array or number[]')
   }
 
-  constructor (bin: Uint8Array | number[] = new Uint8Array(0), pos: number = 0) {
+  constructor(bin: Uint8Array | number[] = new Uint8Array(0), pos: number = 0) {
     if (bin instanceof Uint8Array) {
       this.bin = bin
     } else if (Array.isArray(bin)) {
@@ -27,15 +28,31 @@ export class ReaderUint8Array {
     } else {
       throw new TypeError('ReaderUint8Array constructor: bin must be Uint8Array or number[]')
     }
+    this.#length = this.bin.length
+    if (!Number.isSafeInteger(pos) || pos < 0 || pos > this.#length) {
+      throw new RangeError('ReaderUint8Array position exceeds available data')
+    }
     this.pos = pos
-    this.length = this.bin.length
   }
 
-  public eof (): boolean {
-    return this.pos >= this.length
+  #ensureAvailable(len: number): void {
+    if (
+      !Number.isSafeInteger(len) ||
+      len < 0 ||
+      !Number.isSafeInteger(this.pos) ||
+      this.pos < 0 ||
+      this.pos + len > this.#length
+    ) {
+      throw new RangeError('ReaderUint8Array read exceeds available data')
+    }
   }
 
-  public read (len = this.length): Uint8Array {
+  public eof(): boolean {
+    return this.pos >= this.#length
+  }
+
+  public read(len = this.#length - this.pos): Uint8Array {
+    this.#ensureAvailable(len)
     const start = this.pos
     const end = this.pos + len
     this.pos = end
@@ -47,28 +64,25 @@ export class ReaderUint8Array {
    * lifetime of the backing `Uint8Array`; callers that require isolation should
    * continue to use {@link read}.
    */
-  public readView (len = this.length - this.pos): Uint8Array {
-    if (!Number.isSafeInteger(len) || len < 0 || this.pos + len > this.length) {
-      throw new RangeError('ReaderUint8Array read exceeds available data')
-    }
+  public readView(len = this.#length - this.pos): Uint8Array {
+    this.#ensureAvailable(len)
     const start = this.pos
     this.pos += len
     return this.bin.subarray(start, this.pos)
   }
 
   /** Advances without allocating. */
-  public skip (len: number): void {
-    if (!Number.isSafeInteger(len) || len < 0 || this.pos + len > this.length) {
-      throw new RangeError('ReaderUint8Array skip exceeds available data')
-    }
+  public skip(len: number): void {
+    this.#ensureAvailable(len)
     this.pos += len
   }
 
-  public remaining (): number {
-    return this.length - this.pos
+  public remaining(): number {
+    return this.#length - this.pos
   }
 
-  public readReverse (len = this.length): Uint8Array {
+  public readReverse(len = this.#length - this.pos): Uint8Array {
+    this.#ensureAvailable(len)
     const buf2 = new Uint8Array(len)
     for (let i = 0; i < len; i++) {
       buf2[i] = this.bin[this.pos + len - 1 - i]
@@ -77,45 +91,48 @@ export class ReaderUint8Array {
     return buf2
   }
 
-  public readUInt8 (): number {
+  public readUInt8(): number {
+    this.#ensureAvailable(1)
     const val = this.bin[this.pos]
     this.pos += 1
     return val
   }
 
-  public readInt8 (): number {
-    const val = this.bin[this.pos]
-    this.pos += 1
+  public readInt8(): number {
+    const val = this.readUInt8()
     // If the sign bit is set, convert to negative value
     return (val & 0x80) === 0 ? val : val - 0x100
   }
 
-  public readUInt16BE (): number {
+  public readUInt16BE(): number {
+    this.#ensureAvailable(2)
     const val = (this.bin[this.pos] << 8) | this.bin[this.pos + 1]
     this.pos += 2
     return val
   }
 
-  public readInt16BE (): number {
+  public readInt16BE(): number {
     const val = this.readUInt16BE()
     // If the sign bit is set, convert to negative value
     return (val & 0x8000) === 0 ? val : val - 0x10000
   }
 
-  public readUInt16LE (): number {
+  public readUInt16LE(): number {
+    this.#ensureAvailable(2)
     const val = this.bin[this.pos] | (this.bin[this.pos + 1] << 8)
     this.pos += 2
     return val
   }
 
-  public readInt16LE (): number {
+  public readInt16LE(): number {
     const val = this.readUInt16LE()
     // If the sign bit is set, convert to negative value
     const x = (val & 0x8000) === 0 ? val : val - 0x10000
     return x
   }
 
-  public readUInt32BE (): number {
+  public readUInt32BE(): number {
+    this.#ensureAvailable(4)
     const val =
       this.bin[this.pos] * 0x1000000 + // Shift the first byte by 24 bits
       ((this.bin[this.pos + 1] << 16) | // Shift the second byte by 16 bits
@@ -125,13 +142,14 @@ export class ReaderUint8Array {
     return val
   }
 
-  public readInt32BE (): number {
+  public readInt32BE(): number {
     const val = this.readUInt32BE()
     // If the sign bit is set, convert to negative value
     return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
-  public readUInt32LE (): number {
+  public readUInt32LE(): number {
+    this.#ensureAvailable(4)
     const val =
       (this.bin[this.pos] |
         (this.bin[this.pos + 1] << 8) |
@@ -142,26 +160,27 @@ export class ReaderUint8Array {
     return val
   }
 
-  public readInt32LE (): number {
+  public readInt32LE(): number {
     const val = this.readUInt32LE()
     // Explicitly check if the sign bit is set and then convert to a negative value
     return (val & 0x80000000) === 0 ? val : val - 0x100000000
   }
 
-  public readUInt64BEBn (): BigNumber {
+  public readUInt64BEBn(): BigNumber {
+    this.#ensureAvailable(8)
     const bin = Array.from(this.bin.slice(this.pos, this.pos + 8))
     const bn = new BigNumber(bin)
     this.pos = this.pos + 8
     return bn
   }
 
-  public readUInt64LEBn (): BigNumber {
+  public readUInt64LEBn(): BigNumber {
     const bin = Array.from(this.readReverse(8))
     const bn = new BigNumber(bin)
     return bn
   }
 
-  public readInt64LEBn (): BigNumber {
+  public readInt64LEBn(): BigNumber {
     const OverflowInt64 = new BigNumber(2).pow(new BigNumber(63))
     const OverflowUint64 = new BigNumber(2).pow(new BigNumber(64))
     const bin = Array.from(this.readReverse(8))
@@ -172,7 +191,7 @@ export class ReaderUint8Array {
     return bn
   }
 
-  public readVarIntNum (signed: boolean = true): number {
+  public readVarIntNum(signed: boolean = true): number {
     const first = this.readUInt8()
     let bn: BigNumber
     switch (first) {
@@ -192,7 +211,16 @@ export class ReaderUint8Array {
     }
   }
 
-  public readVarInt (): Uint8Array {
+  /**
+   * Reads a canonical CompactSize value that can be represented exactly by
+   * JavaScript. The legacy `-1` sentinel is accepted when `signed` is true;
+   * pass `false` for untrusted lengths, counts, and indexes.
+   */
+  public readVarIntNumStrict(signed: boolean = true): number {
+    return strictCompactSize(this, signed)
+  }
+
+  public readVarInt(): Uint8Array {
     const first = this.bin[this.pos]
     switch (first) {
       case 0xfd:
@@ -206,7 +234,7 @@ export class ReaderUint8Array {
     }
   }
 
-  public readVarIntBn (): BigNumber {
+  public readVarIntBn(): BigNumber {
     const first = this.readUInt8()
     switch (first) {
       case 0xfd:

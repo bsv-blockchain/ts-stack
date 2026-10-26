@@ -7,6 +7,14 @@ import {
   type BulkFileDataValidatorApi,
   type BulkFileDataValidatorStats
 } from '../Api/BulkFileDataValidatorApi'
+import { normalizeBulkFileDataValidationRequest } from './InlineBulkFileDataValidator'
+
+const MAX_VALIDATION_WORKERS = 32
+const MAX_VALIDATION_QUEUE = 1024
+const MAX_TASK_TIMEOUT_MSECS = 60 * 60 * 1000
+const MAX_HEADER_BYTES = 100_000 * 80
+const SHA256_BASE64 = /^[A-Za-z0-9+/]{43}=$/
+const HEX_32_BYTES = /^[0-9a-f]{64}$/
 
 export interface NodeBulkFileDataValidatorOptions {
   /** Number of validation workers. Defaults to one to bound CPU usage. */
@@ -78,10 +86,22 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
   }
 
   constructor(options: NodeBulkFileDataValidatorOptions = {}) {
-    const maxWorkers = positiveInteger(options.maxWorkers ?? 1, 'maxWorkers')
-    this.maxQueue = positiveInteger(options.maxQueue ?? 8, 'maxQueue')
-    this.taskTimeoutMsecs = positiveInteger(options.taskTimeoutMsecs ?? 2 * 60 * 1000, 'taskTimeoutMsecs')
-    this.workerPath = options.workerPath ?? path.join(__dirname, 'BulkFileDataValidator.worker.js')
+    const maxWorkers = boundedPositiveInteger(options.maxWorkers ?? 1, 'maxWorkers', MAX_VALIDATION_WORKERS)
+    this.maxQueue = boundedPositiveInteger(options.maxQueue ?? 8, 'maxQueue', MAX_VALIDATION_QUEUE)
+    this.taskTimeoutMsecs = boundedPositiveInteger(
+      options.taskTimeoutMsecs ?? 2 * 60 * 1000,
+      'taskTimeoutMsecs',
+      MAX_TASK_TIMEOUT_MSECS
+    )
+    if (
+      options.workerPath !== undefined &&
+      (typeof options.workerPath !== 'string' ||
+        options.workerPath.trim() === '' ||
+        options.workerPath.includes('\u0000'))
+    ) {
+      throw new Error('workerPath must be a non-empty filesystem path when defined')
+    }
+    this.workerPath = path.resolve(options.workerPath ?? path.join(__dirname, 'BulkFileDataValidator.worker.js'))
     for (let index = 0; index < maxWorkers; index++) this.spawnWorker()
   }
 
@@ -92,10 +112,21 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
       this.stats.rejected++
       throw new Error(`Bulk-header validation queue is full (${this.maxQueue} waiting objects).`)
     }
+    let snapshot: BulkFileDataValidationRequest
+    try {
+      snapshot = normalizeBulkFileDataValidationRequest(request)
+    } catch (error) {
+      this.stats.rejected++
+      throw error
+    }
 
     return await new Promise<BulkFileDataValidationResult>((resolve, reject) => {
       this.stats.submitted++
-      this.queue.push({ id: this.nextTaskId++, request, startedAt: 0, resolve, reject })
+      if (!Number.isSafeInteger(this.nextTaskId)) {
+        reject(new Error('Bulk-header validator exhausted its task identifier space.'))
+        return
+      }
+      this.queue.push({ id: this.nextTaskId++, request: snapshot, startedAt: 0, resolve, reject })
       this.updateQueueStats()
       this.dispatch()
     })
@@ -130,7 +161,13 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
     if (this.destroyed) return
     const worker = new Worker(this.workerPath)
     const slot: WorkerSlot = { worker, terminating: false }
-    worker.on('message', (message: WorkerSuccess | WorkerFailure) => this.complete(slot, message))
+    worker.on('message', (message: WorkerSuccess | WorkerFailure) => {
+      try {
+        this.complete(slot, message)
+      } catch (error) {
+        this.failWorker(slot, error instanceof Error ? error : new Error(String(error)))
+      }
+    })
     worker.on('error', error => this.failWorker(slot, error instanceof Error ? error : new Error(String(error))))
     worker.on('exit', code => {
       if (!slot.terminating) this.failWorker(slot, new Error(`Validation worker exited unexpectedly with code ${code}`))
@@ -149,8 +186,12 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
         this.failWorker(slot, new Error(`Bulk-header validation exceeded ${this.taskTimeoutMsecs}ms`))
       }, this.taskTimeoutMsecs)
 
-      const data = exactArrayBuffer(task.request.data)
-      slot.worker.postMessage({ id: task.id, request: { ...task.request, data } }, [data])
+      const data = ownedArrayBuffer(task.request.data)
+      try {
+        slot.worker.postMessage({ id: task.id, request: { ...task.request, data } }, [data])
+      } catch (error) {
+        this.failWorker(slot, error instanceof Error ? error : new Error(String(error)))
+      }
     }
     this.updateQueueStats()
   }
@@ -159,21 +200,49 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
     const task = slot.task
     if (task?.id !== message.id) return
     clearTimeout(task.timer)
-    slot.task = undefined
     const duration = Date.now() - task.startedAt
     this.stats.totalValidationMsecs += duration
     this.stats.maxValidationMsecs = Math.max(this.stats.maxValidationMsecs, duration)
     if (message.ok) {
+      this.validateWorkerResult(message.result, task)
+      slot.task = undefined
       this.stats.completed++
       task.resolve({ ...message.result, data: new Uint8Array(message.result.data) })
     } else {
+      if (!(message.data instanceof ArrayBuffer) || message.data.byteLength > MAX_HEADER_BYTES) {
+        throw new Error('Validation worker returned invalid rejected data.')
+      }
+      slot.task = undefined
       this.stats.failed++
-      const detail = typeof message.error === 'string' ? message.error : (message.error.message ?? 'Validation failed')
+      const detail = (
+        typeof message.error === 'string' ? message.error : (message.error?.message ?? 'Validation failed')
+      ).slice(0, 4096)
       const error = new BulkFileDataValidationError(detail, new Uint8Array(message.data))
       if (typeof message.error !== 'string' && message.error.stack != null) error.stack = message.error.stack
       task.reject(error)
     }
     this.dispatch()
+  }
+
+  private validateWorkerResult(result: WorkerSuccess['result'], task: ValidationTask): void {
+    if (
+      result == null ||
+      typeof result !== 'object' ||
+      !(result.data instanceof ArrayBuffer) ||
+      result.data.byteLength !== task.request.count * 80 ||
+      typeof result.fileHash !== 'string' ||
+      !SHA256_BASE64.test(result.fileHash) ||
+      Buffer.from(result.fileHash, 'base64').toString('base64') !== result.fileHash ||
+      typeof result.lastHeaderHash !== 'string' ||
+      !HEX_32_BYTES.test(result.lastHeaderHash) ||
+      typeof result.lastChainWork !== 'string' ||
+      !HEX_32_BYTES.test(result.lastChainWork) ||
+      (task.request.fileHash !== undefined && result.fileHash !== task.request.fileHash) ||
+      (task.request.lastHash != null && result.lastHeaderHash !== task.request.lastHash) ||
+      (task.request.lastChainWork != null && result.lastChainWork !== task.request.lastChainWork)
+    ) {
+      throw new Error('Validation worker returned an invalid or mismatched result.')
+    }
   }
 
   private failWorker(slot: WorkerSlot, error: Error): void {
@@ -204,11 +273,16 @@ export class NodeBulkFileDataValidator implements BulkFileDataValidatorApi {
   }
 }
 
-function positiveInteger(value: number, name: string): number {
-  if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} must be a positive safe integer`)
+function boundedPositiveInteger(value: number, name: string, maximum: number): number {
+  if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+    throw new Error(`${name} must be a positive safe integer no greater than ${maximum}`)
+  }
   return value
 }
 
-function exactArrayBuffer(data: Uint8Array): ArrayBuffer {
-  return data.slice().buffer as ArrayBuffer
+function ownedArrayBuffer(data: Uint8Array): ArrayBuffer {
+  if (data.byteOffset !== 0 || data.byteLength !== data.buffer.byteLength || !(data.buffer instanceof ArrayBuffer)) {
+    throw new Error('Bulk-header validation task does not own an exact ArrayBuffer.')
+  }
+  return data.buffer
 }

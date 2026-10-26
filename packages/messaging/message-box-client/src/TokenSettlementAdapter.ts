@@ -8,7 +8,12 @@
  * so the receiving side can route to the right adapter. One adapter exists per
  * standard (classic STAS, DSTAS, BSV-21).
  */
-import { AtomicBEEF, Base64String, PubKeyHex, WalletInterface } from '@bsv/sdk'
+import type {
+  AtomicBEEF,
+  Base64String,
+  PubKeyHex,
+  WalletInterface
+} from '@bsv/sdk/wallet/Wallet.interfaces'
 
 /** A token UTXO the sender controls and wishes to transfer. */
 export interface TokenSourceRef {

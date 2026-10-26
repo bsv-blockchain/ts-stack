@@ -87,6 +87,7 @@ const contracts = {
     walletDependency: true,
     environment: {
       ARC_API_KEY: 'container-contract-only-not-a-secret',
+      ARC_CALLBACK_TOKEN: 'container-contract-independent-callback-token',
       BASM_ENABLED: 'false',
       BASM_REORG_STREAM_ENABLED: 'false',
       GASP_ENABLED: 'false',
@@ -211,6 +212,17 @@ const contracts = {
     ],
     forbiddenLogPatterns: ['ERR_ERL_UNEXPECTED_X_FORWARDED_FOR'],
     migration: 'readiness-after-startup-migration'
+  },
+  'webrtpay-relay': {
+    port: 8787,
+    environment: {
+      PUBLIC_URLS: 'wss://relay.container-contract.example'
+    },
+    invalidEnvironment: { PORT: 'invalid' },
+    liveness: '/health',
+    readiness: '/ready',
+    transaction: { method: 'GET', path: '/health', status: 200 },
+    migration: 'not-applicable'
   }
 }
 

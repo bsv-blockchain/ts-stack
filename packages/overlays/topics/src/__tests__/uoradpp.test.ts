@@ -399,7 +399,7 @@ describe('UoraDppLookupService', () => {
         service: 'ls_uora_dpp',
         query: { issuer: MAKER, limit: -1 }
       } as LookupQuestion)
-    ).rejects.toThrow(/non-negative/)
+    ).rejects.toThrow(/limit must be an integer from 1 to 500/)
   })
 
   it('indexes nothing from a topic it does not serve', async () => {
@@ -766,7 +766,7 @@ describe('UoraDppLookupService, at its edges', () => {
         service: 'ls_uora_dpp',
         query: { issuer: MAKER, skip: -1 }
       } as LookupQuestion)
-    ).rejects.toThrow(/Skip must be a non-negative number/)
+    ).rejects.toThrow(/skip must be an integer from 0 to 100000/)
   })
 
   it('refuses a null or missing question, and empty selector strings', async () => {
@@ -776,18 +776,17 @@ describe('UoraDppLookupService, at its edges', () => {
       collection: () => ({}) as never
     } as unknown as Db)
     await expect(service.lookup(undefined as unknown as LookupQuestion)).rejects.toThrow(
-      /valid query is required/
+      /a question object is required/
     )
     await expect(service.lookup(null as unknown as LookupQuestion)).rejects.toThrow(
-      /valid query is required/
+      /a question object is required/
     )
-    // `query` omitted is treated as `{}`, not as a missing question object.
     await expect(service.lookup({ service: 'ls_uora_dpp' } as LookupQuestion)).rejects.toThrow(
-      /issuer, issuerKey, subject, attestationId or digest/
+      /query must be an object/
     )
     await expect(
       service.lookup({ service: 'ls_uora_dpp', query: { issuer: '' } } as LookupQuestion)
-    ).rejects.toThrow(/issuer, issuerKey, subject, attestationId or digest/)
+    ).rejects.toThrow(/issuer must contain 1-128 UTF-8 bytes/)
   })
 
   it('refuses admission and spend notifications in the wrong mode', async () => {

@@ -42,6 +42,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 | ------------------------------------------ |
 | [inputP2PKH](#function-inputp2pkh)         |
 | [outputP2PKH](#function-outputp2pkh)       |
+| [p2pkh](#function-p2pkh)                   |
 | [p2pkhToAddress](#function-p2pkhtoaddress) |
 | [transferP2PKH](#function-transferp2pkh)   |
 
@@ -98,23 +99,33 @@ export async function inputP2PKH(
     labels: [label],
     description: label
   })
-  const st = car.signableTransaction!
-  const beef = Beef.fromBinary(st.tx)
-  const tx = beef.findAtomicTransaction(beef.txs.slice(-1)[0].txid)!
-  tx.inputs[0].unlockingScriptTemplate = unlock
-  await tx.sign()
-  const unlockingScript = tx.inputs[0].unlockingScript!.toHex()
-  const signArgs: SignActionArgs = {
-    reference: st.reference,
-    spends: { 0: { unlockingScript } },
-    options: {
-      acceptDelayedBroadcast: false
+  const st = car.signableTransaction
+  if (st == null) throw new Error('Wallet did not return a signable P2PKH transaction')
+  let signed: Transaction
+  try {
+    const tx = Transaction.fromAtomicBEEF(st.tx)
+    const inputIndex = findRequestedInputIndex(tx, o.outpoint)
+    tx.inputs[inputIndex].unlockingScriptTemplate = unlock
+    await tx.sign()
+    const unlockingScript = tx.inputs[inputIndex].unlockingScript
+    if (unlockingScript == null) throw new Error('P2PKH signer produced no unlocking script')
+    const signArgs: SignActionArgs = {
+      reference: st.reference,
+      spends: { [inputIndex]: { unlockingScript: unlockingScript.toHex() } },
+      options: { acceptDelayedBroadcast: false }
     }
+    const sar = await setup.wallet.signAction(signArgs)
+    if (sar.tx == null) throw new Error('Wallet did not return the signed P2PKH transaction')
+    signed = Transaction.fromAtomicBEEF(sar.tx)
+    assertSameSignedTransaction(tx, signed)
+  } catch (error) {
+    try {
+      await setup.wallet.abortAction({ reference: st.reference })
+    } catch {}
+    throw error
   }
-  const sar = await setup.wallet.signAction(signArgs)
   {
-    const beef = Beef.fromBinary(sar.tx!)
-    const txid = sar.txid!
+    const beef = Beef.fromBinary(signed.toAtomicBEEF())
     console.log(`
 inputP2PKH to ${setup.identityKey}
 input's outpoint ${o.outpoint}
@@ -127,7 +138,7 @@ ${beef.toLogString()}
 }
 ```
 
-See also: [outputP2PKH](./p2pkh.md#function-outputp2pkh)
+See also: [assertSameSignedTransaction](./README.md#function-assertsamesignedtransaction), [findRequestedInputIndex](./README.md#function-findrequestedinputindex), [outputP2PKH](./p2pkh.md#function-outputp2pkh)
 
 Argument Details
 
@@ -170,6 +181,7 @@ export async function outputP2PKH(
   toIdentityKey: string
   satoshis: number
 }> {
+  assertSatoshis(satoshis)
   const address = PublicKey.fromString(toIdentityKey).toAddress()
   const lock = Setup.getLockP2PKH(address)
   const label = 'outputP2PKH'
@@ -189,8 +201,14 @@ export async function outputP2PKH(
     labels: [label],
     description: label
   })
-  const beef = Beef.fromBinary(car.tx!)
-  const outpoint = `${car.txid!}.0`
+  if (car.tx == null || car.txid == null) throw new Error('Wallet did not return the P2PKH payment')
+  const transaction = Transaction.fromAtomicBEEF(car.tx)
+  if (car.txid.toLowerCase() !== transaction.id('hex')) {
+    throw new Error('Wallet P2PKH transaction ID does not match its transaction')
+  }
+  const outputIndex = findRequestedOutputIndex(transaction, lock.toHex(), satoshis)
+  const beef = Beef.fromBinary(transaction.toAtomicBEEF())
+  const outpoint = `${transaction.id('hex')}.${outputIndex}`
   console.log(`
 outputP2PKH to ${toIdentityKey}
 outpoint ${outpoint}
@@ -202,6 +220,8 @@ ${beef.toLogString()}
   return { beef, outpoint, toIdentityKey, satoshis }
 }
 ```
+
+See also: [assertSatoshis](./README.md#function-assertsatoshis), [findRequestedOutputIndex](./README.md#function-findrequestedoutputindex)
 
 Returns
 
@@ -229,11 +249,38 @@ Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
 ---
 
-##### Function: p2pkhToAddress
+##### Function: p2pkh
 
 ```ts
-export async function p2pkhToAddress()
+export async function p2pkh(): Promise<void>
 ```
+
+Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
+
+---
+
+##### Function: p2pkhToAddress
+
+Creates a real mainnet P2PKH output. Verify both configured identities and the
+amount before invoking this explicitly named function.
+
+```ts
+export async function p2pkhToAddress() {
+  const env = Setup.getEnv('main')
+  const setup1 = await Setup.createWalletClient({ env })
+  const setup2 = await Setup.createWalletClient({
+    env,
+    rootKeyHex: env.devKeys[env.identityKey2]
+  })
+  try {
+    await outputP2PKH(setup1, setup2.identityKey, 10)
+  } finally {
+    await Promise.allSettled([setup1.wallet.destroy(), setup2.wallet.destroy()])
+  }
+}
+```
+
+See also: [outputP2PKH](./p2pkh.md#function-outputp2pkh)
 
 Links: [API](#api), [Interfaces](#interfaces), [Functions](#functions)
 
@@ -261,8 +308,12 @@ export async function transferP2PKH() {
     env,
     rootKeyHex: env.devKeys[env.identityKey2]
   })
-  const o = await outputP2PKH(setup1, setup2.identityKey, 42)
-  await inputP2PKH(setup2, o)
+  try {
+    const o = await outputP2PKH(setup1, setup2.identityKey, 42)
+    await inputP2PKH(setup2, o)
+  } finally {
+    await Promise.allSettled([setup1.wallet.destroy(), setup2.wallet.destroy()])
+  }
 }
 ```
 

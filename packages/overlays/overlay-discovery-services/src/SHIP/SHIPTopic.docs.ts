@@ -51,7 +51,7 @@ If any of these checks fail, the SHIP token output is _not_ admitted by the topi
 
 - **Field Ordering**: The fields **must** appear in the exact order specified above (SHIP -> identityKey -> advertisedURI -> topic -> signature).
 - **Exact Five Fields**: More or fewer fields will cause the manager to skip the output.
-- **Proper Locking Script**: Ensure the output is locked with a valid [PushDrop](https://www.npmjs.com/package/@bsv/sdk#pushdrop) format. If the \`lockingScript\` can’t be decoded by \`PushDrop\`, the output is invalid.
+- **Proper Locking Script**: The complete script must use the canonical, bounded [PushDrop](https://www.npmjs.com/package/@bsv/sdk#pushdrop) envelope. Extra opcodes, non-minimal pushes, oversized fields, and trailing script data are rejected.
 - **Signature Data**: The signature is a raw ECDSA signature over the raw bytes of the preceding fields. The manager expects that the identity key and signature match up with the logic in \`isTokenSignatureCorrectlyLinked\`.
 - **Funding**: Remember to fund your SHIP output with at least one satoshi so it remains unspent if you want your advertisement to be valid.
 `

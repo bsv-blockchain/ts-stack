@@ -8,18 +8,18 @@ A high-level TypeScript library that makes BSV blockchain development simple. Bu
 
 ## What can you build?
 
-| Feature | Description |
-|---------|-------------|
-| **Payments** | Send BSV to any identity key via BRC-29 peer-to-peer payments |
+| Feature                       | Description                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| **Payments**                  | Send BSV to any identity key via BRC-29 peer-to-peer payments                       |
 | **Multi-Output Transactions** | Combine P2PKH payments, OP_RETURN data, and PushDrop tokens in a single transaction |
-| **Encrypted Tokens** | Create, transfer, and redeem PushDrop tokens with encrypted payloads |
-| **Inscriptions** | Write text, JSON, or file hashes permanently to the blockchain |
-| **MessageBox P2P** | Send and receive payments and tokens peer-to-peer via MessageBox |
-| **Certification** | Issue and manage BSV certificates with a standalone Certifier |
-| **Verifiable Credentials** | W3C-compatible VCs backed by BSV certificates, with on-chain revocation |
-| **DIDs** | Generate and resolve `did:bsv:` Decentralized Identifiers |
-| **Overlay Networks** | Broadcast to and query SHIP/SLAP overlay services |
-| **Server Wallet** | Run a backend wallet for automated operations and funding flows |
+| **Encrypted Tokens**          | Create, transfer, and redeem PushDrop tokens with encrypted payloads                |
+| **Inscriptions**              | Write text, JSON, or file hashes permanently to the blockchain                      |
+| **MessageBox P2P**            | Send and receive payments and tokens peer-to-peer via MessageBox                    |
+| **Certification**             | Issue and manage BSV certificates with a standalone Certifier                       |
+| **Verifiable Credentials**    | Proposed BRC-203 envelopes preserving original BRC-52 signatures and ciphertext     |
+| **DIDs**                      | Encode and resolve BRC-202 identity-key `did:key` identifiers                       |
+| **Overlay Networks**          | Broadcast to and query SHIP/SLAP overlay services                                   |
+| **Server Wallet**             | Run a backend wallet for automated operations and funding flows                     |
 
 ## Browser vs Server
 
@@ -49,7 +49,7 @@ await wallet.inscribeText('Hello BSV!')
 
 // Get your DID
 const did = wallet.getDID()
-// { id: 'did:bsv:02abc...', ... }
+// { id: 'did:key:zQ3sh...', verificationMethod: [...], ... }
 ```
 
 ## Next Steps
@@ -60,41 +60,41 @@ const did = wallet.getDID()
 
 # Table of Contents
 
-* [Introduction](README.md)
-* [Quick Start](quick-start.md)
-* [Installation](installation.md)
-* [Architecture](architecture.md)
+- [Introduction](README.md)
+- [Quick Start](quick-start.md)
+- [Installation](installation.md)
+- [Architecture](architecture.md)
 
 ## Guides
 
-* [Browser Wallet](guides/browser-wallet.md)
-* [Server Wallet](guides/server-wallet.md)
-* [Payments](guides/payments.md)
-* [Tokens](guides/tokens.md)
-* [Inscriptions](guides/inscriptions.md)
-* [MessageBox & P2P](guides/messagebox.md)
-* [Certification](guides/certification.md)
-* [DID (Decentralized Identity)](guides/did.md)
-* [Verifiable Credentials](guides/credentials.md)
-* [Overlay Networks](guides/overlay.md)
-* [Next.js Integration](guides/nextjs-integration.md)
+- [Browser Wallet](guides/browser-wallet.md)
+- [Server Wallet](guides/server-wallet.md)
+- [Payments](guides/payments.md)
+- [Tokens](guides/tokens.md)
+- [Inscriptions](guides/inscriptions.md)
+- [MessageBox & P2P](guides/messagebox.md)
+- [Certification](guides/certification.md)
+- [DID (Decentralized Identity)](guides/did.md)
+- [Verifiable Credentials](guides/credentials.md)
+- [Overlay Networks](guides/overlay.md)
+- [Next.js Integration](guides/nextjs-integration.md)
 
 ## API Reference
 
-* [WalletCore](api-reference/wallet-core.md)
-* [BrowserWallet](api-reference/browser-wallet.md)
-* [ServerWallet](api-reference/server-wallet.md)
-* [Tokens Module](api-reference/tokens.md)
-* [Inscriptions Module](api-reference/inscriptions.md)
-* [MessageBox Module](api-reference/messagebox.md)
-* [Certification Module](api-reference/certification.md)
-* [DID Module](api-reference/did.md)
-* [Credentials Module](api-reference/credentials.md)
-* [Overlay Module](api-reference/overlay.md)
-* [Types](api-reference/types.md)
-* [Errors](api-reference/errors.md)
+- [WalletCore](api-reference/wallet-core.md)
+- [BrowserWallet](api-reference/browser-wallet.md)
+- [ServerWallet](api-reference/server-wallet.md)
+- [Tokens Module](api-reference/tokens.md)
+- [Inscriptions Module](api-reference/inscriptions.md)
+- [MessageBox Module](api-reference/messagebox.md)
+- [Certification Module](api-reference/certification.md)
+- [DID Module](api-reference/did.md)
+- [Credentials Module](api-reference/credentials.md)
+- [Overlay Module](api-reference/overlay.md)
+- [Types](api-reference/types.md)
+- [Errors](api-reference/errors.md)
 
 ## Advanced
 
-* [Gotchas & Pitfalls](gotchas.md)
-* [MCP Server](mcp-server.md)
+- [Gotchas & Pitfalls](gotchas.md)
+- [MCP Server](mcp-server.md)

@@ -17,9 +17,12 @@
  * The threshold and total shares are configurable. WAB always stores exactly one share.
  */
 
-import { PrivateKey, WalletInterface, Hash, Utils } from '@bsv/sdk'
+import { PrivateKey, WalletInterface, MAX_SHAMIR_SHARES } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { PrivilegedKeyManager } from './sdk/PrivilegedKeyManager'
 import { WABClient } from './wab-client/WABClient'
+import { assertCanonicalShamirShare } from './wab-client/WABResponseValidation'
 import { EntropyCollector, EntropyProgressCallback } from './entropy/EntropyCollector'
 
 /**
@@ -79,7 +82,7 @@ export class ShamirWalletManager {
   private readonly threshold: number
   private readonly totalShares: number
 
-  constructor (config: ShamirWalletManagerConfig) {
+  constructor(config: ShamirWalletManagerConfig) {
     this.config = config
     this.wabClient = new WABClient(config.wabServerUrl)
     this.entropyCollector = new EntropyCollector()
@@ -91,8 +94,17 @@ export class ShamirWalletManager {
     if (this.threshold < 2) {
       throw new Error('Threshold must be at least 2')
     }
+    if (!Number.isSafeInteger(this.threshold) || this.threshold > MAX_SHAMIR_SHARES) {
+      throw new Error(`Threshold must be a safe integer no greater than ${MAX_SHAMIR_SHARES}`)
+    }
     if (this.totalShares < 3) {
       throw new Error('Total shares must be at least 3')
+    }
+    if (!Number.isSafeInteger(this.totalShares) || this.totalShares > MAX_SHAMIR_SHARES) {
+      throw new Error(`Total shares must be a safe integer no greater than ${MAX_SHAMIR_SHARES}`)
+    }
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(config.authMethodType)) {
+      throw new Error('Auth method type contains unsupported characters')
     }
     // User must have at least threshold shares to recover independently
     // (server holds 1 share, user holds totalShares - 1)
@@ -110,21 +122,21 @@ export class ShamirWalletManager {
   /**
    * Get the configured threshold
    */
-  getThreshold (): number {
+  getThreshold(): number {
     return this.threshold
   }
 
   /**
    * Get the configured total shares
    */
-  getTotalShares (): number {
+  getTotalShares(): number {
     return this.totalShares
   }
 
   /**
    * Reset the entropy collector (e.g., if user wants to start over)
    */
-  resetEntropy (): void {
+  resetEntropy(): void {
     this.entropyCollector.reset()
   }
 
@@ -132,21 +144,21 @@ export class ShamirWalletManager {
    * Add a mouse movement sample for entropy collection
    * Call this from your UI's mousemove handler
    */
-  addMouseEntropy (x: number, y: number) {
+  addMouseEntropy(x: number, y: number) {
     return this.entropyCollector.addMouseSample(x, y)
   }
 
   /**
    * Check if enough entropy has been collected
    */
-  hasEnoughEntropy (): boolean {
+  hasEnoughEntropy(): boolean {
     return this.entropyCollector.isComplete()
   }
 
   /**
    * Get entropy collection progress
    */
-  getEntropyProgress () {
+  getEntropyProgress() {
     return this.entropyCollector.getProgress()
   }
 
@@ -154,7 +166,7 @@ export class ShamirWalletManager {
    * Collect entropy from browser mouse movements
    * Convenience method that sets up event listeners automatically
    */
-  async collectEntropyFromBrowser (element?: EventTarget, onProgress?: EntropyProgressCallback): Promise<void> {
+  async collectEntropyFromBrowser(element?: EventTarget, onProgress?: EntropyProgressCallback): Promise<void> {
     await this.entropyCollector.collectFromBrowser(element, onProgress)
   }
 
@@ -162,10 +174,10 @@ export class ShamirWalletManager {
    * Generate a user ID hash from a private key
    * This is used to identify the user on the WAB server without revealing the key
    */
-  private generateUserIdHash (privateKey: PrivateKey): string {
+  private generateUserIdHash(privateKey: PrivateKey): string {
     const publicKey = privateKey.toPublicKey().toString()
-    const hash = Hash.sha256(Utils.toArray(publicKey, 'utf8'))
-    return Utils.toHex(hash)
+    const hash = sha256(toArray(publicKey, 'utf8'))
+    return toHex(hash)
   }
 
   /**
@@ -181,8 +193,8 @@ export class ShamirWalletManager {
    * @param onUserSharesReady Callback when user shares are ready - return true to confirm saved
    * @returns Result containing user shares (server share already stored)
    */
-  async createNewWallet (
-    authPayload: { phoneNumber?: string, email?: string, otp: string },
+  async createNewWallet(
+    authPayload: { phoneNumber?: string; email?: string; otp: string },
     onUserSharesReady: ShareStorageCallback
   ): Promise<CreateShamirWalletResult> {
     // 1. Generate private key from entropy (mixed with CSPRNG)
@@ -207,13 +219,13 @@ export class ShamirWalletManager {
       userIdHash
     )
 
-    if (!storeResult.success) {
+    if (storeResult.success !== true) {
       throw new Error(storeResult.message || 'Failed to store share on server')
     }
 
     // 5. Present user shares for application to handle
     const sharesSaved = await onUserSharesReady(userShares, this.threshold, this.totalShares)
-    if (!sharesSaved) {
+    if (sharesSaved !== true) {
       console.warn('User shares may not have been saved. Recovery may be limited.')
     }
 
@@ -234,14 +246,14 @@ export class ShamirWalletManager {
    * Start OTP verification for share retrieval
    * Call this before recoverWithSharesBC
    */
-  async startOTPVerification (payload: { phoneNumber?: string, email?: string }): Promise<void> {
+  async startOTPVerification(payload: { phoneNumber?: string; email?: string }): Promise<void> {
     if (!this.userIdHash) {
       throw new Error('User ID hash not set. Call setUserIdHash first for recovery.')
     }
 
     const result = await this.wabClient.startShareAuth(this.config.authMethodType, this.userIdHash, payload)
 
-    if (!result.success) {
+    if (result.success !== true) {
       throw new Error(result.message || 'Failed to start OTP verification')
     }
   }
@@ -250,8 +262,11 @@ export class ShamirWalletManager {
    * Set the user ID hash for recovery operations
    * This can be computed from Share A or C (both contain the same threshold/integrity)
    */
-  setUserIdHash (userIdHash: string): void {
-    this.userIdHash = userIdHash
+  setUserIdHash(userIdHash: string): void {
+    if (!/^[0-9a-fA-F]{64}$/.test(userIdHash)) {
+      throw new Error('User ID hash must be a 32-byte hexadecimal string')
+    }
+    this.userIdHash = userIdHash.toLowerCase()
   }
 
   /**
@@ -261,10 +276,13 @@ export class ShamirWalletManager {
    * @param userShares Array of user-held shares (need threshold-1 shares)
    * @param authPayload Contains OTP code and auth method data
    */
-  async recoverWithServerShare (
+  async recoverWithServerShare(
     userShares: string[],
-    authPayload: { phoneNumber?: string, email?: string, otp: string }
+    authPayload: { phoneNumber?: string; email?: string; otp: string }
   ): Promise<PrivateKey> {
+    if (!Array.isArray(userShares) || userShares.length > MAX_SHAMIR_SHARES - 1) {
+      throw new Error(`User shares must be an array with at most ${MAX_SHAMIR_SHARES - 1} entries`)
+    }
     // Validate share formats
     for (const share of userShares) {
       this.validateShareFormat(share)
@@ -285,11 +303,12 @@ export class ShamirWalletManager {
     // Retrieve server share
     const retrieveResult = await this.wabClient.retrieveShare(this.config.authMethodType, authPayload, this.userIdHash)
 
-    if (!retrieveResult.success || !retrieveResult.shareB) {
+    if (retrieveResult.success !== true || retrieveResult.shareB == null) {
       throw new Error(retrieveResult.message || 'Failed to retrieve share from server')
     }
 
     // Combine server share with user shares
+    this.validateShareFormat(retrieveResult.shareB)
     const allShares = [retrieveResult.shareB, ...userShares.slice(0, threshold - 1)]
 
     // Reconstruct private key
@@ -311,7 +330,10 @@ export class ShamirWalletManager {
    *
    * @param userShares Array of user-held shares (need at least threshold shares)
    */
-  async recoverWithUserShares (userShares: string[]): Promise<PrivateKey> {
+  async recoverWithUserShares(userShares: string[]): Promise<PrivateKey> {
+    if (!Array.isArray(userShares) || userShares.length > MAX_SHAMIR_SHARES) {
+      throw new Error(`User shares must be an array with at most ${MAX_SHAMIR_SHARES} entries`)
+    }
     if (userShares.length < 2) {
       throw new Error('Need at least 2 shares to recover')
     }
@@ -340,12 +362,12 @@ export class ShamirWalletManager {
   /**
    * Extract threshold from a share (format: x.y.threshold.integrity)
    */
-  private getThresholdFromShare (share: string): number {
+  private getThresholdFromShare(share: string): number {
     const parts = share.split('.')
     if (parts.length !== 4) {
       throw new Error('Invalid share format')
     }
-    const threshold = Number.parseInt(parts[2], 10)
+    const threshold = Number(parts[2])
     if (Number.isNaN(threshold) || threshold < 2) {
       throw new Error('Invalid threshold in share')
     }
@@ -355,7 +377,7 @@ export class ShamirWalletManager {
   /**
    * Build the underlying wallet after key recovery
    */
-  async buildWallet (): Promise<WalletInterface> {
+  async buildWallet(): Promise<WalletInterface> {
     if (this.privateKey == null) {
       throw new Error('No private key available. Create or recover wallet first.')
     }
@@ -371,7 +393,7 @@ export class ShamirWalletManager {
   /**
    * Get the underlying wallet (must call buildWallet first)
    */
-  getWallet (): WalletInterface {
+  getWallet(): WalletInterface {
     if (this.underlying == null) {
       throw new Error('Wallet not built. Call buildWallet first.')
     }
@@ -385,8 +407,8 @@ export class ShamirWalletManager {
    * @param authPayload Contains OTP code and auth method data
    * @param onUserSharesReady Callback when new user shares are ready
    */
-  async rotateKeys (
-    authPayload: { phoneNumber?: string, email?: string, otp: string },
+  async rotateKeys(
+    authPayload: { phoneNumber?: string; email?: string; otp: string },
     onUserSharesReady: ShareStorageCallback
   ): Promise<CreateShamirWalletResult> {
     if (!this.userIdHash) {
@@ -418,13 +440,13 @@ export class ShamirWalletManager {
       serverShare
     )
 
-    if (!updateResult.success) {
+    if (updateResult.success !== true) {
       throw new Error(updateResult.message || 'Failed to update share on server')
     }
 
     // Present user shares
     const sharesSaved = await onUserSharesReady(userShares, this.threshold, this.totalShares)
-    if (!sharesSaved) {
+    if (sharesSaved !== true) {
       console.warn('User shares may not have been saved. Recovery may be limited.')
     }
 
@@ -445,29 +467,21 @@ export class ShamirWalletManager {
    * Validate Shamir share format
    * Expected format: x.y.threshold.integrity (4 dot-separated parts)
    */
-  private validateShareFormat (share: string): void {
-    const parts = share.split('.')
-    if (parts.length !== 4) {
-      throw new Error(`Invalid share format. Expected 4 dot-separated parts, got ${parts.length}`)
-    }
-
-    const threshold = Number.parseInt(parts[2], 10)
-    if (Number.isNaN(threshold) || threshold < 2) {
-      throw new Error('Invalid share: threshold must be at least 2')
-    }
+  private validateShareFormat(share: string): void {
+    assertCanonicalShamirShare(share, 'share')
   }
 
   /**
    * Check if the manager has a loaded private key
    */
-  hasPrivateKey (): boolean {
+  hasPrivateKey(): boolean {
     return this.privateKey !== undefined
   }
 
   /**
    * Get the user ID hash (for display or storage)
    */
-  getUserIdHash (): string | undefined {
+  getUserIdHash(): string | undefined {
     return this.userIdHash
   }
 
@@ -480,14 +494,14 @@ export class ShamirWalletManager {
    *
    * @param authPayload Contains OTP code and auth method data
    */
-  async deleteAccount (authPayload: { phoneNumber?: string, email?: string, otp: string }): Promise<void> {
+  async deleteAccount(authPayload: { phoneNumber?: string; email?: string; otp: string }): Promise<void> {
     if (!this.userIdHash) {
       throw new Error('User ID hash not set. Cannot delete account.')
     }
 
     const result = await this.wabClient.deleteShamirUser(this.config.authMethodType, authPayload, this.userIdHash)
 
-    if (!result.success) {
+    if (result.success !== true) {
       throw new Error(result.message || 'Failed to delete account')
     }
 

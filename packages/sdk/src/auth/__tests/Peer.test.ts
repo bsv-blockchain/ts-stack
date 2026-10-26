@@ -6,6 +6,7 @@ import { Utils, PrivateKey } from '../../primitives/index.js'
 import { VerifiableCertificate } from '../../auth/certificates/VerifiableCertificate.js'
 import { MasterCertificate } from '../../auth/certificates/MasterCertificate.js'
 import { getVerifiableCertificates } from '../../auth/utils/getVerifiableCertificates.js'
+import { validateCertificates } from '../../auth/utils/validateCertificates.js'
 import { CompletedProtoWallet } from '../certificates/__tests/CompletedProtoWallet.js'
 import { SimplifiedFetchTransport } from '../../auth/transports/SimplifiedFetchTransport.js'
 import { SessionManager, AsyncSessionManager } from '../../auth/SessionManager.js'
@@ -13,7 +14,7 @@ import { SessionManager, AsyncSessionManager } from '../../auth/SessionManager.j
 const certifierPrivKey = new PrivateKey(21)
 const alicePrivKey = new PrivateKey(22)
 const bobPrivKey = new PrivateKey(23)
-const DUMMY_REVOCATION_OUTPOINT_HEX = '00'.repeat(36)
+const DUMMY_REVOCATION_OUTPOINT_HEX = `${'00'.repeat(32)}.0`
 
 jest.mock('../../auth/utils/getVerifiableCertificates')
 
@@ -41,8 +42,7 @@ class LocalTransport implements Transport {
   async onData(callback: (message: AuthMessage) => Promise<void>): Promise<void> {
     this.onDataCallback = m => {
       void (callback(m) as Promise<void>).catch(() => {
-        // Match real transport behaviour: catch errors from handleIncomingMessage
-        // to prevent unhandled promise rejections in tests.
+        // Match real transport behaviour: contain receiver-side failures.
       })
     }
   }
@@ -74,6 +74,16 @@ class AsyncSessionStore implements AsyncSessionManager {
   async hasSession(identifier: string): Promise<boolean> {
     await Promise.resolve()
     return this.sessions.hasSession(identifier)
+  }
+
+  async claimMessageNonce(sessionNonce: string, messageNonce: string): Promise<boolean> {
+    await Promise.resolve()
+    return this.sessions.claimMessageNonce(sessionNonce, messageNonce)
+  }
+
+  async claimInitialRequestNonce(identityKey: string, initialNonce: string): Promise<boolean> {
+    await Promise.resolve()
+    return this.sessions.claimInitialRequestNonce(identityKey, initialNonce)
   }
 }
 
@@ -666,6 +676,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
     expect(certificatesReceivedByAlice).toEqual([bobVerifiableCertificate])
     expect(certificatesReceivedByBob).toEqual([aliceVerifiableCertificate])
+    expect(alice.sessionManager.getSession(bobPubKey)).toMatchObject({
+      certificatesRequired: true,
+      certificatesValidated: true
+    })
 
     // 🔓 Step 3: NOW general messages are allowed
     const bobReceivedMessage = new Promise<void>(resolve => {
@@ -676,21 +690,9 @@ describe('Peer class mutual authentication and certificate exchange', () => {
     await bobReceivedMessage
   }, 20000)
 
-  it('Peers accept partial certificates if at least one required field is present', async () => {
+  it('accepts only requested partial fields under the legacy certificate contract', async () => {
     const alicePubKey = (await walletA.getPublicKey({ identityKey: true })).publicKey
     const bobPubKey = (await walletB.getPublicKey({ identityKey: true })).publicKey
-
-    // Alice has name+email, Bob has only email
-    const aliceMasterCertificate = await createMasterCertificate(walletA, {
-      name: 'Alice',
-      email: 'alice@example.com'
-    })
-    const aliceVerifiableCertificate = await createVerifiableCertificate(
-      aliceMasterCertificate,
-      walletA,
-      bobPubKey,
-      ['name', 'email']
-    )
 
     const bobMasterCertificate = await createMasterCertificate(walletB, {
       email: 'bob@example.com'
@@ -707,52 +709,27 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       types: { [certificateType]: ['name', 'email'] }
     }
 
-    const { aliceReceivedCertificates, bobReceivedCertificates } = setupPeers(true, true, {
-      aliceCertsToRequest: partialCertificatesToRequest,
-      bobCertsToRequest: partialCertificatesToRequest
+    await expect(
+      validateCertificates(
+        walletA,
+        {
+          version: '0.1',
+          messageType: 'certificateResponse',
+          identityKey: bobPubKey,
+          certificates: [bobVerifiableCertificate]
+        },
+        partialCertificatesToRequest
+      )
+    ).resolves.toBeUndefined()
+    await expect(bobVerifiableCertificate.decryptFields(walletA)).resolves.toEqual({
+      email: 'bob@example.com'
     })
-
-    await mockGetVerifiableCertificates(
-      aliceVerifiableCertificate,
-      bobVerifiableCertificate,
-      alicePubKey,
-      bobPubKey
-    )
-
-    // --- Exchange certs explicitly (no general messages yet) ---
-    await alice.requestCertificates(partialCertificatesToRequest, bobPubKey)
-    await bob.requestCertificates(partialCertificatesToRequest, alicePubKey)
-
-    await aliceReceivedCertificates
-    await bobReceivedCertificates
-
-    // --- Validate "partial" acceptance by decrypting on each side ---
-    const aliceDecrypted = await certificatesReceivedByAlice![0].decryptFields(walletA)
-    const bobDecrypted = await certificatesReceivedByBob![0].decryptFields(walletB)
-
-    // Alice received Bob's cert which only has email, but request was name+email
-    expect(aliceDecrypted.email).toBeDefined()
-    // (Bob did not reveal name, so it may be undefined)
-    expect(aliceDecrypted.name).toBeUndefined()
-
-    // Bob received Alice's cert which has both name+email
-    expect(bobDecrypted.email).toBeDefined()
-    expect(bobDecrypted.name).toBeDefined()
-
-    expect(certificatesReceivedByAlice).toEqual([bobVerifiableCertificate])
-    expect(certificatesReceivedByBob).toEqual([aliceVerifiableCertificate])
-
-    // --- Optional: now general messages should work (since validation happened) ---
-    const bobReceivedGeneralMessage = new Promise<void>(resolve => {
-      bob.listenForGeneralMessages(() => resolve())
-    })
-
-    await alice.toPeer(Utils.toArray('Hello Bob!'), bobPubKey)
-    await bobReceivedGeneralMessage
-  }, 20000)
+  })
 
   describe('Transport Error Handling', () => {
     const privKey = PrivateKey.fromRandom()
+    const peerIdentity = new PrivateKey(123).toPublicKey().toString()
+    const certificateType = Utils.toBase64(Array(32).fill(1))
 
     test('Should trigger "Failed to send message to peer" error with network failure', async () => {
       // Create a mock fetch that always fails
@@ -774,7 +751,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
       // Try to send a message to peer - this should fail and trigger the error
       try {
-        await peer.toPeer([1, 2, 3, 4], '03abc123def456')
+        await peer.toPeer([1, 2, 3, 4], peerIdentity)
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
@@ -799,7 +776,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await transport.onData(async _message => {})
 
       try {
-        await peer.toPeer([5, 6, 7, 8], '03def789abc123')
+        await peer.toPeer([5, 6, 7, 8], peerIdentity)
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
@@ -822,7 +799,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await transport.onData(async _message => {})
 
       try {
-        await peer.toPeer([9, 10, 11, 12], '03xyz987fed654')
+        await peer.toPeer([9, 10, 11, 12], peerIdentity)
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
@@ -847,10 +824,10 @@ describe('Peer class mutual authentication and certificate exchange', () => {
         // Try to send a certificate request - this should also trigger the error
         await peer.requestCertificates(
           {
-            certifiers: ['03certifier123'],
-            types: { type1: ['field1'] }
+            certifiers: [peerIdentity],
+            types: { [certificateType]: ['field1'] }
           },
-          '03abc123def456'
+          peerIdentity
         )
         fail('Expected error to be thrown')
       } catch (error: any) {
@@ -871,7 +848,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
 
       try {
         // Try to send a certificate response - this should also trigger the error
-        await peer.sendCertificateResponse('03verifier123', [])
+        await peer.sendCertificateResponse(peerIdentity, [])
         fail('Expected error to be thrown')
       } catch (error: any) {
         expect(error.message).toContain('Network error while sending authenticated request')
@@ -892,7 +869,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await transport.onData(async _message => {})
 
       try {
-        await peer.toPeer([13, 14, 15, 16], '03peer123456')
+        await peer.toPeer([13, 14, 15, 16], peerIdentity)
         fail('Expected error to be thrown')
       } catch (error: any) {
         // Should create a network error wrapping the original error
@@ -914,7 +891,7 @@ describe('Peer class mutual authentication and certificate exchange', () => {
       await transport.onData(async _message => {})
 
       try {
-        await peer.toPeer([17, 18, 19, 20], '03peer789abc')
+        await peer.toPeer([17, 18, 19, 20], peerIdentity)
         fail('Expected error to be thrown')
       } catch (error: any) {
         // Should create network error for non-Error objects

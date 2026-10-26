@@ -13,6 +13,40 @@ export class UnsupportedAuthMethodError extends Error {
 
 const devConsoleAuthMethod = new DevConsoleAuthMethod()
 
+interface TwilioAuthConfig {
+  accountSid: string
+  authToken: string
+  verifyServiceSid: string
+}
+
+function readTwilioAuthConfig(): TwilioAuthConfig | undefined {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID?.trim() ?? ''
+  const authToken = process.env.TWILIO_AUTH_TOKEN ?? ''
+  const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID?.trim() ?? ''
+  if (accountSid === '' && authToken === '' && verifyServiceSid === '') return undefined
+  if (!/^AC[0-9a-fA-F]{32}$/.test(accountSid)) {
+    throw new Error('TWILIO_ACCOUNT_SID must be a canonical AC service account SID.')
+  }
+  if (
+    authToken.length < 1 ||
+    new TextEncoder().encode(authToken).byteLength > 1024 ||
+    [...authToken].some(character => {
+      const codePoint = character.codePointAt(0)!
+      return codePoint <= 0x1f || (codePoint >= 0x7f && codePoint <= 0x9f)
+    })
+  ) {
+    throw new Error('TWILIO_AUTH_TOKEN must be bounded text without control characters.')
+  }
+  if (!/^VA[0-9a-fA-F]{32}$/.test(verifyServiceSid)) {
+    throw new Error('TWILIO_VERIFY_SERVICE_SID must be a canonical VA Verify Service SID.')
+  }
+  return { accountSid, authToken, verifyServiceSid }
+}
+
+export function validateTwilioAuthConfig(): void {
+  readTwilioAuthConfig()
+}
+
 /**
  * The console auth method deliberately discloses an OTP in application logs.
  * It therefore requires both an explicit opt-in and a non-production runtime.
@@ -25,7 +59,7 @@ export function isDevConsoleAuthEnabled(): boolean {
 
 export function getSupportedAuthMethodTypes(): string[] {
   return [
-    'TwilioPhone',
+    ...(readTwilioAuthConfig() == null ? [] : ['TwilioPhone']),
     ...(isDevConsoleAuthEnabled() ? ['DevConsole'] : []),
     ...(isDemoAuthEnabled() ? ['DemoPhone'] : [])
   ]
@@ -36,12 +70,11 @@ export function getAuthMethodInstance(methodType: string): AuthMethod {
     case 'DemoPhone':
       if (isDemoAuthEnabled()) return new DemoPhoneAuthMethod()
       throw new UnsupportedAuthMethodError(methodType)
-    case 'TwilioPhone':
-      return new TwilioAuthMethod({
-        accountSid: process.env.TWILIO_ACCOUNT_SID!,
-        authToken: process.env.TWILIO_AUTH_TOKEN!,
-        verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID!
-      })
+    case 'TwilioPhone': {
+      const config = readTwilioAuthConfig()
+      if (config == null) throw new UnsupportedAuthMethodError(methodType)
+      return new TwilioAuthMethod(config)
+    }
     case 'DevConsole':
       if (isDevConsoleAuthEnabled()) {
         return devConsoleAuthMethod

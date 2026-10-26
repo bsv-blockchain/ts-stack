@@ -4,8 +4,24 @@ import Random from '../primitives/Random.js'
 import PrivateKey from '../primitives/PrivateKey.js'
 import PublicKey from '../primitives/PublicKey.js'
 import Point from '../primitives/Point.js'
-import * as Hash from '../primitives/Hash.js'
-import { toArray, toHex, encode } from '../primitives/utils.js'
+import Curve from '../primitives/Curve.js'
+import { sha256hmac, sha512 } from '../primitives/Hash.js'
+import { constantTimeEquals, toArray, toHex, encode } from '../primitives/utils.js'
+import { compatBytes, MAX_COMPAT_BYTE_PAYLOAD } from './CompatValidation.js'
+
+const MAX_ECIES_ENVELOPE_BYTES = MAX_COMPAT_BYTE_PAYLOAD + 160
+
+function ownedPrivateKey(value: unknown, label: string): PrivateKey {
+  if (!(value instanceof PrivateKey)) throw new TypeError(`${label} must be a PrivateKey`)
+  const key = new PrivateKey(compatBytes(value.toArray('be', 32), label, 32, 32))
+  if (key.isZero() || key.gte(new Curve().n)) throw new TypeError(`${label} is invalid`)
+  return key
+}
+
+function ownedPublicKey(value: unknown, label: string): PublicKey {
+  if (!(value instanceof PublicKey)) throw new TypeError(`${label} must be a PublicKey`)
+  return PublicKey.fromDER(compatBytes(value.encode(true) as number[], label, 33, 33))
+}
 
 interface AESState {
   _key: number[][]
@@ -420,6 +436,9 @@ class CBC {
 
   public static pkcs7Unpad(paddedbuf: number[]): number[] {
     const padlength = paddedbuf.at(-1)!
+    if (padlength < 1 || padlength > 16 || padlength > paddedbuf.length) {
+      throw new Error('invalid padding')
+    }
     const padbuf = paddedbuf.slice(paddedbuf.length - padlength, paddedbuf.length)
     const padbuf2 = Array.from({ length: padlength }, () => 0)
     padbuf2.fill(padlength)
@@ -477,7 +496,12 @@ class AESCBC {
  * @class ECIES
  * Implements the Electrum ECIES protocol for encrypted communication.
  *
- * @prprecated This class is deprecated in favor of the BRC-78 standard for portable encrypted messages,
+ * Electrum BIE1 derives its IV from the ECDH secret. Reusing `fromPrivateKey`, especially in
+ * `noKey` mode, therefore repeats the encryption key and IV and reveals equality/relationships
+ * between messages. Do not use static sender keys for new encryption and do not treat either
+ * legacy format as carrying an application audience, purpose, freshness, or replay guarantee.
+ *
+ * @deprecated This class is deprecated in favor of the BRC-78 standard for portable encrypted messages,
  * which provides a more comprehensive and secure solution by integrating with BRC-42 and BRC-43 standards.
  */
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
@@ -494,12 +518,12 @@ export default class ECIES {
     privKey: PrivateKey,
     pubKey: PublicKey
   ): { iv: number[]; kE: number[]; kM: number[] } {
-    const r = privKey
-    const KB = pubKey
+    const r = ownedPrivateKey(privKey, 'ECIES private key')
+    const KB = ownedPublicKey(pubKey, 'ECIES public key')
     const P = KB.mul(r)
     const S = new PublicKey(P.x, P.y)
     const Sbuf = S.encode(true) as number[]
-    const hash = Hash.sha512(Sbuf)
+    const hash = sha512(Sbuf)
     return {
       iv: hash.slice(0, 16),
       kE: hash.slice(16, 32),
@@ -514,6 +538,8 @@ export default class ECIES {
    * @param {PublicKey} toPublicKey - The public key of the recipient.
    * @param {PrivateKey} [fromPrivateKey] - The private key of the sender. If not provided, a random private key is used.
    * @param {boolean} [noKey=false] - If true, does not include the sender's public key in the encrypted message.
+   * Reusing `fromPrivateKey` repeats BIE1's derived key and IV. Omit it to use a fresh ephemeral
+   * key, and do not use `noKey` for new protocols.
    * @returns {number[]} The encrypted message as a number array.
    */
   public static electrumEncrypt(
@@ -522,8 +548,14 @@ export default class ECIES {
     fromPrivateKey?: PrivateKey,
     noKey = false
   ): number[] {
+    messageBuf = compatBytes(messageBuf, 'Electrum ECIES plaintext')
+    toPublicKey = ownedPublicKey(toPublicKey, 'Electrum ECIES recipient public key')
+    if (typeof noKey !== 'boolean') throw new TypeError('Electrum ECIES noKey must be boolean')
     let Rbuf: string | number[] | null = null
-    fromPrivateKey ??= PrivateKey.fromRandom()
+    fromPrivateKey =
+      fromPrivateKey == null
+        ? PrivateKey.fromRandom()
+        : ownedPrivateKey(fromPrivateKey, 'Electrum ECIES sender private key')
     if (!noKey) {
       Rbuf = fromPrivateKey.toPublicKey().encode(true)
     }
@@ -536,7 +568,7 @@ export default class ECIES {
     } else {
       encBuf = [...BIE1, ...ciphertext]
     }
-    const hmac = Hash.sha256hmac(kM, encBuf)
+    const hmac = sha256hmac(kM, encBuf)
     return [...encBuf, ...hmac]
   }
 
@@ -554,6 +586,17 @@ export default class ECIES {
     fromPublicKey?: PublicKey
   ): number[] {
     const tagLength = 32
+    encBuf = compatBytes(
+      encBuf,
+      'Electrum ECIES envelope',
+      4 + 16 + tagLength,
+      MAX_ECIES_ENVELOPE_BYTES
+    )
+    toPrivateKey = ownedPrivateKey(toPrivateKey, 'Electrum ECIES recipient private key')
+    const expectedPublicKey =
+      fromPublicKey == null
+        ? undefined
+        : ownedPublicKey(fromPublicKey, 'Electrum ECIES sender public key')
 
     const magic = encBuf.slice(0, 4)
     if (encode(magic, 'utf8') !== 'BIE1') {
@@ -563,13 +606,14 @@ export default class ECIES {
 
     // Determine if the sender's public key is included in encBuf
     let Rbuf: number[] | null = null
-    if (encBuf.length - offset - tagLength >= 33) {
+    const available = encBuf.length - offset - tagLength
+    if (available >= 33 + 16) {
       const firstByte = encBuf[offset]
-      if (firstByte === 0x02 || firstByte === 0x03) {
+      if ((firstByte === 0x02 || firstByte === 0x03) && (available - 33) % 16 === 0) {
         // Compressed public key
         Rbuf = encBuf.slice(offset, offset + 33)
         offset += 33
-      } else if (firstByte === 0x04) {
+      } else if (firstByte === 0x04 && available >= 65 + 16 && (available - 65) % 16 === 0) {
         // Uncompressed public key
         Rbuf = encBuf.slice(offset, offset + 65)
         offset += 65
@@ -577,20 +621,34 @@ export default class ECIES {
     }
 
     if (Rbuf === null) {
-      if (fromPublicKey == null) {
+      if (expectedPublicKey == null) {
         throw new Error('Sender public key is required')
       }
+      fromPublicKey = expectedPublicKey
     } else {
-      fromPublicKey ??= PublicKey.fromString(toHex(Rbuf))
+      const embeddedPublicKey = PublicKey.fromString(toHex(Rbuf))
+      if (
+        expectedPublicKey != null &&
+        !constantTimeEquals(
+          embeddedPublicKey.encode(true) as number[],
+          expectedPublicKey.encode(true) as number[]
+        )
+      ) {
+        throw new Error('Embedded sender public key does not match the expected sender')
+      }
+      fromPublicKey = expectedPublicKey ?? embeddedPublicKey
     }
 
     const { iv, kE, kM } = ECIES.ivkEkM(toPrivateKey, fromPublicKey)
     const ciphertext = encBuf.slice(offset, encBuf.length - tagLength)
+    if (ciphertext.length === 0 || ciphertext.length % 16 !== 0) {
+      throw new Error('Invalid Electrum ECIES ciphertext framing')
+    }
     const hmac = encBuf.slice(encBuf.length - tagLength, encBuf.length)
 
-    const hmac2 = Hash.sha256hmac(kM, encBuf.slice(0, encBuf.length - tagLength))
+    const hmac2 = sha256hmac(kM, encBuf.slice(0, encBuf.length - tagLength))
 
-    if (toHex(hmac) !== toHex(hmac2)) {
+    if (!constantTimeEquals(hmac, hmac2)) {
       throw new Error('Invalid checksum')
     }
 
@@ -612,8 +670,13 @@ export default class ECIES {
     fromPrivateKey?: PrivateKey,
     ivBuf?: number[]
   ): number[] {
-    fromPrivateKey ??= PrivateKey.fromRandom()
-    ivBuf ??= Random(16)
+    messageBuf = compatBytes(messageBuf, 'Bitcore ECIES plaintext')
+    toPublicKey = ownedPublicKey(toPublicKey, 'Bitcore ECIES recipient public key')
+    fromPrivateKey =
+      fromPrivateKey == null
+        ? PrivateKey.fromRandom()
+        : ownedPrivateKey(fromPrivateKey, 'Bitcore ECIES sender private key')
+    ivBuf = ivBuf == null ? Random(16) : compatBytes(ivBuf, 'Bitcore ECIES IV', 16, 16)
     const r = fromPrivateKey
     const RPublicKey = fromPrivateKey.toPublicKey()
     const RBuf = RPublicKey.encode(true) as number[]
@@ -621,11 +684,11 @@ export default class ECIES {
     const P = KB.mul(r)
     const S = P.getX()
     const Sbuf = S.toArray('be', 32)
-    const kEkM = Hash.sha512(Sbuf)
+    const kEkM = sha512(Sbuf)
     const kE = kEkM.slice(0, 32)
     const kM = kEkM.slice(32, 64)
     const c = AESCBC.encrypt(messageBuf, kE, ivBuf)
-    const d = Hash.sha256hmac(kM, [...c])
+    const d = sha256hmac(kM, [...c])
     const encBuf = [...RBuf, ...c, ...d]
     return encBuf
   }
@@ -638,7 +701,16 @@ export default class ECIES {
    * @returns {number[]} The decrypted message as a number array.
    */
   public static bitcoreDecrypt(encBuf: number[], toPrivateKey: PrivateKey): number[] {
-    const kB = toPrivateKey
+    encBuf = compatBytes(
+      encBuf,
+      'Bitcore ECIES envelope',
+      33 + 16 + 16 + 32,
+      MAX_ECIES_ENVELOPE_BYTES
+    )
+    if ((encBuf.length - 33 - 32) % 16 !== 0) {
+      throw new Error('Invalid Bitcore ECIES ciphertext framing')
+    }
+    const kB = ownedPrivateKey(toPrivateKey, 'Bitcore ECIES recipient private key')
     const fromPublicKey = PublicKey.fromString(toHex(encBuf.slice(0, 33)))
     const R = fromPublicKey
     const P = R.mul(kB)
@@ -647,13 +719,13 @@ export default class ECIES {
     }
     const S = P.getX()
     const Sbuf = S.toArray('be', 32)
-    const kEkM = Hash.sha512(Sbuf)
+    const kEkM = sha512(Sbuf)
     const kE = kEkM.slice(0, 32)
     const kM = kEkM.slice(32, 64)
     const c = encBuf.slice(33, -32)
     const d = encBuf.slice(-32)
-    const d2 = Hash.sha256hmac(kM, c)
-    if (toHex(d) !== toHex(d2)) {
+    const d2 = sha256hmac(kM, c)
+    if (!constantTimeEquals(d, d2)) {
       throw new Error('Invalid checksum')
     }
     const messageBuf = AESCBC.decrypt(c, kE)

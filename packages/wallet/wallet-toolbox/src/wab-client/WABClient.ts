@@ -6,27 +6,33 @@ import {
   StartAuthResponse
 } from './auth-method-interactors/AuthMethodInteractor'
 import { WABTransport, WABTransportOptions } from './WABTransport'
+import {
+  assertCanonicalShamirShare,
+  validateWABCompleteAuthResponse,
+  validateWABFaucetResponse,
+  validateWABLinkedMethodsResponse,
+  validateWABOperationResponse,
+  validateWABRegistrationResponse,
+  validateWABRetrieveShareResponse,
+  validateWABServerInfo,
+  validateWABStartAuthResponse,
+  validateWABStoreShareResponse,
+  validateWABUpdateShareResponse,
+  WABFaucetResponse,
+  WABLinkedMethodsResponse,
+  WABOperationResponse,
+  WABServerInfo
+} from './WABResponseValidation'
+
+export type {
+  WABFaucetResponse,
+  WABLinkedAuthMethod,
+  WABLinkedMethodsResponse,
+  WABOperationResponse,
+  WABServerInfo
+} from './WABResponseValidation'
 
 export interface WABClientOptions extends WABTransportOptions {}
-
-export interface WABServerInfo {
-  supportedAuthMethods?: string[]
-  [key: string]: unknown
-}
-
-export interface WABOperationResponse {
-  success: boolean
-  message?: string
-  [key: string]: unknown
-}
-
-export interface WABFaucetResponse extends WABOperationResponse {
-  paymentData?: {
-    k?: string
-    tx?: number[]
-    txid?: string
-  }
-}
 
 function assertHexIdentifier(value: string, name: string): void {
   if (!/^[0-9a-fA-F]{64}$/.test(value)) {
@@ -67,11 +73,12 @@ export class WABClient {
     this.transport = new WABTransport(serverUrl, options)
   }
 
-  public getInfo(): Promise<WABServerInfo> {
-    return this.transport.request<WABServerInfo>('/info', {
+  public async getInfo(): Promise<WABServerInfo> {
+    const response = await this.transport.request<unknown>('/info', {
       method: 'GET',
       operation: 'get-info'
     })
+    return validateWABServerInfo(response)
   }
 
   public generateRandomPresentationKey(): string {
@@ -85,7 +92,14 @@ export class WABClient {
     correlationId?: string
   ): Promise<StartAuthResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return authMethod.startAuth(this.transport.serverUrl, presentationKey, payload, this.transport, correlationId)
+    const response = await authMethod.startAuth(
+      this.transport.serverUrl,
+      presentationKey,
+      payload,
+      this.transport,
+      correlationId
+    )
+    return validateWABStartAuthResponse(response)
   }
 
   public async completeAuthMethod(
@@ -95,15 +109,23 @@ export class WABClient {
     correlationId?: string
   ): Promise<CompleteAuthResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return authMethod.completeAuth(this.transport.serverUrl, presentationKey, payload, this.transport, correlationId)
+    const response = await authMethod.completeAuth(
+      this.transport.serverUrl,
+      presentationKey,
+      payload,
+      this.transport,
+      correlationId
+    )
+    return validateWABCompleteAuthResponse(response, presentationKey)
   }
 
-  public async listLinkedMethods(presentationKey: string): Promise<WABOperationResponse> {
+  public async listLinkedMethods(presentationKey: string): Promise<WABLinkedMethodsResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return this.transport.request<WABOperationResponse>('/user/linkedMethods', {
+    const response = await this.transport.request<unknown>('/user/linkedMethods', {
       operation: 'list-linked-methods',
       body: { presentationKey }
     })
+    return validateWABLinkedMethodsResponse(response)
   }
 
   public async unlinkMethod(presentationKey: string, authMethodId: number): Promise<WABOperationResponse> {
@@ -111,34 +133,38 @@ export class WABClient {
     if (!Number.isSafeInteger(authMethodId) || authMethodId <= 0) {
       throw new TypeError('authMethodId must be a positive safe integer.')
     }
-    return this.transport.request<WABOperationResponse>('/user/unlinkMethod', {
+    const response = await this.transport.request<unknown>('/user/unlinkMethod', {
       operation: 'unlink-method',
       body: { presentationKey, authMethodId }
     })
+    return validateWABOperationResponse(response, 'unlink-method')
   }
 
   public async requestFaucet(presentationKey: string): Promise<WABFaucetResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return this.transport.request<WABFaucetResponse>('/faucet/request', {
+    const response = await this.transport.request<unknown>('/faucet/request', {
       operation: 'request-faucet',
       body: { presentationKey }
     })
+    return validateWABFaucetResponse(response)
   }
 
   public async finalizeRegistration(presentationKey: string): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return this.transport.request<WABOperationResponse>('/auth/registration/finalize', {
+    const response = await this.transport.request<unknown>('/auth/registration/finalize', {
       operation: 'finalize-registration',
       body: { presentationKey }
     })
+    return validateWABRegistrationResponse(response)
   }
 
   public async deleteUser(presentationKey: string): Promise<WABOperationResponse> {
     assertHexIdentifier(presentationKey, 'presentationKey')
-    return this.transport.request<WABOperationResponse>('/user/delete', {
+    const response = await this.transport.request<unknown>('/user/delete', {
       operation: 'delete-user',
       body: { presentationKey }
     })
+    return validateWABOperationResponse(response, 'delete-user')
   }
 
   public async startShareAuth(
@@ -149,7 +175,7 @@ export class WABClient {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
-    return this.transport.request('/auth/start', {
+    const response = await this.transport.request<unknown>('/auth/start', {
       operation: 'start-share-auth',
       body: {
         methodType,
@@ -157,6 +183,7 @@ export class WABClient {
         payload: normalizedPayload
       }
     })
+    return validateWABOperationResponse(response, 'start-share-auth') as { success: boolean; message: string }
   }
 
   public async storeShare(
@@ -167,11 +194,13 @@ export class WABClient {
   ): Promise<{ success: boolean; message: string; userId?: number }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
+    assertCanonicalShamirShare(shareB, 'shareB')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
-    return this.transport.request('/share/store', {
+    const response = await this.transport.request<unknown>('/share/store', {
       operation: 'store-share',
       body: { methodType, payload: normalizedPayload, shareB, userIdHash }
     })
+    return validateWABStoreShareResponse(response) as { success: boolean; message: string; userId?: number }
   }
 
   public async retrieveShare(
@@ -182,10 +211,11 @@ export class WABClient {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
-    return this.transport.request('/share/retrieve', {
+    const response = await this.transport.request<unknown>('/share/retrieve', {
       operation: 'retrieve-share',
       body: { methodType, payload: normalizedPayload, userIdHash }
     })
+    return validateWABRetrieveShareResponse(response) as { success: boolean; shareB?: string; message: string }
   }
 
   public async updateShare(
@@ -196,11 +226,17 @@ export class WABClient {
   ): Promise<{ success: boolean; message: string; shareVersion?: number }> {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
+    assertCanonicalShamirShare(newShareB, 'newShareB')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
-    return this.transport.request('/share/update', {
+    const response = await this.transport.request<unknown>('/share/update', {
       operation: 'update-share',
       body: { methodType, payload: normalizedPayload, userIdHash, newShareB }
     })
+    return validateWABUpdateShareResponse(response) as {
+      success: boolean
+      message: string
+      shareVersion?: number
+    }
   }
 
   public async deleteShamirUser(
@@ -211,9 +247,10 @@ export class WABClient {
     assertMethodType(methodType)
     assertHexIdentifier(userIdHash, 'userIdHash')
     const normalizedPayload = normalizeAuthPayload(methodType, payload)
-    return this.transport.request('/share/delete', {
+    const response = await this.transport.request<unknown>('/share/delete', {
       operation: 'delete-share-user',
       body: { methodType, payload: normalizedPayload, userIdHash }
     })
+    return validateWABOperationResponse(response, 'delete-share-user') as { success: boolean; message: string }
   }
 }

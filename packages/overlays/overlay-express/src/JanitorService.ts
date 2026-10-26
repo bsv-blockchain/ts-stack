@@ -2,6 +2,13 @@ import { Db } from 'mongodb'
 import chalk from 'chalk'
 import { isIP } from 'node:net'
 import { BanService } from './BanService.js'
+import {
+  fetchWithDeadline,
+  isRecord,
+  readBoundedJson,
+  secureServiceFetch,
+  snapshotOwnDataRecord
+} from './OutboundSecurity.js'
 
 /**
  * Configuration for the Janitor Service
@@ -24,6 +31,8 @@ export interface JanitorConfig {
   batchSize?: number
   /** Maximum detailed results retained in a report. Use -1 to retain all results. */
   maxReportResults?: number
+  /** Injectable fetch for tests or an explicitly controlled transport. */
+  fetchImpl?: typeof fetch
 }
 
 /**
@@ -81,21 +90,64 @@ export class JanitorService {
   private readonly allowPrivateHosts: boolean
   private readonly batchSize: number
   private readonly maxReportResults: number
+  private readonly fetchImpl?: typeof fetch
 
-  constructor (config: JanitorConfig) {
-    this.mongoDb = config.mongoDb
-    this.logger = config.logger ?? console
-    this.requestTimeoutMs = config.requestTimeoutMs ?? 10000
-    this.hostDownRevokeScore = config.hostDownRevokeScore ?? 3
-    this.banService = config.banService
-    this.autoBanOnRemoval = config.autoBanOnRemoval ?? true
-    this.allowPrivateHosts = config.allowPrivateHosts ?? false
-    this.batchSize = config.batchSize ?? 250
-    this.maxReportResults = config.maxReportResults ?? 1000
+  constructor(config: JanitorConfig) {
+    const owned = snapshotOwnDataRecord(config, 'Janitor config')
+    if (owned.mongoDb == null || typeof owned.mongoDb !== 'object') {
+      throw new TypeError('Janitor mongoDb must be an object')
+    }
+    if (
+      owned.logger !== undefined &&
+      (typeof owned.logger.log !== 'function' ||
+        typeof owned.logger.warn !== 'function' ||
+        typeof owned.logger.error !== 'function')
+    ) {
+      throw new TypeError('Janitor logger must implement log, warn, and error')
+    }
+    if (owned.banService !== undefined && typeof owned.banService !== 'object') {
+      throw new TypeError('Janitor banService must be an object')
+    }
+    if (owned.autoBanOnRemoval !== undefined && typeof owned.autoBanOnRemoval !== 'boolean') {
+      throw new TypeError('Janitor autoBanOnRemoval must be a boolean')
+    }
+    if (owned.allowPrivateHosts !== undefined && typeof owned.allowPrivateHosts !== 'boolean') {
+      throw new TypeError('Janitor allowPrivateHosts must be a boolean')
+    }
+    if (owned.fetchImpl !== undefined && typeof owned.fetchImpl !== 'function') {
+      throw new TypeError('Janitor fetchImpl must be a function')
+    }
+    this.mongoDb = owned.mongoDb
+    this.logger = owned.logger ?? console
+    this.requestTimeoutMs = owned.requestTimeoutMs ?? 10000
+    this.hostDownRevokeScore = owned.hostDownRevokeScore ?? 3
+    this.banService = owned.banService
+    this.autoBanOnRemoval = owned.autoBanOnRemoval ?? true
+    this.allowPrivateHosts = owned.allowPrivateHosts ?? false
+    this.batchSize = owned.batchSize ?? 250
+    this.maxReportResults = owned.maxReportResults ?? 1000
+    this.fetchImpl = owned.fetchImpl
+    if (
+      !Number.isSafeInteger(this.requestTimeoutMs) ||
+      this.requestTimeoutMs < 1 ||
+      this.requestTimeoutMs > 300_000
+    ) {
+      throw new TypeError('Janitor requestTimeoutMs must be an integer between 1 and 300000')
+    }
+    if (
+      !Number.isSafeInteger(this.hostDownRevokeScore) ||
+      this.hostDownRevokeScore < 1 ||
+      this.hostDownRevokeScore > 1000
+    ) {
+      throw new TypeError('Janitor hostDownRevokeScore must be an integer between 1 and 1000')
+    }
     if (this.batchSize !== -1 && (!Number.isSafeInteger(this.batchSize) || this.batchSize < 1)) {
       throw new TypeError('Janitor batchSize must be a positive integer or -1')
     }
-    if (this.maxReportResults !== -1 && (!Number.isSafeInteger(this.maxReportResults) || this.maxReportResults < 1)) {
+    if (
+      this.maxReportResults !== -1 &&
+      (!Number.isSafeInteger(this.maxReportResults) || this.maxReportResults < 1)
+    ) {
       throw new TypeError('Janitor maxReportResults must be a positive integer or -1')
     }
   }
@@ -104,7 +156,7 @@ export class JanitorService {
    * Runs a full pass of health checks on all SHIP and SLAP outputs.
    * Returns a detailed report of the results.
    */
-  async run (): Promise<JanitorReport> {
+  async run(): Promise<JanitorReport> {
     const startedAt = new Date()
     this.logger.log(chalk.blue('Running janitor health checks...'))
 
@@ -160,7 +212,9 @@ export class JanitorService {
   /**
    * Checks a single URL's health endpoint. Used by the admin dashboard for on-demand checks.
    */
-  async checkHost (url: string): Promise<{ healthy: boolean, responseTimeMs: number, statusCode?: number, error?: string }> {
+  async checkHost(
+    url: string
+  ): Promise<{ healthy: boolean; responseTimeMs: number; statusCode?: number; error?: string }> {
     const startTime = Date.now()
 
     if (!this.isValidDomain(url)) {
@@ -174,43 +228,55 @@ export class JanitorService {
     try {
       const fullURL = url.startsWith('http') ? url : `https://${url}`
       const healthURL = new URL('/health', fullURL).toString()
+      const transport = secureServiceFetch(healthURL, this.fetchImpl, this.allowPrivateHosts)
 
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs)
-
+      let statusCode: number | undefined
       try {
-        const response = await fetch(healthURL, {
-          method: 'GET',
-          signal: controller.signal,
-          redirect: 'error',
-          headers: { Accept: 'application/json' }
-        })
+        const response = await fetchWithDeadline(
+          transport.fetchImpl,
+          transport.baseUrl,
+          {
+            method: 'GET',
+            headers: { Accept: 'application/json' }
+          },
+          this.requestTimeoutMs
+        )
+        statusCode = response.status
 
-        clearTimeout(timeout)
         const responseTimeMs = Date.now() - startTime
 
         if (!response.ok) {
-          return { healthy: false, responseTimeMs, statusCode: response.status, error: `HTTP ${response.status}` }
-        }
-
-        const contentLength = Number.parseInt(response.headers?.get?.('content-length') ?? '0', 10)
-        if (Number.isFinite(contentLength) && contentLength > 64 * 1024) {
+          await response.body?.cancel()
           return {
             healthy: false,
             responseTimeMs,
             statusCode: response.status,
-            error: 'Health response too large'
+            error: `HTTP ${response.status}`
           }
         }
-
-        const data = await response.json()
-        const healthy = (data?.status === 'ok' && data?.ready !== false) || (data?.ready === true && data?.live !== false)
-        return { healthy, responseTimeMs, statusCode: response.status, error: healthy ? undefined : 'Unexpected response' }
+        const data = await readBoundedJson(response, 64 * 1024, 'Janitor health response')
+        const healthy =
+          isRecord(data) &&
+          ((data.status === 'ok' && data.ready !== false) ||
+            (data.ready === true && data.live !== false))
+        return {
+          healthy,
+          responseTimeMs,
+          statusCode: response.status,
+          error: healthy ? undefined : 'Unexpected response'
+        }
       } catch (error: any) {
-        clearTimeout(timeout)
         const responseTimeMs = Date.now() - startTime
         if (error.name === 'AbortError') {
           return { healthy: false, responseTimeMs, error: 'Timeout' }
+        }
+        if (error instanceof RangeError) {
+          return {
+            healthy: false,
+            responseTimeMs,
+            statusCode,
+            error: 'Health response too large'
+          }
         }
         this.logger.warn?.('Janitor health request failed', { url, error })
         return { healthy: false, responseTimeMs, error: 'Connection failed' }
@@ -225,7 +291,7 @@ export class JanitorService {
    * Gets health status for all records without modifying them.
    * Used by the dashboard to display current state.
    */
-  async getHealthStatus (): Promise<{ ship: HostHealthResult[], slap: HostHealthResult[] }> {
+  async getHealthStatus(): Promise<{ ship: HostHealthResult[]; slap: HostHealthResult[] }> {
     const shipCollection = this.mongoDb.collection('shipRecords')
     const slapCollection = this.mongoDb.collection('slapRecords')
 
@@ -271,17 +337,17 @@ export class JanitorService {
   /**
    * Checks all outputs for a specific collection and returns results.
    */
-  private async checkTopicOutputs (
+  private async checkTopicOutputs(
     collectionName: string,
     typeField: 'topic' | 'service'
   ): Promise<{
-      results: HostHealthResult[]
-      checked: number
-      healthy: number
-      unhealthy: number
-      removed: number
-      banned: number
-    }> {
+    results: HostHealthResult[]
+    checked: number
+    healthy: number
+    unhealthy: number
+    removed: number
+    banned: number
+  }> {
     const results: HostHealthResult[] = []
     let checked = 0
     let healthy = 0
@@ -327,6 +393,7 @@ export class JanitorService {
       }
     } catch (error) {
       this.logger.error(chalk.red(`Error checking ${collectionName} outputs:`), error)
+      throw error
     }
 
     return { results, checked, healthy, unhealthy, removed, banned }
@@ -335,7 +402,7 @@ export class JanitorService {
   /**
    * Checks a single output for health and returns the result.
    */
-  private async checkOutput (
+  private async checkOutput(
     output: Record<string, any>,
     collection: any,
     typeField: 'topic' | 'service'
@@ -398,7 +465,7 @@ export class JanitorService {
   /**
    * Extracts URL from output record
    */
-  private extractURLFromOutput (output: Record<string, any>): string | null {
+  private extractURLFromOutput(output: Record<string, any>): string | null {
     try {
       if (typeof output.domain === 'string') {
         return output.domain
@@ -410,8 +477,8 @@ export class JanitorService {
         return output.serviceURL
       }
       if (Array.isArray(output.protocols) && output.protocols.length > 0) {
-        const httpsProtocol = output.protocols.find((p: any) =>
-          typeof p === 'string' && p.startsWith('https://')
+        const httpsProtocol = output.protocols.find(
+          (p: any) => typeof p === 'string' && p.startsWith('https://')
         )
         if (httpsProtocol !== undefined) {
           return httpsProtocol
@@ -424,9 +491,12 @@ export class JanitorService {
   }
 
   /** Reject private/special IPv4 address space that could reach local services. */
-  private isPublicIPv4 (hostname: string): boolean {
+  private isPublicIPv4(hostname: string): boolean {
     const octets = hostname.split('.').map(value => Number.parseInt(value, 10))
-    if (octets.length !== 4 || octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)) {
+    if (
+      octets.length !== 4 ||
+      octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)
+    ) {
       return false
     }
     const [a, b] = octets
@@ -445,7 +515,7 @@ export class JanitorService {
   }
 
   /** Reject non-global IPv6 address space, including IPv4-mapped addresses. */
-  private isPublicIPv6 (hostname: string): boolean {
+  private isPublicIPv6(hostname: string): boolean {
     const normalized = hostname.replace(/^\[|\]$/g, '').toLowerCase()
     if (
       normalized === '::' ||
@@ -470,11 +540,12 @@ export class JanitorService {
    * are also disabled in checkHost so an allowed target cannot bounce a
    * request into an internal service.
    */
-  private isValidDomain (url: string): boolean {
+  private isValidDomain(url: string): boolean {
     try {
       const parsedURL = new URL(url.startsWith('http') ? url : `https://${url}`)
       const hostname = parsedURL.hostname.replace(/^\[|\]$/g, '')
-      const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i
+      const domainRegex =
+        /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/i
       const ipVersion = isIP(hostname)
 
       if (
@@ -515,17 +586,19 @@ export class JanitorService {
   /**
    * Handles a healthy output by decrementing its down counter
    */
-  private async handleHealthyOutput (output: Record<string, any>, collection: any): Promise<void> {
+  private async handleHealthyOutput(output: Record<string, any>, collection: any): Promise<void> {
     try {
       const currentDown = typeof output.down === 'number' ? output.down : 0
       if (currentDown > 0) {
-        await collection.updateOne(
-          { _id: output._id },
-          { $inc: { down: -1 } }
-        )
+        await collection.updateOne({ _id: output._id }, { $inc: { down: -1 } })
       }
     } catch (error) {
-      this.logger.error(chalk.red(`Error handling healthy output ${String(output.txid)}:${String(output.outputIndex)}:`), error)
+      this.logger.error(
+        chalk.red(
+          `Error handling healthy output ${String(output.txid)}:${String(output.outputIndex)}:`
+        ),
+        error
+      )
     }
   }
 
@@ -534,16 +607,25 @@ export class JanitorService {
    * If the threshold is reached, deletes the record and optionally bans the domain.
    * Returns true if the record was removed.
    */
-  private async handleUnhealthyOutput (output: Record<string, any>, collection: any, domain?: string): Promise<boolean> {
+  private async handleUnhealthyOutput(
+    output: Record<string, any>,
+    collection: any,
+    domain?: string
+  ): Promise<boolean> {
     try {
       const currentDown = typeof output.down === 'number' ? output.down : 0
       const newDown = currentDown + 1
 
       if (newDown >= this.hostDownRevokeScore) {
-        this.logger.log(chalk.red(`Removing output ${String(output.txid)}:${String(output.outputIndex)} (down: ${newDown} >= ${this.hostDownRevokeScore})`))
-        await collection.deleteOne({ _id: output._id })
+        this.logger.log(
+          chalk.red(
+            `Removing output ${String(output.txid)}:${String(output.outputIndex)} (down: ${newDown} >= ${this.hostDownRevokeScore})`
+          )
+        )
 
-        // Auto-ban the domain and outpoint to prevent GASP re-sync
+        // Persist the bans before deletion. This keeps the operation fail-closed:
+        // a storage failure cannot open a window in which GASP re-admits the
+        // just-deleted output before its ban exists.
         if (this.banService !== undefined && this.autoBanOnRemoval) {
           const txid = output.txid as string
           const outputIndex = output.outputIndex as number
@@ -563,16 +645,20 @@ export class JanitorService {
           }
         }
 
+        await collection.deleteOne({ _id: output._id })
+
         return true
       } else {
-        await collection.updateOne(
-          { _id: output._id },
-          { $inc: { down: 1 } }
-        )
+        await collection.updateOne({ _id: output._id }, { $inc: { down: 1 } })
         return false
       }
     } catch (error) {
-      this.logger.error(chalk.red(`Error handling unhealthy output ${String(output.txid)}:${String(output.outputIndex)}:`), error)
+      this.logger.error(
+        chalk.red(
+          `Error handling unhealthy output ${String(output.txid)}:${String(output.outputIndex)}:`
+        ),
+        error
+      )
       return false
     }
   }

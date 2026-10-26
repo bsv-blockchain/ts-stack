@@ -1,6 +1,7 @@
 import { SHIPStorage } from '../SHIP/SHIPStorage.js'
 import { SLAPStorage } from '../SLAP/SLAPStorage.js'
-import { MongoClient, type Db } from 'mongodb'
+import { MongoClient, ObjectId, type Db } from 'mongodb'
+import * as os from 'node:os'
 import { MongoMemoryServer } from 'mongodb-memory-server'
 
 const shipFilter = {
@@ -149,6 +150,19 @@ describe('discovery storage initialization and retry behavior', () => {
     expect(collection.createIndex).toHaveBeenCalledTimes(1)
     expect(collection.createIndex).toHaveBeenCalledWith({ domain: 1, topic: 1 })
   })
+
+  it('returns zero rows for limit zero and rejects invalid pagination before database work', async () => {
+    const { db, collection } = createMockDb()
+    const storage = new SHIPStorage(db)
+
+    await expect(storage.findAll(0)).resolves.toEqual([])
+    await expect(storage.findAll(Number.NaN)).rejects.toThrow('query.limit')
+    await expect(storage.findAll(1001)).rejects.toThrow('query.limit')
+    await expect(storage.findRecord({ limit: 1.5 })).rejects.toThrow('query.limit')
+
+    expect(collection.indexes).not.toHaveBeenCalled()
+    expect(collection.createIndex).not.toHaveBeenCalled()
+  })
 })
 
 describe('discovery storage MongoDB invariants', () => {
@@ -158,7 +172,10 @@ describe('discovery storage MongoDB invariants', () => {
 
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create()
-    client = new MongoClient(mongo.getUri())
+    // mongodb 7.6 loads `os` with a dynamic import that Jest's CommonJS VM
+    // cannot serve, leaving the handshake without driver metadata. Supply the
+    // Node module directly so the test client completes its handshake.
+    client = new MongoClient(mongo.getUri(), { runtimeAdapters: { os } })
     await client.connect()
     db = client.db('overlay_discovery_storage_test')
   })
@@ -170,6 +187,22 @@ describe('discovery storage MongoDB invariants', () => {
 
   beforeEach(async () => {
     await db.dropDatabase()
+  })
+
+  it.each(['shipRecords', 'slapRecords'])('uses a unique tie breaker across equal-time %s pages', async collectionName => {
+    const isShip = collectionName === 'shipRecords'
+    const records = db.collection(collectionName)
+    const seed = [3, 1, 2].map(index => ({
+      _id: new ObjectId(index.toString(16).padStart(24, '0')),
+      ...(isShip ? shipFilter : slapFilter),
+      domain: `https://host-${index}.example`, txid: `tx-${index}`, outputIndex: index,
+      createdAt: new Date('2026-09-26T00:00:00Z')
+    }))
+    await records.insertMany(seed)
+    const storage = isShip ? new SHIPStorage(db) : new SLAPStorage(db)
+    expect(await storage.findAll(2, 0, 'asc')).toEqual([{ txid: 'tx-1', outputIndex: 1 }, { txid: 'tx-2', outputIndex: 2 }])
+    expect(await storage.findAll(2, 2, 'asc')).toEqual([{ txid: 'tx-3', outputIndex: 3 }])
+    expect(await storage.findAll(2, 0, 'desc')).toEqual([{ txid: 'tx-3', outputIndex: 3 }, { txid: 'tx-2', outputIndex: 2 }])
   })
 
   it('migrates SHIP duplicates, retaining newest before accepting a refresh', async () => {
@@ -273,5 +306,25 @@ describe('discovery storage MongoDB invariants', () => {
       }),
       expect.objectContaining({ key: { domain: 1, service: 1 } })
     ]))
+  })
+
+  it('caps omitted SHIP and SLAP lookup limits at 1000 rows', async () => {
+    await db.collection('shipRecords').insertMany(Array.from({ length: 1005 }, (_, index) => ({
+      ...shipFilter,
+      topic: `tm_topic_${index}`,
+      txid: `ship-${index}`,
+      outputIndex: index,
+      createdAt: new Date(2026, 0, 1, 0, 0, 0, index)
+    })))
+    await db.collection('slapRecords').insertMany(Array.from({ length: 1005 }, (_, index) => ({
+      ...slapFilter,
+      service: `ls_service_${index}`,
+      txid: `slap-${index}`,
+      outputIndex: index,
+      createdAt: new Date(2026, 0, 1, 0, 0, 0, index)
+    })))
+
+    await expect(new SHIPStorage(db).findAll()).resolves.toHaveLength(1000)
+    await expect(new SLAPStorage(db).findAll()).resolves.toHaveLength(1000)
   })
 })

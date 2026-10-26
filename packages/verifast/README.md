@@ -67,6 +67,13 @@ SDK's mutation methods or replace `script.chunks`; mutating a returned
 `ScriptChunk` object in place bypasses the Script layer's serialization-cache
 invalidation.
 
+Consensus context is deliberately strict at the JavaScript/WASM boundary.
+Networks must use one of the documented names; UTXO and block heights must be
+non-negative signed-32-bit integers; consensus must be an actual boolean; and
+custom flag words must be unsigned-32-bit integers. Invalid values are rejected
+instead of being wrapped or truthiness-coerced into a different verification
+context.
+
 ## Spend and batch verification
 
 Call the same backend from code that already constructs SDK `Spend` objects:
@@ -135,7 +142,12 @@ const tweakedPrivate = await verifier.tweakPrivateKeyAdd(privateKey32, tweak32)
 ```
 
 These operations accept and return `Uint8Array` values without JSON, `number[]`,
-or per-item JS/WASM calls. Importing and constructing the default verifier also
+or per-item JS/WASM calls. Private keys, scalars, tweaks, and digests are exactly
+32 bytes; public keys use the standard 33-byte compressed or 65-byte
+uncompressed encoding; and direct signatures use DER's 8-to-72-byte range.
+Malformed result types and non-binary batch verdict bytes from a custom WASM
+factory are rejected rather than interpreted as cryptographic answers.
+Importing and constructing the default verifier also
 registers a warm-only optional backend with `@bsv/sdk`. Existing synchronous
 primitive APIs do not change. Existing asynchronous wallet, BRC-42, P2PKH, and
 authentication composition uses a supported WASM operation only after the

@@ -47,9 +47,10 @@ If any step fails, the SLAP output is rejected.
 
 1. **Exact 5 PushDrop Fields**:
    - If fewer or more than 5 fields are found, the SLAP manager will skip the output.
+   - The complete script must be canonical and bounded; non-minimal pushes, extra opcodes, and trailing data are rejected.
 2. **Valid \`service\`**:
    - Must begin with \`ls_\`.
-   - Only letters (lowercase) and underscores are allowed, per \`isValidTopicOrServiceName\` (BRC-87).
+   - Then lowercase letters and digits in segments joined by single underscores, at most 256 bytes, per \`isValidTopicOrServiceName\`. This admits BRC-87 names and BRC-207 per-asset names such as \`ls_color_<txid>_<vout>\`.
 3. **Advertised URI**:
    - Must not be \`localhost\`.
    - Must use a recognized scheme (\`https://\`, \`wss://\`, or specialized custom \`https+bsvauth...\` forms).

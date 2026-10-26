@@ -1,4 +1,4 @@
-import { LockingScript } from '@bsv/sdk'
+import type LockingScript from '@bsv/sdk/script/LockingScript'
 
 /**
  * DstasToken — decoder for DSTAS (Divisible STAS / STAS 3.0) locking scripts.

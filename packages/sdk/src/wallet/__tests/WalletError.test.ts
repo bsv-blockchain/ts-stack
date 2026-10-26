@@ -93,6 +93,10 @@ describe('WalletError', () => {
       expect(walletErrors.insufficientFunds).toBe(7)
     })
 
+    it('has value 8 for abortRefused', () => {
+      expect(walletErrors.abortRefused).toBe(8)
+    })
+
     it('all values are within the UInt8 range (0-255)', () => {
       for (const val of Object.values(walletErrors).filter(v => typeof v === 'number')) {
         expect(val as number).toBeGreaterThanOrEqual(0)

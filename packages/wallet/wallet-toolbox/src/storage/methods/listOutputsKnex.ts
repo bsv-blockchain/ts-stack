@@ -1,4 +1,5 @@
-import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput, Validation } from '@bsv/sdk'
+import { type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, ListOutputsResult, OriginatorDomainNameStringUnder250Bytes, WalletOutput } from '@bsv/sdk'
 import type { StorageKnex } from '../StorageKnex'
 import { Knex } from 'knex'
 import { getListOutputsSpecOp, type ListOutputsSpecOp } from './ListOutputsSpecOp'
@@ -8,6 +9,7 @@ import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { managedChangeOutputFields } from './managedChange'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 
 interface ResolvedKnexListTags {
   tags: string[]
@@ -19,16 +21,10 @@ function normalizeKnexListOffset(offset: number): {
   offset: number
   orderBy: 'asc' | 'desc'
 } {
-  return offset < 0
-    ? { offset: -offset - 1, orderBy: 'desc' }
-    : { offset, orderBy: 'asc' }
+  return offset < 0 ? { offset: -offset - 1, orderBy: 'desc' } : { offset, orderBy: 'asc' }
 }
 
-function inferShortPageTotal(
-  outputsLength: number,
-  limit: number,
-  skipped: number
-): number | undefined {
+function inferShortPageTotal(outputsLength: number, limit: number, skipped: number): number | undefined {
   if (limit > 0 && outputsLength >= limit) return undefined
   // An empty page proves only that the offset is at or past the end.
   if (outputsLength === 0 && skipped > 0) return undefined
@@ -41,9 +37,7 @@ async function resolveKnexListTotal(
   skipped: number,
   countTotal: () => Promise<number>
 ): Promise<number> {
-  return (
-    inferShortPageTotal(outputsLength, limit, skipped) ?? (await countTotal())
-  )
+  return inferShortPageTotal(outputsLength, limit, skipped) ?? (await countTotal())
 }
 
 async function resolveKnexBasketId(
@@ -74,10 +68,7 @@ function resolveKnexListTags(
   if (specOp?.tagsToIntercept == null) return { tags, specOpTags, basketId }
   const remaining: string[] = []
   for (const tag of tags) {
-    if (
-      specOp.tagsToIntercept.length === 0 ||
-      specOp.tagsToIntercept.includes(tag)
-    ) {
+    if (specOp.tagsToIntercept.length === 0 || specOp.tagsToIntercept.includes(tag)) {
       specOpTags.push(tag)
       if (tag === 'all') basketId = undefined
     } else {
@@ -87,11 +78,7 @@ function resolveKnexListTags(
   return { tags: remaining, specOpTags, basketId }
 }
 
-async function findKnexTagIds(
-  k: Knex,
-  userId: number,
-  tags: string[]
-): Promise<number[]> {
+async function findKnexTagIds(k: Knex, userId: number, tags: string[]): Promise<number[]> {
   if (tags.length === 0) return []
   const rows = await k<TableOutputTag>('output_tags')
     .where({ userId, isDeleted: false })
@@ -101,14 +88,8 @@ async function findKnexTagIds(
   return rows.map(row => row.outputTagId)
 }
 
-function knexTagQueryCannotMatch(
-  tags: string[],
-  tagIds: number[],
-  queryModeAll: boolean
-): boolean {
-  return queryModeAll
-    ? tagIds.length < tags.length
-    : tags.length > 0 && tagIds.length === 0
+function knexTagQueryCannotMatch(tags: string[], tagIds: number[], queryModeAll: boolean): boolean {
+  return queryModeAll ? tagIds.length < tags.length : tags.length > 0 && tagIds.length === 0
 }
 
 function applyKnexBaseFilters(
@@ -138,18 +119,14 @@ function applyKnexBaseFilters(
     .whereNull('o.spentBy')
 }
 
-function applyKnexTagFilters(
-  query: Knex.QueryBuilder,
-  k: Knex,
-  tagIds: number[],
-  queryModeAll: boolean
-): void {
+// ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+function applyKnexTagFilters(query: Knex.QueryBuilder, k: Knex, tagIds: number[], queryModeAll: boolean): void {
   if (queryModeAll) {
     for (const tagId of tagIds) {
       query.whereExists(function () {
         this.select(k.raw('1'))
           .from('output_tags_map as m')
-          .whereRaw('m.outputId = o.outputId')
+          .whereRaw('?? = ??', ['m.outputId', 'o.outputId'])
           .where('m.outputTagId', tagId)
           .whereNot('m.isDeleted', true)
       })
@@ -159,7 +136,7 @@ function applyKnexTagFilters(
   query.whereExists(function () {
     this.select(k.raw('1'))
       .from('output_tags_map as m')
-      .whereRaw('m.outputId = o.outputId')
+      .whereRaw('?? = ??', ['m.outputId', 'o.outputId'])
       .whereIn('m.outputTagId', tagIds)
       .whereNot('m.isDeleted', true)
   })
@@ -175,13 +152,7 @@ function createKnexOutputQuery(
   queryModeAll: boolean
 ): Knex.QueryBuilder {
   const query = k('outputs as o')
-  applyKnexBaseFilters(
-    query,
-    userId,
-    basketId,
-    includeSpent,
-    managedChangeOnly
-  )
+  applyKnexBaseFilters(query, userId, basketId, includeSpent, managedChangeOnly)
   if (tagIds.length > 0) {
     applyKnexTagFilters(query, k, tagIds, queryModeAll)
   }
@@ -201,11 +172,7 @@ async function loadKnexOutputAssociations(
   const tagsByOutputId: Record<number, string[]> = {}
   if (includeLabels) {
     const transactionIds = [
-      ...new Set(
-        outputs
-          .map(output => output.transactionId)
-          .filter((id): id is number => id !== undefined)
-      )
+      ...new Set(outputs.map(output => output.transactionId).filter((id): id is number => id !== undefined))
     ]
     if (transactionIds.length > 0) {
       const rows = await k('tx_labels as l')
@@ -223,11 +190,7 @@ async function loadKnexOutputAssociations(
   }
   if (includeTags) {
     const outputIds = [
-      ...new Set(
-        outputs
-          .map(output => output.outputId)
-          .filter((id): id is number => id !== undefined)
-      )
+      ...new Set(outputs.map(output => output.outputId).filter((id): id is number => id !== undefined))
     ]
     if (outputIds.length > 0) {
       const rows = await k('output_tags as ot')
@@ -249,7 +212,7 @@ async function loadKnexOutputAssociations(
 async function hydrateKnexWalletOutput(
   storage: StorageKnex,
   output: TableOutput,
-  vargs: Validation.ValidListOutputsArgs,
+  vargs: ValidListOutputsArgs,
   labelsByTransactionId: Record<number, string[]>,
   tagsByOutputId: Record<number, string[]>,
   beef: Beef,
@@ -275,25 +238,15 @@ async function hydrateKnexWalletOutput(
       walletOutput.lockingScript = asString(output.lockingScript)
     }
   }
-  if (
-    vargs.includeTransactions &&
-    output.txid != null &&
-    beef.findTxid(output.txid) == null
-  ) {
-    await storage.getValidBeefForKnownTxid(
-      output.txid,
-      beef,
-      undefined,
-      vargs.knownTxids,
-      trx
-    )
+  if (vargs.includeTransactions && output.txid != null && beef.findTxid(output.txid) == null) {
+    await storage.getValidBeefForKnownTxid(output.txid, beef, undefined, vargs.knownTxids, trx)
   }
   return walletOutput
 }
 export async function listOutputs(
   dsk: StorageKnex,
   auth: AuthId,
-  vargs: Validation.ValidListOutputsArgs,
+  vargs: ValidListOutputsArgs,
   _originator?: OriginatorDomainNameStringUnder250Bytes
 ): Promise<ListOutputsResult> {
   const trx: TrxToken | undefined = undefined
@@ -302,22 +255,10 @@ export async function listOutputs(
   const { offset, orderBy } = normalizeKnexListOffset(vargs.offset)
   const k = dsk.toDb(trx)
   const result: ListOutputsResult = { totalOutputs: 0, outputs: [] }
-  const { specOp, basket, tags: sourceTags } = getListOutputsSpecOp(
-    vargs.basket,
-    vargs.tags
-  )
-  const resolvedBasketId = await resolveKnexBasketId(
-    dsk,
-    userId,
-    basket,
-    trx
-  )
+  const { specOp, basket, tags: sourceTags } = getListOutputsSpecOp(vargs.basket, vargs.tags)
+  const resolvedBasketId = await resolveKnexBasketId(dsk, userId, basket, trx)
   if (resolvedBasketId === null) return result
-  const { tags, specOpTags, basketId } = resolveKnexListTags(
-    specOp,
-    sourceTags,
-    resolvedBasketId
-  )
+  const { tags, specOpTags, basketId } = resolveKnexListTags(specOp, sourceTags, resolvedBasketId)
   if (specOp?.resultFromTags != null) {
     return specOp.resultFromTags(dsk, auth, vargs, specOpTags)
   }
@@ -326,6 +267,7 @@ export async function listOutputs(
   if (knexTagQueryCannotMatch(tags, tagIds, isQueryModeAll)) return result
   let columns: string[] = [
     'outputId',
+    'userId',
     'transactionId',
     'basketId',
     'spendable',
@@ -356,62 +298,42 @@ export async function listOutputs(
     result.totalOutputs = Number(sum?.totalSatoshis ?? 0)
     return result
   }
-  const qcount = baseQuery
-    .clone()
-    .clearSelect()
-    .clearOrder()
-    .count('o.outputId as total')
+  const qcount = baseQuery.clone().clearSelect().clearOrder().count('o.outputId as total')
   baseQuery.select(outputColumns)
   if (!specOp?.ignoreLimit) baseQuery.limit(limit).offset(offset)
+  else if (specOp.maximumCandidateCount != null) baseQuery.limit(specOp.maximumCandidateCount + 1)
   baseQuery.orderBy('o.outputId', orderBy)
   let outputs: TableOutput[] = await baseQuery
+  if (specOp?.maximumCandidateCount != null && outputs.length > specOp.maximumCandidateCount) {
+    throw new WERR_INVALID_OPERATION(
+      `${specOp.name} is limited to ${specOp.maximumCandidateCount} candidates; use a bounded paged review.`
+    )
+  }
   if (specOp != null) {
     if (specOp.filterOutputs != null) {
-      outputs = await specOp.filterOutputs(
-        dsk,
-        auth,
-        vargs,
-        specOpTags,
-        outputs
-      )
+      outputs = await specOp.filterOutputs(dsk, auth, vargs, specOpTags, outputs)
     }
     if (specOp.resultFromOutputs != null) {
       return specOp.resultFromOutputs(dsk, auth, vargs, specOpTags, outputs)
     }
   }
   const skipped = specOp?.ignoreLimit ? 0 : offset
-  result.totalOutputs = await resolveKnexListTotal(
-    outputs.length,
-    limit,
-    skipped,
-    async () => {
-      const total = verifyOne(
-        (await qcount) as Array<{ total: number | string }>
-      ).total
-      return Number(total)
-    }
+  result.totalOutputs = await resolveKnexListTotal(outputs.length, limit, skipped, async () => {
+    const total = verifyOne((await qcount) as Array<{ total: number | string }>).total
+    return Number(total)
+  })
+  const { labelsByTransactionId, tagsByOutputId } = await loadKnexOutputAssociations(
+    k,
+    outputs,
+    vargs.includeLabels,
+    vargs.includeTags
   )
-  const { labelsByTransactionId, tagsByOutputId } =
-    await loadKnexOutputAssociations(
-      k,
-      outputs,
-      vargs.includeLabels,
-      vargs.includeTags
-    )
   const beef = new Beef()
   for (const output of outputs) {
     result.outputs.push(
-      await hydrateKnexWalletOutput(
-        dsk,
-        output,
-        vargs,
-        labelsByTransactionId,
-        tagsByOutputId,
-        beef,
-        trx
-      )
+      await hydrateKnexWalletOutput(dsk, output, vargs, labelsByTransactionId, tagsByOutputId, beef, trx)
     )
   }
-  if (vargs.includeTransactions) result.BEEF = beef.toBinary()
+  if (vargs.includeTransactions) result.BEEF = beef.toUint8Array()
   return result
 }

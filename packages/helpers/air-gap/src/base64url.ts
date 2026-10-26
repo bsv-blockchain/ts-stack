@@ -30,10 +30,7 @@ export function toB64url(bytes: Uint8Array): string {
   // btoa pads to a multiple of four, so there are never more than two '=' —
   // and a bounded quantifier keeps the strip linear rather than backtracking.
   const base64 = globalThis.btoa(binary)
-  return base64
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replace(/={0,2}$/, '')
+  return base64.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
 /**
@@ -54,6 +51,6 @@ export function fromB64url(text: string): Uint8Array {
   const binary = globalThis.atob(padded + '='.repeat((4 - (padded.length % 4)) % 4))
   const bytes = new Uint8Array(binary.length)
   // `atob` yields one code unit below 0x100 per byte, so this cannot truncate.
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.codePointAt(i)!
+  for (let i = binary.length; i-- > 0;) bytes[i] = binary.charCodeAt(i)
   return bytes
 }

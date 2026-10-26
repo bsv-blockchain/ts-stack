@@ -1,4 +1,4 @@
-import { Validation } from '@bsv/sdk'
+import { Beef, Script, Transaction, Validation } from '@bsv/sdk'
 import { targetForStorage } from '../createNoSendExpiryAction'
 import {
   makeNoSendExpiryFundingArgs,
@@ -9,13 +9,17 @@ import {
 describe('createNoSendExpiryAction storage boundary', () => {
   test('keeps unlocking scripts and logger objects on the signer side', () => {
     const logger = {} as any
+    const sourceTransaction = new Transaction()
+    sourceTransaction.addOutput({ satoshis: 1, lockingScript: Script.fromHex('51') })
+    const inputBEEF = new Beef()
+    inputBEEF.mergeTransaction(sourceTransaction)
     const args = Validation.validateCreateActionArgs(
       {
         description: 'protected explicit input',
-        inputBEEF: [],
+        inputBEEF: inputBEEF.toBinary(),
         inputs: [
           {
-            outpoint: `${'01'.repeat(32)}.0`,
+            outpoint: `${sourceTransaction.id('hex')}.0`,
             inputDescription: 'explicit protected input',
             unlockingScript: 'aabb'
           }
@@ -72,9 +76,9 @@ describe('createNoSendExpiryAction storage boundary', () => {
     const fixedAnchor = output(1, 5001)
     const serviceCharge = output(0, 5001, 'storage-commission')
 
-    expect(
-      selectNoSendExpiryFundingAnchor([generatedCollision, serviceCharge, fixedAnchor, output(8, 99)], 5001)
-    ).toBe(fixedAnchor)
+    expect(selectNoSendExpiryFundingAnchor([generatedCollision, serviceCharge, fixedAnchor, output(8, 99)], 5001)).toBe(
+      fixedAnchor
+    )
     expect(() => selectNoSendExpiryFundingAnchor([serviceCharge, output(2, 99)], 5001)).toThrow(
       'exact revocation anchor'
     )

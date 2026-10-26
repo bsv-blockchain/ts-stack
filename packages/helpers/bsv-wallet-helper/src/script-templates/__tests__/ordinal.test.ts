@@ -178,6 +178,18 @@ describe('OrdP2PKH locking script', () => {
           message: 'inscription.contentType is required and must be a string (MIME type)'
         },
         {
+          params: { publicKey, inscription: { dataB64: 'eA', contentType: 'text/plain' } },
+          message: 'dataB64 must be canonical base64'
+        },
+        {
+          params: { publicKey, inscription: { dataB64: 'eA==\n', contentType: 'text/plain' } },
+          message: 'dataB64 must be canonical base64'
+        },
+        {
+          params: { publicKey, inscription: { dataB64: 'eA==', contentType: 'text/plain\r\n' } },
+          message: 'contentType must not contain control characters'
+        },
+        {
           params: { publicKey, metadata: null },
           message: 'metadata must be an object'
         },
@@ -200,6 +212,10 @@ describe('OrdP2PKH locking script', () => {
         {
           params: { publicKey, metadata: { app: 'testapp', type: 1 } },
           message: 'metadata.type is required and must be a string'
+        },
+        {
+          params: { publicKey, metadata: { app: 'testapp', type: 'profile', count: 1 } },
+          message: 'metadata.count must be a string'
         }
       ]
 
@@ -218,10 +234,10 @@ describe('OrdP2PKH locking script', () => {
         applyInscription(lockingScript, { dataB64: '====', contentType: 'text/plain' })
       ).toThrow('Invalid file data')
       expect(() => applyInscription(lockingScript, { dataB64: 'eA==', contentType: '' })).toThrow(
-        'Invalid media type'
+        'inscription.contentType is required and must be a string'
       )
       expect(() => applyInscription(lockingScript, undefined, { app: 'testapp' } as MAP)).toThrow(
-        'MAP.app and MAP.type are required fields'
+        'metadata.type is required and must be a string'
       )
 
       const decorated = applyInscription(
@@ -238,6 +254,25 @@ describe('OrdP2PKH locking script', () => {
         type: 'profile'
       })
       expect(metadataOnly.toASM()).toContain('OP_RETURN')
+    })
+
+    test('rejects accessor-backed inscription and metadata objects', async () => {
+      const publicKey = new PrivateKey(11).toPublicKey().toString()
+      const inscription = Object.defineProperty({ contentType: 'text/plain' }, 'dataB64', {
+        enumerable: true,
+        get: () => 'eA=='
+      })
+      const metadata = Object.defineProperty({ app: 'testapp' }, 'type', {
+        enumerable: true,
+        get: () => 'profile'
+      })
+
+      await expect(
+        new OrdP2PKH().lock({ publicKey, inscription: inscription as any })
+      ).rejects.toThrow('inscription.dataB64 must be a data property')
+      await expect(new OrdP2PKH().lock({ publicKey, metadata: metadata as any })).rejects.toThrow(
+        'metadata.type must be a data property'
+      )
     })
   })
 

@@ -4,6 +4,8 @@ import type { HttpClient } from '@bsv/sdk'
 export interface ChaintracksDownloadOptions {
   /** Called immediately before each retry after the initial request. */
   beforeRetry?: (attempt: number) => void | Promise<void>
+  /** Resolve, approve, and DNS-pin only public HTTPS destinations. */
+  publicNetworkOnly?: boolean
 }
 
 /**

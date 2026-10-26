@@ -27,15 +27,24 @@ export default class P2PKH implements ScriptTemplate {
    * @param {number[] | string} pubkeyhash or address - An array or address representing the public key hash.
    * @returns {LockingScript} - A P2PKH locking script.
    */
-  lock (pubkeyhash: string | number[]): LockingScript {
+  lock(pubkeyhash: string | number[]): LockingScript {
     let data: number[]
     if (typeof pubkeyhash === 'string') {
       const hash = fromBase58Check(pubkeyhash)
-      if (hash.prefix[0] !== 0x00 && hash.prefix[0] !== 0x6f) {
+      if (hash.prefix.length !== 1 || (hash.prefix[0] !== 0x00 && hash.prefix[0] !== 0x6f)) {
         throw new Error('only P2PKH is supported')
       }
       data = hash.data as number[]
     } else {
+      if (!Array.isArray(pubkeyhash)) {
+        throw new Error('P2PKH hash must be a dense byte array')
+      }
+      for (let index = 0; index < pubkeyhash.length; index++) {
+        const byte = pubkeyhash[index]
+        if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+          throw new Error('P2PKH hash must be a dense byte array')
+        }
+      }
       data = pubkeyhash
     }
     if (data.length !== 20) {
@@ -65,22 +74,20 @@ export default class P2PKH implements ScriptTemplate {
    * @param {Script} lockingScript - Optional. The lockinScript. Otherwise the input.sourceTransaction is required.
    * @returns {Object} - An object containing the `sign` and `estimateLength` functions.
    */
-  unlock (
+  unlock(
     privateKey: PrivateKey,
     signOutputs: 'all' | 'none' | 'single' = 'all',
     anyoneCanPay: boolean = false,
     sourceSatoshis?: number,
     lockingScript?: Script
   ): {
-      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-      estimateLength: () => Promise<108>
-    } {
+    sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
+    estimateLength: () => Promise<108>
+  } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         const signatureScope = computeSignatureScope(signOutputs, anyoneCanPay)
         const resolved = resolveSourceDetails(tx, inputIndex, sourceSatoshis, lockingScript)
-        sourceSatoshis = resolved.sourceSatoshis
-        lockingScript = resolved.lockingScript
 
         const preimage = formatPreimage({
           tx,
@@ -95,30 +102,41 @@ export default class P2PKH implements ScriptTemplate {
         const preimageHash = sha256(preimage)
         const signingBackend = readyAsyncCryptoBackend('signDigest')
         const publicKeyBackend = readyAsyncCryptoBackend('publicKeyFromPrivate')
-        const privateKeyBytes = signingBackend === undefined && publicKeyBackend === undefined
-          ? undefined
-          : Uint8Array.from(privateKey.toArray('be', 32))
-        const rawSignature = signingBackend === undefined
-          ? privateKey.sign(preimageHash)
-          : Signature.fromDER(Array.from(validateAsyncCryptoBytes(
-            'signDigest',
-            await signingBackend.signDigest(
-              privateKeyBytes!,
-              // PrivateKey.sign hashes its argument before ECDSA signing.
-              // Preserve that historical double-SHA256 contract when passing a
-              // digest to a backend that signs the supplied bytes directly.
-              Uint8Array.from(sha256(preimageHash))
-            )
-          )))
-        const sig = new TransactionSignature(
-          rawSignature.r,
-          rawSignature.s,
-          signatureScope
-        )
+        const privateKeyBytes =
+          signingBackend === undefined && publicKeyBackend === undefined
+            ? undefined
+            : Uint8Array.from(privateKey.toArray('be', 32))
+        const publicKeyBytes =
+          publicKeyBackend === undefined
+            ? (privateKey.toPublicKey().encode(true) as number[])
+            : undefined
+        const rawSignature =
+          signingBackend === undefined
+            ? privateKey.sign(preimageHash)
+            : Signature.fromDER(
+                Array.from(
+                  validateAsyncCryptoBytes(
+                    'signDigest',
+                    await signingBackend.signDigest(
+                      privateKeyBytes!,
+                      // PrivateKey.sign hashes its argument before ECDSA signing.
+                      // Preserve that historical double-SHA256 contract when passing a
+                      // digest to a backend that signs the supplied bytes directly.
+                      Uint8Array.from(sha256(preimageHash))
+                    )
+                  )
+                )
+              )
+        const sig = new TransactionSignature(rawSignature.r, rawSignature.s, signatureScope)
         const sigForScript = sig.toChecksigFormat()
-        const pubkeyForScript = publicKeyBackend === undefined
-          ? privateKey.toPublicKey().encode(true) as number[]
-          : Array.from(validateCompressedPublicKey(await publicKeyBackend.publicKeyFromPrivate(privateKeyBytes!)))
+        const pubkeyForScript =
+          publicKeyBackend === undefined
+            ? publicKeyBytes!
+            : Array.from(
+                validateCompressedPublicKey(
+                  await publicKeyBackend.publicKeyFromPrivate(privateKeyBytes!)
+                )
+              )
         return new UnlockingScript([
           { op: sigForScript.length, data: sigForScript },
           { op: pubkeyForScript.length, data: pubkeyForScript }
@@ -133,7 +151,7 @@ export default class P2PKH implements ScriptTemplate {
   }
 }
 
-function validateCompressedPublicKey (value: Uint8Array): Uint8Array {
+function validateCompressedPublicKey(value: Uint8Array): Uint8Array {
   const bytes = validateAsyncCryptoBytes('publicKeyFromPrivate', value, 33)
   if (bytes[0] !== 0x02 && bytes[0] !== 0x03) {
     throw new Error('publicKeyFromPrivate returned an invalid compressed public key')

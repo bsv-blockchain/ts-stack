@@ -1,9 +1,9 @@
 import { HeightRange } from './HeightRange'
-import { deserializeBaseBlockHeader, validateBufferOfHeaders } from './blockHeaderUtilities'
+import { deserializeBaseBlockHeader, validateBufferOfHeaders, validateGenesisHeader } from './blockHeaderUtilities'
 import { BaseBlockHeader } from '../../../../sdk/WalletServices.interfaces'
 import { asArray, asString, asUint8Array } from '../../../../utility/utilityHelpers.noBuffer'
 import { ChaintracksFsApi } from '../Api/ChaintracksFsApi'
-import { Hash } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
 import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk'
 import { ChaintracksStorageBase } from '../Storage/ChaintracksStorageBase'
 import { ChaintracksFetchApi } from '../Api/ChaintracksFetchApi'
@@ -14,6 +14,35 @@ import {
   BulkHeaderFilesInfo,
   BulkHeaderFileStorage
 } from './BulkHeaderFile'
+import { normalizeBulkHeaderFilesInfo } from './BulkFileDataManager'
+
+const MAX_LOCAL_BULK_MANIFEST_BYTES = 16 * 1024 * 1024
+const MAX_READER_FILES = 10_000
+const MAX_READER_BUFFER_BYTES = 100_000 * 80
+const SAFE_LOCAL_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._~-]*$/
+
+function validateLocalFileName(fileName: string, name: string): void {
+  if (
+    typeof fileName !== 'string' ||
+    fileName.length === 0 ||
+    fileName.length > 255 ||
+    !SAFE_LOCAL_FILE_NAME.test(fileName) ||
+    fileName === '.' ||
+    fileName === '..'
+  ) {
+    throw new WERR_INVALID_PARAMETER(name, 'a safe path-free ASCII file name')
+  }
+}
+
+function validateReaderRange(range: HeightRange): void {
+  if (range == null || typeof range !== 'object') throw new WERR_INVALID_PARAMETER('range', 'a HeightRange')
+  if (!Number.isSafeInteger(range.minHeight) || range.minHeight < 0 || range.minHeight > 0x7fffffff) {
+    throw new WERR_INVALID_PARAMETER('range.minHeight', 'an integer from 0 through 2147483647')
+  }
+  if (!Number.isSafeInteger(range.maxHeight) || range.maxHeight < -1 || range.maxHeight > 0x7fffffff) {
+    throw new WERR_INVALID_PARAMETER('range.maxHeight', 'an integer from -1 through 2147483647')
+  }
+}
 
 /**
  * Breaks available bulk headers stored in multiple files into a sequence of buffers with
@@ -38,23 +67,42 @@ export class BulkFilesReader {
   nextHeight: number | undefined
 
   constructor(files: BulkHeaderFile[], range?: HeightRange, maxBufferSize?: number) {
+    if (
+      !Array.isArray(files) ||
+      files.length > MAX_READER_FILES ||
+      Object.keys(files).length !== files.length ||
+      files.some(file => !(file instanceof BulkHeaderFile))
+    ) {
+      throw new WERR_INVALID_PARAMETER('files', `a dense array of at most ${MAX_READER_FILES} bulk-header files`)
+    }
     this.files = files
     this.range = HeightRange.empty
     this.setRange(range)
-    this.setMaxBufferSize(maxBufferSize || 400 * 80)
+    this.setMaxBufferSize(maxBufferSize ?? 400 * 80)
   }
 
   protected setRange(range?: HeightRange) {
     this.range = this.heightRange
     if (range != null) {
-      this.range = this.range.intersect(range)
+      validateReaderRange(range)
+      this.range = this.range.intersect(new HeightRange(range.minHeight, range.maxHeight))
     }
     this.nextHeight = this.range.isEmpty ? undefined : this.range.minHeight
   }
 
   setMaxBufferSize(maxBufferSize: number | undefined) {
-    this.maxBufferSize = maxBufferSize || 400 * 80
-    if (this.maxBufferSize % 80 !== 0) throw new Error('maxBufferSize must be a multiple of 80 bytes.')
+    this.maxBufferSize = maxBufferSize ?? 400 * 80
+    if (
+      !Number.isSafeInteger(this.maxBufferSize) ||
+      this.maxBufferSize < 80 ||
+      this.maxBufferSize > MAX_READER_BUFFER_BYTES ||
+      this.maxBufferSize % 80 !== 0
+    ) {
+      throw new WERR_INVALID_PARAMETER(
+        'maxBufferSize',
+        `a multiple of 80 bytes from 80 through ${MAX_READER_BUFFER_BYTES}`
+      )
+    }
   }
 
   private getLastFile(): BulkHeaderFileInfo | undefined {
@@ -74,6 +122,9 @@ export class BulkFilesReader {
   }
 
   async readBufferForHeightOrUndefined(height: number): Promise<Uint8Array | undefined> {
+    if (!Number.isSafeInteger(height) || height < 0 || height > 0x7fffffff) {
+      throw new WERR_INVALID_PARAMETER('height', 'an integer from 0 through 2147483647')
+    }
     const file = this.getFileForHeight(height)
     if (file == null) return undefined
     const buffer = await file.readDataFromFile(80, (height - file.firstHeight) * 80)
@@ -151,13 +202,23 @@ export class BulkFilesReader {
    */
   resetRange(range: HeightRange, maxBufferSize?: number) {
     this.setRange(range)
-    this.setMaxBufferSize(maxBufferSize || 400 * 80)
+    this.setMaxBufferSize(maxBufferSize ?? 400 * 80)
   }
 
   async validateFiles(): Promise<void> {
     let lastChainWork: string | undefined = '00'.repeat(32)
     let lastHeaderHash = '00'.repeat(32)
-    for (const file of this.files) {
+    let nextHeight = 0
+    const chain = this.files[0]?.chain
+    for (const [index, file] of this.files.entries()) {
+      if (chain == null || file.chain !== chain) {
+        throw new WERR_INVALID_OPERATION(`bulk file ${file.fileName} has a missing or inconsistent chain`)
+      }
+      if (file.firstHeight !== nextHeight) {
+        throw new WERR_INVALID_OPERATION(
+          `bulk file ${file.fileName} is not contiguous: expected first height ${nextHeight}, got ${file.firstHeight}`
+        )
+      }
       if (file.prevChainWork !== lastChainWork) {
         throw new WERR_INVALID_OPERATION(
           `prevChainWork mismatch for file ${file.fileName}: expected ${file.prevChainWork}, got ${lastChainWork}`
@@ -181,7 +242,15 @@ export class BulkFilesReader {
           `fileHash mismatch for file ${file.fileName}: expected ${file.fileHash}, got ${fileHash}`
         )
       }
-      ;({ lastHeaderHash, lastChainWork } = validateBufferOfHeaders(data, lastHeaderHash, 0, file.count, lastChainWork))
+      ;({ lastHeaderHash, lastChainWork } = validateBufferOfHeaders(
+        data,
+        lastHeaderHash,
+        0,
+        file.count,
+        lastChainWork,
+        chain
+      ))
+      if (index === 0) validateGenesisHeader(data, chain)
 
       if (file.lastHash !== lastHeaderHash) {
         throw new WERR_INVALID_OPERATION(
@@ -195,6 +264,7 @@ export class BulkFilesReader {
       }
 
       file.validated = true
+      nextHeight += file.count
     }
   }
 
@@ -232,11 +302,11 @@ export class BulkFilesReader {
         break
       }
 
-      const last = validateBufferOfHeaders(data, lastHeaderHash, 0, undefined, lastChainWork)
+      const last = validateBufferOfHeaders(data, lastHeaderHash, 0, undefined, lastChainWork, chain)
 
       await toFs.writeFile(toPath(i), data)
 
-      const fileHash = asString(Hash.sha256(asArray(data)), 'base64')
+      const fileHash = asString(sha256(asArray(data)), 'base64')
       const file: BulkHeaderFileInfo = {
         chain,
         count: data.length / 80,
@@ -282,13 +352,17 @@ export class BulkFilesReaderFs extends BulkFilesReader {
     range?: HeightRange,
     maxBufferSize?: number
   ): Promise<BulkFilesReaderFs> {
+    validateLocalFileName(jsonFilename, 'jsonFilename')
     const filesInfo = await this.readJsonFile(fs, rootFolder, jsonFilename)
     const readerFiles = filesInfo.files.map(file => new BulkHeaderFileFs(file, fs, rootFolder))
-    return new BulkFilesReaderFs(fs, readerFiles, range, maxBufferSize)
+    const reader = new BulkFilesReaderFs(fs, readerFiles, range, maxBufferSize)
+    await reader.validateFiles()
+    return reader
   }
 
   static async writeEmptyJsonFile(fs: ChaintracksFsApi, rootFolder: string, jsonFilename: string): Promise<string> {
-    const json = JSON.stringify({ files: [], rootFolder })
+    validateLocalFileName(jsonFilename, 'jsonFilename')
+    const json = JSON.stringify({ files: [], rootFolder, jsonFilename, headersPerFile: 100_000 })
     await fs.writeFile(fs.pathJoin(rootFolder, jsonFilename), asUint8Array(json, 'utf8'))
     return json
   }
@@ -299,6 +373,7 @@ export class BulkFilesReaderFs extends BulkFilesReader {
     jsonFilename: string,
     failToEmptyRange: boolean = true
   ): Promise<BulkHeaderFilesInfo> {
+    validateLocalFileName(jsonFilename, 'jsonFilename')
     const filePath = (file: string) => fs.pathJoin(rootFolder, file)
 
     const jsonPath = filePath(jsonFilename)
@@ -306,17 +381,31 @@ export class BulkFilesReaderFs extends BulkFilesReader {
     let json: string
 
     try {
-      json = asString(await fs.readFile(jsonPath), 'utf8')
-    } catch {
-      // File does not exist yet.  When failToEmptyRange is false we treat a missing
-      // JSON index as an empty range and create it; otherwise we surface a clear error.
-      if (!failToEmptyRange) {
+      const bytes = await fs.readFile(jsonPath)
+      if (bytes.length > MAX_LOCAL_BULK_MANIFEST_BYTES) {
+        throw new WERR_INVALID_PARAMETER(
+          `${rootFolder}/${jsonFilename}`,
+          `no larger than ${MAX_LOCAL_BULK_MANIFEST_BYTES} bytes`
+        )
+      }
+      json = asString(bytes, 'utf8')
+    } catch (error: unknown) {
+      // Only a definite not-found condition may create an empty index. Permission,
+      // corruption, size-limit, and other I/O failures must remain visible.
+      const errorCode = (error as { code?: unknown } | null)?.code
+      if (!failToEmptyRange || errorCode !== 'ENOENT') {
+        if (errorCode !== 'ENOENT') throw error
         throw new WERR_INVALID_PARAMETER(`${rootFolder}/${jsonFilename}`, 'a valid, existing JSON file.')
       }
       json = await this.writeEmptyJsonFile(fs, rootFolder, jsonFilename)
     }
 
-    const readerFiles = JSON.parse(json) as BulkHeaderFilesInfo
+    const parsed = JSON.parse(json) as Record<string, unknown>
+    // Older locally generated empty indexes omitted these two descriptive
+    // fields. Supply their non-authoritative defaults before strict parsing.
+    if (parsed.headersPerFile === undefined) parsed.headersPerFile = 100_000
+    if (parsed.jsonFilename === undefined) parsed.jsonFilename = jsonFilename
+    const readerFiles = normalizeBulkHeaderFilesInfo(parsed)
     readerFiles.jsonFilename = jsonFilename
     readerFiles.rootFolder = rootFolder
     return readerFiles

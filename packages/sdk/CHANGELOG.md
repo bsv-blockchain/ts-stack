@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
 
+## Legacy certificate compatibility (4.0.0 candidate)
+
+- Restore existing certificate listing, discovery, proof, relinquishment, signature
+  verification and BRC-103 requests for canonical Base64 types of 1–128 bytes.
+  New signing and both acquisition protocols still require exactly 32 bytes.
+- Add an opt-in binary substrate profile with sentinel type slots and phantom
+  certificate metadata; original signed objects and ordinary encodings remain
+  unchanged. Binary HTTP includes a dedicated internal capability endpoint and
+  explicit missing-route probe fallback; wallet routers must register the new
+  transport route. Both adapters must upgrade for legacy binary use. No new BRC-100
+  app API or storage schema/RPC is required; strict remote relinquishment servers
+  must upgrade their SDK reference validator.
+- Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier
+  signing/JSON paths. Those types never reliably round-tripped through the old
+  fixed-width binary parser. This profile restores their use without reissuance.
+
 ## Table of Contents
 
 - [Unreleased](#unreleased)
@@ -214,13 +230,236 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.7.1 candidate — authenticated peer identity binding
+### Performance (4.0.0 candidate)
+
+- Bound the windowed point-multiplication table cache. Every distinct public
+  key verified added a table that was never released (about 3 KiB per key);
+  the generator's tables are kept and other points share a 64-entry
+  least-recently-used cache.
+- `PrivateKey.toPublicKey()` caches its result, so P2PKH signing and key
+  derivation no longer recompute k·G per call. The cache checks a SHA-256
+  fingerprint of the key's current value, never a copy of the secret; each
+  call still returns an independent `PublicKey`, and an in-place change to
+  the key recomputes it. `KeyDeriver` reuses its `anyone` public key.
+- `toArray` from a `Uint8Array`, hex decoding to `number[]`, `Writer.toArray`,
+  `Transaction.toBEEF`/`fromHexBEEF`, `Beef.toBinary` and `Beef.mergeBeef(Beef)`
+  convert bytes with a presized loop instead of `Array.from` or a growing
+  `number[]` writer. Output bytes are unchanged.
+- Adds `benchmarks/key-cache-bench.js` and `benchmarks/beef-conversion-bench.js`.
+
+### Fixed (4.0.0 candidate)
+
+- `MerklePath` refuses a one-level proof whose only leaf is not at offset 0.
+  A block of one transaction contains only its coinbase, at index 0, so any
+  other offset is a missing sibling. `fromHex`, the constructor (including
+  deferred root validation), and root computation throw
+  `Missing hash for index <offset> at height 0`. `combine()` recomputes the
+  merged root and leaves the receiver unchanged when that root differs from
+  the paths it merged. Offset 0, including `fromCoinbaseTxidAndHeight`, is
+  unchanged. Valid proofs need no migration. Fixes #1083.
+
+- `verifyNonce` returns `false` when the wallet rejects an HMAC mismatch
+  (`ERR_INVALID_HMAC`, or an error whose message is exactly `HMAC is not valid`)
+  instead of propagating that rejection. `Peer` can then raise its own
+  unverifiable-nonce error, and an authentication server can answer 401 so
+  `AuthFetch` drops the stale session and re-handshakes (issue #1086).
+  Other wallet failures still reject. No API, wire, or wallet-data migration.
+
+### Overlay topic and lookup service names (4.0.0 candidate)
+
+- `TopicBroadcaster` (`SHIPBroadcaster`) topics and `OverlayAdminTokenTemplate`
+  SHIP/SLAP names accept the `tm_` or `ls_` prefix followed by lowercase
+  letters and digits in segments joined by single underscores, up to 256 bytes
+  (the overlay engine's topic limit). The previous grammar allowed letters only
+  and 50 characters, which refused the BRC-207 per-asset names
+  `tm_color_<txid>_<vout>` and `ls_color_<txid>_<vout>`. Leading, trailing and
+  consecutive underscores, uppercase, other characters and a missing prefix are
+  still rejected.
+- Adds `isOverlayTopicName`, `isOverlayLookupServiceName`,
+  `OVERLAY_TOPIC_NAME_PATTERN`, `OVERLAY_LOOKUP_SERVICE_NAME_PATTERN` and
+  `MAX_OVERLAY_NAME_BYTES` to the overlay tools exports.
+- Migration: none. Every name accepted before is still accepted.
+
+### BRC-112 module balances and listOutputs spendability (4.0.0 candidate)
+
+- `ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`.
+  A BRC-112 module balance query (`p <module> balance <basket>`) returns the
+  exact balance as canonical decimal text with no outputs and no BEEF; every
+  other query still returns a count. Result validation requires decimal text
+  for those queries and rejects it for all others.
+- The BRC-100 binary `listOutputs` response carries the module balance as a
+  UTF-8 string and each output's `spendable` byte after its locking script, as
+  BRC-100 specifies. Both sides of a binary connection must update together:
+  earlier codecs neither write nor read the `spendable` byte.
+- Migration: TypeScript that compares or adds `totalOutputs` must first check
+  `typeof totalOutputs === 'number'`. Ordinary baskets always return a number.
+
+### Fixed (3.2.1 candidate)
+
+- Align `OP_SUBSTR`, `OP_LEFT` and `OP_RIGHT` operand decoding with
+  [SV Node v1.2.3](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.2.3).
+  The node now decodes the offset, length and count operands through a checked
+  int64 script-number path (`int_serialization.h` `deserialize<int64_t>`): an
+  operand longer than nine bytes, or whose sign-magnitude value lies outside
+  the signed 64-bit range, fails with `SCRIPT_ERR_SCRIPTNUM_OVERFLOW`. Node
+  v1.2.2, and this interpreter until now, read only the first eight bytes and
+  ignored the rest, so a nine-byte `04 00 00 00 00 00 00 00 80` was treated as
+  `4` instead of `-4`. Operands of eight bytes or fewer, the int32 saturation
+  of the decoded value and the range errors are unchanged.
+- `OP_SPLIT` rejects a position above `INT32_MAX` in addition to one above the
+  element size, matching the node's new guard for elements larger than
+  `INT32_MAX` bytes.
+- Added node `opcode_tests.cpp` / `int_serialization_tests.cpp` vectors to
+  `ChronicleOpcodes.test.ts` and flipped the one synthetic v1.2.2 regression
+  vector (`gen-00795`) whose verdict the node changed. No API, wire or
+  wallet-data migration is required.
+
+### Identity search recovery (3.2.0 candidate)
+
+- Match `any` queries against saved contact names and keys, retain exact named
+  selectors and return contact-only matches in parallel searches without
+  duplicating their public-certificate overrides.
+- Add opt-in `contactErrorMode`, `contactTimeoutMs` and `onContactError` to both
+  resolution option types. Fallback bounds optional contact loading while
+  preserving public lookup errors and trust checks. Legacy callers retain their
+  defaults and original contact failures.
+- No wire, wallet permission, certificate, or persistence migration. UIs must
+  adopt recovery explicitly and distinguish lookup errors from empty results.
+
+- Add caller-installed additional-output authorization to `completeBoundAction`.
+  Bind independently verified local outputs by exact index, script and amount
+  while preserving the default external-input restriction and value conservation.
+
+### Removed (3.0.0 candidate)
+
+- Remove the legacy `identity/DIDTokenValidation` module and its
+  `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`, `MAX_DID_SERIAL_BYTES`,
+  `decodeCanonicalDIDToken` and `normalizeDIDSerialNumber` exports. Consumers
+  must move identity-key DID operations to `@bsv/did` and public certificate
+  discovery to supported wallet/identity APIs; serial records do not identify
+  issuer or subject. See [migration guidance](../../docs/guides/identity-did-vc-migration.md).
+  This source removal deletes no user records or on-chain outputs.
+
+### Fixed (2.8.11 candidate)
+
+- `WalletClient` and the binary BRC-100 wire no longer reject every `acquireCertificate` issuance. Result validation required the returned `fields` to equal the request's, but issuance sends plaintext values and the certificate comes back with each value encrypted, so a valid issuance always failed with `Invalid acquireCertificate result certificate.fields: expected the requested certificate fields`. An issuance result is now bound to exactly the requested field names; a direct acquisition, whose request already carries the encrypted values, is still bound to them exactly. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.9 candidate)
+
+- AuthFetch bounds general payloads in binary bytes using its HTTP request and configured response budgets instead of charging each byte against the generic JSON authentication envelope budget. Complete 4 MiB CHIRP chunks now reach the transport; HTTP request/response bounds, authentication checks, certificate limits and redirect rejection remain enforced. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.8 candidate)
+
+- Align explicit Script verification with bitcoin-sv's coin-era and Chronicle version gates, CLTV/CSV, historical signature hashing, original-digest serialization, numeric widths and shift bounds. Node-derived transaction fixtures cover each corrected mismatch.
+- Reject `OP_NUM2BIN` sizes above the node's signed 32-bit bound before allocation. Check an optional caller-supplied `memoryLimit` before allocating; omitted limits remain unbounded. Resource exhaustion does not prove a script invalid. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.7 candidate)
+
+- Identity search now compares complete English text tokens, ignores default stopwords, and handles excluded phrases without treating each phrase word as independently excluded. Ordered named-field matches scan one literal token at a time, preserving case, punctuation and line-boundary semantics. The existing limitation for language-specific stemming remains; this release does not claim full MongoDB linguistic equivalence.
+
+- `WalletClient` and the binary BRC-100 wire no longer reject valid `discoverByAttributes` results. Result validation bound every requested key to an exact decrypted-field value, so the identity overlay's all-fields `any` search (read as a literal field name) and its fuzzy named-field matches were rejected even after the wallet had verified them. Validation now applies the overlay's matching contract, matching `@bsv/wallet-toolbox` 2.14.2: `any` is a case- and diacritic-insensitive text search with quoted phrases and `-term` exclusions over every field except `profilePhoto`/`icon`; named fields match fuzzily, `userName` exactly, and blank named attributes are ignored. Every result is still bound to the query it answered; certificate and identity verification are unchanged. Word stemming is not reproduced. No API, wire or wallet-data migration is required.
+
+### Fixed (2.8.6 candidate)
+
+- `Brc29RemittanceModule.acceptSettlement` now derives the recipient's own BRC-42 child key (`forSelf: true`) when checking settlement output ownership. Since 2.8.0 it derived the sender-facing key, so every valid incoming BRC-29 payment was rejected with `brc29.internalize_failed` before `internalizeAction` (funds were never lost; payments stayed pending). Adds a sender/recipient round-trip test using real `ProtoWallet` key derivation. No API, wire or wallet-data migration is required.
+
+### Added and fixed (2.8.5 candidate)
+
+- Add optional local general-message payload policy to `Peer` and `snapshotAuthMessage`; HTTP server transports can delegate payload capacity while retaining metadata, byte, signature and replay validation. Existing defaults remain unchanged.
+
+- Raise request and signed-response header limits by 4x: 32 KiB ordinary values, 256 KiB aggregate names and values, 512 headers, and 1 KiB names. Raise the separate certificate-policy header limit to 256 KiB. BRC-105 `x-bsv-payment` request proofs may share the full aggregate budget. Bounds remain finite and server/proxy limits still apply. No API, BRC100, wire or wallet-data migration is required; protected publication is separate.
+
+### 2.8.4 candidate — established action-history display metadata
+
+- Accept empty historical action, input and output descriptions, and empty
+  unassigned basket names, without changing stored values or BRC100 wire bytes.
+- Keep nonempty description bounds, UTF-8 ceilings, request validation,
+  requested scripts and labels, and transaction/value checks unchanged.
+- Add direct, HTTP JSON, binary and shared conformance regression coverage.
+- No application API or account-data migration is required. Publication remains
+  a separate protected workflow action.
+
+### 2.8.3 candidate — BRC100 discovery and action-history compatibility
+
+- Pass the configured caller originator through automatic discovery probes so
+  HTTP WalletWire keeps its existing caller binding without rejecting discovery.
+- Bind the default HTTP JSON fetch receiver for native browser implementations;
+  preserve supplied HTTP clients, discovery ordering, deadlines and validation.
+- Restore signed `listActions` net amounts with the existing int64 wire encoding,
+  matching established SDK behavior and JSON validation. Reject out-of-range,
+  unsafe, noncanonical and truncated values without relaxing counts, lengths or
+  individual output values.
+- No BRC100 API, wire or account-data migration. Applications affected by these
+  client defects can update the SDK without changing their calls; wallet releases
+  do not require every application to upgrade in coordination.
+- Publication remains a separate protected release workflow.
+
+### 2.8.2 candidate — wallet discovery timeout lifecycle
+
+- Keep React Native and XDM discovery bounded without carrying the short probe
+  timeout into later wallet operations that may wait for user approval.
+- Preserve caller-configured operation timeouts, listener cleanup, response
+  validation and origin checks. No API or wire migration is required.
+- Applications using automatic discovery must upgrade their bundled SDK; a
+  wallet-only upgrade does not change the SDK served by an application.
+- This source candidate is not published until the protected npm workflow completes.
+
+### 2.8.1 candidate — portable authenticated empty fields
+
+- Fix portable AES-GCM decryption of valid authenticated empty plaintext. This
+  restores native/browser/mobile interoperability for empty encrypted fields.
+- Preserve historical encryption bytes and full authentication-tag validation;
+  add independent native-oracle tests across AES key sizes, IV lengths and block
+  boundaries, plus tampering and forced-portable SymmetricKey coverage.
+- Migration: none. Existing accounts, ciphertexts and public APIs are unchanged.
+  Publication remains subject to the protected npm workflow.
+
+### 2.8.0 candidate — authenticated boundaries and additive secure TOTP APIs
+
+- Correct empty authenticated HTTP response preimages to use the BRC-104 `-1`
+  length sentinel. Public transport byte vectors and real AuthFetch/Express
+  signature tests cover 204 and empty 401/403/404 responses and status tampering.
+  Non-empty responses and conforming servers require no migration.
+
+- Add `TOTP.generateSecure()` and `TOTP.validateSecure()` for conventional
+  six-digit, zero-padded codes while retaining the published two-digit,
+  unpadded `generate()` and `validate()` behavior for wire compatibility.
 
 - Bind authenticated general messages, certificate requests, and certificate
   responses to the identity stored in the nonce-selected session. Reject
   mismatched transport identity metadata and dispatch only the identity used
   for signature verification. The BRC-103 v0.1 wire envelope, nonce derivation,
   payload bytes, and signature format are unchanged.
+- Own and bound every BRC-103 message, policy, certificate, proof, and byte
+  collection before asynchronous wallet work. Reject inherited/accessor data,
+  malformed public keys/outpoints/base64/DER, excessive frames, unrequested
+  proof fields, and certificate mutation during signing. New master keyrings
+  encode 32-byte keys while preserving decryption of legacy minimal encodings.
+- Prevent inbound traffic from retargeting `Peer`'s implicit outbound
+  destination, preserve authenticated sessions during capacity pressure, cap
+  AuthFetch's received-certificate buffer, and parse payment amounts as exact
+  positive safe integers.
+- Bound SimplifiedFetch request/response framing and signed-header work. Redact
+  URL credentials/path/query, sensitive header values, transaction bytes, and
+  payment derivation data from AuthFetch diagnostics; the wallet remains the
+  BRC-105 spending-authorization boundary.
+- Require every completed `createAction` and `signAction` transaction to carry
+  direct source-value evidence, either in its returned BEEF or in the immutable
+  `createAction.inputBEEF` request. Reject duplicate input outpoints and
+  zero-input value creation. Deferred `signableTransaction` results retain
+  historical partial-BEEF compatibility. Completed `signAction` results, and
+  `createAction` results without matching request evidence, must include the
+  direct source transactions in their returned BEEF.
+- Restore explicit byte-wise initial-response nonce concatenation so verifier
+  behavior remains correct if nonce base64 framing changes in the future.
+- Document two v0.1 compatibility limits: initial certificate members are not
+  covered by the nonce-pair signature, and `RequestedCertificateSet` is an
+  allowlist rather than a complete type/field-fulfillment assertion. Use signed
+  post-handshake requests and explicit application authorization where needed.
+- Clarify the intended Contacts trust model throughout the identity API and
+  guides: a saved identity-key association is authoritative local policy based
+  on the user's independent validation, like an accepted self-signed
+  certificate, but is neither transferable nor third-party certification.
 
 ### 2.7.0 candidate — authentication policy and settlement acceptance
 

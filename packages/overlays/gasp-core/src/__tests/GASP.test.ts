@@ -2,6 +2,7 @@
 jest.mock('@bsv/sdk', () => {
   // Simple hash function to generate a consistent "txid" from a string
   const mockHash = (input: string): string => {
+    if (/_rawtx\d*$/.test(input)) return input.replace('_rawtx', '_txid')
     let hash = 0
     for (let i = 0; i < input.length; i++) {
       const char = input.codePointAt(i) ?? 0
@@ -40,6 +41,11 @@ jest.mock('@bsv/sdk', () => {
   }
 })
 
+jest.mock('@bsv/sdk/transaction/Transaction', () => ({
+  __esModule: true,
+  default: jest.requireMock('@bsv/sdk').Transaction
+}))
+
 import {
   GASP,
   GASPInitialRequest,
@@ -53,6 +59,15 @@ import {
   LogLevel
 } from '../GASP'
 
+const computeMockTXID = (input: string): string => {
+  if (/_rawtx\d*$/.test(input)) return input.replace('_rawtx', '_txid')
+  let hash = 0
+  for (let index = 0; index < input.length; index++) {
+    hash = ((hash << 5) - hash + (input.codePointAt(index) ?? 0)) | 0
+  }
+  return hash.toString(16).padStart(64, '0')
+}
+
 type Graph = {
   graphID: string
   time: number
@@ -61,6 +76,12 @@ type Graph = {
   rawTx: string
   inputs: Record<string, Graph>
 }
+
+const asGASPNode = (graph: Graph, graphID = graph.graphID): GASPNode => ({
+  graphID,
+  rawTx: graph.rawTx,
+  outputIndex: graph.outputIndex
+})
 
 // Used to construct a non-functional remote that will be replaced after being constructed.
 // Useful when directly using another GASP instance as a remote.
@@ -147,7 +168,7 @@ class MockStorage implements GASPStorage {
       proof: 'mock_proof', // Mock proof
       txMetadata: metadata ? 'mock_tx_metadata' : undefined,
       outputMetadata: metadata ? 'mock_output_metadata' : undefined,
-      inputs: metadata ? { mock_input: { hash: 'mock_hash' } } : undefined
+      inputs: metadata ? { 'mock_input.0': { hash: 'mock_hash' } } : undefined
     }
   }
 
@@ -166,10 +187,12 @@ class MockStorage implements GASPStorage {
 
   async appendToGraph(tx: GASPNode, spentBy?: string | undefined): Promise<void> {
     this.logData('appendToGraph', tx, spentBy)
-    this.tempGraphStore[tx.graphID] = {
+    const key =
+      spentBy === undefined ? tx.graphID : `${computeMockTXID(tx.rawTx)}.${tx.outputIndex}`
+    this.tempGraphStore[key] = {
       ...tx,
       time: Date.now(),
-      txid: tx.graphID.split('.')[0],
+      txid: spentBy === undefined ? tx.graphID.split('.')[0] : computeMockTXID(tx.rawTx),
       inputs: {}
     }
   }
@@ -217,7 +240,7 @@ const mockUTXO = {
 
 const mockInputNode = {
   graphID: 'mock_sender1_txid1.0',
-  rawTx: 'deadbeef01010101',
+  rawTx: 'mock_sender1_rawtx2',
   outputIndex: 0,
   time: 222,
   txid: 'mock_sender1_txid2',
@@ -254,7 +277,7 @@ describe('GASP', () => {
 
     await gasp.sync('test-host')
 
-    expect(remote.getInitialResponse).toHaveBeenCalledWith({ version: 1, since: 0 })
+    expect(remote.getInitialResponse).toHaveBeenCalledWith({ version: 1, since: 0, limit: 1000 })
     expect(info).not.toHaveBeenCalled()
     expect(debug).not.toHaveBeenCalled()
     info.mockRestore()
@@ -439,7 +462,7 @@ describe('GASP', () => {
       .fn()
       .mockReturnValueOnce(mockUTXO)
       .mockReturnValueOnce(mockInputNode)
-      .mockReturnValueOnce(recursiveInputNode)
+      .mockReturnValueOnce(asGASPNode(recursiveInputNode, mockUTXO.graphID))
     const gasp1 = new GASP(storage1, throwawayRemote, 0, '[GASP #1] ')
     const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
     gasp1.remote = gasp2
@@ -536,7 +559,7 @@ describe('GASP', () => {
             proof: 'mock_proof',
             txMetadata: metadata ? 'mock_tx_metadata' : undefined,
             outputMetadata: metadata ? 'mock_output_metadata' : undefined,
-            inputs: metadata ? { mock_input: { hash: 'mock_hash' } } : undefined
+            inputs: metadata ? { 'mock_input.0': { hash: 'mock_hash' } } : undefined
           }
         }
       )
@@ -564,7 +587,7 @@ describe('GASP', () => {
         inputs: {
           'cyclic_txid2.0': {
             graphID: 'cyclic_txid2.0',
-            rawTx: 'deadbeef2024',
+            rawTx: 'cyclic_rawtx2',
             outputIndex: 0,
             time: 300,
             txid: 'cyclic_txid2',
@@ -616,10 +639,10 @@ describe('GASP', () => {
         })
       storage1.hydrateGASPNode = jest
         .fn()
-        .mockReturnValueOnce(cyclicNode1)
-        .mockReturnValueOnce(cyclicNode1.inputs['cyclic_txid2.0'])
-        .mockReturnValueOnce(cyclicNode1)
-        .mockReturnValueOnce(cyclicNode1.inputs['cyclic_txid2.0'])
+        .mockReturnValueOnce(asGASPNode(cyclicNode1))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1.inputs['cyclic_txid2.0'], cyclicNode1.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1.inputs['cyclic_txid2.0'], cyclicNode1.graphID))
 
       const gasp1 = new GASP(storage1, throwawayRemote, 0, '[GASP #1] ')
       const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
@@ -635,7 +658,7 @@ describe('GASP', () => {
       // Two nodes were appended to the temporary graph
       expect(storage2.appendToGraph).toHaveBeenCalledTimes(2)
       // Two nodes are in temporary storage, the ones that were sent
-      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(2)
+      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(1)
     })
     it('Prevents infinite recursion with cyclically referencing nodes the other direction', async () => {
       const cyclicNode1 = {
@@ -647,7 +670,7 @@ describe('GASP', () => {
         inputs: {
           'cyclic_txid2.0': {
             graphID: 'cyclic_txid2.0',
-            rawTx: 'deadbeef2024',
+            rawTx: 'cyclic_rawtx2',
             outputIndex: 0,
             time: 300,
             txid: 'cyclic_txid2',
@@ -699,10 +722,10 @@ describe('GASP', () => {
         })
       storage2.hydrateGASPNode = jest
         .fn()
-        .mockReturnValueOnce(cyclicNode1)
-        .mockReturnValueOnce(cyclicNode1.inputs['cyclic_txid2.0'])
-        .mockReturnValueOnce(cyclicNode1)
-        .mockReturnValueOnce(cyclicNode1.inputs['cyclic_txid2.0'])
+        .mockReturnValueOnce(asGASPNode(cyclicNode1))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1.inputs['cyclic_txid2.0'], cyclicNode1.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1))
+        .mockReturnValueOnce(asGASPNode(cyclicNode1.inputs['cyclic_txid2.0'], cyclicNode1.graphID))
 
       const gasp1 = new GASP(storage1, throwawayRemote, 0, '[GASP #1] ')
       const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
@@ -822,10 +845,10 @@ describe('GASP', () => {
 
       storage1.hydrateGASPNode = jest
         .fn()
-        .mockReturnValueOnce(cyclicNodeA)
-        .mockReturnValueOnce(cyclicNodeB)
-        .mockReturnValueOnce(cyclicNodeC)
-        .mockReturnValueOnce(cyclicNodeA)
+        .mockReturnValueOnce(asGASPNode(cyclicNodeA))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeB, cyclicNodeA.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeC, cyclicNodeA.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeA))
 
       const gasp1 = new GASP(storage1, throwawayRemote, 0, '[GASP #1] ')
       const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')
@@ -838,7 +861,7 @@ describe('GASP', () => {
         (await storage1.findKnownUTXOs(0)).length
       )
       expect(storage2.appendToGraph).toHaveBeenCalledTimes(3)
-      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(3)
+      expect(Object.keys(storage2.tempGraphStore)).toHaveLength(1)
     })
 
     it('Prevents infinite recursion with complex cyclic dependencies in the other direction', async () => {
@@ -949,10 +972,10 @@ describe('GASP', () => {
 
       storage2.hydrateGASPNode = jest
         .fn()
-        .mockReturnValueOnce(cyclicNodeA)
-        .mockReturnValueOnce(cyclicNodeB)
-        .mockReturnValueOnce(cyclicNodeC)
-        .mockReturnValueOnce(cyclicNodeA)
+        .mockReturnValueOnce(asGASPNode(cyclicNodeA))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeB, cyclicNodeA.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeC, cyclicNodeA.graphID))
+        .mockReturnValueOnce(asGASPNode(cyclicNodeA))
 
       const gasp1 = new GASP(storage1, throwawayRemote, 0, '[GASP #1] ')
       const gasp2 = new GASP(storage2, gasp1, 0, '[GASP #2] ')

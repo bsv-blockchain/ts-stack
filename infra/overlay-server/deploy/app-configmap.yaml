@@ -8,3 +8,5 @@ data:
   wallet-storage-url: https://storage.example.com
   network: main
   gasp-enabled: 'true'
+  mandala-enabled: 'false'
+  mandala-static-denylist-json: '[]'

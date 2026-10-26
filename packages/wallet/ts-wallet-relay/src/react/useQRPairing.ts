@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { requirePairingUri } from '../shared/artifacts.js'
 
 /**
  * Cross-platform hook that returns an `open()` function to trigger the
@@ -20,13 +21,14 @@ export function useQRPairing(
     openUrl?: (uri: string) => void
   }
 ): { open: () => void; pairingUri: string } {
+  const safePairingUri = requirePairingUri(pairingUri)
   const open = useCallback(() => {
     if (options?.openUrl) {
-      options.openUrl(pairingUri)
+      options.openUrl(safePairingUri)
     } else if (globalThis.window !== undefined) {
-      globalThis.window.location.href = pairingUri
+      globalThis.window.location.href = safePairingUri
     }
-  }, [pairingUri, options?.openUrl]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [safePairingUri, options?.openUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { open, pairingUri }
+  return { open, pairingUri: safePairingUri }
 }

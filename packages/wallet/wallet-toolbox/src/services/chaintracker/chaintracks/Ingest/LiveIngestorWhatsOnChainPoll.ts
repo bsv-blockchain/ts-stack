@@ -8,6 +8,7 @@ import {
   wocGetHeadersHeaderToBlockHeader
 } from './WhatsOnChainServices'
 import { ChaintracksFetchError } from '../util/ChaintracksFetch'
+import { safeDiagnostic } from '../util/safeDiagnostic'
 
 export interface LiveIngestorWhatsOnChainOptions extends LiveIngestorBaseOptions, WhatsOnChainServicesOptions {
   /**
@@ -49,19 +50,22 @@ export interface LiveIngestorWhatsOnChainOptions extends LiveIngestorBaseOptions
    * Maximum delay before retrying repeated failed polling requests.
    */
   retryWaitMax?: number
+  /** Maximum number of validated headers retained for the consumer. Defaults to 4096. */
+  maxQueuedHeaders?: number
 }
 
 /**
  * Reports new headers by polling periodically.
  */
 export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
-  static createLiveIngestorWhatsOnChainOptions (chain: Chain): LiveIngestorWhatsOnChainOptions {
+  static createLiveIngestorWhatsOnChainOptions(chain: Chain): LiveIngestorWhatsOnChainOptions {
     const options: LiveIngestorWhatsOnChainOptions = {
       ...WhatsOnChainServices.createWhatsOnChainServicesOptions(chain),
       ...LiveIngestorBase.createLiveIngestorBaseOptions(chain),
       idleWait: 100000,
       retryWait: 5000,
-      retryWaitMax: 120000
+      retryWaitMax: 120000,
+      maxQueuedHeaders: 4096
     }
     return options
   }
@@ -69,23 +73,29 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
   idleWait: number
   retryWait: number
   retryWaitMax: number
+  maxQueuedHeaders: number
   woc: WhatsOnChainServices
   done: boolean = false
 
-  constructor (options: LiveIngestorWhatsOnChainOptions) {
+  constructor(options: LiveIngestorWhatsOnChainOptions) {
     super(options)
     this.idleWait = options.idleWait ?? 100000
     this.retryWait = options.retryWait ?? 5000
     this.retryWaitMax = options.retryWaitMax ?? 120000
+    this.maxQueuedHeaders = options.maxQueuedHeaders ?? 4096
+    this.validatePositiveOption(this.idleWait, 'idleWait', 24 * 60 * 60 * 1000)
+    this.validatePositiveOption(this.retryWait, 'retryWait', 60 * 60 * 1000)
+    this.validatePositiveOption(this.retryWaitMax, 'retryWaitMax', 24 * 60 * 60 * 1000)
+    this.validatePositiveOption(this.maxQueuedHeaders, 'maxQueuedHeaders', 100000)
     this.woc = new WhatsOnChainServices(options)
   }
 
-  async getHeaderByHash (hash: string): Promise<BlockHeader | undefined> {
+  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
     const header = await this.woc.getHeaderByHash(hash)
     return header
   }
 
-  async startListening (liveHeaders: BlockHeader[]): Promise<void> {
+  async startListening(liveHeaders: BlockHeader[]): Promise<void> {
     this.done = false
     let lastHeaders: WocGetHeadersHeader[] = []
     let failureCount = 0
@@ -98,26 +108,34 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
       } catch (error: unknown) {
         failureCount++
         const retryMsecs = this.getRetryWaitMsecs(error, failureCount)
-        this.log(`LiveIngestorWhatsOnChainPoll getHeaders failed attempt=${failureCount} retryMsecs=${retryMsecs} error=${this.errorMessage(error)}`)
+        this.log(
+          `LiveIngestorWhatsOnChainPoll getHeaders failed attempt=${failureCount} retryMsecs=${retryMsecs} error=${this.errorMessage(error)}`
+        )
         await this.waitUnlessStopped(retryMsecs)
         continue
       }
 
-      const newHeaders = headers.filter(h => !lastHeaders.some(lh => lh.hash === h.hash))
+      const newHeaders = headers.filter(
+        h => !lastHeaders.some(lh => lh.hash === h.hash) && !liveHeaders.some(lh => lh.hash === h.hash)
+      )
 
       for (const h of newHeaders) {
         const bh = wocGetHeadersHeaderToBlockHeader(h)
-        liveHeaders.unshift(bh)
+        if (liveHeaders.length >= this.maxQueuedHeaders) {
+          this.log(`LiveIngestorWhatsOnChainPoll queue capacity ${this.maxQueuedHeaders} reached; dropping ${bh.hash}`)
+          continue
+        }
+        liveHeaders.unshift({ ...bh })
       }
 
       lastHeaders = headers
 
-      await this.waitUnlessStopped(60 * 1000)
+      await this.waitUnlessStopped(this.idleWait)
     }
     this.log('LiveIngestorWhatsOnChainPoll stopped')
   }
 
-  private getRetryWaitMsecs (error: unknown, failureCount: number): number {
+  private getRetryWaitMsecs(error: unknown, failureCount: number): number {
     if (error instanceof ChaintracksFetchError && error.retryAfterMsecs != null) {
       return Math.min(Math.max(error.retryAfterMsecs, 0), this.retryWaitMax)
     }
@@ -125,13 +143,23 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     return Math.min(this.retryWait * multiplier, this.retryWaitMax)
   }
 
-  private errorMessage (error: unknown): string {
-    if (error instanceof ChaintracksFetchError) return `${error.status} ${error.statusText}: ${error.message}`
-    if (error instanceof Error) return error.message
-    return String(error)
+  private validatePositiveOption(value: number, name: string, maximum: number): void {
+    if (!Number.isSafeInteger(value) || value < 1 || value > maximum) {
+      throw new Error(`${name} must be a positive safe integer no greater than ${maximum}`)
+    }
   }
 
-  private async waitUnlessStopped (msecs: number): Promise<void> {
+  private errorMessage(error: unknown): string {
+    const message =
+      error instanceof ChaintracksFetchError
+        ? `${error.status} ${error.statusText}: ${error.message}`
+        : error instanceof Error
+          ? error.message
+          : String(error)
+    return safeDiagnostic(message)
+  }
+
+  private async waitUnlessStopped(msecs: number): Promise<void> {
     let remaining = msecs
     while (remaining > 0 && !this.done) {
       const chunk = Math.min(1000, remaining)
@@ -140,11 +168,11 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     }
   }
 
-  stopListening (): void {
+  stopListening(): void {
     this.done = true
   }
 
-  override async shutdown (): Promise<void> {
+  override async shutdown(): Promise<void> {
     this.stopListening()
   }
 }

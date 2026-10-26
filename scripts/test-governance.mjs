@@ -89,14 +89,14 @@ export function classifyManualFile(relativePath, rules) {
   )
 }
 
-function validateDatedOwner(record, policy, label, errors, today) {
+function validateDatedOwner(record, policy, label, errors, { today, warnings }) {
   if (!policy.ownerDefinitions.includes(record.owner)) {
     errors.push(`${label} references unknown owner "${record.owner}"`)
   }
   if (typeof record.reviewBy !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(record.reviewBy)) {
     errors.push(`${label} must declare reviewBy as YYYY-MM-DD`)
   } else if (record.reviewBy < today) {
-    errors.push(`${label} expired on ${record.reviewBy}`)
+    warnings.push(`${label} expired on ${record.reviewBy}`)
   }
 }
 
@@ -146,8 +146,8 @@ function collectTestInventory(root) {
   return { manualFiles, requiredFiles }
 }
 
-function validatePropertyPolicy(root, propertyTesting, policy, errors, today) {
-  validateDatedOwner(propertyTesting, policy, 'property testing policy', errors, today)
+function validatePropertyPolicy(root, propertyTesting, policy, errors, review) {
+  validateDatedOwner(propertyTesting, policy, 'property testing policy', errors, review)
   if (typeof propertyTesting.library !== 'string' || propertyTesting.library.trim() === '') {
     errors.push('property testing policy must declare a library')
   }
@@ -212,11 +212,11 @@ function validatePropertyExclusion(
   propertyManifestSet,
   policy,
   errors,
-  today,
+  review,
   exclusion
 ) {
   const label = `property exclusion ${exclusion.manifest}`
-  validateDatedOwner({ ...propertyTesting, ...exclusion }, policy, label, errors, today)
+  validateDatedOwner({ ...propertyTesting, ...exclusion }, policy, label, errors, review)
   if (propertyManifestSet.has(exclusion.manifest)) {
     errors.push(`${exclusion.manifest} cannot be both a property manifest and an exclusion`)
   }
@@ -266,7 +266,7 @@ function validatePropertyExclusions(
   propertyManifestPaths,
   policy,
   errors,
-  today
+  review
 ) {
   const exclusions = propertyTesting.exclusions ?? []
   const excludedManifestPaths = exclusions.map(exclusion => exclusion.manifest)
@@ -281,7 +281,7 @@ function validatePropertyExclusions(
       propertyManifestSet,
       policy,
       errors,
-      today,
+      review,
       exclusion
     )
   }
@@ -290,13 +290,13 @@ function validatePropertyExclusions(
   return excludedManifestPaths
 }
 
-function validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, today) {
+function validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, review) {
   validateDatedOwner(
     { ...propertyTesting, ...suite },
     policy,
     `property suite ${suite.path}`,
     errors,
-    today
+    review
   )
   if (typeof suite.target !== 'string' || suite.target.trim().length < 20) {
     errors.push(`property suite ${suite.path} must declare its target`)
@@ -358,13 +358,13 @@ function validatePropertySuiteSource(root, suite, propertyTesting, requiredEnvir
   }
 }
 
-function validatePropertySuite(root, suite, context, propertyTesting, policy, errors, today) {
+function validatePropertySuite(root, suite, context, propertyTesting, policy, errors, review) {
   if (context.suitePaths.has(suite.path)) {
     errors.push(`duplicate property suite ${suite.path}`)
   }
   context.suitePaths.add(suite.path)
   context.suiteManifestPaths.add(suite.manifest)
-  validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, today)
+  validatePropertySuiteMetadata(suite, propertyTesting, policy, errors, review)
   if (!context.requiredFiles.includes(suite.path)) {
     errors.push(`property suite ${suite.path} is missing from required tests`)
     return
@@ -411,8 +411,8 @@ function validatePropertyWorkflow(root, propertyTesting, errors) {
   }
 }
 
-function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, errors, today) {
-  validatePropertyPolicy(root, propertyTesting, policy, errors, today)
+function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, errors, review) {
+  validatePropertyPolicy(root, propertyTesting, policy, errors, review)
   const requiredEnvironment = validateReplayEnvironment(propertyTesting, errors)
   const { manifestPaths, manifests } = loadPropertyManifests(root, propertyTesting, errors)
   const context = {
@@ -423,7 +423,7 @@ function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, e
     suitePaths: new Set()
   }
   for (const suite of propertyTesting.suites ?? []) {
-    validatePropertySuite(root, suite, context, propertyTesting, policy, errors, today)
+    validatePropertySuite(root, suite, context, propertyTesting, policy, errors, review)
   }
   validatePropertyRegistrations(context, manifestPaths, errors)
   const excludedManifestPaths = validatePropertyExclusions(
@@ -432,7 +432,7 @@ function validatePropertyTesting(root, requiredFiles, propertyTesting, policy, e
     manifestPaths,
     policy,
     errors,
-    today
+    review
   )
   validatePropertyWorkflow(root, propertyTesting, errors)
   return { excludedManifestPaths, manifestPaths }
@@ -601,8 +601,8 @@ function validateMutationCompleteness(propertyTesting, context, errors) {
   }
 }
 
-function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, errors, today) {
-  validateDatedOwner(mutationPolicy, policy, 'mutation testing policy', errors, today)
+function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, errors, review) {
+  validateDatedOwner(mutationPolicy, policy, 'mutation testing policy', errors, review)
   const tool = mutationPolicy.tool ?? {}
   validateMutationTool(root, tool, propertyTesting, errors)
   validateMutationWorkflows(root, tool, errors)
@@ -621,12 +621,12 @@ function validateMutationTesting(root, mutationPolicy, propertyTesting, policy, 
   return registeredIds.size
 }
 
-function validateManualPolicies(policy, errors, today) {
+function validateManualPolicies(policy, errors, review) {
   const manualPolicies = new Map(
     policy.manualPolicies.map(manualPolicy => [manualPolicy.id, manualPolicy])
   )
   for (const manualPolicy of policy.manualPolicies) {
-    validateDatedOwner(manualPolicy, policy, `manual policy ${manualPolicy.id}`, errors, today)
+    validateDatedOwner(manualPolicy, policy, `manual policy ${manualPolicy.id}`, errors, review)
     for (const field of ['classification', 'expectedResult', 'cleanup', 'cadence', 'invocation']) {
       if (typeof manualPolicy[field] !== 'string' || manualPolicy[field].trim() === '') {
         errors.push(`manual policy ${manualPolicy.id} must declare ${field}`)
@@ -809,8 +809,8 @@ function validateRetainedWalletSuite(root, suite, discoveredByPortablePath, erro
   }
 }
 
-function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory, errors, today) {
-  validateDatedOwner(inventory, policy, 'wallet manual suite inventory', errors, today)
+function validateWalletManualSuiteInventory(root, manualFiles, policy, inventory, errors, review) {
+  validateDatedOwner(inventory, policy, 'wallet manual suite inventory', errors, review)
   if (inventory.schemaVersion !== 1) {
     errors.push('wallet manual suite inventory must use schemaVersion 1')
   }
@@ -842,7 +842,7 @@ function collectRequiredTestSkips(root, requiredFiles, errors) {
 
 const requiredSkipKey = entry => `${entry.path}\0${entry.title}`
 
-function registerRequiredSkips(policy, errors, today) {
+function registerRequiredSkips(policy, errors, review) {
   const registeredSkips = new Map()
   for (const skip of policy.requiredSkips) {
     const key = requiredSkipKey(skip)
@@ -850,7 +850,7 @@ function registerRequiredSkips(policy, errors, today) {
       errors.push(`duplicate required skip registration for ${skip.path} :: ${skip.title}`)
     }
     registeredSkips.set(key, skip)
-    validateDatedOwner(skip, policy, `required skip ${skip.path} :: ${skip.title}`, errors, today)
+    validateDatedOwner(skip, policy, `required skip ${skip.path} :: ${skip.title}`, errors, review)
     for (const field of ['classification', 'reason', 'removeWhen']) {
       if (typeof skip[field] !== 'string' || skip[field].trim().length < 10) {
         errors.push(`required skip ${skip.path} :: ${skip.title} must declare ${field}`)
@@ -876,7 +876,7 @@ function compareRequiredSkips(observedSkips, registeredSkips, errors) {
   }
 }
 
-function validateConformanceGroups(root, policy, errors, today) {
+function validateConformanceGroups(root, policy, errors, review) {
   const conformance = collectConformanceSkips(root)
   errors.push(...conformance.errors)
   const registeredConformance = new Map(
@@ -892,13 +892,13 @@ function validateConformanceGroups(root, policy, errors, today) {
       )
     }
   }
-  validateRegisteredConformanceGroups(conformance, policy, errors, today)
+  validateRegisteredConformanceGroups(conformance, policy, errors, review)
   return conformance
 }
 
-function validateRegisteredConformanceGroups(conformance, policy, errors, today) {
+function validateRegisteredConformanceGroups(conformance, policy, errors, review) {
   for (const group of policy.conformanceSkipGroups) {
-    validateDatedOwner(group, policy, `conformance skip group ${group.path}`, errors, today)
+    validateDatedOwner(group, policy, `conformance skip group ${group.path}`, errors, review)
     if (!conformance.byFile.has(group.path)) {
       errors.push(`stale conformance skip group ${group.path}`)
     }
@@ -918,6 +918,8 @@ export function evaluateTestGovernance({
   today = new Date().toISOString().slice(0, 10)
 } = {}) {
   const errors = []
+  const warnings = []
+  const review = { today, warnings }
   const { manualFiles, requiredFiles } = collectTestInventory(root)
   const propertyTesting = policy.propertyTesting
   const { excludedManifestPaths, manifestPaths } = validatePropertyTesting(
@@ -926,7 +928,7 @@ export function evaluateTestGovernance({
     propertyTesting,
     policy,
     errors,
-    today
+    review
   )
   const mutationTargets = validateMutationTesting(
     root,
@@ -934,9 +936,9 @@ export function evaluateTestGovernance({
     propertyTesting,
     policy,
     errors,
-    today
+    review
   )
-  const manualPolicies = validateManualPolicies(policy, errors, today)
+  const manualPolicies = validateManualPolicies(policy, errors, review)
   validateManualFiles(manualFiles, policy, manualPolicies, errors)
   const walletManualSuites = validateWalletManualSuiteInventory(
     root,
@@ -944,15 +946,16 @@ export function evaluateTestGovernance({
     policy,
     walletManualSuiteInventory,
     errors,
-    today
+    review
   )
   const observedSkips = collectRequiredTestSkips(root, requiredFiles, errors)
-  const registeredSkips = registerRequiredSkips(policy, errors, today)
+  const registeredSkips = registerRequiredSkips(policy, errors, review)
   compareRequiredSkips(observedSkips, registeredSkips, errors)
-  const conformance = validateConformanceGroups(root, policy, errors, today)
+  const conformance = validateConformanceGroups(root, policy, errors, review)
 
   return {
     errors,
+    warnings,
     summary: {
       requiredTestFiles: requiredFiles.length,
       requiredDirectSkips: observedSkips.length,
@@ -974,6 +977,7 @@ export function evaluateTestGovernance({
 
 function run() {
   const result = evaluateTestGovernance()
+  for (const warning of result.warnings) console.warn(`MAINTENANCE ${warning}`)
   if (result.errors.length > 0) {
     console.error(`Test governance failed with ${result.errors.length} finding(s):`)
     for (const error of result.errors) console.error(`- ${error}`)

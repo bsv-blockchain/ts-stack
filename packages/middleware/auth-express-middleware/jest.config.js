@@ -26,7 +26,7 @@ export default {
   // exchanges that require sequential execution to avoid worker event-loop
   // scheduling issues and port conflicts.
   maxWorkers: 1,
-  collectCoverageFrom: ['src/**/*.ts', '!src/__tests/**'],
+  collectCoverageFrom: ['mod.ts', 'src/**/*.ts', '!src/__tests/**'],
   coverageThreshold: {
     global: {
       branches: 80,

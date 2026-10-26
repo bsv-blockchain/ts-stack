@@ -14,6 +14,7 @@ import {
 export const SYNC_TRANSFER_MIGRATION = '2026-09-09-001 add bounded sync transfers'
 
 export const AUTH_SESSION_MIGRATION = '2026-07-14-001 add shared auth sessions'
+export const AUTH_MESSAGE_NONCE_MIGRATION = '2026-09-16-001 add auth message replay claims'
 export const MONITOR_CREATED_AT_INDEX_MIGRATION = '2026-07-14-002 add monitor created index'
 export const CREATE_ACTION_FUNDING_INDEX_MIGRATION = '2026-08-02-001 add createAction funding selection index'
 export const PAYMENT_REPLAY_MIGRATION = '2026-08-04-001 add payment replay claims'
@@ -22,6 +23,7 @@ export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifac
 export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
+export const INTERNALIZE_RECEIPT_MIGRATION = '2026-10-13-001 coordinate wallet receipt ownership'
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -82,6 +84,28 @@ export class KnexMigrations implements MigrationSource<string> {
   ): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
 
+    migrations[INTERNALIZE_RECEIPT_MIGRATION] = {
+      async up(knex) {
+        // Historical wallets can contain duplicate transaction identifiers.
+        // The receipt key serializes future internalizeAction calls without
+        // modifying or rejecting those existing financial records.
+        if (!(await knex.schema.hasTable('internalize_receipts'))) {
+          await knex.schema.createTable('internalize_receipts', table => {
+            table.integer('userId').unsigned().notNullable().references('userId').inTable('users')
+            table.string('txid', 64).notNullable()
+            table.string('ownerToken', 64).notNullable()
+            table.string('state', 16).notNullable()
+            table.bigInteger('leaseUntil').notNullable()
+            table.boolean('needsNewReceipt').notNullable().defaultTo(false)
+            table.primary(['userId', 'txid'])
+          })
+        }
+      },
+      async down(knex) {
+        await knex.schema.dropTableIfExists('internalize_receipts')
+      }
+    }
+
     const addTimeStamps = (knex: Knex<any, any[]>, table: Knex.CreateTableBuilder, dbtype: DBType) => {
       if (dbtype === 'MySQL') {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now(3)).notNullable()
@@ -95,29 +119,37 @@ export class KnexMigrations implements MigrationSource<string> {
     migrations[SYNC_TRANSFER_MIGRATION] = {
       config: { transaction: true },
       async up(knex) {
+        const dbtype = await determineDBType(knex)
         // MySQL DDL commits implicitly; table/slot creation also tolerates an interrupted migration.
-        if (!await knex.schema.hasTable('sync_transfers')) await knex.schema.createTable('sync_transfers', table => {
-          table.integer('slot').primary()
-          table.string('transferId', 64).unique().nullable()
-          table.string('identityKey', 130).nullable()
-          table.string('context', 64).nullable()
-          table.string('direction', 8).nullable()
-          table.string('digest', 64).nullable()
-          table.integer('totalBytes').nullable()
-          table.integer('receivedBytes').notNullable().defaultTo(0)
-          table.integer('partBytes').nullable()
-          table.bigInteger('expiresAt').notNullable().defaultTo(0)
-          table.string('state', 16).nullable()
-          table.text('result').nullable()
-        })
+        if (!(await knex.schema.hasTable('sync_transfers')))
+          await knex.schema.createTable('sync_transfers', table => {
+            table.integer('slot').primary()
+            table.string('transferId', 64).unique().nullable()
+            table.string('identityKey', 130).nullable()
+            table.string('context', 64).nullable()
+            table.string('direction', 8).nullable()
+            table.string('digest', 64).nullable()
+            table.integer('totalBytes').nullable()
+            table.integer('receivedBytes').notNullable().defaultTo(0)
+            table.integer('partBytes').nullable()
+            table.bigInteger('expiresAt').notNullable().defaultTo(0)
+            table.string('state', 16).nullable()
+            table.text('result').nullable()
+          })
         // Slot zero serializes allocation across replicas; eight slots bound total disk usage.
-        await knex('sync_transfers').insert(Array.from({ length: 9 }, (_, slot) => ({ slot }))).onConflict('slot').ignore()
-        if (!await knex.schema.hasTable('sync_transfer_parts')) await knex.schema.createTable('sync_transfer_parts', table => {
-          table.integer('slot').notNullable().references('slot').inTable('sync_transfers')
-          table.integer('offset').notNullable()
-          table.specificType('bytes', String(knex.client.config.client).includes('mysql') ? 'mediumblob' : 'blob').notNullable()
-          table.primary(['slot', 'offset'])
-        })
+        await knex('sync_transfers')
+          .insert(Array.from({ length: 9 }, (_, slot) => ({ slot })))
+          .onConflict('slot')
+          .ignore()
+        const bytesTypes: Partial<Record<DBType, string>> = { MySQL: 'mediumblob', Postgres: 'bytea' }
+        const bytesType = bytesTypes[dbtype] ?? 'blob'
+        if (!(await knex.schema.hasTable('sync_transfer_parts')))
+          await knex.schema.createTable('sync_transfer_parts', table => {
+            table.integer('slot').notNullable().references('slot').inTable('sync_transfers')
+            table.integer('offset').notNullable()
+            table.specificType('bytes', bytesType).notNullable()
+            table.primary(['slot', 'offset'])
+          })
       },
       async down(knex) {
         await knex.schema.dropTableIfExists('sync_transfer_parts')
@@ -142,6 +174,23 @@ export class KnexMigrations implements MigrationSource<string> {
       },
       async down(knex) {
         await knex.schema.dropTable('auth_sessions')
+      }
+    }
+
+    migrations[AUTH_MESSAGE_NONCE_MIGRATION] = {
+      async up(knex) {
+        await knex.schema.createTable('auth_message_nonces', table => {
+          // Session nonces are 64 characters. Initial-request replay scopes
+          // use `initial:` plus a 66-character compressed identity key.
+          table.string('sessionNonce', 130).notNullable()
+          table.string('messageNonce', 64).notNullable()
+          table.bigInteger('expiresAt').notNullable()
+          table.primary(['sessionNonce', 'messageNonce'])
+          table.index('expiresAt', 'idx_auth_message_nonces_expires')
+        })
+      },
+      async down(knex) {
+        await knex.schema.dropTable('auth_message_nonces')
       }
     }
 
@@ -584,7 +633,12 @@ export class KnexMigrations implements MigrationSource<string> {
           knex
         })
         const settings = await storage.makeAvailable()
-        await knex.raw(`update users set activeStorage = '${settings.storageIdentityKey}' where activeStorage is NULL`)
+        // ?? quotes identifiers: Postgres lowercases unquoted names, so camelCase columns must be quoted.
+        await knex.raw('update users set ?? = ? where ?? is NULL', [
+          'activeStorage',
+          settings.storageIdentityKey,
+          'activeStorage'
+        ])
         await knex.schema.alterTable('users', table => {
           table.string('activeStorage').notNullable().alter()
         })
@@ -810,7 +864,8 @@ export class KnexMigrations implements MigrationSource<string> {
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN rawTx LONGBLOB')
           await knex.raw('ALTER TABLE transactions MODIFY COLUMN inputBEEF LONGBLOB')
           await knex.raw('ALTER TABLE outputs MODIFY COLUMN lockingScript LONGBLOB')
-        } else {
+        } else if (dbtype !== 'Postgres') {
+          // Postgres bytea is unbounded; there is nothing to widen.
           await knex.schema.alterTable('proven_tx_reqs', table => {
             table.binary('rawTx', 10000000).alter()
             table.binary('beef', 10000000).alter()
@@ -863,6 +918,9 @@ export class KnexMigrations implements MigrationSource<string> {
  * @returns {DBType} connected database engine variant
  */
 export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType> {
+  // The MySQL probe below is not valid Postgres SQL, and a failed statement
+  // would abort the surrounding migration transaction.
+  if (knex.client?.dialect === 'postgresql') return 'Postgres'
   try {
     const q = `SELECT 
   CASE 

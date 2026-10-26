@@ -3,7 +3,7 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.1.1'
+version: '1.1.2'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
 review_cadence_days: 30

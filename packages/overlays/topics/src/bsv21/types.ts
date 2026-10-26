@@ -27,4 +27,6 @@ export interface Bsv21Query {
   txid?: string
   outputIndex?: number
   ownerHash160?: PubKeyHex
+  limit?: number
+  skip?: number
 }

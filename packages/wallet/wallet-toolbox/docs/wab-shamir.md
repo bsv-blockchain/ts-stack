@@ -1,6 +1,10 @@
 # WAB Shamir Key Recovery
 
-This guide covers the Shamir Secret Sharing key recovery system, which provides secure wallet backup and recovery using a configurable threshold scheme.
+This guide covers Shamir Secret Sharing **key recovery** using a configurable
+threshold scheme. Recovering the key does not restore wallet records, output
+derivation metadata or product data. Pair this flow with an independent data
+backup and the [wallet recovery plan](https://bsv-blockchain.github.io/ts-stack/guides/wallet-backup-recovery/);
+test both together using the [recovery drill](https://bsv-blockchain.github.io/ts-stack/guides/wallet-recovery-drill/).
 
 ## Overview
 

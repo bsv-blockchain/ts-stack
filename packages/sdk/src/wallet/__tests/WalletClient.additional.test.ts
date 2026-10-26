@@ -15,6 +15,10 @@ import WalletWireTransceiver from '../substrates/WalletWireTransceiver'
 import { WERR_INVALID_PARAMETER } from '../WERR_INVALID_PARAMETER'
 import type { WalletInterface } from '../Wallet.interfaces'
 
+const VALID_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const VALID_CERT_TYPE = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+const VALID_CERT_SERIAL = 'AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI='
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -23,7 +27,10 @@ import type { WalletInterface } from '../Wallet.interfaces'
  * Expect `fn` to throw (or reject) with WERR_INVALID_PARAMETER and the given
  * parameter name.  Works for both sync throws and async rejections.
  */
-async function expectInvalidParam(fn: () => Promise<unknown>, expectedParam: string): Promise<void> {
+async function expectInvalidParam(
+  fn: () => Promise<unknown>,
+  expectedParam: string
+): Promise<void> {
   try {
     await fn()
     throw new Error('Expected WERR_INVALID_PARAMETER but nothing was thrown')
@@ -65,9 +72,9 @@ describe('WalletClient – constructor substrate aliases', () => {
     const postMessage = jest.fn()
     global.window = {
       ReactNativeWebView: { postMessage },
-      addEventListener: jest.fn(
-        (_name: string, callback: (event: MessageEvent) => void) => { listener = callback }
-      ),
+      addEventListener: jest.fn((_name: string, callback: (event: MessageEvent) => void) => {
+        listener = callback
+      }),
       removeEventListener: jest.fn()
     } as unknown as Window & typeof globalThis
     try {
@@ -81,11 +88,11 @@ describe('WalletClient – constructor substrate aliases', () => {
           isInvocation: false,
           id: invocation.id,
           status: 'success',
-          result: { version: '1.0.0' }
+          result: { version: '1.0.0.0' }
         })
       } as MessageEvent)
 
-      await expect(promise).resolves.toEqual({ version: '1.0.0' })
+      await expect(promise).resolves.toEqual({ version: '1.0.0.0' })
       expect(client.originator).toBe('myapp.com')
     } finally {
       global.window = originalWindow
@@ -121,15 +128,19 @@ describe('WalletClient – constructor substrate aliases', () => {
       getHeight: jest.fn(),
       getHeaderForHeight: jest.fn(),
       getNetwork: jest.fn(),
-      getVersion: jest.fn(),
+      getVersion: jest.fn()
     }
     const client = new WalletClient(mockWallet)
     expect(client.substrate).toBe(mockWallet)
   })
 
   it('stores the originator on the instance', () => {
-    const client = new WalletClient('auto', 'example.com')
+    const client = new WalletClient('auto', '  Example.COM  ')
     expect(client.originator).toBe('example.com')
+  })
+
+  it('rejects an originator that is not a canonical hostname', () => {
+    expect(() => new WalletClient('auto', 'https://example.com')).toThrow(WERR_INVALID_PARAMETER)
   })
 
   it('originator is undefined when not provided', () => {
@@ -145,7 +156,7 @@ describe('WalletClient – constructor substrate aliases', () => {
 describe('WalletClient – connectToSubstrate', () => {
   it('does not attempt discovery when substrate is already an object', async () => {
     const mockWallet: Partial<WalletInterface> = {
-      getVersion: jest.fn().mockResolvedValue({ version: '1.0.0.0.0.0.0' }),
+      getVersion: jest.fn().mockResolvedValue({ version: '1.0.0.0.0.0.0' })
     }
     const client = new WalletClient(mockWallet as WalletInterface)
     // connectToSubstrate should return immediately
@@ -167,10 +178,7 @@ describe('WalletClient – createAction validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER for description shorter than 5 bytes', async () => {
-    await expectInvalidParam(
-      () => client.createAction({ description: 'hi' }),
-      'description'
-    )
+    await expectInvalidParam(() => client.createAction({ description: 'hi' }), 'description')
   })
 
   it('throws WERR_INVALID_PARAMETER for description longer than 2000 bytes', async () => {
@@ -182,111 +190,127 @@ describe('WalletClient – createAction validation', () => {
 
   it('throws WERR_INVALID_PARAMETER when output has an empty lockingScript', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: '', satoshis: 1000, outputDescription: 'my output' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: '', satoshis: 1000, outputDescription: 'my output' }]
+        }),
       'lockingScript'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when output lockingScript is odd-length hex', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: 'abc', satoshis: 1000, outputDescription: 'my output' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: 'abc', satoshis: 1000, outputDescription: 'my output' }]
+        }),
       'lockingScript'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when output has no outputDescription', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: '1234', satoshis: 1000, outputDescription: '' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: '1234', satoshis: 1000, outputDescription: '' }]
+        }),
       'outputDescription'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when output description is shorter than 5 bytes', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: '1234', satoshis: 1000, outputDescription: 'hi' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: '1234', satoshis: 1000, outputDescription: 'hi' }]
+        }),
       'outputDescription'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when satoshis is negative', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: '1234', satoshis: -1, outputDescription: 'my output' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: '1234', satoshis: -1, outputDescription: 'my output' }]
+        }),
       'satoshis'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when satoshis is a float', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        outputs: [{ lockingScript: '1234', satoshis: 1.5, outputDescription: 'my output' }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          outputs: [{ lockingScript: '1234', satoshis: 1.5, outputDescription: 'my output' }]
+        }),
       'satoshis'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when input has neither unlockingScript nor unlockingScriptLength', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        inputs: [{
-          outpoint: 'a'.repeat(64) + '.0',
-          inputDescription: 'my input',
-        }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          inputs: [
+            {
+              outpoint: 'a'.repeat(64) + '.0',
+              inputDescription: 'my input'
+            }
+          ]
+        }),
       'unlockingScript, unlockingScriptLength'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when input unlockingScript is odd-length', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        inputs: [{
-          outpoint: 'a'.repeat(64) + '.0',
-          inputDescription: 'my input',
-          unlockingScript: 'abc',
-        }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          inputs: [
+            {
+              outpoint: 'a'.repeat(64) + '.0',
+              inputDescription: 'my input',
+              unlockingScript: 'abc'
+            }
+          ]
+        }),
       'unlockingScript'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when input inputDescription is too short', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        inputs: [{
-          outpoint: 'a'.repeat(64) + '.0',
-          inputDescription: 'hi',
-          unlockingScriptLength: 10,
-        }],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          inputs: [
+            {
+              outpoint: 'a'.repeat(64) + '.0',
+              inputDescription: 'hi',
+              unlockingScriptLength: 10
+            }
+          ]
+        }),
       'inputDescription'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when label is an empty string', async () => {
     await expectInvalidParam(
-      () => client.createAction({
-        description: 'hello world',
-        labels: [''],
-      }),
+      () =>
+        client.createAction({
+          description: 'hello world',
+          labels: ['']
+        }),
       'label'
     )
   })
@@ -324,10 +348,7 @@ describe('WalletClient – abortAction validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER when reference is empty', async () => {
-    await expectInvalidParam(
-      () => client.abortAction({ reference: '' }),
-      'reference'
-    )
+    await expectInvalidParam(() => client.abortAction({ reference: '' }), 'reference')
   })
 
   it('throws WERR_INVALID_PARAMETER when reference contains invalid base64 characters', async () => {
@@ -357,45 +378,27 @@ describe('WalletClient – listActions validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER when limit exceeds 10000', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: [], limit: 10001 }),
-      'limit'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: [], limit: 10001 }), 'limit')
   })
 
   it('throws WERR_INVALID_PARAMETER when limit is zero', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: [], limit: 0 }),
-      'limit'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: [], limit: 0 }), 'limit')
   })
 
   it('throws WERR_INVALID_PARAMETER when limit is a float', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: [], limit: 1.5 }),
-      'limit'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: [], limit: 1.5 }), 'limit')
   })
 
   it('throws WERR_INVALID_PARAMETER when offset is negative', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: [], offset: -1 }),
-      'offset'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: [], offset: -1 }), 'offset')
   })
 
   it('throws WERR_INVALID_PARAMETER when a label is empty', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: [''] }),
-      'label'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: [''] }), 'label')
   })
 
   it('throws WERR_INVALID_PARAMETER when a label is too long (>300 bytes)', async () => {
-    await expectInvalidParam(
-      () => client.listActions({ labels: ['x'.repeat(301)] }),
-      'label'
-    )
+    await expectInvalidParam(() => client.listActions({ labels: ['x'.repeat(301)] }), 'label')
   })
 })
 
@@ -411,10 +414,7 @@ describe('WalletClient – listOutputs validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER when basket is empty', async () => {
-    await expectInvalidParam(
-      () => client.listOutputs({ basket: '' }),
-      'basket'
-    )
+    await expectInvalidParam(() => client.listOutputs({ basket: '' }), 'basket')
   })
 
   it('throws WERR_INVALID_PARAMETER for invalid tagQueryMode', async () => {
@@ -425,10 +425,7 @@ describe('WalletClient – listOutputs validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER when limit exceeds 10000', async () => {
-    await expectInvalidParam(
-      () => client.listOutputs({ basket: 'default', limit: 10001 }),
-      'limit'
-    )
+    await expectInvalidParam(() => client.listOutputs({ basket: 'default', limit: 10001 }), 'limit')
   })
 })
 
@@ -471,52 +468,56 @@ describe('WalletClient – acquireCertificate validation', () => {
 
   it('throws WERR_INVALID_PARAMETER for unrecognised acquisitionProtocol', async () => {
     await expectInvalidParam(
-      () => client.acquireCertificate({
-        acquisitionProtocol: 'unknown' as any,
-        type: 'dHlwZQ==',
-        certifier: 'aa',
-        fields: {},
-      }),
+      () =>
+        client.acquireCertificate({
+          acquisitionProtocol: 'unknown' as any,
+          type: 'dHlwZQ==',
+          certifier: 'aa',
+          fields: {}
+        }),
       'acquisitionProtocol'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER for direct acquisition missing serialNumber', async () => {
     await expectInvalidParam(
-      () => client.acquireCertificate({
-        acquisitionProtocol: 'direct',
-        type: 'dHlwZQ==',
-        certifier: 'aabb',
-        fields: {},
-        // missing serialNumber, signature, revocationOutpoint, keyringRevealer, keyringForSubject
-      } as any),
+      () =>
+        client.acquireCertificate({
+          acquisitionProtocol: 'direct',
+          type: 'dHlwZQ==',
+          certifier: 'aabb',
+          fields: {}
+          // missing serialNumber, signature, revocationOutpoint, keyringRevealer, keyringForSubject
+        } as any),
       'serialNumber'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER for issuance acquisition missing certifierUrl', async () => {
     await expectInvalidParam(
-      () => client.acquireCertificate({
-        acquisitionProtocol: 'issuance',
-        type: 'dHlwZQ==',
-        certifier: 'aabb',
-        fields: {},
-        // certifierUrl deliberately omitted
-      } as any),
+      () =>
+        client.acquireCertificate({
+          acquisitionProtocol: 'issuance',
+          type: 'dHlwZQ==',
+          certifier: 'aabb',
+          fields: {}
+          // certifierUrl deliberately omitted
+        } as any),
       'certifierUrl'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER for issuance with serialNumber (not allowed)', async () => {
     await expectInvalidParam(
-      () => client.acquireCertificate({
-        acquisitionProtocol: 'issuance',
-        type: 'dHlwZQ==',
-        certifier: 'aabb',
-        certifierUrl: 'https://certifier.example.com',
-        fields: {},
-        serialNumber: 'c2VyaWFs',
-      }),
+      () =>
+        client.acquireCertificate({
+          acquisitionProtocol: 'issuance',
+          type: 'dHlwZQ==',
+          certifier: 'aabb',
+          certifierUrl: 'https://certifier.example.com',
+          fields: {},
+          serialNumber: 'c2VyaWFs'
+        }),
       'serialNumber'
     )
   })
@@ -582,14 +583,24 @@ describe('WalletClient – relinquishCertificate validation', () => {
 
   it('throws WERR_INVALID_PARAMETER when serialNumber is empty', async () => {
     await expectInvalidParam(
-      () => client.relinquishCertificate({ type: 'dHlwZQ==', serialNumber: '', certifier: 'aabb' }),
+      () =>
+        client.relinquishCertificate({
+          type: VALID_CERT_TYPE,
+          serialNumber: '',
+          certifier: 'aabb'
+        }),
       'serialNumber'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when certifier is odd-length hex', async () => {
     await expectInvalidParam(
-      () => client.relinquishCertificate({ type: 'dHlwZQ==', serialNumber: 'c2Vy', certifier: 'aab' }),
+      () =>
+        client.relinquishCertificate({
+          type: VALID_CERT_TYPE,
+          serialNumber: VALID_CERT_SERIAL,
+          certifier: 'aab'
+        }),
       'certifier'
     )
   })
@@ -614,15 +625,12 @@ describe('WalletClient – discoverByIdentityKey validation', () => {
   })
 
   it('throws WERR_INVALID_PARAMETER when identityKey is empty', async () => {
-    await expectInvalidParam(
-      () => client.discoverByIdentityKey({ identityKey: '' }),
-      'identityKey'
-    )
+    await expectInvalidParam(() => client.discoverByIdentityKey({ identityKey: '' }), 'identityKey')
   })
 
   it('throws WERR_INVALID_PARAMETER when limit exceeds 10000', async () => {
     await expectInvalidParam(
-      () => client.discoverByIdentityKey({ identityKey: 'aa'.repeat(33), limit: 10001 }),
+      () => client.discoverByIdentityKey({ identityKey: VALID_PUBLIC_KEY, limit: 10001 }),
       'limit'
     )
   })
@@ -641,14 +649,14 @@ describe('WalletClient – discoverByAttributes validation', () => {
 
   it('throws WERR_INVALID_PARAMETER when limit is zero', async () => {
     await expectInvalidParam(
-      () => client.discoverByAttributes({ attributes: {}, limit: 0 }),
+      () => client.discoverByAttributes({ attributes: { name: 'Alice' }, limit: 0 }),
       'limit'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when limit exceeds 10000', async () => {
     await expectInvalidParam(
-      () => client.discoverByAttributes({ attributes: {}, limit: 20000 }),
+      () => client.discoverByAttributes({ attributes: { name: 'Alice' }, limit: 20000 }),
       'limit'
     )
   })
@@ -667,24 +675,26 @@ describe('WalletClient – proveCertificate validation', () => {
 
   it('throws WERR_INVALID_PARAMETER when privileged is true but privilegedReason is missing', async () => {
     await expectInvalidParam(
-      () => client.proveCertificate({
-        certificate: {} as any,
-        fieldsToReveal: [],
-        verifier: 'aa'.repeat(33),
-        privileged: true,
-        // privilegedReason intentionally omitted
-      }),
+      () =>
+        client.proveCertificate({
+          certificate: {} as any,
+          fieldsToReveal: [],
+          verifier: 'aa'.repeat(33),
+          privileged: true
+          // privilegedReason intentionally omitted
+        }),
       'privilegedReason'
     )
   })
 
   it('throws WERR_INVALID_PARAMETER when verifier is not valid hex', async () => {
     await expectInvalidParam(
-      () => client.proveCertificate({
-        certificate: {} as any,
-        fieldsToReveal: [],
-        verifier: 'not-hex!',
-      }),
+      () =>
+        client.proveCertificate({
+          certificate: {} as any,
+          fieldsToReveal: [],
+          verifier: 'not-hex!'
+        }),
       'verifier'
     )
   })

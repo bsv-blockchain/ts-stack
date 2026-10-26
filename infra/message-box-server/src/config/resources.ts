@@ -24,6 +24,10 @@ export interface MessageBoxResourceConfig {
   maxNotificationDevices: number
   notificationRecipientConcurrency: number
   fcmSendConcurrency: number
+  webSocketMaxConnections: number
+  webSocketMaxConnectionsPerIdentity: number
+  webSocketMaxRoomsPerConnection: number
+  webSocketControlRateLimit: number
   webSocketMaxConcurrentSends: number
   webSocketSendRateLimit: number
   webSocketMaxRecipientConnections: number
@@ -143,6 +147,30 @@ export function readMessageBoxResourceConfig(): MessageBoxResourceConfig {
       small: 4,
       standard: 10,
       highThroughput: 50
+    }),
+    webSocketMaxConnections: configured(profile, 'WEBSOCKET_MAX_CONNECTIONS', {
+      small: 250,
+      standard: 1_000,
+      highThroughput: 10_000
+    }),
+    webSocketMaxConnectionsPerIdentity: configured(
+      profile,
+      'WEBSOCKET_MAX_CONNECTIONS_PER_IDENTITY',
+      {
+        small: 5,
+        standard: 25,
+        highThroughput: 100
+      }
+    ),
+    webSocketMaxRoomsPerConnection: configured(profile, 'WEBSOCKET_MAX_ROOMS_PER_CONNECTION', {
+      small: 32,
+      standard: 128,
+      highThroughput: 512
+    }),
+    webSocketControlRateLimit: configured(profile, 'WEBSOCKET_CONTROL_RATE_LIMIT', {
+      small: 120,
+      standard: 600,
+      highThroughput: 2_400
     }),
     webSocketMaxConcurrentSends: configured(profile, 'WEBSOCKET_MAX_CONCURRENT_SENDS', {
       small: 2,

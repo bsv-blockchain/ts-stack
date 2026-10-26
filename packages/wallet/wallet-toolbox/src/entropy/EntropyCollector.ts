@@ -10,7 +10,8 @@
  * mouse movements are predictable, the CSPRNG ensures security.
  */
 
-import { Random, Hash } from '@bsv/sdk'
+import { Random } from '@bsv/sdk'
+import { sha256 } from '@bsv/sdk/primitives/Hash'
 
 export interface EntropyCollectorConfig {
   /** Target number of mouse samples to collect (default: 256) */
@@ -37,7 +38,7 @@ export type EntropyProgressCallback = (progress: EntropyProgress) => void
  * Collected entropy data before mixing
  */
 interface RawEntropyData {
-  mousePositions: Array<{ x: number, y: number, time: number }>
+  mousePositions: Array<{ x: number; y: number; time: number }>
   timingDeltas: number[]
 }
 
@@ -50,7 +51,7 @@ export class EntropyCollector {
 
   private lastSampleTime: number = 0
 
-  constructor (config: EntropyCollectorConfig = {}) {
+  constructor(config: EntropyCollectorConfig = {}) {
     this.config = {
       targetSamples: config.targetSamples ?? 256,
       minSampleInterval: config.minSampleInterval ?? 10
@@ -60,7 +61,7 @@ export class EntropyCollector {
   /**
    * Reset collected entropy data
    */
-  reset (): void {
+  reset(): void {
     this.rawEntropy = {
       mousePositions: [],
       timingDeltas: []
@@ -74,7 +75,7 @@ export class EntropyCollector {
    *
    * @returns Progress information, or null if sample was rejected (too soon)
    */
-  addMouseSample (x: number, y: number): EntropyProgress | null {
+  addMouseSample(x: number, y: number): EntropyProgress | null {
     const now = performance.now()
 
     // Rate limit samples to reduce correlation
@@ -97,7 +98,7 @@ export class EntropyCollector {
   /**
    * Get current collection progress
    */
-  getProgress (): EntropyProgress {
+  getProgress(): EntropyProgress {
     const collected = this.rawEntropy.mousePositions.length
     return {
       collected,
@@ -109,7 +110,7 @@ export class EntropyCollector {
   /**
    * Check if enough entropy has been collected
    */
-  isComplete (): boolean {
+  isComplete(): boolean {
     return this.rawEntropy.mousePositions.length >= this.config.targetSamples
   }
 
@@ -117,7 +118,7 @@ export class EntropyCollector {
    * Extract entropy bytes from collected mouse data
    * Uses SHA-256 to compress and whiten the data
    */
-  private extractRawEntropy (): Uint8Array {
+  private extractRawEntropy(): Uint8Array {
     // Serialize all collected data
     const dataPoints: number[] = []
 
@@ -136,14 +137,11 @@ export class EntropyCollector {
     // Add timing deltas (high entropy source)
     for (const delta of this.rawEntropy.timingDeltas) {
       // Timing deltas converted to bytes
-      dataPoints.push(
-        Math.floor(delta * 1000) & 0xff,
-        Math.floor(delta * 1000000) & 0xff
-      )
+      dataPoints.push(Math.floor(delta * 1000) & 0xff, Math.floor(delta * 1000000) & 0xff)
     }
 
     // Hash to compress and whiten the entropy
-    const hash = Hash.sha256(dataPoints)
+    const hash = sha256(dataPoints)
     return new Uint8Array(hash)
   }
 
@@ -152,7 +150,7 @@ export class EntropyCollector {
    *
    * @returns 32 bytes of high-quality random data suitable for key generation
    */
-  mixWithCSPRNG (): Uint8Array {
+  mixWithCSPRNG(): Uint8Array {
     const userEntropy = this.extractRawEntropy()
     const systemEntropy = new Uint8Array(Random(32))
 
@@ -163,7 +161,7 @@ export class EntropyCollector {
     }
 
     // Final hash to ensure uniform distribution
-    const final = Hash.sha256(Array.from(mixed))
+    const final = sha256(Array.from(mixed))
     return new Uint8Array(final)
   }
 
@@ -175,7 +173,7 @@ export class EntropyCollector {
    *
    * @returns 32 bytes suitable for private key generation
    */
-  generateEntropy (): Uint8Array {
+  generateEntropy(): Uint8Array {
     if (!this.isComplete()) {
       console.warn(
         `EntropyCollector: Only ${this.rawEntropy.mousePositions.length}/${this.config.targetSamples} ` +
@@ -194,7 +192,7 @@ export class EntropyCollector {
    * @param onProgress Optional callback for progress updates
    * @returns Promise that resolves with 32 bytes of entropy
    */
-  async collectFromBrowser (element: EventTarget = document, onProgress?: EntropyProgressCallback): Promise<Uint8Array> {
+  async collectFromBrowser(element: EventTarget = document, onProgress?: EntropyProgressCallback): Promise<Uint8Array> {
     return await new Promise(resolve => {
       const handler = (event: Event): void => {
         if (event instanceof MouseEvent) {
@@ -218,7 +216,7 @@ export class EntropyCollector {
    * Estimate the quality of collected entropy in bits
    * This is a rough heuristic, not a cryptographic guarantee
    */
-  estimateEntropyBits (): number {
+  estimateEntropyBits(): number {
     const samples = this.rawEntropy.mousePositions.length
 
     if (samples === 0) return 0

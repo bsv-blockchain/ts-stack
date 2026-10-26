@@ -17,7 +17,7 @@ const certifier = await Certifier.create()
 // Specific key (persistent certifier)
 const certifier = await Certifier.create({
   privateKey: 'a1b2c3d4...',
-  certificateType: 'Y2VydGlmaWNhdGlvbg==',
+  certificateType: Certifier.getCanonicalCertificateType(),
   defaultFields: { role: 'member' },
   includeTimestamp: true
 })
@@ -25,19 +25,32 @@ const certifier = await Certifier.create({
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `privateKey` | `string` | Random | Hex-encoded private key for the certifier |
-| `certificateType` | `string` | base64('certification') | Certificate type identifier |
-| `defaultFields` | `Record<string, string>` | `{ certified: 'true' }` | Fields included in every certificate |
-| `includeTimestamp` | `boolean` | `true` | Add timestamp field automatically |
+| Parameter          | Type                     | Default                          | Description                                                                         |
+| ------------------ | ------------------------ | -------------------------------- | ----------------------------------------------------------------------------------- |
+| `privateKey`       | `string`                 | Random                           | Hex-encoded private key for the certifier                                           |
+| `certificateType`  | `string`                 | base64(SHA-256('certification')) | Canonical 32-byte type, or a historical short type to canonicalize for new issuance |
+| `defaultFields`    | `Record<string, string>` | `{ certified: 'true' }`          | Fields included in every certificate                                                |
+| `includeTimestamp` | `boolean`                | `true`                           | Add timestamp field automatically                                                   |
 
 ### Certifier Info
 
 ```typescript
 const info = certifier.getInfo()
-// { publicKey: '02abc...', certificateType: 'Y2VydGlm...' }
+// { publicKey: '02abc...', certificateType: '<32-byte base64>' }
 ```
+
+New issuance always uses a canonical 32-byte type. For migration tooling,
+`Certifier.getLegacyCertificateType()` returns the short pre-0.6 default and
+`certifier.getCertificateTypeMigration()` returns the exact canonical/legacy
+mapping for this instance.
+
+The SDK 4.0.0 compatibility candidate permits bounded historical types in
+existing listing, proof and relinquishment calls, while signing/acquisition and
+remote issuance metadata remain strictly 32 bytes. Legacy binary use requires
+upgraded app and wallet adapters; storage servers must upgrade their SDK for
+legacy relinquishment. Older SDKs may reject these references. Do not hash,
+pad or rewrite an existing signed type. See the repository protocol contract
+at `specs/wallet/legacy-certificate-wire.md`.
 
 ## Issuing a Certificate
 
@@ -54,6 +67,7 @@ console.log('Fields:', cert.fields)
 ```
 
 `certify()` does two things:
+
 1. Issues a `MasterCertificate` signed by the certifier
 2. Acquires the certificate into the subject's wallet
 
@@ -61,14 +75,14 @@ console.log('Fields:', cert.fields)
 
 ```typescript
 interface CertificateData {
-  type: string                          // Certificate type
-  serialNumber: string                  // Unique serial number
-  subject: string                       // Subject's identity key
-  certifier: string                     // Certifier's public key
-  revocationOutpoint: string            // Outpoint for revocation
-  fields: Record<string, string>        // Certificate fields
-  signature: string                     // Certifier's signature
-  keyringForSubject: Record<string, string>  // Decryption keyring
+  type: string // Certificate type
+  serialNumber: string // Unique serial number
+  subject: string // Subject's identity key
+  certifier: string // Certifier's public key
+  revocationOutpoint: string // Outpoint for revocation
+  fields: Record<string, string> // Certificate fields
+  signature: string // Certifier's signature
+  keyringForSubject: Record<string, string> // Decryption keyring
 }
 ```
 
@@ -79,7 +93,7 @@ If the certifier runs on a server, wallets can acquire certificates remotely:
 ```typescript
 const cert = await wallet.acquireCertificateFrom({
   serverUrl: 'https://certifier.example.com',
-  replaceExisting: true    // revoke old certs from this certifier first
+  replaceExisting: true // revoke old certs from this certifier first
 })
 ```
 
@@ -88,8 +102,9 @@ const cert = await wallet.acquireCertificateFrom({
 The server must expose two endpoints:
 
 **`GET /api/info`** — Returns certifier metadata:
+
 ```json
-{ "certifierPublicKey": "02abc...", "certificateType": "Y2VydGlm..." }
+{ "certifierPublicKey": "02abc...", "certificateType": "<32-byte base64>" }
 ```
 
 **`POST /api/certify`** — Issues a certificate:
@@ -103,7 +118,7 @@ Response: `CertificateData` JSON
 ```typescript
 const result = await wallet.listCertificatesFrom({
   certifiers: [certifierPublicKey],
-  types: [certificateType],
+  types: [Certifier.getCanonicalCertificateType()],
   limit: 100
 })
 
@@ -117,13 +132,13 @@ for (const cert of result.certificates) {
 
 ```typescript
 await wallet.relinquishCert({
-  type: certificateType,
+  type: Certifier.getCanonicalCertificateType(),
   serialNumber: cert.serialNumber,
   certifier: certifierPublicKey
 })
 ```
 
-This removes the certificate from the wallet. For on-chain revocation of Verifiable Credentials, see the [Credentials Guide](credentials.md).
+This removes the certificate from the wallet. For BRC-52 revocation operations and explicit status evidence, see the [Credentials Guide](credentials.md).
 
 ## Complete Example
 

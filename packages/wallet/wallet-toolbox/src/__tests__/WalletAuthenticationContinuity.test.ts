@@ -1,4 +1,8 @@
+import { CachedKeyDeriver, LockingScript, PrivateKey, RPuzzle, Transaction, UnlockingScript, Utils } from '@bsv/sdk'
 import { WABAccountContinuityError, WalletAuthenticationManager } from '../WalletAuthenticationManager'
+import { CWIStyleWalletManager } from '../CWIStyleWalletManager'
+import { _tu } from '../../test/utils/TestUtilsWalletStorage'
+import { ScriptTemplateBRC29 } from '../utility/ScriptTemplateBRC29'
 
 const temporaryKey = '11'.repeat(32)
 const existingKey = '22'.repeat(32)
@@ -34,6 +38,22 @@ function subject() {
 }
 
 describe('WAB authentication continuity', () => {
+  it('refuses to re-fund a resumed registration when its original token checkpoint is missing', async () => {
+    const { manager, wabClient } = subject()
+    await manager.startAuth({ phoneNumber: '+12065550100' })
+    wabClient.completeAuthMethod.mockResolvedValueOnce({
+      success: true,
+      presentationKey: existingKey,
+      accountStatus: 'existing-user',
+      registrationStatus: 'pending'
+    })
+    await manager.completeAuth({ otp: '123456' })
+
+    const basePassword = jest.spyOn(CWIStyleWalletManager.prototype, 'providePassword').mockResolvedValueOnce()
+    await expect(manager.providePassword('password')).rejects.toThrow(/checkpoint/i)
+    expect(basePassword).not.toHaveBeenCalled()
+  })
+
   it('surfaces a WAB faucet failure message before attempting wallet funding', async () => {
     const wabClient = {
       requestFaucet: jest.fn(async () => ({ success: false, message: 'faucet unavailable' }))
@@ -50,6 +70,290 @@ describe('WAB authentication continuity', () => {
     await expect(
       (manager as any).newWalletFunder(Array(32).fill(1), Object.create(null), 'admin.example')
     ).rejects.toThrow('Faucet request failed: faucet unavailable')
+  })
+
+  it('binds faucet redemption to the exact payment input even when wallet inputs are reordered', async () => {
+    const faucetK = new PrivateKey(2)
+    let rValue = faucetK.toPublicKey().getX().toArray()
+    if (rValue[0] > 127) rValue = [0, ...rValue]
+    const payment = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: new RPuzzle().lock(rValue) }], 0)
+    // The wallet-added input must independently fund the wallet-added output;
+    // this test is about binding the externally signed faucet outpoint after
+    // input reordering, not authorizing that outpoint to fund arbitrary output.
+    const unrelated = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: LockingScript.fromASM('OP_TRUE') }], 0)
+    const partial = new Transaction(
+      1,
+      [
+        {
+          sourceTransaction: unrelated,
+          sourceOutputIndex: 0,
+          sequence: 0xffffffff,
+          unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+        },
+        {
+          sourceTransaction: payment,
+          sourceOutputIndex: 0,
+          sequence: 0xffffffff,
+          unlockingScript: new UnlockingScript()
+        }
+      ],
+      [{ satoshis: 1_000, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+      0
+    )
+    const wallet = {
+      getPublicKey: jest.fn(async () => ({ publicKey: new PrivateKey(3).toPublicKey().toString() })),
+      createAction: jest.fn(async (args: any) => {
+        if (args.inputs == null) return { sendWithResults: [{ txid: partial.id('hex'), status: 'unproven' }] }
+        partial.outputs[0].lockingScript = LockingScript.fromHex(args.outputs[0].lockingScript)
+        return {
+          signableTransaction: { reference: 'ZmF1Y2V0LXJlZmVyZW5jZQ==', tx: partial.toAtomicBEEF() }
+        }
+      }),
+      signAction: jest.fn(async (args: any) => {
+        partial.inputs[1].unlockingScript = UnlockingScript.fromHex(args.spends[1].unlockingScript)
+        return { txid: partial.id('hex'), tx: partial.toAtomicBEEF() }
+      }),
+      abortAction: jest.fn(),
+      internalizeAction: jest.fn(async () => ({ accepted: true })),
+      listOutputs: jest.fn(async () => ({ totalOutputs: 0, outputs: [] })),
+      listActions: jest.fn(async () => ({ totalActions: 0, actions: [] }))
+    }
+    const wabClient = {
+      requestFaucet: jest.fn(async () => ({
+        success: true,
+        paymentData: { k: faucetK.toString(16), tx: payment.toAtomicBEEF(), txid: payment.id('hex') }
+      }))
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => wallet as any,
+      undefined,
+      async () => true,
+      async () => 'password',
+      wabClient as any
+    )
+
+    await expect((manager as any).newWalletFunder(Array(32).fill(1), wallet, 'admin.example')).resolves.toBeUndefined()
+    expect(wallet.createAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        inputs: [expect.objectContaining({ outpoint: `${payment.id('hex')}.0` })],
+        options: expect.objectContaining({ signAndProcess: false, returnTXIDOnly: false })
+      }),
+      'admin.example'
+    )
+    expect(wallet.signAction).toHaveBeenCalledWith(
+      expect.objectContaining({ spends: { 1: { unlockingScript: expect.any(String) } } }),
+      'admin.example'
+    )
+    expect(wallet.abortAction).not.toHaveBeenCalled()
+    expect(wallet.internalizeAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputs: [expect.objectContaining({ protocol: 'wallet payment' })]
+      }),
+      'admin.example'
+    )
+  })
+
+  it('funds an empty real wallet only through an exact wallet-owned output', async () => {
+    const setup = await _tu.createSQLiteTestWallet({
+      databaseName: 'emptyWalletFaucetBinding',
+      chain: 'test',
+      rootKeyHex: '3'.repeat(64),
+      dropAll: true
+    })
+    const faucetK = new PrivateKey(2)
+    let rValue = faucetK.toPublicKey().getX().toArray()
+    if (rValue[0] > 127) rValue = [0, ...rValue]
+    const payment = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: new RPuzzle().lock(rValue) }], 0)
+    const wabClient = {
+      requestFaucet: jest.fn(async () => ({
+        success: true,
+        paymentData: { k: faucetK.toString(16), tx: payment.toAtomicBEEF(), txid: payment.id('hex') }
+      }))
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => setup.wallet,
+      undefined,
+      async () => true,
+      async () => 'password',
+      wabClient as any
+    )
+
+    try {
+      _tu.mockPostServicesAsSuccess([setup])
+      jest.spyOn(setup.services, 'getChainTracker').mockResolvedValue({
+        isValidRootForHeight: async () => true
+      } as any)
+      await expect(
+        (manager as any).newWalletFunder(Array(32).fill(1), setup.wallet, 'admin.example')
+      ).resolves.toBeUndefined()
+      await expect(setup.wallet.balance()).resolves.toBeGreaterThan(0)
+    } finally {
+      await setup.wallet.destroy()
+    }
+  })
+
+  it('recovers a previously signed faucet output instead of authorizing the faucet input again', async () => {
+    const faucetK = new PrivateKey(2)
+    let rValue = faucetK.toPublicKey().getX().toArray()
+    if (rValue[0] > 127) rValue = [0, ...rValue]
+    const payment = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: new RPuzzle().lock(rValue) }], 0)
+    const faucetOutpoint = `${payment.id('hex')}.0`
+    const recipient = new PrivateKey(3)
+    const sender = new PrivateKey(4)
+    const derivationPrefix = Utils.toBase64(Array(16).fill(5))
+    const derivationSuffix = Utils.toBase64(Array(16).fill(6))
+    const template = new ScriptTemplateBRC29({
+      derivationPrefix,
+      derivationSuffix,
+      keyDeriver: new CachedKeyDeriver(sender)
+    })
+    const redemption = new Transaction(
+      1,
+      [
+        {
+          sourceTransaction: payment,
+          sourceOutputIndex: 0,
+          sequence: 0xffffffff,
+          unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+        }
+      ],
+      [{ satoshis: 900, lockingScript: template.lock(sender.toString(), recipient.toPublicKey().toString()) }],
+      0
+    )
+    const instructions = JSON.stringify({
+      version: 1,
+      faucetOutpoint,
+      derivationPrefix,
+      derivationSuffix,
+      senderIdentityKey: sender.toPublicKey().toString()
+    })
+    const wallet = {
+      listOutputs: jest.fn(async () => ({
+        totalOutputs: 1,
+        BEEF: redemption.toAtomicBEEF(),
+        outputs: [
+          {
+            outpoint: `${redemption.id('hex')}.0`,
+            satoshis: 900,
+            spendable: true,
+            customInstructions: instructions
+          }
+        ]
+      })),
+      listActions: jest.fn(),
+      internalizeAction: jest.fn(async () => ({ accepted: true })),
+      getPublicKey: jest.fn(),
+      createAction: jest.fn(),
+      signAction: jest.fn(),
+      abortAction: jest.fn()
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => wallet as any,
+      undefined,
+      async () => true,
+      async () => 'password',
+      {
+        requestFaucet: jest.fn(async () => ({
+          success: true,
+          paymentData: { k: faucetK.toString(16), tx: payment.toAtomicBEEF(), txid: payment.id('hex') }
+        }))
+      } as any
+    )
+
+    await expect((manager as any).newWalletFunder(Array(32).fill(1), wallet, 'admin.example')).resolves.toBeUndefined()
+    expect(wallet.internalizeAction).toHaveBeenCalledTimes(1)
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it('recognizes a completed, already-internalized faucet action after interruption', async () => {
+    const faucetK = new PrivateKey(2)
+    let rValue = faucetK.toPublicKey().getX().toArray()
+    if (rValue[0] > 127) rValue = [0, ...rValue]
+    const payment = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: new RPuzzle().lock(rValue) }], 0)
+    const faucetOutpoint = `${payment.id('hex')}.0`
+    const instructions = JSON.stringify({
+      version: 1,
+      faucetOutpoint,
+      derivationPrefix: Utils.toBase64(Array(16).fill(5)),
+      derivationSuffix: Utils.toBase64(Array(16).fill(6)),
+      senderIdentityKey: new PrivateKey(4).toPublicKey().toString()
+    })
+    const wallet = {
+      listOutputs: jest.fn(async () => ({ totalOutputs: 0, outputs: [] })),
+      listActions: jest.fn(async () => ({
+        totalActions: 1,
+        actions: [
+          {
+            txid: 'aa'.repeat(32),
+            status: 'unproven',
+            labels: [`wab faucet ${payment.id('hex')}`],
+            inputs: [{ sourceOutpoint: faucetOutpoint }],
+            outputs: [{ basket: 'default', customInstructions: instructions }]
+          }
+        ]
+      })),
+      internalizeAction: jest.fn(),
+      getPublicKey: jest.fn(),
+      createAction: jest.fn(),
+      signAction: jest.fn(),
+      abortAction: jest.fn()
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => wallet as any,
+      undefined,
+      async () => true,
+      async () => 'password',
+      {
+        requestFaucet: jest.fn(async () => ({
+          success: true,
+          paymentData: { k: faucetK.toString(16), tx: payment.toAtomicBEEF(), txid: payment.id('hex') }
+        }))
+      } as any
+    )
+
+    await expect((manager as any).newWalletFunder(Array(32).fill(1), wallet, 'admin.example')).resolves.toBeUndefined()
+    expect(wallet.internalizeAction).not.toHaveBeenCalled()
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
+  })
+
+  it('rejects substituted faucet identities and scalars before asking the wallet to sign', async () => {
+    const payment = new Transaction(1, [], [{ satoshis: 1_000, lockingScript: LockingScript.fromASM('OP_TRUE') }], 0)
+    const wallet = { createAction: jest.fn(), signAction: jest.fn(), abortAction: jest.fn() }
+    const wabClient = {
+      requestFaucet: jest
+        .fn()
+        .mockResolvedValueOnce({
+          success: true,
+          paymentData: { k: '2', tx: payment.toAtomicBEEF(), txid: 'f'.repeat(64) }
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          paymentData: { k: '0', tx: payment.toAtomicBEEF(), txid: payment.id('hex') }
+        })
+    }
+    const manager = new WalletAuthenticationManager(
+      'admin.example',
+      async () => wallet as any,
+      undefined,
+      async () => true,
+      async () => 'password',
+      wabClient as any
+    )
+
+    await expect((manager as any).newWalletFunder([], wallet, 'admin.example')).rejects.toThrow(
+      'transaction ID does not match'
+    )
+    await expect((manager as any).newWalletFunder([], wallet, 'admin.example')).rejects.toThrow(
+      'R-puzzle scalar is invalid'
+    )
+    expect(wallet.createAction).not.toHaveBeenCalled()
+    expect(wallet.signAction).not.toHaveBeenCalled()
   })
 
   it('starts, cancels, switches, and reports failed authentication starts', async () => {

@@ -1,5 +1,6 @@
 import { Beef, Telemetry, TelemetryEvent } from '@bsv/sdk'
 import { processAction, shareReqsWithWorld } from '../../src/storage/methods/processAction'
+import { StorageProvider } from '../../src/storage/StorageProvider'
 import { TableProvenTxReq } from '../../src/storage/schema/tables/TableProvenTxReq'
 
 function makeReadyReq (): TableProvenTxReq {
@@ -112,6 +113,72 @@ describe('processAction shareReqsWithWorld', () => {
     expect(storage.updateProvenTxReq).toHaveBeenCalledWith([req.provenTxReqId], expect.objectContaining({ status: 'unsent' }), undefined)
     expect(storage.updateTransaction).toHaveBeenCalledWith([22], { status: 'sending' }, undefined)
     expect(result.swr).toEqual([{ txid: req.txid, status: 'sending' }])
+  })
+
+  test.each([true, false])('does not partition an atomic set when one lookup fails (delayed=%s)', async isDelayed => {
+    const req = makeReadyReq()
+    const missingTxid = 'b'.repeat(64)
+    const beef = {
+      verify: jest.fn(async () => true)
+    } as unknown as Beef
+    const storage = makeStorageFake()
+
+    const result = await shareReqsWithWorld(storage as any, 1, [req.txid, missingTxid], isDelayed, {
+      beef,
+      details: [
+        { txid: req.txid, status: 'readyToSend', req },
+        { txid: missingTxid, status: 'error', error: 'lookup failed' }
+      ]
+    })
+
+    expect(result.swr).toEqual([
+      { txid: req.txid, status: 'failed' },
+      { txid: missingTxid, status: 'failed' }
+    ])
+    expect(storage.transaction).not.toHaveBeenCalled()
+    expect(storage.updateProvenTxReq).not.toHaveBeenCalled()
+    expect(storage.updateTransaction).not.toHaveBeenCalled()
+    expect(storage.attemptToPostReqsToNetwork).not.toHaveBeenCalled()
+    expect(beef.verify).not.toHaveBeenCalled()
+  })
+
+  test('turns a delayed lookup exception into a whole-set failure before scheduling', async () => {
+    const req = makeReadyReq()
+    const missingTxid = 'b'.repeat(64)
+    const storage = {
+      ...makeStorageFake(),
+      findProvenTxs: jest.fn(async ({ partial }: { partial: { txid: string } }) => {
+        if (partial.txid === missingTxid) throw new Error('storage unavailable')
+        return []
+      }),
+      findProvenTxReqs: jest.fn(async () => [req])
+    }
+
+    const result = await shareReqsWithWorld(storage as any, 1, [req.txid, missingTxid], true)
+
+    expect(result.swr).toEqual([
+      { txid: req.txid, status: 'failed' },
+      { txid: missingTxid, status: 'failed' }
+    ])
+    expect(storage.transaction).not.toHaveBeenCalled()
+  })
+
+  test('marks a BEEF assembly exception as an error instead of retaining ready status', async () => {
+    const req = makeReadyReq()
+    const storage = Object.create(StorageProvider.prototype) as StorageProvider & Record<string, unknown>
+    Object.assign(storage, {
+      findProvenTxs: jest.fn(async () => []),
+      findProvenTxReqs: jest.fn(async () => [req]),
+      mergeReqToBeefToShareExternally: jest.fn(async () => {
+        throw new Error('BEEF source unavailable')
+      })
+    })
+
+    const result = await storage.getReqsAndBeefToShareWithWorld([req.txid], [])
+
+    expect(result.details).toEqual([
+      expect.objectContaining({ txid: req.txid, status: 'error' })
+    ])
   })
 
   test('immediate sends still validate the aggregate BEEF before broadcasting', async () => {

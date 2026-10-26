@@ -17,7 +17,7 @@ import {
  * @param rootFolder defaults to "./data/"
  * @returns
  */
-export function createDefaultKnexChaintracksOptions (...args: DefaultKnexChaintracksArguments): ChaintracksOptions {
+export function createDefaultKnexChaintracksOptions(...args: DefaultKnexChaintracksArguments): ChaintracksOptions {
   const params = resolveDefaultKnexChaintracksArguments(args)
 
   const knexConfig: Knex.Config = params.knexConfig ?? {

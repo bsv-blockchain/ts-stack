@@ -1,4 +1,5 @@
-import { toBRC100PortableByteArray, type WalletProtocol } from '@bsv/sdk'
+import { toBRC100PortableByteArray } from '@bsv/sdk/wallet/BRC100ByteEncoding'
+import type { WalletProtocol } from '@bsv/sdk/wallet/Wallet.interfaces'
 import type { WalletLike } from '../types.js'
 import { bytesToBase64url, base64urlToBytes } from './encoding.js'
 
@@ -18,6 +19,7 @@ export async function encryptEnvelope(
   payload: string
 ): Promise<string> {
   const plaintext = Array.from(new TextEncoder().encode(payload))
+  if (plaintext.length > 48 * 1024) throw new RangeError('Relay plaintext exceeds 48 KiB')
   const { ciphertext } = await wallet.encrypt({
     protocolID: params.protocolID,
     keyID: params.keyID,
@@ -45,5 +47,10 @@ export async function decryptEnvelope(
   })
   const bytes = toBRC100PortableByteArray(plaintext)
   if (bytes == null) throw new TypeError('Wallet returned an invalid plaintext byte payload')
-  return new TextDecoder().decode(new Uint8Array(bytes))
+  if (bytes.length > 48 * 1024) throw new RangeError('Relay plaintext exceeds 48 KiB')
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(bytes))
+  } catch {
+    throw new TypeError('Wallet returned plaintext that is not valid UTF-8')
+  }
 }

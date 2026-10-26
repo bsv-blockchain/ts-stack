@@ -15,24 +15,24 @@ npm install @bsv/simple
 This is **required**. Without it, Turbopack will try to bundle server-only packages (`@bsv/wallet-toolbox`, database drivers) for the browser, causing build failures.
 
 ```typescript
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
   serverExternalPackages: [
-    "@bsv/wallet-toolbox",
-    "knex",
-    "better-sqlite3",
-    "tedious",
-    "mysql",
-    "mysql2",
-    "pg",
-    "pg-query-stream",
-    "oracledb",
-    "dotenv"
+    '@bsv/wallet-toolbox',
+    'knex',
+    'better-sqlite3',
+    'tedious',
+    'mysql',
+    'mysql2',
+    'pg',
+    'pg-query-stream',
+    'oracledb',
+    'dotenv'
   ]
-};
+}
 
-export default nextConfig;
+export default nextConfig
 ```
 
 ## 3. Browser Wallet (Client Components)
@@ -89,7 +89,7 @@ const connect = async () => {
   const w = await createWallet()
   setWallet(w)
 
-  // Check if already registered on MessageBox
+  // Directory display hint only; this does not authenticate the handle.
   const handle = await w.getMessageBoxHandle('/api/identity-registry')
   if (handle) {
     setStatus(`Connected as ${handle}`)
@@ -108,11 +108,22 @@ All server routes use pre-built handler factories — no boilerplate needed. Eac
 ```typescript
 // app/api/server-wallet/route.ts
 import { createServerWalletHandler } from '@bsv/simple/server'
-const handler = createServerWalletHandler()
-export const GET = handler.GET, POST = handler.POST
+const handler = createServerWalletHandler({
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
+})
+export const GET = handler.GET,
+  POST = handler.POST
 ```
 
+All actions default closed, including payment-request and receive routes.
+Authenticate the application request and authorize the specific action; a
+truthy non-boolean verdict is rejected.
+
 **API endpoints:**
+
 - `GET ?action=create` — Server identity key + status
 - `GET ?action=request&satoshis=1000` — BRC-29 payment request
 - `GET ?action=balance` — Output count + total satoshis
@@ -122,33 +133,46 @@ export const GET = handler.GET, POST = handler.POST
 - `POST ?action=receive` body: `{ tx, senderIdentityKey, derivationPrefix, derivationSuffix, outputIndex }`
 
 **Custom config:**
+
 ```typescript
 createServerWalletHandler({
-  envVar: 'SERVER_PRIVATE_KEY',       // env var name (default)
-  keyFile: '.server-wallet.json',     // file persistence (default)
+  envVar: 'SERVER_PRIVATE_KEY', // env var name (default)
+  keyFile: '.server-wallet.json', // file persistence (default)
   network: 'main',
   defaultRequestSatoshis: 1000,
-  requestMemo: 'Payment to server'
+  requestMemo: 'Payment to server',
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
 })
 ```
 
 ### Identity Registry
 
+The generated compatibility handler does not authenticate tag mutations: a
+public identity key is not proof of private-key control. Use this route only for
+local/demo discovery or place it behind application authentication. Do not use
+its lookup result alone to select a payment recipient.
+
 ```typescript
 // app/api/identity-registry/route.ts
 import { createIdentityRegistryHandler } from '@bsv/simple/server'
 const handler = createIdentityRegistryHandler()
-export const GET = handler.GET, POST = handler.POST
+export const GET = handler.GET,
+  POST = handler.POST
 ```
 
-### DID Resolver
+The built-in registry accepts only canonical compressed public keys and
+control-free tags up to 128 characters. It defaults to 32 tags per identity,
+10,000 total entries, and 100 results per lookup; deployments can lower these
+limits with `maxTagsPerIdentity`, `maxEntries`, and `maxLookupResults`. All
+Simple route adapters also stop reading JSON request bodies after 64 MiB (a
+custom `toNextHandlers()` adapter may choose a lower limit).
 
-```typescript
-// app/api/resolve-did/route.ts
-import { createDIDResolverHandler } from '@bsv/simple/server'
-const handler = createDIDResolverHandler()
-export const GET = handler.GET
-```
+### Identity-key DID resolution
+
+Use `DID.resolve(did)` from `@bsv/simple` in the application. It is deterministic and offline; no proxy route or provider configuration is required. See [migration guidance](identity-credential-migration.md).
 
 ### Credential Issuer
 
@@ -156,20 +180,37 @@ export const GET = handler.GET
 // app/api/credential-issuer/route.ts  (no [[...path]] catch-all needed!)
 import { createCredentialIssuerHandler } from '@bsv/simple/server'
 const handler = createCredentialIssuerHandler({
-  schemas: [{
-    id: 'my-credential',
-    name: 'MyCredential',
-    fields: [
-      { key: 'name', label: 'Full Name', type: 'text', required: true },
-    ]
-  }]
+  schemas: [
+    {
+      id: 'my-credential',
+      name: 'MyCredential',
+      fields: [{ key: 'name', label: 'Full Name', type: 'text', required: true }]
+    }
+  ],
+  // Required for every issue/certify/revoke state change. Bind this to your
+  // authenticated session, application policy, and subject/serial ownership.
+  authorize: async ({ action, subjectIdentityKey, serialNumber, headers }) => {
+    return await authorizeCredentialOperation({
+      action,
+      subjectIdentityKey,
+      serialNumber,
+      authorization: headers?.get('authorization')
+    })
+  }
 })
-export const GET = handler.GET, POST = handler.POST
+export const GET = handler.GET,
+  POST = handler.POST
 ```
+
+The handler denies issuance and revocation unless `authorize` returns literal
+`true`. Its public info/schema/status/verification routes do not grant mutation
+authority. Never replace this policy with a truthy value or a check that trusts
+the caller-supplied subject key by itself.
 
 ### Key Persistence
 
 Server wallet private keys persist automatically:
+
 1. `process.env.SERVER_PRIVATE_KEY` — Environment variable (production)
 2. `.server-wallet.json` file — Persisted from previous run (development)
 3. Auto-generated via `generatePrivateKey()` — Fresh key (first run)
@@ -223,7 +264,7 @@ SERVER_PRIVATE_KEY=a1b2c3d4e5f6...
 
 ## Common Issues
 
-| Problem | Solution |
-|---------|----------|
-| Build fails with "Can't resolve 'fs'" | Add `serverExternalPackages` to `next.config.ts` |
+| Problem                               | Solution                                                                                       |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Build fails with "Can't resolve 'fs'" | Add `serverExternalPackages` to `next.config.ts`                                               |
 | Import error for `@bsv/simple/server` | Use handler factories (static imports work) or dynamic `await import()` for lower-level access |

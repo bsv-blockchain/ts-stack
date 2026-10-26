@@ -164,41 +164,48 @@ export abstract class StorageReaderWriter extends StorageReader {
   }
 
   async findOrInsertUser (identityKey: string, trx?: TrxToken): Promise<{ user: TableUser, isNew: boolean }> {
-    let user: TableUser | undefined
-    let isNew = false
-    for (let retry = 0; ; retry++) {
+    if (trx != null) return await this.findOrInsertUserInTransaction(identityKey, trx)
+    for (let retry = 0; retry < 2; retry++) {
       try {
-        user = verifyOneOrNone(await this.findUsers({ partial: { identityKey }, trx }))
-        // console.log(`findOrInsertUser oneOrNone: ${JSON.stringify(user || 'none').slice(0,512)}`)
-        if (user != null) break
-        const now = new Date()
-        user = {
-          created_at: now,
-          updated_at: new Date('1971-01-01'), // Default constructed user, sync will override with any updated user.
-          userId: 0,
-          identityKey,
-          activeStorage: this.getSettings().storageIdentityKey
-        }
-        user.userId = await this.insertUser(user, trx)
-        isNew = true
-        // Add default change basket for new user.
-        await this.insertOutputBasket({
-          created_at: now,
-          updated_at: new Date('1971-01-01'), // Default constructed basket, sync will override with any updated basket.
-          basketId: 0,
-          userId: user.userId,
-          name: 'default',
-          numberOfDesiredUTXOs: DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
-          minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
-          isDeleted: false
-        })
-        break
+        return await this.transaction(async transaction =>
+          await this.findOrInsertUserInTransaction(identityKey, transaction)
+        )
       } catch (error_: unknown) {
-        console.log(`findOrInsertUser catch: ${JSON.stringify(error_).slice(0, 512)}`)
         if (retry > 0) throw error_
       }
     }
-    return { user, isNew }
+    throw new WERR_INVALID_OPERATION('Unable to create or resolve wallet user.')
+  }
+
+  private async findOrInsertUserInTransaction (
+    identityKey: string,
+    trx: TrxToken
+  ): Promise<{ user: TableUser, isNew: boolean }> {
+    const existing = verifyOneOrNone(await this.findUsers({ partial: { identityKey }, trx }))
+    if (existing != null) return { user: existing, isNew: false }
+
+    const now = new Date()
+    const user: TableUser = {
+      created_at: now,
+      updated_at: new Date('1971-01-01'), // Default constructed user, sync will override with any updated user.
+      userId: 0,
+      identityKey,
+      activeStorage: this.getSettings().storageIdentityKey
+    }
+    user.userId = await this.insertUser(user, trx)
+    // User and required default basket are one security/financial invariant.
+    // Never expose a user row without the basket used for managed change.
+    await this.insertOutputBasket({
+      created_at: now,
+      updated_at: new Date('1971-01-01'),
+      basketId: 0,
+      userId: user.userId,
+      name: 'default',
+      numberOfDesiredUTXOs: DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
+      minimumDesiredUTXOValue: DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
+      isDeleted: false
+    }, trx)
+    return { user, isNew: true }
   }
 
   async findOrInsertTransaction (
@@ -248,7 +255,7 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (basket.isDeleted) {
           await this.updateOutputBasket(verifyId(basket.basketId), {
             isDeleted: false
-          })
+          }, trx)
         }
         return basket
       } catch (error_: unknown) {
@@ -276,7 +283,7 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (txLabel.isDeleted) {
           await this.updateTxLabel(verifyId(txLabel.txLabelId), {
             isDeleted: false
-          })
+          }, trx)
         }
         return txLabel
       } catch (error_: unknown) {
@@ -303,7 +310,7 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (txLabelMap.isDeleted) {
           await this.updateTxLabelMap(transactionId, txLabelId, {
             isDeleted: false
-          })
+          }, trx)
         }
         return txLabelMap
       } catch (error_: unknown) {
@@ -331,7 +338,7 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (outputTag.isDeleted) {
           await this.updateOutputTag(verifyId(outputTag.outputTagId), {
             isDeleted: false
-          })
+          }, trx)
         }
         return outputTag
       } catch (error_: unknown) {
@@ -358,7 +365,7 @@ export abstract class StorageReaderWriter extends StorageReader {
         if (outputTagMap.isDeleted) {
           await this.updateOutputTagMap(outputId, outputTagId, {
             isDeleted: false
-          })
+          }, trx)
         }
         return outputTagMap
       } catch (error_: unknown) {

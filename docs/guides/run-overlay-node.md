@@ -1,10 +1,10 @@
 ---
 id: guide-overlay-node
-title: "Run an Overlay Node"
+title: 'Run an Overlay Node'
 kind: guide
-version: "1.0.1"
-last_updated: "2026-07-26"
-last_verified: "2026-08-26"
+version: '1.0.1'
+last_updated: '2026-07-26'
+last_verified: '2026-08-26'
 review_cadence_days: 30
 status: stable
 tags: [guide, overlay, node, topics, typescript]
@@ -20,6 +20,7 @@ tags: [guide, overlay, node, topics, typescript]
 ## What you'll build
 
 A production-ready overlay node that:
+
 - Registers multiple topic managers (e.g., HelloWorld, KVStore, BTMS tokens)
 - Indexes data in MongoDB
 - Exposes HTTP endpoints for lookups
@@ -95,15 +96,15 @@ dotenv.config()
 async function setupServer() {
   // 1. Create server instance
   const server = new OverlayExpress(
-    'my-overlay-node',           // Name
-    process.env.SERVER_PRIVATE_KEY!,  // Private key for signing
-    process.env.FQDN || 'localhost:8080',  // Advertised host, no protocol
-    process.env.ADMIN_TOKEN      // Optional admin token
+    'my-overlay-node', // Name
+    process.env.SERVER_PRIVATE_KEY!, // Private key for signing
+    process.env.FQDN || 'localhost:8080', // Advertised host, no protocol
+    process.env.ADMIN_TOKEN // Optional; if supplied, at least 32 random characters
   )
-  
+
   // 2. Configure port
   server.configurePort(parseInt(process.env.PORT || '8080'))
-  
+
   // 3. Configure SQL storage for the overlay engine
   await server.configureKnex({
     client: 'sqlite3',
@@ -113,12 +114,12 @@ async function setupServer() {
 
   // 4. Configure MongoDB connection for lookup services
   await server.configureMongo(process.env.MONGO_URL!)
-  
+
   // 5. Configure network
   server.configureNetwork((process.env.NETWORK || 'test') as 'main' | 'test')
-  
+
   console.log('Server configured: port, SQL storage, MongoDB, network')
-  
+
   return server
 }
 
@@ -126,10 +127,12 @@ export { setupServer }
 ```
 
 The `OverlayExpress` constructor takes:
+
 - `name`: Unique identifier for this node
 - `privateKey`: Used to sign advertisements and transactions
 - `advertisableFQDN`: Domain advertised to peers (for discovery)
-- `adminToken`: Optional; auto-generated if not provided
+- `adminToken`: Optional; auto-generated if not provided. Supplied tokens must be
+  independent random secrets of at least 32 UTF-8 bytes.
 
 ## Step 4 — Register topic managers
 
@@ -151,19 +154,19 @@ async function registerTopics(server: OverlayExpress) {
   await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
     createHelloWorldLookupService(mongoDb)
   )
-  
+
   // Register KVStore topic (key-value protocol-agnostic)
   server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
   await server.configureLookupServiceWithMongo('ls_kvstore', mongoDb =>
     createKVStoreLookupService(mongoDb)
   )
-  
+
   // Register BTMS topic (Basic Token Management System)
   server.configureTopicManager('tm_btms', new BTMSTopicManager())
   await server.configureLookupServiceWithMongo('ls_btms', mongoDb =>
     createBTMSLookupService(mongoDb)
   )
-  
+
   console.log('Topics registered: hello, kvstore, btms')
 }
 
@@ -171,6 +174,7 @@ export { registerTopics }
 ```
 
 Each topic has:
+
 - **TopicManager**: Validates which outputs are protocol-compliant
 - **LookupService**: Indexes data in MongoDB for efficient queries
 
@@ -184,19 +188,19 @@ Add advanced configuration:
 async function configureAdvanced(server: OverlayExpress) {
   // Enable GASP (Graph Aware Sync Protocol) for historical sync with peers
   server.configureEnableGASPSync(true)
-  
+
   // Configure engine parameters
   server.configureEngineParams({
     logTime: true,
-    throwOnBroadcastFailure: false  // Log but don't crash on broadcast failures
+    throwOnBroadcastFailure: false // Log but don't crash on broadcast failures
   })
-  
+
   // Configure web UI
   server.configureWebUI({
     host: process.env.PUBLIC_URL,
     primaryColor: '#0066cc'
   })
-  
+
   // Set up health checks
   server.configureHealth({
     contextProvider: async () => ({
@@ -205,11 +209,11 @@ async function configureAdvanced(server: OverlayExpress) {
       nodeVersion: process.version
     })
   })
-  
+
   // Register custom health check
   server.registerHealthCheck({
     name: 'database-connection',
-    critical: true,  // Failures block /health/ready
+    critical: true, // Failures block /health/ready
     handler: async () => {
       try {
         // Verify MongoDB is responding
@@ -226,7 +230,7 @@ async function configureAdvanced(server: OverlayExpress) {
       }
     }
   })
-  
+
   console.log('Advanced configuration complete')
 }
 
@@ -234,6 +238,7 @@ export { configureAdvanced }
 ```
 
 This configuration:
+
 - **GASP**: Enables peer-to-peer history synchronization
 - **Health checks**: Kubernetes-style liveness/readiness probes
 - **Web UI**: Auto-generates documentation for your topics
@@ -249,22 +254,21 @@ async function main() {
     const server = await setupServer()
     await registerTopics(server)
     await configureAdvanced(server)
-    
+
     // Build the underlying Engine (topic managers + lookup services)
     console.log('Building overlay engine...')
     await server.configureEngine()
-    
+
     // Start the Express server
     console.log('Starting overlay node server...')
     await server.start()
-    
+
     // Retrieve admin token for protected endpoints
     const adminToken = server.getAdminToken()
     console.log(`Admin token: ${adminToken}`)
     console.log(`\nServer running at ${process.env.PUBLIC_URL}`)
     console.log(`Health check: ${process.env.PUBLIC_URL}/health`)
     console.log(`API docs: ${process.env.PUBLIC_URL}/`)
-    
   } catch (error) {
     console.error('Failed to start overlay node:', error)
     process.exit(1)
@@ -275,6 +279,7 @@ main()
 ```
 
 The workflow is:
+
 1. Create `OverlayExpress` instance
 2. Register topic managers and lookup services
 3. Call `configureEngine()` to build the overlay engine
@@ -318,7 +323,7 @@ async function main() {
     process.env.SERVER_PRIVATE_KEY!,
     process.env.FQDN || 'localhost:8080'
   )
-  
+
   // Configure basics
   server.configurePort(parseInt(process.env.PORT || '8080'))
   await server.configureKnex({
@@ -328,41 +333,41 @@ async function main() {
   })
   await server.configureMongo(process.env.MONGO_URL!)
   server.configureNetwork((process.env.NETWORK || 'test') as 'main' | 'test')
-  
+
   // Register topics
   server.configureTopicManager('tm_helloworld', new HelloWorldTopicManager())
   await server.configureLookupServiceWithMongo('ls_helloworld', mongoDb =>
     createHelloWorldLookupService(mongoDb)
   )
-  
+
   server.configureTopicManager('tm_kvstore', new KVStoreTopicManager())
   await server.configureLookupServiceWithMongo('ls_kvstore', mongoDb =>
     createKVStoreLookupService(mongoDb)
   )
-  
+
   server.configureTopicManager('tm_btms', new BTMSTopicManager())
   await server.configureLookupServiceWithMongo('ls_btms', mongoDb =>
     createBTMSLookupService(mongoDb)
   )
-  
+
   // Advanced config
   server.configureEnableGASPSync(true)
   server.configureWebUI({
     host: process.env.PUBLIC_URL,
     primaryColor: '#0066cc'
   })
-  
+
   server.configureHealth({
     contextProvider: async () => ({
       deployment: 'my-overlay-node',
       network: process.env.NETWORK
     })
   })
-  
+
   // Build and start
   await server.configureEngine()
   await server.start()
-  
+
   const adminToken = server.getAdminToken()
   console.log(`Overlay node running at ${process.env.PUBLIC_URL}`)
   console.log(`Admin token: ${adminToken}`)

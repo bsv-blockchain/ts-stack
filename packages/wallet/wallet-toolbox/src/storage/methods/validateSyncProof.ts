@@ -57,13 +57,15 @@ export function canonicalizeSyncProofIdentifiers(candidate: TableProvenTx): void
 
 /** Compare proof authority fields, excluding local IDs and timestamps. */
 export function sameSyncProof(a: TableProvenTx, b: TableProvenTx): boolean {
-  return a.txid.toLowerCase() === b.txid.toLowerCase() &&
+  return (
+    a.txid.toLowerCase() === b.txid.toLowerCase() &&
     a.height === b.height &&
     a.index === b.index &&
     equalBytes(a.merklePath, b.merklePath) &&
     equalBytes(a.rawTx, b.rawTx) &&
     a.blockHash.toLowerCase() === b.blockHash.toLowerCase() &&
     a.merkleRoot.toLowerCase() === b.merkleRoot.toLowerCase()
+  )
 }
 
 /** Record that preflight found no row which this candidate may replace. */
@@ -88,10 +90,7 @@ export function assertSyncProofReplacementAuthorized(candidate: TableProvenTx): 
  * backup/conflict proof replaces an existing global row. Network-backed checks
  * run before the storage merge transaction is opened.
  */
-export async function validateSyncProof(
-  storage: SyncProofValidationStorage,
-  candidate: TableProvenTx
-): Promise<void> {
+export async function validateSyncProof(storage: SyncProofValidationStorage, candidate: TableProvenTx): Promise<void> {
   canonicalizeSyncProofIdentifiers(candidate)
   if (!Number.isSafeInteger(candidate.height) || candidate.height < 0) {
     invalidSyncProof('height must be a non-negative safe integer')
@@ -124,7 +123,7 @@ export async function validateSyncProof(
 
     const services = storage.getServices()
     const chainTracker = await services.getChainTracker()
-    if (!(await chainTracker.isValidRootForHeight(root, candidate.height))) {
+    if ((await chainTracker.isValidRootForHeight(root, candidate.height)) !== true) {
       throw new StaleSyncProofError()
     }
 

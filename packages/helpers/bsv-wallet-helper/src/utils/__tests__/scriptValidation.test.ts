@@ -98,7 +98,7 @@ describe('Script Validation Functions', () => {
         // OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0
         const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
         const p2pkhHex = '76a914' + 'ab'.repeat(20) + '88ac'
-        const fullHex = ordinalHex + '68656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
+        const fullHex = ordinalHex + '0568656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
 
         const script = LockingScript.fromHex(fullHex)
         expect(isOrdinal(script)).toBe(true)
@@ -119,7 +119,7 @@ describe('Script Validation Functions', () => {
       it('should return false for ordinal envelope without P2PKH', () => {
         // BSV-20 envelope + data + OP_ENDIF, but no P2PKH
         const ordinalHex =
-          '0063036f726451126170706c69636174696f6e2f6273762d323000' + '68656c6c6f' + '68'
+          '0063036f726451126170706c69636174696f6e2f6273762d323000' + '0568656c6c6f' + '68'
         const script = LockingScript.fromHex(ordinalHex)
 
         expect(isOrdinal(script)).toBe(false)
@@ -131,7 +131,7 @@ describe('Script Validation Functions', () => {
         // BSV-20: OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0
         const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
         const p2pkhHex = '76a914' + 'ab'.repeat(20) + '88ac'
-        const fullHex = ordinalHex + '68656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
+        const fullHex = ordinalHex + '0568656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
 
         expect(isOrdinal(fullHex)).toBe(true)
       })
@@ -143,7 +143,7 @@ describe('Script Validation Functions', () => {
 
       it('should return false for ordinal hex without P2PKH', () => {
         // BSV-20 envelope + data + OP_ENDIF, but no P2PKH
-        const hex = '0063036f726451126170706c69636174696f6e2f6273762d323000' + '68656c6c6f' + '68'
+        const hex = '0063036f726451126170706c69636174696f6e2f6273762d323000' + '0568656c6c6f' + '68'
         expect(isOrdinal(hex)).toBe(false)
       })
 
@@ -158,7 +158,7 @@ describe('Script Validation Functions', () => {
       it('should return true for script with ordinal envelope', () => {
         // BSV-20: OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0
         const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
-        const fullHex = ordinalHex + '68656c6c6f' + '68' // + data + OP_ENDIF
+        const fullHex = ordinalHex + '0568656c6c6f' + '68' // + data + OP_ENDIF
         const script = LockingScript.fromHex(fullHex)
 
         expect(hasOrd(script)).toBe(true)
@@ -168,7 +168,7 @@ describe('Script Validation Functions', () => {
         // BSV-20 envelope
         const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
         const p2pkhHex = '76a914' + 'ab'.repeat(20) + '88ac'
-        const fullHex = ordinalHex + '68656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
+        const fullHex = ordinalHex + '0568656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
         const script = LockingScript.fromHex(fullHex)
 
         expect(hasOrd(script)).toBe(true)
@@ -199,7 +199,7 @@ describe('Script Validation Functions', () => {
     describe('with hex string input', () => {
       it('should return true for hex with ordinal envelope', () => {
         // BSV-20: OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0
-        const hex = '0063036f726451126170706c69636174696f6e2f6273762d323000' + '68656c6c6f' + '68'
+        const hex = '0063036f726451126170706c69636174696f6e2f6273762d323000' + '0568656c6c6f' + '68'
         expect(hasOrd(hex)).toBe(true)
       })
 
@@ -215,6 +215,16 @@ describe('Script Validation Functions', () => {
       it('should return false for hex without ordinal pattern', () => {
         const hex = 'deadbeef1234567890'
         expect(hasOrd(hex)).toBe(false)
+      })
+
+      it('should not recognize ordinal marker bytes hidden inside pushed data', () => {
+        const ordinalBytes = '0063036f726451126170706c69636174696f6e2f6273762d3230000568656c6c6f68'
+        const p2pkhBytes = '76a914' + 'ab'.repeat(20) + '88ac'
+        const payload = ordinalBytes + p2pkhBytes
+        const script = LockingScript.fromASM(`OP_RETURN ${payload}`)
+
+        expect(hasOrd(script)).toBe(false)
+        expect(isOrdinal(script)).toBe(false)
       })
     })
   })
@@ -288,6 +298,12 @@ describe('Script Validation Functions', () => {
         const hex = 'deadbeef1234567890'
         expect(hasOpReturnData(hex)).toBe(false)
       })
+
+      it('should ignore OP_RETURN bytes inside pushed data', () => {
+        const script = new LockingScript([{ op: 3, data: [0x01, OP.OP_RETURN, 0x02] }])
+        expect(hasOpReturnData(script)).toBe(false)
+        expect(hasOpReturnData(script.toHex())).toBe(false)
+      })
     })
   })
 
@@ -328,7 +344,7 @@ describe('Script Validation Functions', () => {
       // BSV-20: OP_0 OP_IF 'ord' OP_1 'application/bsv-20' OP_0
       const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
       const p2pkhHex = '76a914' + 'ab'.repeat(20) + '88ac'
-      const fullHex = ordinalHex + '68656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
+      const fullHex = ordinalHex + '0568656c6c6f' + '68' + p2pkhHex // + data + OP_ENDIF + P2PKH
       const script = LockingScript.fromHex(fullHex)
 
       expect(isP2PKH(script)).toBe(false) // Not a pure P2PKH
@@ -473,7 +489,7 @@ describe('Script Validation Functions', () => {
     it('should return Ordinal for BSV-20 Ordinal + P2PKH script', () => {
       const ordinalHex = '0063036f726451126170706c69636174696f6e2f6273762d323000'
       const p2pkhHex = '76a914' + 'ab'.repeat(20) + '88ac'
-      const fullHex = ordinalHex + '68656c6c6f' + '68' + p2pkhHex
+      const fullHex = ordinalHex + '0568656c6c6f' + '68' + p2pkhHex
 
       expect(getScriptType(fullHex)).toBe('Ordinal')
     })
@@ -496,6 +512,33 @@ describe('Script Validation Functions', () => {
       expect(() => getScriptType(null as any)).toThrow(
         'getScriptType: Input cannot be null or undefined'
       )
+    })
+
+    it('rejects ambiguous and unsafe MAP key sequences', () => {
+      const field = (value: string): string => Utils.toHex(Utils.toArray(value))
+      const prefix = `${field(ORDINAL_MAP_PREFIX)} ${field('SET')}`
+
+      expect(() =>
+        extractMapMetadata(
+          LockingScript.fromASM(
+            `OP_RETURN ${prefix} ${field('app')} ${field('one')} ${field('app')} ${field('two')} ${field('type')} ${field('data')}`
+          )
+        )
+      ).toThrow('Duplicate metadata key "app"')
+      expect(() =>
+        extractMapMetadata(
+          LockingScript.fromASM(
+            `OP_RETURN ${prefix} ${field('__proto__')} ${field('value')} ${field('app')} ${field('one')} ${field('type')} ${field('data')}`
+          )
+        )
+      ).toThrow('Unsafe metadata key "__proto__"')
+      expect(() =>
+        extractMapMetadata(
+          LockingScript.fromASM(
+            `OP_RETURN ${prefix} ${field('app')} ${field('one')} ${field('type')}`
+          )
+        )
+      ).toThrow('complete key-value pairs')
     })
   })
 
@@ -696,7 +739,7 @@ describe('Script Validation Functions', () => {
       const inscription = extractInscriptionData(shortScript)
 
       expect(inscription).not.toBeNull()
-      expect(inscription!.contentType).toBe('application/octet-stream') // Default
+      expect(inscription!.contentType).toBe('application/bsv-20')
 
       const extractedData = Buffer.from(inscription!.dataB64, 'base64').toString('utf8')
       expect(extractedData).toBe('Hello World')

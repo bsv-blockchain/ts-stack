@@ -452,17 +452,6 @@
       "release": "npm-oidc"
     },
     {
-      "path": "packages/helpers/did-client",
-      "name": "@bsv/did-client",
-      "owner": "ts-stack-maintainers",
-      "area": "helpers",
-      "profile": "browser-library",
-      "consumerProfiles": ["browser-bundler", "browser-esm", "node-cjs", "node-esm", "umd-global"],
-      "criticality": "tier-1",
-      "runtimeTargets": ["browser", "node", "umd"],
-      "release": "npm-oidc"
-    },
-    {
       "path": "packages/helpers/fund-wallet",
       "name": "@bsv/fund-wallet",
       "owner": "ts-stack-maintainers",
@@ -561,6 +550,17 @@
       "criticality": "tier-3",
       "runtimeTargets": ["browser", "node"],
       "release": "none"
+    },
+    {
+      "path": "packages/messaging/webrtpay",
+      "name": "@bsv/webrtpay",
+      "owner": "ts-stack-maintainers",
+      "area": "messaging",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "cli", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
+      "release": "npm-oidc"
     },
     {
       "path": "packages/middleware/402-pay",
@@ -747,6 +747,17 @@
       "consumerProfiles": ["node-esm"],
       "criticality": "tier-1",
       "runtimeTargets": ["node"],
+      "release": "npm-oidc"
+    },
+    {
+      "path": "packages/wallet/color-permission-module",
+      "name": "@bsv/color-permission-module",
+      "owner": "ts-stack-maintainers",
+      "area": "wallet",
+      "profile": "browser-library",
+      "consumerProfiles": ["browser-bundler", "browser-esm", "node-esm"],
+      "criticality": "tier-1",
+      "runtimeTargets": ["browser", "node"],
       "release": "npm-oidc"
     },
     {

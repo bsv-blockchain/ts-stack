@@ -2,9 +2,9 @@
 id: repository-health
 title: 'Repository Health Controls'
 kind: reference
-version: '1.4.1'
-last_updated: '2026-09-15'
-last_verified: '2026-09-15'
+version: '1.4.2'
+last_updated: '2026-09-21'
+last_verified: '2026-09-21'
 review_cadence_days: 30
 status: stable
 tags: [reference, governance, quality, security, releases]
@@ -59,13 +59,24 @@ pre-consolidation public package pages.
 Documentation review reminders apply only to edited pages and pages associated
 with directly changed sources. Elapsed dates are warnings, including on affected
 pages, so an ordinary code change is never blocked just because time passed.
-The separate weekly Maintenance review deadlines workflow enforces all dates. Package and service inventories supply their
+The separate weekly Maintenance review deadlines workflow reports documentation
+and repository-exception review dates as advisory reminders. Package and service inventories supply their
 page relationships; `freshness.sourcePaths` in the documentation policy maps
 other pages to source files or directories. The check uses the PR merge-base
 diff, the push before/after diff, or local changes against `origin/main`.
 Unrelated expired pages do not block repository health. See
 [Documentation Maintenance](../about/doc-agent.md) for explicit comparison and
 full-audit commands. Structural and generated-content checks remain global.
+
+Test-governance review dates are always advisory. `pnpm test:governance` and
+the Repository health contract report overdue manual-suite inventories, property
+suites and exclusions, mutation policy, required skips, and conformance skip
+groups as `MAINTENANCE` warnings, with a successful exit when no structural
+error exists. Passing a review date cannot fail the early policy gate or merge
+gate for any package. Ownership, date format, exact inventories, assertions,
+mutation coverage, skip counts, and removal conditions remain required. This
+does not relax runtime credential, session, payment, or protocol expiration.
+Review dates remain recorded; moving a deadline is not needed to unblock a PR.
 
 `governance/repository-health/baselines.json` records the dated starting
 measurements for CI, conformance, lint, TypeScript, coverage, security,
@@ -75,7 +86,7 @@ only from authoritative evidence and retain the evidence URL.
 The lint record retains the original 846-warning baseline while ratcheting the
 current authored-code result to zero across 1,909 files. The TypeScript checker
 currently tracks all 127 governed configurations and their effective strict options,
-including seven self-contained deployable-service contexts. `pnpm lint` and
+including eight self-contained deployable-service contexts. `pnpm lint` and
 `pnpm typescript:check` are executable zero-debt gates; the historical counts
 are evidence, not allowances.
 
@@ -123,7 +134,7 @@ to that decision, never sufficient merge evidence by itself.
 exceptions. Its schema is in `exception.schema.json`. Every entry requires an
 owner, rationale, evidence, creation date, review deadline, and objective
 removal condition. Owners must resolve to the same owner registry used by the
-workspace inventory. Expired entries fail CI. An empty registry is preferred,
+workspace inventory. Elapsed review dates are always advisory, including `--maintenance` and full documentation audits. An empty registry is preferred,
 but existing overrides, skipped tests, and analysis suppressions must be
 recorded until they are removed.
 
@@ -207,7 +218,10 @@ consumer to its exact entry, byte budget, and reviewed optional-adapter
 splitting disposition. CI retains normalized Vite/esbuild module and package
 composition reports for 30 days. A budget increase is a versioned source
 change requiring composition evidence and explicit review; it cannot be hidden
-in routine dependency maintenance.
+in routine dependency maintenance. An approved increase normally leaves at
+least 10% headroom in every measured byte dimension, rounded to a stable
+one-thousand-byte or five-thousand-byte boundary; any different margin needs an
+explicit composition rationale.
 
 The workspace typecheck runs after the shared build so cross-package
 declarations resolve exactly as downstream consumers see them. It catches
@@ -227,7 +241,7 @@ checks:
    review/analysis policies, and exact CodeQL exclusion coverage;
 4. published package versions match the recorded baseline;
 5. exception records are owned and structurally valid; elapsed review dates
-   are maintenance warnings in source CI and errors with `--maintenance`;
+   are advisory maintenance warnings in every invocation, including `--maintenance`;
 6. current package-contract findings exactly match the ratcheted snapshot; and
 7. generated stack/conformance facts, all 33 public package README contracts,
    and one current consolidated package page per public package are current;

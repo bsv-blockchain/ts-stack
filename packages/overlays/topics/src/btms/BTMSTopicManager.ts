@@ -1,6 +1,7 @@
+import { toArray, toUTF8 } from '@bsv/sdk/primitives/utils'
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Beef, LockingScript, PushDrop, Transaction, Utils } from '@bsv/sdk'
-import docs from './BTMSTopicManagerDocs.js'
+import { Beef, LockingScript, PushDrop, Transaction } from '@bsv/sdk'
+import docs from './BTMSTopicManagerDocs.md.js'
 
 interface PreviousUTXO {
   txid: string
@@ -23,8 +24,8 @@ export default class BTMSTopicManager implements TopicManager {
     if (field.length < 40) {
       return false
     }
-    const asText = Utils.toUTF8(field)
-    const roundTrip = Utils.toArray(asText, 'utf8')
+    const asText = toUTF8(field)
+    const roundTrip = toArray(asText, 'utf8')
     if (roundTrip.length !== field.length) {
       return true
     }
@@ -50,8 +51,8 @@ export default class BTMSTopicManager implements TopicManager {
     if (decoded.fields.length < 2 || decoded.fields.length > 4) {
       return undefined
     }
-    const assetIdField = Utils.toUTF8(decoded.fields[0])
-    const amount = this.parseTokenAmount(Utils.toUTF8(decoded.fields[1]))
+    const assetIdField = toUTF8(decoded.fields[0])
+    const amount = this.parseTokenAmount(toUTF8(decoded.fields[1]))
     if (amount === undefined) {
       return undefined
     }
@@ -59,10 +60,10 @@ export default class BTMSTopicManager implements TopicManager {
     let metadata: string | undefined
     if (decoded.fields.length === 3) {
       if (!this.isLikelySignatureField(decoded.fields[2])) {
-        metadata = Utils.toUTF8(decoded.fields[2])
+        metadata = toUTF8(decoded.fields[2])
       }
     } else if (decoded.fields.length === 4) {
-      metadata = Utils.toUTF8(decoded.fields[2])
+      metadata = toUTF8(decoded.fields[2])
     }
 
     return { assetIdField, amount, metadata }
@@ -76,11 +77,26 @@ export default class BTMSTopicManager implements TopicManager {
   }
 
   private parseTokenAmount(raw: string): number | undefined {
+    if (!/^[1-9]\d*$/.test(raw)) {
+      return undefined
+    }
     const amount = Number(raw)
-    if (!Number.isInteger(amount) || amount < 1) {
+    if (!Number.isSafeInteger(amount)) {
       return undefined
     }
     return amount
+  }
+
+  private addTokenAmounts(left: number, right: number): number {
+    const total = left + right
+    if (
+      !Number.isSafeInteger(left) ||
+      !Number.isSafeInteger(right) ||
+      !Number.isSafeInteger(total)
+    ) {
+      throw new RangeError('BTMS token total exceeds the exact-integer range')
+    }
+    return total
   }
 
   private collectPreviousUTXOs(
@@ -127,7 +143,7 @@ export default class BTMSTopicManager implements TopicManager {
         if (existing === undefined) {
           allowances.set(assetId, { amount: token.amount, metadata: token.metadata })
         } else {
-          existing.amount += token.amount
+          existing.amount = this.addTokenAmounts(existing.amount, token.amount)
         }
       } catch (error) {
         console.log(
@@ -154,7 +170,7 @@ export default class BTMSTopicManager implements TopicManager {
           continue
         }
 
-        const total = (assetTotals.get(token.assetIdField) ?? 0) + token.amount
+        const total = this.addTokenAmounts(assetTotals.get(token.assetIdField) ?? 0, token.amount)
         assetTotals.set(token.assetIdField, total)
         const allowance = allowances.get(token.assetIdField)
         if (allowance === undefined) continue
@@ -228,7 +244,7 @@ export default class BTMSTopicManager implements TopicManager {
   ): Promise<AdmittanceInstructions> {
     try {
       const parsedTransaction = Transaction.fromBEEF(beef)
-      const beefObj = Beef.fromBinary(beef)
+      const beefObj = Beef.fromBinaryStrict(beef)
       if (!Array.isArray(parsedTransaction.outputs)) {
         throw new TypeError('Missing parameter: outputs')
       }

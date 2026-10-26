@@ -2,17 +2,34 @@
 
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
-import { stripTypeScriptTypes } from 'node:module'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 export const REPOSITORY_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
+const require = createRequire(import.meta.url)
+let esbuildTransform
+function loadEsbuildTransform() {
+  if (esbuildTransform === undefined) {
+    try {
+      esbuildTransform = require('esbuild').transformSync
+    } catch {
+      esbuildTransform = null
+    }
+  }
+  return esbuildTransform
+}
+
+export function runtimeComparisonAvailable() {
+  return loadEsbuildTransform() !== null
+}
+
 const EXCLUDED_SOURCE_PATTERNS = [
   /(?:^|\/)__tests(?:__)?(?:\/|$)/,
   /(?:^|\/)tests?(?:\/|$)/,
-  /(?:^|\/)benchmarks?(?:\/|$)/,
+  /(?:^|\/)bench(?:marks?)?(?:\/|$)/,
   /\.(?:spec|test)\.[cm]?[jt]sx?$/,
   // Build and test configuration is never instrumented, so requiring it in
   // LCOV is unsatisfiable: a package that adds or edits jest.config.cjs,
@@ -28,12 +45,6 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/content\/lch\/scripts\/regenerate-brc170-vectors\.mjs$/,
   /\.interfaces\.[cm]?[jt]sx?$/,
   /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/,
-  // A `*.md.ts` module is one exported template literal, which is a convention
-  // this repository already keeps in thirteen files across four packages and
-  // none of which holds a statement. Matched by shape rather than by path,
-  // because the shape is what makes it uninstrumentable and the next package to
-  // add one should not have to discover this.
-  /\.md\.ts$/,
   // A barrel of `export ... from` compiles to re-export bindings and no
   // statements, and a module of `interface` and `type` emits nothing at all, so
   // neither reaches LCOV however thoroughly it is imported. Adding a test that
@@ -55,6 +66,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/helpers\/simple\/src\/core\/types\.ts$/,
   /packages\/wallet\/btms\/src\/types\.ts$/,
   /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
+  /packages\/wallet\/color-permission-module\/src\/types\.ts$/,
   // CHIRP's package entry point is a pure re-export barrel and its types module
   // emits declarations only. The executable CLI remains instrumented and is
   // intentionally not part of this exact exclusion.
@@ -65,6 +77,15 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // patch-coverage boundary.
   /packages\/content\/lch\/src\/index\.ts$/,
   /packages\/content\/lch\/src\/types\.ts$/,
+  // WebRTPay's server entry point is a pure re-export barrel and its signaling
+  // types module emits declarations only. Executable source, the relay CLI
+  // included, remains in the patch-coverage boundary.
+  /packages\/messaging\/webrtpay\/server\/index\.ts$/,
+  /packages\/messaging\/webrtpay\/src\/signaling\/types\.ts$/,
+  // The WebRTPay demo is an example program, not package source: it imports the
+  // built package by name and is run by hand, so package coverage, collected
+  // from src/ and server/, never instruments it.
+  /packages\/messaging\/webrtpay\/examples\/demo-node\.ts$/,
   // These ChainTracks modules emit no executable statements: two contain
   // interfaces/type-only imports and the mobile entry point only re-exports
   // platform-safe implementations. Keep the exclusions exact so executable
@@ -116,16 +137,73 @@ export function changedLinesFromDiff(diff) {
   return changed
 }
 
-// Transforming both revisions compares emitted JavaScript without erasing spaces
-// inside strings or template literals. Unsupported syntax fails closed.
+// Compare actual emitted JavaScript so type-only imports, declarations, and
+// documentation do not create an impossible LCOV obligation. The same
+// deterministic transform is applied to both revisions; unsupported syntax
+// fails closed and therefore remains governed. When esbuild is not installed
+// (for example in the pre-install repository health job) the comparison also
+// fails closed.
 export function hasRuntimeChange(before, after) {
+  const transformSync = loadEsbuildTransform()
+  if (transformSync === null) return true
   try {
-    return (
-      stripTypeScriptTypes(before, { mode: 'transform' }) !==
-      stripTypeScriptTypes(after, { mode: 'transform' })
-    )
+    const options = { loader: 'ts', format: 'esm', target: 'esnext', legalComments: 'none' }
+    return transformSync(before, options).code !== transformSync(after, options).code
   } catch {
     return true
+  }
+}
+
+// Markdown modules are not instrumented by package test configurations. Omit
+// one only when its complete source is a static default-exported template
+// literal. Imports, interpolation, declarations, and any other statements fail
+// closed and remain governed regardless of the filename.
+export function isStaticMarkdownModule(source) {
+  let offset = 0
+  const skipWhitespace = () => {
+    while (/\s/.test(source[offset] ?? '')) offset++
+  }
+  skipWhitespace()
+  while (source.startsWith('/*', offset)) {
+    const commentEnd = source.indexOf('*/', offset + 2)
+    if (commentEnd === -1) return false
+    offset = commentEnd + 2
+    skipWhitespace()
+  }
+  const prefix = 'export default'
+  if (!source.startsWith(prefix, offset)) return false
+  offset += prefix.length
+  skipWhitespace()
+  if (source[offset] !== '`') return false
+  offset++
+  while (offset < source.length) {
+    if (source[offset] === '\\') {
+      offset += 2
+      continue
+    }
+    if (source[offset] === '$' && source[offset + 1] === '{') return false
+    if (source[offset] === '`') {
+      offset++
+      skipWhitespace()
+      if (source[offset] === ';') {
+        offset++
+        skipWhitespace()
+      }
+      return offset === source.length
+    }
+    offset++
+  }
+  return false
+}
+
+export function omitStaticMarkdownModules(changed, readSource) {
+  for (const file of changed.keys()) {
+    if (!file.endsWith('.md.ts')) continue
+    try {
+      if (isStaticMarkdownModule(readSource(file))) changed.delete(file)
+    } catch {
+      // Missing or unreadable sources remain governed.
+    }
   }
 }
 
@@ -260,6 +338,13 @@ async function main(arguments_) {
     { cwd: REPOSITORY_ROOT, encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 }
   )
   const changed = changedLinesFromDiff(diff)
+  omitStaticMarkdownModules(changed, file =>
+    execFileSync('/usr/bin/git', ['show', `HEAD:${file}`], {
+      cwd: REPOSITORY_ROOT,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024
+    })
+  )
   omitTypeOnlyChanges(changed, base)
   const directoryPath = path.resolve(directory)
   const files = fs.existsSync(directoryPath) ? lcovFiles(directoryPath) : []

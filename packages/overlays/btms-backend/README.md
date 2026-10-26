@@ -76,12 +76,18 @@ const results = await lookupService.lookup({
 })
 ```
 
+Lookup queries must be ordinary JSON objects containing only `assetId`,
+`ownerKey`, `limit`, `skip`, `sortOrder`, and `history`. Owner keys must be valid
+compressed public keys, `history` is an actual boolean, `limit` is 1-100, and
+`skip` is 0-100000. Unknown fields, MongoDB selector objects, accessors, and
+coercible values are rejected before storage access.
+
 ## Protocol
 
 BTMS tokens use PushDrop locking scripts with the following structure:
 
 - **Field 0**: Asset ID (`"ISSUE"` for new tokens, or `"txid.outputIndex"` for existing)
-- **Field 1**: Amount (numeric string)
+- **Field 1**: Amount (canonical positive base-10 safe-integer string)
 - **Field 2**: Metadata (optional UTF-8 string)
 
 ### Token Rules
@@ -92,6 +98,10 @@ BTMS tokens use PushDrop locking scripts with the following structure:
 4. **Splitting**: Tokens can be split into multiple outputs
 5. **Merging**: Multiple tokens of the same asset can be merged
 6. **Burning**: Tokens are burned when spent without corresponding outputs
+
+Token amounts cannot exceed `Number.MAX_SAFE_INTEGER` (`9007199254740991`).
+Topic admission and lookup indexing reject non-canonical or inexact amount
+fields, and per-asset totals fail closed rather than silently rounding.
 
 ## Development
 

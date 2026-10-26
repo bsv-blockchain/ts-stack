@@ -14,5 +14,5 @@ export type {
 export { default as DNSResolver } from './resolver/dnsResolver.js'
 export type { DnsResolver, DNSResolverOptions } from './resolver/dnsResolver.js'
 export { default as HttpClient } from './httpClient.js'
-export type { RequestOptions } from './httpClient.js'
+export type { HttpClientOptions, RequestOptions, ResolvedAddress } from './httpClient.js'
 export { default as AbstractDnsResolver } from './resolver/abstractResolver.js'

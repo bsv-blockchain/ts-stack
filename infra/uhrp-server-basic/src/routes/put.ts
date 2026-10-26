@@ -42,6 +42,9 @@ function drainRequest(req: Request): void {
 }
 
 const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseResponse>) => {
+  // GHSA-v356-28v3-rj46: reject traversal and non-canonical identifiers before
+  // wallet, request-body, or filesystem work. This endpoint intentionally uses
+  // its pre-signed HMAC as the upload credential and remains pre-BRC-103.
   const objectID = req.query.objectID
   if (resolveCdnObjectPath(objectID) === null) {
     drainRequest(req)
@@ -106,7 +109,7 @@ const advertiseHandler = async (req: AdvertiseRequest, res: Response<AdvertiseRe
   } catch {
     valid = false
   }
-  if (!valid) {
+  if (valid !== true) {
     drainRequest(req)
     return res.status(401).json({
       status: 'error',

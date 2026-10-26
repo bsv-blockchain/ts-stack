@@ -21,12 +21,14 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -184,12 +186,14 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -347,12 +351,14 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -510,12 +516,14 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -673,12 +681,14 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -836,12 +846,14 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -999,6 +1011,7 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1024,6 +1037,7 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1049,6 +1063,7 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1074,6 +1089,7 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1099,6 +1115,7 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1124,6 +1141,7 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -1149,12 +1167,14 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -1312,12 +1332,14 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -1475,12 +1497,14 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -1638,12 +1662,14 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -1801,12 +1827,14 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -1964,12 +1992,14 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -2127,12 +2157,14 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           0,
           "wallet"
@@ -2290,12 +2322,14 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -2453,12 +2487,14 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           0,
           "wallet"
@@ -2616,12 +2652,14 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -2779,12 +2817,14 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           0,
           "wallet"
@@ -2942,12 +2982,14 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           0,
           "wallet"
@@ -3105,6 +3147,7 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3130,6 +3173,7 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3155,6 +3199,7 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3180,6 +3225,7 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3205,6 +3251,7 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3230,6 +3277,7 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
@@ -3255,12 +3303,14 @@
           ],
           "keyID": "1",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           2,
           "counterparty"
@@ -3418,12 +3468,14 @@
           ],
           "keyID": "1",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -3581,12 +3633,14 @@
           ],
           "keyID": "2",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           2,
           "counterparty"
@@ -3744,12 +3798,14 @@
           ],
           "keyID": "2",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"
@@ -3907,12 +3963,14 @@
           ],
           "keyID": "primary",
           "counterparty": "self",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "self",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
         "protocolID": [
           2,
           "counterparty"
@@ -4070,12 +4128,14 @@
           ],
           "keyID": "primary",
           "counterparty": "anyone",
+          "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
           "data": "test data for revealSpecificKeyLinkage"
         }
       },
       "expected": {
         "prover": "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
-        "counterparty": "anyone",
+        "verifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+        "counterparty": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
         "protocolID": [
           2,
           "counterparty"

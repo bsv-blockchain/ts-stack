@@ -1,3 +1,6 @@
+import { utf8ByteLength } from '../primitives/UTF8.js'
+import { isPlainRecord } from '../primitives/SafeRecord.js'
+
 interface HostReputationEntry {
   host: string
   totalSuccesses: number
@@ -27,33 +30,84 @@ const LEGACY_STORAGE_KEY_V1 = 'bsvsdk_overlay_host_reputation_v1'
 const STORAGE_DEBOUNCE_MS = 50
 const MAX_REPUTATION_ENTRIES = 256
 const REPUTATION_ENTRY_TTL_MS = 30 * 24 * 60 * 60 * 1000
+const MAX_STORED_REPUTATION_BYTES = 1024 * 1024
+const MAX_STORED_ENTRY_CANDIDATES = 1024
+const MAX_HOST_BYTES = 2048
+const MAX_ERROR_BYTES = 8192
+const MAX_REPUTATION_COUNTER = 1_000_000_000
+const MAX_RECORDED_LATENCY_MS = 24 * 60 * 60 * 1000
 
 interface KeyValueStore {
   get: (key: string) => string | null | undefined
   set: (key: string, value: string) => void
 }
 
+function boundedString(value: unknown, maximumBytes: number): value is string {
+  return typeof value === 'string' && utf8ByteLength(value) <= maximumBytes
+}
+
+function validHost(host: unknown): host is string {
+  return boundedString(host, MAX_HOST_BYTES) && host.length > 0
+}
+
+function storedCounter(value: unknown, fallback = 0): number | undefined {
+  const candidate = value ?? fallback
+  if (
+    !Number.isSafeInteger(candidate) ||
+    (candidate as number) < 0 ||
+    (candidate as number) > MAX_REPUTATION_COUNTER
+  )
+    return undefined
+  return candidate as number
+}
+
+function storedTimestamp(value: unknown, fallback = 0): number | undefined {
+  const candidate = value ?? fallback
+  if (!Number.isSafeInteger(candidate) || (candidate as number) < 0) return undefined
+  return candidate as number
+}
+
+function storedLatency(value: unknown): number | null | undefined {
+  if (value == null) return null
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < 0 ||
+    value > MAX_RECORDED_LATENCY_MS
+  )
+    return undefined
+  return value
+}
+
+/**
+ * Bounded availability/latency hints for ordering an already-authorized host
+ * set. Reputation never authenticates a host and must not add a routing target
+ * or replace advertisement, transport, or response verification.
+ */
 export class HostReputationTracker {
-  private readonly stats: Map<string, HostReputationEntry>
-  private readonly store: KeyValueStore | undefined
-  private saveTimer: ReturnType<typeof setTimeout> | null = null
+  readonly #stats: Map<string, HostReputationEntry>
+  readonly #store: KeyValueStore | undefined
+  #saveTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(store?: KeyValueStore) {
-    this.stats = new Map()
-    this.store = store ?? this.getLocalStorageAdapter()
-    this.loadFromStorage()
+    this.#stats = new Map()
+    this.#store = store ?? this.#getLocalStorageAdapter()
+    this.#loadFromStorage()
   }
 
   reset(): void {
-    this.stats.clear()
-    this.scheduleSave()
+    this.#stats.clear()
+    this.#scheduleSave()
   }
 
   recordSuccess(host: string, latencyMs: number): void {
-    const entry = this.getOrCreate(host)
+    if (!validHost(host)) throw new TypeError('Overlay reputation host is invalid.')
+    const entry = this.#getOrCreate(host)
     const now = Date.now()
     const safeLatency =
-      Number.isFinite(latencyMs) && latencyMs >= 0 ? latencyMs : DEFAULT_LATENCY_MS
+      Number.isFinite(latencyMs) && latencyMs >= 0
+        ? Math.min(latencyMs, MAX_RECORDED_LATENCY_MS)
+        : DEFAULT_LATENCY_MS
     if (entry.avgLatencyMs === null) {
       entry.avgLatencyMs = safeLatency
     } else {
@@ -61,25 +115,28 @@ export class HostReputationTracker {
         (1 - LATENCY_SMOOTHING_FACTOR) * entry.avgLatencyMs + LATENCY_SMOOTHING_FACTOR * safeLatency
     }
     entry.lastLatencyMs = safeLatency
-    entry.totalSuccesses += 1
+    entry.totalSuccesses = Math.min(entry.totalSuccesses + 1, MAX_REPUTATION_COUNTER)
     entry.consecutiveFailures = 0
     entry.backoffUntil = 0
     entry.lastUpdatedAt = now
     entry.lastError = undefined
-    this.scheduleSave()
+    this.#scheduleSave()
   }
 
   recordFailure(host: string, reason?: unknown): void {
-    const entry = this.getOrCreate(host)
+    if (!validHost(host)) throw new TypeError('Overlay reputation host is invalid.')
+    const entry = this.#getOrCreate(host)
     const now = Date.now()
-    entry.totalFailures += 1
-    entry.consecutiveFailures += 1
+    entry.totalFailures = Math.min(entry.totalFailures + 1, MAX_REPUTATION_COUNTER)
+    entry.consecutiveFailures = Math.min(entry.consecutiveFailures + 1, MAX_REPUTATION_COUNTER)
     let msg: string | undefined
-    if (typeof reason === 'string') {
-      msg = reason
-    } else if (reason instanceof Error) {
-      msg = reason.message
-    } else {
+    try {
+      if (typeof reason === 'string') {
+        msg = reason
+      } else if (reason instanceof Error && typeof reason.message === 'string') {
+        msg = reason.message
+      }
+    } catch {
       msg = undefined
     }
     const immediate =
@@ -102,29 +159,26 @@ export class HostReputationTracker {
       entry.backoffUntil = now + backoffDuration
     }
     entry.lastUpdatedAt = now
-    if (typeof reason === 'string') {
-      entry.lastError = reason
-    } else if (reason instanceof Error) {
-      entry.lastError = reason.message
-    } else {
-      entry.lastError = undefined
-    }
-    this.scheduleSave()
+    entry.lastError = boundedString(msg, MAX_ERROR_BYTES) ? msg : undefined
+    this.#scheduleSave()
   }
 
   rankHosts(hosts: string[], now: number = Date.now()): RankedHost[] {
+    if (!Number.isSafeInteger(now) || now < 0) {
+      throw new RangeError('Overlay reputation ranking time is invalid.')
+    }
     const seen = new Map<string, number>()
     hosts.forEach((host, idx) => {
-      if (typeof host !== 'string' || host.length === 0) return
+      if (!validHost(host)) return
       if (!seen.has(host)) seen.set(host, idx)
     })
 
     const orderedHosts = Array.from(seen.keys())
     const ranked = orderedHosts.map(host => {
-      const entry = this.getOrCreate(host)
+      const entry = this.#getOrCreate(host)
       return {
         ...entry,
-        score: this.computeScore(entry, now),
+        score: this.#computeScore(entry, now),
         originalOrder: seen.get(host) ?? 0
       }
     })
@@ -142,20 +196,21 @@ export class HostReputationTracker {
   }
 
   snapshot(host: string): HostReputationEntry | undefined {
-    const entry = this.stats.get(host)
+    if (!validHost(host)) return undefined
+    const entry = this.#stats.get(host)
     return entry == null ? undefined : { ...entry }
   }
 
   /** Flushes a pending debounced persistence write immediately. */
   flush(): void {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer)
-      this.saveTimer = null
+    if (this.#saveTimer !== null) {
+      clearTimeout(this.#saveTimer)
+      this.#saveTimer = null
     }
-    this.saveToStorage()
+    this.#saveToStorage()
   }
 
-  private getStorage(): any {
+  #getStorage(): any {
     try {
       const g: any = typeof globalThis === 'object' ? globalThis : undefined
       if (g?.localStorage == null) return undefined
@@ -165,8 +220,8 @@ export class HostReputationTracker {
     }
   }
 
-  private getLocalStorageAdapter(): KeyValueStore | undefined {
-    const s = this.getStorage()
+  #getLocalStorageAdapter(): KeyValueStore | undefined {
+    const s = this.#getStorage()
     if (s == null) return undefined
     return {
       get: (key: string) => {
@@ -184,71 +239,102 @@ export class HostReputationTracker {
     }
   }
 
-  private readStoredReputation(store: KeyValueStore): string | undefined {
+  #readStoredReputation(store: KeyValueStore): string | undefined {
     for (const key of [STORAGE_KEY, LEGACY_STORAGE_KEY_V2, LEGACY_STORAGE_KEY_V1]) {
       const raw = store.get(key)
-      if (typeof raw === 'string' && raw.length > 0) return raw
+      if (
+        typeof raw === 'string' &&
+        raw.length > 0 &&
+        utf8ByteLength(raw) <= MAX_STORED_REPUTATION_BYTES
+      )
+        return raw
     }
     return undefined
   }
 
-  private parseStoredEntry(key: string, value: unknown): HostReputationEntry | undefined {
-    if (value == null || typeof value !== 'object') return undefined
-    const stored: any = value
+  #parseStoredEntry(key: string, value: unknown, now: number): HostReputationEntry | undefined {
+    if (!validHost(key) || !isPlainRecord(value)) return undefined
+    const stored = value
+    const host = stored.host ?? key
+    const totalSuccesses = storedCounter(stored.totalSuccesses)
+    const totalFailures = storedCounter(stored.totalFailures)
+    const consecutiveFailures = storedCounter(stored.consecutiveFailures)
+    const avgLatencyMs = storedLatency(stored.avgLatencyMs)
+    const lastLatencyMs = storedLatency(stored.lastLatencyMs)
+    const backoffUntil = storedTimestamp(stored.backoffUntil)
+    const lastUpdatedAt = storedTimestamp(stored.lastUpdatedAt)
+    if (
+      !validHost(host) ||
+      host !== key ||
+      totalSuccesses === undefined ||
+      totalFailures === undefined ||
+      consecutiveFailures === undefined ||
+      avgLatencyMs === undefined ||
+      lastLatencyMs === undefined ||
+      backoffUntil === undefined ||
+      backoffUntil > now + MAX_BACKOFF_MS ||
+      lastUpdatedAt === undefined ||
+      lastUpdatedAt > now + MAX_BACKOFF_MS ||
+      (stored.lastError !== undefined && !boundedString(stored.lastError, MAX_ERROR_BYTES))
+    )
+      return undefined
     return {
-      host: String(stored.host ?? key),
-      totalSuccesses: Number(stored.totalSuccesses ?? 0),
-      totalFailures: Number(stored.totalFailures ?? 0),
-      consecutiveFailures: Number(stored.consecutiveFailures ?? 0),
-      avgLatencyMs: stored.avgLatencyMs == null ? null : Number(stored.avgLatencyMs),
-      lastLatencyMs: stored.lastLatencyMs == null ? null : Number(stored.lastLatencyMs),
-      backoffUntil: Number(stored.backoffUntil ?? 0),
-      lastUpdatedAt: Number(stored.lastUpdatedAt ?? 0),
-      lastError: typeof stored.lastError === 'string' ? stored.lastError : undefined
+      host,
+      totalSuccesses,
+      totalFailures,
+      consecutiveFailures,
+      avgLatencyMs,
+      lastLatencyMs,
+      backoffUntil,
+      lastUpdatedAt,
+      lastError: stored.lastError as string | undefined
     }
   }
 
-  private loadFromStorage(): void {
-    const s = this.store
+  #loadFromStorage(): void {
+    const s = this.#store
     if (s == null) return
     try {
-      const raw = this.readStoredReputation(s)
+      const raw = this.#readStoredReputation(s)
       if (raw === undefined) return
       const data = JSON.parse(raw)
-      if (typeof data !== 'object' || data === null) return
-      this.stats.clear()
-      for (const k of Object.keys(data)) {
-        const entry = this.parseStoredEntry(k, data[k])
-        if (entry !== undefined) this.stats.set(entry.host, entry)
+      if (!isPlainRecord(data)) return
+      const keys = Object.keys(data)
+      if (keys.length > MAX_STORED_ENTRY_CANDIDATES) return
+      this.#stats.clear()
+      const now = Date.now()
+      for (const k of keys) {
+        const entry = this.#parseStoredEntry(k, data[k], now)
+        if (entry !== undefined) this.#stats.set(entry.host, entry)
       }
-      this.prune(Date.now())
+      this.#prune(now)
     } catch {}
   }
 
-  private scheduleSave(): void {
-    if (this.store == null || this.saveTimer !== null) return
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null
-      this.saveToStorage()
+  #scheduleSave(): void {
+    if (this.#store == null || this.#saveTimer !== null) return
+    this.#saveTimer = setTimeout(() => {
+      this.#saveTimer = null
+      this.#saveToStorage()
     }, STORAGE_DEBOUNCE_MS)
-    const timer = this.saveTimer as ReturnType<typeof setTimeout> & { unref?: () => void }
+    const timer = this.#saveTimer as ReturnType<typeof setTimeout> & { unref?: () => void }
     timer.unref?.()
   }
 
-  private saveToStorage(): void {
-    const s = this.store
+  #saveToStorage(): void {
+    const s = this.#store
     if (s == null) return
     try {
-      this.prune(Date.now())
-      const obj: Record<string, any> = {}
-      for (const [host, entry] of this.stats.entries()) {
+      this.#prune(Date.now())
+      const obj: Record<string, HostReputationEntry> = Object.create(null)
+      for (const [host, entry] of this.#stats.entries()) {
         obj[host] = entry
       }
       s.set(STORAGE_KEY, JSON.stringify(obj))
     } catch {}
   }
 
-  private computeScore(entry: HostReputationEntry, now: number): number {
+  #computeScore(entry: HostReputationEntry, now: number): number {
     const latency = entry.avgLatencyMs ?? DEFAULT_LATENCY_MS
     const failurePenalty = entry.consecutiveFailures * FAILURE_PENALTY_MS
     const successBonus = Math.min(entry.totalSuccesses * SUCCESS_BONUS_MS, latency / 2)
@@ -257,11 +343,11 @@ export class HostReputationTracker {
     return latency + failurePenalty + backoffPenalty - successBonus
   }
 
-  private getOrCreate(host: string): HostReputationEntry {
-    let entry = this.stats.get(host)
+  #getOrCreate(host: string): HostReputationEntry {
+    let entry = this.#stats.get(host)
     if (entry == null) {
-      this.prune(Date.now())
-      if (this.stats.size >= MAX_REPUTATION_ENTRIES) this.evictOldestEntry()
+      this.#prune(Date.now())
+      if (this.#stats.size >= MAX_REPUTATION_ENTRIES) this.#evictOldestEntry()
       entry = {
         host,
         totalSuccesses: 0,
@@ -272,30 +358,30 @@ export class HostReputationTracker {
         backoffUntil: 0,
         lastUpdatedAt: 0
       }
-      this.stats.set(host, entry)
+      this.#stats.set(host, entry)
     }
     return entry
   }
 
-  private prune(now: number): void {
-    for (const [host, entry] of this.stats) {
+  #prune(now: number): void {
+    for (const [host, entry] of this.#stats) {
       if (entry.lastUpdatedAt > 0 && now - entry.lastUpdatedAt > REPUTATION_ENTRY_TTL_MS) {
-        this.stats.delete(host)
+        this.#stats.delete(host)
       }
     }
-    while (this.stats.size > MAX_REPUTATION_ENTRIES) this.evictOldestEntry()
+    while (this.#stats.size > MAX_REPUTATION_ENTRIES) this.#evictOldestEntry()
   }
 
-  private evictOldestEntry(): void {
+  #evictOldestEntry(): void {
     let oldestHost: string | undefined
     let oldestUpdatedAt = Number.POSITIVE_INFINITY
-    for (const [host, entry] of this.stats) {
+    for (const [host, entry] of this.#stats) {
       if (entry.lastUpdatedAt < oldestUpdatedAt) {
         oldestHost = host
         oldestUpdatedAt = entry.lastUpdatedAt
       }
     }
-    if (oldestHost !== undefined) this.stats.delete(oldestHost)
+    if (oldestHost !== undefined) this.#stats.delete(oldestHost)
   }
 }
 

@@ -1,8 +1,9 @@
 import { Beef } from '../transaction/Beef.js'
-import { PubKeyHex, WalletProtocol } from '../wallet/Wallet.interfaces.js'
-import { WalletInterface } from '../wallet/index.js'
+import LockingScript from '../script/LockingScript.js'
+import type { PubKeyHex, WalletProtocol, WalletInterface } from '../wallet/Wallet.interfaces.js'
 // Type-only import — erased at runtime, so it introduces no module cycle with overlay-tools.
-import type { LookupNetworkPreset, LookupResolver } from '../overlay-tools/index.js'
+import type LookupResolver from '../overlay-tools/LookupResolver.js'
+import type { LookupNetworkPreset } from '../overlay-tools/LookupResolver.js'
 
 /**
  * Configuration interface for GlobalKVStore operations.
@@ -29,7 +30,9 @@ export interface KVStoreConfig {
    * A pre-built lookup resolver to use for all overlay queries — both reads and
    * write-host (SHIP) discovery. When provided, it takes precedence and
    * `hostOverrides` / `slapTrackers` are ignored for resolver construction.
-   * Use this to fully control overlay host resolution.
+   * Use this to fully control overlay host resolution. The resolver is authoritative
+   * for which authenticated token outpoints are currently active; BEEF inclusion
+   * alone does not prove that a selected output remains unspent.
    */
   lookupResolver?: LookupResolver
   /**
@@ -88,7 +91,11 @@ export interface KVStoreQuery {
  * Options for configuring KVStore get operations (local processing)
  */
 export interface KVStoreGetOptions {
-  /** Whether to build and include history for each entry */
+  /**
+   * Whether to include the selected token's authenticated, controller-bound
+   * spent-output lineage. This excludes sibling/funding ancestry but does not
+   * independently prove that the resolver's selected tip remains unspent.
+   */
   history?: boolean
   /** Whether to include token transaction data in results */
   includeToken?: boolean
@@ -110,7 +117,8 @@ export interface KVStoreRemoveOptions {
 }
 
 /**
- * KVStore entry returned from queries
+ * KVStore entry returned from queries. Its fields are controller-authenticated;
+ * current active/unspent status remains an assertion by the configured resolver.
  */
 export interface KVStoreEntry {
   key: string
@@ -143,6 +151,7 @@ export interface KVStoreToken {
   outputIndex: number
   satoshis: number
   beef: Beef
+  lockingScript: LockingScript
 }
 
 export const kvProtocol = {

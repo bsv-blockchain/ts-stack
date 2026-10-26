@@ -1,3 +1,4 @@
+import { toHex, toUTF8 } from '@bsv/sdk/primitives/utils'
 /**
  * MessageBox Topic Manager
  *
@@ -13,7 +14,7 @@
  * @module MessageBoxTopicManager
  */
 
-import { PushDrop, ProtoWallet, Utils, Transaction } from '@bsv/sdk'
+import { PushDrop, ProtoWallet, Transaction } from '@bsv/sdk'
 import type { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
 import docs from './MessageBoxTopicDocs.md.js'
 
@@ -34,7 +35,7 @@ export default class MessageBoxTopicManager implements TopicManager {
    * @param previousCoins - Previous outputs to retain (not modified).
    * @returns A list of admissible outputs and retained coins.
    */
-  async identifyAdmissibleOutputs (
+  async identifyAdmissibleOutputs(
     beef: number[],
     previousCoins: number[]
   ): Promise<AdmittanceInstructions> {
@@ -52,21 +53,19 @@ export default class MessageBoxTopicManager implements TopicManager {
           const [identityKeyBuf, hostBuf] = result.fields
 
           // Basic admissibility checks before processing
-          if (
-            !identityKeyBuf || !hostBuf || identityKeyBuf.length === 0 || hostBuf.length === 0
-          ) {
+          if (!identityKeyBuf || !hostBuf || identityKeyBuf.length === 0 || hostBuf.length === 0) {
             console.warn(`[ADMISSIBILITY] Output ${i} skipped due to empty field(s)`)
             continue
           }
 
           try {
-            Utils.toUTF8(hostBuf)
+            toUTF8(hostBuf)
           } catch {
             console.warn(`[ADMISSIBILITY] Output ${i} skipped due to UTF-8 decoding failure`)
             continue
           }
 
-          const identityKey = Utils.toHex(identityKeyBuf)
+          const identityKey = toHex(identityKeyBuf)
           const data = result.fields.flat()
 
           const { valid } = await anyoneWallet.verifySignature({
@@ -77,7 +76,7 @@ export default class MessageBoxTopicManager implements TopicManager {
             keyID: '1'
           })
 
-          if (valid) {
+          if (valid === true) {
             outputsToAdmit.push(i)
           } else {
             console.warn(`[SIGNATURE] Output ${i} FAILED signature verification`)
@@ -108,14 +107,14 @@ export default class MessageBoxTopicManager implements TopicManager {
   /**
    * Returns a Markdown string with documentation for this topic manager.
    */
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return docs
   }
 
   /**
    * Returns metadata used by SHIP dashboards or discovery tools.
    */
-  async getMetaData () {
+  async getMetaData() {
     return {
       name: 'MessageBox Topic Manager',
       shortDescription: 'Advertises and validates hosts for message routing.'
@@ -125,7 +124,7 @@ export default class MessageBoxTopicManager implements TopicManager {
   /**
    * Returns the topics supported by this TopicManager.
    */
-  getTopics (): string[] {
+  getTopics(): string[] {
     return ['tm_messagebox']
   }
 }

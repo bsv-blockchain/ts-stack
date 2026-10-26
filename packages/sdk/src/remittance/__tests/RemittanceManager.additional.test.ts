@@ -780,7 +780,7 @@ describe('RemittanceManager additional coverage', () => {
       expect(termEnv.kind).toBe('termination')
     })
 
-    it('receives identity verification response but sends termination when no identity layer configured', async () => {
+    it('rejects an unsolicited identity verification response without creating a thread', async () => {
       const bus = new MessageBus()
       const mod = makeModule()
 
@@ -810,9 +810,8 @@ describe('RemittanceManager additional coverage', () => {
       )
 
       await receiver.syncThreads()
-      const termMsgs = bus.list('sender-key', DEFAULT_REMITTANCE_MESSAGEBOX)
-      const termEnv = JSON.parse(termMsgs[0].body) as RemittanceEnvelope
-      expect(termEnv.kind).toBe('termination')
+      expect(receiver.getThread('thread-noid-resp' as ThreadId)).toBeUndefined()
+      expect(bus.list('sender-key', DEFAULT_REMITTANCE_MESSAGEBOX)).toHaveLength(0)
     })
 
     it('settlement received when module not found sends termination', async () => {
@@ -961,7 +960,7 @@ describe('RemittanceManager additional coverage', () => {
       expect(processTermination).toHaveBeenCalled()
     })
 
-    it('unknown envelope kind causes thread to enter errored state', async () => {
+    it('rejects an unknown envelope kind without allocating a thread', async () => {
       const bus = new MessageBus()
       const mod = makeModule()
 
@@ -982,8 +981,7 @@ describe('RemittanceManager additional coverage', () => {
       bus.send('k2', 'k1', DEFAULT_REMITTANCE_MESSAGEBOX, JSON.stringify(unknownEnv))
       await manager.syncThreads()
 
-      const thread = manager.getThreadOrThrow('thread-unknown' as ThreadId)
-      expect(thread.state).toBe('errored')
+      expect(manager.getThread('thread-unknown' as ThreadId)).toBeUndefined()
     })
   })
 
@@ -1469,17 +1467,14 @@ describe('RemittanceManager additional coverage', () => {
     )
 
     it.each([
-      ['identityVerificationRequest', 'Identity verification request payload missing data'],
-      ['identityVerificationResponse', 'Identity verification response payload missing data'],
-      [
-        'identityVerificationAcknowledgment',
-        'Identity verification acknowledgment payload missing data'
-      ],
-      ['invoice', 'Invoice payload missing invoice data'],
-      ['settlement', 'Settlement payload missing settlement data'],
-      ['receipt', 'Receipt payload missing receipt data'],
-      ['termination', 'Termination payload missing data']
-    ] as const)('retains the %s malformed-payload failure', async (kind, message) => {
+      'identityVerificationRequest',
+      'identityVerificationResponse',
+      'identityVerificationAcknowledgment',
+      'invoice',
+      'settlement',
+      'receipt',
+      'termination'
+    ] as const)('rejects a malformed %s payload before allocating state', async kind => {
       const bus = new MessageBus()
       const manager = makeInboundManager(
         bus,
@@ -1493,9 +1488,7 @@ describe('RemittanceManager additional coverage', () => {
       sendInbound(bus, kind, 'invalid-payload', threadId)
       await manager.syncThreads()
 
-      const thread = manager.getThreadOrThrow(threadId)
-      expect(thread.state).toBe('errored')
-      expect(thread.lastError?.message).toBe(message)
+      expect(manager.getThread(threadId)).toBeUndefined()
     })
 
     it('honors an identity-layer request termination without sending a response', async () => {

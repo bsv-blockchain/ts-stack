@@ -107,7 +107,7 @@ describe('AuthFetch payment handling', () => {
     expect(context.maxAttempts).toBe(3)
     expect(context.errors).toEqual([])
     expect(context.requestSummary).toMatchObject({
-      url: 'https://api.example.com/resource',
+      url: 'https://api.example.com',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       bodyType: 'object'
@@ -157,6 +157,27 @@ describe('AuthFetch payment handling', () => {
       }),
       undefined
     )
+  })
+
+  test('createPaymentContext rejects a malformed wallet transaction result', async () => {
+    const wallet = createWalletStub()
+    const sparseTransaction: number[] = []
+    sparseTransaction.length = 3
+    sparseTransaction[0] = 1
+    sparseTransaction[2] = 3
+    wallet.createAction.mockResolvedValueOnce({ tx: sparseTransaction })
+    const authFetch = new AuthFetch(wallet as any)
+    createNonceMock.mockResolvedValueOnce('suffix-from-test')
+
+    await expect(
+      (authFetch as any).createPaymentContext(
+        'https://api.example.com/resource',
+        {},
+        42,
+        'remote-identity-key',
+        'test-prefix'
+      )
+    ).rejects.toThrow('dense byte array')
   })
 
   test('brc105 payment label hex survives lowercasing and round-trips to base64', () => {
@@ -279,7 +300,7 @@ describe('AuthFetch payment handling', () => {
         } catch (error) {
           const err = error as any
           expect(err.message).toBe(
-            'Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.'
+            'Paid request to https://api.example.com failed after 2/2 attempts. Sent 5 satoshis to server-key.'
           )
           expect(err.details).toMatchObject({
             attempts: { used: 2, max: 2 },
@@ -308,7 +329,7 @@ describe('AuthFetch payment handling', () => {
         }
       })()
     ).rejects.toThrow(
-      'Paid request to https://api.example.com/resource failed after 2/2 attempts. Sent 5 satoshis to server-key.'
+      'Paid request to https://api.example.com failed after 2/2 attempts. Sent 5 satoshis to server-key.'
     )
 
     expect(paymentContext.attempts).toBe(2)

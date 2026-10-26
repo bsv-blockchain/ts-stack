@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "lastReviewed": "2026-08-12",
+  "lastReviewed": "2026-09-21",
   "owner": "ts-stack-maintainers",
   "policy": {
     "publicEdge": {
@@ -29,16 +29,16 @@
       "correlationFields": ["trace_id", "span_id"],
       "dependencyVersions": {
         "@opentelemetry/api": "^1.9.1",
-        "@opentelemetry/api-logs": "^0.221.0",
-        "@opentelemetry/auto-instrumentations-node": "^0.79.0",
-        "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",
-        "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",
-        "@opentelemetry/exporter-trace-otlp-http": "^0.221.0",
-        "@opentelemetry/instrumentation-runtime-node": "^0.34.0",
-        "@opentelemetry/resources": "^2.10.0",
-        "@opentelemetry/sdk-logs": "^0.221.0",
-        "@opentelemetry/sdk-metrics": "^2.10.0",
-        "@opentelemetry/sdk-node": "^0.221.0",
+        "@opentelemetry/api-logs": "^0.222.0",
+        "@opentelemetry/auto-instrumentations-node": "^0.80.0",
+        "@opentelemetry/exporter-logs-otlp-http": "^0.222.0",
+        "@opentelemetry/exporter-metrics-otlp-http": "^0.222.0",
+        "@opentelemetry/exporter-trace-otlp-http": "^0.222.0",
+        "@opentelemetry/instrumentation-runtime-node": "^0.35.0",
+        "@opentelemetry/resources": "^2.11.0",
+        "@opentelemetry/sdk-logs": "^0.222.0",
+        "@opentelemetry/sdk-metrics": "^2.11.0",
+        "@opentelemetry/sdk-node": "^0.222.0",
         "@opentelemetry/sdk-trace-base": "^2.10.0",
         "@opentelemetry/semantic-conventions": "^1.43.0",
         "pino": "^10.3.1"
@@ -209,12 +209,12 @@
         "database serialization retries are sustained or exhaust their bounded retry budget",
         "wallet storage, database, or Firebase dependency failures consume error budget"
       ],
-      "state": "Knex database plus optional Firebase device registrations.",
-      "migration": "Migrations complete before listen; back up and verify the target schema first.",
-      "backup": "Use the selected database engine's consistent snapshot and restore procedure.",
-      "rpo": "15 minutes for messages and permissions; device registrations follow the same backup boundary when enabled.",
-      "rto": "4 hours from a verified database backup and wallet configuration.",
-      "restoreValidation": "Verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.",
+      "state": "Knex database including message, permission, replay-claim, resource-lock, and exact-request payment-intent state, plus optional Firebase device registrations.",
+      "migration": "Migrations complete before listen; back up and verify the target schema first. The 2026-09-21 payment-intent migration changes the paid-send recovery contract and must be present before the new code accepts legacy server-delivery payments. Do not run mixed-version replicas or perform an image-only rollback after paid-send traffic; prefer roll-forward. Payment-intent rows are durable idempotency and recovery evidence and must not be pruned independently of the corresponding payment replay and message retention records.",
+      "backup": "Use consistent database snapshots plus continuous point-in-time/binlog retention and independently retained wallet transaction and audit evidence spanning each snapshot through the present. A snapshot alone is insufficient once a paid-send wallet mutation may have occurred.",
+      "rpo": "15 minutes for ordinary messages, permissions, and optional device registrations. Paid-send replay claims and payment intents require zero silent loss: reconstruct every post-snapshot row from point-in-time database logs and independent wallet/audit evidence, or keep paid sends disabled while the unresolved recovery window is reconciled.",
+      "rto": "4 hours from verified database and wallet evidence, after paid-send reconciliation is complete or paid sends remain disabled.",
+      "restoreValidation": "Before enabling paid sends, reconstruct and reconcile every post-snapshot wallet action, replay claim, and prepared, wallet_accepted, or completed intent; prove exact-request recovery without repeat wallet mutation. Then verify migration state, authenticated list/send/acknowledge, duplicate handling, and optional push delivery.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT disconnect authenticated WebSockets, drain HTTP, close Knex, and flush telemetry. The standalone compatibility adapter uses only the published AuthSocket public socket surface and automatically delegates to AuthSocketServer.close() when that API is available.",
@@ -251,7 +251,8 @@
           "ARC_API_KEY",
           "ARC_CALLBACK_TOKEN",
           "CHAINTRACKS_URL",
-          "GASP_ENABLED"
+          "GASP_ENABLED",
+          "DISCOVERY_ROOT"
         ],
         "secrets": [
           "ADMIN_TOKEN",
@@ -280,7 +281,8 @@
         "submit and propagate a transaction without creating local-only state",
         "query each enabled lookup service",
         "ingest and classify provider callbacks",
-        "reconcile GASP/BASM state across a reorganization"
+        "reconcile GASP/BASM state across a reorganization",
+        "discover SHIP/SLAP services through default SDK network presets when operating as a discovery root"
       ],
       "alerts": [
         "readiness dependency checks fail or provider callback processing errors repeat",
@@ -288,11 +290,11 @@
         "BASM tip, reorg stream, or GASP synchronization becomes stale"
       ],
       "state": "Knex transaction state and MongoDB lookup-service state.",
-      "migration": "Overlay migrations complete before listen; preserve both stores as one release boundary.",
-      "backup": "Take coordinated MySQL and MongoDB backups before schema or image changes.",
-      "rpo": "15 minutes across a coordinated SQL and MongoDB backup boundary.",
+      "migration": "Stop writes and complete every Overlay migration before listen. Before the 2026-09-17 topical-uniqueness migration, preflight exact duplicate output keys (txid, outputIndex, topic) and applied-transaction keys (txid, topic); reconcile each duplicate from transaction, topic, and lookup evidence rather than auto-deleting security state. Apply that migration before the additive 2026-09-20 spentBy migration, then verify the constraints and column before restoring writes. Preserve both stores and the spent/spentBy relationship as one release boundary. Prefer roll-forward: an old image does not know these migration names, so a bare prior-digest rollback can fail migration-list validation. To restore an old image, stop writes and either use the new migration source to reverse spentBy and topical uniqueness in reverse order after exporting and reconciling all spend evidence, or restore coordinated pre-migration MySQL and MongoDB backups.",
+      "backup": "Take a coordinated, restorable MySQL and MongoDB backup before schema or image changes, with point-in-time logs or equivalent evidence spanning the maintenance window. Retain output spent and spentBy values together so recovery or rollback cannot erase which transaction consumed an output.",
+      "rpo": "15 minutes across a coordinated SQL and MongoDB backup boundary, provided output spent/spentBy evidence remains mutually consistent; keep writes disabled while any recovery gap is reconciled.",
       "rto": "4 hours from mutually consistent backups and verified provider configuration.",
-      "restoreValidation": "Verify schema versions, topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.",
+      "restoreValidation": "Verify schema versions, the topical unique constraints, absence of exact duplicate output and applied-transaction keys, and consistent spent/spentBy evidence before enabling writes. Then verify topic and lookup counts, submit/lookup, provider callbacks, GASP/BASM anchors, and readiness.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT idempotently stop synchronization and maintenance work, drain HTTP, close Knex and MongoDB, and flush telemetry. The standalone compatibility adapter delegates to OverlayExpress.close() when available without requiring an unpublished dependency.",
@@ -516,11 +518,11 @@
         "database migration or pool failures consume error budget"
       ],
       "state": "Authentication, identity-link, pending-registration, UMP-pin, phone-change authorization/history, share, deletion-intent, and faucet database tables.",
-      "migration": "Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds.",
-      "backup": "Take an encrypted database snapshot, retain the presentation-key vault key separately, and test identity/share and presentation-key recovery without logging secrets.",
-      "rpo": "15 minutes for authentication and encrypted share state.",
+      "migration": "Migrations complete before listen. The pending-registration column and presentation-key vault columns are additive. Roll out the new registration routes before relying on interrupted-signup recovery; use legacy then dual-write vault mode and perform an explicit encrypted cutover only after old replicas are drained and reconciliation succeeds. The faucet-claim backfill is not mixed-version compatible: block traffic, drain and stop every old replica, take a restorable backup, apply the migration with one new replica, then deploy only the new image before restoring traffic. Never run an old image against the migrated database; roll forward or restore the old image and pre-migration database together while stopped.",
+      "backup": "Take an encrypted database snapshot, retain the presentation-key vault key separately, and retain point-in-time database logs plus wallet/audit evidence sufficient to reconstruct every faucet claim and payment after the snapshot without logging secrets.",
+      "rpo": "15 minutes for authentication and encrypted share state; zero silent loss for faucet claims and payments, because every post-snapshot wallet action must be replayed from point-in-time logs or reconciled before faucet traffic resumes.",
       "rto": "4 hours from a verified encrypted backup and independently retained encryption keys.",
-      "restoreValidation": "Verify migration and vault reconciliation state, legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
+      "restoreValidation": "Keep faucet traffic disabled while verifying migration and vault reconciliation state. Correlate every wallet action after the restored snapshot with its payment row and authentication identities, reconstruct the payment and receivedFaucet markers, or conservatively mark every plausible identity before re-enabling the faucet. Then verify legacy-client authentication completion, interrupted registration resumption/finalization, UMP pin fallback, phone takeover/restore, share round-trip, identity links, deletion, rate limits, and audit-safe logs.",
       "lifecycle": {
         "status": "implemented",
         "shutdown": "SIGTERM/SIGINT drain HTTP, close Knex, and flush telemetry.",
@@ -610,6 +612,76 @@
       "operatorGuide": "infra/wallet-infra/guides/kube_samples/README.md",
       "publicProtocol": true,
       "corsPrefixes": ["WALLET_STORAGE"]
+    },
+    {
+      "name": "webrtpay-relay",
+      "path": "infra/webrtpay-relay",
+      "envExample": "infra/webrtpay-relay/.env.example",
+      "port": "PORT (default 8787)",
+      "livenessPath": "/health",
+      "readinessPath": "/ready",
+      "configuration": {
+        "required": ["PUBLIC_URLS"],
+        "optional": [
+          "CLOUDFLARE_TURN_API_TOKEN",
+          "CLOUDFLARE_TURN_KEY_ID",
+          "CONNECTIONS_PER_48_PER_MINUTE",
+          "CONNECTIONS_PER_IP_PER_MINUTE",
+          "HOST",
+          "MAX_OVER_RATE_FRAMES",
+          "MAX_SOCKETS",
+          "MAX_UNAUTHENTICATED_SOCKETS",
+          "PORT",
+          "SIGNALS_PER_PAIR_PER_MINUTE",
+          "SIGNALS_PER_RECIPIENT_PER_MINUTE",
+          "SOCKETS_PER_48",
+          "SOCKETS_PER_IP",
+          "STUN_URLS",
+          "TRUSTED_IP_HEADER",
+          "TURN_PER_48_PER_HOUR",
+          "TURN_PER_HOUR",
+          "TURN_PER_IP_PER_HOUR",
+          "TURN_PROVIDER",
+          "TURN_SECRET",
+          "TURN_TTL",
+          "TURN_URLS"
+        ],
+        "secrets": ["CLOUDFLARE_TURN_API_TOKEN", "OTEL_EXPORTER_OTLP_HEADERS", "TURN_SECRET"]
+      },
+      "observability": {
+        "module": "esm",
+        "telemetryFile": "src/telemetry.ts",
+        "loggerFile": "src/logger.ts",
+        "preload": "--import ./dist/telemetry.js",
+        "operations": ["config.summary", "listen", "relay.event", "shutdown"]
+      },
+      "criticalJourneys": [
+        "authenticate a socket by BRC-100 identity key against PUBLIC_URLS",
+        "forward an encrypted signalling envelope to every socket of the recipient identity",
+        "issue short-lived TURN credentials within the per-source and global budgets"
+      ],
+      "alerts": [
+        "authentication failures rise after a PUBLIC_URLS, proxy, or TLS change",
+        "admission refusals (HTTP 429/503) or rate_limited replies remain saturated",
+        "the TURN provider repeatedly fails or the hourly TURN budget is exhausted",
+        "event-loop delay or open-socket count remains above the operator alert threshold"
+      ],
+      "state": "Stateless. Sockets, authenticated identities, and rate-limit buckets live only in process memory; nothing is written to disk or a database.",
+      "migration": "No schema or data migration. Roll forward or back by replacing the image; clients reconnect and re-authenticate.",
+      "backup": "Nothing to back up. Retain the deployment configuration and the TURN secrets in the secret manager.",
+      "rpo": "Not applicable: the relay holds no durable state.",
+      "rto": "Minutes: the time to start a replacement container with the same configuration and public url.",
+      "restoreValidation": "Verify /health and /ready, a client authenticating against each PUBLIC_URLS entry, a signal delivered between two test identities, and TURN issuance when a provider is configured.",
+      "lifecycle": {
+        "status": "implemented",
+        "shutdown": "SIGTERM/SIGINT close every WebSocket, stop the listener, and flush telemetry.",
+        "scaling": "Run one replica per public url: two clients meet only on the same replica, and per-source limits are per process. Scale vertically with the limit variables.",
+        "disruption": "A restart drops every socket; clients reconnect and re-authenticate. Schedule replacements when brief signalling interruption is acceptable.",
+        "topology": "Keep the listener reachable only through the TLS-terminating proxy that sets TRUSTED_IP_HEADER."
+      },
+      "operatorGuide": "docs/infrastructure/webrtpay-relay.md",
+      "publicProtocol": true,
+      "corsPrefixes": ["WEBRTPAY_RELAY"]
     }
   ],
   "applicationWorkloads": [

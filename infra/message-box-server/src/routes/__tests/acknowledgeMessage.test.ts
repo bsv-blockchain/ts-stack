@@ -115,7 +115,11 @@ describe('acknowledgeMessage', () => {
   it.each([
     Array(MAX_ACKNOWLEDGMENT_IDS + 1).fill('id'),
     [''],
-    ['x'.repeat(MAX_MESSAGE_ID_BYTES + 1)]
+    ['x'.repeat(MAX_MESSAGE_ID_BYTES + 1)],
+    [' id'],
+    ['id '],
+    ['id\n'],
+    ['id\u0085']
   ])('rejects resource-exhausting or malformed ID collections', async messageIds => {
     validReq.body.messageIds = messageIds
 

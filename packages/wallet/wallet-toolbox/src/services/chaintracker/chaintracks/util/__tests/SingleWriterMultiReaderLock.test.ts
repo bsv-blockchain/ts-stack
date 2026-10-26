@@ -4,7 +4,7 @@ class TestLock {
   private readonly lock: SingleWriterMultiReaderLock = new SingleWriterMultiReaderLock()
   private value: number = 0
 
-  async readValue (): Promise<number> {
+  async readValue(): Promise<number> {
     return await this.lock.withReadLock(async () => {
       // Simulate some read delay
       await new Promise(resolve => setTimeout(resolve, 10))
@@ -12,7 +12,7 @@ class TestLock {
     })
   }
 
-  async writeValue (newValue: number): Promise<number> {
+  async writeValue(newValue: number): Promise<number> {
     return await this.lock.withWriteLock(async () => {
       // Simulate some write delay
       await new Promise(resolve => setTimeout(resolve, 50))
@@ -21,7 +21,7 @@ class TestLock {
     })
   }
 
-  async test (): Promise<number[]> {
+  async test(): Promise<number[]> {
     const promises: Array<Promise<number>> = []
     const readCount = 3
     for (let i = 0; i < readCount; i++) promises.push(this.readValue())
@@ -45,5 +45,23 @@ describe('SingleWriterMultiReaderLock tests', () => {
     const t = new TestLock()
     const r = await t.test()
     expect(r).toEqual([0, 0, 0, 42, 43, 47, 46, 46, 46, 44, 45, 46, 46, 46, 46])
+  })
+
+  test('bounds queued operations while preserving the active operation', async () => {
+    const lock = new SingleWriterMultiReaderLock(1)
+    let release!: () => void
+    const active = lock.withWriteLock(
+      async () =>
+        await new Promise<void>(resolve => {
+          release = resolve
+        })
+    )
+    await Promise.resolve()
+    const queued = lock.withReadLock(async () => 1)
+
+    await expect(lock.withReadLock(async () => 2)).rejects.toThrow('queue reached')
+    release()
+    await expect(active).resolves.toBeUndefined()
+    await expect(queued).resolves.toBe(1)
   })
 })

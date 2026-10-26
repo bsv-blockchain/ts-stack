@@ -204,6 +204,9 @@ export class LocalChainTracker implements ChainTracker {
       const local = this.local
       try {
         const valid = await local.isValidRootForHeight(root, height)
+        if (typeof valid !== 'boolean') {
+          throw new TypeError('Local ChainTracker returned a non-boolean Merkle-root verdict.')
+        }
         this.assertCurrentContext(context, 'root validation')
         this.status = { ...this.status, activeSource: 'local', lastError: undefined }
         return valid
@@ -499,7 +502,11 @@ export class LocalChainTracker implements ChainTracker {
     let lastError: unknown
     for (const [index, fallback] of this.fallbacks.entries()) {
       try {
-        if (await fallback.isValidRootForHeight(root, height)) valid++
+        const verdict = await fallback.isValidRootForHeight(root, height)
+        if (typeof verdict !== 'boolean') {
+          throw new TypeError('Fallback ChainTracker returned a non-boolean Merkle-root verdict.')
+        }
+        if (verdict === true) valid++
         else invalid++
         if (valid >= this.requiredFallbackAgreement) {
           this.recordFallback(index)

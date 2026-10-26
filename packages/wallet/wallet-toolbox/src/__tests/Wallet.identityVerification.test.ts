@@ -24,7 +24,12 @@ function walletFor(fixture: IdentityVerificationFixture, resolver?: LookupResolv
   const trustSettings = {
     trustLevel: 1,
     trustedCertifiers: [
-      { identityKey: fixture.certificate.certifier, name: 'Synthetic certifier', description: '', trust: 1 }
+      {
+        identityKey: fixture.certificate.certifier,
+        name: 'Synthetic certifier',
+        description: 'Synthetic identity test certifier',
+        trust: 1
+      }
     ]
   }
   const query = jest.fn(async (): Promise<LookupAnswer> => ({
@@ -82,6 +87,27 @@ describe('Wallet final identity verification and compatibility', () => {
     first.certificates[0].decryptedFields.name = 'Changed locally'
     const second = await wallet.discoverByIdentityKey(args)
     expect(second.certificates[0].decryptedFields).toEqual({ name: 'Alice' })
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-binds verified overlay evidence to the requested identity at the wallet entry point', async () => {
+    const { wallet, query } = walletFor(fixture)
+    const substitutedIdentity = new PrivateKey(99).toPublicKey().toString()
+
+    await expect(wallet.discoverByIdentityKey({ identityKey: substitutedIdentity })).resolves.toEqual({
+      totalCertificates: 0,
+      certificates: []
+    })
+    expect(query).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-binds verified overlay evidence to every requested attribute at the wallet entry point', async () => {
+    const { wallet, query } = walletFor(fixture)
+
+    await expect(wallet.discoverByAttributes({ attributes: { name: 'Mallory' } })).resolves.toEqual({
+      totalCertificates: 0,
+      certificates: []
+    })
     expect(query).toHaveBeenCalledTimes(1)
   })
 
@@ -203,12 +229,12 @@ describe('Wallet final identity verification and compatibility', () => {
     expect(Validation.validateDiscoverByIdentityKeyArgs({ identityKey: fixture.certificate.subject })).toMatchObject({
       limit: 10,
       offset: 0,
-      seekPermission: false
+      seekPermission: true
     })
     expect(Validation.validateDiscoverByAttributesArgs({ attributes: { name: 'Alice' } })).toMatchObject({
       limit: 10,
       offset: 0,
-      seekPermission: false
+      seekPermission: true
     })
     await expect(wallet.discoverByIdentityKey(identityArgs)).resolves.toMatchObject({ totalCertificates: 1 })
     expect(query).toHaveBeenLastCalledWith(

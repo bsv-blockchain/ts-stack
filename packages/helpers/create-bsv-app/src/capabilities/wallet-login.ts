@@ -7,8 +7,8 @@ import { Link } from 'react-router-dom'
 import { ConnectWallet } from './ConnectWallet.js'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity } from './serverIdentity.js'
-import { API_BASE_URL } from './config.js'
+import { getServerIdentity, readIdentityKeyResponse, requireIdentityKey } from './serverIdentity.js'
+import { apiFetch } from './apiClient.js'
 
 export function WalletLogin () {
   const { wallet, connected, identityKey } = useWallet()
@@ -28,11 +28,12 @@ export function WalletLogin () {
       step('Signing a login proof with your wallet (action: login)…')
       const proof = await createAuthProof(wallet, { counterparty, action: 'login' })
       step('POST /api/login — sending the proof to the server')
-      const res = await fetch(API_BASE_URL + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof) })
+      const res = await apiFetch('/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof) })
       if (!res.ok) { step('✗ Server rejected the proof (' + String(res.status) + ')'); setError('login failed: ' + String(res.status)); return }
-      const data = await res.json()
+      const loggedInIdentity = await readIdentityKeyResponse(res)
       step('✓ Proof valid — the server trusts this identity')
-      setResult(data.identityKey ?? identityKey)
+      if (identityKey !== null && loggedInIdentity !== identityKey) throw new Error('server returned another wallet identity')
+      setResult(loggedInIdentity)
     } catch (e) { step('✗ ' + String(e)); setError(String(e)) }
   }
   return (
@@ -60,8 +61,8 @@ const HOOK = `// Wallet login: prove identity with the connected wallet, then PO
 import { useCallback } from 'react'
 import { useWallet } from './WalletContext.js'
 import { createAuthProof } from './auth.js'
-import { getServerIdentity } from './serverIdentity.js'
-import { API_BASE_URL } from './config.js'
+import { getServerIdentity, readIdentityKeyResponse } from './serverIdentity.js'
+import { apiFetch } from './apiClient.js'
 
 // serverIdentityKey is optional: when omitted it's fetched from GET /api/identity.
 export interface UseWalletLoginOptions { serverIdentityKey?: string, loginEndpoint?: string }
@@ -70,13 +71,15 @@ export function useWalletLogin (opts: UseWalletLoginOptions = {}) {
   const { wallet, identityKey } = useWallet()
   const login = useCallback(async (): Promise<{ identityKey: string }> => {
     if (wallet === null) throw new Error('connect a wallet first (initializeWallet / relay)')
-    const counterparty = opts.serverIdentityKey ?? await getServerIdentity()
+    const counterparty = requireIdentityKey(opts.serverIdentityKey ?? await getServerIdentity())
     const proof = await createAuthProof(wallet, { counterparty, action: 'login' })
-    const res = await fetch(API_BASE_URL + (opts.loginEndpoint ?? '/api/login'), {
+    const res = await apiFetch(opts.loginEndpoint ?? '/api/login', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(proof)
     })
     if (!res.ok) throw new Error('login failed: ' + String(res.status))
-    return await res.json()
+    const loggedInIdentity = await readIdentityKeyResponse(res)
+    if (identityKey !== null && loggedInIdentity !== identityKey) throw new Error('server returned another wallet identity')
+    return { identityKey: loggedInIdentity }
   }, [wallet, opts.serverIdentityKey, opts.loginEndpoint])
   return { login, identityKey, connected: wallet !== null }
 }
@@ -90,7 +93,7 @@ import { consumeNonce } from './nonceStore.js'
 export function loginRoute (serverWallet: { verifySignature: (args: any) => Promise<{ valid: boolean }> }) {
   return async (req: Request, res: Response): Promise<void> => {
     const result = await verifyAuthProof(serverWallet, req.body, { action: 'login' }, consumeNonce)
-    if (!result.valid) { res.status(401).json({ error: result.error ?? 'invalid proof' }); return }
+    if (!result.valid) { res.status(401).json({ error: 'invalid proof' }); return }
     res.json({ identityKey: result.identityKey })
   }
 }
@@ -102,7 +105,7 @@ function agentsSection(_ctx: CapabilityContext): string {
 Passwordless login: the connected wallet signs a proof with \`action: 'login'\`, the server verifies it, and you get a trusted \`identityKey\` — no password, no shared secret.
 
 ### How it works
-- The client fetches the server's identity key (\`GET /api/identity\`) to use as the proof \`counterparty\`, signs a login proof with the wallet, and POSTs it to \`/api/login\`.
+- The client fetches the server's identity key (\`GET /api/identity\`) under the configured API origin's HTTPS/local-development authority, uses it as the proof \`counterparty\`, signs a login proof with the wallet, and POSTs it through the same redirect-free bounded client. Pass \`serverIdentityKey\` to pin an independently validated key when endpoint trust alone is insufficient.
 - The server verifies the signature with its \`serverWallet\` and consumes a single-use nonce (replay protection), then trusts the \`identityKey\` the proof was signed by.
 - That verified \`identityKey\` is the whole BSV-specific step. What you do next — issue a session, create a user — is your app's call (see *Future integrations*). The demo page renders each step so you can watch the exchange.
 
@@ -113,16 +116,18 @@ Passwordless login: the connected wallet signs a proof with \`action: 'login'\`,
 
 ### Environment (in \`bsv/config.ts\`)
 - Client: \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).
-- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (CORS allow-origin).
+- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization). Production requires explicit stable key and HTTPS origin values.
 
 ### Future integrations — turn login into a session
 After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):
 \`\`\`ts
 import { SignJWT, jwtVerify } from 'jose'
-const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? 'dev-only-secret')
+const secretText = process.env.JWT_SECRET
+if (secretText == null || new TextEncoder().encode(secretText).byteLength < 32) throw new Error('JWT_SECRET must contain at least 32 bytes')
+const secret = new TextEncoder().encode(secretText)
 // in loginRoute, once the proof verifies:
 const token = await new SignJWT({ sub: result.identityKey }).setProtectedHeader({ alg: 'HS256' }).setExpirationTime('7d').sign(secret)
-res.cookie('session', token, { httpOnly: true, sameSite: 'lax' }) // or return it for a bearer header
+res.cookie('session', token, { httpOnly: true, secure: true, sameSite: 'lax' }) // or return it for a bearer header
 // guard a route: const { payload } = await jwtVerify(token, secret) // payload.sub === identityKey
 \`\`\`
 - Swap the in-memory nonce store in \`loginRoute.ts\` for Redis/DB in production.

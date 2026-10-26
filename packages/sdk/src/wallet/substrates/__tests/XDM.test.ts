@@ -1,6 +1,17 @@
 import XDMSubstrate from '../../../wallet/substrates/XDM'
 import { WalletError } from '../../../wallet/WalletError'
 import { Utils } from '../../../primitives/index'
+import Transaction from '../../../transaction/Transaction'
+
+const VALID_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const VALID_TXID = 'ab'.repeat(32)
+const VALID_DER_SIGNATURE = [0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x01]
+const VALID_TYPE = Utils.toBase64(Array(32).fill(1))
+const VALID_SERIAL = Utils.toBase64(Array(32).fill(2))
+const VALID_SIGNATURE_HEX = Utils.toHex(VALID_DER_SIGNATURE)
+const MINIMAL_TRANSACTION = new Transaction()
+const MINIMAL_BEEF = MINIMAL_TRANSACTION.toAtomicBEEF()
+const MINIMAL_TXID = MINIMAL_TRANSACTION.id('hex')
 
 describe('XDMSubstrate', () => {
   let xdmSubstrate: XDMSubstrate
@@ -67,6 +78,12 @@ describe('XDMSubstrate', () => {
         xdmSubstrate = new XDMSubstrate()
       }).not.toThrow()
     })
+
+    it.each([0, 1.5, 3_600_001])('rejects unsafe response timeout %p', responseTimeout => {
+      expect(() => new XDMSubstrate('*', responseTimeout)).toThrow(
+        'XDM responseTimeout must be an integer from 1 to 3600000.'
+      )
+    })
   })
 
   describe('invoke', () => {
@@ -74,12 +91,48 @@ describe('XDMSubstrate', () => {
       xdmSubstrate = new XDMSubstrate()
     })
 
+    it('times out and removes its listener when configured for discovery', async () => {
+      xdmSubstrate = new XDMSubstrate('*', 5)
+
+      await expect(xdmSubstrate.getVersion({})).rejects.toThrow('XDM wallet response timed out.')
+      expect(window.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function))
+      expect(Reflect.get(xdmSubstrate, 'pendingInvocations')).toBe(0)
+    })
+
+    it('rejects before registering another listener at the pending invocation limit', async () => {
+      Reflect.set(xdmSubstrate, 'pendingInvocations', 1024)
+
+      await expect(xdmSubstrate.getVersion({})).rejects.toThrow(
+        'XDM wallet pending invocation limit reached.'
+      )
+      expect(addEventListenerMock).not.toHaveBeenCalled()
+      expect(window.parent.postMessage).not.toHaveBeenCalled()
+    })
+
+    it('releases its pending slot if listener registration throws', async () => {
+      addEventListenerMock.mockImplementationOnce(() => {
+        throw new Error('listener registration failed')
+      })
+
+      await expect(xdmSubstrate.getVersion({})).rejects.toThrow('listener registration failed')
+      expect(Reflect.get(xdmSubstrate, 'pendingInvocations')).toBe(0)
+    })
+
+    it('removes its listener when parent postMessage throws', async () => {
+      ;(window.parent.postMessage as jest.Mock).mockImplementationOnce(() => {
+        throw new Error('postMessage failed')
+      })
+
+      await expect(xdmSubstrate.getVersion({})).rejects.toThrow('postMessage failed')
+      expect(window.removeEventListener).toHaveBeenCalledWith('message', expect.any(Function))
+    })
+
     it('should send a message to window.parent.postMessage with correct parameters', async () => {
       const call = 'testCall'
       const args = { foo: 'bar' }
       const mockId = 'mockedId'
 
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
       xdmSubstrate.invoke(call as any, args) as any
       expect(window.parent.postMessage).toHaveBeenCalledWith(
@@ -100,7 +153,7 @@ describe('XDMSubstrate', () => {
       const result = { data: 'some data' }
       const mockId = 'mockedId'
 
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
       const invokePromise = xdmSubstrate.invoke(call as any, args)
 
@@ -121,11 +174,12 @@ describe('XDMSubstrate', () => {
       const res = await invokePromise
 
       expect(res).toEqual(result)
+      expect(Reflect.get(xdmSubstrate, 'pendingInvocations')).toBe(0)
     })
 
     it('should ignore matching messages from a window other than the parent', async () => {
       const mockId = 'mockedId'
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
       const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
 
       dispatchMessage({
@@ -134,7 +188,7 @@ describe('XDMSubstrate', () => {
           isInvocation: false,
           id: mockId,
           status: 'success',
-          result: 'spoofed'
+          result: { value: 'spoofed' }
         },
         isTrusted: true,
         source: {} as Window
@@ -145,17 +199,17 @@ describe('XDMSubstrate', () => {
           isInvocation: false,
           id: mockId,
           status: 'success',
-          result: 'parent'
+          result: { value: 'parent' }
         },
         isTrusted: true
       })
 
-      await expect(invokePromise).resolves.toBe('parent')
+      await expect(invokePromise).resolves.toEqual({ value: 'parent' })
     })
 
     it('should enforce an exact configured origin', async () => {
       const mockId = 'mockedId'
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
       xdmSubstrate = new XDMSubstrate('https://wallet.example')
       const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
       const response = {
@@ -163,7 +217,7 @@ describe('XDMSubstrate', () => {
         isInvocation: false,
         id: mockId,
         status: 'success',
-        result: 'accepted'
+        result: { value: 'accepted' }
       }
 
       dispatchMessage({
@@ -181,12 +235,12 @@ describe('XDMSubstrate', () => {
         expect.objectContaining({ id: mockId }),
         'https://wallet.example'
       )
-      await expect(invokePromise).resolves.toBe('accepted')
+      await expect(invokePromise).resolves.toEqual({ value: 'accepted' })
     })
 
     it('should preserve wildcard interoperability for opaque parent origins', async () => {
       const mockId = 'mockedId'
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
       const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
 
       dispatchMessage({
@@ -195,18 +249,18 @@ describe('XDMSubstrate', () => {
           isInvocation: false,
           id: mockId,
           status: 'success',
-          result: 'opaque-parent'
+          result: { value: 'opaque-parent' }
         },
         isTrusted: true,
         origin: 'null'
       })
 
-      await expect(invokePromise).resolves.toBe('opaque-parent')
+      await expect(invokePromise).resolves.toEqual({ value: 'opaque-parent' })
     })
 
     it('should ignore malformed message data without throwing', async () => {
       const mockId = 'mockedId'
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
       const invokePromise = xdmSubstrate.invoke('testCall' as any, {})
 
       expect(() => {
@@ -219,22 +273,22 @@ describe('XDMSubstrate', () => {
           isInvocation: false,
           id: mockId,
           status: 'success',
-          result: 'valid'
+          result: { value: 'valid' }
         },
         isTrusted: true
       })
 
-      await expect(invokePromise).resolves.toBe('valid')
+      await expect(invokePromise).resolves.toEqual({ value: 'valid' })
     })
 
     it('should reject when receiving an error message', async () => {
       const call = 'testCall'
       const args = { foo: 'bar' }
       const errorDescription = 'An error occurred'
-      const errorCode = 123
+      const errorCode = 6
       const mockId = 'mockedId'
 
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
       const invokePromise = xdmSubstrate.invoke(call as any, args)
 
@@ -262,6 +316,89 @@ describe('XDMSubstrate', () => {
       }
     })
 
+    it.each([1, 42])(
+      'redacts details from an unassigned wallet error response code %i',
+      async code => {
+        const mockId = 'mockedId'
+        jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
+        const invokePromise = xdmSubstrate.getVersion({})
+
+        dispatchMessage({
+          data: {
+            type: 'CWI',
+            isInvocation: false,
+            id: mockId,
+            status: 'error',
+            description: 'database failed at /private/wallet.sqlite',
+            code
+          },
+          isTrusted: true
+        })
+
+        await invokePromise.catch(error => {
+          expect(error).toBeInstanceOf(WalletError)
+          expect(error.code).toBe(1)
+          expect(error.message).toBe('Wallet operation failed')
+          expect(error.message).not.toContain('/private/wallet.sqlite')
+        })
+        expect(Reflect.get(xdmSubstrate, 'pendingInvocations')).toBe(0)
+      }
+    )
+
+    it('rejects a non-affirmative verification result from the parent wallet', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
+      const invokePromise = xdmSubstrate.verifyHmac({
+        data: [],
+        hmac: Array(32).fill(0),
+        protocolID: [1, 'test protocol'],
+        keyID: '1'
+      })
+
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: { valid: false }
+        },
+        isTrusted: true
+      })
+
+      await expect(invokePromise).rejects.toThrow('valid')
+    })
+
+    it('ignores an invalid error envelope rather than constructing a WalletError', async () => {
+      const mockId = 'mockedId'
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
+      const invokePromise = xdmSubstrate.getVersion({})
+
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'error',
+          description: 'invalid code zero',
+          code: 0
+        },
+        isTrusted: true
+      })
+      dispatchMessage({
+        data: {
+          type: 'CWI',
+          isInvocation: false,
+          id: mockId,
+          status: 'success',
+          result: { version: '1.0.0.0' }
+        },
+        isTrusted: true
+      })
+
+      await expect(invokePromise).resolves.toEqual({ version: '1.0.0.0' })
+    })
+
     it.each([
       ['the type is incorrect', { type: 'WrongType' }, true],
       ['the invocation ID is incorrect', { id: 'wrongId' }, true],
@@ -272,7 +409,7 @@ describe('XDMSubstrate', () => {
       const result = { data: 'some data' }
       const mockId = 'mockedId'
 
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
       const invokePromise = xdmSubstrate.invoke(call as any, args)
 
@@ -307,7 +444,7 @@ describe('XDMSubstrate', () => {
       const result = { data: 'some data' }
       const mockId = 'mockedId'
 
-      jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+      jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
       const invokePromise = xdmSubstrate.invoke(call as any, args)
 
@@ -348,7 +485,7 @@ describe('XDMSubstrate', () => {
         const call = methodName
         const mockId = 'mockedId'
 
-        jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+        jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
         const invokePromise = xdmSubstrate[methodName](args)
 
@@ -383,10 +520,10 @@ describe('XDMSubstrate', () => {
       it('should throw error when invoke rejects', async () => {
         const call = methodName
         const errorDescription = 'An error occurred'
-        const errorCode = 123
+        const errorCode = 6
         const mockId = 'mockedId'
 
-        jest.spyOn(Utils, 'toBase64').mockReturnValue(mockId)
+        jest.spyOn(Utils, 'toBase64').mockReturnValueOnce(mockId)
 
         const invokePromise = xdmSubstrate[methodName](args)
 
@@ -434,20 +571,20 @@ describe('XDMSubstrate', () => {
         inputs: [],
         outputs: []
       },
-      result: { txid: 'abc123' }
+      result: { txid: MINIMAL_TXID, tx: MINIMAL_BEEF }
     },
     {
       methodName: 'signAction',
       args: {
         spends: {},
-        reference: 'someReference'
+        reference: 'cmVm'
       },
-      result: { txid: 'abc123' }
+      result: { txid: MINIMAL_TXID, tx: MINIMAL_BEEF }
     },
     {
       methodName: 'abortAction',
       args: {
-        reference: 'someReference'
+        reference: 'cmVm'
       },
       result: { aborted: true }
     },
@@ -461,8 +598,18 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'internalizeAction',
       args: {
-        tx: 'someTx',
-        outputs: [],
+        tx: MINIMAL_BEEF,
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'wallet payment',
+            paymentRemittance: {
+              derivationPrefix: 'AQ==',
+              derivationSuffix: 'Ag==',
+              senderIdentityKey: VALID_PUBLIC_KEY
+            }
+          }
+        ],
         description: 'Test description'
       },
       result: { accepted: true }
@@ -478,7 +625,7 @@ describe('XDMSubstrate', () => {
       methodName: 'relinquishOutput',
       args: {
         basket: 'someBasket',
-        output: 'someOutput'
+        output: `${VALID_TXID}.0`
       },
       result: { relinquished: true }
     },
@@ -487,19 +634,19 @@ describe('XDMSubstrate', () => {
       args: {
         identityKey: true
       },
-      result: { publicKey: 'somePubKey' }
+      result: { publicKey: VALID_PUBLIC_KEY }
     },
     {
       methodName: 'revealCounterpartyKeyLinkage',
       args: {
-        counterparty: 'someCounterparty',
-        verifier: 'someVerifier'
+        counterparty: VALID_PUBLIC_KEY,
+        verifier: VALID_PUBLIC_KEY
       },
       result: {
-        prover: 'someProver',
-        verifier: 'someVerifier',
-        counterparty: 'someCounterparty',
-        revelationTime: 'someTime',
+        prover: VALID_PUBLIC_KEY,
+        verifier: VALID_PUBLIC_KEY,
+        counterparty: VALID_PUBLIC_KEY,
+        revelationTime: '2026-09-16T00:00:00.000Z',
         encryptedLinkage: [],
         encryptedLinkageProof: []
       }
@@ -507,20 +654,20 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'revealSpecificKeyLinkage',
       args: {
-        counterparty: 'someCounterparty',
-        verifier: 'someVerifier',
+        counterparty: VALID_PUBLIC_KEY,
+        verifier: VALID_PUBLIC_KEY,
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID'
       },
       result: {
-        prover: 'someProver',
-        verifier: 'someVerifier',
-        counterparty: 'someCounterparty',
+        prover: VALID_PUBLIC_KEY,
+        verifier: VALID_PUBLIC_KEY,
+        counterparty: VALID_PUBLIC_KEY,
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID',
         encryptedLinkage: [],
         encryptedLinkageProof: [],
-        proofType: []
+        proofType: 1
       }
     },
     {
@@ -548,13 +695,13 @@ describe('XDMSubstrate', () => {
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID'
       },
-      result: { hmac: [] }
+      result: { hmac: Array(32).fill(0) }
     },
     {
       methodName: 'verifyHmac',
       args: {
         data: [],
-        hmac: [],
+        hmac: Array(32).fill(0),
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID'
       },
@@ -567,13 +714,13 @@ describe('XDMSubstrate', () => {
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID'
       },
-      result: { signature: [] }
+      result: { signature: VALID_DER_SIGNATURE }
     },
     {
       methodName: 'verifySignature',
       args: {
         data: [],
-        signature: [],
+        signature: VALID_DER_SIGNATURE,
         protocolID: [0, 'someProtocol'],
         keyID: 'someKeyID'
       },
@@ -582,24 +729,24 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'acquireCertificate',
       args: {
-        type: 'someType',
-        subject: 'someSubject',
-        serialNumber: 'someSerialNumber',
-        revocationOutpoint: 'someOutpoint',
-        signature: 'someSignature',
+        type: VALID_TYPE,
+        subject: VALID_PUBLIC_KEY,
+        serialNumber: VALID_SERIAL,
+        revocationOutpoint: `${VALID_TXID}.0`,
+        signature: VALID_SIGNATURE_HEX,
         fields: {},
-        certifier: 'someCertifier',
+        certifier: VALID_PUBLIC_KEY,
         keyringRevealer: 'certifier',
         keyringForSubject: {},
         acquisitionProtocol: 'direct'
       },
       result: {
-        type: 'someType',
-        subject: 'someSubject',
-        serialNumber: 'someSerialNumber',
-        certifier: 'someCertifier',
-        revocationOutpoint: 'someOutpoint',
-        signature: 'someSignature',
+        type: VALID_TYPE,
+        subject: VALID_PUBLIC_KEY,
+        serialNumber: VALID_SERIAL,
+        certifier: VALID_PUBLIC_KEY,
+        revocationOutpoint: `${VALID_TXID}.0`,
+        signature: VALID_SIGNATURE_HEX,
         fields: {}
       }
     },
@@ -618,16 +765,16 @@ describe('XDMSubstrate', () => {
       methodName: 'proveCertificate',
       args: {
         certificate: {
-          type: 'someType',
-          subject: 'someSubject',
-          serialNumber: 'someSerialNumber',
-          certifier: 'someCertifier',
-          revocationOutpoint: 'someOutpoint',
-          signature: 'someSignature',
+          type: VALID_TYPE,
+          subject: VALID_PUBLIC_KEY,
+          serialNumber: VALID_SERIAL,
+          certifier: VALID_PUBLIC_KEY,
+          revocationOutpoint: `${VALID_TXID}.0`,
+          signature: VALID_SIGNATURE_HEX,
           fields: {}
         },
         fieldsToReveal: [],
-        verifier: 'someVerifier'
+        verifier: VALID_PUBLIC_KEY
       },
       result: {
         keyringForVerifier: {}
@@ -636,16 +783,16 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'relinquishCertificate',
       args: {
-        type: 'someType',
-        serialNumber: 'someSerialNumber',
-        certifier: 'someCertifier'
+        type: VALID_TYPE,
+        serialNumber: VALID_SERIAL,
+        certifier: VALID_PUBLIC_KEY
       },
       result: { relinquished: true }
     },
     {
       methodName: 'discoverByIdentityKey',
       args: {
-        identityKey: 'someIdentityKey'
+        identityKey: VALID_PUBLIC_KEY
       },
       result: {
         totalCertificates: 0,
@@ -655,7 +802,7 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'discoverByAttributes',
       args: {
-        attributes: {}
+        attributes: { name: 'Alice' }
       },
       result: {
         totalCertificates: 0,
@@ -680,7 +827,7 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'getHeaderForHeight',
       args: { height: 1000 },
-      result: { header: 'someHeader' }
+      result: { header: '00'.repeat(80) }
     },
     {
       methodName: 'getNetwork',
@@ -690,7 +837,7 @@ describe('XDMSubstrate', () => {
     {
       methodName: 'getVersion',
       args: {},
-      result: { version: '1.0.0' }
+      result: { version: '1.0.0.0' }
     }
   ]
 

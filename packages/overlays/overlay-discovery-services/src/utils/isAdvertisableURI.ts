@@ -22,6 +22,8 @@ const HTTPS_URI_PREFIXES = [
   'https+bsvauth+scrypt-offchain://',
   'https+rtt://'
 ] as const
+const MAX_ADVERTISABLE_URI_BYTES = 4096
+const exactCoordinate = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/
 
 const parsePositiveMeasurement = (value: string): number | undefined => {
   const match = /^(\d+(?:\.\d+)?)(?:[a-zA-Z][a-zA-Z0-9/_-]*)?$/.exec(value.trim())
@@ -31,9 +33,51 @@ const parsePositiveMeasurement = (value: string): number | undefined => {
 }
 
 const isAllowedPublicHostname = (hostname: string): boolean => {
-  const normalized = hostname.toLowerCase()
-  if (normalized === 'localhost') return false
-  return normalized.split('.').every(label => !label.startsWith('xn--'))
+  const normalized = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '')
+  if (
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    normalized.endsWith('.local') ||
+    normalized.endsWith('.internal') ||
+    normalized.endsWith('.home.arpa') ||
+    normalized.split('.').some(label => label.startsWith('xn--'))
+  ) {
+    return false
+  }
+  if (normalized.includes(':')) {
+    return !(
+      normalized === '::' ||
+      normalized === '::1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      /^fe[89ab]/.test(normalized) ||
+      normalized.startsWith('ff') ||
+      normalized.startsWith('2001:db8:') ||
+      normalized.startsWith('::ffff:')
+    )
+  }
+  const octets = normalized.split('.').map(Number)
+  if (octets.length !== 4 || octets.some(octet => !Number.isInteger(octet))) return true
+  const [a, b, c, d] = octets
+  return !(
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 0 && c === 0 && d !== 9 && d !== 10) ||
+    (a === 192 && b === 0 && c === 2) ||
+    (a === 192 && b === 88 && c === 99) ||
+    (a === 192 && b === 168) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113) ||
+    a >= 224
+  )
 }
 
 const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
@@ -41,6 +85,7 @@ const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
     const modifiedURI = uri.replace(prefix, 'https://')
     const parsed = new URL(modifiedURI)
     if (!isAllowedPublicHostname(parsed.hostname)) return false
+    if (parsed.username !== '' || parsed.password !== '' || parsed.hash !== '') return false
     if (parsed.pathname !== '/') return false
     return true
   } catch {
@@ -52,6 +97,7 @@ const validateWssURI = (uri: string): boolean => {
   try {
     const parsed = new URL(uri)
     if (!isAllowedPublicHostname(parsed.hostname)) return false
+    if (parsed.username !== '' || parsed.password !== '' || parsed.hash !== '') return false
     return true
   } catch {
     return false
@@ -60,9 +106,16 @@ const validateWssURI = (uri: string): boolean => {
 
 const validateJs8URI = (uri: string): boolean => {
   const queryIndex = uri.indexOf('?')
-  if (queryIndex === -1) return false
+  if (queryIndex === -1 || uri.slice(0, queryIndex) !== 'js8c+bsvauth+smf:') return false
 
   const params = new URLSearchParams(uri.substring(queryIndex))
+  const expectedParameters = ['lat', 'long', 'freq', 'radius']
+  if (
+    [...params.keys()].some(key => !expectedParameters.includes(key)) ||
+    expectedParameters.some(key => params.getAll(key).length !== 1)
+  ) {
+    return false
+  }
   const latStr = params.get('lat')
   const longStr = params.get('long')
   const freqStr = params.get('freq')
@@ -70,10 +123,11 @@ const validateJs8URI = (uri: string): boolean => {
 
   if (!latStr || !longStr || !freqStr || !radiusStr) return false
 
-  const lat = Number.parseFloat(latStr)
-  const lon = Number.parseFloat(longStr)
-  if (Number.isNaN(lat) || lat < -90 || lat > 90) return false
-  if (Number.isNaN(lon) || lon < -180 || lon > 180) return false
+  if (!exactCoordinate.test(latStr) || !exactCoordinate.test(longStr)) return false
+  const lat = Number(latStr)
+  const lon = Number(longStr)
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) return false
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) return false
 
   if (
     parsePositiveMeasurement(freqStr) === undefined ||
@@ -87,6 +141,7 @@ const validateJs8URI = (uri: string): boolean => {
 
 export const isAdvertisableURI = (uri: string): boolean => {
   if (typeof uri !== 'string' || uri.trim() === '') return false
+  if (new TextEncoder().encode(uri).length > MAX_ADVERTISABLE_URI_BYTES) return false
 
   const httpsPrefix = HTTPS_URI_PREFIXES.find(prefix => uri.startsWith(prefix))
   if (httpsPrefix !== undefined) return validateCustomHttpsURI(uri, httpsPrefix)

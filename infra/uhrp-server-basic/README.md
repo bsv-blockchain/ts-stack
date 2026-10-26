@@ -38,7 +38,52 @@ expiry, declared size, and optional `Content-Length` first, streams up to
 incrementally, and exclusively commits the completed object without
 overwriting an existing file or symlink.
 
+Object identifiers are flat Base58 names resolved as direct children of the
+CDN root. Path separators, traversal forms, absolute paths, percent escapes,
+dot files, and repeated-key query shapes are rejected before wallet, body, or
+filesystem work (GHSA-v356-28v3-rj46). The production static server reads from
+the same canonical root used by the upload writer.
+
+`PUT /put` is intentionally reachable before BRC-103 middleware because the
+pre-signed HMAC is its upload credential. Treat `SERVER_PRIVATE_KEY` as a
+high-value secret: anyone who can read it can authorize writes for otherwise
+valid object names.
+
+## Advertisement and ownership trust
+
+The public UHRP token cryptographically authenticates the host identity, hash,
+location, expiry, size, and host-derived locking key. Uploader identity and the
+local object identifier are not UHRP wire fields. For owner-only list, find,
+and renewal operations, this service therefore requires a locally
+server-signed wallet metadata envelope and verifies it against the exact token,
+BEEF output, and wallet tags. Outputs created before that envelope existed
+remain available to owner list/find/renew flows through a bounded legacy path:
+the host-signed on-chain token is authoritative for the hash, location, expiry,
+size, and host, while the local wallet's legacy tags retain the uploader,
+object-name, and MIME association. A legacy renewal writes the current signed
+envelope, upgrading the record in place. Present-but-invalid signed metadata
+never falls back to legacy handling. Public retrieval of an otherwise valid
+on-chain advertisement is unaffected.
+
+Billable upload and renewal sizes come from authenticated bytes/metadata, not
+caller-editable tags. Pricing errors fail closed. CDN responses force arbitrary
+uploaded bytes into a sandboxed attachment with MIME sniffing disabled so an
+upload cannot execute with the API origin's browser authority.
+
 ## CHIRP complete-host support
+
+Authenticated staged-object HEAD responses have no body, including existence
+and validation-error responses. Authentication signs the same empty bytes
+that HTTP sends. Other methods retain their existing JSON error responses.
+
+Authenticated staged-object PUTs parse bounded identity bytes before BRC-103
+verification. The handler stages those same verified bytes rather than rereading
+the consumed request stream. The parser is scoped to staged-object PUTs, rejects
+compressed bodies, and retains the `CHIRP_OBJECT_MAX_BODY_BYTES` ceiling
+(default 4 MiB). JSON routes, HMAC streaming `/put`, and bodyless HEAD responses
+retain their existing behavior. Use SDK 2.8.9 or later for full-size authenticated
+CHIRP chunks; its HTTP transport keeps its existing framing and response limits.
+No object, session, advertisement or persistence migration is required.
 
 The server also implements the BRC-167 baseline upload-session and complete-
 host routes under `/chirp/v1`. Objects are stream-hashed into a deduplicated
@@ -52,3 +97,30 @@ commit-membership index; tune `CHIRP_COMMIT_CACHE_ROOTS`,
 `CHIRP_COMMIT_CACHE_OBJECTS`, and `CHIRP_COMMIT_CACHE_SECONDS` for the
 deployment's root cardinality and memory budget. Existing UHRP routes and
 storage behavior are unchanged.
+
+Staging is deliberately bounded before a paid commit: by default the host
+allows 1,024 active sessions, eight per authenticated identity, and 4,096
+objects per session, while preserving 1 GiB of filesystem headroom. Configure
+`CHIRP_MAX_ACTIVE_SESSIONS`, `CHIRP_MAX_ACTIVE_SESSIONS_PER_IDENTITY`,
+`CHIRP_MAX_STAGED_OBJECTS_PER_SESSION`, and `CHIRP_MIN_FREE_BYTES` for the
+mounted volume. `CHIRP_GC_MAX_ENTRIES` limits deletions per collection cycle;
+it never disables collection merely because the store grew past the limit.
+Commits of the same content root are serialized across upload sessions.
+Filesystem locks fail closed. A lock is never removed automatically based only
+on age because delayed stale-lock cleanup could delete a successor that
+recreated the same pathname. Heartbeats keep live locks current, but an orphan
+left by a crashed process requires operator removal after every writer using
+the shared `CHIRP_DATA_DIR` has been stopped. Never delete a lock while any
+CHIRP replica may still be writing.
+
+## Development watcher security maintenance
+
+The development command uses the existing Node 24 toolchain with `tsx watch`
+instead of the legacy Nodemon/ts-node-dev watcher dependency chain. It watches
+`src/**` through `tsx` and polls the hidden `.env` file every 500 milliseconds
+through the small `dev-watch.mjs` launcher. Environment changes request a normal
+watcher restart. It preserves the telemetry preload and the service entry point,
+and keeps any existing inspector configuration. Production startup, database
+migrations, public routes and data formats are unchanged. Install the committed
+lock with `npm ci` before using the updated development command. This removes
+the unpatched `braces` path without an advisory exclusion or dependency override.

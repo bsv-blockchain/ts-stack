@@ -17,14 +17,19 @@ export class BTMSStorageManager {
   }
 
   private ensureIndexes(): Promise<void> {
-    this.indexInit ??= (async () => {
+    if (this.indexInit) return this.indexInit
+    const attempt = (async () => {
       await Promise.all([
         this.records.createIndex({ assetId: 1 }),
         this.records.createIndex({ ownerKey: 1 }),
         this.records.createIndex({ txid: 1, outputIndex: 1 }, { unique: true })
       ])
     })()
-    return this.indexInit
+    this.indexInit = attempt
+    void attempt.catch(() => {
+      if (this.indexInit === attempt) this.indexInit = undefined
+    })
+    return attempt
   }
 
   /**
@@ -48,7 +53,23 @@ export class BTMSStorageManager {
       metadata,
       createdAt: new Date()
     }
-    await this.records.insertOne(record)
+    const result = await this.records.updateOne(
+      { txid, outputIndex },
+      { $setOnInsert: record },
+      { upsert: true }
+    )
+    if (result.upsertedCount === 1) return
+
+    const existing = await this.records.findOne({ txid, outputIndex })
+    if (
+      existing == null ||
+      existing.assetId !== assetId ||
+      existing.amount !== amount ||
+      existing.ownerKey !== ownerKey ||
+      existing.metadata !== metadata
+    ) {
+      throw new Error(`Conflicting BTMS record replay for ${txid}.${outputIndex}`)
+    }
   }
 
   /**

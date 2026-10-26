@@ -61,6 +61,11 @@ describe('parseEvidence', () => {
     expectInvalid({ beef: tx.toBEEF(), outputIndex: tx.outputs.length })
   })
 
+  it('rejects trailing bytes on untrusted BEEF evidence', async () => {
+    const tx = await signedChild()
+    expectInvalid({ beef: [...tx.toBEEF(), 0], outputIndex: 0 })
+  })
+
   it('rejects a mismatched source TXID and an unconfirmed zero-input leaf', async () => {
     const tx = await signedChild()
     tx.inputs[0].sourceTXID = '11'.repeat(32)

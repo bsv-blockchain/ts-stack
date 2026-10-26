@@ -6,24 +6,36 @@ import type { PubKeyHex } from '../wallet/Wallet.interfaces.js'
  *
  * This intentionally mirrors the essential subset of message-box-client / MessageBoxClient.
  * RemittanceManager never talks directly to HTTP/WebSockets – it only uses this interface.
+ *
+ * This is a security boundary. Implementations MUST authenticate the peer identity represented
+ * by `PeerMessage.sender`, bind message integrity to that identity, and return only messages whose
+ * authenticated recipient and message-box name match the request. `RemittanceManager` checks
+ * those bindings and thread roles but cannot manufacture transport authentication from an
+ * untrusted sender string.
  */
 export interface CommsLayer {
   /**
    * Sends a message over the store-and-forward channel. Returns the transport messageId.
    */
-  sendMessage: (args: { recipient: PubKeyHex, messageBox: string, body: string }, hostOverride?: string) => Promise<string>
+  sendMessage: (
+    args: { recipient: PubKeyHex; messageBox: string; body: string },
+    hostOverride?: string
+  ) => Promise<string>
 
   /**
    * Sends a message over the live channel (e.g. WebSocket). Returns the transport messageId.
    * Implementers may throw if live sending is not possible.
    * RemittanceManager will fall back to sendMessage where appropriate.
    */
-  sendLiveMessage?: (args: { recipient: PubKeyHex, messageBox: string, body: string }, hostOverride?: string) => Promise<string>
+  sendLiveMessage?: (
+    args: { recipient: PubKeyHex; messageBox: string; body: string },
+    hostOverride?: string
+  ) => Promise<string>
 
   /**
-   * Lists pending messages for a message box.
+   * Lists pending authenticated messages for a message box.
    */
-  listMessages: (args: { messageBox: string, host?: string }) => Promise<PeerMessage[]>
+  listMessages: (args: { messageBox: string; host?: string }) => Promise<PeerMessage[]>
 
   /**
    * Acknowledges messages (deletes them from the server / inbox).

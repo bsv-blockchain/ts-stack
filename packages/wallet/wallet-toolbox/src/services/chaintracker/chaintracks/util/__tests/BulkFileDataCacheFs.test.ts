@@ -56,6 +56,20 @@ describe('BulkFileDataCacheFs', () => {
     )
   })
 
+  test('authenticates writes and bounds hostile cache objects before returning them', async () => {
+    const cache = new BulkFileDataCacheFs(root)
+    await expect(cache.set(file, new Uint8Array(79))).rejects.toThrow('data length')
+    await expect(cache.set(file, new Uint8Array(80))).rejects.toThrow('data digest')
+
+    const digest = Buffer.from(file.fileHash!, 'base64').toString('hex')
+    const objectPath = path.join(root, 'objects', digest.slice(0, 2), `${digest}.headers`)
+    await fs.mkdir(path.dirname(objectPath), { recursive: true })
+    await fs.writeFile(objectPath, new Uint8Array(1024 * 1024))
+
+    const loaded = await cache.get(file)
+    expect(loaded).toHaveLength(81)
+  })
+
   test('quarantines only the rejected bytes observed by the validator', async () => {
     const cache = new BulkFileDataCacheFs(root)
     await cache.set(file, data)
@@ -104,5 +118,40 @@ describe('BulkFileDataCacheFs', () => {
     await expect(cache.get({ ...file, fileName: '../outside.headers' })).rejects.toThrow(
       'Invalid bulk-header cache file name'
     )
+  })
+
+  test('rejects ambiguous roots and unbounded or sparse legacy-root collections', () => {
+    expect(() => new BulkFileDataCacheFs({ rootFolder: '' })).toThrow('rootFolder')
+    expect(() => new BulkFileDataCacheFs({ rootFolder: path.parse(root).root })).toThrow('filesystem root')
+    expect(
+      () => new BulkFileDataCacheFs({ rootFolder: root, legacyRoots: Array.from({ length: 65 }, () => root) })
+    ).toThrow('no more than 64')
+    const sparse = Array(2) as string[]
+    sparse[1] = root
+    expect(() => new BulkFileDataCacheFs({ rootFolder: root, legacyRoots: sparse })).toThrow('dense array')
+  })
+
+  test('serializes independent cache writers and fails closed on an abandoned object lock', async () => {
+    const first = new BulkFileDataCacheFs(root)
+    const second = new BulkFileDataCacheFs(root)
+    await expect(Promise.all([first.set(file, data), second.set(file, data)])).resolves.toEqual([undefined, undefined])
+    await expect(first.get(file)).resolves.toEqual(data)
+
+    const digest = Buffer.from(file.fileHash!, 'base64').toString('hex')
+    const lockFolder = path.join(root, 'objects', digest.slice(0, 2), `${digest}.headers.lock`)
+    await fs.mkdir(lockFolder)
+    await fs.writeFile(path.join(lockFolder, 'owner'), 'temporary holder')
+    const mutable = data.slice()
+    const pending = first.set(file, mutable)
+    mutable.fill(1)
+    await fs.unlink(path.join(lockFolder, 'owner'))
+    await fs.rmdir(lockFolder)
+    await expect(pending).resolves.toBeUndefined()
+    await expect(first.get(file)).resolves.toEqual(data)
+
+    await fs.mkdir(lockFolder)
+    await fs.writeFile(path.join(lockFolder, 'owner'), 'abandoned')
+    const bounded = new BulkFileDataCacheFs({ rootFolder: root, lockTimeoutMsecs: 5, lockRetryMsecs: 1 })
+    await expect(bounded.set(file, data)).rejects.toThrow('never reclaimed automatically')
   })
 })

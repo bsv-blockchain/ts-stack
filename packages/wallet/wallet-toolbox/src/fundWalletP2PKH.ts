@@ -22,18 +22,96 @@ export interface ParsedOutpoint {
   vout: number
 }
 
+const MAX_OUTPOINTS = 256
+const MAX_BEEF_TRANSACTIONS = 4096
+const MAX_BEEF_SOURCE_BYTES = 64 * 1024 * 1024
+const MAX_RAW_TX_HEX_BYTES = 32 * 1024 * 1024
+const MAX_MERKLE_PATH_BYTES = 4 * 1024 * 1024
+const FETCH_TIMEOUT_MS = 8000
+
+class FundingResourceLimitError extends Error {}
+
+async function readBoundedResponse(
+  response: Response,
+  maximumBytes: number,
+  label: string
+): Promise<Uint8Array> {
+  const declared = response.headers.get('content-length')
+  if (declared != null) {
+    if (!/^\d+$/.test(declared)) throw new Error(`${label} returned an invalid Content-Length`)
+    const length = Number(declared)
+    if (!Number.isSafeInteger(length) || length > maximumBytes) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new FundingResourceLimitError(`${label} exceeds ${maximumBytes} bytes`)
+    }
+  }
+  if (response.body == null) return new Uint8Array()
+  const reader = response.body.getReader()
+  const chunks: Uint8Array[] = []
+  let length = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      length += value.length
+      if (length > maximumBytes) {
+        await reader.cancel().catch(() => undefined)
+        throw new FundingResourceLimitError(`${label} exceeds ${maximumBytes} bytes`)
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(length)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.length
+  }
+  return bytes
+}
+
+async function fetchBounded(url: string, maximumBytes: number, label: string): Promise<Uint8Array> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      redirect: 'error',
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined)
+      throw new Error(`${label} returned HTTP ${response.status}`)
+    }
+    return await readBoundedResponse(response, maximumBytes, label)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 /** Strictly parse an outpoint string into txid and vout components. */
 export function parseOutpoint (s: string): ParsedOutpoint {
+  if (typeof s !== 'string') throw new TypeError('Outpoint must be a string')
   const m = /^([0-9a-fA-F]{64})\.(\d+)$/.exec(s)
   if (m == null) throw new Error(`Invalid outpoint format: ${s}`)
   const txid = m[1].toLowerCase()
   const vout = Number(m[2])
-  if (!Number.isSafeInteger(vout) || vout < 0) throw new Error(`Invalid vout in outpoint: ${s}`)
+  if (!Number.isSafeInteger(vout) || vout < 0 || vout > 0xffffffff) {
+    throw new Error(`Invalid vout in outpoint: ${s}`)
+  }
   return { outpoint: s, txid, vout }
 }
 
 /** Parse raw hex into a Transaction and assert its hash matches the expected txid. */
 export function parseTxAndAssertId (rawHex: string, expectedTxid: string): Transaction {
+  if (typeof rawHex !== 'string' || rawHex.length === 0 || rawHex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(rawHex)) {
+    throw new Error('Fetched transaction must be non-empty canonical hexadecimal bytes')
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(expectedTxid)) {
+    throw new Error('Expected transaction ID must be 32-byte hexadecimal')
+  }
   const tx = Transaction.fromHex(rawHex)
   const got = tx.id('hex')
   if (got.toLowerCase() !== expectedTxid.toLowerCase()) {
@@ -65,16 +143,18 @@ export function resolveAutoSigned (car: CreateActionResult, txid: string, vout: 
   if (!car.txid || !/^[0-9a-f]{64}$/i.test(car.txid)) {
     throw new Error('createAction returned no signableTransaction and no valid txid')
   }
-  if (car.tx != null) {
-    const completedTx = Transaction.fromAtomicBEEF(car.tx)
-    if (completedTx.id('hex').toLowerCase() !== car.txid.toLowerCase()) {
-      throw new Error('Auto-signed tx id mismatch with car.txid')
-    }
-    if (
-      !completedTx.inputs.some(inp => String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout)
-    ) {
-      throw new Error('Auto-signed tx does not spend the requested outpoint')
-    }
+  if (car.tx == null) {
+    throw new Error('Auto-signed createAction result omitted the transaction needed for validation')
+  }
+  const completedTx = Transaction.fromAtomicBEEF(car.tx)
+  if (completedTx.id('hex').toLowerCase() !== car.txid.toLowerCase()) {
+    throw new Error('Auto-signed tx id mismatch with car.txid')
+  }
+  const matchingInputs = completedTx.inputs.filter(
+    inp => String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout
+  )
+  if (matchingInputs.length !== 1) {
+    throw new Error('Auto-signed tx must spend the requested outpoint exactly once')
   }
   return car.txid
 }
@@ -89,27 +169,30 @@ export async function signAndComplete (
   p2pkhKey: KeyPairAddress,
   getUnlockP2PKH: (priv: KeyPairAddress['privateKey'], satoshis: number) => ScriptTemplateUnlock
 ): Promise<string> {
-  const stBeef = Beef.fromBinary(st.tx)
-  let unsignedTx: Transaction | undefined
-  let inputIndex = -1
-  for (const stbtx of stBeef.txs) {
-    if (stbtx.tx == null) continue
-    for (let i = 0; i < stbtx.tx.inputs.length; i++) {
-      const inp = stbtx.tx.inputs[i]
-      if (String(inp.sourceTXID).toLowerCase() === txid && inp.sourceOutputIndex === vout) {
-        unsignedTx = stbtx.tx
-        inputIndex = i
-        break
-      }
-    }
-    if (unsignedTx != null) break
+  const unsignedTx = Transaction.fromAtomicBEEF(st.tx)
+  const matchingInputIndexes = unsignedTx.inputs.flatMap((input, index) =>
+    String(input.sourceTXID).toLowerCase() === txid && input.sourceOutputIndex === vout ? [index] : []
+  )
+  if (matchingInputIndexes.length !== 1) {
+    throw new Error('Signable transaction must contain the requested outpoint exactly once')
   }
-  if ((unsignedTx == null) || inputIndex < 0) throw new Error('Could not find requested outpoint in signable transaction inputs')
+  const inputIndex = matchingInputIndexes[0]
   unsignedTx.inputs[inputIndex].unlockingScriptTemplate = getUnlockP2PKH(p2pkhKey.privateKey, satoshis)
   await unsignedTx.sign()
   const unlockingScript = unsignedTx.inputs[inputIndex].unlockingScript!.toHex()
   const sar = await wallet.signAction({ reference: st.reference, spends: { [inputIndex]: { unlockingScript } } })
   if (!sar.txid || !/^[0-9a-f]{64}$/i.test(sar.txid)) throw new Error('signAction returned no valid txid')
+  const expectedTxid = unsignedTx.id('hex')
+  if (sar.txid.toLowerCase() !== expectedTxid.toLowerCase()) {
+    throw new Error('signAction returned a transaction ID that does not match the signed transaction')
+  }
+  if (sar.tx == null) {
+    throw new Error('signAction omitted the final transaction needed for validation')
+  }
+  const finalized = Transaction.fromAtomicBEEF(sar.tx)
+  if (finalized.id('hex').toLowerCase() !== expectedTxid.toLowerCase() || finalized.toHex() !== unsignedTx.toHex()) {
+    throw new Error('signAction returned a transaction that does not match the signed transaction')
+  }
   return sar.txid
 }
 
@@ -156,6 +239,9 @@ export async function fundWalletFromP2PKHOutpoints (
   getUnlockP2PKH: (priv: KeyPairAddress['privateKey'], satoshis: number) => ScriptTemplateUnlock,
   inputBEEF?: BEEF
 ): Promise<Array<{ outpoint: string, txid?: string, success: boolean, error?: string }>> {
+  if (!Array.isArray(outpoints) || outpoints.length === 0 || outpoints.length > MAX_OUTPOINTS) {
+    throw new Error(`outpoints must contain between 1 and ${MAX_OUTPOINTS} entries`)
+  }
   const parsed = outpoints.map(o => parseOutpoint(o))
   const seen = new Set<string>()
   for (const p of parsed) {
@@ -164,7 +250,7 @@ export async function fundWalletFromP2PKHOutpoints (
     seen.add(key)
   }
   const beefBin = inputBEEF ?? (await buildBeefForOutpoints(outpoints))
-  const beef = Beef.fromBinary(beefBin)
+  const beef = Beef.fromBinaryStrict(beefBin)
   const results: Array<{ outpoint: string, txid?: string, success: boolean, error?: string }> = []
   for (const p of parsed) {
     try {
@@ -189,8 +275,15 @@ export async function fundWalletFromP2PKHOutpoints (
  * @internal
  */
 export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10): Promise<BEEF> {
+  if (!Array.isArray(outpoints) || outpoints.length === 0 || outpoints.length > MAX_OUTPOINTS) {
+    throw new Error(`outpoints must contain between 1 and ${MAX_OUTPOINTS} entries`)
+  }
+  if (!Number.isSafeInteger(maxDepth) || maxDepth < 0 || maxDepth > 100) {
+    throw new Error('maxDepth must be an integer from 0 to 100')
+  }
   const beef = new Beef()
   const fetched = new Set<string>()
+  let sourceBytes = 0
 
   async function fetchRawTx (txid: string): Promise<string | null> {
     const providers = [
@@ -199,12 +292,18 @@ export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10)
     ]
     for (const url of providers) {
       try {
-        const ctrl = new AbortController()
-        const t = setTimeout(() => ctrl.abort(), 8000)
-        const res = await fetch(url, { signal: ctrl.signal })
-        clearTimeout(t)
-        if (res.ok) return (await res.text()).trim()
-      } catch {
+        const bytes = await fetchBounded(url, MAX_RAW_TX_HEX_BYTES, 'Raw transaction response')
+        const rawHex = new TextDecoder('utf-8', { fatal: true }).decode(bytes).trim()
+        parseTxAndAssertId(rawHex, txid)
+        sourceBytes += bytes.length
+        if (sourceBytes > MAX_BEEF_SOURCE_BYTES) {
+          throw new FundingResourceLimitError(
+            `BEEF source material exceeds ${MAX_BEEF_SOURCE_BYTES} bytes`
+          )
+        }
+        return rawHex
+      } catch (error) {
+        if (error instanceof FundingResourceLimitError) throw error
         /* try next */
       }
     }
@@ -213,14 +312,26 @@ export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10)
 
   async function fetchMerklePath (txid: string): Promise<MerklePath | null> {
     try {
-      const ctrl = new AbortController()
-      const t = setTimeout(() => ctrl.abort(), 8000)
-      const res = await fetch(`https://ordinals.gorillapool.io/api/tx/${txid}/proof`, { signal: ctrl.signal })
-      clearTimeout(t)
-      if (!res.ok) return null
-      const buf = new Uint8Array(await res.arrayBuffer())
-      return MerklePath.fromBinary(Array.from(buf))
-    } catch {
+      const bytes = await fetchBounded(
+        `https://ordinals.gorillapool.io/api/tx/${txid}/proof`,
+        MAX_MERKLE_PATH_BYTES,
+        'Merkle path response'
+      )
+      const merklePath = MerklePath.fromBinary(bytes)
+      const canonical = merklePath.toBinary()
+      if (canonical.length !== bytes.length || canonical.some((byte, index) => byte !== bytes[index])) {
+        throw new Error('Merkle path response is not canonical')
+      }
+      merklePath.computeRoot(txid)
+      sourceBytes += bytes.length
+      if (sourceBytes > MAX_BEEF_SOURCE_BYTES) {
+        throw new FundingResourceLimitError(
+          `BEEF source material exceeds ${MAX_BEEF_SOURCE_BYTES} bytes`
+        )
+      }
+      return merklePath
+    } catch (error) {
+      if (error instanceof FundingResourceLimitError) throw error
       return null
     }
   }
@@ -229,6 +340,9 @@ export async function buildBeefForOutpoints (outpoints: string[], maxDepth = 10)
     if (fetched.has(txid)) return
     if (depth > maxDepth) {
       throw new Error(`BEEF build exceeded maxDepth=${maxDepth} while resolving ${txid}`)
+    }
+    if (fetched.size >= MAX_BEEF_TRANSACTIONS) {
+      throw new Error(`BEEF build exceeds ${MAX_BEEF_TRANSACTIONS} transactions`)
     }
     fetched.add(txid)
 

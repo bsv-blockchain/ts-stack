@@ -21,10 +21,10 @@ import Script from '../../../script/Script'
  *   c) neither → throws
  *
  * getVarIntSize thresholds:
- *   - <= 253      → 1 byte
- *   - 254..65535  → 3 bytes  (> 253)
- *   - 65536..2^32 → 5 bytes  (> 2^16)
- *   - > 2^32      → 9 bytes
+ *   - 0..252          → 1 byte
+ *   - 253..65535      → 3 bytes
+ *   - 65536..2^32-1   → 5 bytes
+ *   - 2^32 and higher → 9 bytes
  */
 
 // ---------------------------------------------------------------------------
@@ -154,34 +154,32 @@ describe('SatoshisPerKilobyte', () => {
   // getVarIntSize thresholds (tested indirectly through computeFee)
   // -------------------------------------------------------------------------
   describe('getVarIntSize thresholds', () => {
-    it('uses 1-byte varint for script length <= 253', async () => {
+    it('uses 3-byte CompactSize for script length 253', async () => {
       const model = new SatoshisPerKilobyte(1000)
       const script253 = Array.from({ length: 253 }).fill(0x00)
       const tx = makeTx([makeScriptInput(script253)], [])
       const fee = await model.computeFee(tx)
-      // script len 253 ≤ 253, so varint is 1 byte
-      // size = 4 + 1 + 40 + 1 + 253 + 1 + 4 = 304
-      expect(fee).toBe(Math.ceil((304 / 1000) * 1000))
+      // CompactSize values 253 and greater require a marker plus uint16.
+      // size = 4 + 1 + 40 + 3 + 253 + 1 + 4 = 306
+      expect(fee).toBe(Math.ceil((306 / 1000) * 1000))
     })
 
-    it('uses 3-byte varint for script length 254 (> 253)', async () => {
+    it('uses 3-byte varint for script length 254', async () => {
       const model = new SatoshisPerKilobyte(1000)
       const script254 = Array.from({ length: 254 }).fill(0x00)
       const tx = makeTx([makeScriptInput(script254)], [])
       const fee = await model.computeFee(tx)
-      // script len 254 > 253, so varint is 3 bytes
+      // script len 254 uses a marker plus uint16.
       // size = 4 + 1 + 40 + 3 + 254 + 1 + 4 = 307
       expect(fee).toBe(Math.ceil((307 / 1000) * 1000))
     })
 
-    it('uses 5-byte varint for script length > 2^16', async () => {
+    it('uses 5-byte varint for script length above uint16', async () => {
       const model = new SatoshisPerKilobyte(1000)
-      // The condition in getVarIntSize is `i > 2**16` (i.e. strictly greater than 65536).
-      // A script of 65537 bytes is the smallest value that triggers the 5-byte varint path.
       const bigScript = Array.from({ length: 65537 }).fill(0x00)
       const tx = makeTx([makeScriptInput(bigScript)], [])
       const fee = await model.computeFee(tx)
-      // varint = 5 bytes (65537 > 2^16)
+      // varint = 5 bytes (65537 is above uint16)
       // size = 4 + 1 (input count) + 40 + 5 (script len varint) + 65537 + 1 (output count) + 4 = 65592
       expect(fee).toBe(Math.ceil((65592 / 1000) * 1000))
     })
@@ -227,6 +225,46 @@ describe('SatoshisPerKilobyte', () => {
       expect(fee).toBe(Math.ceil((249 / 1000) * 1000))
       expect(input0.unlockingScriptTemplate.estimateLength).toHaveBeenCalledWith(tx, 0)
       expect(input1.unlockingScriptTemplate.estimateLength).toHaveBeenCalledWith(tx, 1)
+    })
+
+    it.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
+      'rejects unsafe template estimate %s',
+      async estimatedLength => {
+        const tx = makeTx([makeTemplateInput(estimatedLength)], [])
+        await expect(new SatoshisPerKilobyte(1000).computeFee(tx)).rejects.toThrow(
+          'non-negative safe integer'
+        )
+      }
+    )
+
+    it('rejects invalid and post-construction mutated rates', async () => {
+      for (const value of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(() => new SatoshisPerKilobyte(value)).toThrow('finite and non-negative')
+      }
+      const model = new SatoshisPerKilobyte(1)
+      model.value = -1
+      await expect(model.computeFee(makeTx([], []))).rejects.toThrow('finite and non-negative')
+    })
+
+    it('pins the rate before awaiting an unlocking-script estimate', async () => {
+      let releaseEstimate: (length: number) => void = () => {}
+      const model = new SatoshisPerKilobyte(1000)
+      const tx = makeTx(
+        [{
+          unlockingScriptTemplate: {
+            estimateLength: async () => await new Promise<number>(resolve => {
+              releaseEstimate = resolve
+            })
+          }
+        }],
+        []
+      )
+
+      const pending = model.computeFee(tx)
+      model.value = 1
+      releaseEstimate(107)
+
+      await expect(pending).resolves.toBe(158)
     })
   })
 })

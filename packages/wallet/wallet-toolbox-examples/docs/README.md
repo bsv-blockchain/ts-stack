@@ -44,18 +44,39 @@ Links: [API](#api), [Functions](#functions)
 
 #### Functions
 
-|                                                            |
-| ---------------------------------------------------------- |
-| [backup](#function-backup)                                 |
-| [backupToSQLite](#function-backuptosqlite)                 |
-| [backupWalletClient](#function-backupwalletclient)         |
-| [balanceSpecOp](#function-balancespecop)                   |
-| [balances](#function-balances)                             |
-| [makeEnv](#function-makeenv)                               |
-| [runArgv2Function](#function-runargv2function)             |
-| [swapActive](#function-swapactive)                         |
-| [swapActiveWalletClient](#function-swapactivewalletclient) |
-| [walletBalance](#function-walletbalance)                   |
+|                                                                      |                                                                      |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [assertSameSignedTransaction](#function-assertsamesignedtransaction) | [findRequestedOutputIndex](#function-findrequestedoutputindex)       |
+| [assertSatoshis](#function-assertsatoshis)                           | [makeEnv](#function-makeenv)                                         |
+| [backup](#function-backup)                                           | [runArgv2Function](#function-runargv2function)                       |
+| [backupToSQLite](#function-backuptosqlite)                           | [snapshotCreateActionOptions](#function-snapshotcreateactionoptions) |
+| [backupWalletClient](#function-backupwalletclient)                   | [snapshotStringArray](#function-snapshotstringarray)                 |
+| [balanceSpecOp](#function-balancespecop)                             | [swapActive](#function-swapactive)                                   |
+| [balances](#function-balances)                                       | [swapActiveWalletClient](#function-swapactivewalletclient)           |
+| [findRequestedInputIndex](#function-findrequestedinputindex)         | [walletBalance](#function-walletbalance)                             |
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: assertSameSignedTransaction
+
+```ts
+export function assertSameSignedTransaction(
+  locallySigned: Transaction,
+  walletReturned: Transaction
+): void
+```
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: assertSatoshis
+
+```ts
+export function assertSatoshis(value: unknown): asserts value is number
+```
 
 Links: [API](#api), [Functions](#functions)
 
@@ -78,6 +99,11 @@ Links: [API](#api), [Functions](#functions)
 
 ##### Function: backupToSQLite
 
+Writes sensitive wallet history to SQLite. The destination must be inside a
+trusted, owner-only directory because SQLite may create journal files beside
+the database. Existing symbolic or multiply linked targets are rejected and the database
+itself is restricted to mode `0600` before it is opened.
+
 ```ts
 export async function backupToSQLite(
   setup: SetupWallet,
@@ -87,6 +113,7 @@ export async function backupToSQLite(
   const env = Setup.getEnv(setup.chain)
   filePath ||= `backup_${setup.identityKey}.sqlite`
   databaseName ||= `${setup.identityKey} backup`
+  preparePrivateBackupFile(filePath)
   const backup = await Setup.createStorageKnex({
     env,
     knex: Setup.createSQLiteKnex(filePath),
@@ -112,8 +139,11 @@ export async function backupWalletClient(env: SetupEnv, identityKey: string): Pr
     env,
     rootKeyHex: env.devKeys[identityKey]
   })
-  await backupToSQLite(setup)
-  await setup.wallet.destroy()
+  try {
+    await backupToSQLite(setup)
+  } finally {
+    await setup.wallet.destroy()
+  }
 }
 ```
 
@@ -175,21 +205,66 @@ export async function balances(): Promise<void> {
       env,
       rootKeyHex: env.devKeys[identityKey]
     })
-    let balance = 0
-    let offset = 0
-    for (;;) {
-      const change = await setup.wallet.listOutputs({
-        basket: 'default',
-        limit: 10,
-        offset
-      })
-      balance += change.outputs.reduce((b, o) => (b += o.satoshis), 0)
-      offset += change.outputs.length
-      if (change.outputs.length === 0 || offset >= change.totalOutputs) break
+    try {
+      let balance = 0
+      let offset = 0
+      const seen = new Set<string>()
+      for (;;) {
+        const change = await setup.wallet.listOutputs({ basket: 'default', limit: 10, offset })
+        if (
+          !Number.isSafeInteger(change.totalOutputs) ||
+          change.totalOutputs < 0 ||
+          change.totalOutputs > MAX_BALANCE_OUTPUTS
+        ) {
+          throw new Error('Wallet reported an invalid or excessive output count')
+        }
+        for (const output of change.outputs) {
+          assertSatoshis(output.satoshis)
+          const { txid, vout } = sdk.Validation.parseWalletOutpoint(output.outpoint)
+          const canonicalOutpoint = `${txid.toLowerCase()}.${vout}`
+          if (seen.has(canonicalOutpoint)) {
+            throw new Error('Wallet repeated an output across pages')
+          }
+          seen.add(canonicalOutpoint)
+          const nextBalance = balance + output.satoshis
+          assertSatoshis(nextBalance)
+          balance = nextBalance
+        }
+        offset += change.outputs.length
+        if (change.outputs.length === 0 || offset >= change.totalOutputs) break
+      }
+      console.log(`balance for ${identityKey} = ${balance}`)
+    } finally {
+      await setup.wallet.destroy()
     }
-    console.log(`balance for ${identityKey} = ${balance}`)
   }
 }
+```
+
+See also: [assertSatoshis](./README.md#function-assertsatoshis)
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: findRequestedInputIndex
+
+```ts
+export function findRequestedInputIndex(transaction: Transaction, outpoint: string): number
+```
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: findRequestedOutputIndex
+
+```ts
+export function findRequestedOutputIndex(
+  transaction: Transaction,
+  lockingScript: string,
+  satoshis: number
+): number
 ```
 
 Links: [API](#api), [Functions](#functions)
@@ -207,17 +282,17 @@ in the `src` folder of this repository.
 
 Note that you can replace or add to the auto-generated keys.
 
-The following command will run the function,
-capture the output into a file named '.env',
-and display the file's contents:
+The following commands create a user-readable-only `.env` file. Never display,
+share, or commit its contents; `DEV_KEYS` contains root private keys.
 
 ```bash
-npx tsx makeEnv > .env; cat .env
+umask 077
+npx tsx makeEnv > .env
 ```
 
 ```ts
-export function makeEnv() {
-  Setup.makeEnv()
+export function makeEnv(): void {
+  process.stdout.write(Setup.makeEnv())
 }
 ```
 
@@ -239,13 +314,42 @@ Optionally, if there is a functionName in `module_exports` that matches the file
 then 'functionName' can be ommitted.
 
 ```ts
-export function runArgv2Function(module_exports: object): void
+export function runArgv2Function(moduleExports: Record<string, unknown>): Promise<void> | undefined
 ```
+
+Returns
+
+the example execution promise, or `undefined` when no function matches
 
 Argument Details
 
-- **module_exports**
+- **moduleExports**
   - pass in `module.exports` to resolve functionName
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: snapshotCreateActionOptions
+
+```ts
+export function snapshotCreateActionOptions(options: CreateActionOptions): CreateActionOptions
+```
+
+Links: [API](#api), [Functions](#functions)
+
+---
+
+##### Function: snapshotStringArray
+
+```ts
+export function snapshotStringArray(
+  value: unknown,
+  label: string,
+  maximum: number,
+  maximumStringBytes = 4096
+): string[]
+```
 
 Links: [API](#api), [Functions](#functions)
 
@@ -253,10 +357,14 @@ Links: [API](#api), [Functions](#functions)
 
 ##### Function: swapActive
 
+Changes the active storage provider for the configured mainnet wallet. This
+mutates live wallet configuration; verify both endpoint authorities first.
+
 ```ts
 export async function swapActive(): Promise<void> {
   const env = Setup.getEnv('main')
-  await swapActiveWalletClient(env, env.identityKey, 'https://store.txs.systems')
+  const setup = await swapActiveWalletClient(env, env.identityKey, 'https://store.txs.systems')
+  await setup.wallet.destroy()
 }
 ```
 
@@ -268,6 +376,11 @@ Links: [API](#api), [Functions](#functions)
 
 ##### Function: swapActiveWalletClient
 
+Switches the active mainnet storage authority between two explicitly configured
+endpoints. Only use endpoints whose identity and data-management behavior you
+have independently validated. The returned wallet remains live and the caller
+is responsible for destroying it.
+
 ```ts
 export async function swapActiveWalletClient(
   env: SetupEnv,
@@ -278,21 +391,26 @@ export async function swapActiveWalletClient(
     env,
     rootKeyHex: env.devKeys[identityKey]
   })
-  const client1 = new StorageClient(setup.wallet, endpointUrl)
-  const client2 = new StorageClient(setup.wallet, 'https://storage.babbage.systems')
-  const settings1 = await client1.makeAvailable()
-  const settings2 = await client2.makeAvailable()
-  await setup.storage.addWalletStorageProvider(client1)
-  await setup.storage.addWalletStorageProvider(client2)
-  const activeStorageIdentity = setup.storage.getActiveStore()
-  if (activeStorageIdentity === settings1.storageIdentityKey) {
-    await setup.storage.setActive(settings2.storageIdentityKey)
-  } else if (activeStorageIdentity === settings2.storageIdentityKey) {
-    await setup.storage.setActive(settings1.storageIdentityKey)
-  } else {
-    throw new Error(`${activeStorageIdentity} is not an available storage identity`)
+  try {
+    const client1 = new StorageClient(setup.wallet, endpointUrl)
+    const client2 = new StorageClient(setup.wallet, 'https://storage.babbage.systems')
+    const settings1 = await client1.makeAvailable()
+    const settings2 = await client2.makeAvailable()
+    await setup.storage.addWalletStorageProvider(client1)
+    await setup.storage.addWalletStorageProvider(client2)
+    const activeStorageIdentity = setup.storage.getActiveStore()
+    if (activeStorageIdentity === settings1.storageIdentityKey) {
+      await setup.storage.setActive(settings2.storageIdentityKey)
+    } else if (activeStorageIdentity === settings2.storageIdentityKey) {
+      await setup.storage.setActive(settings1.storageIdentityKey)
+    } else {
+      throw new Error(`${activeStorageIdentity} is not an available storage identity`)
+    }
+    return setup
+  } catch (error) {
+    await setup.wallet.destroy().catch(() => {})
+    throw error
   }
-  return setup
 }
 ```
 

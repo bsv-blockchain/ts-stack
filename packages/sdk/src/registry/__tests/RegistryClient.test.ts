@@ -1,7 +1,7 @@
 import { RegistryClient } from '../RegistryClient'
 import { WalletInterface } from '../../wallet/index.js'
-import { TopicBroadcaster } from '../../overlay-tools/index.js'
-import { PushDrop } from '../../script/index.js'
+import TopicBroadcaster from '../../overlay-tools/SHIPBroadcaster.js'
+import PushDrop from '../../script/templates/PushDrop.js'
 import {
   DefinitionType,
   DefinitionData,
@@ -17,43 +17,90 @@ import {
 // 1) A top-level broadcast mock function
 const mockBroadcast = jest.fn().mockResolvedValue('mockBroadcastSuccess')
 
-jest.mock('../../overlay-tools/index.js', () => {
-  return {
-    TopicBroadcaster: jest.fn().mockImplementation(() => ({
-      broadcast: mockBroadcast
-    })),
-    LookupResolver: jest.fn().mockImplementation(() => ({
-      query: jest.fn() // We'll override in tests
-    }))
-  }
-})
-
-jest.mock('../../script/index.js', () => {
-  const actualScriptModule = jest.requireActual('../../script/index.js')
-  return {
-    ...actualScriptModule,
-    PushDrop: Object.assign(
-      jest.fn().mockImplementation(() => ({
-        lock: jest.fn().mockResolvedValue({ toHex: () => 'mockLockingScriptHex' }),
-        unlock: jest.fn().mockReturnValue({
-          sign: jest.fn().mockResolvedValue({
-            toHex: () => 'mockUnlockingScriptHex'
-          })
-        })
-      })),
-      {
-        decode: jest.fn() // We'll override in tests
+jest.mock('../../wallet/completeBoundAction.js', () => ({
+  completeBoundAction: jest.fn(
+    async (wallet: WalletInterface, args: any, options: any, originator: string) => {
+      const created = await wallet.createAction(args, originator)
+      if (Object.keys(options.inputSigners ?? {}).length === 0) {
+        if (created.tx == null) throw new Error(`Failed to create registration transaction`)
+        return (jest.requireMock('../../transaction/index.js') as any).Transaction.fromAtomicBEEF(
+          created.tx
+        )
       }
-    ),
-    LockingScript: {
-      fromHex: jest.fn().mockImplementation((hex: string) => ({ hex }))
+      if (created.signableTransaction == null) {
+        throw new Error('Wallet signable transaction must be a plain data object')
+      }
+      const [signer] = Object.values(options.inputSigners) as Array<
+        (transaction: unknown, inputIndex: number) => Promise<{ toHex: () => string }>
+      >
+      const unlockingScript = await signer({}, 0)
+      const signed = await wallet.signAction(
+        {
+          reference: created.signableTransaction.reference,
+          spends: { 0: { unlockingScript: unlockingScript.toHex() } },
+          options: {
+            acceptDelayedBroadcast: args.options?.acceptDelayedBroadcast,
+            returnTXIDOnly: false,
+            noSend: args.options?.noSend,
+            sendWith: args.options?.sendWith
+          }
+        },
+        originator
+      )
+      if (signed.tx == null) throw new Error('Wallet signed transaction must be a byte array')
+      return (jest.requireMock('../../transaction/index.js') as any).Transaction.fromAtomicBEEF(
+        signed.tx
+      )
     }
-  }
-})
+  )
+}))
 
-jest.mock('../../transaction/index.js', () => {
+jest.mock('../registryTokenValidation.js', () => ({
+  decodeAndVerifyRegistryToken: jest.fn(async () => {
+    const pushDropModule = jest.requireMock('../../script/templates/PushDrop.js') as any
+    const MockPushDrop = pushDropModule.default ?? pushDropModule
+    const { Utils } = jest.requireMock('../../primitives/index.js') as any
+    return MockPushDrop.decode()
+      .fields.slice(0, -1)
+      .map((field: number[]) => Utils.toUTF8(field))
+  })
+}))
+
+jest.mock('../../overlay-tools/SHIPBroadcaster.js', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    broadcast: mockBroadcast
+  }))
+}))
+
+jest.mock('../../overlay-tools/LookupResolver.js', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    query: jest.fn() // We'll override in tests
+  }))
+}))
+
+jest.mock('../../script/templates/PushDrop.js', () => ({
+  __esModule: true,
+  default: Object.assign(
+    jest.fn().mockImplementation(() => ({
+      lock: jest.fn().mockResolvedValue({ toHex: () => 'mockLockingScriptHex' }),
+      unlock: jest.fn().mockReturnValue({
+        sign: jest.fn().mockResolvedValue({
+          toHex: () => 'mockUnlockingScriptHex'
+        })
+      })
+    })),
+    {
+      decode: jest.fn() // We'll override in tests
+    }
+  )
+}))
+
+jest.mock('../../transaction/Transaction.js', () => {
   return {
-    Transaction: {
+    __esModule: true,
+    default: {
       fromAtomicBEEF: jest.fn().mockImplementation((_tx: number[]) => ({
         // minimal mock
         toHexBEEF: () => 'mockTxHexBEEF',
@@ -63,11 +110,13 @@ jest.mock('../../transaction/index.js', () => {
           { lockingScript: 'mockLockingScriptObject2' }
         ]
       })),
-      fromBEEF: jest.fn().mockImplementation((_tx: number[]) => ({
+      fromBEEF: jest.fn().mockImplementation((_tx: number[], txid?: string) => ({
+        id: () => txid ?? '00'.repeat(32),
         outputs: [
-          { lockingScript: 'decodedLockScript0' },
-          { lockingScript: 'decodedLockScript1' },
+          { lockingScript: 'decodedLockScript0', satoshis: 1 },
+          { lockingScript: 'decodedLockScript1', satoshis: 1 },
           {
+            satoshis: 1,
             lockingScript: {
               toHex: jest.fn().mockImplementation(() => 'decodedLockScript1AsHex')
             }
@@ -77,6 +126,10 @@ jest.mock('../../transaction/index.js', () => {
     }
   }
 })
+
+jest.mock('../../transaction/index.js', () => ({
+  Transaction: (jest.requireMock('../../transaction/Transaction.js') as any).default
+}))
 
 jest.mock('../../primitives/index.js', () => {
   return {
@@ -165,6 +218,29 @@ describe('RegistryClient', () => {
     }
 
     registryClient = new RegistryClient(walletMock as WalletInterface, {}, TEST_ORIGINATOR)
+
+    jest
+      .spyOn(registryClient as any, 'authenticateRegistryRecord')
+      .mockImplementation(async (record: RegistryRecord) => {
+        if (
+          record.txid === undefined ||
+          record.outputIndex === undefined ||
+          record.lockingScript === undefined
+        ) {
+          throw new Error('Invalid registry record. Missing txid, outputIndex, or lockingScript.')
+        }
+        if (record.registryOperator !== 'mockPublicKey') {
+          throw new Error('This registry token does not belong to the current wallet.')
+        }
+        return {
+          definition: record,
+          txid: record.txid,
+          outputIndex: record.outputIndex,
+          lockingScript: { toHex: () => record.lockingScript },
+          satoshis: record.satoshis,
+          beef: record.beef
+        }
+      })
 
     // Mock the resolver instance since it's now initialized in constructor
     ;(registryClient as any).resolver = {
@@ -272,7 +348,7 @@ describe('RegistryClient', () => {
       })
       const data = buildDefinitionData('basket')
       await expect(registryClient.registerDefinition(data)).rejects.toThrow(
-        'Failed to create basket registration transaction!'
+        'Failed to create registration transaction'
       )
     })
 
@@ -366,20 +442,20 @@ describe('RegistryClient', () => {
       ;(walletMock.listOutputs as jest.Mock).mockResolvedValue({
         outputs: [
           {
-            outpoint: 'abc123.0',
-            satoshis: 1000,
+            outpoint: `${'aa'.repeat(32)}.0`,
+            satoshis: 1,
             lockingScript: 'lsHexA',
             spendable: false
           },
           {
-            outpoint: 'xyz999.1',
-            satoshis: 500,
+            outpoint: `${'bb'.repeat(32)}.1`,
+            satoshis: 1,
             lockingScript: 'lsHexB',
             spendable: false
           },
           {
-            outpoint: 'skipMe.2',
-            satoshis: 200,
+            outpoint: `${'cc'.repeat(32)}.2`,
+            satoshis: 1,
             lockingScript: {
               toHex: jest.fn(() => 'lsHexC')
             },
@@ -414,9 +490,9 @@ describe('RegistryClient', () => {
       expect(records).toHaveLength(1)
       expect(records[0]).toMatchObject({
         definitionType: 'basket',
-        txid: 'skipMe',
+        txid: 'cc'.repeat(32),
         outputIndex: 2,
-        satoshis: 200,
+        satoshis: 1,
         lockingScript: 'decodedLockScript1AsHex'
       })
     })
@@ -478,14 +554,14 @@ describe('RegistryClient', () => {
         signableTransaction: undefined
       })
       await expect(registryClient.removeDefinition(validRecord)).rejects.toThrow(
-        'Failed to create signable transaction.'
+        'Wallet signable transaction must be a plain data object'
       )
     })
 
     it('should throw if signAction returns no signedTx', async () => {
       ;(walletMock.signAction as jest.Mock).mockResolvedValueOnce({ tx: undefined })
       await expect(registryClient.removeDefinition(validRecord)).rejects.toThrow(
-        'Failed to finalize the transaction signature.'
+        'Wallet signed transaction must be a byte array'
       )
     })
 
@@ -645,6 +721,16 @@ describe('RegistryClient', () => {
       ;(clientWithDelayedBroadcast as any).resolver = {
         query: jest.fn().mockResolvedValue({ type: 'output-list', outputs: [] })
       }
+      jest
+        .spyOn(clientWithDelayedBroadcast as any, 'authenticateRegistryRecord')
+        .mockResolvedValue({
+          definition: validRecord,
+          txid: validRecord.txid,
+          outputIndex: validRecord.outputIndex,
+          lockingScript: { toHex: () => validRecord.lockingScript },
+          satoshis: validRecord.satoshis,
+          beef: validRecord.beef
+        })
 
       await clientWithDelayedBroadcast.removeDefinition(validRecord)
 

@@ -13,26 +13,26 @@ const result = await wallet.createToken({
 
 console.log('Token created:', result.txid)
 console.log('Basket:', result.basket)
-console.log('Encrypted:', result.encrypted)  // true
+console.log('Encrypted:', result.encrypted) // true
 ```
 
 ### How Token Creation Works
 
-1. Your data is serialized to JSON
-2. The JSON is encrypted using the wallet's key derivation (`counterparty: 'self'`)
-3. The ciphertext is locked in a PushDrop script
+1. Your data is serialized and limited to 1 MiB before wallet access
+2. The JSON is encrypted using the wallet's key derivation for `to` (`counterparty: 'self'` only when `to` is omitted or is the local identity)
+3. The ciphertext is locked in a PushDrop script for that same counterparty
 4. The output is stored in the specified basket with `customInstructions` containing the decryption parameters
 
 ### TokenOptions
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `data` | `any` | *required* | JSON-serializable data to encrypt |
-| `to` | `string` | self | Recipient identity key |
-| `basket` | `string` | `'tokens'` | Basket to store the token in |
-| `protocolID` | `[number, string]` | `[0, 'token']` | PushDrop protocol ID |
-| `keyID` | `string` | `'1'` | PushDrop key ID |
-| `satoshis` | `number` | `1` | Satoshis locked in the token |
+| Parameter    | Type               | Default        | Description                       |
+| ------------ | ------------------ | -------------- | --------------------------------- |
+| `data`       | `any`              | _required_     | JSON-serializable data to encrypt |
+| `to`         | `string`           | self           | Recipient identity key            |
+| `basket`     | `string`           | `'tokens'`     | Basket to store the token in      |
+| `protocolID` | `[number, string]` | `[0, 'token']` | PushDrop protocol ID              |
+| `keyID`      | `string`           | `'1'`          | PushDrop key ID                   |
+| `satoshis`   | `number`           | `1`            | Satoshis locked in the token      |
 
 ## Listing Tokens
 
@@ -47,7 +47,7 @@ for (const token of tokens) {
 }
 ```
 
-The `listTokenDetails` method:
+The `listTokenDetails` method reads validated 1,000-output pages up to a 10,000-token safety ceiling, then:
 
 1. Fetches all outputs from the basket with locking scripts and custom instructions
 2. Decodes each PushDrop locking script
@@ -57,14 +57,14 @@ The `listTokenDetails` method:
 
 ### TokenDetail
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `outpoint` | `string` | Transaction ID and output index (`txid.vout`) |
-| `satoshis` | `number` | Satoshis locked in the token |
-| `data` | `any` | Decrypted payload (or `null` if decryption failed) |
-| `protocolID` | `any` | Protocol ID used for encryption |
-| `keyID` | `string` | Key ID used for encryption |
-| `counterparty` | `string` | Counterparty used for encryption |
+| Field          | Type     | Description                                        |
+| -------------- | -------- | -------------------------------------------------- |
+| `outpoint`     | `string` | Transaction ID and output index (`txid.vout`)      |
+| `satoshis`     | `number` | Satoshis locked in the token                       |
+| `data`         | `any`    | Decrypted payload (or `null` if decryption failed) |
+| `protocolID`   | `any`    | Protocol ID used for encryption                    |
+| `keyID`        | `string` | Key ID used for encryption                         |
+| `counterparty` | `string` | Counterparty used for encryption                   |
 
 ## Sending a Token (On-Chain)
 
@@ -84,11 +84,12 @@ This is a two-step signing flow:
 
 1. The original token output is fetched with its full transaction (BEEF format)
 2. The PushDrop fields are decoded from the original locking script
-3. A new PushDrop output is created with a fresh key, locked to the recipient
+3. A new PushDrop output is created with a fresh key, locked to the recipient, with the source token's satoshi value preserved
 4. `createAction()` is called with the old token as input and new token as output
-5. The SDK returns a `signableTransaction` (since we need to provide the PushDrop unlock)
-6. The unlock template signs the transaction
-7. `signAction()` completes the transaction
+5. The bound-action helper locates the requested outpoint's actual input index
+6. The unlock template signs only that exact input
+7. `signAction()` completes the transaction and the helper verifies the final
+   input/output template, unlocking script, and transaction ID before returning
 
 The token stays in the same basket but with updated `customInstructions` reflecting the new key and counterparty.
 
@@ -134,19 +135,29 @@ for (const token of incoming) {
 }
 ```
 
-`acceptIncomingToken` internalizes the token using `basket insertion` protocol and acknowledges the message to remove it from the inbox.
+`listIncomingTokens()` caps each retrieval at 1,000 messages, validates the
+transaction/decryption metadata, and takes the sender only from the
+authenticated MessageBox envelope; a body cannot replace it.
+
+`acceptIncomingToken()` treats its argument only as a message selection. It
+re-fetches the bounded authenticated inbox record with that message ID before
+internalizing the token using `basket insertion`, so caller-supplied sender,
+transaction, protocol, key, and output metadata cannot redirect the wallet
+operation. It acknowledges only after exact wallet acceptance. If the
+post-internalization acknowledgement temporarily fails, the token remains safe
+and the call still reports acceptance.
 
 ### Incoming Token Structure
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `messageId` | `string` | MessageBox message ID |
-| `sender` | `string` | Sender's identity key |
-| `transaction` | `number[]` | Transaction bytes |
-| `protocolID` | `any` | PushDrop protocol ID |
-| `keyID` | `string` | PushDrop key ID |
-| `outputIndex` | `number` | Output index in transaction |
-| `createdAt` | `string` | Timestamp |
+| Field         | Type       | Description                 |
+| ------------- | ---------- | --------------------------- |
+| `messageId`   | `string`   | MessageBox message ID       |
+| `sender`      | `string`   | Sender's identity key       |
+| `transaction` | `number[]` | Transaction bytes           |
+| `protocolID`  | `any`      | PushDrop protocol ID        |
+| `keyID`       | `string`   | PushDrop key ID             |
+| `outputIndex` | `number`   | Output index in transaction |
+| `createdAt`   | `string`   | Timestamp                   |
 
 ## Complete Example
 
@@ -163,7 +174,10 @@ const created = await wallet.createToken({
 
 // List all tokens
 const tickets = await wallet.listTokenDetails('event-tickets')
-console.log('My tickets:', tickets.map(t => t.data))
+console.log(
+  'My tickets:',
+  tickets.map(t => t.data)
+)
 
 // Send to someone (on-chain)
 await wallet.sendToken({

@@ -1,4 +1,13 @@
 import {
+  type ValidCreateActionArgs,
+  type ValidListActionsArgs,
+  type ValidListCertificatesArgs,
+  type ValidListOutputsArgs,
+  parseWalletOutpoint,
+  validateRelinquishCertificateArgs,
+  validateRelinquishOutputArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import {
   AbortActionResult,
   Beef,
   InternalizeActionArgs,
@@ -10,7 +19,6 @@ import {
   RelinquishCertificateArgs,
   RelinquishOutputArgs,
   AbortActionArgs,
-  Validation,
   WalletLoggerInterface,
   ChainTracker,
   Transaction
@@ -36,6 +44,7 @@ import {
   FindCertificatesArgs,
   FindOutputBasketsArgs,
   FindOutputsArgs,
+  FindProvenTxReqsArgs,
   FindStaleMerkleRootsArgs,
   ProcessSyncChunkResult,
   ProvenOrRawTx,
@@ -69,6 +78,7 @@ import { TableTxLabel } from '../../src/storage/schema/tables/TableTxLabel'
 import { TableMonitorEvent } from '../../src/storage/schema/tables/TableMonitorEvent'
 import { TableUser } from '../../src/storage/schema/tables/TableUser'
 import { TableCertificateX } from './schema/tables/TableCertificate'
+import { TableProvenTx } from './schema/tables/TableProvenTx'
 import {
   WERR_INTERNAL,
   WERR_INVALID_MERKLE_ROOT,
@@ -82,6 +92,7 @@ import {
 import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
 import { asArray } from '../utility/utilityHelpers.noBuffer'
+import { brc177NoSendExpiryStateRank, type Brc177ValidCreateActionArgs } from '../utility/brc177NoSendExpiry'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
@@ -131,11 +142,19 @@ import {
   defaultManagedChangePolicy,
   validateManagedChangePolicy
 } from './methods/managedChangePolicy'
-import {
-  activateNoSendExpiry,
-  armNoSendExpiry,
-  prepareNoSendExpiry
-} from './methods/noSendExpiry'
+import { activateNoSendExpiry, armNoSendExpiry, prepareNoSendExpiry } from './methods/noSendExpiry'
+
+type AbortActionStorageResult =
+  | AbortActionResult
+  | { __abortAction: 'brc177-reclaim-requested'; transactionId: number }
+  | { __abortAction: 'brc177-reclaim-in-progress' }
+  | { __abortAction: 'brc177-cancelled' }
+  | { __abortAction: 'brc177-target-protected' }
+  | { __abortAction: 'skipped-onchain' }
+  | { __abortAction: 'retry-chain-check' }
+
+const MAX_AUTH_PROOF_REQUEST_FALLBACK_ROWS = 10_000
+const MAX_AUTH_PROOF_REQUEST_TXIDS = 1_000
 
 export abstract class StorageProvider extends StorageReaderWriter implements WalletStorageProvider {
   isDirty = false
@@ -147,6 +166,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   readonly actionBatchMaxReservedOutputs: number
   readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: SpendVerifierInterface
+
+  /**
+   * Safe lower bound for the proof audit. Built-in providers return the minimum
+   * height; custom providers conservatively review from zero when proofs exist.
+   * No insertion-order assumption or unbounded proof-blob scan is required.
+   */
+  async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const rows = await this.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 } })
+    return rows.length === 0 ? undefined : 0
+  }
 
   static defaultOptions(): {
     feeModel: StorageFeeModel
@@ -180,12 +209,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     this.commissionSatoshis = options.commissionSatoshis
     this.maxRecursionDepth = 12
     const maxReservedOutputs = options.actionBatchMaxReservedOutputs ?? 256
-    if (maxReservedOutputs !== -1 &&
-      (!Number.isSafeInteger(maxReservedOutputs) || maxReservedOutputs < 1)) {
-      throw new WERR_INVALID_PARAMETER(
-        'actionBatchMaxReservedOutputs',
-        'a positive safe integer or -1 for unlimited'
-      )
+    if (maxReservedOutputs !== -1 && (!Number.isSafeInteger(maxReservedOutputs) || maxReservedOutputs < 1)) {
+      throw new WERR_INVALID_PARAMETER('actionBatchMaxReservedOutputs', 'a positive safe integer or -1 for unlimited')
     }
     this.actionBatchMaxReservedOutputs = maxReservedOutputs
     this.managedChangePolicy = validateManagedChangePolicy(options.managedChangePolicy)
@@ -248,17 +273,22 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     // minimal older implementation has not exposed the additive batch status
     // lookup. createAction resolves missing metadata before tier planning.
     const findStatuses = this.findTransactionStatusesByIds?.bind(this)
-    const statuses = findStatuses == null
-      ? new Map<number, TransactionStatus>()
-      : await findStatuses(userId, outputs.map(output => output.transactionId), trx)
+    const statuses =
+      findStatuses == null
+        ? new Map<number, TransactionStatus>()
+        : await findStatuses(
+            userId,
+            outputs.map(output => output.transactionId),
+            trx
+          )
     return outputs.map(({ outputId, transactionId, satoshis, txid, vout }) => ({
-        outputId,
-        transactionId,
-        satoshis,
-        txid,
-        vout,
-        transactionStatus: statuses.get(transactionId)
-      }))
+      outputId,
+      transactionId,
+      satoshis,
+      txid,
+      vout,
+      transactionStatus: statuses.get(transactionId)
+    }))
   }
 
   /** Read the current status of a set of source transactions without loading raw transaction bytes. */
@@ -295,7 +325,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         output.userId === userId &&
         !reserved.has(output.outputId) &&
         statuses.includes(transactionStatuses.get(output.transactionId) as TransactionStatus)
-      ) eligible[output.outputId] = output
+      )
+        eligible[output.outputId] = output
     }
     return eligible
   }
@@ -331,8 +362,8 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   abstract getLabelsForTransactionId(transactionId?: number, trx?: TrxToken): Promise<TableTxLabel[]>
   abstract getTagsForOutputId(outputId: number, trx?: TrxToken): Promise<TableOutputTag[]>
 
-  abstract listActions(auth: AuthId, args: Validation.ValidListActionsArgs): Promise<ListActionsResult>
-  abstract listOutputs(auth: AuthId, args: Validation.ValidListOutputsArgs): Promise<ListOutputsResult>
+  abstract listActions(auth: AuthId, args: ValidListActionsArgs): Promise<ListActionsResult>
+  abstract listOutputs(auth: AuthId, args: ValidListOutputsArgs): Promise<ListOutputsResult>
 
   abstract countChangeInputs(userId: number, basketId: number, excludeSending: boolean): Promise<number>
 
@@ -391,9 +422,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     digests: string[],
     trx?: TrxToken
   ): Promise<TableActionBatchBlob[]> {
-    return (await Promise.all(
-      digests.map(async digest => await this.findActionBatchBlobRecord(actionBatchId, digest, trx))
-    )).filter((blob): blob is TableActionBatchBlob => blob != null)
+    return (
+      await Promise.all(digests.map(async digest => await this.findActionBatchBlobRecord(actionBatchId, digest, trx)))
+    ).filter((blob): blob is TableActionBatchBlob => blob != null)
   }
   async putActionBatchBlobRecords(blobs: TableActionBatchBlob[], trx?: TrxToken): Promise<void> {
     for (const blob of blobs) await this.putActionBatchBlobRecord(blob, trx)
@@ -405,19 +436,53 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async getCapabilities(): Promise<StorageCapabilities> {
     return {
-      ...(this.supportsNoSendExpiryPersistence()
-        ? { brc177NoSendExpiry: { version: 1 as const } }
-        : {}),
+      ...(this.supportsNoSendExpiryPersistence() ? { brc177NoSendExpiry: { version: 1 as const } } : {}),
       ...(this.supportsActionBatchPersistence()
         ? getActionBatchCapabilities(this.actionBatchMaxReservedOutputs, true)
         : {})
     }
   }
 
-  async prepareNoSendExpiry(
-    auth: AuthId,
-    args: Validation.ValidCreateActionArgs
-  ): Promise<StoragePrepareNoSendExpiryResult> {
+  /**
+   * Restrict remotely requested proof work to transactions tracked by the
+   * authenticated wallet. ProvenTxReq rows are globally deduplicated, so their
+   * own schema has no userId column and must be authorized through transactions.
+   */
+  async findProvenTxReqsAuth(auth: AuthId, args: FindProvenTxReqsArgs): Promise<TableProvenTxReq[]> {
+    const userId = verifyId(auth.userId)
+    let requestedTxids: string[]
+    if (args.txids?.length) {
+      if (args.txids.length > MAX_AUTH_PROOF_REQUEST_TXIDS) {
+        throw new WERR_INVALID_PARAMETER('args.txids', `at most ${MAX_AUTH_PROOF_REQUEST_TXIDS} transaction IDs`)
+      }
+      requestedTxids = []
+      for (const txid of args.txids) {
+        if ((await this.countTransactions({ partial: { userId, txid }, trx: args.trx })) > 0) {
+          requestedTxids.push(txid)
+        }
+      }
+    } else {
+      // Built-in providers override this method with a joined/indexed query.
+      // Keep third-party implementations safe even when they only implement
+      // the older reader surface: bound the compatibility ownership scan and
+      // require exact txids for wallets beyond it.
+      const owned = await this.getProvenTxReqsForUser({
+        userId,
+        paged: { limit: MAX_AUTH_PROOF_REQUEST_FALLBACK_ROWS + 1, offset: 0 },
+        trx: args.trx
+      })
+      if (owned.length > MAX_AUTH_PROOF_REQUEST_FALLBACK_ROWS) {
+        throw new WERR_INVALID_OPERATION(
+          'Authenticated proof-request scans beyond 10,000 rows require a provider-native scoped query or exact txids'
+        )
+      }
+      requestedTxids = owned.map(request => request.txid)
+    }
+    if (requestedTxids.length === 0) return []
+    return await this.findProvenTxReqs({ ...args, txids: requestedTxids })
+  }
+
+  async prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
     if (auth.isActive !== true) throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
     if (!this.supportsNoSendExpiryPersistence()) {
       throw new WERR_NOT_IMPLEMENTED('BRC-177 atomic lifecycle persistence')
@@ -491,10 +556,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await commitBatch(this, auth, manifest)
   }
 
-  async commitActionBatchByDigest(
-    auth: AuthId,
-    args: CommitActionBatchByDigestArgs
-  ): Promise<CommitActionBatchResult> {
+  async commitActionBatchByDigest(auth: AuthId, args: CommitActionBatchByDigestArgs): Promise<CommitActionBatchResult> {
     return await commitBatchByDigest(this, auth, args)
   }
 
@@ -638,7 +700,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   private async findAbortableTransaction(
     userId: number,
     args: AbortActionArgs,
-    trx: TrxToken
+    trx?: TrxToken
   ): Promise<{ tx: TableTransaction; reference: string | undefined }> {
     let reference: string | undefined = args.reference
     let tx = verifyOneOrNone(
@@ -659,14 +721,9 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       )
     }
     const unAbortableStatus: TransactionStatus[] = ['completed', 'failed', 'sending', 'unproven']
-    const brc177TerminalOrRacing = tx?.noSendExpiryState != null && [
-      'broadcast',
-      'reclaiming',
-      'reclaimed',
-      'target-won',
-      'conflicted',
-      'cancelled'
-    ].includes(tx.noSendExpiryState)
+    const brc177TerminalOrRacing =
+      tx?.noSendExpiryState != null &&
+      ['broadcast', 'reclaiming', 'reclaimed', 'target-won', 'conflicted', 'cancelled'].includes(tx.noSendExpiryState)
     if (tx == null || !tx.isOutgoing || (unAbortableStatus.includes(tx.status) && !brc177TerminalOrRacing)) {
       throw new WERR_INVALID_PARAMETER(
         'reference',
@@ -676,13 +733,17 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return { tx, reference }
   }
 
-  private async checkAbortChainProtection(
-    tx: TableTransaction,
-    args: AbortActionArgs,
-    trx: TrxToken
-  ): Promise<{ skipped: boolean; serviceUnreachable: boolean }> {
-    if (tx.txid == null || tx.txid === '' || tx.status !== 'nosend') {
-      return { skipped: false, serviceUnreachable: false }
+  private async observeAbortChainProtection(tx: TableTransaction): Promise<
+    | {
+        transactionId: number
+        txid: string
+        chainStatus: 'mined' | 'known' | 'unknown' | undefined
+        serviceUnreachable: boolean
+      }
+    | undefined
+  > {
+    if (tx.txid == null || tx.txid === '' || tx.status !== 'nosend' || tx.noSendExpiryState != null) {
+      return undefined
     }
 
     let serviceUnreachable = false
@@ -697,20 +758,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     } catch {
       serviceUnreachable = true
     }
-    if (chainStatus !== 'mined' && chainStatus !== 'known') {
-      return { skipped: false, serviceUnreachable }
+    return {
+      transactionId: tx.transactionId,
+      txid: tx.txid,
+      chainStatus,
+      serviceUnreachable
     }
-
-    const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
-    if (req != null) {
-      req.addHistoryNote({
-        what: 'abortAction-skipped-onchain',
-        reference: args.reference,
-        chainStatus
-      })
-      await req.updateStorageDynamicProperties(this, trx)
-    }
-    return { skipped: true, serviceUnreachable }
   }
 
   private async invalidateAbortedTransaction(
@@ -722,12 +775,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx: TrxToken
   ): Promise<AbortActionResult> {
     if (tx.noSendExpiryState === 'preparing' || tx.noSendExpiryState === 'unsigned') {
-      if (!await this.compareAndSetNoSendExpiryState(
-        tx.transactionId,
-        tx.noSendExpiryState,
-        'cancelled',
-        trx
-      )) {
+      if (!(await this.compareAndSetNoSendExpiryState(tx.transactionId, tx.noSendExpiryState, 'cancelled', trx))) {
         throw new WERR_INVALID_OPERATION('BRC-177 action changed while it was being aborted')
       }
     }
@@ -751,103 +799,141 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (auth.userId == null) throw new WERR_INVALID_PARAMETER('auth.userId', 'valid')
 
     const userId = auth.userId
-    const r = await this.transaction(async trx => {
-      const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
-      if (tx.noSendExpiryState != null && auth.isActive !== true) {
-        throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
-      }
-      if (tx.noSendExpiryState === 'signed') {
-        // A released BRC-177 transaction must never be invalidated locally: the
-        // recipient may be broadcasting it at this instant. Make it due and let
-        // the lifecycle's positive chain/UTXO checks arbitrate the race.
-        if (!await this.compareAndSetNoSendExpiryState(
-          tx.transactionId,
-          'signed',
-          'revocation-requested',
+    let r: AbortActionStorageResult | undefined
+    for (let attempt = 0; attempt < 2; attempt++) {
+      // IndexedDB write transactions can auto-commit while awaiting non-database
+      // promises. Observe the chain before opening the write transaction, then
+      // bind the observation to the exact row and txid re-read below.
+      const preflight = await this.findAbortableTransaction(userId, args)
+      const chainObservation = await this.observeAbortChainProtection(preflight.tx)
+      r = await this.transaction(async trx => {
+        const { tx, reference } = await this.findAbortableTransaction(userId, args, trx)
+        if (tx.noSendExpiryState != null && auth.isActive !== true) {
+          throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
+        }
+        if (
+          tx.noSendExpiryMode === 'never' &&
+          brc177NoSendExpiryStateRank(tx.noSendExpiryState) >= brc177NoSendExpiryStateRank('signed')
+        ) {
+          throw new WERR_INVALID_OPERATION('A released BRC-177 never action is permanently sent and cannot be aborted')
+        }
+        if (tx.noSendExpiryState === 'signed') {
+          // A released BRC-177 transaction must never be invalidated locally: the
+          // recipient may be broadcasting it at this instant. Make it due and let
+          // the lifecycle's positive chain/UTXO checks arbitrate the race.
+          if (!(await this.compareAndSetNoSendExpiryState(tx.transactionId, 'signed', 'revocation-requested', trx))) {
+            throw new WERR_INVALID_OPERATION('BRC-177 action changed while early revocation was requested')
+          }
+          const req = tx.txid == null ? undefined : await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+          if (req != null) {
+            req.addHistoryNote({ what: 'brc177-early-abort-reclaim-requested', reference: args.reference })
+            await req.updateStorageDynamicProperties(this, trx)
+          }
+          return {
+            __abortAction: 'brc177-reclaim-requested' as const,
+            transactionId: tx.transactionId
+          }
+        }
+        if (tx.noSendExpiryState === 'revocation-requested') {
+          return {
+            __abortAction: 'brc177-reclaim-requested' as const,
+            transactionId: tx.transactionId
+          }
+        }
+        if (tx.noSendExpiryState === 'reclaiming' || tx.noSendExpiryState === 'reclaimed') {
+          return { __abortAction: 'brc177-reclaim-in-progress' as const }
+        }
+        if (tx.noSendExpiryState === 'cancelled') {
+          return { __abortAction: 'brc177-cancelled' as const }
+        }
+        if (
+          tx.noSendExpiryState === 'broadcast' ||
+          tx.noSendExpiryState === 'target-won' ||
+          tx.noSendExpiryState === 'conflicted'
+        ) {
+          return { __abortAction: 'brc177-target-protected' as const }
+        }
+        // Chain-status protection for signed nosend txs.
+        //
+        // Background: a nosend tx (created via createAction({noSend:true}))
+        // can be externally broadcast by the caller and reach 'mined' or
+        // mempool-'known' status before any internalizeAction or Monitor
+        // cycle has retired its 'nosend' status in storage. If abortAction
+        // is invoked on it in that window, the destructive transitions
+        // below (transactions.status='failed' + proven_tx_reqs.status='invalid')
+        // orphan every output the tx produced — including auto-fund change
+        // outputs the wallet itself emitted — because listOutputs filters
+        // them out of the spendable set on parent-tx 'failed' status.
+        //
+        // Protection: if the tx has a txid AND status is 'nosend', ask
+        // the network whether it already knows about the tx before
+        // invalidating. getStatusForTxids returns 'mined' | 'known' |
+        // 'unknown' per StatusForTxidResult (WalletServices.interfaces.ts).
+        // Refuse the abort for 'mined' OR 'known' — a tx that's broadcast
+        // and propagating in mempool returns 'known' (depth===0) and
+        // protecting it avoids orphaning during the propagation window.
+        //
+        // Service-unreachable handling: proceed with abort. Refusal is
+        // reserved for positive on-chain confirmation. When the network
+        // confirmation pathway is itself unavailable (services throw or
+        // gracefully return r.status !== 'success'), confirmation is not
+        // possible — and per the BRC-100 contract callers retain the
+        // ability to abort offline. The fallback writes a forensic
+        // history note ('abortAction-offline-fallback') so an operator
+        // can grep for aborts that proceeded under uncertainty. This
+        // hole can never be 100% closed against externally-broadcast
+        // chain-confirmed txs while offline; the audit trail makes it
+        // recoverable.
+        if (tx.txid != null && tx.txid !== '' && tx.status === 'nosend' && tx.noSendExpiryState == null) {
+          if (
+            chainObservation == null ||
+            chainObservation.transactionId !== tx.transactionId ||
+            chainObservation.txid !== tx.txid
+          ) {
+            return { __abortAction: 'retry-chain-check' as const }
+          }
+          if (chainObservation.chainStatus === 'mined' || chainObservation.chainStatus === 'known') {
+            const req = await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
+            if (req != null) {
+              req.addHistoryNote({
+                what: 'abortAction-skipped-onchain',
+                reference: args.reference,
+                chainStatus: chainObservation.chainStatus
+              })
+              await req.updateStorageDynamicProperties(this, trx)
+            }
+            // Commit the audit note before translating this sentinel to aborted:false.
+            return { __abortAction: 'skipped-onchain' as const }
+          }
+        }
+        return await this.invalidateAbortedTransaction(
+          tx,
+          userId,
+          reference,
+          args.reference,
+          chainObservation?.serviceUnreachable ?? false,
           trx
-        )) {
-          throw new WERR_INVALID_OPERATION('BRC-177 action changed while early revocation was requested')
-        }
-        const req = tx.txid == null ? undefined : await EntityProvenTxReq.fromStorageTxid(this, tx.txid, trx)
-        if (req != null) {
-          req.addHistoryNote({ what: 'brc177-early-abort-reclaim-requested', reference: args.reference })
-          await req.updateStorageDynamicProperties(this, trx)
-        }
-        return {
-          __abortAction: 'brc177-reclaim-requested' as const,
-          transactionId: tx.transactionId
-        }
-      }
-      if (tx.noSendExpiryState === 'revocation-requested') {
-        return {
-          __abortAction: 'brc177-reclaim-requested' as const,
-          transactionId: tx.transactionId
-        }
-      }
-      if (tx.noSendExpiryState === 'reclaiming' || tx.noSendExpiryState === 'reclaimed') {
-        return { __abortAction: 'brc177-reclaim-in-progress' as const }
-      }
-      if (tx.noSendExpiryState === 'cancelled') {
-        return { __abortAction: 'brc177-cancelled' as const }
-      }
-      if (tx.noSendExpiryState === 'broadcast' || tx.noSendExpiryState === 'target-won' ||
-        tx.noSendExpiryState === 'conflicted') {
-        return { __abortAction: 'brc177-target-protected' as const }
-      }
-      // Chain-status protection for signed nosend txs.
-      //
-      // Background: a nosend tx (created via createAction({noSend:true}))
-      // can be externally broadcast by the caller and reach 'mined' or
-      // mempool-'known' status before any internalizeAction or Monitor
-      // cycle has retired its 'nosend' status in storage. If abortAction
-      // is invoked on it in that window, the destructive transitions
-      // below (transactions.status='failed' + proven_tx_reqs.status='invalid')
-      // orphan every output the tx produced — including auto-fund change
-      // outputs the wallet itself emitted — because listOutputs filters
-      // them out of the spendable set on parent-tx 'failed' status.
-      //
-      // Protection: if the tx has a txid AND status is 'nosend', ask
-      // the network whether it already knows about the tx before
-      // invalidating. getStatusForTxids returns 'mined' | 'known' |
-      // 'unknown' per StatusForTxidResult (WalletServices.interfaces.ts).
-      // Refuse the abort for 'mined' OR 'known' — a tx that's broadcast
-      // and propagating in mempool returns 'known' (depth===0) and
-      // protecting it avoids orphaning during the propagation window.
-      //
-      // Service-unreachable handling: proceed with abort. Refusal is
-      // reserved for positive on-chain confirmation. When the network
-      // confirmation pathway is itself unavailable (services throw or
-      // gracefully return r.status !== 'success'), confirmation is not
-      // possible — and per the BRC-100 contract callers retain the
-      // ability to abort offline. The fallback writes a forensic
-      // history note ('abortAction-offline-fallback') so an operator
-      // can grep for aborts that proceeded under uncertainty. This
-      // hole can never be 100% closed against externally-broadcast
-      // chain-confirmed txs while offline; the audit trail makes it
-      // recoverable.
-      const protection = await this.checkAbortChainProtection(tx, args, trx)
-      if (protection.skipped) {
-        // Commit the audit note before translating this sentinel to aborted:false.
-        return { __abortAction: 'skipped-onchain' as const }
-      }
-      return await this.invalidateAbortedTransaction(
-        tx,
-        userId,
-        reference,
-        args.reference,
-        protection.serviceUnreachable,
-        trx
-      )
-    })
+        )
+      })
+      if (!('__abortAction' in r) || r.__abortAction !== 'retry-chain-check') break
+    }
+    if (r == null || ('__abortAction' in r && r.__abortAction === 'retry-chain-check')) {
+      throw new WERR_INVALID_OPERATION('Action changed while its chain status was being checked; retry abortAction')
+    }
     if ('__abortAction' in r) {
       if (r.__abortAction === 'brc177-reclaim-requested') {
         await processNoSendExpiryLifecycle(this).catch(() => undefined)
-        const current = verifyOne(await this.findTransactions({
-          partial: { transactionId: r.transactionId },
-          noRawTx: true
-        }))
-        if (current.noSendExpiryState === 'broadcast' || current.noSendExpiryState === 'target-won' ||
-          current.noSendExpiryState === 'conflicted') {
+        const current = verifyOne(
+          await this.findTransactions({
+            partial: { transactionId: r.transactionId },
+            noRawTx: true
+          })
+        )
+        if (
+          current.noSendExpiryState === 'broadcast' ||
+          current.noSendExpiryState === 'target-won' ||
+          current.noSendExpiryState === 'conflicted'
+        ) {
           return { aborted: false }
         }
         return { aborted: true }
@@ -918,6 +1004,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         }
       } catch (error_: unknown) {
         const e = WalletError.fromUnknown(error_)
+        d.status = 'error'
         d.error = `${e.name}: ${e.message}`
       }
     }
@@ -1028,10 +1115,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     }
   }
 
-  private async protectNoSendExpiryReclaimInputOnFailure(
-    tx: TableTransaction,
-    trx?: TrxToken
-  ): Promise<boolean> {
+  private async protectNoSendExpiryReclaimInputOnFailure(tx: TableTransaction, trx?: TrxToken): Promise<boolean> {
     if (tx.txid == null) return false
     const target = verifyOneOrNone(
       await this.findTransactions({
@@ -1116,8 +1200,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     }, trx)
   }
 
-  async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
+  async createAction(auth: AuthId, args: ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
+    // BRC-177 actions are created only through prepareNoSendExpiry and activateNoSendExpiry.
+    if ((args as Brc177ValidCreateActionArgs).brc177 != null) {
+      throw new WERR_INVALID_PARAMETER('args', 'without BRC-177 metadata')
+    }
     if (this.supportsActionBatchPersistence() && this.requiresActionBatchCleanupBeforeCreateAction()) {
       await cleanupExpiredActionBatches(this)
     }
@@ -1137,7 +1225,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     return await attemptToPostReqsToNetwork(this, reqs, trx, logger)
   }
 
-  async listCertificates(auth: AuthId, args: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+  async listCertificates(auth: AuthId, args: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
     return await listCertificates(this, auth, args)
   }
 
@@ -1204,7 +1292,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     if (chainTracker != null) {
       const root = mp.computeRoot()
       const isValid = await chainTracker.isValidRootForHeight(root, proven.height)
-      if (!isValid) {
+      if (isValid !== true) {
         if (skipInvalidProofs !== true) throw new WERR_INVALID_MERKLE_ROOT(proven.blockHash, proven.height, root, txid)
         // Proof is currently invalid — recurse deeper via rawTx path
         r.rawTx = proven.rawTx
@@ -1219,16 +1307,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async getValidBeefForTxid(
-    ...[
-      txid,
-      mergeToBeef,
-      trustSelf,
-      knownTxids,
-      trx,
-      requiredLevels,
-      chainTracker,
-      skipInvalidProofs
-    ]: [
+    ...[txid, mergeToBeef, trustSelf, knownTxids, trx, requiredLevels, chainTracker, skipInvalidProofs]: [
       txid: string,
       mergeToBeef?: Beef,
       trustSelf?: TrustSelf,
@@ -1294,10 +1373,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
-    const vargs = Validation.validateRelinquishCertificateArgs(args)
+    // Validate an existing reference, including historical types; acquisition remains strict.
+    const vargs = validateRelinquishCertificateArgs(args)
     const cert = verifyOne(
       await this.findCertificates({
         partial: {
+          userId: auth.userId,
           certifier: vargs.certifier,
           serialNumber: vargs.serialNumber,
           type: vargs.type
@@ -1310,10 +1391,24 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async relinquishOutput(auth: AuthId, args: RelinquishOutputArgs): Promise<number> {
-    const vargs = Validation.validateRelinquishOutputArgs(args)
-    const { txid, vout } = Validation.parseWalletOutpoint(vargs.output)
-    const output = verifyOne(await this.findOutputs({ partial: { userId: auth.userId, txid, vout } }))
-    return await this.updateOutput(output.outputId, { basketId: undefined })
+    const vargs = validateRelinquishOutputArgs(args)
+    const { txid, vout } = parseWalletOutpoint(vargs.output)
+    return await this.transaction(async trx => {
+      // Keep existing "not found" behavior for a missing output.
+      const output = verifyOne(await this.findOutputs({ partial: { userId: auth.userId, txid, vout }, trx }))
+      // Confirm the output actually belongs to the caller-claimed basket before
+      // clearing it. Without this, any caller that names an arbitrary basket it
+      // happens to hold basket-removal permission for could relinquish (and
+      // thereby free for reuse/spend by whichever app claims the output next)
+      // an output belonging to a different basket entirely, by outpoint alone.
+      const basket = verifyOneOrNone(
+        await this.findOutputBaskets({ partial: { userId: auth.userId, name: vargs.basket }, trx })
+      )
+      if (basket == null || output.basketId == null || output.basketId !== basket.basketId) {
+        throw new WERR_INVALID_PARAMETER('basket', `the basket currently containing output ${vargs.output}`)
+      }
+      return await this.updateOutput(output.outputId, { basketId: undefined }, trx)
+    })
   }
 
   async processSyncChunk(args: RequestSyncChunkArgs, chunk: SyncChunk): Promise<ProcessSyncChunkResult> {
@@ -1347,31 +1442,40 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       const ss = new EntitySyncState(
         verifyOne(
           await this.findSyncStates({
-            partial: args.syncStateId == null ? {
-              storageIdentityKey: args.fromStorageIdentityKey,
-              userId: user.userId
-            } : {
-              syncStateId: args.syncStateId,
-              storageIdentityKey: args.fromStorageIdentityKey,
-              userId: user.userId
-            },
+            partial:
+              args.syncStateId == null
+                ? {
+                    storageIdentityKey: args.fromStorageIdentityKey,
+                    userId: user.userId
+                  }
+                : {
+                    syncStateId: args.syncStateId,
+                    storageIdentityKey: args.fromStorageIdentityKey,
+                    userId: user.userId
+                  },
             trx
           })
         )
       )
       if (args.requireMatchingCheckpoint === true) {
         const checkpoint = ss.makeSyncCheckpoint()
-        const sameSince = (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
+        const sameSince =
+          (checkpoint.since == null ? undefined : new Date(checkpoint.since).getTime()) ===
           (args.since == null ? undefined : new Date(args.since).getTime())
-        if (!sameSince || checkpoint.offsets.length !== args.offsets.length || checkpoint.offsets.some((entry, index) =>
-          entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset)) {
-          throw new WERR_INVALID_OPERATION('Wallet sync checkpoint changed; resume from its durable state before retrying')
+        if (
+          !sameSince ||
+          checkpoint.offsets.length !== args.offsets.length ||
+          checkpoint.offsets.some(
+            (entry, index) => entry.name !== args.offsets[index]?.name || entry.offset !== args.offsets[index]?.offset
+          )
+        ) {
+          throw new WERR_INVALID_OPERATION(
+            'Wallet sync checkpoint changed; resume from its durable state before retrying'
+          )
         }
       }
       const result = await ss.processSyncChunk(this, args, chunk, trx)
-      return args.includeNextCheckpoint === true
-        ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() }
-        : result
+      return args.includeNextCheckpoint === true ? { ...result, nextCheckpoint: ss.makeSyncCheckpoint() } : result
     })
   }
 
@@ -1389,9 +1493,13 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
    * Alterations of "typically" to handle:
    */
   async updateProvenTxReqWithNewProvenTx(
-    args: UpdateProvenTxReqWithNewProvenTxArgs
+    args: UpdateProvenTxReqWithNewProvenTxArgs,
+    validatedCandidate?: TableProvenTx
   ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
     const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
+    if (req.txid.toLowerCase() !== args.txid.toLowerCase()) {
+      throw new WERR_INVALID_PARAMETER('args.txid', 'the transaction id of the selected proof request')
+    }
     let proven: EntityProvenTx
     if (req.provenTxId != null && req.provenTxId > 0) {
       // Someone beat us to it, grab what we need for results...
@@ -1402,22 +1510,20 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         await req.updateStorageDynamicProperties(this)
       }
     } else {
+      const candidate = validatedCandidate ?? {
+        created_at: new Date(),
+        updated_at: new Date(),
+        provenTxId: 0,
+        txid: args.txid,
+        height: args.height,
+        index: args.index,
+        merklePath: args.merklePath,
+        rawTx: req.rawTx,
+        blockHash: args.blockHash,
+        merkleRoot: args.merkleRoot
+      }
       proven = await this.transaction(async trx => {
-        const { proven: api } = await this.findOrInsertProvenTx(
-          {
-            created_at: new Date(),
-            updated_at: new Date(),
-            provenTxId: 0,
-            txid: args.txid,
-            height: args.height,
-            index: args.index,
-            merklePath: args.merklePath,
-            rawTx: req.rawTx,
-            blockHash: args.blockHash,
-            merkleRoot: args.merkleRoot
-          },
-          trx
-        )
+        const { proven: api } = await this.findOrInsertProvenTx(candidate, trx)
         const found = new EntityProvenTx(api)
         if (req.status !== 'completed' || req.provenTxId !== found.provenTxId) {
           req.status = 'completed'
@@ -1438,6 +1544,38 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       notify: req.apiNotify
     }
     return r
+  }
+
+  /** Authorize and validate remote proof completion before mutating shared proof state. */
+  async updateProvenTxReqWithNewProvenTxAuth(
+    auth: AuthId,
+    args: UpdateProvenTxReqWithNewProvenTxArgs
+  ): Promise<UpdateProvenTxReqWithNewProvenTxResult> {
+    const userId = verifyId(auth.userId)
+    const req = await EntityProvenTxReq.fromStorageId(this, args.provenTxReqId)
+    if (req.txid.toLowerCase() !== args.txid.toLowerCase()) {
+      throw new WERR_INVALID_PARAMETER('args.txid', 'the transaction id of the selected proof request')
+    }
+    const ownedTransactions = await this.countTransactions({
+      partial: { userId, txid: req.txid }
+    })
+    if (ownedTransactions === 0) {
+      throw new WERR_UNAUTHORIZED('The proof request does not belong to the authenticated wallet.')
+    }
+    const candidate: TableProvenTx = {
+      created_at: new Date(),
+      updated_at: new Date(),
+      provenTxId: 0,
+      txid: args.txid,
+      height: args.height,
+      index: args.index,
+      merklePath: args.merklePath,
+      rawTx: req.rawTx,
+      blockHash: args.blockHash,
+      merkleRoot: args.merkleRoot
+    }
+    await validateSyncProof(this, candidate)
+    return await this.updateProvenTxReqWithNewProvenTx(args, candidate)
   }
 
   /**
@@ -1502,12 +1640,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         // Leave the output's current state unchanged when no UTXO service can
         // answer conclusively; the validated proof still repairs transaction
         // and consumed-input state.
-        verdicts.set(
-          outputId,
-          classification.verdict === 'unknown'
-            ? undefined
-            : classification.verdict === 'unspent'
-        )
+        verdicts.set(outputId, classification.verdict === 'unknown' ? undefined : classification.verdict === 'unspent')
       }
     }
     return verdicts
@@ -1542,11 +1675,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
       log +=
         ' '.repeat(indent + 2) +
         `input ${vin} matched to output ${output.outputId} updated spentBy ${tx.transactionId}\n`
-      await this.updateOutput(
-        verifyId(output.outputId),
-        { spendable: false, spentBy: tx.transactionId },
-        trx
-      )
+      await this.updateOutput(verifyId(output.outputId), { spendable: false, spentBy: tx.transactionId }, trx)
     }
     return log
   }
@@ -1565,24 +1694,18 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     for (const output of outputs) {
       const outputId = verifyId(output.outputId)
       if (!outputVerdicts.has(outputId)) {
-        throw new WERR_INTERNAL(
-          `Output ${outputId} changed while preparing proof recovery.`
-        )
+        throw new WERR_INTERNAL(`Output ${outputId} changed while preparing proof recovery.`)
       }
       const isUtxo = outputVerdicts.get(outputId)
       if (isUtxo == null) {
-        log +=
-          ' '.repeat(indent + 2) +
-          `output ${output.outputId} does not have a valid locking script\n`
+        log += ' '.repeat(indent + 2) + `output ${output.outputId} does not have a valid locking script\n`
         continue
       }
       if (isUtxo === output.spendable) {
         log += ' '.repeat(indent + 2) + `output ${output.outputId} unchanged\n`
         continue
       }
-      log +=
-        ' '.repeat(indent + 2) +
-        `output ${output.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
+      log += ' '.repeat(indent + 2) + `output ${output.outputId} set to ${isUtxo ? 'spendable' : 'spent'}\n`
       await this.updateOutput(outputId, { spendable: isUtxo }, trx)
     }
     return log
@@ -1597,14 +1720,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
     trx: TrxToken
   ): Promise<string> {
     if (bsvtx == null || !preparedTransactionIds.has(tx.transactionId)) {
-      throw new WERR_INTERNAL(
-        `Transaction ${tx.transactionId} changed while preparing proof recovery.`
-      )
+      throw new WERR_INTERNAL(`Transaction ${tx.transactionId} changed while preparing proof recovery.`)
     }
     await this.updateTransaction(tx.transactionId, { status: 'unproven' }, trx)
-    let log =
-      ' '.repeat(indent) +
-      `transaction ${tx.transactionId} status is now 'unproven'\n`
+    let log = ' '.repeat(indent) + `transaction ${tx.transactionId} status is now 'unproven'\n`
     log += await this.restoreProofRecoveryInputs(tx, bsvtx, indent, trx)
     log += await this.restoreProofRecoveryOutputs(tx, outputVerdicts, indent, trx)
     return log
@@ -1641,8 +1760,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
     // UTXO checks can call external services. Complete every check before
     // opening the write transaction so network latency never holds DB locks.
-    const outputVerdicts =
-      await this.prepareProofRecoveryOutputVerdicts(transactionsToRepair)
+    const outputVerdicts = await this.prepareProofRecoveryOutputVerdicts(transactionsToRepair)
 
     return await this.transaction(async trx => {
       let log = ''
@@ -1666,14 +1784,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         }
         const shouldRepair = requestUpdate != null || tx.status === 'failed'
         if (!shouldRepair) continue
-        log += await this.restoreTransactionForProof(
-          tx,
-          bsvtx,
-          preparedTransactionIds,
-          outputVerdicts,
-          indent,
-          trx
-        )
+        log += await this.restoreTransactionForProof(tx, bsvtx, preparedTransactionIds, outputVerdicts, indent, trx)
       }
 
       await req.updateStorageDynamicProperties(this, trx)

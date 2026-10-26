@@ -19,10 +19,8 @@ export interface WalletDefaults {
   tokenKeyID: string
   messageBoxHost: string
   registryUrl?: string
-  didBasket: string
-  didResolverUrl: string
-  didProxyUrl?: string
-  didProtocolID: [SecurityLevel, string]
+  /** Explicitly trusted registry transport for controlled local/private deployments. */
+  registryFetch?: typeof fetch
 }
 
 // ============================================================================
@@ -196,6 +194,11 @@ export interface MessageBoxConfig {
 
 export interface CertifierConfig {
   privateKey?: string
+  /**
+   * Canonical base64 certificate identifier. A bounded historical short value
+   * is retained as an offline-migration alias while new issuance uses its
+   * 32-byte SHA-256 digest.
+   */
   certificateType?: string
   defaultFields?: Record<string, string>
   includeTimestamp?: boolean
@@ -288,105 +291,6 @@ export interface IncomingPayment {
 }
 
 // ============================================================================
-// DID Types (Legacy — kept for backward compatibility)
-// ============================================================================
-
-export interface DIDDocument {
-  '@context': string[]
-  id: string
-  controller: string
-  verificationMethod: DIDVerificationMethod[]
-  authentication: string[]
-  assertionMethod: string[]
-}
-
-export interface DIDVerificationMethod {
-  id: string
-  type: string
-  controller: string
-  publicKeyHex: string
-}
-
-export interface DIDParseResult {
-  method: string
-  identifier: string
-}
-
-// ============================================================================
-// DID Types V2 (did:bsv spec-compliant — Teranode/nChain)
-// ============================================================================
-
-export interface DIDDocumentV2 {
-  '@context': string | string[]
-  id: string
-  controller?: string
-  verificationMethod: DIDVerificationMethodV2[]
-  authentication: Array<string | DIDVerificationMethodV2>
-  assertionMethod?: Array<string | DIDVerificationMethodV2>
-  service?: DIDService[]
-}
-
-export interface DIDVerificationMethodV2 {
-  id: string
-  type: string
-  controller: string
-  publicKeyJwk: { kty: string; crv: string; x: string; y: string }
-}
-
-export interface DIDService {
-  id: string
-  type: string
-  serviceEndpoint: string
-}
-
-export interface DIDCreateOptions {
-  identityCode?: string
-  satoshis?: number
-  basket?: string
-  controllerKey?: string
-  services?: DIDService[]
-}
-
-export interface DIDCreateResult {
-  did: string
-  txid: string
-  identityCode: string
-  document: DIDDocumentV2
-}
-
-export interface DIDResolutionResult {
-  didDocument: DIDDocumentV2 | null
-  didDocumentMetadata: {
-    created?: string
-    updated?: string
-    deactivated?: boolean
-    versionId?: string
-    nextVersionId?: string
-  }
-  didResolutionMetadata: {
-    contentType?: string
-    error?: string
-    message?: string
-  }
-}
-
-export interface DIDChainState {
-  did: string
-  identityCode: string
-  issuanceTxid: string
-  currentOutpoint: string
-  status: 'active' | 'deactivated'
-  created: string
-  updated: string
-}
-
-export interface DIDUpdateOptions {
-  did: string
-  services?: DIDService[]
-  additionalKeys?: string[]
-}
-
-// ============================================================================
 // Credential Schema Types
 // ============================================================================
 
@@ -409,64 +313,18 @@ export interface CredentialSchemaConfig {
   id: string
   name: string
   description?: string
+  /**
+   * Canonical base64 certificate identifier. A bounded historical short value
+   * is retained as an offline-migration alias while new issuance uses its
+   * 32-byte SHA-256 digest.
+   */
   certificateTypeBase64?: string
+  /** Exact historical identifiers accepted when verifying offline persisted credentials. */
+  legacyCertificateTypesBase64?: string[]
   fields: CredentialFieldSchema[]
   fieldGroups?: Array<{ key: string; label: string }>
   validate?: (values: Record<string, string>) => string | null
   computedFields?: (values: Record<string, string>) => Record<string, string>
-}
-
-// ============================================================================
-// W3C Verifiable Credential Types
-// ============================================================================
-
-export interface VerifiableCredential {
-  '@context': string[]
-  type: string[]
-  id?: string
-  issuer: string
-  issuanceDate: string
-  expirationDate?: string
-  credentialSubject: {
-    id: string
-    [key: string]: any
-  }
-  credentialStatus?: {
-    id: string
-    type: string
-  }
-  proof: {
-    type: string
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-    signatureValue: string
-  }
-  _bsv: {
-    certificate: CertificateData
-  }
-}
-
-export interface VerifiablePresentation {
-  '@context': string[]
-  type: string[]
-  holder: string
-  verifiableCredential: VerifiableCredential[]
-  proof: {
-    type: string
-    created: string
-    proofPurpose: string
-    verificationMethod: string
-  }
-}
-
-export interface VerificationResult {
-  valid: boolean
-  revoked: boolean
-  errors: string[]
-  issuer?: string
-  subject?: string
-  type?: string
 }
 
 // ============================================================================
@@ -513,16 +371,19 @@ export interface IdentityRegistryStore {
 }
 
 export interface IdentityRegistryConfig {
+  /**
+   * Persistence for the legacy unauthenticated directory. Possession of an
+   * identity key string does not prove control of its private key.
+   */
   store?: IdentityRegistryStore
+  /** Content validation only; this callback is not an authentication hook. */
   validateTag?: (tag: string, identityKey: string) => string | null
+  /** Maximum tags retained for one identity. Defaults to 32; maximum 256. */
   maxTagsPerIdentity?: number
-}
-
-export interface DIDResolverConfig {
-  resolverUrl?: string
-  wocBaseUrl?: string
-  resolverTimeout?: number
-  maxHops?: number
+  /** Maximum entries loaded or retained by the registry. Defaults to 10,000. */
+  maxEntries?: number
+  /** Maximum matches returned by one lookup. Defaults to 100; maximum 1,000. */
+  maxLookupResults?: number
 }
 
 export interface ServerWalletManagerConfig {
@@ -532,6 +393,17 @@ export interface ServerWalletManagerConfig {
   storageUrl?: string
   defaultRequestSatoshis?: number
   requestMemo?: string
+  /** Maximum decoded JSON request bytes. Defaults to 64 MiB; maximum 256 MiB. */
+  maxRequestBytes?: number
+  /**
+   * Mandatory authorization policy for every generated server-wallet route.
+   * Only a literal `true` authorizes access; omission defaults closed.
+   */
+  authorize?: (request: {
+    action: 'status' | 'reset' | 'create' | 'request' | 'balance' | 'outputs' | 'receive'
+    url: string
+    headers?: Headers
+  }) => boolean | Promise<boolean>
 }
 
 export interface CredentialIssuerHandlerConfig {
@@ -540,4 +412,20 @@ export interface CredentialIssuerHandlerConfig {
   keyFile?: string
   serverWalletManager?: any
   revocationStorePath?: string
+  /** Maximum decoded JSON request bytes. Defaults to 64 MiB; maximum 256 MiB. */
+  maxRequestBytes?: number
+  /**
+   * Mandatory authorization policy for certificate issuance and revocation.
+   * Only a literal `true` authorizes the requested state change. Public info,
+   * schema, status, and signature-verification queries do not invoke it.
+   */
+  authorize?: (request: {
+    action: 'certify' | 'issue' | 'revoke'
+    subjectIdentityKey?: string
+    schemaId?: string
+    fields?: Record<string, string>
+    serialNumber?: string
+    url: string
+    headers?: Headers
+  }) => boolean | Promise<boolean>
 }

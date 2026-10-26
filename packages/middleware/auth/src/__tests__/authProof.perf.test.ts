@@ -161,7 +161,7 @@ describe('performance (local benchmark — `npm run test:perf`, PERF_ITER to sca
   }, 120_000)
 
   it(`pure serialization, no crypto (${PURE_ITER}x) — should dwarf the crypto path`, () => {
-    const data = createAuthSigData('login', '02abc', OPTIONS)
+    const data = createAuthSigData('login', serverKey, OPTIONS)
     const ser = benchSyncBatch('serializeSignablePayload(body)', PURE_ITER, () =>
       serializeSignablePayload(data, BODY)
     )

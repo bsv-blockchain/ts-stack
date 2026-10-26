@@ -14,7 +14,14 @@
  * exposing `ServerWallet.create`).
  */
 
-import { PrivateKey, KeyDeriver, WalletInterface } from '@bsv/sdk'
+import {
+  PrivateKey,
+  KeyDeriver,
+  WalletInterface,
+  snapshotWalletResultRequest,
+  validateWalletArgs,
+  validateWalletResult
+} from '@bsv/sdk'
 import {
   Wallet as ToolboxWallet,
   WalletStorageManager,
@@ -24,6 +31,14 @@ import {
   Chain
 } from '@bsv/wallet-toolbox'
 import { WalletCore } from '../core/WalletCore'
+import { snapshotPlainDataRecord } from '../core/certificate-validation'
+import { canonicalIdentityKey } from '../core/certificate-validation'
+import { snapshotDenseByteArray } from '../core/byte-validation'
+import {
+  validateBase64String,
+  validateInteger,
+  validateStringLength
+} from '@bsv/sdk/wallet/validationHelpers'
 import { WalletDefaults, ServerWalletConfig, IncomingPayment } from '../core/types'
 import { createTokenMethods } from '../modules/tokens'
 import { createInscriptionMethods } from '../modules/inscriptions'
@@ -54,29 +69,66 @@ class ServerWalletCore extends WalletCore {
    * Internalizes a payment using the `wallet payment` protocol with `server_funding` label.
    */
   async receivePayment(payment: IncomingPayment): Promise<void> {
-    const tx = payment.tx instanceof Uint8Array ? Array.from(payment.tx) : payment.tx
+    const record = snapshotPlainDataRecord(payment)
+    if (record == null) throw new TypeError('Incoming payment is invalid')
+    const tx = snapshotDenseByteArray(record.tx, 'Incoming payment transaction', 64 * 1024 * 1024)
+    if (tx.length === 0) {
+      throw new TypeError('Incoming payment transaction is invalid')
+    }
+
+    const senderIdentityKey = canonicalIdentityKey(
+      record.senderIdentityKey,
+      'incoming payment sender identity key'
+    )
+    const derivationPrefix = validateBase64String(
+      record.derivationPrefix as string,
+      'derivationPrefix',
+      1,
+      256
+    )
+    const derivationSuffix = validateBase64String(
+      record.derivationSuffix as string,
+      'derivationSuffix',
+      1,
+      256
+    )
+    const outputIndex = validateInteger(
+      record.outputIndex as number | undefined,
+      'outputIndex',
+      undefined,
+      0,
+      0xffffffff
+    )
 
     const description =
-      payment.description != null && payment.description !== ''
-        ? payment.description
-        : `Payment from ${payment.senderIdentityKey.substring(0, 20)}...`
+      typeof record.description === 'string' && record.description !== ''
+        ? validateStringLength(record.description, 'description', 5, 2000)
+        : `Payment from ${senderIdentityKey.substring(0, 20)}...`
 
-    await this.client.internalizeAction({
+    const internalizeArgs = {
       tx,
       outputs: [
         {
-          outputIndex: payment.outputIndex,
-          protocol: 'wallet payment',
+          outputIndex,
+          protocol: 'wallet payment' as const,
           paymentRemittance: {
-            senderIdentityKey: payment.senderIdentityKey,
-            derivationPrefix: payment.derivationPrefix,
-            derivationSuffix: payment.derivationSuffix
+            senderIdentityKey,
+            derivationPrefix,
+            derivationSuffix
           }
         }
       ],
       description,
       labels: ['server_funding']
-    } as any)
+    }
+    validateWalletArgs('internalizeAction', internalizeArgs)
+    const bindingRequest = snapshotWalletResultRequest('internalizeAction', internalizeArgs)
+    const internalizeResult = await this.client.internalizeAction(internalizeArgs)
+    try {
+      validateWalletResult('internalizeAction', internalizeResult, bindingRequest)
+    } catch {
+      throw new Error('Receiving wallet did not accept the payment')
+    }
   }
 }
 
@@ -99,23 +151,32 @@ export type ServerWallet = ServerWalletCore &
 
 export namespace ServerWallet {
   export async function create(config: ServerWalletConfig): Promise<ServerWallet> {
-    const privateKey = PrivateKey.fromHex(config.privateKey)
+    const ownedConfig = snapshotPlainDataRecord(config)
+    if (ownedConfig == null || typeof ownedConfig.privateKey !== 'string') {
+      throw new TypeError('Invalid server wallet configuration')
+    }
+    const privateKey = PrivateKey.fromHex(ownedConfig.privateKey)
     const keyDeriver = new KeyDeriver(privateKey)
     const identityKey = keyDeriver.identityKey
-    const network: Chain = (config.network ?? 'main') as Chain
+    const configuredNetwork = ownedConfig.network ?? 'main'
+    if (configuredNetwork !== 'main' && configuredNetwork !== 'testnet') {
+      throw new TypeError('Invalid server wallet network')
+    }
+    const network: Chain = configuredNetwork === 'testnet' ? 'test' : 'main'
 
     const storageManager = new WalletStorageManager(identityKey)
     const signer = new WalletSigner(network, keyDeriver, storageManager)
     const services = new Services(network)
     const toolboxWallet = new ToolboxWallet(signer, services)
 
-    const storageUrl = config.storageUrl ?? 'https://storage.babbage.systems'
+    const storageUrl = ownedConfig.storageUrl ?? 'https://storage.babbage.systems'
+    if (typeof storageUrl !== 'string') throw new TypeError('Invalid server wallet storage URL')
     const storageClient = new StorageClient(toolboxWallet, storageUrl)
     await storageClient.makeAvailable()
     await storageManager.addWalletStorageProvider(storageClient)
 
     const wallet = new ServerWalletCore(toolboxWallet, identityKey, {
-      network: config.network ?? 'main'
+      network: configuredNetwork
     })
 
     Object.assign(wallet, createTokenMethods(wallet))

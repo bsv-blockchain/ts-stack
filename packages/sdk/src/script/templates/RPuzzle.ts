@@ -8,7 +8,9 @@ import TransactionSignature from '../../primitives/TransactionSignature.js'
 import { sha256 } from '../../primitives/Hash.js'
 import ScriptChunk from '../ScriptChunk.js'
 import BigNumber from '../../primitives/BigNumber.js'
-import Script from '../Script.js'
+import { computeSignatureScope, formatPreimage, resolveSourceDetails } from './SignatureUtils.js'
+
+const R_PUZZLE_TYPES = new Set(['raw', 'SHA1', 'SHA256', 'HASH256', 'RIPEMD160', 'HASH160'])
 
 /**
  * RPuzzle class implementing ScriptTemplate.
@@ -25,6 +27,7 @@ export default class RPuzzle implements ScriptTemplate {
    * @param {'raw'|'SHA1'|'SHA256'|'HASH256'|'RIPEMD160'|'HASH160'} type Denotes the type of puzzle to create
    */
   constructor(type: 'raw' | 'SHA1' | 'SHA256' | 'HASH256' | 'RIPEMD160' | 'HASH160' = 'raw') {
+    if (!R_PUZZLE_TYPES.has(type)) throw new Error(`Unsupported R puzzle type: ${type as string}`)
     this.type = type
   }
 
@@ -35,6 +38,13 @@ export default class RPuzzle implements ScriptTemplate {
    * @returns {LockingScript} - An R puzzle locking script.
    */
   lock(value: number[]): LockingScript {
+    if (!Array.isArray(value)) throw new TypeError('R puzzle value must be a dense byte array')
+    for (let index = 0; index < value.length; index++) {
+      const byte = value[index]
+      if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+        throw new TypeError('R puzzle value must be a dense byte array')
+      }
+    }
     const chunks: ScriptChunk[] = [
       { op: OP.OP_OVER },
       { op: OP.OP_3 },
@@ -85,38 +95,19 @@ export default class RPuzzle implements ScriptTemplate {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         privateKey ??= PrivateKey.fromRandom()
-        let signatureScope = TransactionSignature.SIGHASH_FORKID
-        if (signOutputs === 'all') {
-          signatureScope |= TransactionSignature.SIGHASH_ALL
-        }
-        if (signOutputs === 'none') {
-          signatureScope |= TransactionSignature.SIGHASH_NONE
-        }
-        if (signOutputs === 'single') {
-          signatureScope |= TransactionSignature.SIGHASH_SINGLE
-        }
-        if (anyoneCanPay) {
-          signatureScope |= TransactionSignature.SIGHASH_ANYONECANPAY
-        }
-        const otherInputs = [...tx.inputs]
-        const [input] = otherInputs.splice(inputIndex, 1)
-        if (typeof input.sourceTransaction !== 'object') {
+        const signatureScope = computeSignatureScope(signOutputs, anyoneCanPay)
+        if (typeof tx.inputs[inputIndex]?.sourceTransaction !== 'object') {
           throw new TypeError('The source transaction is needed for transaction signing.')
         }
-        const preimage = TransactionSignature.format({
-          sourceTXID: input.sourceTransaction?.id('hex') ?? '',
-          sourceOutputIndex: input.sourceOutputIndex ?? 0,
-          sourceSatoshis: input.sourceTransaction?.outputs[input.sourceOutputIndex]?.satoshis ?? 0,
-          transactionVersion: tx.version,
-          otherInputs,
+        const resolved = resolveSourceDetails(tx, inputIndex)
+        const preimage = formatPreimage({
+          tx,
           inputIndex,
-          outputs: tx.outputs,
-          inputSequence: input.sequence ?? 0xffffffff,
-          subscript:
-            input.sourceTransaction?.outputs[input.sourceOutputIndex]?.lockingScript ??
-            new Script(),
-          lockTime: tx.lockTime,
-          scope: signatureScope
+          signatureScope,
+          sourceTXID: resolved.sourceTXID,
+          sourceSatoshis: resolved.sourceSatoshis,
+          lockingScript: resolved.lockingScript,
+          allInputs: resolved.allInputs
         })
 
         const rawSignature = privateKey.sign(sha256(preimage), undefined, true, k)

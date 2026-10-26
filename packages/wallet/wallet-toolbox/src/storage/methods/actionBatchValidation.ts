@@ -1,4 +1,7 @@
-import { Beef, Hash, Script, Transaction, Utils, Validation } from '@bsv/sdk'
+import { validateCreateActionArgs, validateSatoshis } from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, Script, Transaction } from '@bsv/sdk'
+import { SHA256 } from '@bsv/sdk/primitives/Hash'
+import { toHex } from '@bsv/sdk/primitives/utils'
 import type { ActionBatchCommitAction, ActionBatchManifest } from '../../sdk/ActionBatch.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
 import { verifyUnlockScriptsBatch } from '../../signer/methods/verifyUnlockScripts'
@@ -10,7 +13,7 @@ import { validateStorageFeeModel } from '../StorageProvider'
 import type { TableActionBatch, TableActionBatchBlob } from '../schema/tables/TableActionBatch'
 import { maxPossibleSatoshis } from './generateChange'
 import { lockScriptWithKeyOffsetFromPubKey } from './offsetKey'
-import { manifestPhysicalDigests } from './actionBatchBlobs'
+import { ACTION_BATCH_MAX_ACTIONS, manifestPhysicalDigests } from './actionBatchBlobs'
 
 export interface ValidatedBatchAction {
   action: ActionBatchCommitAction
@@ -51,19 +54,13 @@ function allocateManifestBytes(totalBytes: number, name: string): Uint8Array {
     return new Uint8Array(totalBytes)
   } catch (error: unknown) {
     if (error instanceof RangeError) {
-      throw new WERR_INVALID_OPERATION(
-        `action batch ${name} cannot be assembled in this runtime`
-      )
+      throw new WERR_INVALID_OPERATION(`action batch ${name} cannot be assembled in this runtime`)
     }
     throw error
   }
 }
 
-function assembleManifestChunks(
-  chunks: Array<number[] | Uint8Array>,
-  totalBytes: number,
-  name: string
-): Uint8Array {
+function assembleManifestChunks(chunks: Array<number[] | Uint8Array>, totalBytes: number, name: string): Uint8Array {
   const bytes = allocateManifestBytes(totalBytes, name)
   let offset = 0
   for (const chunk of chunks) {
@@ -83,7 +80,7 @@ function resolveChunkedManifestBytes(
     throw new WERR_INVALID_PARAMETER(name, 'one or more blob chunks')
   }
   const chunks: Array<number[] | Uint8Array> = []
-  const logicalHash = new Hash.SHA256()
+  const logicalHash = new SHA256()
   let totalBytes = 0
   for (const chunkDigest of chunkDigests) {
     const chunk = blobs.get(chunkDigest)
@@ -95,14 +92,12 @@ function resolveChunkedManifestBytes(
     }
     totalBytes += chunk.bytes.length
     if (!Number.isSafeInteger(totalBytes)) {
-      throw new WERR_INVALID_OPERATION(
-        `action batch ${name} exceeds this runtime's addressable memory`
-      )
+      throw new WERR_INVALID_OPERATION(`action batch ${name} exceeds this runtime's addressable memory`)
     }
     chunks.push(chunk.bytes)
     logicalHash.update(chunk.bytes)
   }
-  if (Utils.toHex(logicalHash.digest()) !== digest) {
+  if (toHex(logicalHash.digest()) !== digest) {
     throw new WERR_INVALID_PARAMETER(name, 'chunks matching digest')
   }
   return assembleManifestChunks(chunks, totalBytes, name)
@@ -204,7 +199,7 @@ function validateActionOutputs(action: ActionBatchCommitAction): void {
 }
 
 function validateActionMetadata(action: ActionBatchCommitAction): void {
-  Validation.validateCreateActionArgs({
+  validateCreateActionArgs({
     inputs: action.metadata.inputs.map(input => ({
       ...input,
       outpoint: `${input.outpoint.txid}.${input.outpoint.vout}`
@@ -268,7 +263,7 @@ async function requireSourceOutput(
   const output = source?.outputs[vout]
   if (output == null) throw new WERR_INVALID_PARAMETER('manifest', `source output ${txid}.${vout}`)
   return {
-    satoshis: Validation.validateSatoshis(output.satoshis, 'source output satoshis'),
+    satoshis: validateSatoshis(output.satoshis, 'source output satoshis'),
     lockingScript: output.lockingScript
   }
 }
@@ -342,10 +337,7 @@ interface ManifestActionValidationState {
   spentOutpoints: Set<string>
 }
 
-function validateActionIdentity(
-  action: ActionBatchCommitAction,
-  state: ManifestActionValidationState
-): void {
+function validateActionIdentity(action: ActionBatchCommitAction, state: ManifestActionValidationState): void {
   if (state.seenTxids.has(action.txid)) {
     throw new WERR_INVALID_PARAMETER('actions', 'unique txids')
   }
@@ -368,45 +360,26 @@ async function validateActionTransactionShape(
     throw new WERR_INVALID_PARAMETER('txid', 'match raw transaction')
   }
   if (!(await storage.getServices().nLockTimeIsFinal(tx))) {
-    throw new WERR_INVALID_PARAMETER(
-      'transaction',
-      'final nLockTime and sequence values'
-    )
+    throw new WERR_INVALID_PARAMETER('transaction', 'final nLockTime and sequence values')
   }
   if (tx.version !== action.plan.version || tx.lockTime !== action.plan.lockTime) {
-    throw new WERR_INVALID_PARAMETER(
-      'transaction',
-      'match planned version and lockTime'
-    )
+    throw new WERR_INVALID_PARAMETER('transaction', 'match planned version and lockTime')
   }
-  if (
-    tx.inputs.length !== action.plan.inputs.length ||
-    tx.outputs.length !== action.plan.outputs.length
-  ) {
-    throw new WERR_INVALID_PARAMETER(
-      'transaction',
-      'match planned input and output counts'
-    )
+  if (tx.inputs.length !== action.plan.inputs.length || tx.outputs.length !== action.plan.outputs.length) {
+    throw new WERR_INVALID_PARAMETER('transaction', 'match planned input and output counts')
   }
   if (!action.plan.inputs.every((input, index) => input.vin === index)) {
     throw new WERR_INVALID_PARAMETER('inputs', 'complete sequential vin mappings')
   }
-  const outputVouts = action.plan.outputs
-    .map(output => output.vout)
-    .sort((left, right) => left - right)
+  const outputVouts = action.plan.outputs.map(output => output.vout).sort((left, right) => left - right)
   if (!outputVouts.every((vout, index) => vout === index)) {
     throw new WERR_INVALID_PARAMETER('outputs', 'complete sequential vout mappings')
   }
   const expectedNoSendChange = action.metadata.isNoSend
-    ? action.plan.outputs
-        .filter(output => output.purpose === 'change')
-        .map(output => output.vout)
+    ? action.plan.outputs.filter(output => output.purpose === 'change').map(output => output.vout)
     : undefined
   if (!sameNumbers(action.plan.noSendChangeOutputVouts, expectedNoSendChange)) {
-    throw new WERR_INVALID_PARAMETER(
-      'noSendChangeOutputVouts',
-      'match planned change outputs'
-    )
+    throw new WERR_INVALID_PARAMETER('noSendChangeOutputVouts', 'match planned change outputs')
   }
 }
 
@@ -418,35 +391,20 @@ async function validateActionInputSources(
 ): Promise<void> {
   for (const planned of action.plan.inputs) {
     const input = tx.inputs[planned.vin]
-    if (
-      input?.sourceTXID !== planned.sourceTxid ||
-      input.sourceOutputIndex !== planned.sourceVout
-    ) {
-      throw new WERR_INVALID_PARAMETER(
-        'inputs',
-        'match planned transaction outpoints'
-      )
+    if (input?.sourceTXID !== planned.sourceTxid || input.sourceOutputIndex !== planned.sourceVout) {
+      throw new WERR_INVALID_PARAMETER('inputs', 'match planned transaction outpoints')
     }
-    const source = await requireSourceOutput(
-      storage,
-      beef,
-      planned.sourceTxid,
-      planned.sourceVout
-    )
+    const source = await requireSourceOutput(storage, beef, planned.sourceTxid, planned.sourceVout)
     if (
       source.satoshis !== planned.sourceSatoshis ||
-      (planned.sourceLockingScript != null &&
-        source.lockingScript.toHex() !== planned.sourceLockingScript)
+      (planned.sourceLockingScript != null && source.lockingScript.toHex() !== planned.sourceLockingScript)
     ) {
       throw new WERR_INVALID_PARAMETER('inputs', 'match proven source outputs')
     }
   }
 }
 
-function registerActionOutpoints(
-  tx: Transaction,
-  state: ManifestActionValidationState
-): void {
+function registerActionOutpoints(tx: Transaction, state: ManifestActionValidationState): void {
   for (const input of tx.inputs) {
     const sourceTxid = input.sourceTXID
     if (sourceTxid == null) {
@@ -454,10 +412,7 @@ function registerActionOutpoints(
     }
     const outpoint = `${sourceTxid}.${input.sourceOutputIndex}`
     if (state.spentOutpoints.has(outpoint)) {
-      throw new WERR_INVALID_PARAMETER(
-        'actions',
-        `not double spend ${outpoint}`
-      )
+      throw new WERR_INVALID_PARAMETER('actions', `not double spend ${outpoint}`)
     }
     state.spentOutpoints.add(outpoint)
     if (state.batchTxids.has(sourceTxid) && !state.seenTxids.has(sourceTxid)) {
@@ -472,47 +427,26 @@ function validateActionFee(
   tx: Transaction,
   rawTx: Uint8Array
 ): void {
-  const inputSatoshis = action.plan.inputs.reduce(
-    (sum, input) => sum + input.sourceSatoshis,
-    0
-  )
+  const inputSatoshis = action.plan.inputs.reduce((sum, input) => sum + input.sourceSatoshis, 0)
   const outputSatoshis = tx.outputs.reduce(
-    (sum, output) =>
-      sum +
-      Validation.validateSatoshis(
-        output.satoshis,
-        'transaction output satoshis'
-      ),
+    (sum, output) => sum + validateSatoshis(output.satoshis, 'transaction output satoshis'),
     0
   )
   const feeRate = validateStorageFeeModel(storage.feeModel).value ?? 0
   if (inputSatoshis - outputSatoshis < Math.ceil((rawTx.length * feeRate) / 1000)) {
-    throw new WERR_INVALID_PARAMETER(
-      'transaction fee',
-      'meet the active storage fee model'
-    )
+    throw new WERR_INVALID_PARAMETER('transaction fee', 'meet the active storage fee model')
   }
 }
 
-function validateActionTransactionOutputs(
-  action: ActionBatchCommitAction,
-  tx: Transaction
-): void {
+function validateActionTransactionOutputs(action: ActionBatchCommitAction, tx: Transaction): void {
   for (const planned of action.plan.outputs) {
     const transactionOutput = tx.outputs[planned.vout]
     const scriptMatches =
       planned.lockingScript === ''
         ? planned.providedBy === 'storage' && planned.purpose === 'change'
         : transactionOutput?.lockingScript.toHex() === planned.lockingScript
-    if (
-      transactionOutput == null ||
-      transactionOutput.satoshis !== planned.satoshis ||
-      !scriptMatches
-    ) {
-      throw new WERR_INVALID_PARAMETER(
-        'outputs',
-        'match planned transaction outputs'
-      )
+    if (transactionOutput == null || transactionOutput.satoshis !== planned.satoshis || !scriptMatches) {
+      throw new WERR_INVALID_PARAMETER('outputs', 'match planned transaction outputs')
     }
   }
 }
@@ -524,22 +458,13 @@ async function validateManifestAction(
   const rawTx = await resolveManifestBytes(
     state.blobs,
     compactAction.rawTx ??
-      (compactAction.rawTxDigest == null
-        ? undefined
-        : state.manifest.inlineBlobs?.[compactAction.rawTxDigest]),
+      (compactAction.rawTxDigest == null ? undefined : state.manifest.inlineBlobs?.[compactAction.rawTxDigest]),
     compactAction.rawTxDigest,
     `rawTx ${compactAction.txid}`,
-    compactAction.rawTxDigest == null
-      ? undefined
-      : state.manifest.blobChunks?.[compactAction.rawTxDigest]
+    compactAction.rawTxDigest == null ? undefined : state.manifest.blobChunks?.[compactAction.rawTxDigest]
   )
   const tx = Transaction.fromBinary(rawTx)
-  const action = await materializeActionScripts(
-    state.blobs,
-    state.manifest,
-    compactAction,
-    tx
-  )
+  const action = await materializeActionScripts(state.blobs, state.manifest, compactAction, tx)
   validateActionIdentity(action, state)
   await validateActionTransactionShape(state.storage, action, tx)
   await validateActionInputSources(state.storage, state.beef, action, tx)
@@ -548,9 +473,7 @@ async function validateManifestAction(
   validateActionTransactionOutputs(action, tx)
   const externalInputBeef = beefForTxids(
     state.beef,
-    action.plan.inputs
-      .map(input => input.sourceTxid)
-      .filter(txid => !state.batchTxids.has(txid))
+    action.plan.inputs.map(input => input.sourceTxid).filter(txid => !state.batchTxids.has(txid))
   ).toUint8Array()
   state.beef.mergeRawTx(rawTx)
   state.seenTxids.add(action.txid)
@@ -563,10 +486,15 @@ export async function validateManifestActions(
   batch: TableActionBatch,
   manifest: ActionBatchManifest
 ): Promise<{ actions: ValidatedBatchAction[]; dependencyBeef: Uint8Array; beef: Beef }> {
-  const blobRecords = await storage.findActionBatchBlobRecords(
-    batch.actionBatchId,
-    manifestPhysicalDigests(manifest)
-  )
+  // Re-check the bound at the trust boundary. A manifest may have been
+  // prepared by an older client/provider or supplied directly over RPC.
+  if (!Array.isArray(manifest.actions) || manifest.actions.length > ACTION_BATCH_MAX_ACTIONS) {
+    throw new WERR_INVALID_PARAMETER(
+      'manifest.actions',
+      `contain no more than ${ACTION_BATCH_MAX_ACTIONS} signed actions`
+    )
+  }
+  const blobRecords = await storage.findActionBatchBlobRecords(batch.actionBatchId, manifestPhysicalDigests(manifest))
   const blobs = new Map(blobRecords.map(blob => [blob.digest, blob]))
   const dependencyBeef = await resolveManifestBytes(
     blobs,
@@ -579,7 +507,7 @@ export async function validateManifestActions(
   if (manifest.actions.length === 0) {
     throw new WERR_INVALID_PARAMETER('actions', 'contain at least one signed action')
   }
-  const beef = dependencyBeef.length === 0 ? new Beef() : Beef.fromBinary(dependencyBeef)
+  const beef = dependencyBeef.length === 0 ? new Beef() : Beef.fromBinaryStrict(dependencyBeef)
   const batchTxids = new Set(manifest.actions.map(action => action.txid))
   const seenTxids = new Set<string>()
   const seenReferences = new Set<string>()

@@ -9,6 +9,21 @@ This protocol is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Choose one protocol deliberately; their headers and client
 contracts are not interchangeable.
 
+Version 2.1.8 removes middleware payment-header size ceilings. A header already
+received from the client is parsed and its payment validated regardless of size.
+HTTP server, CDN, proxy and WAF configuration own transport budgets; configure
+and validate the full route for supported payment proofs. The deprecated
+`maxPaymentHeaderBytes` option remains accepted for source compatibility but is
+ignored, including when an older application still supplies a value. Move any
+intended transport policy to the HTTP server or edge and remove the option.
+
+Atomic BEEF validation, canonical base64, derivation verification, payment
+pricing, wallet acceptance and atomic replay protection still apply. Invalid
+payment contents are rejected. SDK 2.8.5 separately raises client header capacity;
+that does not constrain what this middleware accepts from other compatible
+clients. No BRC100 call, wire or wallet-data migration is required. Source
+publication is a separate protected release step.
+
 ## Requirements
 
 - Node.js 22 or newer
@@ -85,16 +100,23 @@ with an accepted zero-value receipt. Invalid or failed pricing returns a stable
    }
    ```
 
-5. The middleware bounds and parses the header, verifies the derivation
-   prefix, parses the Atomic BEEF transaction, requires output zero to cover
-   the current price, and atomically claims its transaction ID.
-6. The wallet must return `{ accepted: true }` from `internalizeAction`.
-   Merge/replay-like results do not authorize the route.
-7. `next()` runs with `req.payment`, and
+5. The middleware parses the received header, verifies the derivation
+   prefix, parses the Atomic BEEF transaction, reduces legacy overinclusive
+   envelopes to the declared subject and its dependency closure, and requires
+   output zero to cover the current price.
+6. The wallet must validate and newly accept the remittance with
+   `{ accepted: true }` from `internalizeAction`. Merge/replay-like or malformed
+   results do not authorize the route.
+7. Only after wallet validation does the middleware atomically claim the
+   transaction ID. This prevents invalid derivation material paired with a
+   public transaction from poisoning the replay store.
+8. `next()` runs with `req.payment`, and
    `x-bsv-payment-satoshis-paid` reports the actual output value.
 
-Malformed, duplicate, underfunded, rejected, or ambiguous payments never call
-`next`.
+Wallet verdicts must expose `accepted` and optional `isMerge` as own data
+properties; inherited or accessor-backed authority is rejected without
+invoking accessors. Malformed, duplicate, underfunded, rejected, or ambiguous
+payments never call `next`.
 
 ## Options
 
@@ -103,7 +125,6 @@ const payment = createPaymentMiddleware({
   wallet,
   calculateRequestPrice,
   replayStore,
-  maxPaymentHeaderBytes: 64 * 1024,
   logger
 })
 ```
@@ -114,8 +135,8 @@ const payment = createPaymentMiddleware({
 - `replayStore` must implement an atomic
   `claim(transactionId): boolean | Promise<boolean>`. It returns `false` if
   the transaction has already been used.
-- `maxPaymentHeaderBytes` defaults to 64 KiB and must be a positive safe
-  integer.
+- `maxPaymentHeaderBytes` is deprecated and ignored; header budgets belong to
+  the HTTP server or edge.
 - `logger` may provide `error` and `warn` methods. Internal failures are sent
   to it as structured context but are never exposed in HTTP responses.
 
@@ -126,8 +147,7 @@ Invalid option types fail during startup.
 `InMemoryPaymentReplayStore` is the safe single-process default. It:
 
 - atomically claims each transaction ID once within one process;
-- retains claims after wallet errors because the acceptance outcome may be
-  ambiguous;
+- records only transactions the wallet reported as newly accepted;
 - refuses new claims when its fixed capacity is reached rather than evicting
   an older replay marker; and
 - loses all claims when the process restarts.
@@ -177,7 +197,7 @@ the required price. For free requests it is zero and `tx`/`txid` are empty.
 | 400    | `ERR_INVALID_PAYMENT`           | Atomic BEEF is invalid or output zero is underfunded                     |
 | 400    | `ERR_PAYMENT_FAILED`            | The wallet could not accept the payment                                  |
 | 402    | `ERR_PAYMENT_REQUIRED`          | A payment challenge was issued                                           |
-| 409    | `ERR_PAYMENT_REPLAYED`          | The transaction was claimed before or was not newly accepted             |
+| 409    | `ERR_PAYMENT_REPLAYED`          | The transaction was already claimed or was not newly accepted            |
 | 500    | `ERR_SERVER_MISCONFIGURED`      | Auth middleware did not provide a valid identity                         |
 | 500    | `ERR_PAYMENT_INTERNAL`          | Pricing failed or returned an invalid value                              |
 | 503    | `ERR_PAYMENT_UNAVAILABLE`       | Challenge creation or replay storage is unavailable                      |
@@ -199,12 +219,16 @@ credentialed CORS.
 - Run authentication first and authorization/payment routes after both
   middleware functions.
 - Use a durable atomic replay store for multiple processes or replicas.
-- Do not delete a replay claim automatically after an ambiguous wallet error.
+- Wallet errors and rejected remittances are never inserted into the replay
+  store; investigate an unavailable replay store promptly because the wallet
+  may already have accepted the transaction before that independent gate.
 - Monitor `409` and `503` rates and replay-store capacity.
 - Treat pricing as security-sensitive, deterministic request policy.
 - The wallet remains responsible for validating and safely internalizing the
   supplied BRC-29 remittance.
 - Apply normal request/header limits and rate limiting at the service edge.
+- Logger failures are contained and cannot interrupt payment authorization or
+  change the HTTP result.
 
 ## API
 

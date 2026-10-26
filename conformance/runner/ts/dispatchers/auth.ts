@@ -8,6 +8,7 @@
  */
 
 import { expect } from '@jest/globals'
+import { SimplifiedFetchTransport, Utils } from '@bsv/sdk'
 
 export const categories: ReadonlyArray<string> = ['brc31-handshake']
 
@@ -368,10 +369,55 @@ export function dispatch(
   throw new Error(`auth dispatcher: unknown category '${category}'`)
 }
 
+async function dispatchResponsePreimage(
+  input: Record<string, unknown>,
+  expected: Record<string, unknown>
+): Promise<void> {
+  const requestId = Utils.toArray(getString(input, 'request_id_hex'), 'hex')
+  const body = Utils.toArray(getString(input, 'body_hex'), 'hex')
+  const identityKey = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+  const response = new Response(body.length === 0 ? null : new Uint8Array(body), {
+    status: input['status'] as number,
+    headers: {
+      'x-bsv-auth-version': '0.1',
+      'x-bsv-auth-identity-key': identityKey,
+      'x-bsv-auth-request-id': Utils.toBase64(requestId),
+      'x-bsv-auth-signature': 'aabbcc'
+    }
+  })
+  const transport = new SimplifiedFetchTransport('https://fixture.invalid', async () => response)
+  let received = 0
+  await transport.onData(async message => {
+    expect(Utils.toHex(message.payload!)).toBe(expected['payload_hex'])
+    received++
+  })
+  const request = new Utils.Writer()
+  request.write(requestId)
+  for (const field of ['GET', '/api/resource']) {
+    const bytes = Utils.toArray(field, 'utf8')
+    request.writeVarIntNum(bytes.length)
+    request.write(bytes)
+  }
+  request.writeVarIntNum(-1) // absent query
+  request.writeVarIntNum(0) // no signed headers
+  request.writeVarIntNum(-1) // absent body
+  await transport.send({
+    version: '0.1',
+    messageType: 'general',
+    identityKey,
+    nonce: 'bm9uY2U=',
+    yourNonce: 'bm9uY2U=',
+    signature: [1],
+    payload: request.toArray()
+  })
+  expect(received).toBe(1)
+}
+
 function dispatchBRC31Handshake(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
-): void {
+): void | Promise<void> {
+  if (input['http_response_preimage'] === true) return dispatchResponsePreimage(input, expected)
   // Route by the path of the request (for HTTP vectors) or by special keys
   const path = getString(input, 'path')
   const schemaCheck = getBool(input, '_schema_check')

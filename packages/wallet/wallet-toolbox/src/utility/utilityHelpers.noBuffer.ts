@@ -1,4 +1,4 @@
-import { Utils } from '@bsv/sdk'
+import { toArray, toBase64, toHex, toUTF8, toUint8Array } from '@bsv/sdk/primitives/utils'
 
 /** Byte array, string, or Uint8Array accepted by buffer-coercion helpers */
 export type ByteInput = string | number[] | Uint8Array
@@ -14,11 +14,7 @@ export type ByteEncoding = 'hex' | 'utf8' | 'base64'
  * @returns hex encoded string representation of val.
  * @publicbody
  */
-export function asString (
-  val: ByteInput,
-  enc?: ByteEncoding,
-  returnEnc?: ByteEncoding
-): string {
+export function asString(val: ByteInput, enc?: ByteEncoding, returnEnc?: ByteEncoding): string {
   enc ||= 'hex'
   returnEnc ||= enc
   if (typeof val === 'string') {
@@ -28,11 +24,11 @@ export function asString (
   const v = Array.isArray(val) ? val : Array.from(val)
   switch (returnEnc) {
     case 'utf8':
-      return Utils.toUTF8(v)
+      return toUTF8(v)
     case 'base64':
-      return Utils.toBase64(v)
+      return toBase64(v)
   }
-  return Utils.toHex(v)
+  return toHex(v)
 }
 
 /**
@@ -42,11 +38,11 @@ export function asString (
  * @returns number[] array of byte values representation of val.
  * @publicbody
  */
-export function asArray (val: ByteInput, enc?: ByteEncoding): number[] {
+export function asArray(val: ByteInput, enc?: ByteEncoding): number[] {
   if (Array.isArray(val)) return val
   if (typeof val !== 'string') return Array.from(val)
   enc ||= 'hex'
-  const a: number[] = Utils.toArray(val, enc)
+  const a: number[] = toArray(val, enc)
   return a
 }
 
@@ -57,9 +53,9 @@ export function asArray (val: ByteInput, enc?: ByteEncoding): number[] {
  * @returns Uint8Array representation of val.
  * @publicbody
  */
-export function asUint8Array (val: ByteInput, enc?: ByteEncoding): Uint8Array {
+export function asUint8Array(val: ByteInput, enc?: ByteEncoding): Uint8Array {
   if (Array.isArray(val)) return Uint8Array.from(val)
   if (typeof val !== 'string') return val
   enc ||= 'hex'
-  return Utils.toUint8Array(val, enc)
+  return toUint8Array(val, enc)
 }

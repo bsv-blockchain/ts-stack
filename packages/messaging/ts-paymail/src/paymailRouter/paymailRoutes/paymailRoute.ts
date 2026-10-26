@@ -47,14 +47,25 @@ export default class PaymailRoute {
         if (error instanceof PaymailBadRequestError) throw error
         throw new PaymailBadRequestError(error instanceof Error ? error.message : String(error))
       }
-      if (!req.params.paymail) {
+      if (typeof req.params.paymail !== 'string' || req.params.paymail.length === 0) {
         throw new PaymailBadRequestError('Paymail handle is required.')
       }
-      const response = await this.domainLogicHandler(
-        req.params as PaymailRouteParams,
-        validatedBody
+      if (parsePaymail(req.params.paymail) == null) {
+        throw new PaymailBadRequestError('Invalid Paymail handle.')
+      }
+      const validatedParams = this.validateParams(req.params as PaymailRouteParams)
+      // Capture the evidence used by response checks before application code
+      // runs. Domain handlers may legitimately normalize or annotate their
+      // input, but those mutations must never move a check away from the
+      // request that arrived on the wire.
+      const responseValidationParams = this.snapshotValidatedParams(validatedParams)
+      const responseValidationBody = this.snapshotValidatedBody(validatedBody)
+      const response = await this.domainLogicHandler(validatedParams, validatedBody)
+      const serializedResponse = this.serializeResponse(
+        response,
+        responseValidationBody,
+        responseValidationParams
       )
-      const serializedResponse = this.serializeResponse(response)
       this.sendSuccessResponse(res, serializedResponse)
     } catch (error) {
       next(error)
@@ -65,7 +76,25 @@ export default class PaymailRoute {
     return body
   }
 
-  protected serializeResponse(response: unknown): string {
+  protected validateParams(params: PaymailRouteParams): PaymailRouteParams {
+    return params
+  }
+
+  /** Captures response-validation evidence before domain logic can mutate its input. */
+  protected snapshotValidatedBody(body: unknown): unknown {
+    return body
+  }
+
+  /** Captures route identity evidence before domain logic can mutate its input. */
+  protected snapshotValidatedParams(params: PaymailRouteParams): PaymailRouteParams {
+    return Object.fromEntries(Object.entries(params)) as PaymailRouteParams
+  }
+
+  protected serializeResponse(
+    response: unknown,
+    _validatedBody?: unknown,
+    _validatedParams?: PaymailRouteParams
+  ): string {
     return JSON.stringify(response)
   }
 
@@ -87,6 +116,10 @@ export default class PaymailRoute {
 
   public getMethod(): 'GET' | 'POST' {
     return this.capability.getMethod()
+  }
+
+  public getSenderValidationMode(): 'not-applicable' | 'required' | 'disabled' {
+    return 'not-applicable'
   }
 
   static getNameAndDomain(params: PaymailRouteParams): {

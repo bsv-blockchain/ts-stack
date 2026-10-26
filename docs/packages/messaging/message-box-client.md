@@ -3,10 +3,10 @@ id: pkg-message-box-client
 title: '@bsv/message-box-client'
 kind: package
 domain: messaging
-version: '2.5.1'
+version: '2.7.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-08'
-last_verified: '2026-09-08'
+last_updated: '2026-10-21'
+last_verified: '2026-10-21'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/message-box-client'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/message-box-client'
@@ -16,9 +16,21 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 # @bsv/message-box-client
 
+This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 > Browser- and Node-compatible authenticated store-and-forward messaging,
 > live WebSockets, peer payments, token settlement, permissions, quotes, and
 > push-device registration.
+
+The 2.7.0 release repairs live WebSocket delivery. A dropped socket is kept while Socket.IO reconnects it instead of being abandoned while it reconnects underneath, and the rooms a caller asked for are joined again once the new connection authenticates, because membership belongs to the server-side socket that joined. A server-forced disconnect, which Socket.IO never retries, triggers a rebuild: immediately the first time, then doubling from one second to a thirty-second cap. One listener per room serves every subscriber and one acknowledgement listener serves every send, in place of listeners that accumulated because the socket wrapper has no `off`. The client now reads the server's `joinedRoom` and `joinFailed`, so a refused join no longer leaves it certain of a room it was never given; correcting the record needs a server that names the refused room, which ships alongside this release, and against any other server the client records joins as it always did. A refused join is dropped from the reported live status at once. Joins are paced at 16 awaiting the server's answer per socket, the rest following as answers arrive or after five seconds without one, because the server drops a socket with more than 32 signed messages in process. `sendLiveMessage()` falls back to HTTP when the socket cannot be established, authenticated or joined, instead of throwing; a conflicting WebSocket identity pin still throws. A live message is delivered a tick after it arrives rather than synchronously, which was already true whenever it was encrypted.
+
+The 2.6.0 source candidate adds optional `paymentOutcome` and `payment` fields to the `PeerMessage` values returned by `listMessages()` and `listMessagesLite()`, so a payment the wallet did not store is no longer lost when its message is acknowledged. See [Payment acceptance and acknowledgment ordering](#payment-acceptance-and-acknowledgment-ordering).
+
+The 2.5.4 release raised the `@bsv/sdk` peer floor to `^2.8.6`: SDK 2.8.0 through 2.8.5 reject every valid incoming BRC-29 payment in `PeerPayClient.acceptPayment()` and `rejectPayment()` because the recipient key is derived without `forSelf`. That release changed peer metadata without changing source.
+
+The 2.5.3 release fixes the CommonJS build (`new MessageBoxClient()` failed with `LookupResolver.default is not a constructor` under `require()`). `sendMessage()` HTTP failures now append the server's well-formed failure code, for example `Message Box send failed with HTTP 400 (ERR_DUPLICATE_MESSAGE).`; free-text server descriptions are never copied into errors. That 2.5.3 release required `^2.8.0`, the first SDK release providing modules this package already required.
 
 ## Install
 
@@ -27,7 +39,9 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
-Use SDK 2.4.1 or newer so BRC-29 sends accept both historical `number[]` and
+The current candidate requires `^2.8.6 || ^3.0.0 || ^4.0.0`; use SDK2.8.6 or newer within
+the SDK2 family, or the proposed SDK3 candidate after the linked qualification. The package imports SDK validation modules first
+shipped in 2.8.0, and SDK 2.8.6 fixes BRC-29 payment acceptance. BRC-29 sends accept both historical `number[]` and
 binary Wallet Wire `Uint8Array` transaction results. Payment receipt also
 recovers pending typed-array tokens serialized through JSON as numeric-key
 objects.
@@ -56,13 +70,20 @@ await client.acknowledgeMessage({
 })
 ```
 
+Before acknowledging a message that carried a payment, check its
+`paymentOutcome`: unless it is `'internalized'`, the payment is returned as
+`payment` and must be stored first, because the message holds the only copy of
+its derivation data.
+
 Initialization is automatic. Call `init()` only when explicit startup control
 is useful.
 
 ## What it provides
 
 - `MessageBoxClient` — authenticated HTTP polling and live WebSocket delivery,
-  with selectable socket transports
+  with selectable socket transports, rooms restored across reconnects, a
+  bounded rebuild after a server-forced disconnect, and `onLiveStatus` for
+  observing all of it
 - encryption through the BRC-100 wallet protocol, enabled by default
 - overlay host advertisement and public-HTTPS discovery
 - sender-specific and box-wide permissions with fee quotes
@@ -71,12 +92,58 @@ is useful.
 - `PeerTokenClient` — token transport through pluggable settlement adapters
 - `RemittanceAdapter` — SDK remittance communication integration
 
+## Live delivery is not a substitute for polling
+
+A live message reaches only the sockets held by the server process that served
+the send, so a scaled-out deployment without a shared broker will not reach a
+recipient joined elsewhere. A send carrying a payment is never pushed at all:
+the push carries the request body, which holds no payment, and only
+`listMessages()` internalizes a recipient payment. A consumer that
+acknowledges on the push would delete the stored row before its wallet had the
+output.
+
+`onLiveStatus(listener)` reports the socket's state — `connecting`, `live`
+with its joined rooms (requested on the current socket and not refused by the
+server, recorded when requested), `reconnecting` when something will restore it, or
+`closed` when nothing will — and returns a function that unsubscribes. It
+describes the socket, not delivery.
+
+`listMessages()` therefore remains required for correctness rather than as a
+fallback. `getJoinedRooms()` reports the rooms joined on the current socket, in
+the same sense; mutating the returned set does not cancel a rejoin, so use
+`leaveRoom()`. There is no raw Socket.IO connect/disconnect event to subscribe
+to; use `onLiveStatus`.
+
 ## Security and interoperability
 
-Configured hosts must be absolute HTTP(S) URLs without credentials, query
-strings, or fragments. HTTP is retained for operator-controlled local
-development. Untrusted overlay destinations require HTTPS and cannot target
-local, private, link-local, reserved, or documentation-only hosts.
+Configured hosts require HTTPS except on loopback and must be exact absolute
+URLs without whitespace, credentials, query strings, fragments, or control
+characters. Every HTTP result must carry a canonical server identity proven by
+BRC-103 mutual authentication; ordinary AuthFetch fallback is rejected. The
+first authenticated identity remains authoritative per origin for the client
+instance, or applications can supply durable, independently validated
+`serverIdentityKeysByHost` pins.
+
+Untrusted overlay destinations require public HTTPS and cannot target local,
+private, link-local, reserved, or documentation-only hosts. Returned BEEF,
+output indexes, canonical PushDrop fields, the requested identity, and the
+advertisement signature are independently bounded and verified. A lookup
+provider proposes routing candidates but is not itself routing authority.
+
+The client snapshots outgoing send authority before its first asynchronous
+operation. Recipients must be canonical public keys; message-box names,
+caller-supplied IDs, bodies, recipient arrays, and JSON object graphs are
+bounded and accessor-free. Authenticated send results must correlate their
+recipient and message ID to the request.
+
+Delivery quotes are untrusted financial input even though their transport is
+authenticated. Each requested recipient and message-box name must appear
+exactly once, fee/status/block fields must agree, and only bounded safe-integer
+amounts enter arithmetic. `maximumPayment` is an optional independent ceiling
+for `sendMessage` and shared plaintext batches. Before returning a payment
+envelope, the client parses the wallet's Atomic BEEF and binds every requested
+script and satoshi amount at the exact remittance output index. The Message Box
+states its price; the wallet remains the final spending authority.
 
 Message Box remains accessible from arbitrary deployed browser origins by
 default. Server-side exact-origin allowlists or disabled CORS are operator
@@ -108,16 +175,39 @@ payment can be acknowledged immediately. Failures, incomplete envelopes and paym
 remain queued. Its boolean return contract is unchanged: `false` can
 mean no payment or a retained failed payment.
 
+Incoming payment envelopes accept Atomic BEEF up to 32 MiB and at most 101
+payment outputs, matching the existing 100-recipient batch plus delivery-fee
+output contract. The client snapshots those fields independently so a valid
+large transaction is not rejected by the smaller generic JSON-graph limit;
+sparse arrays, accessors, non-byte values, and oversized fields still fail
+closed before wallet work.
+
 `acceptPayment` also requires affirmative wallet acceptance before acknowledgment.
 For refundable amounts, `rejectPayment` internalizes first, sends the refund,
 and then acknowledges. A failed internalization prevents both refund and
 acknowledgment; a failed refund send leaves the message queued. The existing
 small-payment policy is unchanged.
 
-This is the initial ordering remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
+`listMessages` and `listMessagesLite` set `paymentOutcome` on each message
+that carried a payment: `'internalized'` (the wallet accepted it), `'failed'`
+(internalizing threw, the wallet refused it, or the payment was malformed),
+`'skipped'` (not attempted: `acceptPayments: false`, or always for
+`listMessagesLite`) or `'no-wallet-outputs'`. Unless the outcome is
+`'internalized'`, the raw, unvalidated envelope payment is kept on the message as
+`payment`; validate and store it before acknowledging the message. Messages
+without a payment carry neither field.
+
+This is the ordering and list-outcome remediation for [issue #503](https://github.com/bsv-blockchain/ts-stack/issues/503).
 It does not provide a durable refund journal or exactly-once delivery. Reconcile
 uncertain refund-send outcomes before retrying, since a send may have completed
-before its response was lost. Payment-envelope retention and outcome reporting
-through `listMessages`/`listMessagesLite`, basket-insertion policy, and resumable
-refund semantics remain open. Use the original envelope for notification payment
+before its response was lost. Basket-insertion policy, mixed-output failures and
+resumable refund semantics remain open. Use the original envelope for notification payment
 processing; a plain acknowledgment is not evidence that a payment was accepted.
+
+Payment and token request fulfillment is not cross-process or cross-crash
+exactly once. Persist each authenticated request ID and sender together with
+every attempted or completed settlement transaction ID. Before fulfillment or
+retry, reject a transaction ID already associated with a different request and
+reject a different transaction ID for a request whose outcome is still
+uncertain. Reconcile the wallet and peer first; in-memory serialization does
+not prevent another service process from replaying the same request.

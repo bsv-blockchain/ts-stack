@@ -47,6 +47,30 @@ rollout. Apply the database change first, wait for its probes, then update the W
 digest. Roll back to the prior digest only when its schema compatibility is
 verified; otherwise restore through the database recovery runbook.
 
+The `2026-09-21-001-faucet-claim-backfill` migration is an explicit exception to
+that rolling procedure. Enter maintenance mode, remove WAB from traffic, drain
+and stop every old replica, verify that no old process can write the database,
+and take a restorable backup. With traffic still blocked, start one new-image
+replica to apply and verify the migration, then deploy only that new image to all
+remaining replicas before restoring traffic. Do not roll a migrated database
+back to an old WAB image: its legacy link/unlink paths can erase the monotonic
+claim evidence and reopen faucet reclaim. Roll forward, or restore the old image
+and the pre-migration database together while all traffic remains stopped. The
+payment-reservation migration refuses to roll down while any payment row exists;
+never delete payout evidence merely to make an old image start.
+
+Database snapshots alone do not close the faucet recovery boundary: an
+irreversible wallet action can succeed after the snapshot whose claim and
+payment rows are then lost by a snapshot-only restore. Retain point-in-time
+database logs and independently protected wallet/audit evidence through the
+latest faucet action. After any restore, keep `/faucet/request` unavailable at
+the ingress until every wallet action after the restored snapshot is correlated
+to its payment row and authentication identities. Reconstruct the payment and
+`receivedFaucet` markers before resuming traffic; if an identity association
+cannot be proved, conservatively mark every plausible identity as having
+received the faucet. Never reopen the faucet merely because the restored
+snapshot lacks a claim.
+
 The presentation-key migration is additive and leaves existing plaintext rows
 unchanged, so it can be applied before or during a rolling WAB deployment. The
 sample secret reference is optional: with no mode or key, the new binary stays

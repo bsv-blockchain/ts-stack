@@ -204,7 +204,6 @@ export function buildChaintracksOptionsWithIngestors(
     bulkIngestors: [],
     liveIngestors: [],
     addLiveRecursionLimit,
-    logging: (...args) => console.log(new Date().toISOString(), ...args),
     readonly: false
   }
 
@@ -253,7 +252,8 @@ export function buildChaintracksOptionsWithIngestors(
     const bulkOptions: BulkIngestorWhatsOnChainOptions = {
       ...wocOptions,
       jsonResource,
-      idleWait: 5000
+      idleWait: 5000,
+      fetch
     }
     co.bulkIngestors.push(new BulkIngestorWhatsOnChainCdn(bulkOptions))
 

@@ -3,7 +3,7 @@
   "id": "auth.brc31-handshake",
   "name": "BRC-103 Mutual Authentication and BRC-104 HTTP Transport",
   "brc": ["BRC-103", "BRC-104"],
-  "version": "1.1.0",
+  "version": "1.2.0",
   "reference_impl": "packages/sdk",
   "parity_class": "required",
   "vectors": [
@@ -426,6 +426,76 @@
         }
       },
       "tags": ["brc-103", "phase-2", "error", "signing-failure"]
+    },
+    {
+      "id": "auth.brc31-handshake.17",
+      "description": "BRC-104 HTTP 204 response preimage with an empty body",
+      "input": {
+        "http_response_preimage": true,
+        "status": 204,
+        "body_hex": "",
+        "request_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1fcc00ffffffffffffffffff"
+      },
+      "tags": ["brc-104", "response", "wire-bytes"]
+    },
+    {
+      "id": "auth.brc31-handshake.18",
+      "description": "BRC-104 HTTP 401 response preimage with an empty body",
+      "input": {
+        "http_response_preimage": true,
+        "status": 401,
+        "body_hex": "",
+        "request_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1ffd910100ffffffffffffffffff"
+      },
+      "tags": ["brc-104", "response", "wire-bytes"]
+    },
+    {
+      "id": "auth.brc31-handshake.19",
+      "description": "BRC-104 HTTP 403 response preimage with an empty body",
+      "input": {
+        "http_response_preimage": true,
+        "status": 403,
+        "body_hex": "",
+        "request_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1ffd930100ffffffffffffffffff"
+      },
+      "tags": ["brc-104", "response", "wire-bytes"]
+    },
+    {
+      "id": "auth.brc31-handshake.20",
+      "description": "BRC-104 HTTP 404 response preimage with an empty body",
+      "input": {
+        "http_response_preimage": true,
+        "status": 404,
+        "body_hex": "",
+        "request_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1ffd940100ffffffffffffffffff"
+      },
+      "tags": ["brc-104", "response", "wire-bytes"]
+    },
+    {
+      "id": "auth.brc31-handshake.21",
+      "description": "BRC-104 HTTP 404 response preimage with three raw body bytes",
+      "input": {
+        "http_response_preimage": true,
+        "status": 404,
+        "body_hex": "010203",
+        "request_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+      },
+      "expected": {
+        "payload_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1ffd94010003010203"
+      },
+      "tags": ["brc-104", "response", "wire-bytes"]
     }
   ]
 }

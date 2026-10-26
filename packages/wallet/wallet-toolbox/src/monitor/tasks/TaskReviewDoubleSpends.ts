@@ -1,13 +1,18 @@
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import { Monitor } from '../Monitor'
+import {
+  MAX_MONITOR_INTERVAL_MSECS,
+  MAX_MONITOR_OFFSET,
+  MAX_MONITOR_PAGE_SIZE,
+  optionalMonitorInteger,
+  requireMonitorInteger
+} from '../monitorValidation'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
-function hasDurableInputConflict (req: TableProvenTxReq): boolean {
+function hasDurableInputConflict(req: TableProvenTxReq): boolean {
   try {
     const history = JSON.parse(req.history) as { notes?: Array<Record<string, unknown>> }
-    return history.notes?.some(note =>
-      note.inputConflict === true || note.what === 'arcSSEInputQuarantine'
-    ) === true
+    return history.notes?.some(note => note.inputConflict === true || note.what === 'arcSSEInputQuarantine') === true
   } catch {
     // Malformed legacy history must never weaken a terminal decision.
     return true
@@ -33,12 +38,16 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
   static readonly taskName = 'ReviewDoubleSpends'
 
   private static checkNowRequested = false
-  static get checkNow (): boolean { return this.checkNowRequested }
-  static set checkNow (value: boolean) { this.checkNowRequested = value }
+  static get checkNow(): boolean {
+    return this.checkNowRequested
+  }
+  static set checkNow(value: boolean) {
+    this.checkNowRequested = value
+  }
 
   triggerNextMsecs: number
 
-  constructor (
+  constructor(
     monitor: Monitor,
     public triggerMsecs = Monitor.oneMinute * 12,
     public reviewLimit = 100,
@@ -46,10 +55,14 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     public triggerQuickMsecs = Monitor.oneMinute * 1
   ) {
     super(monitor, TaskReviewDoubleSpends.taskName)
+    requireMonitorInteger(triggerMsecs, 'triggerMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
+    requireMonitorInteger(reviewLimit, 'reviewLimit', 1, MAX_MONITOR_PAGE_SIZE)
+    requireMonitorInteger(minAgeMinutes, 'minAgeMinutes', 0, MAX_MONITOR_INTERVAL_MSECS / Monitor.oneMinute)
+    requireMonitorInteger(triggerQuickMsecs, 'triggerQuickMsecs', 0, MAX_MONITOR_INTERVAL_MSECS)
     this.triggerNextMsecs = this.triggerQuickMsecs
   }
 
-  trigger (nowMsecsSinceEpoch: number): { run: boolean } {
+  trigger(nowMsecsSinceEpoch: number): { run: boolean } {
     return {
       run:
         TaskReviewDoubleSpends.checkNow ||
@@ -57,7 +70,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     }
   }
 
-  async getLastReviewedCheckpoint (): Promise<{ resumeOffset: number, expectedProvenTxReqId?: number } | undefined> {
+  async getLastReviewedCheckpoint(): Promise<{ resumeOffset: number; expectedProvenTxReqId?: number } | undefined> {
     let events: Array<{ details?: string }> = []
     await this.storage.runAsStorageProvider(async sp => {
       events = await sp.findMonitorEvents({
@@ -71,10 +84,11 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
       if (!event.details) continue
       try {
         const parsed = JSON.parse(event.details) as Partial<ReviewDoubleSpendsCheckpoint>
-        if (typeof parsed.resumeOffset === 'number') {
+        const resumeOffset = optionalMonitorInteger(parsed.resumeOffset, 0, MAX_MONITOR_OFFSET)
+        if (resumeOffset !== undefined) {
           return {
-            resumeOffset: parsed.resumeOffset,
-            expectedProvenTxReqId: parsed.expectedProvenTxReqId
+            resumeOffset,
+            expectedProvenTxReqId: optionalMonitorInteger(parsed.expectedProvenTxReqId, 1, MAX_MONITOR_OFFSET)
           }
         }
       } catch {
@@ -85,7 +99,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     return undefined
   }
 
-  async runTask (): Promise<string> {
+  async runTask(): Promise<string> {
     TaskReviewDoubleSpends.checkNow = false
 
     const checkpoint = await this.getLastReviewedCheckpoint()
@@ -106,7 +120,7 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
 
     for (const req of reqs) {
       const gsr = await this.monitor.services.getStatusForTxids([req.txid])
-      const status = gsr.status === 'success' ? gsr.results[0]?.status : undefined
+      const status = gsr.status === 'success' ? gsr.results.find(result => result.txid === req.txid)?.status : undefined
       const durableInputConflict = hasDurableInputConflict(req)
       reviewed.push(req)
       const canUnfail = status === 'mined' || (status === 'known' && !durableInputConflict)
@@ -138,11 +152,11 @@ export class TaskReviewDoubleSpends extends WalletMonitorTask {
     } satisfies ReviewDoubleSpendsCheckpoint)
   }
 
-  private async findReqsToReview (
-    checkpoint: { resumeOffset: number, expectedProvenTxReqId?: number } | undefined,
+  private async findReqsToReview(
+    checkpoint: { resumeOffset: number; expectedProvenTxReqId?: number } | undefined,
     updatedBefore: Date
   ): Promise<TableProvenTxReq[] & { sourceOffset?: number }> {
-    let offset = checkpoint?.resumeOffset || 0
+    let offset = checkpoint?.resumeOffset ?? 0
 
     if (checkpoint?.expectedProvenTxReqId !== undefined) {
       const verify = await this.storage.findProvenTxReqs({

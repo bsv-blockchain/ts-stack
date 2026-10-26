@@ -52,16 +52,37 @@ export type Topic =
   | 'bitcoin/testnet-handshake'
   | 'bitcoin/testnet-rejected_tx'
 
+const VALID_TOPICS = new Set<Topic>([
+  'bitcoin/mainnet-bestblock',
+  'bitcoin/mainnet-block',
+  'bitcoin/mainnet-subtree',
+  'bitcoin/mainnet-mining_on',
+  'bitcoin/mainnet-handshake',
+  'bitcoin/mainnet-rejected_tx',
+  'bitcoin/testnet-bestblock',
+  'bitcoin/testnet-block',
+  'bitcoin/testnet-subtree',
+  'bitcoin/testnet-mining_on',
+  'bitcoin/testnet-handshake',
+  'bitcoin/testnet-rejected_tx'
+])
+
 export type TopicCallbacks = Partial<Record<Topic, MessageCallback | DecodedMessageCallback>>
 
 export interface SubscriberConfig {
   bootstrapPeers?: string[] // Array of bootstrap peer multiaddrs
   staticPeers?: string[] // Optional array of static peer multiaddrs
-  sharedKey?: string // Hex string of the shared PSK (without headers)
+  /**
+   * 32-byte PNET key encoded as 64 hexadecimal characters. The default
+   * Teranode mainnet value is a public compatibility key, not a secret or an
+   * authentication credential.
+   */
+  sharedKey?: string
   dhtProtocolID?: string // DHT protocol prefix, default '/teranode'
   topics?: Topic[] // Array of topics to subscribe to
   listenAddresses?: string[] // Listening addresses
-  usePrivateDHT?: boolean // Whether to use private DHT
+  /** Whether to enable the Kademlia DHT service. Defaults to true. */
+  usePrivateDHT?: boolean
   /**
    * When true, raw GossipSub bytes are decoded from the two-layer JSON wire
    * format before being handed to callbacks. Callbacks then receive a
@@ -76,6 +97,47 @@ export interface TeranodeListenerConfig extends Omit<SubscriberConfig, 'topics'>
   // Inherits all SubscriberConfig options except topics
 }
 
+const CONFIG_KEYS = new Set<keyof TeranodeListenerConfig>([
+  'bootstrapPeers',
+  'staticPeers',
+  'sharedKey',
+  'dhtProtocolID',
+  'listenAddresses',
+  'usePrivateDHT',
+  'decodeMessages'
+])
+
+function hasControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)
+    if (codePoint !== undefined && (codePoint <= 31 || codePoint === 127)) return true
+  }
+  return false
+}
+
+function snapshotTopics(value: unknown): Topic[] {
+  if (!Array.isArray(value) || value.length > VALID_TOPICS.size) {
+    throw new TypeError('topics must contain only supported unique Teranode topics')
+  }
+  const topics: Topic[] = []
+  for (let index = 0; index < value.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+    if (
+      descriptor === undefined ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'string' ||
+      !VALID_TOPICS.has(descriptor.value as Topic)
+    ) {
+      throw new TypeError('topics must contain only supported unique Teranode topics')
+    }
+    topics.push(descriptor.value as Topic)
+  }
+  if (new Set(topics).size !== topics.length) {
+    throw new TypeError('topics must contain only supported unique Teranode topics')
+  }
+  return topics
+}
+
 /**
  * TeranodeListener provides a callback-based API for subscribing to Teranode P2P topics.
  * Each topic can have its own callback function for handling messages.
@@ -86,8 +148,13 @@ export class TeranodeListener {
   private readonly config: TeranodeListenerConfig
   private reconnectionInterval?: NodeJS.Timeout
   private readonly decodeMessages: boolean
+  private startPromise?: Promise<void>
+  private stopPromise?: Promise<void>
+  private reconnectionPromise?: Promise<void>
   private readonly shutdownHandler = (): void => {
-    void this.stop()
+    void this.stop().catch(error => {
+      console.error('Failed to stop TeranodeListener:', error)
+    })
   }
 
   /**
@@ -105,25 +172,39 @@ export class TeranodeListener {
    * @param config - Optional configuration (uses Teranode mainnet defaults)
    */
   constructor(topicCallbacks: TopicCallbacks, config: TeranodeListenerConfig = {}) {
-    this.topicCallbacks = topicCallbacks
-    this.config = config
-    this.decodeMessages = config.decodeMessages ?? false
+    this.topicCallbacks = this.snapshotTopicCallbacks(topicCallbacks)
+    this.config = this.snapshotConfig(config)
+    this.decodeMessages = this.config.decodeMessages ?? false
   }
 
   /**
    * Start the P2P listener and subscribe to topics
    */
   async start(): Promise<void> {
+    if (this.stopPromise) await this.stopPromise
     if (this.node) {
       console.warn('TeranodeListener is already started')
       return
     }
 
-    const topics = Object.keys(this.topicCallbacks) as Topic[]
-    const fullConfig: SubscriberConfig = {
-      ...this.config,
-      topics
+    if (this.startPromise) {
+      await this.startPromise
+      return
     }
+
+    const operation = this.startOnce()
+    this.startPromise = operation
+    try {
+      await operation
+    } finally {
+      if (this.startPromise === operation) this.startPromise = undefined
+    }
+  }
+
+  private async startOnce(): Promise<void> {
+    if (this.stopPromise) await this.stopPromise
+
+    const topics = Object.keys(this.topicCallbacks) as Topic[]
 
     // Create the libp2p node using the same logic as startSubscriber
     const {
@@ -139,16 +220,21 @@ export class TeranodeListener {
       ],
       sharedKey = '285b49e6d910726a70f205086c39cbac6d8dcc47839053a21b1f614773bbc137',
       dhtProtocolID = '/teranode',
-      listenAddresses = ['/ip4/127.0.0.1/tcp/9901']
-    } = fullConfig
+      listenAddresses = ['/ip4/127.0.0.1/tcp/9901'],
+      usePrivateDHT = true
+    } = this.config
+
+    if (!/^[0-9a-f]{64}$/iu.test(sharedKey)) {
+      throw new TypeError('sharedKey must encode exactly 32 bytes as hexadecimal')
+    }
 
     // Format the PSK
-    const pskText = `/key/swarm/psk/1.0.0/\n/base16/\n${sharedKey}`
+    const pskText = `/key/swarm/psk/1.0.0/\n/base16/\n${sharedKey.toLowerCase()}`
     const psk = new TextEncoder().encode(pskText)
     const connectionProtector = preSharedKey({ psk })
     const privateKey: PrivateKey = await generateKeyPair('Ed25519')
 
-    this.node = await createLibp2p({
+    const candidate = await createLibp2p({
       privateKey,
       addresses: {
         listen: listenAddresses
@@ -165,12 +251,16 @@ export class TeranodeListener {
         })
       ],
       services: {
-        dht: kadDHT({
-          protocol: `${dhtProtocolID}/kad/1.0.0`,
-          clientMode: false,
-          validators: {},
-          selectors: {}
-        }),
+        ...(usePrivateDHT
+          ? {
+              dht: kadDHT({
+                protocol: `${dhtProtocolID}/kad/1.0.0`,
+                clientMode: false,
+                validators: {},
+                selectors: {}
+              })
+            }
+          : {}),
         pubsub: gossipsub({
           allowPublishToZeroTopicPeers: true,
           emitSelf: false,
@@ -186,32 +276,57 @@ export class TeranodeListener {
       }
     })
 
-    await this.node.start()
-    console.log('TeranodeListener started with Peer ID:', this.node.peerId.toString())
+    try {
+      await candidate.start()
+      this.node = candidate
+      console.log('TeranodeListener started with Peer ID:', candidate.peerId.toString())
 
-    // Set up event listeners
-    this.setupEventListeners()
+      this.setupEventListeners()
+      this.setupTopicSubscriptions()
 
-    // Subscribe to topics with callbacks
-    this.setupTopicSubscriptions()
+      if (staticPeers.length > 0) {
+        await this.connectToStaticPeers(staticPeers)
+        this.reconnectionInterval = this.startStaticPeerMonitoring(staticPeers)
+      }
 
-    // Connect to static peers if provided
-    if (staticPeers.length > 0) {
-      await this.connectToStaticPeers(staticPeers)
-      this.reconnectionInterval = this.startStaticPeerMonitoring(staticPeers)
+      process.once('SIGINT', this.shutdownHandler)
+    } catch (error) {
+      if (this.reconnectionInterval) clearInterval(this.reconnectionInterval)
+      this.reconnectionInterval = undefined
+      this.node = null
+      process.removeListener('SIGINT', this.shutdownHandler)
+      try {
+        await candidate.stop()
+      } catch (stopError) {
+        console.error('Failed to clean up a partially started TeranodeListener:', stopError)
+      }
+      throw error
     }
-
-    // Handle graceful shutdown
-    process.once('SIGINT', this.shutdownHandler)
   }
 
   /**
    * Stop the P2P listener
    */
   async stop(): Promise<void> {
-    if (!this.node) {
-      return
+    if (this.stopPromise) return await this.stopPromise
+    const operation = this.stopOnce()
+    this.stopPromise = operation
+    try {
+      await operation
+    } finally {
+      if (this.stopPromise === operation) this.stopPromise = undefined
     }
+  }
+
+  private async stopOnce(): Promise<void> {
+    if (this.startPromise) {
+      try {
+        await this.startPromise
+      } catch {
+        return
+      }
+    }
+    if (!this.node) return
 
     console.log('Stopping TeranodeListener...')
 
@@ -219,10 +334,15 @@ export class TeranodeListener {
       clearInterval(this.reconnectionInterval)
       this.reconnectionInterval = undefined
     }
+    if (this.reconnectionPromise) await this.reconnectionPromise
 
-    await this.node.stop()
-    this.node = null
     process.removeListener('SIGINT', this.shutdownHandler)
+    const candidate = this.node
+    try {
+      await candidate.stop()
+    } finally {
+      if (this.node === candidate) this.node = null
+    }
     console.log('TeranodeListener stopped')
   }
 
@@ -230,6 +350,8 @@ export class TeranodeListener {
    * Add a new topic callback
    */
   addTopicCallback(topic: Topic, callback: MessageCallback | DecodedMessageCallback): void {
+    this.assertTopic(topic)
+    if (typeof callback !== 'function') throw new TypeError('topic callback must be a function')
     this.topicCallbacks[topic] = callback
 
     if (this.node) {
@@ -242,6 +364,7 @@ export class TeranodeListener {
    * Remove a topic callback
    */
   removeTopicCallback(topic: Topic): void {
+    this.assertTopic(topic)
     delete this.topicCallbacks[topic]
 
     if (this.node) {
@@ -311,7 +434,7 @@ export class TeranodeListener {
           console.error(`Error in callback for topic ${topicKey}:`, error)
         }
       } else {
-        console.log(`Received message on unhandled topic "${msg.topic}"`)
+        console.log('Received message on an unhandled topic')
       }
     })
 
@@ -342,48 +465,188 @@ export class TeranodeListener {
   }
 
   private startStaticPeerMonitoring(staticPeers: string[]): NodeJS.Timeout {
-    return setInterval(async () => {
-      if (!this.node) return
-
-      const connectedPeerIds = new Set(this.node.getPeers().map(p => p.toString()))
-      const disconnectedStaticPeers = []
-
-      for (const staticPeer of staticPeers) {
+    return setInterval(() => {
+      if (!this.node || this.reconnectionPromise) return
+      const activeNode = this.node
+      const operation = (async () => {
         try {
-          const peerIdMatch = /\/p2p\/([^/]+)$/.exec(staticPeer)
-          if (peerIdMatch) {
-            const peerId = peerIdMatch[1]
-            if (!connectedPeerIds.has(peerId)) {
-              disconnectedStaticPeers.push(staticPeer)
+          const connectedPeerIds = new Set(activeNode.getPeers().map(p => p.toString()))
+          const disconnectedStaticPeers: string[] = []
+
+          for (const staticPeer of staticPeers) {
+            const peerIdMatch = /\/p2p\/([^/]+)$/.exec(staticPeer)
+            if (peerIdMatch) {
+              const peerId = peerIdMatch[1]
+              if (!connectedPeerIds.has(peerId)) {
+                disconnectedStaticPeers.push(staticPeer)
+              }
             }
           }
-        } catch (error) {
-          console.error(`Error checking static peer ${staticPeer}:`, error)
-        }
-      }
 
-      if (disconnectedStaticPeers.length > 0) {
-        console.log(
-          `Reconnecting to ${disconnectedStaticPeers.length} disconnected static peers...`
-        )
-        await this.connectToStaticPeers(disconnectedStaticPeers)
-      }
+          if (disconnectedStaticPeers.length > 0) {
+            console.log(
+              `Reconnecting to ${disconnectedStaticPeers.length} disconnected static peers...`
+            )
+            await this.connectToStaticPeers(disconnectedStaticPeers)
+          }
+        } catch (error) {
+          console.error('Error monitoring static Teranode peers:', error)
+        }
+      })()
+      this.reconnectionPromise = operation
+      void operation.finally(() => {
+        if (this.reconnectionPromise === operation) this.reconnectionPromise = undefined
+      })
     }, 30000) // 30 seconds
+  }
+
+  private snapshotTopicCallbacks(callbacks: TopicCallbacks): TopicCallbacks {
+    if (
+      callbacks === null ||
+      typeof callbacks !== 'object' ||
+      Array.isArray(callbacks) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(callbacks))
+    ) {
+      throw new TypeError('topicCallbacks must be a plain object')
+    }
+    const snapshot = Object.create(null) as TopicCallbacks
+    for (const key of Reflect.ownKeys(callbacks)) {
+      if (typeof key !== 'string') throw new TypeError('topicCallbacks cannot contain symbols')
+      this.assertTopic(key)
+      const descriptor = Object.getOwnPropertyDescriptor(callbacks, key)!
+      if (!('value' in descriptor) || typeof descriptor.value !== 'function') {
+        throw new TypeError('topic callback must be an own data function')
+      }
+      Object.defineProperty(snapshot, key, {
+        configurable: true,
+        enumerable: true,
+        value: descriptor.value,
+        writable: true
+      })
+    }
+    return snapshot
+  }
+
+  private snapshotConfig(config: TeranodeListenerConfig): TeranodeListenerConfig {
+    if (
+      config === null ||
+      typeof config !== 'object' ||
+      Array.isArray(config) ||
+      ![Object.prototype, null].includes(Object.getPrototypeOf(config))
+    ) {
+      throw new TypeError('listener config must be a plain object')
+    }
+    const values = Object.create(null) as Record<string, unknown>
+    for (const key of Reflect.ownKeys(config)) {
+      if (typeof key !== 'string' || !CONFIG_KEYS.has(key as keyof TeranodeListenerConfig)) {
+        throw new TypeError('listener config contains an unsupported property')
+      }
+      const descriptor = Object.getOwnPropertyDescriptor(config, key)!
+      if (!('value' in descriptor)) throw new TypeError('listener config cannot use accessors')
+      values[key] = descriptor.value
+    }
+
+    const snapshot = {
+      bootstrapPeers: this.snapshotStringArray(values.bootstrapPeers, 'bootstrapPeers', 32),
+      staticPeers: this.snapshotStringArray(values.staticPeers, 'staticPeers', 64),
+      listenAddresses: this.snapshotStringArray(values.listenAddresses, 'listenAddresses', 16),
+      sharedKey: values.sharedKey,
+      dhtProtocolID: values.dhtProtocolID,
+      usePrivateDHT: values.usePrivateDHT,
+      decodeMessages: values.decodeMessages
+    } as TeranodeListenerConfig
+    if (snapshot.sharedKey !== undefined && typeof snapshot.sharedKey !== 'string') {
+      throw new TypeError('sharedKey must be a string')
+    }
+    if (snapshot.sharedKey !== undefined && !/^[0-9a-f]{64}$/iu.test(snapshot.sharedKey)) {
+      throw new TypeError('sharedKey must encode exactly 32 bytes as hexadecimal')
+    }
+    if (
+      snapshot.dhtProtocolID !== undefined &&
+      (typeof snapshot.dhtProtocolID !== 'string' ||
+        !/^\/[A-Za-z0-9][A-Za-z0-9._/-]{0,127}$/.test(snapshot.dhtProtocolID) ||
+        snapshot.dhtProtocolID.includes('//') ||
+        snapshot.dhtProtocolID.includes('..') ||
+        snapshot.dhtProtocolID.endsWith('/'))
+    ) {
+      throw new TypeError('dhtProtocolID must be a canonical protocol prefix')
+    }
+    for (const option of ['usePrivateDHT', 'decodeMessages'] as const) {
+      if (snapshot[option] !== undefined && typeof snapshot[option] !== 'boolean') {
+        throw new TypeError(`${option} must be a boolean`)
+      }
+    }
+    return Object.freeze(snapshot)
+  }
+
+  private snapshotStringArray(
+    value: unknown,
+    label: string,
+    maxItems: number
+  ): string[] | undefined {
+    if (value === undefined) return undefined
+    if (!Array.isArray(value) || value.length > maxItems) {
+      throw new TypeError(`${label} must contain at most ${maxItems} bounded strings`)
+    }
+    const snapshot: string[] = []
+    for (let index = 0; index < value.length; index++) {
+      const descriptor = Object.getOwnPropertyDescriptor(value, String(index))
+      if (
+        descriptor === undefined ||
+        !('value' in descriptor) ||
+        typeof descriptor.value !== 'string' ||
+        descriptor.value.length === 0 ||
+        descriptor.value.length > 2048 ||
+        hasControlCharacter(descriptor.value)
+      ) {
+        throw new TypeError(`${label} must contain at most ${maxItems} bounded strings`)
+      }
+      snapshot.push(descriptor.value)
+    }
+    if (new Set(snapshot).size !== snapshot.length) {
+      throw new TypeError(`${label} must not contain duplicates`)
+    }
+    for (const address of snapshot) multiaddr(address)
+    return Object.freeze(snapshot) as unknown as string[]
+  }
+
+  private assertTopic(topic: string): asserts topic is Topic {
+    if (!VALID_TOPICS.has(topic as Topic))
+      throw new TypeError(`Unsupported Teranode topic: ${topic}`)
   }
 }
 
 export async function startSubscriber(config: SubscriberConfig = {}): Promise<void> {
-  const {
-    topics = [
-      'bitcoin/mainnet-bestblock',
-      'bitcoin/mainnet-block',
-      'bitcoin/mainnet-subtree',
-      'bitcoin/mainnet-mining_on',
-      'bitcoin/mainnet-handshake',
-      'bitcoin/mainnet-rejected_tx'
-    ],
-    ...listenerConfig
-  } = config
+  if (
+    config === null ||
+    typeof config !== 'object' ||
+    Array.isArray(config) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(config))
+  ) {
+    throw new TypeError('subscriber config must be a plain object')
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(config)
+  const values = Object.create(null) as Record<string, unknown>
+  for (const key of Reflect.ownKeys(descriptors)) {
+    if (typeof key !== 'string') throw new TypeError('subscriber config cannot contain symbols')
+    const descriptor = descriptors[key]
+    if (!('value' in descriptor)) throw new TypeError('subscriber config cannot use accessors')
+    values[key] = descriptor.value
+  }
+  const topics =
+    values.topics === undefined
+      ? ([
+          'bitcoin/mainnet-bestblock',
+          'bitcoin/mainnet-block',
+          'bitcoin/mainnet-subtree',
+          'bitcoin/mainnet-mining_on',
+          'bitcoin/mainnet-handshake',
+          'bitcoin/mainnet-rejected_tx'
+        ] satisfies Topic[])
+      : snapshotTopics(values.topics)
+  const listenerConfig = Object.fromEntries(
+    Object.entries(values).filter(([key]) => key !== 'topics')
+  ) as TeranodeListenerConfig
   const callbacks = Object.fromEntries(topics.map(topic => [topic, () => {}])) as TopicCallbacks
   const listener = new TeranodeListener(callbacks, listenerConfig)
   await listener.start()

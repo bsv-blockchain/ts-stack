@@ -8,7 +8,12 @@ import {
   TaggedBEEF,
   AdmittanceInstructions,
   STEAK,
-  SHIPBroadcaster
+  SHIPBroadcaster,
+  LookupResolver,
+  PrivateKey,
+  ProtoWallet,
+  PushDrop,
+  type WalletInterface
 } from '@bsv/sdk'
 import { Output } from '../Output'
 import { SyncConfiguration } from '../SyncConfiguration'
@@ -51,20 +56,33 @@ const mockOutput: Output = {
   score: 1234567890
 }
 
+const makePreviousOutput = (topic = 'Hello'): Output => ({
+  ...mockOutput,
+  txid: examplePreviousTXID,
+  topic,
+  beef: undefined
+})
+
 const invalidHostingUrls = [
   'http://example.com', // Invalid: http
   'https://localhost:3000', // Invalid: localhost
   'https://192.168.1.1', // Invalid: internal private IP
   'https://127.0.0.1', // Invalid: loopback IP
   'https://0.0.0.0', // Invalid: non-routable IP
+  'https://255.255.255.255', // Invalid: broadcast IP
   'http://172.16.0.1', // Invalid: private IP
-  '[::1]'
+  '[::1]',
+  'ftp://example.com',
+  'javascript:alert(1)',
+  'https://user:secret@example.com',
+  'https://example.com?redirect=https://internal.example',
+  'https://example.com/#fragment'
 ]
 
 const validHostingUrls = [
   'https://example.com', // Valid: public URL
   'https://8.8.8.8', // Valid: public routable IP
-  'https://255.255.255.255' // Valid: public routable IP
+  'https://1.1.1.1' // Valid: public routable IP
 ]
 
 const mockAdvertiser: Advertiser = {
@@ -125,6 +143,368 @@ describe('BSV Overlay Services Engine', () => {
     jest.restoreAllMocks()
   })
 
+  it.each([
+    ['a null envelope', null, undefined, undefined, undefined, 'byte and topic arrays'],
+    [
+      'a non-array BEEF',
+      { beef: '00', topics: ['Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'byte and topic arrays'
+    ],
+    [
+      'a non-array topic list',
+      { beef: [0], topics: 'Hello' },
+      undefined,
+      undefined,
+      undefined,
+      'byte and topic arrays'
+    ],
+    [
+      'an empty BEEF',
+      { beef: [], topics: ['Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'between 1'
+    ],
+    [
+      'a fractional BEEF byte',
+      { beef: [1.5], topics: ['Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'between 1'
+    ],
+    [
+      'a negative BEEF byte',
+      { beef: [-1], topics: ['Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'between 1'
+    ],
+    [
+      'an oversized BEEF byte',
+      { beef: [256], topics: ['Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'between 1'
+    ],
+    [
+      'an empty topic list',
+      { beef: [0], topics: [] },
+      undefined,
+      undefined,
+      undefined,
+      'between 1'
+    ],
+    [
+      'too many topics',
+      { beef: [0], topics: Array.from({ length: 129 }, (_, index) => `tm_${index}`) },
+      undefined,
+      undefined,
+      undefined,
+      'between 1 and 128 topics'
+    ],
+    [
+      'an invalid submission mode',
+      { beef: [0], topics: ['Hello'] },
+      undefined,
+      'replay',
+      undefined,
+      'Invalid overlay submission mode'
+    ],
+    [
+      'a non-function callback',
+      { beef: [0], topics: ['Hello'] },
+      'callback',
+      undefined,
+      undefined,
+      'onSteakReady must be a function'
+    ],
+    [
+      'non-array off-chain values',
+      { beef: [0], topics: ['Hello'] },
+      undefined,
+      undefined,
+      'off-chain',
+      'offChainValues must be a bounded array'
+    ],
+    [
+      'unsafe off-chain integers',
+      { beef: [0], topics: ['Hello'] },
+      undefined,
+      undefined,
+      [Number.MAX_SAFE_INTEGER + 1],
+      'offChainValues must be a bounded array'
+    ],
+    [
+      'duplicate topics',
+      { beef: [0], topics: ['Hello', 'Hello'] },
+      undefined,
+      undefined,
+      undefined,
+      'duplicate topics'
+    ]
+  ])(
+    'rejects %s before transaction parsing or topic admission',
+    async (_label, tagged, callback, mode, offChainValues, message) => {
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        mockStorageEngine,
+        mockChainTracker
+      )
+
+      await expect(
+        (engine.submit as (...args: unknown[]) => Promise<STEAK>)(
+          tagged,
+          callback,
+          mode,
+          offChainValues
+        )
+      ).rejects.toThrow(message as string)
+      expect(mockTopicManager.identifyAdmissibleOutputs).not.toHaveBeenCalled()
+      expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+    }
+  )
+
+  it('bounds off-chain value count and releases the submission queue after rejection', async () => {
+    const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+
+    await expect(
+      engine.submit(
+        { beef: exampleBeef, topics: ['Hello'] },
+        undefined,
+        'current-tx',
+        Array(100_001).fill(0)
+      )
+    ).rejects.toThrow('offChainValues must be a bounded array')
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual(
+      expect.objectContaining({ Hello: expect.any(Object) })
+    )
+  })
+
+  it.each([
+    ['a non-object question', null, 'Lookup question must be an object'],
+    ['a non-array formula', {}, 'Lookup service must return an array'],
+    ['a non-object formula entry', [null], 'Lookup result[0] is invalid'],
+    [
+      'a non-array context',
+      [{ txid: exampleTXID, outputIndex: 0, context: '00' }],
+      'context must be bounded bytes'
+    ],
+    [
+      'a fractional context byte',
+      [{ txid: exampleTXID, outputIndex: 0, context: [1.5] }],
+      'context must be bounded bytes'
+    ],
+    [
+      'a negative context byte',
+      [{ txid: exampleTXID, outputIndex: 0, context: [-1] }],
+      'context must be bounded bytes'
+    ],
+    [
+      'an oversized context byte',
+      [{ txid: exampleTXID, outputIndex: 0, context: [256] }],
+      'context must be bounded bytes'
+    ]
+  ])('rejects lookup input with %s before storage access', async (_label, result, message) => {
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+    if (result !== null) mockLookupService.lookup = jest.fn(async () => result as any)
+
+    const request = result === null ? null : { service: 'Hello', query: {} }
+    await expect(
+      (engine.lookup as (value: unknown) => Promise<LookupAnswer>)(request)
+    ).rejects.toThrow(message as string)
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('rejects sparse lookup context before storage access', async () => {
+    const context = Array<number>(1)
+    mockLookupService.lookup = jest.fn(async () => [{ txid: exampleTXID, outputIndex: 0, context }])
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'context must be bounded bytes'
+    )
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('enforces the absolute lookup formula cap even when the configured cap is unlimited', async () => {
+    const formula = { txid: exampleTXID, outputIndex: 0 }
+    mockLookupService.lookup = jest.fn(async () => Array(100_001).fill(formula))
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+    engine.maxLookupResults = -1
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'more than 100000 results'
+    )
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('does not query storage for empty or already-cached lookup batches', async () => {
+    mockLookupService.lookup = jest.fn(async () => [])
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).resolves.toEqual({
+      type: 'output-list',
+      outputs: []
+    })
+    const context = (engine as any).createUTXOHistoryHydrationContext()
+    context.outputCache.set(`${exampleTXID}:0`, Promise.resolve(mockOutput))
+    await expect(
+      (engine as any).preloadOutputsWithBEEF(
+        [{ txid: exampleTXID.toUpperCase(), outputIndex: 0 }],
+        context
+      )
+    ).resolves.toBeUndefined()
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on hostile history selectors, depth, cycles, and traversal budgets', async () => {
+    const engine = new Engine({}, {}, mockStorageEngine, mockChainTracker)
+    const hydrate = (
+      output: Output,
+      selector: any,
+      depth: number,
+      context: any,
+      ancestors?: Set<string>
+    ) => (engine as any).hydrateUTXOHistoryNode(output, selector, depth, context, ancestors)
+
+    await expect(
+      hydrate(
+        mockOutput,
+        async () => true,
+        2049,
+        (engine as any).createUTXOHistoryHydrationContext()
+      )
+    ).rejects.toThrow('maximum depth')
+    await expect(
+      hydrate(
+        { ...mockOutput, beef: undefined },
+        async () => true,
+        0,
+        (engine as any).createUTXOHistoryHydrationContext()
+      )
+    ).rejects.toThrow('associated transaction BEEF')
+    await expect(
+      hydrate(mockOutput, async () => 'yes', 0, (engine as any).createUTXOHistoryHydrationContext())
+    ).rejects.toThrow('must return a boolean')
+    await expect(
+      hydrate(mockOutput, 2049, 2049, (engine as any).createUTXOHistoryHydrationContext())
+    ).rejects.toThrow('maximum depth')
+    await expect(
+      hydrate(
+        { ...mockOutput, beef: undefined },
+        0,
+        0,
+        (engine as any).createUTXOHistoryHydrationContext()
+      )
+    ).rejects.toThrow('associated transaction BEEF')
+    await expect(
+      hydrate(
+        mockOutput,
+        0,
+        0,
+        (engine as any).createUTXOHistoryHydrationContext(),
+        new Set([`${exampleTXID}:0`])
+      )
+    ).rejects.toThrow('contains a cycle')
+
+    const exhausted = (engine as any).createUTXOHistoryHydrationContext()
+    exhausted.hydratedNodes = 100_000
+    await expect(hydrate(mockOutput, 0, 0, exhausted)).rejects.toThrow(
+      'traversal exceeded its work budget'
+    )
+  })
+
+  it('rejects malformed batched storage results before history traversal', async () => {
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 0 }
+    ])
+    const findOutputsByOutpoints = jest.fn(async () => null as never)
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      { ...mockStorageEngine, findOutputsByOutpoints },
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'invalid or oversized batched lookup outputs'
+    )
+    expect(findOutputsByOutpoints).toHaveBeenCalledWith(
+      [{ txid: exampleTXID, outputIndex: 0 }],
+      true
+    )
+  })
+
+  it.each([
+    ['empty BEEF', { ...mockOutput, beef: [] }, 'invalid or oversized transaction BEEF'],
+    [
+      'an out-of-range output index',
+      { ...mockOutput, outputIndex: 1 },
+      'index is outside its transaction'
+    ]
+  ])('rejects a storage lookup row with %s', async (_label, row, message) => {
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: row.outputIndex, history: 0 }
+    ])
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      {
+        ...mockStorageEngine,
+        findOutputsByOutpoints: jest.fn(async () => [row])
+      },
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(message as string)
+  })
+
+  it('returns an empty output list when fallback storage has no requested outpoint', async () => {
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 0 }
+    ])
+    mockStorageEngine.findOutput = jest.fn(async () => null)
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).resolves.toEqual({
+      type: 'output-list',
+      outputs: []
+    })
+  })
+
   it('rejects oversized lookup formulas before hydrating their outputs', async () => {
     mockLookupService.lookup = jest.fn(async () => [
       { txid: exampleTXID, outputIndex: 0, history: 0 },
@@ -142,6 +522,383 @@ describe('BSV Overlay Services Engine', () => {
       'Lookup returned 2 results; maximum is 1'
     )
     expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('rejects malformed lookup formulas and oversized context before storage access', async () => {
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    mockLookupService.lookup = jest.fn(async () => [{ txid: 'not-a-txid', outputIndex: 0 }])
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'must be 32 bytes of hex'
+    )
+
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 2049 }
+    ])
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'history must be -1 through 2048'
+    )
+
+    mockLookupService.lookup = jest.fn(async () => [
+      {
+        txid: exampleTXID,
+        outputIndex: 0,
+        context: Array.from({ length: 1024 * 1024 + 1 }, () => 0)
+      }
+    ])
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'context must be bounded bytes'
+    )
+    expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+  })
+
+  it('rejects storage outputs that are not bound to requested lookup outpoints', async () => {
+    const unrelatedTxid = 'f'.repeat(64)
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 0 }
+    ])
+    mockStorageEngine.findOutputsByOutpoints = jest.fn(async () => [
+      mockOutput,
+      { ...mockOutput, txid: unrelatedTxid, beef: undefined }
+    ])
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'was not requested'
+    )
+  })
+
+  it('rejects mismatched transaction BEEF and unbound history relations', async () => {
+    const unrelatedTxid = 'f'.repeat(64)
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: unrelatedTxid, outputIndex: 0, history: 0 }
+    ])
+    mockStorageEngine.findOutput = jest.fn(async () => ({ ...mockOutput, txid: unrelatedTxid }))
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'BEEF does not match its transaction ID'
+    )
+
+    mockLookupService.lookup = jest.fn(async () => [
+      { txid: exampleTXID, outputIndex: 0, history: 1 }
+    ])
+    mockStorageEngine.findOutput = jest.fn(async () => ({
+      ...mockOutput,
+      outputsConsumed: [{ txid: unrelatedTxid, outputIndex: 0 }]
+    }))
+    await expect(engine.lookup({ service: 'Hello', query: {} })).rejects.toThrow(
+      'relation is not an input'
+    )
+  })
+
+  it('fails topic admission closed on unbound storage output and verdict results', async () => {
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+    const logger = { ...console, error: jest.fn() }
+    engine.logger = logger
+    mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+      Hello: { outputsToAdmit: [], coinsToRetain: [] }
+    })
+    expect(mockTopicManager.identifyAdmissibleOutputs).not.toHaveBeenCalled()
+    expect(mockStorageEngine.markUTXOAsSpent).not.toHaveBeenCalled()
+    expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+
+    mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => ({}) as any)
+    await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+      Hello: { outputsToAdmit: [], coinsToRetain: [] }
+    })
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('invalid applied-transaction verdict')
+    )
+  })
+
+  it('deduplicates stored consumer relations by outpoint value', async () => {
+    const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+    const consumer = { txid: exampleTXID, outputIndex: 0 }
+    mockStorageEngine.findOutput = jest.fn(async () => ({
+      ...makePreviousOutput(),
+      consumedBy: [{ ...consumer }]
+    }))
+
+    await (engine as any).updateConsumedOutput(
+      { txid: examplePreviousTXID, outputIndex: 0 },
+      [{ ...consumer }],
+      'Hello'
+    )
+
+    expect(mockStorageEngine.updateConsumedBy).toHaveBeenCalledWith(
+      examplePreviousTXID,
+      0,
+      'Hello',
+      [consumer]
+    )
+  })
+
+  it('copies service registries without prototypes or inherited dispatch entries', async () => {
+    const managers = Object.assign(Object.create({ inherited: mockTopicManager }), {
+      Hello: mockTopicManager
+    })
+    const lookupServices = Object.assign(Object.create({ inherited: mockLookupService }), {
+      Hello: mockLookupService
+    })
+    const engine = new Engine(managers, lookupServices, mockStorageEngine, mockChainTracker)
+
+    expect(Object.getPrototypeOf(engine.managers)).toBeNull()
+    expect(Object.getPrototypeOf(engine.lookupServices)).toBeNull()
+    expect(Object.keys(engine.managers)).toEqual(['Hello'])
+    expect(Object.keys(engine.lookupServices)).toEqual(['Hello'])
+    await expect(engine.getDocumentationForTopicManager('toString')).resolves.toBe(
+      'No documentation found!'
+    )
+    await expect(engine.lookup({ service: 'toString', query: {} })).rejects.toThrow(
+      'Lookup service not found'
+    )
+  })
+
+  it('bounds and copies public component metadata without invoking accessors', async () => {
+    const nameGetter = jest.fn(() => 'Unsafe Service')
+    const accessorMetadata = Object.create(null)
+    Object.defineProperty(accessorMetadata, 'name', { enumerable: true, get: nameGetter })
+    Object.defineProperty(accessorMetadata, 'shortDescription', {
+      enumerable: true,
+      value: 'Description'
+    })
+    mockTopicManager.getMetaData = jest.fn(async () => ({
+      name: 'x'.repeat(257),
+      shortDescription: 'Description'
+    }))
+    mockLookupService.getMetaData = jest.fn(async () => accessorMetadata)
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.listTopicManagers()).resolves.toEqual({
+      Hello: { name: 'Hello', shortDescription: 'No topical tagline.' }
+    })
+    await expect(engine.listLookupServiceProviders()).resolves.toEqual({
+      Hello: { name: 'Hello', shortDescription: 'No lookup service tagline.' }
+    })
+    expect(nameGetter).not.toHaveBeenCalled()
+  })
+
+  it('normalizes safe metadata URLs and rejects oversized documentation', async () => {
+    mockTopicManager.getMetaData = jest.fn(async () => ({
+      name: 'Mock Manager',
+      shortDescription: 'Description',
+      iconURL: 'https://example.com:443/icon.png',
+      informationURL: 'https://example.com/docs'
+    }))
+    mockLookupService.getDocumentation = jest.fn(async () => 'x'.repeat(1024 * 1024 + 1))
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.listTopicManagers()).resolves.toEqual({
+      Hello: {
+        name: 'Mock Manager',
+        shortDescription: 'Description',
+        iconURL: 'https://example.com/icon.png',
+        informationURL: 'https://example.com/docs'
+      }
+    })
+    await expect(engine.getDocumentationForLookupServiceProvider('Hello')).rejects.toThrow(
+      'at most 1048576 bytes'
+    )
+  })
+
+  it.each([
+    ['null metadata', null],
+    ['array metadata', []],
+    ['missing name', { shortDescription: 'Description' }],
+    ['missing description', { name: 'Manager' }],
+    [
+      'malformed icon URL',
+      { name: 'Manager', shortDescription: 'Description', iconURL: 'not a URL' }
+    ],
+    [
+      'credentialed information URL',
+      {
+        name: 'Manager',
+        shortDescription: 'Description',
+        informationURL: 'https://user:secret@example.com'
+      }
+    ],
+    [
+      'header-unsafe version',
+      { name: 'Manager', shortDescription: 'Description', version: '1.0\nforged' }
+    ]
+  ])('contains hostile component metadata: %s', async (_label, metadata) => {
+    mockTopicManager.getMetaData = jest.fn(async () => metadata as any)
+    const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+
+    await expect(engine.listTopicManagers()).resolves.toEqual({
+      Hello: { name: 'Hello', shortDescription: 'No topical tagline.' }
+    })
+  })
+
+  it('retains valid optional metadata and enforces documentation types', async () => {
+    mockTopicManager.getMetaData = jest.fn(async () => ({
+      name: 'Manager',
+      shortDescription: '',
+      version: '1.2.3',
+      iconURL: 'http://docs.example/icon.png'
+    }))
+    mockTopicManager.getDocumentation = jest.fn(async () => 'bounded documentation')
+    mockLookupService.getDocumentation = jest.fn(async () => ({ secret: true }) as any)
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      mockStorageEngine,
+      mockChainTracker
+    )
+
+    await expect(engine.listTopicManagers()).resolves.toEqual({
+      Hello: {
+        name: 'Manager',
+        shortDescription: '',
+        version: '1.2.3',
+        iconURL: 'http://docs.example/icon.png'
+      }
+    })
+    await expect(engine.getDocumentationForTopicManager('Hello')).resolves.toBe(
+      'bounded documentation'
+    )
+    await expect(engine.getDocumentationForLookupServiceProvider('Hello')).rejects.toThrow(
+      'must be a string'
+    )
+  })
+
+  it('rejects oversized component registries before retaining them', () => {
+    const managers = Object.fromEntries(
+      Array.from({ length: 10_001 }, (_, index) => [`tm_${index}`, mockTopicManager])
+    )
+
+    expect(() => new Engine(managers, {}, mockStorageEngine, mockChainTracker)).toThrow(
+      'more than 10000 entries'
+    )
+  })
+
+  it('rejects reserved registry and sync-configuration names', () => {
+    const reservedManagers = Object.create(null)
+    reservedManagers.__proto__ = mockTopicManager
+    const reservedSync = Object.create(null)
+    reservedSync.constructor = 'SHIP'
+
+    expect(() => new Engine(reservedManagers, {}, mockStorageEngine, mockChainTracker)).toThrow(
+      'reserved object property name'
+    )
+    expect(
+      () =>
+        new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          reservedSync
+        )
+    ).toThrow('reserved object property name')
+  })
+
+  it('rejects non-record registries and undefined sync entries', () => {
+    expect(() => new Engine(null as any, {}, mockStorageEngine, mockChainTracker)).toThrow(
+      'Topic manager registry must be an object'
+    )
+    expect(() => new Engine({}, [] as any, mockStorageEngine, mockChainTracker)).toThrow(
+      'Lookup service registry must be an object'
+    )
+    expect(
+      () =>
+        new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { Hello: undefined as any }
+        )
+    ).toThrow('Sync configuration Hello is invalid')
+  })
+
+  it('validates and copy-isolates tracker and sync configuration lists', () => {
+    const endpoints = ['https://peer.example']
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      {},
+      mockStorageEngine,
+      mockChainTracker,
+      undefined,
+      ['tracker.example'],
+      ['lookup.example'],
+      undefined,
+      undefined,
+      { Hello: endpoints }
+    )
+    endpoints.push('https://mutated.example')
+
+    expect(engine.syncConfiguration?.Hello).toEqual(['https://peer.example'])
+    expect(
+      () =>
+        new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          { Hello: { endpoint: 'https://peer.example' } } as any
+        )
+    ).toThrow('must be an array')
+    expect(
+      () =>
+        new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          ['bad\ntracker']
+        )
+    ).toThrow('SHIP trackers[0] is invalid')
   })
 
   it('engine.syncAdvertisements should return void when invalid hostingURL is provided', async () => {
@@ -189,6 +946,9 @@ describe('BSV Overlay Services Engine', () => {
     }
 
     for (const url of validHostingUrls) {
+      mockAdvertiser.createAdvertisements.mockClear()
+      mockAdvertiser.findAllAdvertisements.mockClear()
+      engineSubmit.mockClear()
       const engine = new Engine(
         { tm_helloworld: mockTopicManager },
         { ls_helloworld: mockLookupService },
@@ -210,6 +970,113 @@ describe('BSV Overlay Services Engine', () => {
       expect(mockAdvertiser.createAdvertisements).toHaveBeenCalled()
       expect(mockAdvertiser.findAllAdvertisements).toHaveBeenCalledWith('SHIP') // Assuming 'SHIP' is expected
     }
+  })
+
+  it('rejects unbound or malformed current advertisements before wallet mutation', async () => {
+    const advertiser: Advertiser = {
+      createAdvertisements: jest.fn(),
+      revokeAdvertisements: jest.fn(),
+      findAllAdvertisements: jest.fn(async () => [
+        {
+          protocol: 'SHIP',
+          identityKey: '02' + '11'.repeat(32),
+          domain: 'https://example.com',
+          topicOrService: 'tm_helloworld'
+        }
+      ]),
+      parseAdvertisement: jest.fn()
+    }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      {},
+      mockStorageEngine,
+      mockChainTracker,
+      'https://example.com',
+      undefined,
+      undefined,
+      undefined,
+      advertiser
+    )
+
+    await expect(engine.syncAdvertisements()).rejects.toThrow('invalid identity, domain, or BEEF')
+    expect(advertiser.createAdvertisements).not.toHaveBeenCalled()
+    expect(advertiser.revokeAdvertisements).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a non-array response', null, 'invalid or oversized advertisement set'],
+    ['a null entry', [null], 'Advertisement[0] is invalid'],
+    ['the wrong protocol', [{ protocol: 'SLAP' }], 'Advertisement[0] has the wrong protocol'],
+    [
+      'a reserved component name',
+      [
+        {
+          protocol: 'SHIP',
+          topicOrService: '__proto__',
+          identityKey: `02${'11'.repeat(32)}`,
+          domain: 'https://example.com',
+          beef: exampleBeef,
+          outputIndex: 0
+        }
+      ],
+      'reserved object property name'
+    ],
+    [
+      'an output outside its transaction',
+      [
+        {
+          protocol: 'SHIP',
+          topicOrService: 'tm_test',
+          identityKey: `02${'11'.repeat(32)}`,
+          domain: 'https://example.com',
+          beef: exampleBeef,
+          outputIndex: 1
+        }
+      ],
+      'outside its transaction'
+    ]
+  ])('rejects an advertiser response with %s', (_label, advertisements, message) => {
+    const engine = new Engine({}, {}, mockStorageEngine, mockChainTracker)
+
+    expect(() =>
+      (engine as any).validateCurrentAdvertisements(advertisements, 'SHIP', mockAdvertiser)
+    ).toThrow(message as string)
+  })
+
+  it('binds every accepted advertisement field to the transaction metadata', () => {
+    const advertiser: Advertiser = {
+      ...mockAdvertiser,
+      parseAdvertisement: jest.fn(() => ({
+        protocol: 'SHIP',
+        identityKey: `02${'22'.repeat(32)}`,
+        topicOrService: 'tm_test',
+        domain: 'https://example.com'
+      }))
+    }
+    const advertisement = {
+      protocol: 'SHIP',
+      topicOrService: 'tm_test',
+      identityKey: `02${'11'.repeat(32)}`,
+      domain: 'https://example.com',
+      beef: exampleBeef,
+      outputIndex: 0
+    }
+    const engine = new Engine({}, {}, mockStorageEngine, mockChainTracker)
+
+    expect(() =>
+      (engine as any).validateCurrentAdvertisements([advertisement], 'SHIP', advertiser)
+    ).toThrow('metadata does not match its BEEF')
+  })
+
+  it('caps current advertisement cardinality before parsing attacker-controlled entries', () => {
+    const parseAdvertisement = jest.fn()
+    const advertiser = { ...mockAdvertiser, parseAdvertisement }
+    const engine = new Engine({}, {}, mockStorageEngine, mockChainTracker)
+
+    expect(() =>
+      (engine as any).validateCurrentAdvertisements(Array(10_001).fill(null), 'SHIP', advertiser)
+    ).toThrow('invalid or oversized advertisement set')
+    expect(parseAdvertisement).not.toHaveBeenCalled()
   })
 
   it('refreshes old unproven transaction proofs before eviction', async () => {
@@ -246,6 +1113,68 @@ describe('BSV Overlay Services Engine', () => {
       merklePath,
       799900
     )
+    expect(storage.findUnprovenAppliedTransactions).toHaveBeenCalledWith(799856, undefined, {
+      maxCandidates: 10000,
+      maxOutputs: 100000
+    })
+  })
+
+  it('rejects unsafe unproven-maintenance thresholds and storage candidates', async () => {
+    expect(
+      () =>
+        new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          false,
+          '[TEST]',
+          false,
+          undefined,
+          console,
+          true,
+          undefined,
+          false,
+          0
+        )
+    ).toThrow('thresholdBlocks')
+
+    const storage = {
+      ...mockStorageEngine,
+      findUnprovenAppliedTransactions: jest.fn(async () => [
+        {
+          txid: exampleTXID,
+          topic: 'Other',
+          firstSeenHeight: 799000,
+          outputs: [{ txid: exampleTXID, outputIndex: 0 }]
+        }
+      ]),
+      deleteAppliedTransaction: jest.fn(async () => undefined)
+    }
+    const engine = new Engine(
+      { Hello: mockTopicManager },
+      { Hello: mockLookupService },
+      storage,
+      mockChainTracker
+    )
+
+    await expect(engine.evictUnprovenTransactions({ thresholdBlocks: -1 })).rejects.toThrow(
+      'thresholdBlocks'
+    )
+    await expect(
+      engine.refreshUnprovenTransactionProofs({
+        topic: 'Hello',
+        proofProvider: jest.fn(async () => undefined)
+      })
+    ).rejects.toThrow('different topic')
+    expect(storage.deleteAppliedTransaction).not.toHaveBeenCalled()
+    expect(mockLookupService.outputEvicted).not.toHaveBeenCalled()
   })
 
   it('evicts provider-invalidated applied transactions', async () => {
@@ -279,6 +1208,242 @@ describe('BSV Overlay Services Engine', () => {
     expect(deleteOutput).toHaveBeenCalledWith(exampleTXID, 0, 'Hello')
     expect(deleteAppliedTransaction).toHaveBeenCalledWith(exampleTXID, 'Hello')
   })
+
+  it('rejects unbound or oversized provider-eviction data before mutation', async () => {
+    const deleteAppliedTransaction = jest.fn(async () => undefined)
+    const deleteOutput = jest.fn(async () => undefined)
+    const storage = {
+      ...mockStorageEngine,
+      findOutputsForTransaction: jest.fn(async () => [
+        {
+          ...mockOutput,
+          txid: '11'.repeat(32),
+          topic: 'Hello'
+        }
+      ]),
+      deleteOutput,
+      deleteAppliedTransaction
+    }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      { ls_helloworld: mockLookupService },
+      storage,
+      mockChainTracker
+    )
+
+    await expect(engine.evictAppliedTransaction(exampleTXID)).rejects.toThrow(
+      'different transaction'
+    )
+    await expect(engine.evictAppliedTransaction('not-a-txid')).rejects.toThrow(
+      'must be 32 bytes of hex'
+    )
+    await expect(
+      engine.evictAppliedTransaction(exampleTXID, { reason: 'x'.repeat(1025) })
+    ).rejects.toThrow('bounded string')
+    expect(deleteOutput).not.toHaveBeenCalled()
+    expect(deleteAppliedTransaction).not.toHaveBeenCalled()
+    expect(mockLookupService.outputEvicted).not.toHaveBeenCalled()
+  })
+
+  it('validates reorg input and storage rows before demoting state', async () => {
+    const demote = jest.fn(async () => undefined)
+    const storage = {
+      ...mockStorageEngine,
+      findProvenAppliedTransactionsByBlockHash: jest.fn(async () => [
+        { txid: exampleTXID, topic: 'Hello', blockHeight: 99 }
+      ]),
+      demoteAppliedTransactionToUnproven: demote,
+      findTopicBlockAnchors: jest.fn(async () => []),
+      upsertTopicBlockAnchor: jest.fn(async () => undefined)
+    }
+    const engine = new Engine({ Hello: mockTopicManager }, {}, storage, mockChainTracker)
+
+    await expect(
+      engine.handleReorg({
+        orphanedBlockHashes: ['not-a-hash'],
+        rebuildFromHeight: 100,
+        newTipHeight: 101
+      })
+    ).rejects.toThrow('32 bytes of hex')
+    await expect(
+      engine.handleReorg({
+        orphanedBlockHashes: ['11'.repeat(32)],
+        rebuildFromHeight: 100,
+        newTipHeight: 101
+      })
+    ).rejects.toThrow('outside the rebuild range')
+    await expect(engine.revalidateRecentAnchors(0)).rejects.toThrow('depth')
+    expect(demote).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a non-object header', null],
+    ['a mismatched height', { blockHeight: 6, blockHash: '11'.repeat(32) }],
+    ['an invalid block hash', { blockHeight: 5, blockHash: 'bad' }],
+    [
+      'a mismatched Merkle root',
+      { blockHeight: 5, blockHash: '11'.repeat(32), merkleRoot: '22'.repeat(32) }
+    ]
+  ])('contains a header resolver returning %s', async (_label, header) => {
+    const logger = { ...console, warn: jest.fn() }
+    const engine = new Engine(
+      {},
+      {},
+      mockStorageEngine,
+      mockChainTracker,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      '[TEST]',
+      false,
+      undefined,
+      logger
+    )
+    engine.topicAnchorHeaderResolver = jest.fn(async () => header as any)
+
+    await expect((engine as any).resolveBlockHash(5, '33'.repeat(32))).resolves.toBeUndefined()
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('height=5'))
+  })
+
+  it('accepts a resolver header bound to the requested height and Merkle root', async () => {
+    const engine = new Engine({}, {}, mockStorageEngine, mockChainTracker)
+    engine.topicAnchorHeaderResolver = jest.fn(async blockHeight => ({
+      blockHeight,
+      blockHash: '11'.repeat(32),
+      merkleRoot: '22'.repeat(32)
+    }))
+
+    await expect((engine as any).resolveBlockHash(5, '22'.repeat(32))).resolves.toBe(
+      '11'.repeat(32)
+    )
+  })
+
+  it('recomputes a bounded anchor range from validated stored anchor state', async () => {
+    const storedAnchor = {
+      topic: 'Hello',
+      blockHeight: 10,
+      blockHash: '11'.repeat(32),
+      basmRoot: '22'.repeat(32),
+      admittedCount: 1,
+      tac: '33'.repeat(32)
+    }
+    const rebuiltAnchor = { ...storedAnchor, tac: '44'.repeat(32) }
+    const storage = {
+      ...mockStorageEngine,
+      findAdmittedTransactionsForBlock: jest.fn(async () => []),
+      upsertTopicBlockAnchor: jest.fn(async () => undefined),
+      findTopicBlockAnchor: jest
+        .fn<() => Promise<typeof storedAnchor | undefined>>()
+        .mockResolvedValueOnce(storedAnchor)
+        .mockResolvedValueOnce(rebuiltAnchor),
+      findTopicAnchorTip: jest.fn(async () => ({
+        topic: 'Hello',
+        blockHeight: 12,
+        blockHash: '55'.repeat(32),
+        basmRoot: '66'.repeat(32),
+        admittedCount: 0,
+        tac: '77'.repeat(32)
+      }))
+    }
+    const engine = new Engine({ Hello: mockTopicManager }, {}, storage, mockChainTracker)
+    const rebuild = jest.fn(async () => undefined)
+    ;(engine as any).rebuildTopicAnchorChain = rebuild
+
+    await expect((engine as any).recomputeTopicBlockAnchor('Hello', 10)).resolves.toEqual(
+      rebuiltAnchor
+    )
+    expect(rebuild).toHaveBeenCalledWith('Hello', 10, 12, new Map([[10, storedAnchor.blockHash]]))
+  })
+
+  it('uses an explicit block hash for a new anchor and stops when none is available', async () => {
+    const storage = {
+      ...mockStorageEngine,
+      findAdmittedTransactionsForBlock: jest.fn(async () => []),
+      upsertTopicBlockAnchor: jest.fn(async () => undefined),
+      findTopicBlockAnchor: jest.fn(async () => undefined),
+      findTopicAnchorTip: jest.fn(async () => undefined)
+    }
+    const engine = new Engine({ Hello: mockTopicManager }, {}, storage, mockChainTracker)
+    const rebuild = jest.fn(async () => undefined)
+    ;(engine as any).rebuildTopicAnchorChain = rebuild
+
+    await expect(
+      (engine as any).recomputeTopicBlockAnchor('Hello', 10, '11'.repeat(32))
+    ).resolves.toBeUndefined()
+    expect(rebuild).toHaveBeenCalledWith('Hello', 10, 10, new Map([[10, '11'.repeat(32)]]))
+
+    rebuild.mockClear()
+    await expect((engine as any).recomputeTopicBlockAnchor('Hello', 10)).resolves.toBeUndefined()
+    expect(rebuild).not.toHaveBeenCalled()
+    await expect(
+      (engine as any).recomputeTopicBlockAnchor('Hello', 10, 'not-a-hash')
+    ).rejects.toThrow('BASM block hash')
+  })
+
+  it('advances only an established anchor chain below the requested tip', async () => {
+    const storage = {
+      ...mockStorageEngine,
+      upsertTopicBlockAnchor: jest.fn(async () => undefined),
+      findTopicAnchorTip: jest.fn(async () => ({
+        topic: 'Hello',
+        blockHeight: 2,
+        blockHash: '11'.repeat(32),
+        basmRoot: '22'.repeat(32),
+        admittedCount: 0,
+        tac: '33'.repeat(32)
+      }))
+    }
+    const engine = new Engine({ Hello: mockTopicManager }, {}, storage, mockChainTracker)
+    const rebuild = jest.fn(async () => undefined)
+    ;(engine as any).rebuildTopicAnchorChain = rebuild
+
+    await engine.advanceTopicAnchorChains(4)
+    expect(rebuild).toHaveBeenCalledWith('Hello', 3, 4)
+  })
+
+  it.each([new Error('height unavailable'), 'hostile height provider'])(
+    'contains current-height provider failure %#',
+    async failure => {
+      const logger = { ...console, warn: jest.fn() }
+      const storage = {
+        ...mockStorageEngine,
+        findTopicAnchorTip: jest.fn(),
+        upsertTopicBlockAnchor: jest.fn()
+      }
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        {},
+        storage,
+        {
+          ...mockChainTracker,
+          currentHeight: jest.fn(async () => {
+            throw failure
+          })
+        },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        false,
+        '[TEST]',
+        false,
+        undefined,
+        logger
+      )
+
+      await expect(engine.advanceTopicAnchorChains()).resolves.toBeUndefined()
+      expect(storage.findTopicAnchorTip).not.toHaveBeenCalled()
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining(failure instanceof Error ? failure.message : String(failure))
+      )
+    }
+  )
 
   it('Uses SHIP sync configuration by default if no syncConfiguration was provided', () => {
     const engine = new Engine(
@@ -453,7 +1618,82 @@ describe('BSV Overlay Services Engine', () => {
     )
   })
 
-  it('skips disabled and invalid GASP configurations while syncing a single valid peer', async () => {
+  it('uses only signature-authenticated one-satoshi SHIP endpoints for GASP sync', async () => {
+    const makeSHIP = async (
+      signingKey: PrivateKey,
+      claimedIdentity: string,
+      domain: string,
+      satoshis = 1,
+      topic = 'tm_helloworld'
+    ): Promise<number[]> => {
+      const wallet = new ProtoWallet(signingKey)
+      const lockingScript = await new PushDrop(wallet as unknown as WalletInterface).lock(
+        [
+          Utils.toArray('SHIP', 'utf8'),
+          Utils.toArray(claimedIdentity, 'hex'),
+          Utils.toArray(domain, 'utf8'),
+          Utils.toArray(topic, 'utf8')
+        ],
+        [2, 'service host interconnect'],
+        '1',
+        'anyone',
+        true
+      )
+      return new Transaction(1, [], [{ lockingScript, satoshis }], 0).toBEEF()
+    }
+
+    const ownerKey = new PrivateKey(42)
+    const impostorKey = new PrivateKey(43)
+    const ownerWallet = new ProtoWallet(ownerKey)
+    const { publicKey: ownerIdentity } = await ownerWallet.getPublicKey({ identityKey: true })
+    const valid = await makeSHIP(ownerKey, ownerIdentity, 'https://valid.example')
+    const forged = await makeSHIP(impostorKey, ownerIdentity, 'https://forged.example')
+    const wrongValue = await makeSHIP(ownerKey, ownerIdentity, 'https://value.example', 2)
+    const wrongTopic = await makeSHIP(
+      ownerKey,
+      ownerIdentity,
+      'https://topic.example',
+      1,
+      'tm_other'
+    )
+    jest.spyOn(LookupResolver.prototype, 'query').mockResolvedValue({
+      type: 'output-list',
+      outputs: [
+        { beef: forged, outputIndex: 0 },
+        { beef: wrongValue, outputIndex: 0 },
+        { beef: wrongTopic, outputIndex: 0 },
+        { beef: valid, outputIndex: 0 }
+      ]
+    })
+    const logger = { ...console, info: jest.fn(), error: jest.fn() }
+    const engine = new Engine(
+      { tm_helloworld: mockTopicManager },
+      {},
+      mockStorageEngine,
+      mockChainTracker,
+      'https://self.example',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { tm_helloworld: 'SHIP' },
+      false,
+      '[OVERLAY_ENGINE] ',
+      false,
+      undefined,
+      logger
+    )
+    mockStorageEngine.getLastInteraction = jest.fn(async () => 0)
+    const sync = jest.spyOn(GASP.prototype, 'sync').mockResolvedValue()
+
+    await engine.startGASPSync()
+
+    expect(sync).toHaveBeenCalledTimes(1)
+    expect(sync).toHaveBeenCalledWith('https://valid.example', 10000)
+    expect(logger.error).toHaveBeenCalledTimes(3)
+  })
+
+  it('skips disabled GASP configurations while syncing a single valid peer', async () => {
     const logger = {
       ...console,
       info: jest.fn(),
@@ -462,7 +1702,6 @@ describe('BSV Overlay Services Engine', () => {
     const engine = new Engine(
       {
         tm_disabled: mockTopicManager,
-        tm_invalid: mockTopicManager,
         tm_single: mockTopicManager
       },
       {},
@@ -475,9 +1714,8 @@ describe('BSV Overlay Services Engine', () => {
       undefined,
       {
         tm_disabled: false,
-        tm_invalid: 'INVALID',
         tm_single: ['https://only.example']
-      } as any,
+      },
       false,
       '[OVERLAY_ENGINE] ',
       false,
@@ -495,6 +1733,29 @@ describe('BSV Overlay Services Engine', () => {
   })
 
   describe('handleNewMerkleProof tests', () => {
+    it('rejects an untrusted or height-mismatched proof before storage mutation', async () => {
+      const proven = Transaction.fromHexBEEF(beef27c8f0)
+      const proof = proven.merklePath
+      if (proof === undefined) throw new Error('improper test setup')
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        { Hello: mockLookupService },
+        mockStorageEngine,
+        mockChainTracker
+      )
+
+      await expect(
+        engine.handleNewMerkleProof(txid27c8f, proof, proof.blockHeight + 1)
+      ).rejects.toThrow('block height does not match')
+
+      mockChainTracker.isValidRootForHeight.mockResolvedValueOnce(false)
+      await expect(engine.handleNewMerkleProof(txid27c8f, proof)).rejects.toThrow(
+        'not valid for the claimed block height'
+      )
+      expect(mockStorageEngine.findOutputsForTransaction).not.toHaveBeenCalled()
+      expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
+    })
+
     it('persists a replacement proof when the stored BEEF is already mined', async () => {
       const tx = Transaction.fromHexBEEF(beef37abad0)
       const txid = tx.id('hex')
@@ -524,6 +1785,42 @@ describe('BSV Overlay Services Engine', () => {
       await engine.handleNewMerkleProof(txid, tx.merklePath)
 
       expect(updateTransactionBEEF).toHaveBeenCalledWith(txid, tx.toBEEF())
+    })
+
+    it('rejects an unbound proof-descendant relation before updating any BEEF', async () => {
+      const proven = Transaction.fromHexBEEF(beef37abad0)
+      const proof = proven.merklePath
+      if (proof === undefined) throw new Error('improper test setup')
+      const root: Output = {
+        ...mockOutput,
+        txid: proven.id('hex'),
+        outputIndex: 0,
+        outputScript: proven.outputs[0].lockingScript.toBinary(),
+        topic: 'Hello',
+        beef: proven.toBEEF(),
+        consumedBy: [{ txid: exampleTXID, outputIndex: 0 }],
+        outputsConsumed: []
+      }
+      const unrelated: Output = {
+        ...mockOutput,
+        topic: 'Hello',
+        consumedBy: [],
+        outputsConsumed: []
+      }
+      mockStorageEngine.findOutputsForTransaction = jest.fn(async txid =>
+        txid === root.txid ? [root] : [unrelated]
+      )
+      const engine = new Engine(
+        { Hello: mockTopicManager },
+        { Hello: mockLookupService },
+        mockStorageEngine,
+        mockChainTracker
+      )
+
+      await expect(engine.handleNewMerkleProof(root.txid, proof)).rejects.toThrow(
+        'does not contain the proven transaction'
+      )
+      expect(mockStorageEngine.updateTransactionBEEF).not.toHaveBeenCalled()
     })
 
     it('0 simple proof', async () => {
@@ -882,10 +2179,61 @@ describe('BSV Overlay Services Engine', () => {
         expect(broadcaster.broadcast).not.toHaveBeenCalled()
       })
 
+      it('rejects duplicate topics and malformed BEEF before invoking trust components', async () => {
+        const broadcaster = makeBroadcaster()
+        const engine = makeEngine(broadcaster)
+
+        await expect(
+          engine.submit({ beef: exampleBeef, topics: ['Hello', 'Hello'] })
+        ).rejects.toThrow('duplicate topics')
+        await expect(engine.submit({ beef: [256], topics: ['Hello'] })).rejects.toThrow(
+          'Tagged BEEF'
+        )
+        expect(mockTopicManager.identifyAdmissibleOutputs).not.toHaveBeenCalled()
+        expect(broadcaster.broadcast).not.toHaveBeenCalled()
+      })
+
+      it.each([
+        [{ outputsToAdmit: [exampleTX.outputs.length], coinsToRetain: [] }, 'outputsToAdmit'],
+        [{ outputsToAdmit: [0, 0], coinsToRetain: [] }, 'outputsToAdmit'],
+        [{ outputsToAdmit: [0], coinsToRetain: [0] }, 'not a previous topical coin']
+      ])(
+        'fails topic validation for unsafe manager instructions',
+        async (instructions, message) => {
+          mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => instructions)
+          const broadcaster = makeBroadcaster()
+          const engine = makeEngine(broadcaster)
+          const logger = { ...console, error: jest.fn() }
+          engine.logger = logger
+
+          await expect(engine.submit({ beef: exampleBeef, topics: ['Hello'] })).resolves.toEqual({
+            Hello: { outputsToAdmit: [], coinsToRetain: [] }
+          })
+          expect(logger.error).toHaveBeenCalledWith(expect.stringContaining(message))
+          expect(broadcaster.broadcast).not.toHaveBeenCalled()
+          expect(mockStorageEngine.insertOutput).not.toHaveBeenCalled()
+        }
+      )
+
+      it('contains a client callback failure and completes durable storage mutation', async () => {
+        const engine = makeEngine()
+        const logger = { ...console, error: jest.fn() }
+        engine.logger = logger
+        const failure = new Error('client callback failed')
+
+        await expect(
+          engine.submit({ beef: exampleBeef, topics: ['Hello'] }, () => {
+            throw failure
+          })
+        ).resolves.toHaveProperty('Hello')
+        expect(logger.error).toHaveBeenCalledWith('Error in onSteakReady callback:', failure)
+        expect(mockStorageEngine.insertAppliedTransaction).toHaveBeenCalled()
+      })
+
       it('never broadcasts when topic validation throws, even with tracked coins consumed', async () => {
         // The rejected tx spends previously-admitted coins — a throw must
         // still gate the broadcast (this is the rejected-transfer shape).
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
           throw new Error('rule violation\r\nFORGED')
         })
@@ -907,7 +2255,7 @@ describe('BSV Overlay Services Engine', () => {
         // e.g. a KVStore remove that also purges history: previously-admitted
         // coins are consumed, nothing admitted, nothing retained. That is an
         // acceptance, not a rejection (rejection = throw).
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
           outputsToAdmit: [],
           coinsToRetain: []
@@ -927,7 +2275,7 @@ describe('BSV Overlay Services Engine', () => {
       })
 
       it('broadcasts when outputs are consumed but none admitted (coinsToRetain only)', async () => {
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => ({
           outputsToAdmit: [],
           coinsToRetain: [0]
@@ -945,7 +2293,7 @@ describe('BSV Overlay Services Engine', () => {
           message: 'propagated'
         })
         const engine = new Engine(
-          { tm_Hello: mockTopicManager },
+          { tm_hello: mockTopicManager },
           {},
           mockStorageEngine,
           mockChainTracker,
@@ -958,10 +2306,10 @@ describe('BSV Overlay Services Engine', () => {
 
         const result = await engine.submit({
           beef: exampleBeef,
-          topics: ['tm_Hello']
+          topics: ['tm_hello']
         })
 
-        expect(result.tm_Hello.outputsToAdmit).toEqual([0])
+        expect(result.tm_hello.outputsToAdmit).toEqual([0])
         expect(propagate).toHaveBeenCalledTimes(1)
       })
     })
@@ -1006,7 +2354,7 @@ describe('BSV Overlay Services Engine', () => {
       describe('For each input of the transaction', () => {
         it('Acquires the appropriate previous topical UTXOs from the storage engine', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           const engine = new Engine(
             {
               Hello: mockTopicManager
@@ -1025,7 +2373,7 @@ describe('BSV Overlay Services Engine', () => {
         })
         it('Includes the appropriate previous topical UTXOs when they are returned from the storage engine', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           const engine = new Engine(
             {
               Hello: mockTopicManager
@@ -1041,12 +2389,17 @@ describe('BSV Overlay Services Engine', () => {
             topics: ['Hello']
           })
           expect(mockStorageEngine.findOutput).toHaveBeenCalled()
-          expect(mockStorageEngine.markUTXOAsSpent).toHaveBeenCalledWith(exampleTXID, 0, 'Hello')
+          expect(mockStorageEngine.markUTXOAsSpent).toHaveBeenCalledWith(
+            examplePreviousTXID,
+            0,
+            'Hello',
+            exampleTXID
+          )
         })
       })
       it('Identifies admissible outputs with the appropriate topic manager', async () => {
         // Mock findUTXO to return a UTXO
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         const engine = new Engine(
           {
             Hello: mockTopicManager
@@ -1070,7 +2423,7 @@ describe('BSV Overlay Services Engine', () => {
       describe('When previous UTXOs were retained by the topic manager', () => {
         it('Notifies all lookup services about the output being spent (not deleted, see the comment about this in deleteUTXODeep)', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           const engine = new Engine(
             {
               Hello: mockTopicManager
@@ -1089,7 +2442,7 @@ describe('BSV Overlay Services Engine', () => {
           })
           expect(engine.lookupServices.Hello.outputSpent).toHaveBeenCalledWith({
             mode: 'none',
-            txid: exampleTXID,
+            txid: examplePreviousTXID,
             outputIndex: 0,
             topic: 'Hello'
           })
@@ -1098,7 +2451,7 @@ describe('BSV Overlay Services Engine', () => {
         it.each(['txid', 'whole-tx'] as const)(
           'preserves %s spend-notification compatibility',
           async spendNotificationMode => {
-            mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+            mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
             const outputSpent = jest.fn()
             const engine = new Engine(
               {
@@ -1123,7 +2476,7 @@ describe('BSV Overlay Services Engine', () => {
             expect(outputSpent).toHaveBeenCalledWith(
               expect.objectContaining({
                 mode: spendNotificationMode,
-                txid: exampleTXID,
+                txid: examplePreviousTXID,
                 outputIndex: 0,
                 topic: 'Hello'
               })
@@ -1139,10 +2492,7 @@ describe('BSV Overlay Services Engine', () => {
         )
 
         it('preserves script-mode spending input details', async () => {
-          const spentOutput: Output = {
-            ...mockOutput,
-            txid: examplePreviousTXID
-          }
+          const spentOutput = makePreviousOutput()
           mockStorageEngine.findOutput = jest.fn(async () => spentOutput)
           const outputSpent = jest.fn()
           const scriptLookupService: LookupService = {
@@ -1202,10 +2552,7 @@ describe('BSV Overlay Services Engine', () => {
           const fromBEEF = jest
             .spyOn(Transaction, 'fromBEEF')
             .mockReturnValueOnce(txWithSourceTransactionFallback)
-          const spentOutput: Output = {
-            ...mockOutput,
-            txid: examplePreviousTXID
-          }
+          const spentOutput = makePreviousOutput()
           mockStorageEngine.findOutput = jest.fn(async () => spentOutput)
           const outputSpent = jest.fn()
           const engine = new Engine(
@@ -1237,7 +2584,12 @@ describe('BSV Overlay Services Engine', () => {
             transactionId.mockRestore()
           }
 
-          expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(examplePreviousTXID, 0, 'Hello')
+          expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(
+            examplePreviousTXID,
+            0,
+            'Hello',
+            false
+          )
           expect(outputSpent).toHaveBeenCalledWith(
             expect.objectContaining({
               mode: 'script',
@@ -1252,7 +2604,7 @@ describe('BSV Overlay Services Engine', () => {
       describe('When previous UTXOs were not retained by the topic manager', () => {
         it('Marks the UTXO as stale, deleting all stale UTXOs by calling deleteUTXODeep', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           const engine = new Engine(
             {
               Hello: mockTopicManager
@@ -1270,16 +2622,20 @@ describe('BSV Overlay Services Engine', () => {
             topics: ['Hello']
           })
           // Test that previous UTXOs are deleted
-          expect(mockStorageEngine.deleteOutput).toHaveBeenCalledWith(exampleTXID, 0, 'hello')
-          expect(mockLookupService.outputNoLongerRetainedInHistory).toHaveBeenCalledWith(
-            exampleTXID,
+          expect(mockStorageEngine.deleteOutput).toHaveBeenCalledWith(
+            examplePreviousTXID,
             0,
-            'hello'
+            'Hello'
+          )
+          expect(mockLookupService.outputNoLongerRetainedInHistory).toHaveBeenCalledWith(
+            examplePreviousTXID,
+            0,
+            'Hello'
           )
         })
         it('Notifies all lookup services about the output being spent (the notification about the actual deletion will come from deleteUTXODeep)', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           const engine = new Engine(
             {
               Hello: mockTopicManager
@@ -1298,15 +2654,15 @@ describe('BSV Overlay Services Engine', () => {
           })
           // Was the lookup service notified of the output deletion?
           expect(mockLookupService.outputNoLongerRetainedInHistory).toHaveBeenCalledWith(
-            exampleTXID,
+            examplePreviousTXID,
             0,
-            'hello'
+            'Hello'
           )
         })
       })
       it('Adds admissible UTXOs to the storage engine', async () => {
         // Mock findUTXO to return a UTXO
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput('hello'))
         const engine = new Engine(
           {
             hello: mockTopicManager
@@ -1333,7 +2689,7 @@ describe('BSV Overlay Services Engine', () => {
       })
       it('Notifies lookup services about incoming admissible UTXOs', async () => {
         // Mock findUTXO to return a UTXO
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         const engine = new Engine(
           {
             Hello: mockTopicManager
@@ -1363,7 +2719,7 @@ describe('BSV Overlay Services Engine', () => {
       describe('For each consumed UTXO', () => {
         it('Finds the UTXO', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
             return {
               outputsToAdmit: [0],
@@ -1388,11 +2744,16 @@ describe('BSV Overlay Services Engine', () => {
           })
 
           // Test a storage engine lookup happens for the utxo consumed
-          expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(examplePreviousTXID, 0, 'Hello')
+          expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(
+            examplePreviousTXID,
+            0,
+            'Hello',
+            false
+          )
         })
         it('Updates the UTXO to reflect that it is now additionally consumed by the newly-created UTXOs', async () => {
           // Mock findUTXO to return a UTXO
-          mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+          mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
           mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
             return {
               outputsToAdmit: [0],
@@ -1432,7 +2793,7 @@ describe('BSV Overlay Services Engine', () => {
       })
       it('Inserts a new applied transaction to avoid de-duplication', async () => {
         // Mock findUTXO to return a UTXO
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
           return {
             outputsToAdmit: [0],
@@ -1467,7 +2828,7 @@ describe('BSV Overlay Services Engine', () => {
       it('Returns a correct set of admitted topics and outputs', async () => {
         // Mock findUTXO to return a UTXO
         mockStorageEngine.insertOutput = jest.fn()
-        mockStorageEngine.findOutput = jest.fn(async () => mockOutput)
+        mockStorageEngine.findOutput = jest.fn(async () => makePreviousOutput())
         mockTopicManager.identifyAdmissibleOutputs = jest.fn(async () => {
           return {
             outputsToAdmit: [0],
@@ -1550,7 +2911,7 @@ describe('BSV Overlay Services Engine', () => {
       it('Uses batched output loading when the storage engine supports it', async () => {
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: undefined
           }
@@ -1575,7 +2936,7 @@ describe('BSV Overlay Services Engine', () => {
         })
 
         expect(findOutputsByOutpoints).toHaveBeenCalledWith(
-          [{ txid: 'mockTXID', outputIndex: 0 }],
+          [{ txid: exampleTXID, outputIndex: 0 }],
           true
         )
         expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
@@ -1584,7 +2945,7 @@ describe('BSV Overlay Services Engine', () => {
         it('Finds the identified UTXO by its txid and vout', async () => {
           mockLookupService.lookup = jest.fn(async () => [
             {
-              txid: 'mockTXID',
+              txid: exampleTXID,
               outputIndex: 0,
               history: undefined
             }
@@ -1607,7 +2968,7 @@ describe('BSV Overlay Services Engine', () => {
             query: { name: 'Bob' }
           })
           expect(mockStorageEngine.findOutput).toHaveBeenCalledWith(
-            'mockTXID',
+            exampleTXID,
             0,
             undefined,
             undefined,
@@ -1617,7 +2978,7 @@ describe('BSV Overlay Services Engine', () => {
         it('Calls getUTXOHistory with the correct UTXO and history parameters', async () => {
           mockLookupService.lookup = jest.fn(async () => [
             {
-              txid: 'mockTXID',
+              txid: exampleTXID,
               outputIndex: 0,
               history: undefined
             }
@@ -1653,7 +3014,7 @@ describe('BSV Overlay Services Engine', () => {
       it('Returns the correct set of hydrated results', async () => {
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: undefined
           }
@@ -1699,7 +3060,7 @@ describe('BSV Overlay Services Engine', () => {
         })
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: mockedHistorySelector
           }
@@ -1734,7 +3095,7 @@ describe('BSV Overlay Services Engine', () => {
         })
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: mockedHistorySelector
           }
@@ -1769,7 +3130,7 @@ describe('BSV Overlay Services Engine', () => {
       it('Returns undefined if the history selector is a number, and less than the current depth', async () => {
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: -1
           }
@@ -1799,7 +3160,7 @@ describe('BSV Overlay Services Engine', () => {
       it('Returns the current output even if history should be traversed, if the current output is part of a transaction that does not consume any previous topical UTXOs', async () => {
         mockLookupService.lookup = jest.fn(async () => [
           {
-            txid: 'mockTXID',
+            txid: exampleTXID,
             outputIndex: 0,
             history: 1
           }
@@ -1865,6 +3226,76 @@ describe('BSV Overlay Services Engine', () => {
       ...overrides
     })
 
+    it('serializes submissions and releases the queue after a failure', async () => {
+      const engine = makeEngine()
+      let releaseFirst!: () => void
+      const firstGate = new Promise<void>(resolve => {
+        releaseFirst = resolve
+      })
+      const firstFailure = new Error('first submission failed')
+      const submitUnlocked = jest
+        .spyOn(engine as any, 'submitUnlocked')
+        .mockImplementationOnce(async () => {
+          await firstGate
+          throw firstFailure
+        })
+        .mockResolvedValueOnce({ Hello: { outputsToAdmit: [], coinsToRetain: [] } })
+
+      const first = engine.submit({ beef: [1], topics: ['Hello'] })
+      await Promise.resolve()
+      const second = engine.submit({ beef: [1], topics: ['Hello'] })
+      await Promise.resolve()
+
+      expect(submitUnlocked).toHaveBeenCalledTimes(1)
+      releaseFirst()
+      await expect(first).rejects.toBe(firstFailure)
+      await expect(second).resolves.toEqual({
+        Hello: { outputsToAdmit: [], coinsToRetain: [] }
+      })
+      expect(submitUnlocked).toHaveBeenCalledTimes(2)
+    })
+
+    it('binds BASM admitted block positions to the supplied Merkle proof', async () => {
+      const engine = makeEngine()
+      const provenTransaction = Transaction.fromBEEF(Utils.toArray(beef27c8f0, 'hex'))
+      const proof = provenTransaction.merklePath
+      expect(proof).toBeDefined()
+      const leaf = proof?.path[0]?.find(candidate => candidate.hash === txid27c8f)
+      expect(leaf).toBeDefined()
+      const remote = {
+        requestCompoundMerklePath: jest.fn(async () => ({
+          topic: 'Hello',
+          blockHeight: proof!.blockHeight,
+          txids: [txid27c8f],
+          merklePath: proof!.toHex()
+        })),
+        requestRawTransactions: jest.fn()
+      }
+      engine.topicAnchorHeaderResolver = jest.fn(async height => ({
+        blockHeight: height,
+        blockHash: '11'.repeat(32),
+        merkleRoot: proof!.computeRoot(),
+        blockTransactionCount: Math.max(...proof!.path[0].map(candidate => candidate.offset)) + 2
+      }))
+
+      await expect(
+        (engine as any).fetchBASMMissingTransactions(
+          remote,
+          'Hello',
+          {
+            topic: 'Hello',
+            blockHeight: proof!.blockHeight,
+            blockHash: '11'.repeat(32),
+            basmRoot: txid27c8f,
+            admittedCount: 1,
+            tac: '22'.repeat(32)
+          },
+          [{ txid: txid27c8f, blockIndex: leaf!.offset + 1 }]
+        )
+      ).rejects.toThrow('proof node is outside canonical block positions')
+      expect(remote.requestRawTransactions).not.toHaveBeenCalled()
+    })
+
     it('retains unsupported-topic validation as a failed, non-admissible topic', async () => {
       const failedTopics = new Set<string>()
       const logger = { ...console, error: jest.fn() }
@@ -1915,7 +3346,7 @@ describe('BSV Overlay Services Engine', () => {
       expect(broadcaster.broadcast).not.toHaveBeenCalled()
     })
 
-    it('isolates spend-notification and storage failures from submission state', async () => {
+    it('isolates spend-notification failures but fails closed on storage errors', async () => {
       const logger = { ...console, error: jest.fn() }
       const notificationFailure = new Error('notification unavailable')
       const engine = makeEngine(
@@ -1941,8 +3372,9 @@ describe('BSV Overlay Services Engine', () => {
       mockStorageEngine.markUTXOAsSpent = jest.fn(async () => {
         throw storageFailure
       })
-      await (engine as any).markPreviousOutputSpent(mockOutput, 'Hello', exampleTX, exampleTXID)
-      expect(logger.error).toHaveBeenCalledWith('Error marking UTXO as spent:', storageFailure)
+      await expect(
+        (engine as any).markPreviousOutputSpent(mockOutput, 'Hello', exampleTX, exampleTXID)
+      ).rejects.toBe(storageFailure)
     })
 
     it('preserves no-op and invalid script spend-notification boundaries', async () => {
@@ -2010,6 +3442,51 @@ describe('BSV Overlay Services Engine', () => {
       expect(deleteUTXODeep).not.toHaveBeenCalled()
     })
 
+    it('does not prune through retained history and removes only the exact consumer reference', async () => {
+      const engine = makeEngine()
+      const ancestor = {
+        ...mockOutput,
+        txid: examplePreviousTXID,
+        outputIndex: 0,
+        topic: 'Hello',
+        consumedBy: [
+          { txid: exampleTXID, outputIndex: 0 },
+          { txid: exampleTXID, outputIndex: 1 },
+          { txid: '11'.repeat(32), outputIndex: 0 }
+        ],
+        outputsConsumed: []
+      }
+      mockStorageEngine.findOutput = jest.fn(async () => ancestor)
+      const prunable = {
+        ...mockOutput,
+        topic: 'Hello',
+        consumedBy: [],
+        outputsConsumed: [{ txid: examplePreviousTXID, outputIndex: 0 }]
+      }
+
+      await (engine as any).deleteUTXODeep(prunable)
+
+      expect(mockStorageEngine.updateConsumedBy).toHaveBeenCalledWith(
+        examplePreviousTXID,
+        0,
+        'Hello',
+        [
+          { txid: exampleTXID, outputIndex: 1 },
+          { txid: '11'.repeat(32), outputIndex: 0 }
+        ]
+      )
+      expect(mockStorageEngine.deleteOutput).toHaveBeenCalledTimes(1)
+
+      jest.clearAllMocks()
+      const retained = {
+        ...prunable,
+        consumedBy: [{ txid: '22'.repeat(32), outputIndex: 0 }]
+      }
+      await (engine as any).deleteUTXODeep(retained)
+      expect(mockStorageEngine.deleteOutput).not.toHaveBeenCalled()
+      expect(mockStorageEngine.findOutput).not.toHaveBeenCalled()
+    })
+
     it('preserves whole-transaction admission and incomplete-output no-ops', async () => {
       const outputAdmittedByTopic = jest.fn()
       const engine = makeEngine()
@@ -2059,7 +3536,7 @@ describe('BSV Overlay Services Engine', () => {
       ).resolves.toBeUndefined()
     })
 
-    it('isolates admission callbacks and storage mutation failures', async () => {
+    it('isolates admission callbacks but fails closed on storage mutation failures', async () => {
       const callbackFailure = new Error('lookup callback unavailable')
       const logger = { ...console, error: jest.fn() }
       const engine = makeEngine(
@@ -2091,26 +3568,23 @@ describe('BSV Overlay Services Engine', () => {
 
       const mutationFailure = new Error('mutation unavailable')
       jest.spyOn(engine as any, 'applyTopicStorageMutation').mockRejectedValueOnce(mutationFailure)
-      await (engine as any).applyStorageMutations([makeValidation()], {
-        dupeTopics: new Set<string>(),
-        failedTopics: new Set<string>(),
-        steak: {
-          Hello: {
-            outputsToAdmit: [],
-            coinsToRetain: [],
-            coinsRemoved: []
-          }
-        },
-        tx: exampleTX,
-        txid: exampleTXID,
-        beef: exampleBeef,
-        offChainValues: undefined
-      })
-      expect(logger.error).toHaveBeenCalledWith(
-        'Error updating storage and notifying lookup services for topic',
-        'Hello',
-        mutationFailure
-      )
+      await expect(
+        (engine as any).applyStorageMutations([makeValidation()], {
+          dupeTopics: new Set<string>(),
+          failedTopics: new Set<string>(),
+          steak: {
+            Hello: {
+              outputsToAdmit: [],
+              coinsToRetain: [],
+              coinsRemoved: []
+            }
+          },
+          tx: exampleTX,
+          txid: exampleTXID,
+          beef: exampleBeef,
+          offChainValues: undefined
+        })
+      ).rejects.toBe(mutationFailure)
     })
 
     it('records proven storage mutations and skips missing consumed outputs', async () => {
@@ -2150,6 +3624,117 @@ describe('BSV Overlay Services Engine', () => {
       expect(recompute).toHaveBeenCalledWith('Hello', 814435, 'block-hash')
     })
 
+    it('only serves raw BASM transactions admitted to the requested topic', async () => {
+      const findRawTransactions = jest.fn(async (txids: string[]) =>
+        txids.map(txid => ({ txid, rawTx: exampleTX.toHex() }))
+      )
+      mockStorageEngine.findRawTransactions = findRawTransactions
+      const engine = makeEngine()
+
+      await expect(engine.provideRawTransactions([exampleTXID])).rejects.toThrow(
+        'A BASM topic is required'
+      )
+      expect(findRawTransactions).not.toHaveBeenCalled()
+
+      await expect(engine.provideRawTransactions([exampleTXID], 'Hello')).resolves.toEqual({
+        transactions: [],
+        missing: [exampleTXID]
+      })
+      expect(findRawTransactions).toHaveBeenLastCalledWith([])
+
+      mockStorageEngine.doesAppliedTransactionExist = jest.fn(async () => true)
+      await expect(engine.provideRawTransactions([exampleTXID], 'Hello')).resolves.toEqual({
+        transactions: [{ txid: exampleTXID, rawTx: exampleTX.toHex() }],
+        missing: []
+      })
+      expect(findRawTransactions).toHaveBeenLastCalledWith([exampleTXID])
+
+      mockStorageEngine.doesAppliedTransactionExist = jest.fn(
+        async () => ({ allowed: true }) as any
+      )
+      await expect(engine.provideRawTransactions([exampleTXID], 'Hello')).rejects.toThrow(
+        'invalid BASM authorization verdict'
+      )
+    })
+
+    it('validates and bounds inbound GASP pages before querying storage', async () => {
+      const engine = makeEngine()
+      await expect(
+        engine.provideForeignSyncResponse({ version: 2, since: 0, limit: 10 }, 'Hello')
+      ).rejects.toThrow('version')
+      await expect(
+        engine.provideForeignSyncResponse({ version: 1, since: 0, limit: 10_001 }, 'Hello')
+      ).rejects.toThrow('between 1 and 10000')
+      expect(mockStorageEngine.findUTXOsForTopic).not.toHaveBeenCalled()
+
+      mockStorageEngine.findUTXOsForTopic = jest.fn(async () => [
+        {
+          ...mockOutput,
+          topic: 'Hello',
+          txid: exampleTXID,
+          outputIndex: 0,
+          score: 1
+        }
+      ])
+      await expect(
+        engine.provideForeignSyncResponse({ version: 1, since: 0, limit: 1 }, 'Hello')
+      ).resolves.toEqual({
+        since: 0,
+        UTXOList: [{ txid: exampleTXID, outputIndex: 0, score: 1 }]
+      })
+
+      mockStorageEngine.findUTXOsForTopic = jest.fn(async () => [
+        { ...mockOutput, topic: 'Other', score: 1 }
+      ])
+      await expect(
+        engine.provideForeignSyncResponse({ version: 1, since: 1, limit: 1 }, 'Hello')
+      ).rejects.toThrow('cross-topic GASP UTXO')
+    })
+
+    it('binds inbound GASP node hydration to the requested topic', async () => {
+      const engine = makeEngine()
+      mockStorageEngine.findOutput = jest.fn(async () => ({ ...mockOutput, topic: 'Other' }))
+
+      await expect(
+        engine.provideForeignGASPNode(`${exampleTXID}.0`, exampleTXID, 0, 'Hello')
+      ).rejects.toThrow('not admitted to this topic')
+
+      mockStorageEngine.findOutput = jest.fn(async () => ({ ...mockOutput, topic: 'Hello' }))
+      await expect(
+        engine.provideForeignGASPNode(`${exampleTXID}.0`, exampleTXID, 0, 'Hello')
+      ).resolves.toMatchObject({
+        graphID: `${exampleTXID}.0`,
+        outputIndex: 0,
+        rawTx: exampleTX.toHex()
+      })
+      expect(mockStorageEngine.findOutput).toHaveBeenLastCalledWith(
+        exampleTXID,
+        0,
+        'Hello',
+        undefined,
+        true
+      )
+
+      mockStorageEngine.findOutput = jest.fn(async () => ({
+        ...mockOutput,
+        topic: 'Hello',
+        outputsConsumed: [{ txid: 'f'.repeat(64), outputIndex: 0 }]
+      }))
+      await expect(
+        engine.provideForeignGASPNode(`${exampleTXID}.0`, 'f'.repeat(64), 0, 'Hello')
+      ).rejects.toThrow('relation is not a transaction input')
+
+      mockStorageEngine.findOutput = jest.fn(async () => ({
+        ...mockOutput,
+        txid: 'f'.repeat(64),
+        topic: 'Hello',
+        beef: undefined
+      }))
+      await expect(
+        engine.provideForeignGASPNode(`${exampleTXID}.0`, exampleTXID, 0, 'Hello')
+      ).rejects.toThrow('does not match the requested outpoint')
+    })
+
     it('preserves propagation no-ops and isolates remote propagation failure', async () => {
       const logger = { ...console, error: jest.fn() }
       const engine = makeEngine()
@@ -2157,18 +3742,29 @@ describe('BSV Overlay Services Engine', () => {
 
       await (engine as any).propagateSubmission(
         { beef: exampleBeef, topics: ['Hello'] },
-        {},
+        {
+          Hello: {
+            outputsToAdmit: [0],
+            coinsToRetain: [],
+            coinsRemoved: []
+          }
+        },
         new Set<string>(),
         exampleTX,
         exampleTXID
       )
+      expect(logger.error).toHaveBeenCalledWith(
+        'Error during propagation to other nodes:',
+        expect.any(TypeError)
+      )
+      logger.error.mockClear()
 
       const propagationFailure = new Error('remote unavailable')
       jest.spyOn(SHIPBroadcaster.prototype, 'broadcast').mockRejectedValueOnce(propagationFailure)
       await (engine as any).propagateSubmission(
-        { beef: exampleBeef, topics: ['tm_Hello'] },
+        { beef: exampleBeef, topics: ['tm_hello'] },
         {
-          tm_Hello: {
+          tm_hello: {
             outputsToAdmit: [0],
             coinsToRetain: [],
             coinsRemoved: []

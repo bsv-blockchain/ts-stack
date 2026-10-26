@@ -1,4 +1,6 @@
 import { lchAssert } from './errors.js'
+import { LCH_LIMITS } from './constants.js'
+import { toHex } from './hash.js'
 import type { PaymentDemand, PaymentOutput } from './types.js'
 
 const MAX_SATOSHIS = 2_100_000_000_000_000n
@@ -57,35 +59,68 @@ export function unitAmount(
   return checkedSatoshis(units * checkedSatoshis(pricePerUnit))
 }
 
-function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
-  return left.length === right.length && left.every((byte, index) => byte === right[index])
-}
-
 export function matchFinalizedOutputs(
   demands: readonly PaymentDemand[],
   outputs: readonly PaymentOutput[]
 ): Map<string, number> {
-  lchAssert(demands.length > 0, 'ERR_LCH_PAYMENT', 'No payment Demands were supplied')
+  lchAssert(
+    Array.isArray(demands) &&
+      demands.length > 0 &&
+      demands.length <= LCH_LIMITS.cborEntries &&
+      Array.isArray(outputs) &&
+      outputs.length <= LCH_LIMITS.cborEntries,
+    'ERR_LCH_PAYMENT',
+    'Payment Demand or output count is invalid'
+  )
   const demandIds = demands.map(demand => {
-    lchAssert(demand.demandId.length === 32, 'ERR_LCH_PAYMENT', 'Demand ID must contain 32 bytes')
-    return Array.from(demand.demandId, byte => byte.toString(16).padStart(2, '0')).join('')
+    lchAssert(
+      demand.demandId instanceof Uint8Array &&
+        demand.demandId.length === 32 &&
+        demand.lockingScript instanceof Uint8Array &&
+        demand.lockingScript.length > 0,
+      'ERR_LCH_PAYMENT',
+      'Demand ID or locking script is invalid'
+    )
+    checkedSatoshis(demand.satoshis)
+    return toHex(demand.demandId as Uint8Array)
   })
   lchAssert(
     new Set(demandIds).size === demandIds.length,
     'ERR_LCH_PAYMENT',
     'Demand IDs must be unique'
   )
+  const explicitOutputIndexes = outputs
+    .map(output => output.outputIndex)
+    .filter((value): value is number => value !== undefined)
+  lchAssert(
+    new Set(explicitOutputIndexes).size === explicitOutputIndexes.length &&
+      outputs.every(output => {
+        checkedSatoshis(output.satoshis)
+        return (
+          output.lockingScript instanceof Uint8Array &&
+          output.lockingScript.length > 0 &&
+          (output.outputIndex === undefined ||
+            (Number.isSafeInteger(output.outputIndex) && output.outputIndex >= 0))
+        )
+      }),
+    'ERR_LCH_PAYMENT',
+    'Finalized outputs are malformed or repeat an output index'
+  )
+  const candidatesByDestination = new Map<string, Array<{ output: PaymentOutput; index: number }>>()
+  outputs.forEach((output, index) => {
+    const key = `${output.satoshis}:${toHex(output.lockingScript as Uint8Array)}`
+    const candidates = candidatesByDestination.get(key) ?? []
+    candidates.push({ output, index })
+    candidatesByDestination.set(key, candidates)
+  })
   const used = new Set<number>()
+  const usedOutputIndexes = new Set<number>()
   const matches = new Map<string, number>()
   for (const demand of demands) {
-    const candidates = outputs
-      .map((output, index) => ({ output, index }))
-      .filter(
-        ({ output, index }) =>
-          !used.has(index) &&
-          output.satoshis === demand.satoshis &&
-          bytesEqual(output.lockingScript, demand.lockingScript)
-      )
+    const destination = `${demand.satoshis}:${toHex(demand.lockingScript as Uint8Array)}`
+    const candidates = (candidatesByDestination.get(destination) ?? []).filter(
+      ({ index }) => !used.has(index)
+    )
     lchAssert(
       candidates.length === 1,
       'ERR_LCH_PAYMENT',
@@ -93,11 +128,12 @@ export function matchFinalizedOutputs(
     )
     const index = candidates[0].output.outputIndex ?? candidates[0].index
     lchAssert(
-      Number.isSafeInteger(index) && index >= 0,
+      Number.isSafeInteger(index) && index >= 0 && !usedOutputIndexes.has(index),
       'ERR_LCH_PAYMENT',
-      'Finalized output index is invalid'
+      'Finalized output index is invalid or ambiguous'
     )
     used.add(candidates[0].index)
+    usedOutputIndexes.add(index)
     matches.set(demandIds[matches.size], index)
   }
   return matches

@@ -1,11 +1,26 @@
 import { PaymailClient } from '@bsv/paymail'
-import { mockUser1, mockUser2 } from '../mockUser'
+import { mockUser1, mockUser2, type MockUser } from '../mockUser.js'
 
-const client = new PaymailClient()
+export function requireSingleDestination<T>(outputs: readonly T[]): T {
+  if (outputs.length !== 1) {
+    throw new Error('This single-output example cannot safely satisfy multiple destinations')
+  }
+  const [destination] = outputs
+  if (destination === undefined) throw new Error('Paymail server returned no payment destination')
+  return destination
+}
 
-;(async () => {
-  const sender = mockUser1
-  const receiver = mockUser2.getPaymail()
+export interface SendP2PExampleOptions {
+  client?: PaymailClient
+  sender?: MockUser
+  receiver?: MockUser
+}
+
+export async function runSendP2PExample(options: SendP2PExampleOptions = {}): Promise<void> {
+  const client = options.client ?? new PaymailClient()
+  const sender = options.sender ?? mockUser1
+  const receiverUser = options.receiver ?? mockUser2
+  const receiver = receiverUser.getPaymail()
   await sender.initWallet()
   const startingBalance = sender.getSatoshiBalance()
   console.log('sender starting balance', startingBalance)
@@ -15,10 +30,9 @@ const client = new PaymailClient()
   }
 
   const p2pDestination = await client.getP2pPaymentDestination(receiver, startingBalance - 1)
-
-  // example we are assuming only one output but in reality it can be many
+  const destination = requireSingleDestination(p2pDestination.outputs)
   const { tx, reference } = await sender.getSpendingTransactionToScript(
-    p2pDestination.outputs[0].script,
+    destination.script,
     startingBalance - 1
   )
 
@@ -29,7 +43,11 @@ const client = new PaymailClient()
     note: 'hello world'
   })
   await sender.broadcastTransaction(tx)
-  mockUser1.processTransaction(tx, reference)
+  sender.processTransaction(tx, reference)
   console.log('sender updated balance', sender.getSatoshiBalance())
   await sender.closeWallet()
-})()
+}
+
+if (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) {
+  void runSendP2PExample()
+}

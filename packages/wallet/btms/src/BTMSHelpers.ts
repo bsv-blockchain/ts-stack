@@ -21,6 +21,37 @@ import {
 } from '@bsv/sdk'
 import { BTMS_LABEL_PREFIX, ISSUE_MARKER, DEFAULT_TOKEN_SATOSHIS } from './constants.js'
 
+/** Reject token values that cannot be represented exactly by the public number-based API. */
+export function assertSafeTokenAmount(
+  amount: number,
+  label = 'Token amount',
+  allowZero = false
+): void {
+  const minimum = allowZero ? 0 : 1
+  if (!Number.isSafeInteger(amount) || amount < minimum) {
+    throw new RangeError(
+      `${label} must be a ${allowZero ? 'non-negative' : 'positive'} integer within the safe integer range`
+    )
+  }
+}
+
+/** Add token values without silently rounding above Number.MAX_SAFE_INTEGER. */
+export function addTokenAmounts(left: number, right: number, label = 'Token amount'): number {
+  assertSafeTokenAmount(left, label, true)
+  assertSafeTokenAmount(right, label, true)
+  const total = left + right
+  assertSafeTokenAmount(total, label, true)
+  return total
+}
+
+/** Subtract token values without permitting an underflow or inexact result. */
+export function subtractTokenAmounts(left: number, right: number, label = 'Token amount'): number {
+  assertSafeTokenAmount(left, label, true)
+  assertSafeTokenAmount(right, label, true)
+  if (right > left) throw new RangeError(`${label} must not be negative`)
+  return left - right
+}
+
 // ---------------------------------------------------------------------------
 // getTransactions helpers
 // ---------------------------------------------------------------------------
@@ -63,7 +94,7 @@ export function sumOutputAmountsByTag(
   for (const output of outputs) {
     if (!output.tags?.includes(tagName)) continue
     const amt = decodeOutputAmount(output, txid, assetId)
-    if (amt !== null) total += amt
+    if (amt !== null) total = addTokenAmounts(total, amt, 'Transaction output total')
   }
   return total
 }
@@ -76,7 +107,7 @@ export function sumInputAmounts(
   let total = 0
   for (const input of inputs) {
     const amt = decodeInputAmount(input, assetId)
-    if (amt !== null) total += amt
+    if (amt !== null) total = addTokenAmounts(total, amt, 'Transaction input total')
   }
   return total
 }
@@ -103,7 +134,7 @@ export function calcSendAmount(
   for (const output of sendOutputs) {
     const amt = decodeOutputAmount(output, action.txid, assetId)
     if (amt !== null) {
-      total += amt
+      total = addTokenAmounts(total, amt, 'Transaction send total')
       decoded += 1
     }
   }
@@ -115,7 +146,7 @@ export function calcSendAmount(
   const changeAmount = action.outputs
     ? sumOutputAmountsByTag(action.outputs, 'btms_type_change', action.txid, assetId)
     : 0
-  return inputAmount - changeAmount
+  return subtractTokenAmounts(inputAmount, changeAmount, 'Transaction send amount')
 }
 
 /** Calculate the amount burned (inputs − change). */
@@ -127,7 +158,7 @@ export function calcBurnAmount(
   const changeAmount = action.outputs
     ? sumOutputAmountsByTag(action.outputs, 'btms_type_change', action.txid, assetId)
     : 0
-  return inputAmount - changeAmount
+  return subtractTokenAmounts(inputAmount, changeAmount, 'Transaction burn amount')
 }
 
 /** Calculate display amount for any action type. */
@@ -234,7 +265,7 @@ export function accumulateOutputIntoBalances(
   if (!assetId) return
 
   const current = assetBalances.get(assetId) ?? { balance: 0 }
-  current.balance += decoded.amount
+  current.balance = addTokenAmounts(current.balance, decoded.amount, 'Asset balance')
   current.metadata ??= parseMetadata(decoded.metadata)
   assetBalances.set(assetId, current)
 }

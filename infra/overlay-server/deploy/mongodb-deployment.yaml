@@ -38,6 +38,8 @@ spec:
                   key: mongo-root-user
           image: mongo:6.0.28@sha256:8b6d8f5bbedb25cb73517b65cf99f13aeb75ad5b157a56c479287a840bbad3ac
           name: mongo
+          securityContext:
+            allowPrivilegeEscalation: false
           ports:
             - containerPort: 27017
               name: mongodb

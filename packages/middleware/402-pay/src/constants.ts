@@ -1,4 +1,4 @@
-import type { WalletProtocol } from '@bsv/sdk'
+import type { WalletProtocol } from '@bsv/sdk/wallet/Wallet.interfaces'
 
 /** BRC-29 protocol ID for key derivation */
 export const BRC29_PROTOCOL_ID: WalletProtocol = [2, '3241645161d8']

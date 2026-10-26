@@ -10,6 +10,98 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.1.0 candidate
+
+### Added
+
+- `OneColor`, the BRC-162 1Color template: the same prefix rules as
+  `Bsv21Binary`, plus 36-byte token ids (txid ‖ little-endian vout) for assets
+  first deployed under BRC-161 at a nonzero output. A 36-byte id with vout 0 is
+  rejected. `OneColor.tokenIdFromString` and `OneColor.tokenIdToString` convert
+  `<txid>_<vout>` ids. `OneColorError`, `OneColorDecoded` and `OneColorRole`
+  name the shared error class and types.
+- `Bsv21Binary` is unchanged; `src/Bsv21Binary.ts` exports the prefix helpers
+  `OneColor` reuses (`payloadChunk`, `splitPayload`, `p2pkhHash`, `roleOf`).
+- `Bsv21Token.envelope` locates a BRC-160 `ord` envelope anywhere in a script
+  and returns its fields, content type, body and the remaining locking script
+  (`Bsv21Envelope`). `Bsv21TokenDecoded` gains `op`, `payload` and
+  `lockingScript`.
+
+### Fixed
+
+- `Bsv21Token.decode` reads the envelope per BRC-160 wherever it sits:
+  `<locking script> <envelope>`, `<envelope> <locking script>` and
+  `<envelope> OP_CODESEPARATOR <locking script>`; a field may repeat (the last
+  value wins) and single-byte `0x00`/`0x01` pushes alias `OP_0`/`OP_1` tags.
+  The spend condition may be any script: `ownerHash160` is empty, rather than
+  an error, when it is not P2PKH. `auth` and `deploy+auth` outputs, which carry
+  no `amt`, decode with `amt` `'0'`.
+- `decodeStrictCbor` and `encodeStrictCbor` implement full strict DAG-CBOR, as
+  BRC-162 requires payloads to be read: negative integers, arrays, finite 64-bit
+  floats and tag 42 links (`StrictCborLink`) are accepted, so the `icon`
+  `[text, bytes]` array and `req` parameter values decode. The Mandala subset
+  rejected them with `major type N not allowed` / `simple value or float not
+allowed`. New messages: `float must be 64-bit`, `non-finite float`, `simple
+value not allowed`, `only tag 42 is allowed`, `invalid CID`, `input bytes
+outside 0..255`. The 4096-byte ceiling (`STRICT_CBOR_MAX_BYTES`) and the
+  depth-4 cap are gone: the spec sets neither; `STRICT_CBOR_MAX_DEPTH` (1024)
+  remains as an anti-DoS bound on nesting. `test/vectors/brc162.json` is
+  regenerated.
+
+### 2.0.0 candidate — BRC-162 (breaking)
+
+### Removed
+
+- `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL`, with their types
+  (`MandalaTokenDecoded`, `MandalaAdminDecoded`, `MandalaActionDetails`,
+  `MandalaActionKind`, `MandalaAdminLockParams`, `MandalaAdminUnlockParams` and
+  `AssetMetadata`). Mandala tokens now use the BRC-162 binary layout, which is
+  not wire-compatible with the removed BRC-92 scripts.
+- The `mandala-signing.ts` subpath.
+- `encodeScriptNum`, `encodeAssetId` and `decodeAssetId` from the
+  `mandala-encoding.ts` subpath, which keeps `createMinimallyEncodedScriptChunk`,
+  `decodeScriptNum` and `decodeScriptNumChunk`.
+
+### Added
+
+- `Bsv21Binary`, a [BRC-162](https://brc.dev/162) (BSV-21 binary) token-output
+  template with canonical pushes: `lock`, `lockBRC29`, `unlock` and `decode`.
+  Amounts are `bigint` (0 to 2^64 - 1) and every value has exactly one accepted
+  encoding; a token-shaped script that is not canonical throws
+  `Bsv21BinaryError`. Companion exports: `Bsv21BinaryDecoded`, `Bsv21Role`,
+  `BSV21_MAX_AMOUNT`, `encodeAmountChunk`, `decodeAmountChunk`,
+  `tokenIdToString`, `tokenIdFromString` and `isTokenShaped`.
+- A strict, dependency-free DAG-CBOR subset for token payloads:
+  `encodeStrictCbor`, `decodeStrictCbor`, `tryDecodeStrictCbor`,
+  `StrictCborError`, `StrictCborValue`, `StrictCborMap`,
+  `STRICT_CBOR_MAX_BYTES` and `STRICT_CBOR_MAX_DEPTH`. Floats, tags, negative
+  integers, arrays, unsorted keys, non-minimal headers, trailing bytes and
+  nesting deeper than 4 are refused, and so is a `number[]` input with an entry
+  outside 0..255 (never wrapped to a byte). Each refusal throws a fixed
+  message; the package-local `test/vectors/brc162.json` pins every message and
+  the order the checks run in, for ports such as the Go overlay.
+
+### Changed
+
+- Accept `@bsv/sdk` `^3.0.0` as well as `^2.1.6`. The source already declares
+  this range, but published 1.10.3 only accepts `^2.1.6`, so a release that
+  stages SDK 3 cannot install `@bsv/overlay-topics`, which depends on
+  templates. 2.0.0 is the first release to publish the wider range; the other
+  script templates are unchanged.
+
+### 1.10.3 candidate — CommonJS SDK interop
+
+### Fixed
+
+- The CommonJS build no longer wraps `@bsv/sdk` default imports as whole
+  modules, so `require('@bsv/templates')` consumers can construct scripts again
+  instead of failing with `LockingScript.default is not a constructor`
+  ([#571](https://github.com/bsv-blockchain/ts-stack/issues/571)). SDK classes
+  are now imported by name from the SDK barrels; the ESM build and browser
+  bundle size are unchanged.
+
+### 1.10.2 candidate — signing-context and template hardening
+
 ### Added
 
 - `R1K1Wallet`, a static Runar contract template with a salted P-256 hardware
@@ -38,7 +130,15 @@ All notable changes to this project will be documented in this file. The format 
 
 ### Security
 
-- (Notify of any improvements related to security vulnerabilities or potential risks.)
+- Validate and snapshot the complete signing context before requesting a
+  wallet signature, including source outpoint, satoshis, locking script,
+  sequence, scope, and any supplied source transaction.
+- Require `MultiPushDrop` to match its complete canonical script and cap it at
+  120 distinct compressed locking keys; bind `P2MSKH` signatures to the exact
+  ordered key commitment and threshold.
+- Reject non-positive or non-safe-integer Mandala amounts and harden Mandala,
+  R1K1Wallet, OpReturn, DSTAS, STAS, and BSV-21 script and signature inputs
+  against malformed, ambiguous, or mutation-backed values.
 
 ---
 

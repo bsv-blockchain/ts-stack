@@ -94,15 +94,98 @@ Back up the database before schema changes and retain the prior immutable image
 for application rollback. A rollback must consider whether a migration is
 backward-compatible with the prior application version.
 
+For paid sends, a periodic snapshot alone is not a sufficient recovery source:
+the wallet mutation is external to the database transaction. Retain continuous
+point-in-time/binlog history and independent wallet transaction/audit evidence
+from each snapshot through the present. After any restore, keep paid sends
+disabled until every post-snapshot wallet action, replay claim, and
+`prepared`, `wallet_accepted`, or `completed` intent has been reconstructed and
+reconciled. The paid-send recovery objective is zero silent loss of replay or
+intent evidence; an unresolved window is an availability event, not permission
+to retry or request another spend.
+
+The payment migrations create both `payment_replays` and
+`message_payment_intents`; preserve both tables across every rollout. Custom
+embedded deployments must upgrade their replay-store adapter before deploying:
+it must implement `TransactionalPaymentReplayStore.claimInTransaction` and
+write `payment_replays` through the supplied Knex transaction. Keep `claim` for
+route-level payment middleware. Do not emulate rollback by deleting a claim
+after an error, because a concurrent request may already own the same
+transaction ID. The standard server uses `KnexPaymentReplayStore` and needs no
+adapter migration. Transactional body-payment claims must store
+`expires_at = NULL` and remain non-expiring: recipient-only payments have no
+server-wallet freshness verdict, so pruning such a claim would make the old
+transaction reusable for a different message.
+`MESSAGE_BOX_PAYMENT_REPLAY_TTL_DAYS` applies only to ordinary route-level
+BRC-105 claims.
+
+`message_payment_intents` is the durable cross-boundary recovery protocol. A
+`prepared` row binds the transaction ID to the exact canonical request before
+wallet mutation, and its attempt token prevents concurrent requests from taking
+ownership. `wallet_accepted` records an accepted wallet result after a
+non-retryable message transaction failure so an exact retry can finish without
+internalizing twice. `completed` means the message and non-expiring replay claim
+committed. A process termination after wallet acceptance but before the
+`wallet_accepted` update leaves an intentionally ambiguous `prepared` row;
+reconcile that wallet transaction and row manually before allowing another
+attempt or asking the payer to spend again. Never delete or reassign
+`prepared` or `wallet_accepted` rows as a retry mechanism, and retain intent
+rows unless a future reviewed retention policy proves that their replay and
+recovery obligations have ended.
+
+An application rollback cannot be image-only, and mixed-version replicas are
+unsupported once paid-send traffic begins. An older image neither implements
+this recovery protocol nor contains the new migration file, so migration-list
+validation may refuse to start it against the migrated database. Prefer a
+roll-forward. If rollback is unavoidable, stop and drain every replica,
+reconcile every intent, and restore the prior image together with a verified
+pre-migration database backup before restoring traffic. The down migration
+intentionally refuses to drop `message_payment_intents` while any row exists;
+never delete recovery rows merely to bypass that guard. Fresh body-payment
+requests with a server delivery output still require a newly accepted wallet
+result, and `isMerge: true` without a matching accepted intent fails closed.
+
+The September 24 authentication migration creates `auth_message_nonces` for
+`KnexSessionManager`. The service owns this table because it does not run the
+Toolbox wallet database migrations. Both HTTP initial-request replay claims and
+signed-message replay claims must be shared by every HTTP replica. An older
+service database with only `auth_sessions` cannot complete a new HTTP handshake;
+a healthy WebSocket handshake does not prove HTTP authentication works.
+
+Apply the additive migration with the standard migration runner before accepting
+HTTP traffic. It does not rewrite messages, permissions, sessions or payment
+recovery state. Keep its migration file available to the ledger on every replica;
+an older image lacking that file may refuse startup. Retain the replay table
+across application rollbacks. Its down migration refuses to discard any existing
+claim. Never disable replay checks or delete claims to restore availability.
+
 ## Probes
 
 - `GET /healthz` — liveness; does not authenticate or disclose dependencies
 - `GET /ready` — database readiness; returns 503 while unavailable
 
-Gate traffic on readiness. Add an authenticated WebSocket handshake probe when
-live messaging is a required deployment capability.
+Gate traffic on readiness. Also complete an authenticated HTTP initial handshake
+and signed request using a synthetic identity, and verify that replaying the
+same signed request against another replica is rejected. Add an authenticated
+WebSocket handshake probe when live messaging is required; it exercises a
+separate session manager and cannot substitute for the durable HTTP check.
 
 ## Ingress and timeouts
+
+For multiple replicas, preserve Engine.IO polling session affinity: every
+request for one transport session must reach its originating process. Use a
+load-balancer policy that works with existing credential-free cross-domain
+clients, such as source-IP affinity; requiring a new third-party routing cookie
+would force a client migration. Test authenticated polling and WebSocket
+connections separately. Affinity is transport routing, not authentication or
+durable session failover; clients reconnect after endpoint withdrawal.
+
+Configure the proxy's idle upstream HTTP connection lifetime below the server's
+five-second keep-alive timeout (for example, four seconds). Otherwise a proxy
+can reuse a connection at the server's close boundary and return an intermittent
+503 before an application response. Keep active-request and WebSocket stream
+timeouts separate and sufficiently long. Do not add automatic payment-request
+retries as a substitute for correct connection lifecycle settings.
 
 The image serves HTTP and WebSocket traffic directly on `PORT` (8080 by
 default). Put the platform ingress or load balancer in front of the container

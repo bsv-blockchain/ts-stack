@@ -1,8 +1,13 @@
 import { StorageKnex } from '../StorageKnex'
 import { KnexSyncTransferStore } from './KnexSyncTransferStore'
-import { decodeSyncTransfer, encodeSyncTransfer, syncTransferDigest,
-  SYNC_TRANSFER_MAX_BYTES, SYNC_TRANSFER_PART_BYTES } from './SyncTransfer'
-import { syncChunkBinary } from './syncChunkBinary'
+import {
+  decodeSyncTransfer,
+  encodeSyncTransfer,
+  syncTransferDigest,
+  SYNC_TRANSFER_MAX_BYTES,
+  SYNC_TRANSFER_PART_BYTES
+} from './SyncTransfer'
+import { syncChunkBinary, tableRowsBinary } from './syncChunkBinary'
 /**
  * StorageServer.ts
  *
@@ -25,7 +30,7 @@ import type { PaymentReplayStore } from '@bsv/payment-express-middleware'
 import { Options as RateLimitOptions, rateLimit } from 'express-rate-limit'
 import { Wallet } from '../../Wallet'
 import { StorageProvider } from '../StorageProvider'
-import { WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_NOT_ACTIVE, WERR_UNAUTHORIZED } from '../../sdk/WERR_errors'
 import { AuthId, SyncChunk } from '../../sdk/WalletStorage.interfaces'
 import { EntityTimeStamp } from '../../sdk/types'
 import { validateDate, validateEntity, validateEntities, validateSyncChunkEntities } from './entityValidationHelpers'
@@ -105,6 +110,22 @@ const storageRpcMethods = new Set([
   'updateProvenTxReqWithNewProvenTx'
 ])
 
+/**
+ * Serialize an error for an authenticated network peer without exposing
+ * provider, database, filesystem, or other server-internal diagnostics.
+ *
+ * WalletError subclasses are the storage protocol's explicit public error
+ * contract. WERR_INTERNAL and unknown exceptions are deliberately collapsed
+ * to the stable default message; operators can still capture the original
+ * exception through the explicitly configured server logger and telemetry.
+ */
+function publicWalletErrorJson(error: unknown): string {
+  if (!(error instanceof WalletError) || error.name === 'WERR_INTERNAL' || error.name === 'WERR_UNKNOWN') {
+    return WalletError.unknownToJson(new WERR_INTERNAL())
+  }
+  return WalletError.unknownToJson(error)
+}
+
 const authIdRpcMethods = new Set([
   'abortAction',
   'abortActionBatch',
@@ -147,7 +168,8 @@ const activeStorageRpcMethods = new Set([
   'prepareActionBatchCommit',
   'prepareNoSendExpiry',
   'renewActionBatch',
-  'resumeActionBatch'
+  'resumeActionBatch',
+  'updateProvenTxReqWithNewProvenTx'
 ])
 
 const topLevelLimitArgument = new Map<string, number>([
@@ -164,9 +186,21 @@ const pagedLimitArgument = new Map<string, number>([
   ['findProvenTxReqs', 0]
 ])
 
+const binaryRowResults = new Map<string, 'outputs' | 'provenTxReqs'>([
+  ['findOutputsAuth', 'outputs'],
+  ['findProvenTxReqs', 'provenTxReqs']
+])
+
 interface RpcDispatchResult {
   found: boolean
   result?: unknown
+}
+
+/** Copy a result's schema-defined byte fields for the already negotiated binary JSON codec. */
+function binaryRpcResult(method: string, result: unknown): unknown {
+  if (method === 'getSyncChunk') return syncChunkBinary(result as SyncChunk)
+  const table = binaryRowResults.get(method)
+  return table != null && Array.isArray(result) ? tableRowsBinary(table, result) : result
 }
 
 function requiredAuthenticatedIdentityKey(req: Request): string {
@@ -240,6 +274,8 @@ export interface WalletStorageServerOptions {
   defaultRpcListLimit?: number
   /** Largest caller-selected list/find item limit. Use -1 to disable this operator ceiling. */
   maxRpcListLimit?: number
+  /** Largest list/find/sync offset accepted at the RPC edge. Use -1 only for trusted tenants. */
+  maxRpcListOffset?: number
   /** Maximum elements in any decoded request array. Use -1 only for trusted callers. */
   maxRpcArrayItems?: number
   /** Maximum serialized JSON-RPC response bytes. Use -1 to disable. */
@@ -274,6 +310,7 @@ export class StorageServer {
   private readonly telemetryConfig?: TelemetryConfig
   private readonly defaultRpcListLimit: number
   private readonly maxRpcListLimit: number
+  private readonly maxRpcListOffset: number
   private readonly maxRpcArrayItems: number
   private readonly maxRpcResponseBytes: number
   private readonly paymentReplayStore?: PaymentReplayStore
@@ -327,6 +364,13 @@ export class StorageServer {
         'RPC_MAX_LIST_LIMIT',
         profileValue(profile, { small: 500, standard: 1_000, highThroughput: 5_000 })
       )
+    this.maxRpcListOffset =
+      options.maxRpcListOffset ??
+      readResourceLimit(
+        'WALLET_STORAGE',
+        'RPC_MAX_LIST_OFFSET',
+        profileValue(profile, { small: 100_000, standard: 1_000_000, highThroughput: 10_000_000 })
+      )
     this.maxRpcArrayItems =
       options.maxRpcArrayItems ??
       readResourceLimit(
@@ -352,19 +396,38 @@ export class StorageServer {
     ) {
       throw new RangeError('defaultRpcListLimit must not exceed maxRpcListLimit')
     }
+    if (!Number.isSafeInteger(this.maxRpcListOffset) || this.maxRpcListOffset < -1) {
+      throw new RangeError('maxRpcListOffset must be -1 or a non-negative safe integer')
+    }
 
-    const jsonBodyLimit = readBodyLimitBytes('WALLET_STORAGE_JSON', profileValue(profile, {
-      small: 2 * 1024 * 1024, standard: 8 * 1024 * 1024, highThroughput: 32 * 1024 * 1024
-    }))
+    const jsonBodyLimit = readBodyLimitBytes(
+      'WALLET_STORAGE_JSON',
+      profileValue(profile, {
+        small: 2 * 1024 * 1024,
+        standard: 8 * 1024 * 1024,
+        highThroughput: 32 * 1024 * 1024
+      })
+    )
     // Keep legacy configurations working when their envelopes cannot fit even a minimum part.
-    if (options.syncTransfers !== false && storage instanceof StorageKnex && jsonBodyLimit >= 4096 &&
-      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= 4096)) {
+    if (
+      options.syncTransfers !== false &&
+      storage instanceof StorageKnex &&
+      jsonBodyLimit >= 4096 &&
+      (this.maxRpcResponseBytes === -1 || this.maxRpcResponseBytes >= 4096)
+    ) {
       this.syncTransfers = new KnexSyncTransferStore(storage.knex, {
-        version: 1, maxBytes: SYNC_TRANSFER_MAX_BYTES,
-        inlineBytes: Math.min(6 * 1024 * 1024, Math.floor(jsonBodyLimit / 2),
-          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_MAX_BYTES : Math.floor(this.maxRpcResponseBytes / 2)),
-        partBytes: Math.min(SYNC_TRANSFER_PART_BYTES, Math.floor(jsonBodyLimit / 4),
-          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_PART_BYTES : Math.floor(this.maxRpcResponseBytes / 4))
+        version: 1,
+        maxBytes: SYNC_TRANSFER_MAX_BYTES,
+        inlineBytes: Math.min(
+          6 * 1024 * 1024,
+          Math.floor(jsonBodyLimit / 2),
+          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_MAX_BYTES : Math.floor(this.maxRpcResponseBytes / 2)
+        ),
+        partBytes: Math.min(
+          SYNC_TRANSFER_PART_BYTES,
+          Math.floor(jsonBodyLimit / 4),
+          this.maxRpcResponseBytes === -1 ? SYNC_TRANSFER_PART_BYTES : Math.floor(this.maxRpcResponseBytes / 4)
+        )
       })
     }
 
@@ -534,7 +597,7 @@ export class StorageServer {
         })
         res.status(200).json({ uploaded: true })
       } catch (error: unknown) {
-        const json = WalletError.unknownToJson(error)
+        const json = publicWalletErrorJson(error)
         res.status(400).json(JSON.parse(json))
       }
     })
@@ -549,7 +612,7 @@ export class StorageServer {
         await this.storage.putActionBatchBlob(auth, { batchId, digest, bytes: body })
         res.status(200).json({ uploaded: true })
       } catch (error: unknown) {
-        const json = WalletError.unknownToJson(error)
+        const json = publicWalletErrorJson(error)
         res.status(400).json(JSON.parse(json))
       }
     })
@@ -589,9 +652,10 @@ export class StorageServer {
     const logObj = this.createRpcLog(req, method, id, params)
     try {
       this.enforceRpcRequestBudgets(method, params)
-      const dispatch = method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
-        ? await this.dispatchSyncTransfer(method, params, req)
-        : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
+      const dispatch =
+        method.endsWith('SyncTransfer') || method.endsWith('SyncTransferPart')
+          ? await this.dispatchSyncTransfer(method, params, req)
+          : await this.dispatchRpcCall(method, params, req, logObj, rpcSpan)
       if (!dispatch.found) {
         return this.sendRpc(
           res,
@@ -604,10 +668,11 @@ export class StorageServer {
           400
         )
       }
-      const result = useBinary && method === 'getSyncChunk'
-        ? syncChunkBinary(dispatch.result as SyncChunk)
-        : dispatch.result
-      const payload = { jsonrpc: '2.0', result, id }
+      const result = useBinary ? binaryRpcResult(method, dispatch.result) : dispatch.result
+      // JSON-RPC success responses must carry a result member. Preserve an
+      // explicit null for void storage methods rather than letting
+      // JSON.stringify silently omit an undefined result.
+      const payload = { jsonrpc: '2.0', result: result ?? null, id }
       const serialized = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
       // Apply the response bound before consulting any client transport preference.
       if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
@@ -619,14 +684,23 @@ export class StorageServer {
     }
   }
 
-  private async sendOversizedSyncResponse(req: Request, res: Response, useBinary: boolean,
-    method: string, params: any[], payload: { jsonrpc: string; result: unknown; id: unknown }): Promise<Response> {
+  private async sendOversizedSyncResponse(
+    req: Request,
+    res: Response,
+    useBinary: boolean,
+    method: string,
+    params: any[],
+    payload: { jsonrpc: string; result: unknown; id: unknown }
+  ): Promise<Response> {
     // Dispatch already applied normal RPC authorization. Negotiation changes only framing.
     if (method !== 'getSyncChunk' || params[0]?.syncTransferVersion !== 1 || this.syncTransfers == null) {
       return this.sendRpc(res, useBinary, payload)
     }
-    const manifest = await this.syncTransfers.beginRead(requiredAuthenticatedIdentityKey(req),
-      syncTransferDigest(encodeSyncTransfer(params[0])), encodeSyncTransfer(syncChunkBinary(payload.result as SyncChunk)))
+    const manifest = await this.syncTransfers.beginRead(
+      requiredAuthenticatedIdentityKey(req),
+      syncTransferDigest(encodeSyncTransfer(params[0])),
+      encodeSyncTransfer(syncChunkBinary(payload.result as SyncChunk))
+    )
     return this.sendRpc(res, useBinary, { ...payload, result: { syncTransfer: manifest } })
   }
 
@@ -663,8 +737,13 @@ export class StorageServer {
     next()
   }
 
-  private sendRpc(res: Response, useBinary: boolean, payload: unknown, status: number = 200,
-    serialized: string = escapeRpcJson(stringifyJsonRpc(payload, useBinary))): Response {
+  private sendRpc(
+    res: Response,
+    useBinary: boolean,
+    payload: unknown,
+    status: number = 200,
+    serialized: string = escapeRpcJson(stringifyJsonRpc(payload, useBinary))
+  ): Response {
     res.set('X-Content-Type-Options', 'nosniff')
     if (this.maxRpcResponseBytes !== -1 && Buffer.byteLength(serialized, 'utf8') > this.maxRpcResponseBytes) {
       return res.status(413).json({
@@ -688,6 +767,7 @@ export class StorageServer {
     if (topLevelIndex != null) {
       const args = this.objectArgument(params, topLevelIndex)
       args.limit = this.normalizedRpcLimit(args.limit)
+      args.offset = this.normalizedRpcOffset(args.offset)
     }
     const pagedIndex = pagedLimitArgument.get(method)
     if (pagedIndex != null) {
@@ -697,7 +777,20 @@ export class StorageServer {
         throw new TypeError('paged must be an object')
       }
       paged.limit = this.normalizedRpcLimit(paged.limit)
+      paged.offset = this.normalizedRpcOffset(paged.offset)
       args.paged = paged
+    }
+    if (method === 'getSyncChunk' || method === 'processSyncChunk') {
+      const args = this.objectArgument(params, 0)
+      if (args.offsets != null) {
+        if (!Array.isArray(args.offsets)) throw new TypeError('offsets must be an array')
+        for (const entry of args.offsets) {
+          if (entry == null || typeof entry !== 'object' || Array.isArray(entry)) {
+            throw new TypeError('offset entries must be objects')
+          }
+          entry.offset = this.normalizedRpcOffset(entry.offset)
+        }
+      }
     }
     if (method === 'getSyncChunk') {
       const args = this.objectArgument(params, 0)
@@ -760,12 +853,24 @@ export class StorageServer {
     return limit
   }
 
+  private normalizedRpcOffset(value: unknown): number {
+    if (value == null) return 0
+    if (!Number.isSafeInteger(value) || Number(value) < 0) {
+      throw new RangeError('RPC list offsets must be non-negative safe integers')
+    }
+    const offset = Number(value)
+    if (this.maxRpcListOffset !== -1 && offset > this.maxRpcListOffset) {
+      throw new RangeError(`RPC list offsets must not exceed ${this.maxRpcListOffset}`)
+    }
+    return offset
+  }
+
   private sendRpcError(res: Response, useBinary: boolean, id: unknown, error: unknown): Response {
     /**
      * Convert errors to standard JSON object format that can be converted back
      * to WalletError derived objects on the client side and re-thrown.
      */
-    const json = WalletError.unknownToJson(error)
+    const json = publicWalletErrorJson(error)
     return this.sendRpc(res, useBinary, {
       jsonrpc: '2.0',
       error: JSON.parse(json),
@@ -803,7 +908,14 @@ export class StorageServer {
   ): Promise<RpcDispatchResult> {
     if (!storageRpcMethods.has(method)) return { found: false }
 
-    const storageMethod = method === 'findOutputBaskets' ? 'findOutputBasketsAuth' : method
+    const storageMethod =
+      method === 'findOutputBaskets'
+        ? 'findOutputBasketsAuth'
+        : method === 'findProvenTxReqs'
+          ? 'findProvenTxReqsAuth'
+          : method === 'updateProvenTxReqWithNewProvenTx'
+            ? 'updateProvenTxReqWithNewProvenTxAuth'
+            : method
     const storageHandler = (this.storage as any)[storageMethod]
     if (typeof storageHandler !== 'function') return { found: false }
 
@@ -823,10 +935,16 @@ export class StorageServer {
         async () => await storageHandler.call(this.storage, ...params),
         { 'rpc.method': method }
       )
-      if ((method === 'makeAvailable' || method === 'getSettings') && typeof this.storage.getSyncCheckpoint === 'function') {
+      if (
+        (method === 'makeAvailable' || method === 'getSettings') &&
+        typeof this.storage.getSyncCheckpoint === 'function'
+      ) {
         // Advertise on the wire without mutating the persisted settings object.
-        result = { ...result, syncCheckpointVersion: 1,
-          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities }) }
+        result = {
+          ...result,
+          syncCheckpointVersion: 1,
+          ...(this.syncTransfers == null ? {} : { syncTransfer: this.syncTransfers.capabilities })
+        }
       }
       this.finishRpcLogging(logger, result)
       return { found: true, result }
@@ -849,8 +967,10 @@ export class StorageServer {
     switch (method) {
       case 'beginReadSyncTransfer': {
         const args = input.args
-        if (args?.identityKey !== identityKey ||
-          args.fromStorageIdentityKey !== this.storage.getSettings().storageIdentityKey) {
+        if (
+          args?.identityKey !== identityKey ||
+          args.fromStorageIdentityKey !== this.storage.getSettings().storageIdentityKey
+        ) {
           throw new WERR_UNAUTHORIZED('Sync transfer source must match authenticated storage')
         }
         // Retain existing request validation, authorization, ordering and user scoping.
@@ -875,10 +995,13 @@ export class StorageServer {
         const staged = await transfers.loadWrite(identityKey, input.transferId)
         if (staged.result !== undefined) return { found: true, result: staged.result }
         const payload = decodeSyncTransfer(staged.bytes) as { args: AuthId & Record<string, unknown>; chunk: SyncChunk }
-        if (payload?.args?.identityKey !== identityKey || payload.chunk?.userIdentityKey !== identityKey ||
+        if (
+          payload?.args?.identityKey !== identityKey ||
+          payload.chunk?.userIdentityKey !== identityKey ||
           payload.args.toStorageIdentityKey !== this.storage.getSettings().storageIdentityKey ||
           payload.chunk.toStorageIdentityKey !== payload.args.toStorageIdentityKey ||
-          payload.chunk.fromStorageIdentityKey !== payload.args.fromStorageIdentityKey) {
+          payload.chunk.fromStorageIdentityKey !== payload.args.fromStorageIdentityKey
+        ) {
           throw new WERR_UNAUTHORIZED('Sync transfer wallet and storage identities must match')
         }
         // Mark only the reconstructed request: old peers retain their existing wire contract.
@@ -893,7 +1016,8 @@ export class StorageServer {
         await transfers.release(identityKey, input.transferId)
         result = true
         break
-      default: return { found: false }
+      default:
+        return { found: false }
     }
     return { found: true, result }
   }
@@ -925,7 +1049,8 @@ export class StorageServer {
   ): Promise<boolean> {
     switch (method) {
       case 'destroy':
-        this.logIgnoredDestroy(logObj)
+      case 'migrate':
+        this.logIgnoredLifecycleMutation(logObj)
         return false
       case 'getSettings':
         return true
@@ -937,6 +1062,13 @@ export class StorageServer {
       case 'adminStats':
         this.authorizeAdminStats(params, req)
         return true
+      case 'findProvenTxReqs':
+      case 'updateProvenTxReqWithNewProvenTx': {
+        const args = params[0]
+        const auth = await this.authenticatedAuth(req, activeStorageRpcMethods.has(method))
+        params.splice(0, params.length, auth, args)
+        return true
+      }
       case 'processSyncChunk':
         await this.validateParam0(params, req)
         validateSyncChunkEntities(params[1] as SyncChunk)
@@ -948,7 +1080,7 @@ export class StorageServer {
     }
   }
 
-  private logIgnoredDestroy(logObj?: Record<string, unknown>): void {
+  private logIgnoredLifecycleMutation(logObj?: Record<string, unknown>): void {
     if (logObj == null) return
     logObj.result = undefined
     logObj.comment = 'IGNORED'

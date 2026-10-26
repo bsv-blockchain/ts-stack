@@ -25,3 +25,16 @@ export * from './WalletLogger'
 export * from './WalletAuthenticationManager'
 export * from './WalletPermissionsManager'
 export * from './WalletSettingsManager'
+
+// Additive, for parity with index.mobile.ts: @bsv/wallet-toolbox-client is
+// also published as a single bundle with no deep-import subpaths (see
+// client/package.json `exports`), so browser hosts hit the same gap mobile
+// hosts do for custom Monitor.addTask tasks, posting signed requests to the
+// network directly, the storage remoting wire format, and unlock-script
+// verification. Named exports only, matching index.mobile.ts.
+export { WalletMonitorTask } from './monitor/tasks/WalletMonitorTask'
+export { attemptToPostReqsToNetwork } from './storage/methods/attemptToPostReqsToNetwork'
+export type { PostReqsToNetworkResult } from './storage/methods/attemptToPostReqsToNetwork'
+export { parseJsonRpc, stringifyJsonRpc } from './storage/remoting/BinaryJson'
+export { verifyUnlockScripts } from './signer/methods/verifyUnlockScripts'
+export type { UnlockScriptVerificationResult } from './signer/methods/verifyUnlockScripts'

@@ -1,6 +1,19 @@
-import { type SyncTransferCapabilities, type SyncTransferManifest, type SyncTransferPart,
-  encodeSyncTransfer, syncTransferDigest, receiveSyncTransfer,
-  validateSyncTransferCapabilities, validateSyncTransferManifest } from './SyncTransfer'
+import {
+  type ValidCreateActionArgs,
+  type ValidListActionsArgs,
+  type ValidListCertificatesArgs,
+  type ValidListOutputsArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import {
+  type SyncTransferCapabilities,
+  type SyncTransferManifest,
+  type SyncTransferPart,
+  encodeSyncTransfer,
+  syncTransferDigest,
+  receiveSyncTransfer,
+  validateSyncTransferCapabilities,
+  validateSyncTransferManifest
+} from './SyncTransfer'
 import { syncChunkBinary } from './syncChunkBinary'
 import { validateSyncCheckpoint } from '../sync/syncCheckpoint'
 import {
@@ -15,7 +28,7 @@ import {
   RelinquishOutputArgs,
   WalletInterface,
   AuthFetch,
-  Validation,
+  PublicKey,
   Telemetry,
   TelemetryConfig,
   TelemetrySpan
@@ -82,7 +95,13 @@ import { pruneBeefForTxids } from '../../utility/beefForTxids'
 const syncChunkResponseRetryLimit = 4
 const minimumSyncChunkRoughSize = 64 * 1024
 
-function isSyncChunkResponseTooLarge (error: unknown): boolean {
+/** Hold proof data as bytes so negotiated binary JSON carries it compactly. */
+function withBeefBytes<T extends { inputBEEF?: number[] | Uint8Array }>(args: T): T {
+  if (args.inputBEEF == null || args.inputBEEF instanceof Uint8Array) return args
+  return { ...args, inputBEEF: Uint8Array.from(args.inputBEEF) }
+}
+
+function isSyncChunkResponseTooLarge(error: unknown): boolean {
   return error instanceof Error && /WalletStorageClient rpcCall: network error 413(?:\s|$)/.test(error.message)
 }
 
@@ -104,6 +123,25 @@ export interface StorageClientOptions {
    * supplied. Request parameters and response payloads are never emitted.
    */
   telemetry?: TelemetryConfig
+  /**
+   * Optional independently validated server identity key. When omitted, the
+   * first authenticated response is authoritative for this client instance.
+   */
+  serverIdentityKey?: string
+  /**
+   * Optional independently validated storage-provider identity. The storage
+   * and authenticated server may use distinct keys. When omitted, the value
+   * advertised in the first authenticated `makeAvailable` response is
+   * authoritative for this client instance.
+   */
+  storageIdentityKey?: string
+}
+
+function hasControlCharacter(value: string): boolean {
+  return Array.from(value).some(character => {
+    const point = character.codePointAt(0)!
+    return point <= 0x1f || (point >= 0x7f && point <= 0x9f)
+  })
 }
 
 function isLoopbackStorageHost(hostname: string): boolean {
@@ -117,6 +155,14 @@ function isLoopbackStorageHost(hostname: string): boolean {
 }
 
 function normalizeStorageEndpointUrl(endpointUrl: string): string {
+  if (
+    typeof endpointUrl !== 'string' ||
+    endpointUrl !== endpointUrl.trim() ||
+    endpointUrl.length > 8192 ||
+    hasControlCharacter(endpointUrl)
+  ) {
+    throw new TypeError('Wallet storage endpoint must be an exact bounded URL.')
+  }
   let parsed: URL
   try {
     parsed = new URL(endpointUrl)
@@ -135,6 +181,90 @@ function normalizeStorageEndpointUrl(endpointUrl: string): string {
   return endpointUrl
 }
 
+function normalizeServerIdentityKey(value: unknown): string {
+  if (typeof value !== 'string' || !/^(?:02|03)[0-9a-f]{64}$/.test(value)) {
+    throw new TypeError('Wallet storage server identity key must be canonical.')
+  }
+  try {
+    if (PublicKey.fromString(value).toString() !== value) throw new Error()
+  } catch {
+    throw new TypeError('Wallet storage server identity key must be canonical.')
+  }
+  return value
+}
+
+function normalizeStorageIdentityKey(value: unknown): string {
+  // Despite the historical "key" name, existing stores use both public keys
+  // and opaque identifiers, including legacy 32-byte and current 33-byte
+  // random values. Preserve that contract while enforcing the schema's
+  // bounded, non-control identifier domain.
+  if (typeof value !== 'string' || value.length < 1 || value.length > 130 || hasControlCharacter(value)) {
+    throw new TypeError('Wallet storage identity must be an exact bounded identifier.')
+  }
+  return value
+}
+
+function validateRemoteStorageSettings(value: unknown): RemoteStorageSettings {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  const prototype = Object.getPrototypeOf(value)
+  const properties = Object.getOwnPropertyDescriptors(value)
+  if (
+    (prototype !== Object.prototype && prototype !== null) ||
+    Object.getOwnPropertySymbols(value).length !== 0 ||
+    Object.values(properties).some(property => property.get != null || property.set != null)
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+
+  normalizeStorageIdentityKey(properties.storageIdentityKey?.value)
+  const storageName = properties.storageName?.value
+  if (
+    storageName !== undefined &&
+    (typeof storageName !== 'string' ||
+      storageName.length < 1 ||
+      storageName.length > 255 ||
+      hasControlCharacter(storageName))
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  const chain = properties.chain?.value
+  if (
+    chain !== undefined &&
+    (typeof chain !== 'string' || !['main', 'test', 'stn', 'ttn', 'tstn', 'regtest'].includes(chain))
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  const dbtype = properties.dbtype?.value
+  if (
+    dbtype !== undefined &&
+    (typeof dbtype !== 'string' || !['SQLite', 'MySQL', 'Postgres', 'IndexedDB'].includes(dbtype))
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  const maxOutputScript = properties.maxOutputScript?.value
+  if (
+    maxOutputScript !== undefined &&
+    (!Number.isSafeInteger(maxOutputScript) || maxOutputScript < 0 || maxOutputScript > 16 * 1024 * 1024)
+  ) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  for (const key of ['created_at', 'updated_at'] as const) {
+    const date = properties[key]?.value
+    if (date !== undefined && !(date instanceof Date) && !(typeof date === 'string' || typeof date === 'number')) {
+      throw new Error('Wallet storage returned invalid settings.')
+    }
+    if (date !== undefined && !Number.isFinite(new Date(date).getTime())) {
+      throw new Error('Wallet storage returned invalid settings.')
+    }
+  }
+  if (properties.syncCheckpointVersion != null && properties.syncCheckpointVersion.value !== 1) {
+    throw new Error('Wallet storage returned invalid settings.')
+  }
+  return value as RemoteStorageSettings
+}
+
 /**
  * Abstract base class shared by `StorageClient` and `StorageMobile`.
  *
@@ -149,6 +279,8 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   protected serverSupportsBinary = false
   protected readonly binaryRequests: boolean
   protected readonly telemetry: Telemetry
+  private authenticatedServerIdentityKey?: string
+  private readonly expectedStorageIdentityKey?: string
   private syncChunkRoughSizeLimit?: number
   /** Optional progress/cancellation hook for a bounded transfer; never receives wallet contents. */
   onSyncTransferProgress?: (progress: { direction: 'read' | 'write'; bytes: number; totalBytes: number }) => void
@@ -161,6 +293,24 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     this.endpointUrl = normalizeStorageEndpointUrl(endpointUrl)
     this.binaryRequests = options.binaryRequests === true
     this.telemetry = new Telemetry(options.telemetry)
+    this.authenticatedServerIdentityKey =
+      options.serverIdentityKey === undefined ? undefined : normalizeServerIdentityKey(options.serverIdentityKey)
+    this.expectedStorageIdentityKey =
+      options.storageIdentityKey === undefined ? undefined : normalizeStorageIdentityKey(options.storageIdentityKey)
+  }
+
+  protected async authenticatedFetch(url: string, config: Parameters<AuthFetch['fetch']>[1]): Promise<Response> {
+    const response = await this.authClient.fetch(url, config)
+    const authenticatedIdentityKey = response.headers.get('x-bsv-auth-identity-key')
+    if (authenticatedIdentityKey == null) {
+      throw new Error('Wallet storage response was not mutually authenticated.')
+    }
+    const identityKey = normalizeServerIdentityKey(authenticatedIdentityKey)
+    if (this.authenticatedServerIdentityKey !== undefined && identityKey !== this.authenticatedServerIdentityKey) {
+      throw new Error('Wallet storage authenticated server identity changed.')
+    }
+    this.authenticatedServerIdentityKey = identityKey
+    return response
   }
 
   protected async traceRpcCall<T>(
@@ -223,6 +373,13 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    */
   protected abstract rpcCall<T>(method: string, params: unknown[]): Promise<T>
 
+  protected nextRequestId(): number {
+    if (!Number.isSafeInteger(this.nextId) || this.nextId < 1) {
+      throw new Error('Wallet storage request identifier space exhausted.')
+    }
+    return this.nextId++
+  }
+
   /**
    * @returns true once storage `TableSettings` have been retreived from remote storage.
    */
@@ -248,7 +405,16 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @returns remote storage `TableSettings`
    */
   async makeAvailable(): Promise<RemoteStorageSettings> {
-    this.settings ??= await this.rpcCall<RemoteStorageSettings>('makeAvailable', [])
+    if (this.settings != null) return this.settings
+    const settings = validateRemoteStorageSettings(await this.rpcCall<RemoteStorageSettings>('makeAvailable', []))
+    const descriptor = Object.getOwnPropertyDescriptor(settings, 'storageIdentityKey')
+    const storageIdentityKey = normalizeStorageIdentityKey(
+      descriptor != null && 'value' in descriptor ? descriptor.value : undefined
+    )
+    if (this.expectedStorageIdentityKey !== undefined && storageIdentityKey !== this.expectedStorageIdentityKey) {
+      throw new Error('Wallet storage settings identity does not match the configured storage identity.')
+    }
+    this.settings = settings
     return this.settings
   }
 
@@ -318,7 +484,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `createAction` arguments.
    * @returns `StorageCreateActionResults` supporting additional wallet processing to yield `createAction` results.
    */
-  async createAction(auth: AuthId, args: Validation.ValidCreateActionArgs): Promise<StorageCreateActionResult> {
+  async createAction(auth: AuthId, args: ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (args.inputBEEF != null) {
       if (args.inputs.length === 0) {
         args = {
@@ -328,7 +494,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       } else {
         let source: Beef | undefined
         try {
-          source = Beef.fromBinary(args.inputBEEF)
+          source = Beef.fromBinaryStrict(args.inputBEEF)
         } catch {
           // Forward malformed proof data so the server preserves its established
           // validation error contract.
@@ -342,13 +508,13 @@ export abstract class StorageClientBase implements WalletStorageProvider {
           if (pruned != null) {
             args = {
               ...args,
-              inputBEEF: pruned.toBinary()
+              inputBEEF: pruned.toUint8Array()
             }
           }
         }
       }
     }
-    return await this.rpcCall<StorageCreateActionResult>('createAction', [auth, args])
+    return await this.rpcCall<StorageCreateActionResult>('createAction', [auth, withBeefBytes(args)])
   }
 
   /**
@@ -365,18 +531,18 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     return await this.rpcCall<StorageProcessActionResults>('processAction', [auth, args])
   }
 
-  async prepareNoSendExpiry(
-    auth: AuthId,
-    args: Validation.ValidCreateActionArgs
-  ): Promise<StoragePrepareNoSendExpiryResult> {
-    return await this.rpcCall<StoragePrepareNoSendExpiryResult>('prepareNoSendExpiry', [auth, args])
+  async prepareNoSendExpiry(auth: AuthId, args: ValidCreateActionArgs): Promise<StoragePrepareNoSendExpiryResult> {
+    return await this.rpcCall<StoragePrepareNoSendExpiryResult>('prepareNoSendExpiry', [auth, withBeefBytes(args)])
   }
 
   async activateNoSendExpiry(
     auth: AuthId,
     args: StorageActivateNoSendExpiryArgs
   ): Promise<StorageActivateNoSendExpiryResult> {
-    return await this.rpcCall<StorageActivateNoSendExpiryResult>('activateNoSendExpiry', [auth, args])
+    return await this.rpcCall<StorageActivateNoSendExpiryResult>('activateNoSendExpiry', [
+      auth,
+      { ...args, target: withBeefBytes(args.target) }
+    ])
   }
 
   async armNoSendExpiry(auth: AuthId, args: StorageArmNoSendExpiryArgs): Promise<void> {
@@ -411,16 +577,13 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     const baseUrl = this.endpointUrl.endsWith('/') ? this.endpointUrl.slice(0, -1) : this.endpointUrl
     const url = `${baseUrl}/action-batch/${encodeURIComponent(args.batchId)}/blob/${encodeURIComponent(args.digest)}`
     const bytes = args.bytes instanceof Uint8Array ? args.bytes : Uint8Array.from(args.bytes)
-    const response = await this.authClient.fetch(url, {
+    const response = await this.authenticatedFetch(url, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/octet-stream' },
       body: bytes
     })
     if (!response.ok) {
-      const details = (await response.text()).slice(0, 512)
-      throw new Error(
-        `WalletStorageClient putActionBatchBlob: network error ${response.status} ${response.statusText}: ${details}`
-      )
+      throw new Error(`WalletStorageClient putActionBatchBlob: network error ${response.status}`)
     }
   }
 
@@ -436,7 +599,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     }
     const baseUrl = this.endpointUrl.endsWith('/') ? this.endpointUrl.slice(0, -1) : this.endpointUrl
     const url = `${baseUrl}/action-batch/${encodeURIComponent(args.batchId)}/pack`
-    const response = await this.authClient.fetch(url, {
+    const response = await this.authenticatedFetch(url, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/octet-stream',
@@ -445,10 +608,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       body
     })
     if (!response.ok) {
-      const details = (await response.text()).slice(0, 512)
-      throw new Error(
-        `WalletStorageClient putActionBatchPack: network error ${response.status} ${response.statusText}: ${details}`
-      )
+      throw new Error(`WalletStorageClient putActionBatchPack: network error ${response.status}`)
     }
   }
 
@@ -486,7 +646,11 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   }
 
   /** Read compact progress only when the provider advertises support. */
-  async getSyncCheckpoint(auth: AuthId, storageIdentityKey: string, storageName: string): Promise<SyncCheckpoint | undefined> {
+  async getSyncCheckpoint(
+    auth: AuthId,
+    storageIdentityKey: string,
+    storageName: string
+  ): Promise<SyncCheckpoint | undefined> {
     // Settings are already exchanged with legacy providers. Only an advertised
     // capability enables this RPC; transport and authentication failures propagate.
     if ((await this.makeAvailable()).syncCheckpointVersion !== 1) return undefined
@@ -535,7 +699,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listActions` arguments.
    * @returns `listActions` results.
    */
-  async listActions(auth: AuthId, vargs: Validation.ValidListActionsArgs): Promise<ListActionsResult> {
+  async listActions(auth: AuthId, vargs: ValidListActionsArgs): Promise<ListActionsResult> {
     const r = await this.rpcCall<ListActionsResult>('listActions', [auth, vargs])
     return r
   }
@@ -547,7 +711,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listOutputs` arguments.
    * @returns `listOutputs` results.
    */
-  async listOutputs(auth: AuthId, vargs: Validation.ValidListOutputsArgs): Promise<ListOutputsResult> {
+  async listOutputs(auth: AuthId, vargs: ValidListOutputsArgs): Promise<ListOutputsResult> {
     const r = await this.rpcCall<ListOutputsResult>('listOutputs', [auth, vargs])
     return r
   }
@@ -559,7 +723,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
    * @param args Validated extension of original wallet `listCertificates` arguments.
    * @returns `listCertificates` results.
    */
-  async listCertificates(auth: AuthId, vargs: Validation.ValidListCertificatesArgs): Promise<ListCertificatesResult> {
+  async listCertificates(auth: AuthId, vargs: ValidListCertificatesArgs): Promise<ListCertificatesResult> {
     const r = await this.rpcCall<ListCertificatesResult>('listCertificates', [auth, vargs])
     return r
   }
@@ -677,9 +841,10 @@ export abstract class StorageClientBase implements WalletStorageProvider {
     const bytes = capabilities == null ? undefined : encodeSyncTransfer({ args, chunk: syncChunkBinary(chunk) })
     // Legacy numeric byte arrays can require four JSON characters per byte.
     const expansion = this.binaryRequests && this.serverSupportsBinary ? 1 : 4
-    const r = bytes != null && bytes.length * expansion > (capabilities!.inlineBytes ?? 6 * 1024 * 1024)
-      ? await this.uploadSyncTransfer(args.identityKey, bytes, capabilities!)
-      : await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
+    const r =
+      bytes != null && bytes.length * expansion > (capabilities!.inlineBytes ?? 6 * 1024 * 1024)
+        ? await this.uploadSyncTransfer(args.identityKey, bytes, capabilities!)
+        : await this.rpcCall<ProcessSyncChunkResult>('processSyncChunk', [args, wireChunk])
     if (r.nextCheckpoint != null) r.nextCheckpoint = validateSyncCheckpoint(r.nextCheckpoint, args)
     return r
   }
@@ -706,15 +871,21 @@ export abstract class StorageClientBase implements WalletStorageProvider {
       } catch (error: unknown) {
         if (!isSyncChunkResponseTooLarge(error)) throw error
         const smaller = this.smallerSyncRequest(requestArgs, retries)
-        if (smaller != null) { requestArgs = smaller; continue }
+        if (smaller != null) {
+          requestArgs = smaller
+          continue
+        }
         if (transfer == null) throw error
         return await this.downloadSyncTransfer(requestArgs, transfer)
       }
     }
   }
 
-  private async readSyncChunkResponse(args: RequestSyncChunkArgs, originalMaxRoughSize: number,
-    transfer: SyncTransferCapabilities | undefined): Promise<SyncChunk> {
+  private async readSyncChunkResponse(
+    args: RequestSyncChunkArgs,
+    originalMaxRoughSize: number,
+    transfer: SyncTransferCapabilities | undefined
+  ): Promise<SyncChunk> {
     const r = await this.rpcCall<SyncChunk | { syncTransfer: SyncTransferManifest }>('getSyncChunk', [args])
     if ('syncTransfer' in r) {
       if (transfer == null || Object.keys(r).length !== 1) throw new Error('Unexpected wallet sync transfer response')
@@ -732,7 +903,7 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   }
 
   protected rpcResponseError(response: Response): Error {
-    const error = new Error(`WalletStorageClient rpcCall: network error ${response.status} ${response.statusText}`)
+    const error = new Error(`WalletStorageClient rpcCall: network error ${response.status}`)
     if (response.status !== 429) return error
     const after = response.headers.get('retry-after')
     let delay = 1000
@@ -756,7 +927,13 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   private syncTransferRetryDelay(error: unknown, attempt: number): number | undefined {
     const message = error instanceof Error ? error.message : ''
-    if (attempt >= 2 || !/network error (?:429|502|503|504)|timed out waiting for authenticated response|fetch failed|Failed to fetch/i.test(message)) return undefined
+    if (
+      attempt >= 2 ||
+      !/network error (?:429|502|503|504)|timed out waiting for authenticated response|fetch failed|Failed to fetch/i.test(
+        message
+      )
+    )
+      return undefined
     if (!/network error 429/.test(message)) return 250 * 2 ** attempt
     const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error
     const retryAfter = cause != null && typeof cause === 'object' ? Reflect.get(cause, 'retryAfterMs') : undefined
@@ -766,7 +943,9 @@ export abstract class StorageClientBase implements WalletStorageProvider {
 
   private async transferPartCall<T>(method: string, input: Record<string, unknown>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
-      try { return await this.rpcCall<T>(method, [input]) } catch (error) {
+      try {
+        return await this.rpcCall<T>(method, [input])
+      } catch (error) {
         // Only immutable reads and identical staged part writes may be retried here. Never commit.
         const delay = this.syncTransferRetryDelay(error, attempt)
         if (delay == null) throw error
@@ -776,51 +955,86 @@ export abstract class StorageClientBase implements WalletStorageProvider {
   }
 
   private async releaseSyncTransfer(identityKey: string, transferId: string): Promise<void> {
-    try { await this.rpcCall('releaseSyncTransfer', [{ identityKey, transferId }]) } catch {
+    try {
+      await this.rpcCall('releaseSyncTransfer', [{ identityKey, transferId }])
+    } catch {
       // Expiry reclaims staging if the connection is gone. Wallet records are never removed.
     }
   }
 
-  private async downloadSyncTransfer(args: RequestSyncChunkArgs, capabilities: SyncTransferCapabilities,
-    suppliedManifest?: SyncTransferManifest): Promise<SyncChunk> {
-    const manifest = validateSyncTransferManifest(suppliedManifest ?? await this.transferPartCall<SyncTransferManifest>(
-      'beginReadSyncTransfer', { identityKey: args.identityKey, args }), capabilities)
+  private async downloadSyncTransfer(
+    args: RequestSyncChunkArgs,
+    capabilities: SyncTransferCapabilities,
+    suppliedManifest?: SyncTransferManifest
+  ): Promise<SyncChunk> {
+    const manifest = validateSyncTransferManifest(
+      suppliedManifest ??
+        (await this.transferPartCall<SyncTransferManifest>('beginReadSyncTransfer', {
+          identityKey: args.identityKey,
+          args
+        })),
+      capabilities
+    )
     try {
-      const chunk = await receiveSyncTransfer(manifest, async offset => {
+      const chunk = (await receiveSyncTransfer(manifest, async offset => {
         this.onSyncTransferProgress?.({ direction: 'read', bytes: offset, totalBytes: manifest.totalBytes })
         return await this.transferPartCall<SyncTransferPart>('readSyncTransferPart', {
-          identityKey: args.identityKey, transferId: manifest.transferId, offset })
-      }) as SyncChunk
+          identityKey: args.identityKey,
+          transferId: manifest.transferId,
+          offset
+        })
+      })) as SyncChunk
       this.onSyncTransferProgress?.({ direction: 'read', bytes: manifest.totalBytes, totalBytes: manifest.totalBytes })
-      if (chunk?.userIdentityKey !== args.identityKey || chunk.fromStorageIdentityKey !== args.fromStorageIdentityKey ||
-        chunk.toStorageIdentityKey !== args.toStorageIdentityKey) throw new Error('Wallet sync transfer identities changed')
+      if (
+        chunk?.userIdentityKey !== args.identityKey ||
+        chunk.fromStorageIdentityKey !== args.fromStorageIdentityKey ||
+        chunk.toStorageIdentityKey !== args.toStorageIdentityKey
+      )
+        throw new Error('Wallet sync transfer identities changed')
       return validateSyncChunkEntities(chunk)
     } finally {
       await this.releaseSyncTransfer(args.identityKey, manifest.transferId)
     }
   }
 
-  private async uploadSyncTransfer(identityKey: string, bytes: Uint8Array, capabilities: SyncTransferCapabilities): Promise<ProcessSyncChunkResult> {
-    if (bytes.length > capabilities.maxBytes) throw new RangeError('Wallet sync record exceeds the negotiated transfer size limit')
+  private async uploadSyncTransfer(
+    identityKey: string,
+    bytes: Uint8Array,
+    capabilities: SyncTransferCapabilities
+  ): Promise<ProcessSyncChunkResult> {
+    if (bytes.length > capabilities.maxBytes)
+      throw new RangeError('Wallet sync record exceeds the negotiated transfer size limit')
     const response = await this.transferPartCall<SyncTransferManifest & { receivedBytes: number }>(
-      'beginWriteSyncTransfer', { identityKey, digest: syncTransferDigest(bytes), totalBytes: bytes.length })
+      'beginWriteSyncTransfer',
+      { identityKey, digest: syncTransferDigest(bytes), totalBytes: bytes.length }
+    )
     const manifest = validateSyncTransferManifest(response, capabilities)
-    if (manifest.digest !== syncTransferDigest(bytes) || manifest.totalBytes !== bytes.length ||
-      !Number.isSafeInteger(response.receivedBytes) || response.receivedBytes < 0 || response.receivedBytes > bytes.length ||
-      (response.receivedBytes !== bytes.length && response.receivedBytes % manifest.partBytes !== 0)) {
+    if (
+      manifest.digest !== syncTransferDigest(bytes) ||
+      manifest.totalBytes !== bytes.length ||
+      !Number.isSafeInteger(response.receivedBytes) ||
+      response.receivedBytes < 0 ||
+      response.receivedBytes > bytes.length ||
+      (response.receivedBytes !== bytes.length && response.receivedBytes % manifest.partBytes !== 0)
+    ) {
       throw new Error('Invalid wallet sync upload checkpoint')
     }
     for (let offset = response.receivedBytes; offset < bytes.length;) {
       this.onSyncTransferProgress?.({ direction: 'write', bytes: offset, totalBytes: bytes.length })
       const part = bytes.subarray(offset, offset + manifest.partBytes)
       const next = await this.transferPartCall<number>('writeSyncTransferPart', {
-        identityKey, transferId: manifest.transferId, offset, bytes: part
+        identityKey,
+        transferId: manifest.transferId,
+        offset,
+        bytes: part
       })
       if (next !== offset + part.length) throw new Error('Invalid wallet sync upload acknowledgement')
       offset = next
     }
     // An uncertain commit is surfaced. The next sync starts from the writer's durable checkpoint.
-    const result = await this.rpcCall<ProcessSyncChunkResult>('commitSyncTransfer', [{ identityKey, transferId: manifest.transferId }])
+    const result = await this.rpcCall<ProcessSyncChunkResult>('commitSyncTransfer', [
+      { identityKey, transferId: manifest.transferId }
+    ])
     await this.releaseSyncTransfer(identityKey, manifest.transferId)
     return result
   }

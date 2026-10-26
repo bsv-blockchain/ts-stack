@@ -129,7 +129,7 @@
         "totalCertificates": 1,
         "certificates": [
           {
-            "type": "AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+            "type": "YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "subject": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
             "serialNumber": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
             "certifier": "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
@@ -173,13 +173,14 @@
         }
       },
       "expected": {
-        "totalCertificates": 0,
-        "certificates": []
+        "error": true,
+        "code": "ERR_INVALID_PARAMETER"
       },
       "tags": [
         "brc-100",
         "discoverByAttributes",
-        "empty-attrs"
+        "empty-attrs",
+        "validation"
       ]
     },
     {

@@ -1,4 +1,10 @@
-import { HexString, OutpointString, PubKeyHex, Base64String, WalletInterface } from '../wallet/index.js'
+import type {
+  HexString,
+  OutpointString,
+  PubKeyHex,
+  Base64String,
+  WalletInterface
+} from '../wallet/Wallet.interfaces.js'
 
 /**
  * Types for core Remittance protocol.
@@ -46,17 +52,32 @@ export type RemittanceThreadState =
  * This is the canonical state machine for remittance threads.
  * Use it to validate transitions and to build audits/visualizations.
  */
-export const REMITTANCE_STATE_TRANSITIONS: Record<RemittanceThreadState, RemittanceThreadState[]> = {
-  new: ['identityRequested', 'invoiced', 'settled', 'terminated', 'errored'],
-  identityRequested: ['identityResponded', 'identityAcknowledged', 'invoiced', 'settled', 'terminated', 'errored'],
-  identityResponded: ['identityAcknowledged', 'invoiced', 'settled', 'terminated', 'errored'],
-  identityAcknowledged: ['invoiced', 'settled', 'terminated', 'errored'],
-  invoiced: ['identityRequested', 'identityResponded', 'identityAcknowledged', 'settled', 'terminated', 'errored'],
-  settled: ['receipted', 'terminated', 'errored'],
-  receipted: ['terminated', 'errored'],
-  terminated: ['errored'],
-  errored: []
-}
+export const REMITTANCE_STATE_TRANSITIONS: Record<RemittanceThreadState, RemittanceThreadState[]> =
+  {
+    new: ['identityRequested', 'invoiced', 'settled', 'terminated', 'errored'],
+    identityRequested: [
+      'identityResponded',
+      'identityAcknowledged',
+      'invoiced',
+      'settled',
+      'terminated',
+      'errored'
+    ],
+    identityResponded: ['identityAcknowledged', 'invoiced', 'settled', 'terminated', 'errored'],
+    identityAcknowledged: ['invoiced', 'settled', 'terminated', 'errored'],
+    invoiced: [
+      'identityRequested',
+      'identityResponded',
+      'identityAcknowledged',
+      'settled',
+      'terminated',
+      'errored'
+    ],
+    settled: ['receipted', 'terminated', 'errored'],
+    receipted: ['terminated', 'errored'],
+    terminated: ['errored'],
+    errored: []
+  }
 
 export interface Unit {
   /** Namespace for disambiguation, e.g. 'bsv', 'iso4217', 'token'. */
@@ -196,7 +217,7 @@ export interface Settlement {
  * Receipt issued by the payee (or service provider).
  *
  * A receipt could be a PDF, a photo/oroof-of-delivery, a copy of the payment transaction, etc.
-*
+ *
  * A receipt should NOT be issued when a settlement is rejected/failed. Use a Termination instead.
  */
 export interface Receipt {
@@ -227,6 +248,9 @@ export interface Termination {
  *
  * It closely matches the message-box-client shapes:
  * messageId, sender, body, etc.
+ * `sender` and `recipient` are authenticated transport facts, not untrusted
+ * application claims. A CommsLayer that cannot provide that guarantee is not
+ * safe for authorization or financial use.
  */
 export interface PeerMessage {
   messageId: string
@@ -257,7 +281,7 @@ export type RemittanceKind =
 export interface RemittanceEnvelope<K extends RemittanceKind = RemittanceKind, P = unknown> {
   /** Protocol version. */
   v: 1
-  /** Envelope id (idempotency key). Not the transport messageId. */
+  /** Sender-scoped envelope id (idempotency key). Not the transport messageId. */
   id: string
   kind: K
   threadId: ThreadId

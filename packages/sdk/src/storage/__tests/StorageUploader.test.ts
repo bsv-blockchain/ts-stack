@@ -6,14 +6,14 @@ import { createHash } from 'node:crypto'
 /**
  * A helper for converting a string to a number[] of UTF-8 bytes
  */
-function stringToUtf8Array (str: string): number[] {
+function stringToUtf8Array(str: string): number[] {
   return Array.from(new TextEncoder().encode(str))
 }
 
 /**
  * Builds a JSON Response for mocked fetch calls.
  */
-function jsonResponse (body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' }
@@ -23,11 +23,13 @@ function jsonResponse (body: unknown, status = 200): Response {
 /**
  * Normalizes whatever a caller passed to `fetch` into a URL string.
  */
-function extractFetchURL (input: RequestInfo | URL): string {
+function extractFetchURL(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input
   if (input instanceof URL) return input.toString()
   return input.url
 }
+
+const testFetch: typeof fetch = async (input, init) => await fetch(input, init)
 
 describe('StorageUploader — legacy single-host behavior', () => {
   let uploader: StorageUploader
@@ -40,7 +42,8 @@ describe('StorageUploader — legacy single-host behavior', () => {
     walletClient = new WalletClient('json-api', 'non-admin.com')
     uploader = new StorageUploader({
       storageURL: 'https://example.test.system',
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     authFetchSpy = jest
@@ -65,12 +68,14 @@ describe('StorageUploader — legacy single-host behavior', () => {
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
 
     // /upload (authFetch)
-    authFetchSpy.mockResolvedValueOnce(jsonResponse({
-      status: 'success',
-      uploadURL: 'https://example-upload.com/put',
-      requiredHeaders: {},
-      amount: 42
-    }))
+    authFetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://example-upload.com/put',
+        requiredHeaders: {},
+        amount: 42
+      })
+    )
 
     const result = await uploader.publishFile({
       file: { data, type: 'text/plain' },
@@ -90,7 +95,8 @@ describe('StorageUploader — legacy single-host behavior', () => {
     expect(result.hostedBy).toEqual(['https://example.test.system'])
 
     const url = StorageUtils.getHashFromURL(result.uhrpURL)
-    const firstFour = url.slice(0, 4)
+    const firstFour = url
+      .slice(0, 4)
       .map(b => b.toString(16).padStart(2, '0'))
       .join('')
     expect(firstFour).toHaveLength(8)
@@ -105,12 +111,14 @@ describe('StorageUploader — legacy single-host behavior', () => {
       .mockResolvedValueOnce(jsonResponse({ quote: 100 }))
       .mockResolvedValueOnce(new Response(null, { status: 200 }))
 
-    authFetchSpy.mockResolvedValueOnce(jsonResponse({
-      status: 'success',
-      uploadURL: 'https://example-upload.com/put',
-      requiredHeaders: {},
-      amount: 100
-    }))
+    authFetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://example-upload.com/put',
+        requiredHeaders: {},
+        amount: 100
+      })
+    )
 
     const result = await uploader.publishFile({
       file: { data, type: 'application/octet-stream' },
@@ -128,12 +136,14 @@ describe('StorageUploader — legacy single-host behavior', () => {
       .mockResolvedValueOnce(jsonResponse({ quote: 42 }))
       .mockResolvedValueOnce(new Response(null, { status: 500 }))
 
-    authFetchSpy.mockResolvedValueOnce(jsonResponse({
-      status: 'success',
-      uploadURL: 'https://example-upload.com/put',
-      requiredHeaders: {},
-      amount: 42
-    }))
+    authFetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://example-upload.com/put',
+        requiredHeaders: {},
+        amount: 42
+      })
+    )
 
     const failingData = stringToUtf8Array('failing data')
 
@@ -171,9 +181,9 @@ describe('StorageUploader — legacy single-host behavior', () => {
       jsonResponse({ status: 'error', code: 'ERR_NOT_FOUND', description: 'File not found' })
     )
 
-    await expect(uploader.findFile('uhrp://unknown-hash'))
-      .rejects
-      .toThrow('findFile returned an error: ERR_NOT_FOUND - File not found')
+    await expect(uploader.findFile('uhrp://unknown-hash')).rejects.toThrow(
+      'findFile returned an error: ERR_NOT_FOUND - File not found'
+    )
   })
 
   it('should list user uploads successfully', async () => {
@@ -181,9 +191,7 @@ describe('StorageUploader — legacy single-host behavior', () => {
       { uhrpUrl: 'uhrp://hash1', expiryTime: 111111 },
       { uhrpUrl: 'uhrp://hash2', expiryTime: 222222 }
     ]
-    authFetchSpy.mockResolvedValueOnce(
-      jsonResponse({ status: 'success', uploads: mockUploads })
-    )
+    authFetchSpy.mockResolvedValueOnce(jsonResponse({ status: 'success', uploads: mockUploads }))
 
     const result = await uploader.listUploads()
     expect(authFetchSpy).toHaveBeenCalledTimes(1)
@@ -223,17 +231,17 @@ describe('StorageUploader — legacy single-host behavior', () => {
       jsonResponse({ status: 'error', code: 'ERR_CANT_RENEW', description: 'Failed to renew' })
     )
 
-    await expect(uploader.renewFile('uhrp://some-other-hash', 15))
-      .rejects
-      .toThrow('renewFile returned an error: ERR_CANT_RENEW - Failed to renew')
+    await expect(uploader.renewFile('uhrp://some-other-hash', 15)).rejects.toThrow(
+      'renewFile returned an error: ERR_CANT_RENEW - Failed to renew'
+    )
   })
 
   it('should throw if renewFile request fails with non-200 status', async () => {
     authFetchSpy.mockResolvedValueOnce(new Response(null, { status: 404 }))
 
-    await expect(uploader.renewFile('uhrp://ghost', 10))
-      .rejects
-      .toThrow('renewFile request failed: HTTP 404')
+    await expect(uploader.renewFile('uhrp://ghost', 10)).rejects.toThrow(
+      'renewFile request failed: HTTP 404'
+    )
   })
 })
 
@@ -252,17 +260,17 @@ describe('StorageUploader — multi-provider behavior', () => {
    * Sets up URL-routed mocks for the quote, upload, and PUT steps across any
    * number of providers. Returns the two spies for assertion.
    */
-  function wireMocks (
+  function wireMocks(
     uploader: StorageUploader,
     quotes: Record<string, number | 'error'>,
     uploadOutcomes: Record<string, 'ok' | 'fail'> = {}
   ): {
-      authFetchSpy: jest.SpyInstance
-      globalFetchSpy: jest.SpiedFunction<typeof global.fetch>
-      putCalls: string[]
-      quoteCalls: string[]
-      uploadCalls: string[]
-    } {
+    authFetchSpy: jest.SpyInstance
+    globalFetchSpy: jest.SpiedFunction<typeof global.fetch>
+    putCalls: string[]
+    quoteCalls: string[]
+    uploadCalls: string[]
+  } {
     const putCalls: string[] = []
     const quoteCalls: string[] = []
     const uploadCalls: string[] = []
@@ -311,7 +319,7 @@ describe('StorageUploader — multi-provider behavior', () => {
   }
 
   it('defaults to DEFAULT_UHRP_SERVERS when no hosts are configured', () => {
-    const uploader = new StorageUploader({ wallet: walletClient })
+    const uploader = new StorageUploader({ wallet: walletClient, fetchClient: testFetch })
     expect((uploader as any).hosts).toEqual(DEFAULT_UHRP_SERVERS)
     expect((uploader as any).resilienceLevel).toBe(1)
   })
@@ -319,7 +327,8 @@ describe('StorageUploader — multi-provider behavior', () => {
   it('clamps resilienceLevel to 1 for legacy storageURL callers', () => {
     const uploader = new StorageUploader({
       storageURL: 'https://legacy.example',
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
     expect((uploader as any).hosts).toEqual(['https://legacy.example'])
     expect((uploader as any).resilienceLevel).toBe(1)
@@ -329,30 +338,43 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURL: 'https://legacy.example',
       storageURLs: ['https://a.example', 'https://b.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
     expect((uploader as any).hosts).toEqual(['https://a.example', 'https://b.example'])
   })
 
   it('throws if resilienceLevel is not a positive integer', () => {
-    expect(() => new StorageUploader({
-      storageURLs: ['https://a.example'],
-      resilienceLevel: 0,
-      wallet: walletClient
-    })).toThrow(/positive integer/)
+    expect(
+      () =>
+        new StorageUploader({
+          storageURLs: ['https://a.example'],
+          resilienceLevel: 0,
+          wallet: walletClient,
+          fetchClient: testFetch
+        })
+    ).toThrow(/positive integer/)
 
-    expect(() => new StorageUploader({
-      storageURLs: ['https://a.example'],
-      resilienceLevel: 1.5,
-      wallet: walletClient
-    })).toThrow(/positive integer/)
+    expect(
+      () =>
+        new StorageUploader({
+          storageURLs: ['https://a.example'],
+          resilienceLevel: 1.5,
+          wallet: walletClient,
+          fetchClient: testFetch
+        })
+    ).toThrow(/positive integer/)
   })
 
   it('throws if storageURLs is an empty array', () => {
-    expect(() => new StorageUploader({
-      storageURLs: [],
-      wallet: walletClient
-    })).toThrow(/at least one/)
+    expect(
+      () =>
+        new StorageUploader({
+          storageURLs: [],
+          wallet: walletClient,
+          fetchClient: testFetch
+        })
+    ).toThrow(/at least one/)
   })
 
   it('sorts quotes by price and uploads to the cheapest N', async () => {
@@ -360,7 +382,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const { quoteCalls, uploadCalls, putCalls } = wireMocks(uploader, {
@@ -382,14 +405,8 @@ describe('StorageUploader — multi-provider behavior', () => {
       'https://c.example/quote'
     ])
     // Uploads happen in ascending price order: b (100), c (200).
-    expect(uploadCalls).toEqual([
-      'https://b.example/upload',
-      'https://c.example/upload'
-    ])
-    expect(putCalls).toEqual([
-      'https://b.example/put',
-      'https://c.example/put'
-    ])
+    expect(uploadCalls).toEqual(['https://b.example/upload', 'https://c.example/upload'])
+    expect(putCalls).toEqual(['https://b.example/put', 'https://c.example/put'])
     expect(result.hostedBy).toEqual(['https://b.example', 'https://c.example'])
     expect(result.published).toBe(true)
     expect(StorageUtils.isValidURL(result.uhrpURL)).toBe(true)
@@ -400,7 +417,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const { uploadCalls, putCalls } = wireMocks(
@@ -440,7 +458,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 3,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireMocks(uploader, {
@@ -455,7 +474,9 @@ describe('StorageUploader — multi-provider behavior', () => {
         file: { data, type: 'text/plain' },
         retentionPeriod: 60
       })
-    ).rejects.toThrow(/Resiliency threshold of 3 could not be met: only 1 of 3 provider\(s\) responded/)
+    ).rejects.toThrow(
+      /Resiliency threshold of 3 could not be met: only 1 of 3 provider\(s\) responded/
+    )
   })
 
   it('throws when remaining quotes cannot cover the threshold after upload failures', async () => {
@@ -463,7 +484,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireMocks(
@@ -492,7 +514,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireMocks(uploader, {
@@ -516,7 +539,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireMocks(uploader, {
@@ -543,7 +567,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 3,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     // Only one host returns a quote.
@@ -566,7 +591,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const { authFetchSpy, globalFetchSpy } = wireMocks(uploader, {
@@ -595,13 +621,16 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2, // target = 4 quotes
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     // Every host would return a valid quote if asked; we want to prove that
     // hosts after the first batch of 4 are never contacted.
     const quotes: Record<string, number> = {}
-    hosts.forEach((h, i) => { quotes[h] = 100 + i })
+    hosts.forEach((h, i) => {
+      quotes[h] = 100 + i
+    })
 
     const { quoteCalls } = wireMocks(uploader, quotes)
 
@@ -631,7 +660,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2, // target = 4 quotes
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     // First batch of 4: only 2 valid quotes. Second batch of 2 fills the target.
@@ -673,7 +703,8 @@ describe('StorageUploader — multi-provider behavior', () => {
     const uploader = new StorageUploader({
       storageURLs: hosts,
       resilienceLevel: 2, // target = 4 quotes
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     // First batch of 4 yields only 3 valid quotes. The second iteration must
@@ -721,7 +752,7 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
    * Spies on the authFetch instance with a URL-routed handler. Each host
    * gets a handler keyed by `${host}/find`, `${host}/list`, `${host}/renew`.
    */
-  function wireAuthFetch (
+  function wireAuthFetch(
     uploader: StorageUploader,
     handler: (url: string) => Promise<Response>
   ): jest.SpyInstance {
@@ -733,7 +764,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
   it('findFile fans out to every configured host and picks the longest-expiry result', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const calls: string[] = []
@@ -776,7 +808,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
   it('findFile scopes to options.hostedBy when provided', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const calls: string[] = []
@@ -795,30 +828,39 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
   it('findFile throws with an aggregated error when every host fails (multi-host)', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
-    wireAuthFetch(uploader, async () => jsonResponse({
-      status: 'error', code: 'ERR_NOT_FOUND', description: 'nope'
-    }))
+    wireAuthFetch(uploader, async () =>
+      jsonResponse({
+        status: 'error',
+        code: 'ERR_NOT_FOUND',
+        description: 'nope'
+      })
+    )
 
-    await expect(uploader.findFile('uhrp://ghost'))
-      .rejects.toThrow(/no configured host reported this UHRP URL/)
+    await expect(uploader.findFile('uhrp://ghost')).rejects.toThrow(
+      /no configured host reported this UHRP URL/
+    )
   })
 
   it('findFile rejects hostedBy sets with no configured intersection', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
-    await expect(uploader.findFile('uhrp://x', { hostedBy: ['https://unknown.example'] }))
-      .rejects.toThrow(/did not intersect any configured provider/)
+    await expect(
+      uploader.findFile('uhrp://x', { hostedBy: ['https://unknown.example'] })
+    ).rejects.toThrow(/did not intersect any configured provider/)
   })
 
   it('listUploads unions entries from every host and merges by UHRP URL', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireAuthFetch(uploader, async url => {
@@ -843,9 +885,16 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const listing = await uploader.listUploads()
     const byUrl = Object.fromEntries(listing.map((e: any) => [e.uhrpUrl, e]))
 
-    expect(Object.keys(byUrl).sort((a, b) => a.localeCompare(b))).toEqual(['uhrp://one', 'uhrp://shared', 'uhrp://two'])
+    expect(Object.keys(byUrl).sort((a, b) => a.localeCompare(b))).toEqual([
+      'uhrp://one',
+      'uhrp://shared',
+      'uhrp://two'
+    ])
     expect(byUrl['uhrp://shared'].expiryTime).toBe(300) // longest wins
-    expect(byUrl['uhrp://shared'].hostedBy.sort()).toEqual(['https://a.example', 'https://b.example'])
+    expect(byUrl['uhrp://shared'].hostedBy.sort()).toEqual([
+      'https://a.example',
+      'https://b.example'
+    ])
     expect(byUrl['uhrp://one'].hostedBy).toEqual(['https://a.example'])
     expect(byUrl['uhrp://two'].hostedBy).toEqual(['https://b.example'])
   })
@@ -853,7 +902,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
   it('listUploads succeeds when at least one host responds (multi-host)', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireAuthFetch(uploader, async url => {
@@ -875,7 +925,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireAuthFetch(uploader, async url => {
@@ -924,7 +975,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
       resilienceLevel: 3,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     wireAuthFetch(uploader, async url => {
@@ -969,16 +1021,19 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
       resilienceLevel: 3,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     // Scope to 2 hosts; threshold clamps to 2. Both succeed → overall success.
-    wireAuthFetch(uploader, async () => jsonResponse({
-      status: 'success',
-      prevExpiryTime: 0,
-      newExpiryTime: 500,
-      amount: 10
-    }))
+    wireAuthFetch(uploader, async () =>
+      jsonResponse({
+        status: 'success',
+        prevExpiryTime: 0,
+        newExpiryTime: 500,
+        amount: 10
+      })
+    )
 
     const result = await uploader.renewFile('uhrp://x', 30, {
       hostedBy: ['https://a.example', 'https://b.example']
@@ -991,14 +1046,17 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example'],
       resilienceLevel: 2,
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
-    wireAuthFetch(uploader, async () => jsonResponse({
-      status: 'error',
-      code: 'ERR_OLD_ADVERTISEMENT_NOT_FOUND',
-      description: 'gone'
-    }))
+    wireAuthFetch(uploader, async () =>
+      jsonResponse({
+        status: 'error',
+        code: 'ERR_OLD_ADVERTISEMENT_NOT_FOUND',
+        description: 'gone'
+      })
+    )
 
     const promise = uploader.renewFile('uhrp://ghost', 30)
     await expect(promise).rejects.toBeInstanceOf(RenewResiliencyError)
@@ -1008,7 +1066,8 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
   it('renewFile honors options.hostedBy and only renews the specified replicas', async () => {
     const uploader = new StorageUploader({
       storageURLs: ['https://a.example', 'https://b.example', 'https://c.example'],
-      wallet: walletClient
+      wallet: walletClient,
+      fetchClient: testFetch
     })
 
     const calls: string[] = []
@@ -1032,5 +1091,101 @@ describe('StorageUploader — multi-host findFile / listUploads / renewFile', ()
     ])
     expect(result.amount).toBe(20)
     expect(result.results).toHaveLength(2)
+  })
+})
+
+describe('StorageUploader — hostile provider boundaries', () => {
+  const wallet = new WalletClient('json-api', 'non-admin.com')
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+  })
+
+  it('deduplicates providers before enforcing resilience and rejects private origins', () => {
+    expect(
+      () =>
+        new StorageUploader({
+          storageURLs: ['https://a.example', 'https://a.example/'],
+          resilienceLevel: 2,
+          wallet,
+          fetchClient: testFetch
+        })
+    ).toThrow(/unique storage providers/)
+    for (const storageURL of ['https://127.0.0.1', 'https://[::1]', ' https://a.example']) {
+      expect(() => new StorageUploader({ storageURL, wallet, fetchClient: testFetch })).toThrow()
+    }
+  })
+
+  it('allows only a provider Content-Length that exactly matches the upload bytes', async () => {
+    const observedHeaders: Headers[] = []
+    const fetchClient: typeof fetch = async (input, init) => {
+      if (String(input).endsWith('/quote')) return jsonResponse({ quote: 1 })
+      observedHeaders.push(new Headers(init?.headers))
+      return new Response(null, { status: 200 })
+    }
+    const uploader = new StorageUploader({
+      storageURL: 'https://provider.example',
+      wallet,
+      fetchClient
+    })
+    const authFetchSpy = jest.spyOn((uploader as any).authFetch, 'fetch').mockResolvedValue(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://upload.example/put',
+        requiredHeaders: { 'content-length': 3 }
+      })
+    )
+
+    await expect(
+      uploader.publishFile({
+        file: { data: Uint8Array.of(1, 2, 3), type: 'application/octet-stream' },
+        retentionPeriod: 1
+      })
+    ).resolves.toMatchObject({ published: true })
+    expect(observedHeaders[0].get('content-length')).toBe('3')
+
+    authFetchSpy.mockResolvedValue(
+      jsonResponse({
+        status: 'success',
+        uploadURL: 'https://upload.example/put',
+        requiredHeaders: { 'content-length': '2' }
+      })
+    )
+    await expect(
+      uploader.publishFile({
+        file: { data: Uint8Array.of(1, 2, 3), type: 'application/octet-stream' },
+        retentionPeriod: 1
+      })
+    ).rejects.toThrow(/Resiliency threshold/)
+  })
+
+  it('rejects authority, framing, and newline-bearing provider headers', async () => {
+    for (const requiredHeaders of [
+      { host: 'internal' },
+      { 'transfer-encoding': 'chunked' },
+      { 'x-safe': 'ok\r\nX-Evil: yes' }
+    ]) {
+      const uploader = new StorageUploader({
+        storageURL: 'https://provider.example',
+        wallet,
+        fetchClient: async input =>
+          String(input).endsWith('/quote')
+            ? jsonResponse({ quote: 1 })
+            : new Response(null, { status: 200 })
+      })
+      jest.spyOn((uploader as any).authFetch, 'fetch').mockResolvedValue(
+        jsonResponse({
+          status: 'success',
+          uploadURL: 'https://upload.example/put',
+          requiredHeaders
+        })
+      )
+      await expect(
+        uploader.publishFile({
+          file: { data: Uint8Array.of(1), type: 'application/octet-stream' },
+          retentionPeriod: 1
+        })
+      ).rejects.toThrow(/Resiliency threshold/)
+    }
   })
 })

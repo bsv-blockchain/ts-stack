@@ -1,12 +1,23 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
+import { writeBytesFully } from './writeBytesFully'
 
-export const CDN_ROOT = path.resolve(process.cwd(), 'public/cdn')
+/** Public files served by the production and development entrypoints. */
+export const PUBLIC_ROOT = path.resolve(process.cwd(), 'public')
+/** Canonical object root shared by upload writes and public CDN reads. */
+export const CDN_ROOT = path.join(PUBLIC_ROOT, 'cdn')
 export const MAX_OBJECT_ID_LENGTH = 128
 
+// A flat Base58 name rejects every path separator, traversal glyph, percent
+// escape, dot-file name, and null byte before path resolution.
 const BASE58_OBJECT_ID = /^[1-9A-HJ-NP-Za-km-z]+$/
 
+/**
+ * Resolve a single canonical object name directly beneath the CDN root.
+ * The post-resolution confinement check is retained as defense in depth if
+ * the accepted object-name alphabet changes in the future.
+ */
 export function resolveCdnObjectPath(
   objectID: unknown,
   root: string = CDN_ROOT
@@ -110,7 +121,7 @@ export async function writeCdnObjectStreamExclusive(
         return { status: 'too_large' }
       }
       hash.update(bytes)
-      await handle.write(bytes)
+      await writeBytesFully(handle, bytes)
     }
     if (byteLength !== expectedBytes) return { status: 'size_mismatch' }
 

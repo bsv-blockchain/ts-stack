@@ -38,7 +38,8 @@ describe('storage admin diagnostic formatting', () => {
   test('exposes a read-only managed-change liquidity review mode', () => {
     expect(normalizeReviewMode('liquidity')).toBe('liquidity')
     expect(normalizeReviewMode('change')).toBe('change')
-    expect(normalizeReviewMode('unknown')).toBe('all')
+    expect(normalizeReviewMode(undefined)).toBe('all')
+    expect(() => normalizeReviewMode('unknown')).toThrow('mode')
     expect(renderAdminPage()).toContain('<option value="liquidity">managed-change liquidity (read only)</option>')
   })
 })

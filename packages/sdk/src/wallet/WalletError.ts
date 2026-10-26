@@ -76,6 +76,7 @@ export enum walletErrors {
   reviewActions = 5,
   invalidParameter = 6,
   insufficientFunds = 7,
+  abortRefused = 8,
 }
 
 export type WalletErrorCode = keyof typeof walletErrors

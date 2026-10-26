@@ -24,7 +24,16 @@
  *   - Locking key = anyoneWallet.getPublicKey({counterparty: registryOperator, protocolID, keyID})
  */
 
-import { LockingScript, PrivateKey, PublicKey, Script, Transaction, Utils, ProtoWallet, WalletProtocol } from '@bsv/sdk'
+import {
+  LockingScript,
+  PrivateKey,
+  PublicKey,
+  Script,
+  Transaction,
+  Utils,
+  ProtoWallet,
+  WalletProtocol
+} from '@bsv/sdk'
 import CertMapTopicManager from '../certmap/CertMapTopicManager.js'
 
 // ---------------------------------------------------------------------------
@@ -86,16 +95,29 @@ const KEY_ID = '1'
 async function buildValidCertMapScript(registryPrivKey: PrivateKey): Promise<LockingScript> {
   const registryOperator = registryPrivKey.toPublicKey().toString()
 
-  const certFields = { name: { type: 'string' }, email: { type: 'string' }, age: { type: 'number' } }
+  const certFields = {
+    name: {
+      friendlyName: 'Name',
+      description: 'Legal name',
+      type: 'text',
+      fieldIcon: 'https://example.com/name.png'
+    },
+    email: {
+      friendlyName: 'Email',
+      description: 'Email address',
+      type: 'text',
+      fieldIcon: 'https://example.com/email.png'
+    }
+  }
 
   const dataFields = [
-    Utils.toArray('identity-cert-v1', 'utf8'),                   // type
-    Utils.toArray('Identity Certificate', 'utf8'),                // name
-    Utils.toArray('https://example.com/icon.png', 'utf8'),       // iconURL
+    Utils.toArray('identity-cert-v1', 'utf8'), // type
+    Utils.toArray('Identity Certificate', 'utf8'), // name
+    Utils.toArray('https://example.com/icon.png', 'utf8'), // iconURL
     Utils.toArray('An identity certificate for testing', 'utf8'), // description
-    Utils.toArray('https://docs.example.com/cert', 'utf8'),      // documentationURL
-    Utils.toArray(JSON.stringify(certFields), 'utf8'),            // certFields (JSON)
-    Utils.toArray(registryOperator, 'utf8'),                     // registryOperator
+    Utils.toArray('https://docs.example.com/cert', 'utf8'), // documentationURL
+    Utils.toArray(JSON.stringify(certFields), 'utf8'), // certFields (JSON)
+    Utils.toArray(registryOperator, 'utf8') // registryOperator
   ]
 
   const data = dataFields.reduce((a, e) => [...a, ...e], [] as number[])
@@ -153,7 +175,7 @@ describe('CertMapTopicManager', () => {
         Utils.toArray('Description', 'utf8'),
         Utils.toArray('https://docs.example.com/cert', 'utf8'),
         Utils.toArray(serializedCertFields, 'utf8'),
-        Utils.toArray(registryOperator, 'utf8'),
+        Utils.toArray(registryOperator, 'utf8')
       ]
       const data = dataFields.reduce((a, e) => [...a, ...e], [] as number[])
 
@@ -208,7 +230,7 @@ describe('CertMapTopicManager', () => {
       Utils.toArray('An identity certificate for testing', 'utf8'),
       Utils.toArray('https://docs.example.com/cert', 'utf8'),
       Utils.toArray(JSON.stringify(certFields), 'utf8'),
-      Utils.toArray(registryOperator, 'utf8'),
+      Utils.toArray(registryOperator, 'utf8')
     ]
     const data = dataFields.reduce((a, e) => [...a, ...e], [] as number[])
 

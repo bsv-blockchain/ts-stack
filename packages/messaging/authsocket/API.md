@@ -1,16 +1,16 @@
 # API
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ## Interfaces
 
-|                                                                         |
-| ----------------------------------------------------------------------- |
-| [AuthSocketErrorContext](#interface-authsocketerrorcontext)             |
-| [AuthSocketServerOptions](#interface-authsocketserveroptions)           |
+| |
+| --- |
+| [AuthSocketErrorContext](#interface-authsocketerrorcontext) |
+| [AuthSocketServerOptions](#interface-authsocketserveroptions) |
 | [SocketServerTransportOptions](#interface-socketservertransportoptions) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
@@ -18,27 +18,27 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface AuthSocketErrorContext {
-  phase: AuthSocketErrorPhase
-  socketId?: string
-  eventName?: string
+    phase: AuthSocketErrorPhase;
+    socketId?: string;
+    eventName?: string;
 }
 ```
 
 See also: [AuthSocketErrorPhase](#type-authsocketerrorphase)
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ### Interface: AuthSocketServerOptions
 
 ```ts
 export interface AuthSocketServerOptions extends Partial<ServerOptions> {
-  wallet: WalletInterface
-  requestedCertificates?: any
-  sessionManager?: SessionManager | AsyncSessionManager
-  maxPendingAuthMessages?: number
-  onError?: AuthSocketErrorHandler
+    wallet: WalletInterface;
+    requestedCertificates?: RequestedCertificateSet;
+    sessionManager?: SessionManager | AsyncSessionManager;
+    maxPendingAuthMessages?: number;
+    maxEventPayloadBytes?: number;
+    onError?: AuthSocketErrorHandler;
 }
 ```
 
@@ -47,6 +47,14 @@ See also: [AuthSocketErrorHandler](#type-authsocketerrorhandler)
 <details>
 
 <summary>Interface AuthSocketServerOptions Details</summary>
+
+#### Property maxEventPayloadBytes
+
+Maximum encoded bytes in one authenticated application event. Defaults to 1 MiB.
+
+```ts
+maxEventPayloadBytes?: number
+```
 
 #### Property maxPendingAuthMessages
 
@@ -63,8 +71,15 @@ Receives contained transport and application errors without exposing remote payl
 ```ts
 onError?: AuthSocketErrorHandler
 ```
-
 See also: [AuthSocketErrorHandler](#type-authsocketerrorhandler)
+
+#### Property requestedCertificates
+
+SDK v0.1 certificate allowlist; not an application authorization verdict.
+
+```ts
+requestedCertificates?: RequestedCertificateSet
+```
 
 #### Property sessionManager
 
@@ -77,16 +92,15 @@ sessionManager?: SessionManager | AsyncSessionManager
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ### Interface: SocketServerTransportOptions
 
 ```ts
 export interface SocketServerTransportOptions {
-  maxPendingMessages?: number
-  onError?: (error: unknown) => void | Promise<void>
+    maxPendingMessages?: number;
+    onError?: (error: unknown) => void | Promise<void>;
 }
 ```
 
@@ -112,19 +126,18 @@ onError?: (error: unknown) => void | Promise<void>
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ## Classes
 
-|                                                       |
-| ----------------------------------------------------- |
-| [AuthSocket](#class-authsocket)                       |
-| [AuthSocketServer](#class-authsocketserver)           |
+| |
+| --- |
+| [AuthSocket](#class-authsocket) |
+| [AuthSocketServer](#class-authsocketserver) |
 | [SocketServerTransport](#class-socketservertransport) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
@@ -135,7 +148,7 @@ signing and verification via the Peer class.
 
 ```ts
 export class AuthSocket {
-    constructor(public readonly ioSocket: IoSocket, private readonly peer: Peer, private readonly onIdentityKeyDiscovered: (socketId: string, identityKey: string) => void, private readonly onError: AuthSocketErrorHandler = () => { })
+    constructor(public readonly ioSocket: IoSocket, private readonly peer: Peer, private readonly onIdentityKeyDiscovered: (socketId: string, identityKey: string) => boolean | void | Promise<boolean | void>, private readonly onError: AuthSocketErrorHandler = () => { }, private readonly maxEventPayloadBytes: number = DEFAULT_MAX_EVENT_PAYLOAD_BYTES)
     public on(eventName: string, callback: (data: any) => void | Promise<void>)
     public async emit(eventName: string, data: any): Promise<void>
     get id(): string
@@ -143,7 +156,7 @@ export class AuthSocket {
 }
 ```
 
-See also: [AuthSocketErrorHandler](#type-authsocketerrorhandler)
+See also: [AuthSocketErrorHandler](#type-authsocketerrorhandler), [DEFAULT_MAX_EVENT_PAYLOAD_BYTES](#variable-default_max_event_payload_bytes)
 
 <details>
 
@@ -173,10 +186,9 @@ public on(eventName: string, callback: (data: any) => void | Promise<void>)
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ### Class: AuthSocketServer
 
 A server-side wrapper for Socket.IO that integrates BRC-103 mutual authentication
@@ -184,13 +196,11 @@ to ensure secure, identity-aware communication between clients and the server.
 
 This class functions as a drop-in replacement for the `Server` class from Socket.IO,
 with added support for:
-
 - Automatic BRC-103 handshake for secure client authentication.
 - Management of authenticated client sessions, avoiding redundant handshakes.
 - Event-based communication through signed and verified BRC-103 messages.
 
 Features:
-
 - Tracks client connections and their associated `Peer` and `AuthSocket` instances.
 - Allows broadcasting messages to all authenticated clients.
 - Provides a seamless API for developers by wrapping Socket.IO functionality.
@@ -218,15 +228,14 @@ See also: [AuthSocket](#class-authsocket), [AuthSocketServerOptions](#interface-
 ```ts
 constructor(httpServer: HttpServer, private readonly options: AuthSocketServerOptions)
 ```
-
 See also: [AuthSocketServerOptions](#interface-authsocketserveroptions)
 
 Argument Details
 
-- **httpServer**
-  - The underlying HTTP server
-- **options**
-  - Contains both standard Socket.IO server config and BRC-103 config.
++ **httpServer**
+  + The underlying HTTP server
++ **options**
+  + Contains both standard Socket.IO server config and BRC-103 config.
 
 #### Method close
 
@@ -267,21 +276,20 @@ the number of authenticated connections selected for delivery
 
 #### Method on
 
-A direct pass-through to `io.on('connection', cb)`,
-but the callback is invoked with an AuthSocket instead.
+Register authenticated-connection setup. All callbacks complete before the
+first or concurrently received application event is dispatched and before
+the peer becomes eligible for server routing.
 
 ```ts
 public on(eventName: "connection", callback: (socket: AuthSocket) => void | Promise<void>): void
 ```
-
 See also: [AuthSocket](#class-authsocket)
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ### Class: SocketServerTransport
 
 Implements the Transport interface for a specific client socket.
@@ -299,57 +307,103 @@ export class SocketServerTransport implements Transport {
 
 See also: [SocketServerTransportOptions](#interface-socketservertransportoptions)
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ## Functions
+
+| |
+| --- |
+| [decodeAuthSocketEventPayload](#function-decodeauthsocketeventpayload) |
+| [encodeAuthSocketEventPayload](#function-encodeauthsocketeventpayload) |
+| [parseAuthSocketEventPayload](#function-parseauthsocketeventpayload) |
+| [resolveMaxEventPayloadBytes](#function-resolvemaxeventpayloadbytes) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 
 ### Function: decodeAuthSocketEventPayload
 
 ```ts
 export function decodeAuthSocketEventPayload(payload: number[]): {
-  eventName: string
-  data: any
+    eventName: string;
+    data: any;
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
+### Function: encodeAuthSocketEventPayload
 
+```ts
+export function encodeAuthSocketEventPayload(eventName: string, data: unknown, maxBytes: number): number[]
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: parseAuthSocketEventPayload
+
+```ts
+export function parseAuthSocketEventPayload(payload: unknown, maxBytes: number): {
+    eventName: string;
+    data: unknown;
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: resolveMaxEventPayloadBytes
+
+```ts
+export function resolveMaxEventPayloadBytes(value: number | undefined): number
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ## Types
 
-|                                                        |
-| ------------------------------------------------------ |
+| |
+| --- |
 | [AuthSocketErrorHandler](#type-authsocketerrorhandler) |
-| [AuthSocketErrorPhase](#type-authsocketerrorphase)     |
+| [AuthSocketErrorPhase](#type-authsocketerrorphase) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
 ### Type: AuthSocketErrorHandler
 
 ```ts
-export type AuthSocketErrorHandler = (
-  error: unknown,
-  context: AuthSocketErrorContext
-) => void | Promise<void>
+export type AuthSocketErrorHandler = (error: unknown, context: AuthSocketErrorContext) => void | Promise<void>
 ```
 
 See also: [AuthSocketErrorContext](#interface-authsocketerrorcontext)
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
-
 ### Type: AuthSocketErrorPhase
 
 ```ts
-export type AuthSocketErrorPhase = 'authentication' | 'application' | 'connection' | 'send'
+export type AuthSocketErrorPhase = "authentication" | "application" | "connection" | "send"
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+## Variables
+
+### Variable: DEFAULT_MAX_EVENT_PAYLOAD_BYTES
+
+```ts
+DEFAULT_MAX_EVENT_PAYLOAD_BYTES = 1024 * 1024
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---

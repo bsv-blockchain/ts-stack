@@ -2,20 +2,24 @@ import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { statSync } from 'node:fs'
 import { buildMutationTargets } from './targets.mjs'
+import { selectedMutationPartition } from '../../scripts/mutation-partitions.mjs'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const targetName = process.env.TS_STACK_MUTATION_TARGET
 const targets = buildMutationTargets(repositoryRoot)
 
-const target = targets[targetName]
+const canonicalTarget = targets[targetName]
 
-if (target === undefined) {
+if (canonicalTarget === undefined) {
   throw new Error(
     `Unknown TS_STACK_MUTATION_TARGET ${JSON.stringify(targetName)}. Expected one of: ${Object.keys(
       targets
     ).join(', ')}`
   )
 }
+
+const partition = process.env.TS_STACK_MUTATION_PARTITION || 'whole'
+const target = selectedMutationPartition(targetName, canonicalTarget, partition)
 
 const expectedDirectory = resolve(repositoryRoot, target.packageDirectory)
 const expectedStat = statSync(expectedDirectory)
@@ -26,7 +30,12 @@ if (expectedStat.dev !== currentStat.dev || expectedStat.ino !== currentStat.ino
   )
 }
 
-const reportDirectory = resolve(repositoryRoot, 'artifacts/mutation', targetName)
+const reportDirectory = resolve(
+  repositoryRoot,
+  'artifacts/mutation',
+  targetName,
+  ...(partition === 'whole' ? [] : [partition])
+)
 
 export default {
   testRunner: target.testRunner,

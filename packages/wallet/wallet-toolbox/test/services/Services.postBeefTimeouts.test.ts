@@ -1,4 +1,4 @@
-import { Beef } from '@bsv/sdk'
+import { Beef, Script, Transaction } from '@bsv/sdk'
 import { Services } from '../../src/services/Services'
 import { ServiceCollection } from '../../src/services/ServiceCollection'
 import { PostBeefResult, PostBeefService } from '../../src/sdk/WalletServices.interfaces'
@@ -10,6 +10,17 @@ function successResult(name: string, txids: string[]): PostBeefResult {
     status: 'success',
     txidResults: txids.map(txid => ({ txid, status: 'success' }))
   }
+}
+
+function makePostableBeef(lockingScriptBytes: number): { beef: Beef; txid: string } {
+  const transaction = new Transaction()
+  transaction.addOutput({
+    satoshis: 1,
+    lockingScript: Script.fromBinary(Array.from({ length: lockingScriptBytes }, () => 0))
+  })
+  const beef = new Beef()
+  beef.mergeTransaction(transaction)
+  return { beef, txid: transaction.id('hex') }
 }
 
 describe('Services postBeef timeout behavior', () => {
@@ -38,8 +49,8 @@ describe('Services postBeef timeout behavior', () => {
     services.postBeefUntilSuccessSoftTimeoutPerKbMs = 1
     services.postBeefUntilSuccessSoftTimeoutMaxMs = 1000
 
-    const beef = { toBinary: () => Array.from({ length: 200 * 1024 }).fill(0) } as unknown as Beef
-    const results = await services.postBeef(beef, ['txid1'])
+    const { beef, txid } = makePostableBeef(200 * 1024)
+    const results = await services.postBeef(beef, [txid])
 
     expect(results).toHaveLength(1)
     expect(results[0].status).toBe('success')
@@ -66,8 +77,8 @@ describe('Services postBeef timeout behavior', () => {
     services.postBeefUntilSuccessSoftTimeoutPerKbMs = 0
     services.postBeefUntilSuccessSoftTimeoutMaxMs = 10
 
-    const beef = { toBinary: () => [] } as unknown as Beef
-    const results = await services.postBeef(beef, ['txid1'])
+    const { beef, txid } = makePostableBeef(0)
+    const results = await services.postBeef(beef, [txid])
 
     expect(results).toHaveLength(2)
     expect(results[0].status).toBe('error')

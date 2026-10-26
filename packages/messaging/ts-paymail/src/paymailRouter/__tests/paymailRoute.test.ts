@@ -13,11 +13,12 @@ function createRoute(
   >[0]['domainLogicHandler'] = params => {
     const { name, domain } = PaymailRoute.getNameAndDomain(params)
     return { name, domain }
-  }
+  },
+  code = 'generic'
 ): PaymailRoute {
   return new PaymailRoute({
     capability: new Capability({
-      code: 'generic',
+      code,
       title: 'Generic Paymail capability'
     }),
     endpoint,
@@ -66,6 +67,126 @@ describe('PaymailRoute', () => {
     expect(response.body).toEqual({ name: 'alice', domain: 'example.test' })
   })
 
+  it('rejects malformed route handles before application logic', async () => {
+    const handler = jest.fn(() => ({ accepted: true }))
+    const app = express()
+    app.use(
+      new PaymailRouter({
+        baseUrl: 'https://example.test',
+        routes: [createRoute('/generic/:paymail', handler)]
+      }).getRouter()
+    )
+
+    const response = await request(app).get('/generic/not-a-paymail')
+
+    expect(response.statusCode).toBe(400)
+    expect(response.text).toBe('Invalid Paymail handle.')
+    expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('rejects unsafe router configuration and malformed JSON', async () => {
+    expect(
+      () =>
+        new PaymailRouter({
+          baseUrl: 'https://example.test',
+          routes: [createRoute()],
+          requestSenderValidation: 0 as unknown as boolean
+        })
+    ).toThrow('requestSenderValidation must be a boolean')
+    expect(
+      () => new PaymailRouter({ baseUrl: 'http://internal.example', routes: [createRoute()] })
+    ).toThrow('Invalid Paymail baseUrl')
+    expect(
+      () =>
+        new PaymailRouter({
+          baseUrl: 'https://example.test/path',
+          routes: [createRoute()]
+        })
+    ).toThrow('Invalid Paymail baseUrl')
+
+    class PostRoute extends PaymailRoute {}
+    const postApp = express()
+    postApp.use(
+      new PaymailRouter({
+        baseUrl: 'https://example.test',
+        routes: [
+          new PostRoute({
+            capability: new Capability({ code: 'post', title: 'Post', method: 'POST' }),
+            endpoint: '/post/:paymail',
+            domainLogicHandler: () => ({})
+          })
+        ]
+      }).getRouter()
+    )
+    const malformed = await request(postApp)
+      .post('/post/alice@example.test')
+      .set('Content-Type', 'application/json')
+      .send('{')
+    expect(malformed.statusCode).toBe(400)
+    expect(malformed.text).toBe('Invalid JSON body')
+  })
+
+  it('snapshots router configuration accessors exactly once', () => {
+    const route = createRoute()
+    const reads = {
+      baseUrl: 0,
+      basePath: 0,
+      routes: 0,
+      errorHandler: 0,
+      requestSenderValidation: 0
+    }
+    const config = Object.defineProperties(
+      {},
+      {
+        baseUrl: {
+          enumerable: true,
+          get: () => {
+            reads.baseUrl += 1
+            return 'https://example.test'
+          }
+        },
+        basePath: {
+          enumerable: true,
+          get: () => {
+            reads.basePath += 1
+            return '/paymail'
+          }
+        },
+        routes: {
+          enumerable: true,
+          get: () => {
+            reads.routes += 1
+            return [route]
+          }
+        },
+        errorHandler: {
+          enumerable: true,
+          get: () => {
+            reads.errorHandler += 1
+            return undefined
+          }
+        },
+        requestSenderValidation: {
+          enumerable: true,
+          get: () => {
+            reads.requestSenderValidation += 1
+            return false
+          }
+        }
+      }
+    ) as ConstructorParameters<typeof PaymailRouter>[0]
+
+    new PaymailRouter(config)
+
+    expect(reads).toEqual({
+      baseUrl: 1,
+      basePath: 1,
+      routes: 1,
+      errorHandler: 1,
+      requestSenderValidation: 1
+    })
+  })
+
   it('uses the default error handler for bad requests and unexpected failures', async () => {
     const app = express()
     app.use(
@@ -73,9 +194,13 @@ describe('PaymailRoute', () => {
         baseUrl: 'https://example.test',
         routes: [
           createRoute('/missing/:other'),
-          createRoute('/error/:paymail', () => {
-            throw new Error('route failed')
-          })
+          createRoute(
+            '/error/:paymail',
+            () => {
+              throw new Error('route failed')
+            },
+            'generic-error'
+          )
         ]
       }).getRouter()
     )

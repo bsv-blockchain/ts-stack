@@ -75,7 +75,7 @@ describe('internalizeAction managed-change policy', () => {
         ],
         description: 'Require basket remittance'
       })
-    ).rejects.toThrow('valid insertionRemittance and no paymentRemittance')
+    ).rejects.toThrow('only insertionRemittance for basket insertion')
 
     await expect(
       ctx.storage.internalizeAction({
@@ -90,7 +90,7 @@ describe('internalizeAction managed-change policy', () => {
         ],
         description: 'Reject conflicting basket remittance'
       })
-    ).rejects.toThrow('valid insertionRemittance and no paymentRemittance')
+    ).rejects.toThrow('only insertionRemittance for basket insertion')
 
     await expect(
       ctx.storage.internalizeAction({
@@ -103,7 +103,7 @@ describe('internalizeAction managed-change policy', () => {
         ],
         description: 'Require payment remittance'
       })
-    ).rejects.toThrow('valid paymentRemittance and no insertionRemittance')
+    ).rejects.toThrow('only paymentRemittance for wallet payment')
 
     await expect(
       ctx.storage.internalizeAction({

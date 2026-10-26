@@ -1,4 +1,10 @@
-import { Beef, Transaction, Utils, Validation } from '@bsv/sdk'
+import {
+  type ValidCreateActionArgs,
+  type ValidCreateActionInput,
+  validateSatoshis
+} from '@bsv/sdk/wallet/validationHelpers'
+import { Beef, Transaction } from '@bsv/sdk'
+import { toBase64 } from '@bsv/sdk/primitives/utils'
 import { ActionBatchFundingOutput, BeginActionBatchResult } from '../../sdk/ActionBatch.interfaces'
 import {
   StorageCreateActionResult,
@@ -49,7 +55,7 @@ function outpointOf(output: Pick<ActionBatchFundingOutput, 'txid' | 'vout'>): st
 function randomDerivation(count: number, random: () => number): string {
   const bytes: number[] = []
   for (let i = 0; i < count; i++) bytes.push(Math.floor(random() * 256))
-  return Utils.toBase64(bytes)
+  return toBase64(bytes)
 }
 
 function outputFromBeef(beef: Beef, outpoint: { txid: string; vout: number }): PlannerOutput | undefined {
@@ -66,7 +72,7 @@ function outputFromBeef(beef: Beef, outpoint: { txid: string; vout: number }): P
     change: false,
     outputDescription: '',
     vout: outpoint.vout,
-    satoshis: Validation.validateSatoshis(output.satoshis, 'source output satoshis'),
+    satoshis: validateSatoshis(output.satoshis, 'source output satoshis'),
     providedBy: 'you',
     purpose: '',
     type: 'custom',
@@ -130,7 +136,7 @@ export function plannerInputLockingScript(
 
 function sdkInputFromExplicit(
   state: ActionBatchPlannerState,
-  input: Validation.ValidCreateActionInput,
+  input: ValidCreateActionInput,
   vin: number,
   output: PlannerOutput,
   isSignAction: boolean
@@ -188,7 +194,7 @@ function sourceTransactionFor(
 
 function trimInputBeef(
   state: ActionBatchPlannerState,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   inputs: StorageCreateTransactionSdkInput[]
 ): Uint8Array | undefined {
   if (args.options.returnTXIDOnly) return undefined
@@ -201,7 +207,7 @@ function trimInputBeef(
   return beef.toUint8Array()
 }
 
-function requestedOutputs(args: Validation.ValidCreateActionArgs): StorageCreateTransactionSdkOutput[] {
+function requestedOutputs(args: ValidCreateActionArgs): StorageCreateTransactionSdkOutput[] {
   return args.outputs.map((output, vout) => ({
     ...output,
     vout,
@@ -217,7 +223,7 @@ interface FundingPlan {
 
 async function planFunding(
   state: ActionBatchPlannerState,
-  args: Validation.ValidCreateActionArgs,
+  args: ValidCreateActionArgs,
   explicit: PlannerOutput[],
   noSendChange: PlannerOutput[]
 ): Promise<FundingPlan> {
@@ -319,7 +325,7 @@ function makeChangeOutputs(
   }))
 }
 
-function validateActionOutpoints(state: ActionBatchPlannerState, args: Validation.ValidCreateActionArgs): void {
+function validateActionOutpoints(state: ActionBatchPlannerState, args: ValidCreateActionArgs): void {
   const seen = new Set<string>()
   const outpoints = [...args.inputs.map(input => input.outpoint), ...args.options.noSendChange]
   for (const outpoint of outpoints) {
@@ -334,10 +340,7 @@ function validateActionOutpoints(state: ActionBatchPlannerState, args: Validatio
   }
 }
 
-function resolveExplicitInputs(
-  state: ActionBatchPlannerState,
-  args: Validation.ValidCreateActionArgs
-): PlannerOutput[] {
+function resolveExplicitInputs(state: ActionBatchPlannerState, args: ValidCreateActionArgs): PlannerOutput[] {
   const explicit = args.inputs.map(input => resolveInputOutput(state, input.outpoint))
   if (explicit.some(output => output.change)) {
     throw new WERR_INVALID_PARAMETER('inputs', 'unmanaged inputs; use noSendChange for managed change')
@@ -378,7 +381,7 @@ function applyFundingAdjustment(
 
 export async function planAction(
   state: ActionBatchPlannerState,
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): Promise<ActionBatchPlannedAction> {
   validateActionOutpoints(state, args)
   const explicit = resolveExplicitInputs(state, args)

@@ -43,7 +43,7 @@ const socket = AuthSocketClient('http://localhost:3000', {
 
 // Standard Socket.IO usage
 socket.on('connect', () => {
-  console.log('Connected to server. Socket ID:', socket.id)
+  console.log('Socket.IO transport connected. Socket ID:', socket.id)
 
   // Emit a sample message
   socket.emit('chatMessage', {
@@ -64,11 +64,30 @@ socket.on('disconnect', () => {
 2. Interact with `.on(...)`, `.emit(...)` as normal.
 3. Behind the scenes, each message is signed with your client wallet key and verified by the server. Inbound messages are also verified.
 
-Authenticated event data preserves arbitrary JSON exactly, including plain
+The standard `connect` event and `connected` property report only the underlying
+Socket.IO transport. They do not assert that the server has completed BRC-103
+authentication. An outbound application `emit` performs the handshake before
+its signed general message is sent; inbound application callbacks run only for
+verified general messages. For local side effects that require a known server,
+configure `expectedServerIdentityKey` and wait for a verified application event,
+not merely `connect`.
+
+Remote endpoints must use `https://` or `wss://`; cleartext is accepted only
+for exact loopback hosts. BRC-103 authenticates messages but does not encrypt
+payloads or Socket.IO metadata, so TLS remains mandatory in production. The
+optional `expectedServerIdentityKey` binds the connection to a known canonical
+BRC-103 server identity. When omitted, the client binds to the identity on the
+first verified application message for that connection. URL-authority and TLS
+verification overrides in `managerOptions` are rejected; use a trusted custom
+CA while retaining certificate verification for private PKI.
+
+Authenticated event data preserves supported JSON exactly, including plain
 numeric-key objects under names such as `data`, `payload`, `transaction`, and
 `tx`. Real `Uint8Array` values are serialized as portable number arrays. Code
 that owns a typed payment or wallet protocol may recover a historical
 numeric-key byte object at that protocol's explicit byte field after receipt.
+Non-JSON values, negative zero, nested `undefined`, accessors, hidden/extra
+properties, sparse arrays, and serialization hooks are rejected before signing.
 
 ### Failure isolation and resource limits
 
@@ -82,6 +101,11 @@ payloads or wallet material.
 The client processes at most 32 authentication messages concurrently by
 default. Set `maxPendingAuthMessages` to a positive safe integer to choose a
 different bound; a server that exceeds it is disconnected.
+
+Authenticated application frames default to a 1 MiB encoded limit. Set
+`maxEventPayloadBytes` to another positive safe integer if needed. Event names
+are bounded and cannot use Socket.IO lifecycle names or the internal `_unknown`
+sentinel. Malformed, oversized, or reserved-name frames are not dispatched.
 
 ### How It Works (Briefly)
 

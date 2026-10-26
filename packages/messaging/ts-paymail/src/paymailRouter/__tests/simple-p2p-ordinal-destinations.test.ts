@@ -57,4 +57,13 @@ describe('#Paymail Server - Simple Ordinal P2P Payment Destinations', () => {
 
     expect(response.statusCode).toBe(400)
   })
+
+  it('rejects a handler response with a different destination count', async () => {
+    const response = await request(app)
+      .post('/ordinal-p2p-payment-destination/satoshi@bsv.org')
+      .send({ ordinals: 2 })
+
+    expect(response.statusCode).toBe(500)
+    expect(response.text).toBe('Internal server error')
+  })
 })

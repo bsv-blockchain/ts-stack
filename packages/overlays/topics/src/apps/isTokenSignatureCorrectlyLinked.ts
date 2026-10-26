@@ -17,7 +17,7 @@ export const isTokenSignatureCorrectlyLinked = async (
       protocolID,
       keyID: '1'
     })
-    if (!valid) return false
+    if (valid !== true) return false
   } catch {
     // Signature verification threw (e.g. malformed key/data) — treat as invalid
     return false

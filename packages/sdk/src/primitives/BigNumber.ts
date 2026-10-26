@@ -83,20 +83,20 @@ export default class BigNumber {
    * console.log(BigNumber.wordSize);  // output: 26
    */
   static readonly wordSize: number = 26
-  private static readonly WORD_SIZE_BIGINT: bigint = BigInt(BigNumber.wordSize)
-  private static readonly WORD_MASK: bigint = (1n << BigNumber.WORD_SIZE_BIGINT) - 1n
-  private static readonly MAX_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MAX_SAFE_INTEGER)
-  private static readonly MIN_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MIN_SAFE_INTEGER)
-  private static readonly MAX_IMULN_ARG: number = 0x4000000 - 1
-  private static readonly MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT: bigint = (1n << 53n) - 1n
+  static readonly #WORD_SIZE_BIGINT: bigint = 26n
+  static readonly #WORD_MASK: bigint = (1n << 26n) - 1n
+  static readonly #MAX_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MAX_SAFE_INTEGER)
+  static readonly #MIN_SAFE_INTEGER_BIGINT: bigint = BigInt(Number.MIN_SAFE_INTEGER)
+  static readonly #MAX_IMULN_ARG: number = 0x4000000 - 1
+  static readonly #MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT: bigint = (1n << 53n) - 1n
   // About 3.25 MiB of mathematical payload. Legitimate cryptographic values
   // are orders of magnitude smaller; this cap prevents hostile sparse-length
   // metadata from causing an unbounded dense JavaScript array allocation.
-  private static readonly MAX_NOMINAL_WORD_LENGTH: number = 1_048_576
+  static readonly #MAX_NOMINAL_WORD_LENGTH: number = 1_048_576
 
-  private _magnitude: bigint = 0n
-  private _sign: 0 | 1 = 0
-  private _nominalWordLength: number = 1
+  #_magnitude: bigint = 0n
+  #_sign: 0 | 1 = 0
+  #_nominalWordLength: number = 1
 
   /**
    * Reduction context of the big number.
@@ -113,29 +113,29 @@ export default class BigNumber {
    * @property negative
    */
   public get negative(): number {
-    return this._sign
+    return this.#_sign
   }
 
   /**
    * Sets the negative flag. Only 0 (positive) or 1 (negative) are allowed.
    */
   public set negative(val: number) {
-    this.assert(val === 0 || val === 1, 'Negative property must be 0 or 1')
+    this.#assert(val === 0 || val === 1, 'Negative property must be 0 or 1')
     const newSign = val === 1 ? 1 : 0
-    if (this._magnitude === 0n) {
-      this._sign = 0
+    if (this.#_magnitude === 0n) {
+      this.#_sign = 0
     } else {
-      this._sign = newSign
+      this.#_sign = newSign
     }
   }
 
-  private get _computedWordsArray(): number[] {
-    if (this._magnitude === 0n) return [0]
+  get #_computedWordsArray(): number[] {
+    if (this.#_magnitude === 0n) return [0]
     const arr: number[] = []
-    let temp = this._magnitude
+    let temp = this.#_magnitude
     while (temp > 0n) {
-      arr.push(Number(temp & BigNumber.WORD_MASK))
-      temp >>= BigNumber.WORD_SIZE_BIGINT
+      arr.push(Number(temp & BigNumber.#WORD_MASK))
+      temp >>= BigNumber.#WORD_SIZE_BIGINT
     }
     return arr.length > 0 ? arr : [0]
   }
@@ -147,17 +147,17 @@ export default class BigNumber {
    */
   public get words(): number[] {
     if (
-      !Number.isSafeInteger(this._nominalWordLength) ||
-      this._nominalWordLength < 1 ||
-      this._nominalWordLength > BigNumber.MAX_NOMINAL_WORD_LENGTH
+      !Number.isSafeInteger(this.#_nominalWordLength) ||
+      this.#_nominalWordLength < 1 ||
+      this.#_nominalWordLength > BigNumber.#MAX_NOMINAL_WORD_LENGTH
     ) {
       throw new Error('BigNumber word length exceeds the supported limit')
     }
-    const computed = this._computedWordsArray
-    if (this._nominalWordLength <= computed.length) {
+    const computed = this.#_computedWordsArray
+    if (this.#_nominalWordLength <= computed.length) {
       return computed
     }
-    const paddedWords = Array.from({ length: this._nominalWordLength }).fill(0)
+    const paddedWords = Array.from({ length: this.#_nominalWordLength }).fill(0)
     for (let i = 0; i < computed.length; i++) {
       paddedWords[i] = computed[i]
     }
@@ -168,17 +168,18 @@ export default class BigNumber {
    * Sets the words array representing the value of the big number.
    */
   public set words(newWords: number[]) {
-    const oldSign = this._sign
+    const oldSign = this.#_sign
     let newMagnitude = 0n
     const len = newWords.length > 0 ? newWords.length : 1
     for (let i = len - 1; i >= 0; i--) {
       const wordVal = newWords[i] ?? 0
       newMagnitude =
-        (newMagnitude << BigNumber.WORD_SIZE_BIGINT) | BigInt(wordVal & Number(BigNumber.WORD_MASK))
+        (newMagnitude << BigNumber.#WORD_SIZE_BIGINT) |
+        BigInt(wordVal & Number(BigNumber.#WORD_MASK))
     }
-    this._magnitude = newMagnitude
-    this._sign = oldSign
-    this._nominalWordLength = len
+    this.#_magnitude = newMagnitude
+    this.#_sign = oldSign
+    this.#_nominalWordLength = len
     this.normSign()
   }
 
@@ -188,7 +189,7 @@ export default class BigNumber {
    * @property length
    */
   public get length(): number {
-    return Math.max(1, this._nominalWordLength)
+    return Math.max(1, this.#_nominalWordLength)
   }
 
   /**
@@ -247,7 +248,7 @@ export default class BigNumber {
     number ??= 0
 
     if (typeof number === 'bigint') {
-      this._initializeState(number < 0n ? -number : number, number < 0n ? 1 : 0)
+      this.#_initializeState(number < 0n ? -number : number, number < 0n ? 1 : 0)
       this.normSign()
       return
     }
@@ -257,32 +258,32 @@ export default class BigNumber {
     const effectiveEndian: 'be' | 'le' = baseIsEndian ? base : endian
 
     if (typeof number === 'number') {
-      this.initNumber(number, effectiveEndian)
+      this.#initNumber(number, effectiveEndian)
       return
     }
     if (Array.isArray(number)) {
-      this.initArray(number, effectiveEndian)
+      this.#initArray(number, effectiveEndian)
       return
     }
     if (typeof number === 'string') {
-      this._initFromString(number, effectiveBase, effectiveEndian)
+      this.#_initFromString(number, effectiveBase, effectiveEndian)
       return
     }
 
     if (number !== 0) {
-      this.assert(false, 'Unsupported input type for BigNumber constructor')
+      this.#assert(false, 'Unsupported input type for BigNumber constructor')
     } else {
-      this._initializeState(0n, 0)
+      this.#_initializeState(0n, 0)
     }
   }
 
-  private _initFromString(
+  #_initFromString(
     number: string,
     effectiveBase: number | 'hex',
     effectiveEndian: 'be' | 'le'
   ): void {
     if (effectiveBase === 'hex') effectiveBase = 16
-    this.assert(
+    this.#assert(
       typeof effectiveBase === 'number' &&
         effectiveBase === Math.trunc(effectiveBase) &&
         effectiveBase >= 2 &&
@@ -301,19 +302,19 @@ export default class BigNumber {
 
     const numStr = originalNumberStr.substring(start)
     if (numStr.length === 0) {
-      this._initializeState(0n, sign === 1 && originalNumberStr.startsWith('-') ? 1 : 0)
+      this.#_initializeState(0n, sign === 1 && originalNumberStr.startsWith('-') ? 1 : 0)
       this.normSign()
       return
     }
 
     if (effectiveBase === 16) {
-      this._initFromHexString(numStr, sign, effectiveEndian)
+      this.#_initFromHexString(numStr, sign, effectiveEndian)
     } else {
-      this._initFromNonHexString(numStr, effectiveBase, sign, effectiveEndian)
+      this.#_initFromNonHexString(numStr, effectiveBase, sign, effectiveEndian)
     }
   }
 
-  private _initFromHexString(numStr: string, sign: number, effectiveEndian: 'be' | 'le'): void {
+  #_initFromHexString(numStr: string, sign: number, effectiveEndian: 'be' | 'le'): void {
     if (effectiveEndian === 'le') {
       const bytes: number[] = []
       let hexStr = numStr
@@ -324,8 +325,8 @@ export default class BigNumber {
         if (Number.isNaN(byteVal)) throw new Error('Invalid character in ' + hexStr)
         bytes.push(byteVal)
       }
-      this.initArray(bytes, 'le')
-      this._sign = sign
+      this.#initArray(bytes, 'le')
+      this.#_sign = sign
       this.normSign()
     } else {
       let tempMagnitude: bigint
@@ -334,25 +335,25 @@ export default class BigNumber {
       } catch {
         throw new Error('Invalid character in ' + numStr)
       }
-      this._initializeState(tempMagnitude, sign)
+      this.#_initializeState(tempMagnitude, sign)
       this.normSign()
     }
   }
 
-  private _initFromNonHexString(
+  #_initFromNonHexString(
     numStr: string,
     base: number,
     sign: number,
     effectiveEndian: 'be' | 'le'
   ): void {
     try {
-      this._parseBaseString(numStr, base)
-      this._sign = sign
+      this.#_parseBaseString(numStr, base)
+      this.#_sign = sign
       this.normSign()
       if (effectiveEndian === 'le') {
-        const currentSign = this._sign
-        this.initArray(this.toArray('be'), 'le')
-        this._sign = currentSign
+        const currentSign = this.#_sign
+        this.#initArray(this.toArray('be'), 'le')
+        this.#_sign = currentSign
         this.normSign()
       }
     } catch (err) {
@@ -368,7 +369,7 @@ export default class BigNumber {
     }
   }
 
-  private _bigIntToStringInBase(num: bigint, base: number): string {
+  #_bigIntToStringInBase(num: bigint, base: number): string {
     if (num === 0n) return '0'
     if (base < 2 || base > 36) throw new Error('Base must be between 2 and 36')
 
@@ -384,8 +385,8 @@ export default class BigNumber {
     return result
   }
 
-  private _parseBaseString(numberStr: string, base: number): void {
-    this._magnitude = 0n
+  #_parseBaseString(numberStr: string, base: number): void {
+    this.#_magnitude = 0n
     const bigBase = BigInt(base)
 
     let groupSize = BigNumber.groupSizes[base]
@@ -405,21 +406,21 @@ export default class BigNumber {
 
     if (firstChunkLen > 0) {
       const chunkStr = numberStr.substring(currentPos, currentPos + firstChunkLen)
-      this._magnitude = BigInt(this._parseBaseWord(chunkStr, base))
+      this.#_magnitude = BigInt(this.#_parseBaseWord(chunkStr, base))
       currentPos += firstChunkLen
     }
 
     while (currentPos < totalLen) {
       const chunkStr = numberStr.substring(currentPos, currentPos + groupSize)
-      const wordVal = BigInt(this._parseBaseWord(chunkStr, base))
-      this._magnitude = this._magnitude * groupBaseBigInt + wordVal
+      const wordVal = BigInt(this.#_parseBaseWord(chunkStr, base))
+      this.#_magnitude = this.#_magnitude * groupBaseBigInt + wordVal
       currentPos += groupSize
     }
 
-    this._finishInitialization()
+    this.#_finishInitialization()
   }
 
-  private _parseBaseWord(str: string, base: number): number {
+  #_parseBaseWord(str: string, base: number): number {
     let r = 0
     for (let i = 0; i < str.length; i++) {
       const charCode = str.codePointAt(i) as number
@@ -435,46 +436,46 @@ export default class BigNumber {
     return r
   }
 
-  private _initializeState(magnitude: bigint, sign: 0 | 1): void {
-    this._magnitude = magnitude
-    this._sign = magnitude === 0n ? 0 : sign
-    this._finishInitialization()
+  #_initializeState(magnitude: bigint, sign: 0 | 1): void {
+    this.#_magnitude = magnitude
+    this.#_sign = magnitude === 0n ? 0 : sign
+    this.#_finishInitialization()
   }
 
-  private _finishInitialization(): void {
-    if (this._magnitude === 0n) {
-      this._nominalWordLength = 1
-      this._sign = 0
+  #_finishInitialization(): void {
+    if (this.#_magnitude === 0n) {
+      this.#_nominalWordLength = 1
+      this.#_sign = 0
     } else {
-      const bitLen = this._magnitude.toString(2).length
-      this._nominalWordLength = Math.max(1, Math.ceil(bitLen / BigNumber.wordSize))
+      const bitLen = this.#_magnitude.toString(2).length
+      this.#_nominalWordLength = Math.max(1, Math.ceil(bitLen / BigNumber.wordSize))
     }
   }
 
-  private assert(val: unknown, msg: string = 'Assertion failed'): void {
+  #assert(val: unknown, msg: string = 'Assertion failed'): void {
     if (!(val as boolean)) throw new Error(msg)
   }
 
-  private initNumber(number: number, endian: 'be' | 'le' = 'be'): this {
-    this.assert(
-      BigInt(Math.abs(number)) <= BigNumber.MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT,
+  #initNumber(number: number, endian: 'be' | 'le' = 'be'): this {
+    this.#assert(
+      BigInt(Math.abs(number)) <= BigNumber.#MAX_NUMBER_CONSTRUCTOR_MAG_BIGINT,
       'The number is larger than 2 ^ 53 (unsafe)'
     )
-    this.assert(number % 1 === 0, 'Number must be an integer for BigNumber conversion')
-    this._initializeState(BigInt(Math.abs(number)), number < 0 ? 1 : 0)
+    this.#assert(number % 1 === 0, 'Number must be an integer for BigNumber conversion')
+    this.#_initializeState(BigInt(Math.abs(number)), number < 0 ? 1 : 0)
     if (endian === 'le') {
-      const currentSign = this._sign
+      const currentSign = this.#_sign
       const beBytes = this.toArray('be')
-      this.initArray(beBytes, 'le')
-      this._sign = currentSign
+      this.#initArray(beBytes, 'le')
+      this.#_sign = currentSign
       this.normSign()
     }
     return this
   }
 
-  private initArray(bytes: number[], endian: 'be' | 'le'): this {
+  #initArray(bytes: number[], endian: 'be' | 'le'): this {
     if (bytes.length === 0) {
-      this._initializeState(0n, 0)
+      this.#_initializeState(0n, 0)
       return this
     }
     let magnitude = 0n
@@ -484,20 +485,20 @@ export default class BigNumber {
       for (let i = bytes.length - 1; i >= 0; i--)
         magnitude = (magnitude << 8n) | BigInt(bytes[i] & 0xff)
     }
-    this._initializeState(magnitude, 0)
+    this.#_initializeState(magnitude, 0)
     return this
   }
 
   copy(dest: BigNumber): void {
-    dest._magnitude = this._magnitude
-    dest._sign = this._sign
-    dest._nominalWordLength = this._nominalWordLength
+    dest.#_magnitude = this.#_magnitude
+    dest.#_sign = this.#_sign
+    dest.#_nominalWordLength = this.#_nominalWordLength
     dest.red = this.red
   }
   static move(dest: BigNumber, src: BigNumber): void {
-    dest._magnitude = src._magnitude
-    dest._sign = src._sign
-    dest._nominalWordLength = src._nominalWordLength
+    dest.#_magnitude = src.#_magnitude
+    dest.#_sign = src.#_sign
+    dest.#_nominalWordLength = src.#_nominalWordLength
     dest.red = src.red
   }
   clone(): BigNumber {
@@ -507,21 +508,21 @@ export default class BigNumber {
   }
 
   expand(size: number): this {
-    this.assert(
-      Number.isSafeInteger(size) && size >= 0 && size <= BigNumber.MAX_NOMINAL_WORD_LENGTH,
+    this.#assert(
+      Number.isSafeInteger(size) && size >= 0 && size <= BigNumber.#MAX_NOMINAL_WORD_LENGTH,
       'Expand size must be a non-negative safe integer within the supported word limit'
     )
-    this._nominalWordLength = Math.max(this._nominalWordLength, size, 1)
+    this.#_nominalWordLength = Math.max(this.#_nominalWordLength, size, 1)
     return this
   }
 
   strip(): this {
-    this._finishInitialization()
+    this.#_finishInitialization()
     return this.normSign()
   }
   normSign(): this {
-    if (this._magnitude === 0n) {
-      this._sign = 0
+    if (this.#_magnitude === 0n) {
+      this.#_sign = 0
     }
     return this
   }
@@ -529,13 +530,13 @@ export default class BigNumber {
     return (this.red === null ? '<BN: ' : '<BN-R: ') + this.toString(16) + '>'
   }
 
-  private _getMinimalHex(): string {
-    if (this._magnitude === 0n) return '0'
-    return this._magnitude.toString(16)
+  #_getMinimalHex(): string {
+    if (this.#_magnitude === 0n) return '0'
+    return this.#_magnitude.toString(16)
   }
 
-  private _toHexString(padding: number): string {
-    let hexStr = this._getMinimalHex()
+  #_toHexString(padding: number): string {
+    let hexStr = this.#_getMinimalHex()
 
     if (padding > 1) {
       // Preserve whole bytes before applying the bn.js multiple-of-N rule.
@@ -560,17 +561,17 @@ export default class BigNumber {
    */
   toString(base: number | 'hex' = 10, padding: number = 1): string {
     if (base === 16 || base === 'hex') {
-      return this._toHexString(padding)
+      return this.#_toHexString(padding)
     }
 
     if (typeof base !== 'number' || base < 2 || base > 36 || base % 1 !== 0)
       throw new Error('Base should be an integer between 2 and 36')
-    return this.toBaseString(base, padding)
+    return this.#toBaseString(base, padding)
   }
 
-  private toBaseString(base: number, padding: number): string {
-    if (this._magnitude === 0n) {
-      return BigNumber._paddedZero(padding)
+  #toBaseString(base: number, padding: number): string {
+    if (this.#_magnitude === 0n) {
+      return BigNumber.#_paddedZero(padding)
     }
 
     let groupSize = BigNumber.groupSizes[base]
@@ -582,22 +583,22 @@ export default class BigNumber {
     }
 
     let out = ''
-    let tempMag = this._magnitude
+    let tempMag = this.#_magnitude
 
     while (tempMag > 0n) {
       const remainder = tempMag % groupBaseBigInt
       tempMag /= groupBaseBigInt
-      const chunkStr = this._bigIntToStringInBase(remainder, base)
-      out = (tempMag > 0n ? this._zeroPaddedChunk(chunkStr, groupSize) : chunkStr) + out
+      const chunkStr = this.#_bigIntToStringInBase(remainder, base)
+      out = (tempMag > 0n ? this.#_zeroPaddedChunk(chunkStr, groupSize) : chunkStr) + out
     }
 
     if (padding > 0) {
       while (out.length < padding) out = '0' + out
     }
-    return (this._sign === 1 ? '-' : '') + out
+    return (this.#_sign === 1 ? '-' : '') + out
   }
 
-  private static _paddedZero(padding: number): string {
+  static #_paddedZero(padding: number): string {
     let out = '0'
     if (padding > 1) {
       while (out.length < padding) out = '0' + out
@@ -606,7 +607,7 @@ export default class BigNumber {
   }
 
   /** Returns a chunk string zero-padded to groupSize (used by toBaseString for interior chunks). */
-  private _zeroPaddedChunk(chunkStr: string, groupSize: number): string {
+  #_zeroPaddedChunk(chunkStr: string, groupSize: number): string {
     const zerosToPrepend = groupSize - chunkStr.length
     if (zerosToPrepend <= 0) return chunkStr
     if (zerosToPrepend < BigNumber.zeros.length) return BigNumber.zeros[zerosToPrepend] + chunkStr
@@ -622,8 +623,8 @@ export default class BigNumber {
    * @returns The JavaScript number representation of the BigNumber instance.
    */
   toNumber(): number {
-    const val = this._getSignedValue()
-    if (val > BigNumber.MAX_SAFE_INTEGER_BIGINT || val < BigNumber.MIN_SAFE_INTEGER_BIGINT)
+    const val = this.#_getSignedValue()
+    if (val > BigNumber.#MAX_SAFE_INTEGER_BIGINT || val < BigNumber.#MIN_SAFE_INTEGER_BIGINT)
       throw new Error('Number can only safely store up to 53 bits')
     return Number(val)
   }
@@ -635,7 +636,7 @@ export default class BigNumber {
    * @returns bigint value for this BigNumber.
    */
   toBigInt(): bigint {
-    return this._getSignedValue()
+    return this.#_getSignedValue()
   }
 
   /**
@@ -645,12 +646,12 @@ export default class BigNumber {
    * @returns The JSON string representation of the BigNumber instance.
    */
   toJSON(): string {
-    const hex = this._getMinimalHex()
+    const hex = this.#_getMinimalHex()
     return (this.isNeg() ? '-' : '') + hex
   }
 
-  private toArrayLikeGeneric(res: number[], isLE: boolean): void {
-    let tempMag = this._magnitude
+  #toArrayLikeGeneric(res: number[], isLE: boolean): void {
+    let tempMag = this.#_magnitude
     let position = isLE ? 0 : res.length - 1
     const increment = isLE ? 1 : -1
 
@@ -680,14 +681,14 @@ export default class BigNumber {
     const actualByteLength = this.byteLength()
     const reqLength = length ?? Math.max(1, actualByteLength)
 
-    this.assert(actualByteLength <= reqLength, 'byte array longer than desired length')
-    this.assert(reqLength > 0, 'Requested array length <= 0')
+    this.#assert(actualByteLength <= reqLength, 'byte array longer than desired length')
+    this.#assert(reqLength > 0, 'Requested array length <= 0')
 
     const res = Array.from({ length: reqLength }).fill(0)
-    if (this._magnitude === 0n && reqLength > 0) return res
-    if (this._magnitude === 0n && reqLength === 0) return []
+    if (this.#_magnitude === 0n && reqLength > 0) return res
+    if (this.#_magnitude === 0n && reqLength === 0) return []
 
-    this.toArrayLikeGeneric(res, endian === 'le')
+    this.#toArrayLikeGeneric(res, endian === 'le')
     return res
   }
 
@@ -698,10 +699,10 @@ export default class BigNumber {
    * @returns The bit length of the BigNumber.
    */
   bitLength(): number {
-    if (this._magnitude === 0n) {
+    if (this.#_magnitude === 0n) {
       return 0
     }
-    return this._magnitude.toString(2).length
+    return this.#_magnitude.toString(2).length
   }
   /**
    * Converts a BigNumber to an array of bits.
@@ -714,7 +715,7 @@ export default class BigNumber {
     const len = num.bitLength()
     if (len === 0) return []
     const w = Array.from({ length: len })
-    const mag = num._magnitude
+    const mag = num.#_magnitude
     for (let bit = 0; bit < len; bit++) {
       w[bit] = ((mag >> BigInt(bit)) & 1n) === 0n ? 0 : 1
     }
@@ -740,9 +741,9 @@ export default class BigNumber {
    * const zeroBits = bn.zeroBits(); // 3
    */
   zeroBits(): number {
-    if (this._magnitude === 0n) return 0
+    if (this.#_magnitude === 0n) return 0
     let c = 0
-    let t = this._magnitude
+    let t = this.#_magnitude
     while ((t & 1n) === 0n && t !== 0n) {
       c++
       t >>= 1n
@@ -757,140 +758,136 @@ export default class BigNumber {
    * @returns The byte length of the BigNumber.
    */
   byteLength(): number {
-    if (this._magnitude === 0n) {
+    if (this.#_magnitude === 0n) {
       return 0
     }
     return Math.ceil(this.bitLength() / 8)
   }
 
-  private _getSignedValue(): bigint {
-    return this._sign === 1 ? -this._magnitude : this._magnitude
+  #_getSignedValue(): bigint {
+    return this.#_sign === 1 ? -this.#_magnitude : this.#_magnitude
   }
 
-  private _setValueFromSigned(sVal: bigint): void {
+  #_setValueFromSigned(sVal: bigint): void {
     if (sVal < 0n) {
-      this._magnitude = -sVal
-      this._sign = 1
+      this.#_magnitude = -sVal
+      this.#_sign = 1
     } else {
-      this._magnitude = sVal
-      this._sign = 0
+      this.#_magnitude = sVal
+      this.#_sign = 0
     }
-    this._finishInitialization()
+    this.#_finishInitialization()
     this.normSign()
   }
 
   toTwos(width: number): BigNumber {
-    this.assert(width >= 0)
+    this.#assert(width >= 0)
     const Bw = BigInt(width)
-    let v = this._getSignedValue()
-    if (this._sign === 1 && this._magnitude !== 0n) v = (1n << Bw) + v
+    let v = this.#_getSignedValue()
+    if (this.#_sign === 1 && this.#_magnitude !== 0n) v = (1n << Bw) + v
     const m = (1n << Bw) - 1n
     v &= m
     const r = new BigNumber(0n)
-    r._initializeState(v, 0)
+    r.#_initializeState(v, 0)
     return r
   }
 
   fromTwos(width: number): BigNumber {
-    this.assert(width >= 0)
+    this.#assert(width >= 0)
     const Bw = BigInt(width)
-    const m = this._magnitude
-    if (width > 0 && ((m >> (Bw - 1n)) & 1n) !== 0n && this._sign === 0) {
+    const m = this.#_magnitude
+    if (width > 0 && ((m >> (Bw - 1n)) & 1n) !== 0n && this.#_sign === 0) {
       const sVal = m - (1n << Bw)
       const r = new BigNumber(0n)
-      r._setValueFromSigned(sVal)
+      r.#_setValueFromSigned(sVal)
       return r
     }
     return this.clone()
   }
 
   isNeg(): boolean {
-    return this._sign === 1 && this._magnitude !== 0n
+    return this.#_sign === 1 && this.#_magnitude !== 0n
   }
   neg(): BigNumber {
     return this.clone().ineg()
   }
   ineg(): this {
-    if (this._magnitude !== 0n) {
-      this._sign = this._sign === 1 ? 0 : 1
+    if (this.#_magnitude !== 0n) {
+      this.#_sign = this.#_sign === 1 ? 0 : 1
     }
     return this
   }
 
-  private _iuop(
-    num: BigNumber,
-    op: (a: bigint, b: bigint) => bigint,
-    isXor: boolean = false
-  ): this {
-    const newMag = op(this._magnitude, num._magnitude)
-    let targetNominalLength = this._nominalWordLength
+  #_iuop(num: BigNumber, op: (a: bigint, b: bigint) => bigint, isXor: boolean = false): this {
+    const newMag = op(this.#_magnitude, num.#_magnitude)
+    let targetNominalLength = this.#_nominalWordLength
     if (isXor) targetNominalLength = Math.max(this.length, num.length)
 
-    this._magnitude = newMag
-    this._finishInitialization()
-    if (isXor) this._nominalWordLength = Math.max(this._nominalWordLength, targetNominalLength)
+    this.#_magnitude = newMag
+    this.#_finishInitialization()
+    if (isXor) this.#_nominalWordLength = Math.max(this.#_nominalWordLength, targetNominalLength)
     return this.strip()
   }
 
   iuor(num: BigNumber): this {
-    return this._iuop(num, (a, b) => a | b)
+    return this.#_iuop(num, (a, b) => a | b)
   }
   iuand(num: BigNumber): this {
-    return this._iuop(num, (a, b) => a & b)
+    return this.#_iuop(num, (a, b) => a & b)
   }
   iuxor(num: BigNumber): this {
-    return this._iuop(num, (a, b) => a ^ b, true)
+    return this.#_iuop(num, (a, b) => a ^ b, true)
   }
-  private _iop(num: BigNumber, op: (a: bigint, b: bigint) => bigint, isXor: boolean = false): this {
-    this.assert(this._sign === 0 && num._sign === 0)
-    return this._iuop(num, op, isXor)
+  #_iop(num: BigNumber, op: (a: bigint, b: bigint) => bigint, isXor: boolean = false): this {
+    this.#assert(this.#_sign === 0 && num.#_sign === 0)
+    return this.#_iuop(num, op, isXor)
   }
   ior(num: BigNumber): this {
-    return this._iop(num, (a, b) => a | b)
+    return this.#_iop(num, (a, b) => a | b)
   }
   iand(num: BigNumber): this {
-    return this._iop(num, (a, b) => a & b)
+    return this.#_iop(num, (a, b) => a & b)
   }
   ixor(num: BigNumber): this {
-    return this._iop(num, (a, b) => a ^ b, true)
+    return this.#_iop(num, (a, b) => a ^ b, true)
   }
-  private _uop_new(num: BigNumber, opName: 'iuor' | 'iuand' | 'iuxor'): BigNumber {
+  #_uop_new(num: BigNumber, opName: 'iuor' | 'iuand' | 'iuxor'): BigNumber {
     if (this.length >= num.length) {
       return this.clone()[opName](num)
     }
     return num.clone()[opName](this)
   }
   or(num: BigNumber): BigNumber {
-    this.assert(this._sign === 0 && num._sign === 0)
-    return this._uop_new(num, 'iuor')
+    this.#assert(this.#_sign === 0 && num.#_sign === 0)
+    return this.#_uop_new(num, 'iuor')
   }
   uor(num: BigNumber): BigNumber {
-    return this._uop_new(num, 'iuor')
+    return this.#_uop_new(num, 'iuor')
   }
   and(num: BigNumber): BigNumber {
-    this.assert(this._sign === 0 && num._sign === 0)
-    return this._uop_new(num, 'iuand')
+    this.#assert(this.#_sign === 0 && num.#_sign === 0)
+    return this.#_uop_new(num, 'iuand')
   }
   uand(num: BigNumber): BigNumber {
-    return this._uop_new(num, 'iuand')
+    return this.#_uop_new(num, 'iuand')
   }
   xor(num: BigNumber): BigNumber {
-    this.assert(this._sign === 0 && num._sign === 0)
-    return this._uop_new(num, 'iuxor')
+    this.#assert(this.#_sign === 0 && num.#_sign === 0)
+    return this.#_uop_new(num, 'iuxor')
   }
   uxor(num: BigNumber): BigNumber {
-    return this._uop_new(num, 'iuxor')
+    return this.#_uop_new(num, 'iuxor')
   }
 
   inotn(width: number): this {
-    this.assert(typeof width === 'number' && width >= 0)
+    this.#assert(typeof width === 'number' && width >= 0)
     const Bw = BigInt(width)
     const m = (1n << Bw) - 1n
-    this._magnitude = ~this._magnitude & m
+    this.#_magnitude = ~this.#_magnitude & m
     const wfw = width === 0 ? 1 : Math.ceil(width / BigNumber.wordSize)
-    this._nominalWordLength = Math.max(1, wfw)
+    this.#_nominalWordLength = Math.max(1, wfw)
     this.strip()
-    this._nominalWordLength = Math.max(this._nominalWordLength, Math.max(1, wfw))
+    this.#_nominalWordLength = Math.max(this.#_nominalWordLength, Math.max(1, wfw))
     return this
   }
 
@@ -898,55 +895,55 @@ export default class BigNumber {
     return this.clone().inotn(width)
   }
   setn(bit: number, val: any): this {
-    this.assert(typeof bit === 'number' && bit >= 0)
+    this.#assert(typeof bit === 'number' && bit >= 0)
     const Bb = BigInt(bit)
-    if (val === 1 || val === true) this._magnitude |= 1n << Bb
-    else this._magnitude &= ~(1n << Bb)
+    if (val === 1 || val === true) this.#_magnitude |= 1n << Bb
+    else this.#_magnitude &= ~(1n << Bb)
     const wnb = Math.floor(bit / BigNumber.wordSize) + 1
-    this._nominalWordLength = Math.max(this._nominalWordLength, wnb)
-    this._finishInitialization()
+    this.#_nominalWordLength = Math.max(this.#_nominalWordLength, wnb)
+    this.#_finishInitialization()
     return this.strip()
   }
 
   iadd(num: BigNumber): this {
-    this._setValueFromSigned(this._getSignedValue() + num._getSignedValue())
+    this.#_setValueFromSigned(this.#_getSignedValue() + num.#_getSignedValue())
     return this
   }
   add(num: BigNumber): BigNumber {
     const r = new BigNumber(0n)
-    r._setValueFromSigned(this._getSignedValue() + num._getSignedValue())
+    r.#_setValueFromSigned(this.#_getSignedValue() + num.#_getSignedValue())
     return r
   }
   isub(num: BigNumber): this {
-    this._setValueFromSigned(this._getSignedValue() - num._getSignedValue())
+    this.#_setValueFromSigned(this.#_getSignedValue() - num.#_getSignedValue())
     return this
   }
   sub(num: BigNumber): BigNumber {
     const r = new BigNumber(0n)
-    r._setValueFromSigned(this._getSignedValue() - num._getSignedValue())
+    r.#_setValueFromSigned(this.#_getSignedValue() - num.#_getSignedValue())
     return r
   }
   mul(num: BigNumber): BigNumber {
     const r = new BigNumber(0n)
-    r._magnitude = this._magnitude * num._magnitude
-    r._sign = r._magnitude === 0n ? 0 : ((this._sign ^ num._sign) as 0 | 1)
-    r._nominalWordLength = this.length + num.length
+    r.#_magnitude = this.#_magnitude * num.#_magnitude
+    r.#_sign = r.#_magnitude === 0n ? 0 : ((this.#_sign ^ num.#_sign) as 0 | 1)
+    r.#_nominalWordLength = this.length + num.length
     r.red = null
     return r.normSign()
   }
 
   imul(num: BigNumber): this {
-    this._magnitude *= num._magnitude
-    this._sign = this._magnitude === 0n ? 0 : ((this._sign ^ num._sign) as 0 | 1)
-    this._nominalWordLength = this.length + num.length
+    this.#_magnitude *= num.#_magnitude
+    this.#_sign = this.#_magnitude === 0n ? 0 : ((this.#_sign ^ num.#_sign) as 0 | 1)
+    this.#_nominalWordLength = this.length + num.length
     this.red = null
     return this.normSign()
   }
 
   imuln(num: number): this {
-    this.assert(typeof num === 'number', 'Assertion failed')
-    this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, 'Assertion failed')
-    this._setValueFromSigned(this._getSignedValue() * BigInt(num))
+    this.#assert(typeof num === 'number', 'Assertion failed')
+    this.#assert(Math.abs(num) <= BigNumber.#MAX_IMULN_ARG, 'Assertion failed')
+    this.#_setValueFromSigned(this.#_getSignedValue() * BigInt(num))
     return this
   }
   muln(num: number): BigNumber {
@@ -954,23 +951,23 @@ export default class BigNumber {
   }
   sqr(): BigNumber {
     const r = new BigNumber(0n)
-    r._magnitude = this._magnitude * this._magnitude
-    r._sign = 0
-    r._nominalWordLength = this.length * 2
+    r.#_magnitude = this.#_magnitude * this.#_magnitude
+    r.#_sign = 0
+    r.#_nominalWordLength = this.length * 2
     r.red = null
     return r
   }
 
   isqr(): this {
-    this._magnitude *= this._magnitude
-    this._sign = 0
-    this._nominalWordLength = this.length * 2
+    this.#_magnitude *= this.#_magnitude
+    this.#_sign = 0
+    this.#_nominalWordLength = this.length * 2
     this.red = null
     return this
   }
 
   pow(num: BigNumber): BigNumber {
-    this.assert(num._sign === 0, 'Exponent for pow must be non-negative')
+    this.#assert(num.#_sign === 0, 'Exponent for pow must be non-negative')
     if (num.isZero()) return new BigNumber(1n)
 
     const res = new BigNumber(1n)
@@ -995,7 +992,7 @@ export default class BigNumber {
     return res
   }
 
-  private static normalizeNonNegativeBigInt(value: number | bigint, label: string): bigint {
+  static #normalizeNonNegativeBigInt(value: number | bigint, label: string): bigint {
     if (typeof value === 'number') {
       if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0)
         throw new Error(`${label} must be a non-negative integer`)
@@ -1006,36 +1003,36 @@ export default class BigNumber {
   }
 
   iushln(bits: number | bigint): this {
-    const normalizedBits = BigNumber.normalizeNonNegativeBigInt(bits, 'Shift bits')
+    const normalizedBits = BigNumber.#normalizeNonNegativeBigInt(bits, 'Shift bits')
     if (normalizedBits === 0n) return this
-    this._magnitude <<= normalizedBits
-    this._finishInitialization()
+    this.#_magnitude <<= normalizedBits
+    this.#_finishInitialization()
     return this.strip()
   }
 
   ishln(bits: number | bigint): this {
-    this.assert(this._sign === 0, 'ishln requires positive number')
+    this.#assert(this.#_sign === 0, 'ishln requires positive number')
     return this.iushln(bits)
   }
 
   iushrn(bits: number | bigint, hint?: number, extended?: BigNumber): this {
-    const normalizedBits = BigNumber.normalizeNonNegativeBigInt(bits, 'Shift bits')
+    const normalizedBits = BigNumber.#normalizeNonNegativeBigInt(bits, 'Shift bits')
     if (normalizedBits === 0n) {
-      if (extended != null) extended._initializeState(0n, 0)
+      if (extended != null) extended.#_initializeState(0n, 0)
       return this
     }
     if (extended != null) {
       const m = (1n << normalizedBits) - 1n
-      const sOut = this._magnitude & m
-      extended._initializeState(sOut, 0)
+      const sOut = this.#_magnitude & m
+      extended.#_initializeState(sOut, 0)
     }
-    this._magnitude >>= normalizedBits
-    this._finishInitialization()
+    this.#_magnitude >>= normalizedBits
+    this.#_finishInitialization()
     return this.strip()
   }
 
   ishrn(bits: number | bigint, hint?: number, extended?: BigNumber): this {
-    this.assert(this._sign === 0, 'ishrn requires positive number')
+    this.#assert(this.#_sign === 0, 'ishrn requires positive number')
     return this.iushrn(bits, hint, extended)
   }
 
@@ -1053,20 +1050,20 @@ export default class BigNumber {
   }
 
   testn(bit: number): boolean {
-    this.assert(typeof bit === 'number' && bit >= 0)
-    return ((this._magnitude >> BigInt(bit)) & 1n) !== 0n
+    this.#assert(typeof bit === 'number' && bit >= 0)
+    return ((this.#_magnitude >> BigInt(bit)) & 1n) !== 0n
   }
 
   imaskn(bits: number): this {
-    this.assert(typeof bits === 'number' && bits >= 0)
-    this.assert(this._sign === 0, 'imaskn works only with positive numbers')
+    this.#assert(typeof bits === 'number' && bits >= 0)
+    this.#assert(this.#_sign === 0, 'imaskn works only with positive numbers')
     const Bb = BigInt(bits)
     const m = Bb === 0n ? 0n : (1n << Bb) - 1n
-    this._magnitude &= m
+    this.#_magnitude &= m
     const wfm = bits === 0 ? 1 : Math.max(1, Math.ceil(bits / BigNumber.wordSize))
-    this._nominalWordLength = wfm
-    this._finishInitialization()
-    this._nominalWordLength = Math.max(this._nominalWordLength, wfm)
+    this.#_nominalWordLength = wfm
+    this.#_finishInitialization()
+    this.#_nominalWordLength = Math.max(this.#_nominalWordLength, wfm)
     return this.strip()
   }
 
@@ -1074,18 +1071,18 @@ export default class BigNumber {
     return this.clone().imaskn(bits)
   }
   iaddn(num: number): this {
-    this.assert(typeof num === 'number')
-    this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, 'num is too large')
-    this._setValueFromSigned(this._getSignedValue() + BigInt(num))
+    this.#assert(typeof num === 'number')
+    this.#assert(Math.abs(num) <= BigNumber.#MAX_IMULN_ARG, 'num is too large')
+    this.#_setValueFromSigned(this.#_getSignedValue() + BigInt(num))
     return this
   }
   _iaddn(num: number): this {
     return this.iaddn(num)
   }
   isubn(num: number): this {
-    this.assert(typeof num === 'number')
-    this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, 'Assertion failed')
-    this._setValueFromSigned(this._getSignedValue() - BigInt(num))
+    this.#assert(typeof num === 'number')
+    this.#assert(Math.abs(num) <= BigNumber.#MAX_IMULN_ARG, 'Assertion failed')
+    this.#_setValueFromSigned(this.#_getSignedValue() - BigInt(num))
     return this
   }
   addn(num: number): BigNumber {
@@ -1095,7 +1092,7 @@ export default class BigNumber {
     return this.clone().isubn(num)
   }
   iabs(): this {
-    this._sign = 0
+    this.#_sign = 0
     return this
   }
   abs(): BigNumber {
@@ -1103,34 +1100,29 @@ export default class BigNumber {
   }
 
   divmod(num: BigNumber, mode?: 'div' | 'mod', positive?: boolean): any {
-    this.assert(!num.isZero(), 'Division by zero')
+    this.#assert(!num.isZero(), 'Division by zero')
     if (this.isZero()) {
       const z = new BigNumber(0n)
       return { div: mode === 'mod' ? null : z, mod: mode === 'div' ? null : z }
     }
-    const tV = this._getSignedValue()
-    const nV = num._getSignedValue()
+    const tV = this.#_getSignedValue()
+    const nV = num.#_getSignedValue()
     const dV = mode !== 'mod' ? tV / nV : null
-    const mV = this._computeMod(tV, nV, mode, positive)
-    return { div: this._bigNumberFromSigned(dV), mod: this._bigNumberFromSigned(mV) }
+    const mV = this.#_computeMod(tV, nV, mode, positive)
+    return { div: this.#_bigNumberFromSigned(dV), mod: this.#_bigNumberFromSigned(mV) }
   }
 
-  private _computeMod(
-    tV: bigint,
-    nV: bigint,
-    mode?: 'div' | 'mod',
-    positive?: boolean
-  ): bigint | null {
+  #_computeMod(tV: bigint, nV: bigint, mode?: 'div' | 'mod', positive?: boolean): bigint | null {
     if (mode === 'div') return null
     let mV = tV % nV
     if (positive === true && mV < 0n) mV += nV < 0n ? -nV : nV
     return mV
   }
 
-  private _bigNumberFromSigned(v: bigint | null): BigNumber | null {
+  #_bigNumberFromSigned(v: bigint | null): BigNumber | null {
     if (v === null) return null
     const r = new BigNumber(0n)
-    r._setValueFromSigned(v)
+    r.#_setValueFromSigned(v)
     return r
   }
 
@@ -1147,16 +1139,16 @@ export default class BigNumber {
   }
 
   divRound(num: BigNumber): BigNumber {
-    this.assert(!num.isZero())
-    const tV = this._getSignedValue()
-    const nV = num._getSignedValue()
+    this.#assert(!num.isZero())
+    const tV = this.#_getSignedValue()
+    const nV = num.#_getSignedValue()
 
     let d = tV / nV
     const m = tV % nV
 
     if (m === 0n) {
       const r = new BigNumber(0n)
-      r._setValueFromSigned(d)
+      r.#_setValueFromSigned(d)
       return r
     }
 
@@ -1171,23 +1163,23 @@ export default class BigNumber {
       }
     }
     const r = new BigNumber(0n)
-    r._setValueFromSigned(d)
+    r.#_setValueFromSigned(d)
     return r
   }
 
   modrn(numArg: number): number {
-    this.assert(numArg !== 0, 'Division by zero in modrn')
+    this.#assert(numArg !== 0, 'Division by zero in modrn')
     const absDivisor = BigInt(Math.abs(numArg))
     if (absDivisor === 0n) throw new Error('Division by zero in modrn')
 
-    const remainderMag = this._magnitude % absDivisor
+    const remainderMag = this.#_magnitude % absDivisor
     return numArg < 0 ? Number(-remainderMag) : Number(remainderMag)
   }
 
   idivn(num: number): this {
-    this.assert(num !== 0)
-    this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, 'num is too large')
-    this._setValueFromSigned(this._getSignedValue() / BigInt(num))
+    this.#assert(num !== 0)
+    this.#assert(Math.abs(num) <= BigNumber.#MAX_IMULN_ARG, 'num is too large')
+    this.#_setValueFromSigned(this.#_getSignedValue() / BigInt(num))
     return this
   }
 
@@ -1196,10 +1188,10 @@ export default class BigNumber {
   }
 
   egcd(p: BigNumber): { a: BigNumber; b: BigNumber; gcd: BigNumber } {
-    this.assert(p._sign === 0, 'p must not be negative')
-    this.assert(!p.isZero(), 'p must not be zero')
-    let uV = this._getSignedValue()
-    let vV = p._magnitude
+    this.#assert(p.negative === 0, 'p must not be negative')
+    this.#assert(!p.isZero(), 'p must not be zero')
+    let uV = this.#_getSignedValue()
+    let vV = p.#_magnitude
     let a = 1n
     let pa = 0n
     let b = 0n
@@ -1217,25 +1209,25 @@ export default class BigNumber {
       b = t
     }
     const ra = new BigNumber(0n)
-    ra._setValueFromSigned(a)
+    ra.#_setValueFromSigned(a)
     const rb = new BigNumber(0n)
-    rb._setValueFromSigned(b)
+    rb.#_setValueFromSigned(b)
     const rg = new BigNumber(0n)
-    rg._initializeState(uV < 0n ? -uV : uV, 0)
+    rg.#_initializeState(uV < 0n ? -uV : uV, 0)
     return { a: ra, b: rb, gcd: rg }
   }
 
   gcd(num: BigNumber): BigNumber {
-    let u = this._magnitude
-    let v = num._magnitude
+    let u = this.#_magnitude
+    let v = num.#_magnitude
     if (u === 0n) {
       const r = new BigNumber(0n)
-      r._setValueFromSigned(v)
+      r.#_setValueFromSigned(v)
       return r.iabs()
     }
     if (v === 0n) {
       const r = new BigNumber(0n)
-      r._setValueFromSigned(u)
+      r.#_setValueFromSigned(u)
       return r.iabs()
     }
     while (v !== 0n) {
@@ -1244,12 +1236,15 @@ export default class BigNumber {
       v = t
     }
     const res = new BigNumber(0n)
-    res._initializeState(u, 0)
+    res.#_initializeState(u, 0)
     return res
   }
 
   invm(num: BigNumber): BigNumber {
-    this.assert(!num.isZero() && num._sign === 0, 'Modulus for invm must be positive and non-zero')
+    this.#assert(
+      !num.isZero() && num.#_sign === 0,
+      'Modulus for invm must be positive and non-zero'
+    )
     const eg = this.egcd(num)
     if (!eg.gcd.eqn(1)) {
       throw new Error('Inverse does not exist (numbers are not coprime).')
@@ -1258,27 +1253,27 @@ export default class BigNumber {
   }
 
   isEven(): boolean {
-    return this._magnitude % 2n === 0n
+    return this.#_magnitude % 2n === 0n
   }
   isOdd(): boolean {
-    return this._magnitude % 2n === 1n
+    return this.#_magnitude % 2n === 1n
   }
   andln(num: number): number {
-    this.assert(num >= 0)
-    return Number(this._magnitude & BigInt(num))
+    this.#assert(num >= 0)
+    return Number(this.#_magnitude & BigInt(num))
   }
   bincn(bit: number): this {
-    this.assert(typeof bit === 'number' && bit >= 0)
+    this.#assert(typeof bit === 'number' && bit >= 0)
     const BVal = 1n << BigInt(bit)
-    this._setValueFromSigned(this._getSignedValue() + BVal)
+    this.#_setValueFromSigned(this.#_getSignedValue() + BVal)
     return this
   }
   isZero(): boolean {
-    return this._magnitude === 0n
+    return this.#_magnitude === 0n
   }
   cmpn(num: number): CompareResult {
-    this.assert(Math.abs(num) <= BigNumber.MAX_IMULN_ARG, 'Number is too big')
-    const tV = this._getSignedValue()
+    this.#assert(Math.abs(num) <= BigNumber.#MAX_IMULN_ARG, 'Number is too big')
+    const tV = this.#_getSignedValue()
     const nV = BigInt(num)
     if (tV < nV) {
       return -1
@@ -1289,8 +1284,8 @@ export default class BigNumber {
     return 0
   }
   cmp(num: BigNumber): CompareResult {
-    const tV = this._getSignedValue()
-    const nV = num._getSignedValue()
+    const tV = this.#_getSignedValue()
+    const nV = num.#_getSignedValue()
     if (tV < nV) {
       return -1
     }
@@ -1300,10 +1295,10 @@ export default class BigNumber {
     return 0
   }
   ucmp(num: BigNumber): CompareResult {
-    if (this._magnitude < num._magnitude) {
+    if (this.#_magnitude < num.#_magnitude) {
       return -1
     }
-    if (this._magnitude > num._magnitude) {
+    if (this.#_magnitude > num.#_magnitude) {
       return 1
     }
     return 0
@@ -1340,12 +1335,12 @@ export default class BigNumber {
   }
 
   toRed(ctx: ReductionContext): BigNumber {
-    this.assert(this.red == null, 'Already a number in reduction context')
-    this.assert(this._sign === 0, 'toRed works only with positives')
+    this.#assert(this.red == null, 'Already a number in reduction context')
+    this.#assert(this.#_sign === 0, 'toRed works only with positives')
     return ctx.convertTo(this).forceRed(ctx)
   }
   fromRed(): BigNumber {
-    this.assert(this.red, 'fromRed works only with numbers in reduction context')
+    this.#assert(this.red, 'fromRed works only with numbers in reduction context')
     return this.red.convertFrom(this)
   }
   forceRed(ctx: ReductionContext): this {
@@ -1353,62 +1348,62 @@ export default class BigNumber {
     return this
   }
   redAdd(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redAdd works only with red numbers')
+    this.#assert(this.red, 'redAdd works only with red numbers')
     return this.red.add(this, num)
   }
   redIAdd(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redIAdd works only with red numbers')
+    this.#assert(this.red, 'redIAdd works only with red numbers')
     return this.red.iadd(this, num)
   }
   redSub(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redSub works only with red numbers')
+    this.#assert(this.red, 'redSub works only with red numbers')
     return this.red.sub(this, num)
   }
   redISub(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redISub works only with red numbers')
+    this.#assert(this.red, 'redISub works only with red numbers')
     return this.red.isub(this, num)
   }
   redShl(num: number): BigNumber {
-    this.assert(this.red, 'redShl works only with red numbers')
+    this.#assert(this.red, 'redShl works only with red numbers')
     return this.red.shl(this, num)
   }
   redMul(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redMul works only with red numbers')
+    this.#assert(this.red, 'redMul works only with red numbers')
     this.red.verify2(this, num)
     return this.red.mul(this, num)
   }
   redIMul(num: BigNumber): BigNumber {
-    this.assert(this.red, 'redIMul works only with red numbers')
+    this.#assert(this.red, 'redIMul works only with red numbers')
     this.red.verify2(this, num)
     return this.red.imul(this, num)
   }
   redSqr(): BigNumber {
-    this.assert(this.red, 'redSqr works only with red numbers')
+    this.#assert(this.red, 'redSqr works only with red numbers')
     this.red.verify1(this)
     return this.red.sqr(this)
   }
   redISqr(): BigNumber {
-    this.assert(this.red, 'redISqr works only with red numbers')
+    this.#assert(this.red, 'redISqr works only with red numbers')
     this.red.verify1(this)
     return this.red.isqr(this)
   }
   redSqrt(): BigNumber {
-    this.assert(this.red, 'redSqrt works only with red numbers')
+    this.#assert(this.red, 'redSqrt works only with red numbers')
     this.red.verify1(this)
     return this.red.sqrt(this)
   }
   redInvm(): BigNumber {
-    this.assert(this.red, 'redInvm works only with red numbers')
+    this.#assert(this.red, 'redInvm works only with red numbers')
     this.red.verify1(this)
     return this.red.invm(this)
   }
   redNeg(): BigNumber {
-    this.assert(this.red, 'redNeg works only with red numbers')
+    this.#assert(this.red, 'redNeg works only with red numbers')
     this.red.verify1(this)
     return this.red.neg(this)
   }
   redPow(num: BigNumber): BigNumber {
-    this.assert(this.red != null && num.red == null, 'redPow(normalNum)')
+    this.#assert(this.red != null && num.red == null, 'redPow(normalNum)')
     this.red.verify1(this)
     return this.red.pow(this, num)
   }
@@ -1446,7 +1441,7 @@ export default class BigNumber {
   toHex(byteLength: number = 0): string {
     if (this.isZero() && byteLength === 0) return ''
 
-    let hexStr = this._getMinimalHex() // Raw hex: "0", "f", "10", "123"
+    let hexStr = this.#_getMinimalHex() // Raw hex: "0", "f", "10", "123"
 
     // Ensure even length for non-zero values (byte alignment)
     if (hexStr !== '0' && hexStr.length % 2 !== 0) {
@@ -1532,7 +1527,7 @@ export default class BigNumber {
     const magnitude = hexStr.length === 0 ? 0n : BigInt('0x' + hexStr)
 
     const r = new BigNumber(0n)
-    r._initializeState(magnitude, sign)
+    r.#_initializeState(magnitude, sign)
     return r
   }
 
@@ -1544,11 +1539,11 @@ export default class BigNumber {
    * @returns Returns an array equivalent to this BigNumber interpreted as a signed magnitude with specified endianess.
    */
   toSm(endian: 'big' | 'little' = 'big'): number[] {
-    if (this._magnitude === 0n) {
-      return this._sign === 1 ? [0x80] : []
+    if (this.#_magnitude === 0n) {
+      return this.#_sign === 1 ? [0x80] : []
     }
 
-    let hex = this._getMinimalHex()
+    let hex = this.#_getMinimalHex()
     if (hex.length % 2 !== 0) hex = '0' + hex
 
     const byteLen = hex.length / 2
@@ -1560,7 +1555,7 @@ export default class BigNumber {
     }
 
     let result: number[]
-    if (this._sign === 1) {
+    if (this.#_sign === 1) {
       if ((bytes[0] & 0x80) === 0) {
         result = bytes.slice()
         result[0] |= 0x80
@@ -1720,8 +1715,8 @@ export default class BigNumber {
    * high-resolution timing attacks in shared CPU contexts.
    */
   _invmp(p: BigNumber): BigNumber {
-    this.assert(p._sign === 0, 'p must not be negative for _invmp')
-    this.assert(!p.isZero(), 'p must not be zero for _invmp')
+    this.#assert(p.#_sign === 0, 'p must not be negative for _invmp')
+    this.#assert(!p.isZero(), 'p must not be zero for _invmp')
 
     // Fermat inversion: a^(p-2) mod p
     // NOTE: This assumes p is prime (true for all cryptographic use cases here).
@@ -1760,9 +1755,9 @@ export default class BigNumber {
    * @returns The BigNumber resulting from the multiplication operation.
    */
   mulTo(num: BigNumber, out: BigNumber): BigNumber {
-    out._magnitude = this._magnitude * num._magnitude
-    out._sign = out._magnitude === 0n ? 0 : ((this._sign ^ num._sign) as 0 | 1)
-    out._nominalWordLength = this.length + num.length
+    out.#_magnitude = this.#_magnitude * num.#_magnitude
+    out.#_sign = out.#_magnitude === 0n ? 0 : ((this.#_sign ^ num.#_sign) as 0 | 1)
+    out.#_nominalWordLength = this.length + num.length
     out.red = null
     out.normSign()
     return out

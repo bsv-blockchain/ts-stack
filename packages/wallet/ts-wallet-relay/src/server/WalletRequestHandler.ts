@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest, RpcResponse } from '../types.js'
+import { parseRpcMessage } from '../shared/validation.js'
 
 /**
  * Pure utilities for creating and parsing JSON-RPC messages.
@@ -19,7 +20,7 @@ export class WalletRequestHandler {
   }
 
   parseMessage(raw: string): RpcRequest | RpcResponse {
-    return JSON.parse(raw) as RpcRequest | RpcResponse
+    return parseRpcMessage(JSON.parse(raw))
   }
 
   isResponse(msg: RpcRequest | RpcResponse): msg is RpcResponse {

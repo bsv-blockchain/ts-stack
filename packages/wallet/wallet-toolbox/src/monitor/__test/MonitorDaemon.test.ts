@@ -137,4 +137,74 @@ describe('MonitorDaemon setup', () => {
     await completion
     expect(daemon.setup).toBeUndefined()
   })
+
+  test('starts subscriptions before tracker and task work, then stops cleanly', async () => {
+    const order: string[] = []
+    const monitor = {
+      ready: Promise.resolve().then(() => order.push('ready')),
+      startTasks: jest.fn(async () => {
+        order.push('tasks')
+      }),
+      stopTasks: jest.fn(() => order.push('stop')),
+      destroy: jest.fn(async () => order.push('destroy'))
+    }
+    const chaintracks = {
+      startListening: jest.fn(async () => {
+        order.push('chaintracks')
+      })
+    }
+    const daemon = new MonitorDaemon({})
+    daemon.setup = { monitor: monitor as any, chaintracks: chaintracks as any }
+
+    await daemon.start()
+    await daemon.stop()
+    await daemon.destroy()
+
+    expect(order).toEqual(['ready', 'chaintracks', 'tasks', 'stop', 'destroy'])
+    expect(daemon.setup).toBeUndefined()
+  })
+
+  test('can restart after a transient tracker-listener startup failure', async () => {
+    const failure = new Error('temporary listener failure')
+    const monitor = {
+      ready: Promise.resolve(),
+      startTasks: jest.fn(async () => {}),
+      stopTasks: jest.fn(),
+      destroy: jest.fn(async () => {})
+    }
+    const chaintracks = {
+      startListening: jest.fn<Promise<void>, []>().mockRejectedValueOnce(failure).mockResolvedValueOnce(undefined)
+    }
+    const daemon = new MonitorDaemon({})
+    daemon.setup = { monitor: monitor as any, chaintracks: chaintracks as any }
+
+    await expect(daemon.start()).rejects.toBe(failure)
+    expect(daemon.doneListening).toBeUndefined()
+    expect(daemon.doneTasks).toBeUndefined()
+    await expect(daemon.start()).resolves.toBeUndefined()
+    await daemon.stop()
+  })
+
+  test('destroys monitor resources before storage and continues cleanup after failure', async () => {
+    const order: string[] = []
+    const monitorFailure = new Error('monitor cleanup failed')
+    const daemon = new MonitorDaemon({})
+    daemon.setup = {
+      monitor: {
+        destroy: jest.fn(async () => {
+          order.push('monitor')
+          throw monitorFailure
+        })
+      } as any,
+      storageProvider: {
+        destroy: jest.fn(async () => {
+          order.push('storage')
+        })
+      } as any
+    }
+
+    await expect(daemon.destroy()).rejects.toThrow('monitor cleanup failed')
+    expect(order).toEqual(['monitor', 'storage'])
+    expect(daemon.setup).toBeUndefined()
+  })
 })

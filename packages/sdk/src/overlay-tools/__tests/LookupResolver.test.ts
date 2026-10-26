@@ -2,9 +2,10 @@ import LookupResolver, { HTTPSOverlayLookupFacilitator } from '../LookupResolver
 import { getOverlayHostReputationTracker } from '../HostReputationTracker'
 import OverlayAdminTokenTemplate from '../../overlay-tools/OverlayAdminTokenTemplate'
 import { CompletedProtoWallet } from '../../auth/certificates/__tests/CompletedProtoWallet'
-import { PrivateKey } from '../../primitives/index'
+import { PrivateKey, Utils } from '../../primitives/index'
 import { Transaction } from '../../transaction/index'
 import { LockingScript } from '../../script/index'
+import PushDrop from '../../script/templates/PushDrop'
 
 const mockFacilitator = {
   lookup: jest.fn()
@@ -888,6 +889,66 @@ describe('LookupResolver', () => {
         5000
       ]
     ])
+  })
+
+  it('does not query a host from an unauthenticated SLAP advertisement', async () => {
+    const key = new PrivateKey(44)
+    const wallet = new CompletedProtoWallet(key)
+    const unauthenticated = await new PushDrop(wallet).lock(
+      [
+        Utils.toArray('SLAP', 'utf8'),
+        Utils.toArray(key.toPublicKey().toString(), 'hex'),
+        Utils.toArray('https://attacker.example', 'utf8'),
+        Utils.toArray('ls_foo', 'utf8')
+      ],
+      [2, 'Service Lookup Availability'],
+      '1',
+      'self'
+    )
+    const advertisementTx = new Transaction(
+      1,
+      [],
+      [{ lockingScript: unauthenticated, satoshis: 1 }],
+      0
+    )
+    const validScript = await new OverlayAdminTokenTemplate(wallet).lock(
+      'SLAP',
+      'https://wrong-value.example',
+      'ls_foo'
+    )
+    const wrongValueTx = new Transaction(1, [], [{ lockingScript: validScript, satoshis: 2 }], 0)
+    const mismatchedTxidTx = new Transaction(
+      1,
+      [],
+      [{ lockingScript: validScript, satoshis: 1 }],
+      0
+    )
+    mockFacilitator.lookup.mockReturnValueOnce({
+      type: 'output-list',
+      outputs: [
+        { beef: advertisementTx.toBEEF(), outputIndex: 0 },
+        { beef: wrongValueTx.toBEEF(), outputIndex: 0 },
+        {
+          beef: mismatchedTxidTx.toBEEF(),
+          outputIndex: 0,
+          txid: '00'.repeat(32)
+        }
+      ]
+    })
+
+    const resolver = new LookupResolver({
+      facilitator: mockFacilitator,
+      slapTrackers: ['https://mock.slap']
+    })
+    await expect(resolver.query({ service: 'ls_foo', query: { test: 1 } })).rejects.toThrow(
+      'No competent mainnet hosts found by the SLAP trackers for lookup service: ls_foo'
+    )
+    expect(mockFacilitator.lookup).toHaveBeenCalledTimes(1)
+    expect(mockFacilitator.lookup).not.toHaveBeenCalledWith(
+      'https://attacker.example',
+      expect.anything(),
+      expect.anything()
+    )
   })
 
   it('should throw an error when HTTPSOverlayLookupFacilitator is used with non-HTTPS URL', async () => {

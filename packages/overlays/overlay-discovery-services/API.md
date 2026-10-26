@@ -1,21 +1,36 @@
 # API
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ## Interfaces
 
 | |
 | --- |
+| [PaginationQuery](#interface-paginationquery) |
 | [SHIPQuery](#interface-shipquery) |
 | [SHIPRecord](#interface-shiprecord) |
 | [SLAPQuery](#interface-slapquery) |
 | [SLAPRecord](#interface-slaprecord) |
 | [UTXOReference](#interface-utxoreference) |
+| [ValidatedPagination](#interface-validatedpagination) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
+### Interface: PaginationQuery
+
+```ts
+export interface PaginationQuery {
+    limit?: number;
+    skip?: number;
+    sortOrder?: "asc" | "desc";
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ### Interface: SHIPQuery
 
 ```ts
@@ -30,7 +45,7 @@ export interface SHIPQuery {
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Interface: SHIPRecord
@@ -46,7 +61,7 @@ export interface SHIPRecord {
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Interface: SLAPQuery
@@ -63,7 +78,7 @@ export interface SLAPQuery {
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Interface: SLAPRecord
@@ -79,7 +94,7 @@ export interface SLAPRecord {
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Interface: UTXOReference
@@ -91,7 +106,20 @@ export interface UTXOReference {
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Interface: ValidatedPagination
+
+```ts
+export interface ValidatedPagination {
+    limit: number;
+    skip: number;
+    sortOrder: "asc" | "desc";
+}
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ## Classes
@@ -106,7 +134,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](
 | [SLAPTopicManager](#class-slaptopicmanager) |
 | [WalletAdvertiser](#class-walletadvertiser) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
@@ -121,25 +149,25 @@ within the overlay network.
 export class SHIPLookupService implements LookupService {
     admissionMode: AdmissionMode = "locking-script";
     spendNotificationMode: SpendNotificationMode = "none";
-    constructor(public storage: SHIPStorage) 
-    async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> 
-    async outputSpent(payload: OutputSpent): Promise<void> 
-    async outputEvicted(txid: string, outputIndex: number): Promise<void> 
-    async lookup(question: LookupQuestion): Promise<LookupFormula> 
-    async getDocumentation(): Promise<string> 
+    constructor(public storage: SHIPStorage)
+    async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void>
+    async outputSpent(payload: OutputSpent): Promise<void>
+    async outputEvicted(txid: string, outputIndex: number): Promise<void>
+    async lookup(question: LookupQuestion): Promise<LookupFormula>
+    async getDocumentation(): Promise<string>
     async getMetaData(): Promise<{
         name: string;
         shortDescription: string;
         iconURL?: string;
         version?: string;
         informationURL?: string;
-    }> 
+    }>
 }
 ```
 
 See also: [SHIPStorage](#class-shipstorage)
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: SHIPStorage
@@ -148,13 +176,13 @@ Implements a storage engine for SHIP protocol
 
 ```ts
 export class SHIPStorage {
-    constructor(private readonly db: Db) 
-    async ensureIndexes(): Promise<void> 
-    async hasDuplicateRecord(identityKey: string, domain: string, topic: string): Promise<boolean> 
-    async storeSHIPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void> 
-    async deleteSHIPRecord(txid: string, outputIndex: number): Promise<void> 
-    async findRecord(query: SHIPQuery): Promise<UTXOReference[]> 
-    async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]> 
+    constructor(private readonly db: Db)
+    async ensureIndexes(): Promise<void>
+    async hasDuplicateRecord(identityKey: string, domain: string, topic: string): Promise<boolean>
+    async storeSHIPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void>
+    async deleteSHIPRecord(txid: string, outputIndex: number): Promise<void>
+    async findRecord(query: SHIPQuery): Promise<UTXOReference[]>
+    async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]>
 }
 ```
 
@@ -169,7 +197,7 @@ See also: [SHIPQuery](#interface-shipquery), [UTXOReference](#interface-utxorefe
 Constructs a new SHIPStorage instance
 
 ```ts
-constructor(private readonly db: Db) 
+constructor(private readonly db: Db)
 ```
 
 Argument Details
@@ -182,7 +210,7 @@ Argument Details
 Deletes a SHIP record
 
 ```ts
-async deleteSHIPRecord(txid: string, outputIndex: number): Promise<void> 
+async deleteSHIPRecord(txid: string, outputIndex: number): Promise<void>
 ```
 
 Argument Details
@@ -197,7 +225,7 @@ Argument Details
 Ensures the necessary indexes are created for the collections.
 
 ```ts
-async ensureIndexes(): Promise<void> 
+async ensureIndexes(): Promise<void>
 ```
 
 #### Method findAll
@@ -205,7 +233,7 @@ async ensureIndexes(): Promise<void>
 Returns all results tracked by the overlay
 
 ```ts
-async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]> 
+async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]>
 ```
 See also: [UTXOReference](#interface-utxoreference)
 
@@ -227,7 +255,7 @@ Argument Details
 Finds SHIP records based on a given query object.
 
 ```ts
-async findRecord(query: SHIPQuery): Promise<UTXOReference[]> 
+async findRecord(query: SHIPQuery): Promise<UTXOReference[]>
 ```
 See also: [SHIPQuery](#interface-shipquery), [UTXOReference](#interface-utxoreference)
 
@@ -242,15 +270,15 @@ Argument Details
 
 #### Method hasDuplicateRecord
 
-Checks if a duplicate SHIP record exists with the same field values
+Checks if a SHIP record exists for the same provider and topic.
 
 ```ts
-async hasDuplicateRecord(identityKey: string, domain: string, topic: string): Promise<boolean> 
+async hasDuplicateRecord(identityKey: string, domain: string, topic: string): Promise<boolean>
 ```
 
 Returns
 
-true if a duplicate exists
+true if a matching record exists
 
 Argument Details
 
@@ -266,7 +294,7 @@ Argument Details
 Stores a SHIP record
 
 ```ts
-async storeSHIPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void> 
+async storeSHIPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, topic: string): Promise<void>
 ```
 
 Argument Details
@@ -284,7 +312,7 @@ Argument Details
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: SHIPTopicManager
@@ -297,15 +325,15 @@ SHIP tokens facilitate the advertisement of nodes hosting specific topics within
 
 ```ts
 export class SHIPTopicManager implements TopicManager {
-    async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> 
-    async getDocumentation(): Promise<string> 
+    async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions>
+    async getDocumentation(): Promise<string>
     async getMetaData(): Promise<{
         name: string;
         shortDescription: string;
         iconURL?: string;
         version?: string;
         informationURL?: string;
-    }> 
+    }>
 }
 ```
 
@@ -318,7 +346,7 @@ export class SHIPTopicManager implements TopicManager {
 Returns documentation specific to the SHIP topic manager.
 
 ```ts
-async getDocumentation(): Promise<string> 
+async getDocumentation(): Promise<string>
 ```
 
 Returns
@@ -336,7 +364,7 @@ async getMetaData(): Promise<{
     iconURL?: string;
     version?: string;
     informationURL?: string;
-}> 
+}>
 ```
 
 Returns
@@ -348,7 +376,7 @@ A promise that resolves to an object containing metadata.
 Identifies admissible outputs for SHIP tokens.
 
 ```ts
-async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> 
+async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions>
 ```
 
 Returns
@@ -364,7 +392,7 @@ Argument Details
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: SLAPLookupService
@@ -379,25 +407,25 @@ records for lookup purposes.
 export class SLAPLookupService implements LookupService {
     admissionMode: AdmissionMode = "locking-script";
     spendNotificationMode: SpendNotificationMode = "none";
-    constructor(public storage: SLAPStorage) 
-    async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> 
-    async outputSpent(payload: OutputSpent): Promise<void> 
-    async outputEvicted(txid: string, outputIndex: number): Promise<void> 
-    async lookup(question: LookupQuestion): Promise<LookupFormula> 
-    async getDocumentation(): Promise<string> 
+    constructor(public storage: SLAPStorage)
+    async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void>
+    async outputSpent(payload: OutputSpent): Promise<void>
+    async outputEvicted(txid: string, outputIndex: number): Promise<void>
+    async lookup(question: LookupQuestion): Promise<LookupFormula>
+    async getDocumentation(): Promise<string>
     async getMetaData(): Promise<{
         name: string;
         shortDescription: string;
         iconURL?: string;
         version?: string;
         informationURL?: string;
-    }> 
+    }>
 }
 ```
 
 See also: [SLAPStorage](#class-slapstorage)
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: SLAPStorage
@@ -406,13 +434,13 @@ Implements a storage engine for SLAP protocol
 
 ```ts
 export class SLAPStorage {
-    constructor(private readonly db: Db) 
-    async ensureIndexes(): Promise<void> 
-    async hasDuplicateRecord(identityKey: string, domain: string, service: string): Promise<boolean> 
-    async storeSLAPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void> 
-    async deleteSLAPRecord(txid: string, outputIndex: number): Promise<void> 
-    async findRecord(query: SLAPQuery): Promise<UTXOReference[]> 
-    async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]> 
+    constructor(private readonly db: Db)
+    async ensureIndexes(): Promise<void>
+    async hasDuplicateRecord(identityKey: string, domain: string, service: string): Promise<boolean>
+    async storeSLAPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void>
+    async deleteSLAPRecord(txid: string, outputIndex: number): Promise<void>
+    async findRecord(query: SLAPQuery): Promise<UTXOReference[]>
+    async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]>
 }
 ```
 
@@ -427,7 +455,7 @@ See also: [SLAPQuery](#interface-slapquery), [UTXOReference](#interface-utxorefe
 Constructs a new SLAPStorage instance
 
 ```ts
-constructor(private readonly db: Db) 
+constructor(private readonly db: Db)
 ```
 
 Argument Details
@@ -440,7 +468,7 @@ Argument Details
 Deletes a SLAP record
 
 ```ts
-async deleteSLAPRecord(txid: string, outputIndex: number): Promise<void> 
+async deleteSLAPRecord(txid: string, outputIndex: number): Promise<void>
 ```
 
 Argument Details
@@ -455,7 +483,7 @@ Argument Details
 Ensures the necessary indexes are created for the collections.
 
 ```ts
-async ensureIndexes(): Promise<void> 
+async ensureIndexes(): Promise<void>
 ```
 
 #### Method findAll
@@ -463,7 +491,7 @@ async ensureIndexes(): Promise<void>
 Returns all results tracked by the overlay
 
 ```ts
-async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]> 
+async findAll(limit?: number, skip?: number, sortOrder?: "asc" | "desc"): Promise<UTXOReference[]>
 ```
 See also: [UTXOReference](#interface-utxoreference)
 
@@ -485,7 +513,7 @@ Argument Details
 Finds SLAP records based on a given query object.
 
 ```ts
-async findRecord(query: SLAPQuery): Promise<UTXOReference[]> 
+async findRecord(query: SLAPQuery): Promise<UTXOReference[]>
 ```
 See also: [SLAPQuery](#interface-slapquery), [UTXOReference](#interface-utxoreference)
 
@@ -500,15 +528,15 @@ Argument Details
 
 #### Method hasDuplicateRecord
 
-Checks if a duplicate SLAP record exists with the same field values
+Checks if a SLAP record exists for the same provider and service.
 
 ```ts
-async hasDuplicateRecord(identityKey: string, domain: string, service: string): Promise<boolean> 
+async hasDuplicateRecord(identityKey: string, domain: string, service: string): Promise<boolean>
 ```
 
 Returns
 
-true if a duplicate exists
+true if a matching record exists
 
 Argument Details
 
@@ -524,7 +552,7 @@ Argument Details
 Stores a SLAP record
 
 ```ts
-async storeSLAPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void> 
+async storeSLAPRecord(txid: string, outputIndex: number, identityKey: string, domain: string, service: string): Promise<void>
 ```
 
 Argument Details
@@ -542,7 +570,7 @@ Argument Details
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: SLAPTopicManager
@@ -555,15 +583,15 @@ SLAP tokens facilitate the advertisement of lookup services availability within 
 
 ```ts
 export class SLAPTopicManager implements TopicManager {
-    async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> 
-    async getDocumentation(): Promise<string> 
+    async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions>
+    async getDocumentation(): Promise<string>
     async getMetaData(): Promise<{
         name: string;
         shortDescription: string;
         iconURL?: string;
         version?: string;
         informationURL?: string;
-    }> 
+    }>
 }
 ```
 
@@ -576,7 +604,7 @@ export class SLAPTopicManager implements TopicManager {
 Returns documentation specific to the SLAP topic manager.
 
 ```ts
-async getDocumentation(): Promise<string> 
+async getDocumentation(): Promise<string>
 ```
 
 Returns
@@ -594,7 +622,7 @@ async getMetaData(): Promise<{
     iconURL?: string;
     version?: string;
     informationURL?: string;
-}> 
+}>
 ```
 
 Returns
@@ -606,7 +634,7 @@ A promise that resolves to an object containing metadata.
 Identifies admissible outputs for SLAP tokens.
 
 ```ts
-async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions> 
+async identifyAdmissibleOutputs(beef: number[], previousCoins: number[]): Promise<AdmittanceInstructions>
 ```
 
 Returns
@@ -622,7 +650,7 @@ Argument Details
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Class: WalletAdvertiser
@@ -631,12 +659,12 @@ Implements the Advertiser interface for managing SHIP and SLAP advertisements us
 
 ```ts
 export class WalletAdvertiser implements Advertiser {
-    constructor(public chain: "main" | "test", public privateKey: string, public storageURL: string, public advertisableURI: string, public lookupResolverConfig?: LookupResolverConfig) 
-    async init(): Promise<void> 
-    async createAdvertisements(adsData: AdvertisementData[]): Promise<TaggedBEEF> 
-    async findAllAdvertisements(protocol: "SHIP" | "SLAP"): Promise<Advertisement[]> 
-    async revokeAdvertisements(advertisements: Advertisement[]): Promise<TaggedBEEF> 
-    parseAdvertisement(outputScript: Script): Advertisement 
+    constructor(public chain: "main" | "test" | "ttn", public privateKey: string, public storageURL: string, public advertisableURI: string, public lookupResolverConfig?: LookupResolverConfig)
+    async init(): Promise<void>
+    async createAdvertisements(adsData: AdvertisementData[]): Promise<TaggedBEEF>
+    async findAllAdvertisements(protocol: "SHIP" | "SLAP"): Promise<Advertisement[]>
+    async revokeAdvertisements(advertisements: Advertisement[]): Promise<TaggedBEEF>
+    parseAdvertisement(outputScript: Script): Advertisement
 }
 ```
 
@@ -649,13 +677,13 @@ export class WalletAdvertiser implements Advertiser {
 Constructs a new WalletAdvertiser instance.
 
 ```ts
-constructor(public chain: "main" | "test", public privateKey: string, public storageURL: string, public advertisableURI: string, public lookupResolverConfig?: LookupResolverConfig) 
+constructor(public chain: "main" | "test" | "ttn", public privateKey: string, public storageURL: string, public advertisableURI: string, public lookupResolverConfig?: LookupResolverConfig)
 ```
 
 Argument Details
 
 + **chain**
-  + The blockchain (main or test) where this advertiser is advertising
+  + The blockchain (main, test, or TTN) where this advertiser is advertising
 + **privateKey**
   + The private key used for signing transactions.
 + **storageURL**
@@ -670,7 +698,7 @@ Argument Details
 Utility function to create multiple advertisements in a single transaction.
 
 ```ts
-async createAdvertisements(adsData: AdvertisementData[]): Promise<TaggedBEEF> 
+async createAdvertisements(adsData: AdvertisementData[]): Promise<TaggedBEEF>
 ```
 
 Returns
@@ -688,10 +716,12 @@ Will throw an error if the locking key is invalid.
 
 #### Method findAllAdvertisements
 
-Finds all SHIP or SLAP advertisements for a given topic created by this identity.
+Finds this wallet identity's authenticated SHIP or SLAP advertisements.
+Lookup results owned by another identity, carrying a forged signature, or
+not bound to their returned transaction output are ignored.
 
 ```ts
-async findAllAdvertisements(protocol: "SHIP" | "SLAP"): Promise<Advertisement[]> 
+async findAllAdvertisements(protocol: "SHIP" | "SLAP"): Promise<Advertisement[]>
 ```
 
 Returns
@@ -700,7 +730,7 @@ A promise that resolves to an array of advertisements.
 
 Argument Details
 
-+ **topic**
++ **protocol**
   + Whether SHIP or SLAP advertisements should be returned.
 
 #### Method init
@@ -708,15 +738,18 @@ Argument Details
 Initializes the wallet asynchronously.
 
 ```ts
-async init(): Promise<void> 
+async init(): Promise<void>
 ```
 
 #### Method parseAdvertisement
 
-Parses an advertisement from the provided output script.
+Structurally parses a canonical advertisement from the provided output script.
+This synchronous compatibility method does not verify the token signature;
+security-sensitive callers must use a trusted admission result. This class's
+create, find, and revoke flows perform cryptographic verification internally.
 
 ```ts
-parseAdvertisement(outputScript: Script): Advertisement 
+parseAdvertisement(outputScript: Script): Advertisement
 ```
 
 Returns
@@ -733,7 +766,7 @@ Argument Details
 Revokes an existing advertisement.
 
 ```ts
-async revokeAdvertisements(advertisements: Advertisement[]): Promise<TaggedBEEF> 
+async revokeAdvertisements(advertisements: Advertisement[]): Promise<TaggedBEEF>
 ```
 
 Returns
@@ -747,156 +780,300 @@ Argument Details
 
 </details>
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+## Functions
+
+| |
+| --- |
+| [definedProperties](#function-definedproperties) |
+| [hasPreviousCoins](#function-haspreviouscoins) |
+| [isAdmissibleDiscoveryOutput](#function-isadmissiblediscoveryoutput) |
+| [logDiscoveryIdentificationError](#function-logdiscoveryidentificationerror) |
+| [logDiscoverySummary](#function-logdiscoverysummary) |
+| [parseDiscoveryTransaction](#function-parsediscoverytransaction) |
+| [requireLookupQuery](#function-requirelookupquery) |
+| [validateOptionalBoolean](#function-validateoptionalboolean) |
+| [validateOptionalPublicKey](#function-validateoptionalpublickey) |
+| [validateOptionalString](#function-validateoptionalstring) |
+| [validateOptionalStringArray](#function-validateoptionalstringarray) |
+| [validatePaginationQuery](#function-validatepaginationquery) |
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+
+### Function: definedProperties
+
+```ts
+export function definedProperties<T extends object>(value: T): Partial<T>
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: hasPreviousCoins
+
+```ts
+export function hasPreviousCoins(previousCoins: number[] | undefined): boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: isAdmissibleDiscoveryOutput
+
+Validates the shared SHIP/SLAP advertisement envelope while retaining each
+protocol's topic-or-service prefix requirement.
+
+```ts
+export async function isAdmissibleDiscoveryOutput(lockingScript: LockingScript, protocol: DiscoveryProtocol): Promise<boolean>
+```
+
+See also: [DiscoveryProtocol](#type-discoveryprotocol)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: logDiscoveryIdentificationError
+
+Logs a parse failure only when nothing was admitted and no previous coin
+was consumed, matching the prior per-protocol behavior.
+
+```ts
+export function logDiscoveryIdentificationError(protocol: DiscoveryProtocol, outputsToAdmit: number[], previousCoins: number[], error: unknown): void
+```
+
+See also: [DiscoveryProtocol](#type-discoveryprotocol)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: logDiscoverySummary
+
+Emits the shared SHIP/SLAP admittance summary while preserving each
+protocol's existing wording and emoji.
+
+```ts
+export function logDiscoverySummary(protocol: DiscoveryProtocol, outputsToAdmit: number[], previousCoins: number[]): void
+```
+
+See also: [DiscoveryProtocol](#type-discoveryprotocol)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: parseDiscoveryTransaction
+
+Parses one strictly framed, resource-bounded discovery transaction.
+
+```ts
+export function parseDiscoveryTransaction(value: unknown): Transaction
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: requireLookupQuery
+
+Reads a lookup question without invoking accessors and returns either the
+legacy `findAll` query or an allowlisted plain-data query record.
+
+```ts
+export function requireLookupQuery(question: unknown, expectedService: string, allowedKeys: readonly string[]): "findAll" | LookupQueryRecord
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: validateOptionalBoolean
+
+```ts
+export function validateOptionalBoolean(value: unknown, path: string): boolean
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: validateOptionalPublicKey
+
+```ts
+export function validateOptionalPublicKey(value: unknown, path: string): string | undefined
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: validateOptionalString
+
+```ts
+export function validateOptionalString(value: unknown, path: string, maximumBytes = MAX_QUERY_STRING_BYTES): string | undefined
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: validateOptionalStringArray
+
+```ts
+export function validateOptionalStringArray(value: unknown, path: string): string[] | undefined
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Function: validatePaginationQuery
+
+```ts
+export function validatePaginationQuery(query: PaginationQuery): ValidatedPagination
+```
+
+See also: [PaginationQuery](#interface-paginationquery), [ValidatedPagination](#interface-validatedpagination)
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+## Types
+
+### Type: DiscoveryProtocol
+
+```ts
+export type DiscoveryProtocol = "SHIP" | "SLAP"
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ## Variables
 
 | |
 | --- |
+| [MAX_DISCOVERY_LOOKUP_RESULTS](#variable-max_discovery_lookup_results) |
+| [MAX_DISCOVERY_LOOKUP_SKIP](#variable-max_discovery_lookup_skip) |
+| [MAX_QUERY_NAME_BYTES](#variable-max_query_name_bytes) |
 | [isAdvertisableURI](#variable-isadvertisableuri) |
 | [isTokenSignatureCorrectlyLinked](#variable-istokensignaturecorrectlylinked) |
 | [isValidTopicOrServiceName](#variable-isvalidtopicorservicename) |
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 
+### Variable: MAX_DISCOVERY_LOOKUP_RESULTS
+
+```ts
+MAX_DISCOVERY_LOOKUP_RESULTS = 1000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Variable: MAX_DISCOVERY_LOOKUP_SKIP
+
+```ts
+MAX_DISCOVERY_LOOKUP_SKIP = 1000000
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
+### Variable: MAX_QUERY_NAME_BYTES
+
+```ts
+MAX_QUERY_NAME_BYTES = 256
+```
+
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
+
+---
 ### Variable: isAdvertisableURI
 
 ```ts
 isAdvertisableURI = (uri: string): boolean => {
     if (typeof uri !== "string" || uri.trim() === "")
         return false;
-    const validateCustomHttpsURI = (uri: string, prefix: string): boolean => {
-        try {
-            const modifiedURI = uri.replace(prefix, "https://");
-            const parsed = new URL(modifiedURI);
-            if (parsed.hostname.toLowerCase() === "localhost")
-                return false;
-            if (parsed.pathname !== "/")
-                return false;
-            return true;
-        }
-        catch (e) {
-            return false;
-        }
-    };
-    if (uri.startsWith("https://")) {
-        return validateCustomHttpsURI(uri, "https://");
-    }
-    else if (uri.startsWith("https+bsvauth://")) {
-        return validateCustomHttpsURI(uri, "https+bsvauth://");
-    }
-    else if (uri.startsWith("https+bsvauth+smf://")) {
-        return validateCustomHttpsURI(uri, "https+bsvauth+smf://");
-    }
-    else if (uri.startsWith("https+bsvauth+scrypt-offchain://")) {
-        return validateCustomHttpsURI(uri, "https+bsvauth+scrypt-offchain://");
-    }
-    else if (uri.startsWith("https+rtt://")) {
-        return validateCustomHttpsURI(uri, "https+rtt://");
-    }
-    else if (uri.startsWith("wss://")) {
-        try {
-            const parsed = new URL(uri);
-            if (parsed.protocol !== "wss:")
-                return false;
-            if (parsed.hostname.toLowerCase() === "localhost")
-                return false;
-            return true;
-        }
-        catch (e) {
-            return false;
-        }
-    }
-    else if (uri.startsWith("js8c+bsvauth+smf:")) {
-        const queryIndex = uri.indexOf("?");
-        if (queryIndex === -1)
-            return false;
-        const queryStr = uri.substring(queryIndex);
-        const params = new URLSearchParams(queryStr);
-        const latStr = params.get("lat");
-        const longStr = params.get("long");
-        const freqStr = params.get("freq");
-        const radiusStr = params.get("radius");
-        if (!latStr || !longStr || !freqStr || !radiusStr)
-            return false;
-        const lat = parseFloat(latStr);
-        const lon = parseFloat(longStr);
-        if (isNaN(lat) || lat < -90 || lat > 90)
-            return false;
-        if (isNaN(lon) || lon < -180 || lon > 180)
-            return false;
-        const freqMatch = freqStr.match(/(\d+(\.\d+)?)/);
-        if (!freqMatch)
-            return false;
-        const freqVal = parseFloat(freqMatch[1]);
-        if (isNaN(freqVal) || freqVal <= 0)
-            return false;
-        const radiusMatch = radiusStr.match(/(\d+(\.\d+)?)/);
-        if (!radiusMatch)
-            return false;
-        const radiusVal = parseFloat(radiusMatch[1]);
-        if (isNaN(radiusVal) || radiusVal <= 0)
-            return false;
-        return true;
-    }
+    if (new TextEncoder().encode(uri).length > MAX_ADVERTISABLE_URI_BYTES)
+        return false;
+    const httpsPrefix = HTTPS_URI_PREFIXES.find(prefix => uri.startsWith(prefix));
+    if (httpsPrefix !== undefined)
+        return validateCustomHttpsURI(uri, httpsPrefix);
+    if (uri.startsWith("wss://"))
+        return validateWssURI(uri);
+    if (uri.startsWith("js8c+bsvauth+smf:"))
+        return validateJs8URI(uri);
     return false;
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Variable: isTokenSignatureCorrectlyLinked
 
 ```ts
 isTokenSignatureCorrectlyLinked = async (lockingPublicKey: PublicKey, fields: number[][]): Promise<boolean> => {
-    const signature = fields.pop();
-    const protocolID: [
-        2,
-        string
-    ] = [2, Utils.toUTF8(fields[0]) === "SHIP" ? "service host interconnect" : "service lookup availability"];
-    const identityKey = Utils.toHex(fields[1]);
-    const data = fields.reduce((a, e) => [...a, ...e], []);
-    const anyoneWallet = new ProtoWallet("anyone");
     try {
+        if (!Array.isArray(fields) || fields.length !== 5)
+            return false;
+        for (let index = 0; index < fields.length; index++) {
+            if (!Object.prototype.hasOwnProperty.call(fields, index) || !Array.isArray(fields[index])) {
+                return false;
+            }
+        }
+        const dataFields = fields.slice(0, -1);
+        const signature = fields.at(-1)!;
+        const protocol = Utils.toUTF8Strict(dataFields[0]);
+        if (protocol !== "SHIP" && protocol !== "SLAP")
+            return false;
+        const protocolID: [
+            2,
+            string
+        ] = [
+            2,
+            protocol === "SHIP"
+                ? "service host interconnect"
+                : "service lookup availability"
+        ];
+        const identityKey = Utils.toHex(dataFields[1]);
+        if (PublicKey.fromString(identityKey).toString() !== identityKey)
+            return false;
+        const anyoneWallet = new ProtoWallet("anyone");
         const { valid } = await anyoneWallet.verifySignature({
-            data,
+            data: dataFields.flat(),
             signature,
             counterparty: identityKey,
             protocolID,
             keyID: "1"
         });
-        if (!valid) {
+        if (valid !== true) {
             return false;
         }
+        const { publicKey: expectedLockingPublicKey } = await anyoneWallet.getPublicKey({
+            counterparty: identityKey,
+            protocolID,
+            keyID: "1"
+        });
+        return expectedLockingPublicKey === lockingPublicKey.toString();
     }
-    catch (e) {
+    catch {
         return false;
     }
-    const { publicKey: expectedLockingPublicKey } = await anyoneWallet.getPublicKey({
-        counterparty: identityKey,
-        protocolID,
-        keyID: "1"
-    });
-    return expectedLockingPublicKey === lockingPublicKey.toString();
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---
 ### Variable: isValidTopicOrServiceName
 
 ```ts
 isValidTopicOrServiceName = (service: string): boolean => {
-    const serviceRegex = /^(?=.{1,50}$)(?:tm_|ls_)[a-z]+(?:_[a-z]+)*$/;
+    const serviceRegex = /^(?=.{1,256}$)(?:tm_|ls_)[a-z0-9]+(?:_[a-z0-9]+)*$/;
     return serviceRegex.test(service);
 }
 ```
 
-Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Variables](#variables)
+Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
 ---

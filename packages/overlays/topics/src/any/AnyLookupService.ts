@@ -9,15 +9,22 @@ import {
 } from '@bsv/overlay'
 import { AnyStorage } from './AnyStorage.js'
 import { Db } from 'mongodb'
-import { AnyQuery } from './types.js'
+import {
+  readDate,
+  readInteger,
+  readSortOrder,
+  readString,
+  requireLookupQuery,
+  requireTxid
+} from '../shared/queryValidation.js'
 
 export class AnyLookupService implements LookupService {
   readonly admissionMode: AdmissionMode = 'locking-script'
   readonly spendNotificationMode: SpendNotificationMode = 'txid'
 
-  constructor (public storage: AnyStorage) { }
+  constructor(public storage: AnyStorage) {}
 
-  async outputAdmittedByTopic (payload: OutputAdmittedByTopic): Promise<void> {
+  async outputAdmittedByTopic(payload: OutputAdmittedByTopic): Promise<void> {
     if (payload.mode !== 'locking-script') throw new Error('Invalid mode')
     const { txid, outputIndex } = payload
     if (payload.topic !== 'tm_anytx') return
@@ -29,51 +36,49 @@ export class AnyLookupService implements LookupService {
     }
   }
 
-  async outputSpent (payload: OutputSpent): Promise<void> {
+  async outputSpent(payload: OutputSpent): Promise<void> {
     if (payload.mode !== 'txid') throw new Error('Invalid mode')
     const { topic, txid, outputIndex, spendingTxid } = payload
     if (topic !== 'tm_anytx') return
     await this.storage.spendRecord(txid, outputIndex, spendingTxid)
   }
 
-  async outputEvicted (txid: string, outputIndex: number): Promise<void> {
+  async outputEvicted(txid: string, outputIndex: number): Promise<void> {
     await this.storage.deleteRecord(txid, outputIndex)
   }
 
-  async lookup (question: LookupQuestion): Promise<LookupFormula> {
-    if (!question) throw new Error('A valid query must be provided!')
-    if (question.service !== 'ls_anytx') throw new Error('Lookup service not supported!')
-
-    const {
-      txid,
-      limit = 50,
-      skip = 0,
-      startDate,
-      endDate,
-      sortOrder
-    } = question.query as AnyQuery
-
-    if (limit < 0) throw new Error('Limit must be a non-negative number')
-    if (skip < 0) throw new Error('Skip must be a non-negative number')
-
-    const from = startDate ? new Date(startDate) : undefined
-    const to = endDate ? new Date(endDate) : undefined
-    if (from && Number.isNaN(from.getTime())) throw new Error('Invalid startDate provided!')
-    if (to && Number.isNaN(to.getTime())) throw new Error('Invalid endDate provided!')
+  async lookup(question: LookupQuestion): Promise<LookupFormula> {
+    const query = requireLookupQuery(question, 'ls_anytx', [
+      'txid',
+      'limit',
+      'skip',
+      'startDate',
+      'endDate',
+      'sortOrder'
+    ])
+    const txid = requireTxid(readString(query, 'txid', { maxBytes: 64 }))
+    const limit = readInteger(query, 'limit', 50, 1, 100)
+    const skip = readInteger(query, 'skip', 0, 0, 100000)
+    const from = readDate(query, 'startDate')
+    const to = readDate(query, 'endDate')
+    const sortOrder = readSortOrder(query)
+    if (from !== undefined && to !== undefined && from > to) {
+      throw new Error('Invalid lookup query: startDate must not be after endDate')
+    }
 
     if (txid) {
       const result = await this.storage.findByTxid(txid)
       return result === null ? [] : [result]
     }
 
-    return await this.storage.findAll(limit, skip, from, to, sortOrder || 'desc')
+    return await this.storage.findAll(limit, skip, from, to, sortOrder)
   }
 
-  async getDocumentation (): Promise<string> {
+  async getDocumentation(): Promise<string> {
     return 'Any Lookup Service: lookup your outputs.'
   }
 
-  async getMetaData (): Promise<{
+  async getMetaData(): Promise<{
     name: string
     shortDescription: string
     iconURL?: string
@@ -88,5 +93,7 @@ export class AnyLookupService implements LookupService {
 }
 
 // Factory
-function create (db: Db): AnyLookupService { return new AnyLookupService(new AnyStorage(db)) }
+function create(db: Db): AnyLookupService {
+  return new AnyLookupService(new AnyStorage(db))
+}
 export default create

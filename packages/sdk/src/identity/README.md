@@ -12,6 +12,33 @@
 - **Identity Resolution**: Easily resolve identity certificates based on identity keys or specific attributes.
 - **Displayable Identities**: Parse identity certificates into user-friendly, displayable identities.
 
+## Local contact authority
+
+`ContactsManager` stores identity-key associations that the wallet user or
+application has independently validated and deliberately accepted. A saved
+contact is authoritative inside that wallet in the same policy sense as a
+locally installed trust anchor or accepted self-signed certificate: when
+contact lookup is enabled, the saved association may override or short-circuit
+third-party overlay discovery.
+
+That authority is intentionally local. Authenticating a contact output proves
+that this wallet stored the record; it does not create a certifier signature or
+prove the real-world identity to anyone else. Applications should therefore:
+
+- save contacts only after user confirmation or another independent validation
+  channel;
+- label contact-sourced identity as a local contact, not as externally
+  certified;
+- never feed unauthenticated network discovery directly into the contacts
+  basket; and
+- use a fresh overlay query when third-party certificate evidence is required.
+
+Identity resolution does not consult contacts by default. Pass
+`{ useContacts: true }` to `resolveByIdentityKey` or `resolveByAttributes` when
+the application intends to honor this local authority. With the default
+contacts-first mode, a match skips the overlay; `{ parallel: true }` still lets
+the contact win while also obtaining a fresh overlay answer.
+
 ## Installation
 
 ```bash

@@ -13,6 +13,9 @@ import { validateWABAdminConfig } from './security/adminAuth'
 import { validateDemoAccountConfig } from './services/DemoAccountService'
 import { validatePresentationKeyVaultConfig } from './security/presentationKeyVault'
 import { reconcilePresentationKeyVault } from './security/presentationKeyReconciliation'
+import { validateFaucetConfig } from './config/faucet'
+import { validateShareEncryptionConfig } from './services/ShareService'
+import { validateTwilioAuthConfig } from './auth-methods/AuthMethodFactory'
 
 const PORT = process.env.PORT || 8080
 const tracer = trace.getTracer('@bsv/wab-server')
@@ -23,6 +26,9 @@ async function startServer(): Promise<Server | undefined> {
     try {
       validateWABAdminConfig()
       validateDemoAccountConfig()
+      validateTwilioAuthConfig()
+      validateFaucetConfig()
+      validateShareEncryptionConfig()
       await migrateLatest()
       log.info({ operation: 'migrate', outcome: 'ok' }, 'migrations applied')
       validatePresentationKeyVaultConfig()

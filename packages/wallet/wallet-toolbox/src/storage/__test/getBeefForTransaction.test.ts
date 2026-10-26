@@ -98,7 +98,9 @@ describe('getBeefForTransaction tests', () => {
     const knownTxids = Array.from({ length: 10_000 }, (_, index) => index.toString(16).padStart(64, '0'))
     knownTxids.push(txid)
     Object.defineProperty(knownTxids, Symbol.iterator, {
-      value: () => { throw new Error('the common single-root path must not iterate the full history') }
+      value: () => {
+        throw new Error('the common single-root path must not iterate the full history')
+      }
     })
 
     const beef = await storage.getBeefForTransaction(txid, {
@@ -155,30 +157,33 @@ describe('getBeefForTransaction tests', () => {
       return tx
     })
     const txids = transactions.map(transaction => transaction.id('hex'))
-    const compound = new MerklePath(900_200, [
-      txids.map((hash, offset) => ({ offset, hash, txid: true }))
-    ])
+    const compound = new MerklePath(900_200, [txids.map((hash, offset) => ({ offset, hash, txid: true }))])
     const merkleRoot = compound.computeRoot(txids[0])
-    const proven = new Map<string, ProvenOrRawTx>(transactions.map((transaction, index) => {
-      const now = new Date()
-      return [txids[index], {
-        proven: {
-          provenTxId: index + 1,
-          txid: txids[index],
-          height: compound.blockHeight,
-          index,
-          merklePath: compound.extract([txids[index]]).toBinary(),
-          rawTx: transaction.toBinary(),
-          blockHash: '11'.repeat(32),
-          merkleRoot,
-          created_at: now,
-          updated_at: now
-        }
-      }]
-    }))
-    const batchRead = jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async requested =>
-      new Map(requested.map(txid => [txid, proven.get(txid)!]))
+    const proven = new Map<string, ProvenOrRawTx>(
+      transactions.map((transaction, index) => {
+        const now = new Date()
+        return [
+          txids[index],
+          {
+            proven: {
+              provenTxId: index + 1,
+              txid: txids[index],
+              height: compound.blockHeight,
+              index,
+              merklePath: compound.extract([txids[index]]).toBinary(),
+              rawTx: transaction.toBinary(),
+              blockHash: '11'.repeat(32),
+              merkleRoot,
+              created_at: now,
+              updated_at: now
+            }
+          }
+        ]
+      })
     )
+    const batchRead = jest
+      .spyOn(storage, 'getProvenOrRawTxs')
+      .mockImplementation(async requested => new Map(requested.map(txid => [txid, proven.get(txid)!])))
 
     const actual = await storage.getBeefForTransactions(txids, {
       ignoreStorage: false,
@@ -216,16 +221,17 @@ describe('getBeefForTransaction tests', () => {
       created_at: now,
       updated_at: now
     }
-    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(
-      new Map([[invalidTxid, { proven: invalidProven }]])
-    )
-    const decodeFailure = jest.spyOn(EntityProvenTx.prototype, 'getMerklePath')
-      .mockImplementationOnce(() => { throw new Error('forced proof decode failure') })
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(new Map([[invalidTxid, { proven: invalidProven }]]))
+    const decodeFailure = jest.spyOn(EntityProvenTx.prototype, 'getMerklePath').mockImplementationOnce(() => {
+      throw new Error('forced proof decode failure')
+    })
 
-    await expect(storage.getBeefForTransactions([invalidTxid], {
-      ignoreStorage: false,
-      ignoreServices: true
-    })).rejects.toThrow('forced proof decode failure')
+    await expect(
+      storage.getBeefForTransactions([invalidTxid], {
+        ignoreStorage: false,
+        ignoreServices: true
+      })
+    ).rejects.toThrow('forced proof decode failure')
     decodeFailure.mockRestore()
 
     const transaction = new Transaction()
@@ -244,23 +250,25 @@ describe('getBeefForTransaction tests', () => {
       created_at: now,
       updated_at: now
     }
-    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(
-      new Map([[txid, { proven }]])
-    )
+    jest.spyOn(storage, 'getProvenOrRawTxs').mockResolvedValueOnce(new Map([[txid, { proven }]]))
     const target = new Beef()
     jest.spyOn(target, 'mergeProvenTxs').mockImplementation(() => {
       throw new Error('forced batch merge failure')
     })
 
-    await expect(storage.getBeefForTransactions([txid], {
-      ignoreStorage: false,
-      ignoreServices: true,
-      mergeToBeef: target
-    })).rejects.toThrow('forced batch merge failure')
-    expect(events).toEqual(expect.arrayContaining([
-      expect.objectContaining({ name: 'wallet.storage.beef.decode_proven_batch', spanStatus: 'error' }),
-      expect.objectContaining({ name: 'wallet.storage.beef.merge_proven_batch', spanStatus: 'error' })
-    ]))
+    await expect(
+      storage.getBeefForTransactions([txid], {
+        ignoreStorage: false,
+        ignoreServices: true,
+        mergeToBeef: target
+      })
+    ).rejects.toThrow('forced batch merge failure')
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'wallet.storage.beef.decode_proven_batch', spanStatus: 'error' }),
+        expect.objectContaining({ name: 'wallet.storage.beef.merge_proven_batch', spanStatus: 'error' })
+      ])
+    )
   })
 
   test('preserves merge targets and routes proof-policy options through the single-root lane', async () => {
@@ -269,11 +277,13 @@ describe('getBeefForTransaction tests', () => {
     const existing = new Beef()
     existing.mergeTxidOnly(roots[0])
 
-    await expect(storage.getBeefForTransactions([], {
-      ignoreStorage: false,
-      ignoreServices: true,
-      mergeToBeef: existing
-    })).resolves.toBe(existing)
+    await expect(
+      storage.getBeefForTransactions([], {
+        ignoreStorage: false,
+        ignoreServices: true,
+        mergeToBeef: existing
+      })
+    ).resolves.toBe(existing)
 
     const serialized = existing.toBinary()
     const mergedSerialized = await storage.getBeefForTransactions(roots, {
@@ -328,14 +338,18 @@ describe('getBeefForTransaction tests', () => {
     })
     root.addOutput({ satoshis: 1, lockingScript: Script.fromASM('OP_TRUE') })
     storage.maxRecursionDepth = 1
-    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
-      txids.map(txid => [txid, txid === root.id('hex') ? { rawTx: root.toBinary() } : {}])
-    ))
+    jest
+      .spyOn(storage, 'getProvenOrRawTxs')
+      .mockImplementation(
+        async txids => new Map(txids.map(txid => [txid, txid === root.id('hex') ? { rawTx: root.toBinary() } : {}]))
+      )
 
-    await expect(storage.getBeefForTransactions([root.id('hex')], {
-      ignoreStorage: false,
-      ignoreServices: true
-    })).rejects.toThrow('Maximum BEEF depth exceeded')
+    await expect(
+      storage.getBeefForTransactions([root.id('hex')], {
+        ignoreStorage: false,
+        ignoreServices: true
+      })
+    ).rejects.toThrow('Maximum BEEF depth exceeded')
   })
 
   test('assembles mixed proven and raw storage records and preserves trustSelf semantics', async () => {
@@ -366,9 +380,9 @@ describe('getBeefForTransaction tests', () => {
       [provenTxid, { proven }],
       [rawTxid, { rawTx: rawTransaction.toBinary(), inputBEEF: inputBEEF.toBinary() }]
     ])
-    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
-      txids.map(txid => [txid, stored.get(txid) ?? {}])
-    ))
+    jest
+      .spyOn(storage, 'getProvenOrRawTxs')
+      .mockImplementation(async txids => new Map(txids.map(txid => [txid, stored.get(txid) ?? {}])))
 
     const assembled = await storage.getBeefForTransactions([provenTxid, rawTxid], {
       ignoreStorage: false,
@@ -386,10 +400,12 @@ describe('getBeefForTransaction tests', () => {
     expect(trusted.findTxid(provenTxid)?.isTxidOnly).toBe(true)
     expect(trusted.findTxid(rawTxid)?.isTxidOnly).toBe(true)
 
-    await expect(storage.getBeefForTransactions(['36'.repeat(32)], {
-      ignoreStorage: false,
-      ignoreServices: true
-    })).rejects.toThrow('valid transaction on chain main')
+    await expect(
+      storage.getBeefForTransactions(['36'.repeat(32)], {
+        ignoreStorage: false,
+        ignoreServices: true
+      })
+    ).rejects.toThrow('valid transaction on chain main')
   })
 
   test('expands stored txid-only ancestors unless the current caller declares them known', async () => {
@@ -411,9 +427,9 @@ describe('getBeefForTransaction tests', () => {
       [ancestorTxid, { rawTx: ancestor.toBinary() }]
     ])
     jest.spyOn(storage, 'getProvenOrRawTx').mockImplementation(async txid => records.get(txid) ?? {})
-    jest.spyOn(storage, 'getProvenOrRawTxs').mockImplementation(async txids => new Map(
-      txids.map(txid => [txid, records.get(txid) ?? {}])
-    ))
+    jest
+      .spyOn(storage, 'getProvenOrRawTxs')
+      .mockImplementation(async txids => new Map(txids.map(txid => [txid, records.get(txid) ?? {}])))
 
     const singleRootBeef = await storage.getBeefForTransaction(root.id('hex'), {
       ignoreStorage: false,
@@ -549,19 +565,25 @@ describe('getBeefForTransaction tests', () => {
       }
     })
 
-    const firstTxid = '794f836052ad73732a550c38bea3697a722c6a1e54bcbe63735ba79e0d23f623'
+    const firstTxid = Transaction.fromBinary(buildMockRawTx('')).id('hex')
     const isValidRootForHeight = jest.fn(async () => false)
     ps.gbo.chainTracker = {
       isValidRootForHeight,
       currentHeight: jest.fn(async () => 800000)
     }
-    await expect(ps.getBeefForTxid(firstTxid)).rejects.toThrow(/Invalid merkleRoot/)
+    services.getChainTracker = jest.fn(async () => ps.gbo.chainTracker!)
+    const unprovenBeef = await ps.getBeefForTxid(firstTxid)
+    expect(unprovenBeef.bumps).toHaveLength(0)
+
+    isValidRootForHeight.mockResolvedValue('true' as unknown as boolean)
+    const malformedVerdictBeef = await ps.getBeefForTxid(firstTxid)
+    expect(malformedVerdictBeef.bumps).toHaveLength(0)
 
     isValidRootForHeight.mockResolvedValue(true)
     const beef = await ps.getBeefForTxid(firstTxid)
     expect(beef.bumps.length).toBeGreaterThan(0)
     {
-      const beef = await ps.getBeefForTxid('53023657e79f446ca457040a0ab3b903000d7281a091397c7853f021726a560e')
+      const beef = await ps.getBeefForTxid(firstTxid)
       expect(beef.bumps.length).toBeGreaterThan(0)
     }
   })

@@ -17,13 +17,19 @@ This prompts the user to approve the connection. Once approved, the wallet is re
 ```typescript
 const wallet = await createWallet({
   network: 'main',
-  tokenBasket: 'my-tokens',        // default basket for tokens
+  tokenBasket: 'my-tokens', // default basket for tokens
   messageBoxHost: 'https://messagebox.babbage.systems',
   registryUrl: '/api/identity-registry'
 })
 ```
 
 Any default can be overridden per-method call.
+
+`registryUrl` selects a legacy unauthenticated directory. Its results are
+discovery hints only; confirm identity keys independently before sending value.
+Public HTTPS with DNS-address checking is the default transport boundary. An
+intentional same-origin HTTP development registry must additionally provide an
+explicitly trusted `registryFetch` callback.
 
 ## Wallet Info
 
@@ -65,10 +71,10 @@ Derive public keys for specific protocols and counterparties.
 
 ```typescript
 const derivedKey = await wallet.derivePublicKey(
-  [2, '3241645161d8'],   // protocol ID (BRC-29 in this case)
-  'invoice-001',          // key ID
-  recipientIdentityKey,   // counterparty
-  false                   // forSelf
+  [2, '3241645161d8'], // protocol ID (BRC-29 in this case)
+  'invoice-001', // key ID
+  recipientIdentityKey, // counterparty
+  false // forSelf
 )
 ```
 
@@ -79,7 +85,7 @@ A convenience method for deriving BRC-29 payment keys:
 ```typescript
 const paymentKey = await wallet.derivePaymentKey(
   recipientIdentityKey,
-  'invoice-001'    // optional invoice number
+  'invoice-001' // optional invoice number
 )
 ```
 
@@ -99,16 +105,17 @@ await client.listOutputs({ basket: 'my-basket', include: 'locking scripts' })
 
 ## Default Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `network` | `'main'` | Network to operate on |
-| `description` | `'BSV-Simplify transaction'` | Default transaction description |
-| `outputDescription` | `'BSV-Simplify output'` | Default output description |
-| `tokenBasket` | `'tokens'` | Default basket for token operations |
-| `tokenProtocolID` | `[0, 'token']` | Default PushDrop protocol ID |
-| `tokenKeyID` | `'1'` | Default PushDrop key ID |
-| `messageBoxHost` | `'https://messagebox.babbage.systems'` | MessageBox server URL |
-| `registryUrl` | `undefined` | Identity registry API URL |
+| Setting             | Default                                | Description                                         |
+| ------------------- | -------------------------------------- | --------------------------------------------------- |
+| `network`           | `'main'`                               | Network to operate on                               |
+| `description`       | `'BSV-Simplify transaction'`           | Default transaction description                     |
+| `outputDescription` | `'BSV-Simplify output'`                | Default output description                          |
+| `tokenBasket`       | `'tokens'`                             | Default basket for token operations                 |
+| `tokenProtocolID`   | `[0, 'token']`                         | Default PushDrop protocol ID                        |
+| `tokenKeyID`        | `'1'`                                  | Default PushDrop key ID                             |
+| `messageBoxHost`    | `'https://messagebox.babbage.systems'` | MessageBox server URL                               |
+| `registryUrl`       | `undefined`                            | Identity registry API URL                           |
+| `registryFetch`     | `undefined`                            | Explicitly trusted local/private registry transport |
 
 ## Type Reference
 

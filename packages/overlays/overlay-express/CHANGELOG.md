@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
+
+### 2.7.2 candidate — outbound and deployment hardening
+
+- Serialize GASP route errors through the configured logger as one escaped field; HTTP error responses, public APIs and wire behavior are unchanged.
+
 - Updates the packed workspace dependency candidate for the additive overlay persistence contract. Runtime behavior and defaults are unchanged; no consumer migration is required.
 - Validated BASM heights, hashes and txid sets while retaining numeric-string
   heights, public CORS, topic-free raw transactions, configured limits and sync
@@ -31,6 +37,8 @@ All notable changes to this project will be documented in this file. The format 
 - Harden provider-chain terminal/fallback failure reporting and preserve the
   public positional and synchronization configuration contracts while
   simplifying their declarations.
+- Add direct constructor configuration for the same bounded operational and
+  edge policies exposed by the configure methods.
 - Public protocol endpoints now allow credential-free cross-origin browser
   calls by default. Operators can opt into exact origins or disable
   Origin-bearing calls.
@@ -55,6 +63,16 @@ All notable changes to this project will be documented in this file. The format 
   strict operator allowlist.
 
 ### Security
+
+- Require DNS-pinned public HTTPS, disabled redirects, finite deadlines, and
+  bounded response bodies for outbound Arcade, Chaintracks, webhook, and
+  monitor traffic; private or plaintext destinations require an explicit
+  development policy.
+- Require a callback token of at least 32 bytes before `/arc-ingest` is
+  enabled, verify canonical reorganization data, and bound health, search,
+  monitor, ban, discovery, and janitor work.
+- Sanitize the administration UI, apply CSP and no-store controls, and keep
+  detailed health information opt-in.
 
 - Added body, concurrency, connection-timeout, parser-error, and browser-header
   baselines to every route.

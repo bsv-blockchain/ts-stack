@@ -3,10 +3,10 @@ id: pkg-payment-express-middleware
 title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: '2.1.6'
+version: '2.1.10'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-27'
-last_verified: '2026-08-27'
+last_updated: '2026-09-24'
+last_verified: '2026-09-24'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/payment-express-middleware'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware'
@@ -16,6 +16,10 @@ tags: [middleware, express, payment, '402', brc-29]
 
 # @bsv/payment-express-middleware
 
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
+
 Express middleware for the legacy authenticated `x-bsv-payment` JSON flow. It
 runs after `@bsv/auth-express-middleware`, validates an Atomic BEEF payment,
 atomically rejects transaction-ID reuse, internalizes output zero, and exposes
@@ -23,6 +27,21 @@ a verified receipt.
 
 This contract is distinct from the newer BRC-121 implementation in
 `@bsv/402-pay`. Their headers and clients are not interchangeable.
+
+Version 2.1.8 removes middleware payment-header size ceilings. A header already
+received from the client is parsed and its payment validated regardless of size.
+HTTP server, CDN, proxy and WAF configuration own transport budgets; configure
+and validate the full route for supported payment proofs. The deprecated
+`maxPaymentHeaderBytes` option remains accepted for source compatibility but is
+ignored, including when an older application still supplies a value. Move any
+intended transport policy to the HTTP server or edge and remove the option.
+
+Atomic BEEF validation, canonical base64, derivation verification, payment
+pricing, wallet acceptance and atomic replay protection still apply. Invalid
+payment contents are rejected. SDK 2.8.5 separately raises client header capacity;
+that does not constrain what this middleware accepts from other compatible
+clients. No BRC100 call, wire or wallet-data migration is required. Source
+publication is a separate protected release step.
 
 ## Install
 
@@ -75,13 +94,17 @@ accepted zero-value receipt. Invalid pricing fails closed.
    `derivationPrefix`, `derivationSuffix`, and `transaction`.
 4. The transaction must be valid Atomic BEEF whose output zero covers the
    current price.
-5. The transaction ID is atomically claimed before the wallet is called.
-6. Only `{ accepted: true }` from a newly internalized payment authorizes the
-   route.
-7. `req.payment.satoshisPaid` and the response header report the actual output
+5. Legacy overinclusive Atomic BEEF is reduced to the declared payment subject
+   and dependency closure before it reaches the wallet or receipt.
+6. Only an own-data `{ accepted: true }` from a newly internalized payment
+   authorizes the route; inherited and accessor-backed verdicts are rejected.
+7. After wallet validation, the transaction ID is atomically claimed. This
+   ordering prevents invalid public BEEF/remittance pairs from poisoning a
+   rightful payment's replay key.
+8. `req.payment.satoshisPaid` and the response header report the actual output
    value.
 
-The raw header is bounded to 64 KiB by default. Duplicated, malformed,
+The middleware does not impose a raw-header size ceiling. Duplicated, malformed,
 underfunded, replayed, rejected, or ambiguous payments never call `next()`.
 
 ## Replay storage
@@ -109,20 +132,24 @@ const replayStore = {
 }
 ```
 
-Claims are retained after ambiguous wallet errors. A derivation nonce proves
-the server created a prefix; it is not an expiring single-use replay database.
+Wallet errors and rejected remittances are not claimed. If the wallet accepts
+but the subsequent replay claim is unavailable, the middleware returns `503`;
+operators must reconcile that ambiguous transaction before asking the payer to
+spend again. A derivation nonce proves the server created a prefix; it is not
+an expiring single-use replay database.
 
 ## Configuration
 
 - `wallet` — required BRC-100 wallet with `internalizeAction`
 - `calculateRequestPrice` — sync or async price; defaults to 100
 - `replayStore` — atomic transaction-ID claim store
-- `maxPaymentHeaderBytes` — positive safe integer; defaults to 64 KiB
+- `maxPaymentHeaderBytes` — deprecated and ignored; configure transport budgets
+  on the HTTP server or edge
 - `logger` — optional structured `error`/`warn` sink
 
 The logger receives sanitized failure metadata, not exception messages,
-transaction IDs, wallet objects, or payment bodies. HTTP responses are also
-stable and sanitized.
+transaction IDs, wallet objects, or payment bodies. Logger failures are
+contained. HTTP responses are also stable and sanitized.
 
 ## Payment receipt
 
@@ -150,7 +177,8 @@ wildcard origin with credentialed CORS.
 - Run auth first, then payment, then protected routes.
 - Use HTTPS and normal request/header/rate limits.
 - Use durable atomic replay storage across processes and replicas.
-- Never automatically delete a claim after an ambiguous wallet result.
+- Reconcile a transaction after a replay-store failure that follows wallet
+  acceptance; never ask the payer to spend again based only on that `503`.
 - Alert on replay (`409`) and unavailable/capacity (`503`) responses.
 - Keep pricing deterministic and security-reviewed.
 - The wallet remains responsible for safely internalizing the BRC-29

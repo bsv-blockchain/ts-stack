@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { getAuthMethodInstance } from '../auth-methods/AuthMethodFactory'
 import { log } from '../logger'
-import { isAuthPayload, isHexIdentifier, isRecord } from '../security/requestValidation'
+import { isAuthPayload, isHexIdentifier, snapshotRequestBody } from '../security/requestValidation'
 import { PhoneChangeError, PhoneChangeService } from '../services/PhoneChangeService'
 import { UserService } from '../services/UserService'
 
@@ -22,25 +22,26 @@ function phonePayload(
 export class PhoneChangeController {
   static async start(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body) || !isHexIdentifier(req.body.presentationKey)) {
+      const body = snapshotRequestBody(req.body)
+      if (body == null || !isHexIdentifier(body.presentationKey)) {
         return res
           .status(400)
           .json({ message: 'A current presentationKey and phoneNumber are required.' })
       }
-      const payload = phonePayload(req.body, false)
+      const payload = phonePayload(body, false)
       if (!isAuthPayload(payload)) {
         return res
           .status(400)
           .json({ message: 'A current presentationKey and phoneNumber are required.' })
       }
-      const user = await UserService.getUserByPresentationKey(req.body.presentationKey)
+      const user = await UserService.getUserByPresentationKey(body.presentationKey)
       if (user == null)
         return res
           .status(401)
           .json({ message: 'The current wallet account could not be verified.' })
 
       const result = await getAuthMethodInstance(METHOD_TYPE).startAuth(
-        req.body.presentationKey,
+        body.presentationKey,
         payload
       )
       return res.json(result)
@@ -55,25 +56,26 @@ export class PhoneChangeController {
 
   static async complete(req: Request, res: Response): Promise<Response> {
     try {
-      if (!isRecord(req.body) || !isHexIdentifier(req.body.presentationKey)) {
+      const body = snapshotRequestBody(req.body)
+      if (body == null || !isHexIdentifier(body.presentationKey)) {
         return res
           .status(400)
           .json({ message: 'A current presentationKey, phoneNumber, and otp are required.' })
       }
-      const payload = phonePayload(req.body, true)
+      const payload = phonePayload(body, true)
       if (!isAuthPayload(payload)) {
         return res
           .status(400)
           .json({ message: 'A current presentationKey, phoneNumber, and otp are required.' })
       }
-      const user = await UserService.getUserByPresentationKey(req.body.presentationKey)
+      const user = await UserService.getUserByPresentationKey(body.presentationKey)
       if (user == null)
         return res
           .status(401)
           .json({ message: 'The current wallet account could not be verified.' })
 
       const authMethod = getAuthMethodInstance(METHOD_TYPE)
-      const result = await authMethod.completeAuth(req.body.presentationKey, payload)
+      const result = await authMethod.completeAuth(body.presentationKey, payload)
       if (!result.success) return res.json(result)
       const config = authMethod.buildConfigFromPayload(payload)
       const pending = await PhoneChangeService.findPending(user.id, METHOD_TYPE, config)
@@ -98,21 +100,22 @@ export class PhoneChangeController {
 
   static async commit(req: Request, res: Response): Promise<Response> {
     try {
+      const body = snapshotRequestBody(req.body)
       if (
-        !isRecord(req.body) ||
-        typeof req.body.changeToken !== 'string' ||
-        !/^[0-9a-fA-F]{64}$/.test(req.body.changeToken) ||
-        !isHexIdentifier(req.body.presentationKey) ||
-        !isHexIdentifier(req.body.newPresentationKey)
+        body == null ||
+        typeof body.changeToken !== 'string' ||
+        !/^[0-9a-fA-F]{64}$/.test(body.changeToken) ||
+        !isHexIdentifier(body.presentationKey) ||
+        !isHexIdentifier(body.newPresentationKey)
       ) {
         return res.status(400).json({
           message: 'A valid changeToken, presentationKey, and newPresentationKey are required.'
         })
       }
       const changeId = await PhoneChangeService.commit(
-        req.body.changeToken,
-        req.body.presentationKey,
-        req.body.newPresentationKey
+        body.changeToken,
+        body.presentationKey,
+        body.newPresentationKey
       )
       return res.json({ success: true, changeId })
     } catch (error) {
@@ -129,23 +132,24 @@ export class PhoneChangeController {
 
   static async finalize(req: Request, res: Response): Promise<Response> {
     try {
+      const body = snapshotRequestBody(req.body)
       if (
-        !isRecord(req.body) ||
-        !Number.isSafeInteger(req.body.changeId) ||
-        Number(req.body.changeId) <= 0 ||
-        !isHexIdentifier(req.body.presentationKey) ||
-        !isHexIdentifier(req.body.newPresentationKey)
+        body == null ||
+        !Number.isSafeInteger(body.changeId) ||
+        Number(body.changeId) <= 0 ||
+        !isHexIdentifier(body.presentationKey) ||
+        !isHexIdentifier(body.newPresentationKey)
       ) {
         return res.status(400).json({
           message: 'A valid changeId, presentationKey, and newPresentationKey are required.'
         })
       }
       await PhoneChangeService.finalize(
-        Number(req.body.changeId),
-        req.body.presentationKey,
-        req.body.newPresentationKey
+        Number(body.changeId),
+        body.presentationKey,
+        body.newPresentationKey
       )
-      return res.json({ success: true, changeId: Number(req.body.changeId) })
+      return res.json({ success: true, changeId: Number(body.changeId) })
     } catch (error) {
       if (error instanceof PhoneChangeError) {
         return res.status(error.status).json({ success: false, message: error.message })

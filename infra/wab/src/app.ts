@@ -13,7 +13,9 @@ import { isDemoAuthEnabled } from './services/DemoAccountService'
 import { PhoneChangeController } from './controllers/PhoneChangeController'
 import { RegistrationController } from './controllers/RegistrationController'
 import { requireWABAdmin } from './security/adminAuth'
+import { readFaucetAmount } from './config/faucet'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy'
+import { snapshotDemoRequestBody } from './security/requestValidation'
 import {
   bodyParserErrorHandler,
   concurrencyLimit,
@@ -118,13 +120,22 @@ app.use('/demo', (req, res, next) => {
     return
   }
   if (req.path === '/info' && req.method === 'GET') {
-    res.json({ supportedAuthMethods: ['DemoPhone'], faucetEnabled: true, faucetAmount: 1000 })
+    res.json({
+      supportedAuthMethods: ['DemoPhone'],
+      faucetEnabled: true,
+      faucetAmount: readFaucetAmount()
+    })
     return
   }
   // Older phone interactors send TwilioPhone regardless of discovery. On this
   // explicit demo base URL only, translate that wire alias to the demo namespace.
-  if (req.body?.methodType === 'TwilioPhone') req.body.methodType = 'DemoPhone'
-  if (req.body?.methodType !== undefined && req.body.methodType !== 'DemoPhone') {
+  const body = snapshotDemoRequestBody(req.body ?? Object.create(null))
+  if (body == null) {
+    res.status(400).json({ message: 'The demo endpoint requires a valid JSON object.' })
+    return
+  }
+  req.body = body
+  if (body.methodType !== undefined && body.methodType !== 'DemoPhone') {
     res.status(400).json({ message: 'The demo endpoint requires DemoPhone authentication.' })
     return
   }

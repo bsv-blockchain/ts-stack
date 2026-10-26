@@ -1,7 +1,5 @@
-import { PublicKey, ProtoWallet, Utils } from '@bsv/sdk'
-
-
-/**
+import { toHex, toUTF8Strict } from '@bsv/sdk/primitives/utils'
+import { PublicKey, ProtoWallet } from '@bsv/sdk' /**
  * Checks that the BRC-48 locking key and the signature are valid and linked to the claimed identity key.
  * @param lockingPublicKey - The public key used in the output's locking script.
  * @param fields - The fields of the PushDrop token for the SHIP or SLAP advertisement.
@@ -11,39 +9,48 @@ export const isTokenSignatureCorrectlyLinked = async (
   lockingPublicKey: PublicKey,
   fields: number[][]
 ): Promise<boolean> => {
-  // The signature is the last field, which needs to be removed for verification
-  const signature = fields.pop()!
-
-  // The protocol is in the first field
-  const protocolID: [2, string] = [2, Utils.toUTF8(fields[0]) === 'SHIP' ? 'service host interconnect' : 'service lookup availability']
-
-  // The identity key is in the second field
-  const identityKey = Utils.toHex(fields[1])
-
-  // First, we ensure that the signature over the data is valid for the claimed identity key.
-  const data = fields.flat()
-  const anyoneWallet = new ProtoWallet('anyone')
   try {
+    if (!Array.isArray(fields) || fields.length !== 5) return false
+    for (let index = 0; index < fields.length; index++) {
+      if (!Object.prototype.hasOwnProperty.call(fields, index) || !Array.isArray(fields[index])) {
+        return false
+      }
+    }
+
+    // Verification must not consume or otherwise mutate the caller's decoded token.
+    const dataFields = fields.slice(0, -1)
+    const signature = fields.at(-1)!
+    const protocol = toUTF8Strict(dataFields[0])
+    if (protocol !== 'SHIP' && protocol !== 'SLAP') return false
+    const protocolID: [2, string] = [
+      2,
+      protocol === 'SHIP' ? 'service host interconnect' : 'service lookup availability'
+    ]
+    const identityKey = toHex(dataFields[1])
+    if (PublicKey.fromString(identityKey).toString() !== identityKey) return false
+
+    // First, ensure the signature over the data is valid for the claimed identity key.
+    const anyoneWallet = new ProtoWallet('anyone')
     const { valid } = await anyoneWallet.verifySignature({
-      data,
+      data: dataFields.flat(),
       signature,
       counterparty: identityKey,
       protocolID,
       keyID: '1'
     })
-    if (!valid) {
+    if (valid !== true) {
       return false
     }
+
+    // Then, ensure the locking public key is the identity's expected BRC-48 child.
+    const { publicKey: expectedLockingPublicKey } = await anyoneWallet.getPublicKey({
+      counterparty: identityKey,
+      protocolID,
+      keyID: '1'
+    })
+    return expectedLockingPublicKey === lockingPublicKey.toString()
   } catch {
-    // Signature verification threw (e.g. malformed key/data) — treat as invalid
+    // Malformed keys, fields, signatures, or wallet results are invalid tokens.
     return false
   }
-
-  // Then, we ensure that the locking public key matches the correct derived child.
-  const { publicKey: expectedLockingPublicKey } = await anyoneWallet.getPublicKey({
-    counterparty: identityKey,
-    protocolID,
-    keyID: '1'
-  })
-  return expectedLockingPublicKey === lockingPublicKey.toString()
 }

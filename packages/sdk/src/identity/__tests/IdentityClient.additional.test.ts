@@ -1,9 +1,47 @@
 import { WalletInterface } from '../../wallet/index'
 import { IdentityClient } from '../IdentityClient'
 import { KNOWN_IDENTITY_TYPES, defaultIdentity } from '../types/index.js'
+import Certificate from '../../auth/certificates/Certificate.js'
+
+const VALID_SERIAL = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+const IDENTITY_KEY = `02${'11'.repeat(32)}`
+const CERTIFIER_KEY = `03${'22'.repeat(32)}`
+const MOCK_TXID = 'ab'.repeat(32)
+
+function revelationPayload(serialNumber = VALID_SERIAL, subject = IDENTITY_KEY): number[] {
+  return Array.from(
+    new TextEncoder().encode(
+      JSON.stringify({
+        type: VALID_SERIAL,
+        serialNumber,
+        subject,
+        certifier: CERTIFIER_KEY,
+        revocationOutpoint: `${'cd'.repeat(32)}.0`,
+        fields: { name: 'encrypted' },
+        keyring: { name: VALID_SERIAL },
+        signature: '3006020101020101'
+      })
+    )
+  )
+}
+
+function revelationScript(hex = 'scriptHex') {
+  const payload = revelationPayload()
+  const signature = [48, 6, 2, 1, 1, 2, 1, 1]
+  return {
+    toHex: () => hex,
+    chunks: [
+      { op: 33, data: new Uint8Array(33) },
+      { op: 0xac },
+      { op: payload.length <= 0xff ? 0x4c : 0x4d, data: payload },
+      { op: signature.length, data: signature },
+      { op: 0x6d }
+    ]
+  }
+}
 
 // ----- Mocks for external dependencies -----
-jest.mock('../../script', () => {
+jest.mock('../../script/templates/PushDrop.js', () => {
   const mockPushDropInstance = {
     lock: jest.fn().mockResolvedValue({
       toHex: () => 'lockingScriptHex'
@@ -17,26 +55,47 @@ jest.mock('../../script', () => {
 
   const mockPushDrop: any = jest.fn().mockImplementation(() => mockPushDropInstance)
   mockPushDrop.decode = jest.fn().mockReturnValue({
+    lockingPublicKey: { toString: () => IDENTITY_KEY },
     fields: [new Uint8Array([1, 2, 3, 4])]
   })
 
   return {
-    PushDrop: mockPushDrop,
-    LockingScript: {
-      fromHex: jest.fn().mockImplementation((hex: string) => ({ toHex: () => hex }))
+    __esModule: true,
+    default: mockPushDrop
+  }
+})
+
+jest.mock('../../script/LockingScript.js', () => {
+  return {
+    __esModule: true,
+    default: {
+      fromHex: jest.fn().mockImplementation((hex: string) => ({
+        toHex: () => hex,
+        chunks: [
+          { op: 33, data: new Uint8Array(33) },
+          { op: 0xac },
+          { op: 4, data: new Uint8Array([1, 2, 3, 4]) },
+          { op: 8, data: new Uint8Array(8) },
+          { op: 0x6d }
+        ]
+      }))
     }
   }
 })
 
-jest.mock('../../overlay-tools/index.js', () => {
+jest.mock('../../overlay-tools/SHIPBroadcaster.js', () => {
   return {
-    TopicBroadcaster: jest.fn().mockImplementation(() => ({
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
       broadcast: jest.fn().mockResolvedValue('broadcastResult')
-    })),
-    SHIPBroadcaster: jest.fn().mockImplementation(() => ({
-      broadcast: jest.fn().mockResolvedValue('broadcastResult')
-    })),
-    LookupResolver: jest.fn().mockImplementation(() => ({
+    }))
+  }
+})
+
+jest.mock('../../overlay-tools/LookupResolver.js', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
       query: jest.fn().mockResolvedValue({
         type: 'output-list',
         outputs: [
@@ -45,16 +104,22 @@ jest.mock('../../overlay-tools/index.js', () => {
           }
         ]
       })
-    })),
+    }))
+  }
+})
+
+jest.mock('../../overlay-tools/withDoubleSpendRetry.js', () => {
+  return {
     withDoubleSpendRetry: jest.fn().mockImplementation(async (fn: () => Promise<void>) => {
       await fn()
     })
   }
 })
 
-jest.mock('../../transaction/index.js', () => {
+jest.mock('../../transaction/Transaction.js', () => {
   return {
-    Transaction: {
+    __esModule: true,
+    default: {
       fromAtomicBEEF: jest.fn().mockImplementation(_tx => ({
         toHexBEEF: () => 'transactionHex'
       })),
@@ -79,6 +144,9 @@ jest.mock('../../primitives/index.js', () => {
       toArray: jest.fn().mockReturnValue(new Uint8Array()),
       toUTF8: jest.fn().mockImplementation(data => {
         return new TextDecoder().decode(data)
+      }),
+      toUTF8Strict: jest.fn().mockImplementation(data => {
+        return new TextDecoder('utf-8', { fatal: true }).decode(new Uint8Array(data))
       }),
       toHex: jest.fn().mockReturnValue('0102030405060708')
     },
@@ -108,7 +176,9 @@ describe('IdentityClient (additional coverage)', () => {
     })
 
     walletMock = {
-      proveCertificate: jest.fn().mockResolvedValue({ keyringForVerifier: 'fakeKeyring' }),
+      proveCertificate: jest.fn().mockResolvedValue({
+        keyringForVerifier: { name: VALID_SERIAL }
+      }),
       createAction: jest.fn().mockResolvedValue({
         tx: [1, 2, 3],
         signableTransaction: { tx: [1, 2, 3], reference: 'ref' }
@@ -119,6 +189,9 @@ describe('IdentityClient (additional coverage)', () => {
         verify: jest.fn().mockResolvedValue(true)
       }),
       signAction: jest.fn().mockResolvedValue({ tx: [4, 5, 6] }),
+      abortAction: jest.fn().mockResolvedValue({ aborted: true }),
+      getPublicKey: jest.fn().mockResolvedValue({ publicKey: IDENTITY_KEY }),
+      verifySignature: jest.fn().mockResolvedValue({ valid: true }),
       getNetwork: jest.fn().mockResolvedValue({ network: 'testnet' }),
       discoverByIdentityKey: jest.fn().mockResolvedValue({ certificates: [] }),
       discoverByAttributes: jest.fn().mockResolvedValue({ certificates: [] }),
@@ -510,6 +583,48 @@ describe('IdentityClient (additional coverage)', () => {
       const result = IdentityClient.parseIdentity(cert as any)
       expect(result.name).toBe(defaultIdentity.name)
     })
+
+    it('rejects active-content resource schemes from identity fields and certifier metadata', () => {
+      expect(() =>
+        IdentityClient.parseIdentity({
+          type: 'custom-type',
+          subject: 'sub1',
+          decryptedFields: { name: 'Alice', profilePhoto: 'javascript:alert(1)' },
+          certifierInfo: {}
+        } as any)
+      ).toThrow('unsafe URL scheme')
+
+      expect(() =>
+        IdentityClient.parseIdentity({
+          type: 'custom-type',
+          subject: 'sub1',
+          decryptedFields: { name: 'Alice' },
+          certifierInfo: { iconUrl: 'data:text/html,<script>alert(1)</script>' }
+        } as any)
+      ).toThrow('unsafe URL scheme')
+    })
+
+    it('rejects accessors without invoking identity-controlled code', () => {
+      let getterCalls = 0
+      const fields: Record<string, unknown> = { name: 'Alice' }
+      Object.defineProperty(fields, 'profilePhoto', {
+        enumerable: true,
+        get: () => {
+          getterCalls++
+          return 'https://attacker.example/track'
+        }
+      })
+
+      expect(() =>
+        IdentityClient.parseIdentity({
+          type: 'custom-type',
+          subject: 'sub1',
+          decryptedFields: fields,
+          certifierInfo: {}
+        } as any)
+      ).toThrow('data property')
+      expect(getterCalls).toBe(0)
+    })
   })
 
   // ─── resolveByIdentityKey: overrideWithContacts = false ────────────────────
@@ -632,12 +747,55 @@ describe('IdentityClient (additional coverage)', () => {
   // ─── revokeCertificateRevelation ────────────────────────────────────────────
 
   describe('revokeCertificateRevelation', () => {
-    const { LookupResolver, SHIPBroadcaster, withDoubleSpendRetry } = jest.requireMock(
-      '../../overlay-tools/index.js'
-    )
+    const LookupResolver = (jest.requireMock('../../overlay-tools/LookupResolver.js') as any)
+      .default
+    const SHIPBroadcaster = (jest.requireMock('../../overlay-tools/SHIPBroadcaster.js') as any)
+      .default
+    const { withDoubleSpendRetry } = jest.requireMock(
+      '../../overlay-tools/withDoubleSpendRetry.js'
+    ) as any
+    const PushDrop = (jest.requireMock('../../script/templates/PushDrop.js') as any).default
+    const Transaction = (jest.requireMock('../../transaction/Transaction.js') as any).default
+    let certificateVerify: jest.SpiedFunction<Certificate['verify']>
+
+    beforeAll(() => {
+      certificateVerify = jest.spyOn(Certificate.prototype, 'verify')
+    })
+
+    afterAll(() => {
+      certificateVerify.mockRestore()
+    })
 
     beforeEach(() => {
       jest.clearAllMocks()
+      certificateVerify.mockResolvedValue(true)
+      PushDrop.decode.mockReturnValue({
+        lockingPublicKey: { toString: () => IDENTITY_KEY },
+        fields: [revelationPayload(), [48, 6, 2, 1, 1, 2, 1, 1]]
+      })
+      const parsedTransaction = {
+        id: jest.fn().mockReturnValue(MOCK_TXID),
+        inputs: [
+          {
+            sourceTXID: MOCK_TXID,
+            sourceOutputIndex: 0,
+            unlockingScript: { toHex: () => 'unlockingScriptHex' }
+          }
+        ],
+        outputs: [{ lockingScript: revelationScript(), satoshis: 1 }]
+      }
+      Transaction.fromBEEF.mockReturnValue(parsedTransaction)
+      Transaction.fromAtomicBEEF.mockReturnValue(parsedTransaction)
+      SHIPBroadcaster.mockImplementation(() => ({
+        broadcast: jest.fn().mockResolvedValue({
+          status: 'success',
+          txid: MOCK_TXID,
+          message: 'broadcasted'
+        })
+      }))
+      withDoubleSpendRetry.mockImplementation(async (fn: () => Promise<void>) => {
+        await fn()
+      })
     })
 
     it('throws when lookup result type is not output-list', async () => {
@@ -645,7 +803,7 @@ describe('IdentityClient (additional coverage)', () => {
         query: jest.fn().mockResolvedValue({ type: 'freeform', result: 'some data' })
       }))
 
-      await expect(identityClient.revokeCertificateRevelation('serialXYZ')).rejects.toThrow(
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
         'Failed to get lookup result'
       )
     })
@@ -654,23 +812,9 @@ describe('IdentityClient (additional coverage)', () => {
       LookupResolver.mockImplementation(() => ({
         query: jest.fn().mockResolvedValue({
           type: 'output-list',
-          outputs: [{ beef: [1, 2, 3] }]
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
         })
       }))
-
-      SHIPBroadcaster.mockImplementation(() => ({
-        broadcast: jest.fn().mockResolvedValue('broadcasted')
-      }))
-
-      withDoubleSpendRetry.mockImplementation(async (fn: () => Promise<void>) => {
-        await fn()
-      })
-
-      const { Transaction } = jest.requireMock('../../transaction/index.js')
-      Transaction.fromBEEF.mockReturnValue({
-        id: jest.fn().mockReturnValue('mocktxid'),
-        outputs: [{ lockingScript: { toHex: () => 'scriptHex' } }]
-      })
 
       walletMock.createAction = jest.fn().mockResolvedValue({
         signableTransaction: { tx: [1, 2, 3], reference: 'ref' },
@@ -678,37 +822,25 @@ describe('IdentityClient (additional coverage)', () => {
       })
       walletMock.signAction = jest.fn().mockResolvedValue({ tx: [4, 5, 6] })
 
-      await expect(identityClient.revokeCertificateRevelation('serialABC')).resolves.toBeUndefined()
+      await expect(
+        identityClient.revokeCertificateRevelation(VALID_SERIAL)
+      ).resolves.toBeUndefined()
     })
 
     it('throws when signableTransaction is undefined', async () => {
       LookupResolver.mockImplementation(() => ({
         query: jest.fn().mockResolvedValue({
           type: 'output-list',
-          outputs: [{ beef: [1, 2, 3] }]
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
         })
       }))
-
-      SHIPBroadcaster.mockImplementation(() => ({
-        broadcast: jest.fn()
-      }))
-
-      withDoubleSpendRetry.mockImplementation(async (fn: () => Promise<void>) => {
-        await fn()
-      })
-
-      const { Transaction } = jest.requireMock('../../transaction/index.js')
-      Transaction.fromBEEF.mockReturnValue({
-        id: jest.fn().mockReturnValue('mocktxid'),
-        outputs: [{ lockingScript: { toHex: () => 'scriptHex' } }]
-      })
 
       walletMock.createAction = jest.fn().mockResolvedValue({
         signableTransaction: undefined,
         tx: undefined
       })
 
-      await expect(identityClient.revokeCertificateRevelation('serialDEF')).rejects.toThrow(
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
         'Failed to create signable transaction'
       )
     })
@@ -717,23 +849,9 @@ describe('IdentityClient (additional coverage)', () => {
       LookupResolver.mockImplementation(() => ({
         query: jest.fn().mockResolvedValue({
           type: 'output-list',
-          outputs: [{ beef: [1, 2, 3] }]
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
         })
       }))
-
-      SHIPBroadcaster.mockImplementation(() => ({
-        broadcast: jest.fn()
-      }))
-
-      withDoubleSpendRetry.mockImplementation(async (fn: () => Promise<void>) => {
-        await fn()
-      })
-
-      const { Transaction } = jest.requireMock('../../transaction/index.js')
-      Transaction.fromBEEF.mockReturnValue({
-        id: jest.fn().mockReturnValue('mocktxid'),
-        outputs: [{ lockingScript: { toHex: () => 'scriptHex' } }]
-      })
 
       walletMock.createAction = jest.fn().mockResolvedValue({
         signableTransaction: { tx: [1, 2, 3], reference: 'ref' },
@@ -741,8 +859,175 @@ describe('IdentityClient (additional coverage)', () => {
       })
       walletMock.signAction = jest.fn().mockResolvedValue({ tx: undefined })
 
-      await expect(identityClient.revokeCertificateRevelation('serialGHI')).rejects.toThrow(
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
         'Failed to sign transaction'
+      )
+    })
+
+    it('rejects a lookup output whose authenticated payload has a different serial', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        })
+      }))
+      PushDrop.decode.mockReturnValue({
+        lockingPublicKey: { toString: () => IDENTITY_KEY },
+        fields: [
+          revelationPayload('AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI='),
+          [48, 6, 2, 1, 1, 2, 1, 1]
+        ]
+      })
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'No authenticated revelation output matches'
+      )
+      expect(walletMock.createAction).not.toHaveBeenCalled()
+    })
+
+    it('rejects a token that is not signed by the current wallet', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        })
+      }))
+      ;(walletMock.verifySignature as jest.Mock).mockResolvedValue({ valid: false })
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'No authenticated revelation output matches'
+      )
+      expect(walletMock.createAction).not.toHaveBeenCalled()
+    })
+
+    it('rejects a revelation output locked to a different derived key', async () => {
+      PushDrop.decode.mockReturnValue({
+        lockingPublicKey: { toString: () => CERTIFIER_KEY },
+        fields: [revelationPayload(), [48, 6, 2, 1, 1, 2, 1, 1]]
+      })
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'No authenticated revelation output matches'
+      )
+      expect(walletMock.verifySignature).not.toHaveBeenCalled()
+      expect(walletMock.createAction).not.toHaveBeenCalled()
+    })
+
+    it('uses the resolver output index and the actual partial-transaction input index', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 1 }]
+        })
+      }))
+      const sourceTransaction = {
+        id: jest.fn().mockReturnValue(MOCK_TXID),
+        inputs: [],
+        outputs: [
+          { lockingScript: { toHex: () => 'other' }, satoshis: 2 },
+          { lockingScript: revelationScript('revelation'), satoshis: 1 }
+        ]
+      }
+      const signedTransaction = {
+        id: jest.fn().mockReturnValue('ef'.repeat(32)),
+        inputs: [
+          { sourceTXID: '12'.repeat(32), sourceOutputIndex: 4 },
+          {
+            sourceTXID: MOCK_TXID,
+            sourceOutputIndex: 1,
+            unlockingScript: { toHex: () => 'unlockingScriptHex' }
+          }
+        ],
+        outputs: []
+      }
+      Transaction.fromBEEF.mockReturnValue(sourceTransaction)
+      Transaction.fromAtomicBEEF.mockReturnValue(signedTransaction)
+
+      await identityClient.revokeCertificateRevelation(VALID_SERIAL)
+
+      expect(walletMock.createAction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          inputs: [expect.objectContaining({ outpoint: `${MOCK_TXID}.1` })]
+        }),
+        undefined
+      )
+      expect(walletMock.signAction).toHaveBeenCalledWith(
+        expect.objectContaining({ spends: { 1: { unlockingScript: 'unlockingScriptHex' } } }),
+        undefined
+      )
+    })
+
+    it('rejects a signable transaction that substitutes the requested input', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        })
+      }))
+      Transaction.fromAtomicBEEF.mockReturnValue({
+        inputs: [{ sourceTXID: '12'.repeat(32), sourceOutputIndex: 0 }],
+        outputs: []
+      })
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'does not contain the requested revelation input'
+      )
+      expect(walletMock.signAction).not.toHaveBeenCalled()
+      expect(walletMock.abortAction).toHaveBeenCalledWith({ reference: 'ref' }, undefined)
+    })
+
+    it('rejects a signed transaction that substitutes the authorized template', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        })
+      }))
+      const partial = {
+        version: 1,
+        lockTime: 0,
+        id: jest.fn().mockReturnValue(MOCK_TXID),
+        inputs: [{ sourceTXID: MOCK_TXID, sourceOutputIndex: 0 }],
+        outputs: [{ satoshis: 1, lockingScript: { toHex: () => 'authorized' } }]
+      }
+      const substituted = {
+        version: 1,
+        lockTime: 0,
+        id: jest.fn().mockReturnValue('ef'.repeat(32)),
+        inputs: [
+          {
+            sourceTXID: MOCK_TXID,
+            sourceOutputIndex: 0,
+            unlockingScript: { toHex: () => 'unlockingScriptHex' }
+          }
+        ],
+        outputs: [{ satoshis: 1, lockingScript: { toHex: () => 'substituted' } }]
+      }
+      Transaction.fromAtomicBEEF.mockReturnValueOnce(partial).mockReturnValueOnce(substituted)
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'substituted an authorized output'
+      )
+      expect(walletMock.abortAction).toHaveBeenCalledWith({ reference: 'ref' }, undefined)
+    })
+
+    it('does not report success when the overlay rejects the revocation', async () => {
+      LookupResolver.mockImplementation(() => ({
+        query: jest.fn().mockResolvedValue({
+          type: 'output-list',
+          outputs: [{ beef: [1, 2, 3], outputIndex: 0 }]
+        })
+      }))
+      SHIPBroadcaster.mockImplementation(() => ({
+        broadcast: jest.fn().mockResolvedValue({
+          status: 'error',
+          code: 'ERR_ALL_HOSTS_REJECTED',
+          description: 'rejected'
+        })
+      }))
+
+      await expect(identityClient.revokeCertificateRevelation(VALID_SERIAL)).rejects.toThrow(
+        'ERR_ALL_HOSTS_REJECTED'
       )
     })
   })

@@ -8,12 +8,16 @@ import { RequestOptions } from 'node:https'
 // Mock Transaction
 jest.mock('../../../transaction/Transaction', () => {
   class MockTransaction {
-    toHex (): string {
+    toHex(): string {
       return 'mocked_transaction_hex'
     }
 
-    toHexEF (): string {
+    toHexEF(): string {
       return 'mocked_transaction_hexEF'
+    }
+
+    id(): string {
+      return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     }
   }
   return { __esModule: true, default: MockTransaction }
@@ -21,7 +25,7 @@ jest.mock('../../../transaction/Transaction', () => {
 
 // ---- helpers ----------------------------------------------------------------
 
-function mockedFetch (response: { status: number, data: any }): jest.Mock {
+function mockedFetch(response: { status: number; data: any }): jest.Mock {
   return jest.fn().mockResolvedValue({
     ok: response.status >= 200 && response.status < 300,
     status: response.status,
@@ -36,7 +40,7 @@ function mockedFetch (response: { status: number, data: any }): jest.Mock {
   })
 }
 
-function mockedHttps (response: { status: number, data: any }): {
+function mockedHttps(response: { status: number; data: any }): {
   request: (
     url: string,
     options: RequestOptions,
@@ -46,19 +50,15 @@ function mockedHttps (response: { status: number, data: any }): {
       headers: { 'content-type': string }
       on: (event: string, handler: (chunk?: any) => void) => void
     }) => void
-  ) => { on: jest.Mock, write: jest.Mock, end: jest.Mock }
+  ) => { on: jest.Mock; write: jest.Mock; end: jest.Mock }
 } {
   const https = {
-    request: (
-      url: string,
-      options: RequestOptions,
-      callback: (res: any) => void
-    ) => {
+    request: (url: string, options: RequestOptions, callback: (res: any) => void) => {
       const mockResponse = {
         statusCode: response.status,
         statusMessage: response.status === 200 ? 'OK' : 'Bad request',
         headers: { 'content-type': 'application/json; charset=UTF-8' },
-        on (event: string, handler: (chunk?: any) => void) {
+        on(event: string, handler: (chunk?: any) => void) {
           if (event === 'data') handler(JSON.stringify(response.data))
           if (event === 'end') handler()
         }
@@ -87,7 +87,10 @@ describe('ARC Broadcaster – additional coverage', () => {
 
   describe('constructor', () => {
     it('sets callbackUrl and callbackToken on headers when provided via config', async () => {
-      const mockFetch = mockedFetch({ status: 200, data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' } })
+      const mockFetch = mockedFetch({
+        status: 200,
+        data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+      })
       const broadcaster = new ARC(URL, {
         callbackUrl: 'https://my.callback.url',
         callbackToken: 'my-secret-token',
@@ -101,7 +104,10 @@ describe('ARC Broadcaster – additional coverage', () => {
     })
 
     it('does not add X-CallbackUrl header when callbackUrl is empty string', async () => {
-      const mockFetch = mockedFetch({ status: 200, data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' } })
+      const mockFetch = mockedFetch({
+        status: 200,
+        data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+      })
       const broadcaster = new ARC(URL, {
         callbackUrl: '',
         httpClient: new FetchHttpClient(mockFetch)
@@ -113,7 +119,10 @@ describe('ARC Broadcaster – additional coverage', () => {
     })
 
     it('does not add X-CallbackToken header when callbackToken is empty string', async () => {
-      const mockFetch = mockedFetch({ status: 200, data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' } })
+      const mockFetch = mockedFetch({
+        status: 200,
+        data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+      })
       const broadcaster = new ARC(URL, {
         callbackToken: '',
         httpClient: new FetchHttpClient(mockFetch)
@@ -125,7 +134,10 @@ describe('ARC Broadcaster – additional coverage', () => {
     })
 
     it('merges custom headers into request headers', async () => {
-      const mockFetch = mockedFetch({ status: 200, data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' } })
+      const mockFetch = mockedFetch({
+        status: 200,
+        data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+      })
       const broadcaster = new ARC(URL, {
         headers: { 'X-Custom-Header': 'custom-value', 'X-Another': 'another' },
         httpClient: new FetchHttpClient(mockFetch)
@@ -140,7 +152,10 @@ describe('ARC Broadcaster – additional coverage', () => {
     })
 
     it('does not add Authorization header when apiKey is empty string', async () => {
-      const mockFetch = mockedFetch({ status: 200, data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' } })
+      const mockFetch = mockedFetch({
+        status: 200,
+        data: { txid: 'abc', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+      })
       const broadcaster = new ARC(URL, {
         apiKey: '',
         httpClient: new FetchHttpClient(mockFetch)
@@ -165,7 +180,7 @@ describe('ARC Broadcaster – additional coverage', () => {
     it('returns error for INVALID txStatus', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'txid1', txStatus: 'INVALID', extraInfo: 'script error' }
+        data: { txid: transaction.id('hex'), txStatus: 'INVALID', extraInfo: 'script error' }
       })
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
       const response = await broadcaster.broadcast(transaction)
@@ -175,7 +190,7 @@ describe('ARC Broadcaster – additional coverage', () => {
         expect(response.code).toBe('INVALID')
         expect(response.description).toContain('INVALID')
         expect(response.description).toContain('script error')
-        expect(response.txid).toBe('txid1')
+        expect(response.txid).toBe(transaction.id('hex'))
         expect(response.more).toBeUndefined()
       }
     })
@@ -183,7 +198,7 @@ describe('ARC Broadcaster – additional coverage', () => {
     it('returns error for MALFORMED txStatus', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'txid2', txStatus: 'MALFORMED', extraInfo: 'bad format' }
+        data: { txid: transaction.id('hex'), txStatus: 'MALFORMED', extraInfo: 'bad format' }
       })
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
       const response = await broadcaster.broadcast(transaction)
@@ -197,7 +212,11 @@ describe('ARC Broadcaster – additional coverage', () => {
     it('returns error for MINED_IN_STALE_BLOCK txStatus', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'txid3', txStatus: 'MINED_IN_STALE_BLOCK', extraInfo: '' }
+        data: {
+          txid: transaction.id('hex'),
+          txStatus: 'MINED_IN_STALE_BLOCK',
+          extraInfo: ''
+        }
       })
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
       const response = await broadcaster.broadcast(transaction)
@@ -211,7 +230,11 @@ describe('ARC Broadcaster – additional coverage', () => {
     it('returns error when txStatus itself contains ORPHAN', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'orphanTxid', txStatus: 'SEEN_IN_ORPHAN_MEMPOOL', extraInfo: '' }
+        data: {
+          txid: transaction.id('hex'),
+          txStatus: 'SEEN_IN_ORPHAN_MEMPOOL',
+          extraInfo: ''
+        }
       })
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
       const response = await broadcaster.broadcast(transaction)
@@ -219,16 +242,16 @@ describe('ARC Broadcaster – additional coverage', () => {
       expect(response.status).toBe('error')
       if (response.status === 'error') {
         expect(response.code).toBe('SEEN_IN_ORPHAN_MEMPOOL')
-        expect(response.txid).toBe('orphanTxid')
+        expect(response.txid).toBe(transaction.id('hex'))
       }
     })
 
     it('includes competingTxs in failure when present on error txStatus', async () => {
-      const competingTxs = ['competingTx1', 'competingTx2']
+      const competingTxs = ['5'.repeat(64), '6'.repeat(64)]
       const mockFetch = mockedFetch({
         status: 200,
         data: {
-          txid: 'txid4',
+          txid: transaction.id('hex'),
           txStatus: 'REJECTED',
           extraInfo: '',
           competingTxs
@@ -244,11 +267,12 @@ describe('ARC Broadcaster – additional coverage', () => {
     })
 
     it('includes competingTxs on successful broadcast when present', async () => {
-      const competingTxs = ['competingTx1']
+      const competingTxs = ['8'.repeat(64)]
+      const expectedTxid = transaction.id('hex')
       const mockFetch = mockedFetch({
         status: 200,
         data: {
-          txid: 'successTxid',
+          txid: expectedTxid,
           txStatus: 'SEEN_ON_NETWORK',
           extraInfo: 'ok',
           competingTxs
@@ -260,24 +284,21 @@ describe('ARC Broadcaster – additional coverage', () => {
       expect(response.status).toBe('success')
       if (response.status === 'success') {
         expect(response.competingTxs).toEqual(competingTxs)
-        expect(response.txid).toBe('successTxid')
+        expect(response.txid).toBe(expectedTxid)
       }
     })
 
-    it('handles missing txStatus and extraInfo on successful response', async () => {
+    it('rejects a success response missing transaction status metadata', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'minimalTxid' }
+        data: { txid: transaction.id('hex') }
       })
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
       const response = await broadcaster.broadcast(transaction)
 
-      // No txStatus means no error status match – should succeed
-      expect(response.status).toBe('success')
-      if (response.status === 'success') {
-        expect(response.txid).toBe('minimalTxid')
-        // message should be 'undefined undefined' trimmed or similar
-        expect(typeof response.message).toBe('string')
+      expect(response.status).toBe('error')
+      if (response.status === 'error') {
+        expect(response.code).toBe('ERR_INVALID_RESPONSE')
       }
     })
   })
@@ -301,9 +322,9 @@ describe('ARC Broadcaster – additional coverage', () => {
       expect(response.status).toBe('error')
       if (response.status === 'error') {
         expect(response.code).toBe('422')
-        expect(response.txid).toBe('failedTxid')
+        expect(response.txid).toBeUndefined()
         expect(response.description).toBe('Unprocessable entity')
-        expect(response.more).toEqual({ txid: 'failedTxid', detail: 'Unprocessable entity' })
+        expect(response.more).toEqual({ detail: 'Unprocessable entity' })
       }
     })
 
@@ -319,7 +340,7 @@ describe('ARC Broadcaster – additional coverage', () => {
       if (response.status === 'error') {
         expect(response.code).toBe('500')
         expect(response.description).toBe('Unknown error')
-        expect(response.more).toEqual({ someOtherField: 'value' })
+        expect(response.more).toBeUndefined()
         expect(response.txid).toBeUndefined()
       }
     })
@@ -347,7 +368,7 @@ describe('ARC Broadcaster – additional coverage', () => {
       expect(response.status).toBe('error')
       if (response.status === 'error') {
         expect(response.description).toBe('parsed from string')
-        expect(response.txid).toBe('parsedTxid')
+        expect(response.txid).toBeUndefined()
       }
     })
 
@@ -394,7 +415,7 @@ describe('ARC Broadcaster – additional coverage', () => {
     it('falls back to toHex when toHexEF throws the expected EF error', async () => {
       const mockFetch = mockedFetch({
         status: 200,
-        data: { txid: 'efFallbackTxid', txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
+        data: { txid: 'e'.repeat(64), txStatus: 'SEEN_ON_NETWORK', extraInfo: '' }
       })
 
       // Override the mock transaction to throw the EF error
@@ -402,7 +423,8 @@ describe('ARC Broadcaster – additional coverage', () => {
         toHexEF: () => {
           throw new Error('All inputs must have source transactions when serializing to EF format')
         },
-        toHex: () => 'fallback_hex'
+        toHex: () => 'fallback_hex',
+        id: () => 'e'.repeat(64)
       } as unknown as Transaction
 
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
@@ -518,7 +540,9 @@ describe('ARC Broadcaster – additional coverage', () => {
       } as unknown as Transaction
 
       const broadcaster = new ARC(URL, { httpClient: new FetchHttpClient(mockFetch) })
-      await expect(broadcaster.broadcastMany([mockTx])).rejects.toThrow('Unexpected serialization error')
+      await expect(broadcaster.broadcastMany([mockTx])).rejects.toThrow(
+        'Unexpected serialization error'
+      )
     })
 
     it('returns error objects for all transactions when HTTP request throws', async () => {
@@ -534,7 +558,7 @@ describe('ARC Broadcaster – additional coverage', () => {
         const err = r as any
         expect(err.status).toBe('error')
         expect(err.code).toBe('500')
-        expect(err.description).toBe('Connection refused')
+        expect(err.description).toBe('Internal Server Error')
       }
     })
 

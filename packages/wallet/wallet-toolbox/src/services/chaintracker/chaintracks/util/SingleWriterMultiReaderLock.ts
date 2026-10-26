@@ -1,3 +1,5 @@
+import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER } from '../../../../sdk'
+
 /**
  * A reader-writer lock to manage concurrent access.
  * Allows multiple readers or one writer at a time.
@@ -8,7 +10,19 @@ export class SingleWriterMultiReaderLock {
   private readonly readerQueue: Array<() => void> = []
   private readonly writerQueue: Array<() => void> = []
 
-  private checkQueues (): void {
+  constructor(private readonly maxQueued = 4096) {
+    if (!Number.isSafeInteger(maxQueued) || maxQueued < 1 || maxQueued > 100_000) {
+      throw new WERR_INVALID_PARAMETER('maxQueued', 'an integer from 1 through 100000')
+    }
+  }
+
+  private assertQueueCapacity(): void {
+    if (this.readerQueue.length + this.writerQueue.length >= this.maxQueued) {
+      throw new WERR_INVALID_OPERATION(`Chaintracks lock queue reached its ${this.maxQueued}-operation limit`)
+    }
+  }
+
+  private checkQueues(): void {
     if (this.writerActive || this.readers > 0) return
     if (this.writerQueue.length > 0) {
       // If there are waiting writers and no active readers or writers, start the next writer
@@ -35,6 +49,7 @@ export class SingleWriterMultiReaderLock {
       }
     } else {
       // Queue the reader until writers are done
+      this.assertQueueCapacity()
       const promise = new Promise<void>(resolve => {
         this.readerQueue.push(resolve)
       })
@@ -60,6 +75,7 @@ export class SingleWriterMultiReaderLock {
         this.checkQueues()
       }
     } else {
+      this.assertQueueCapacity()
       const promise = new Promise<void>(resolve => {
         this.writerQueue.push(resolve)
       })

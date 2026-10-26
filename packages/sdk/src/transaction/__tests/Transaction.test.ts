@@ -325,6 +325,49 @@ describe('Transaction', () => {
       )
       await expect(spendTx.sign()).rejects.toThrow()
     })
+
+    it('isolates asynchronous templates and refuses to commit after transaction mutation', async () => {
+      const sourceTx = new Transaction(
+        1,
+        [],
+        [{ lockingScript: LockingScript.fromASM('OP_TRUE'), satoshis: 10 }],
+        0
+      )
+      let resume!: () => void
+      const gate = new Promise<void>(resolve => {
+        resume = resolve
+      })
+      let observedOutput: number | undefined
+      const template = {
+        sign: async (snapshot: Transaction): Promise<UnlockingScript> => {
+          await gate
+          observedOutput = snapshot.outputs[0].satoshis
+          return new UnlockingScript([{ op: OP.OP_TRUE }])
+        },
+        estimateLength: async () => 1
+      }
+      const spendTx = new Transaction(
+        1,
+        [
+          {
+            sourceTransaction: sourceTx,
+            sourceOutputIndex: 0,
+            unlockingScriptTemplate: template,
+            sequence: 0xffffffff
+          }
+        ],
+        [{ lockingScript: LockingScript.fromASM('OP_TRUE'), satoshis: 9 }],
+        0
+      )
+
+      const pending = spendTx.sign()
+      spendTx.outputs[0].satoshis = 8
+      resume()
+
+      await expect(pending).rejects.toThrow('Transaction changed while signing')
+      expect(observedOutput).toBe(9)
+      expect(spendTx.inputs[0].unlockingScript).toBeUndefined()
+    })
   })
 
   describe('Fees', () => {
@@ -750,10 +793,89 @@ describe('Transaction', () => {
       expect(tx.outputs[0].satoshis).toEqual(20000 - 10)
       expect(tx.getFee()).toEqual(10)
     })
+
+    it('isolates asynchronous fee models and commits change only to unchanged state', async () => {
+      const source = new Transaction(
+        1,
+        [],
+        [{ satoshis: 10, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+        0
+      )
+      const tx = new Transaction(
+        1,
+        [
+          {
+            sourceTransaction: source,
+            sourceOutputIndex: 0,
+            unlockingScript: new UnlockingScript([{ op: OP.OP_TRUE }]),
+            sequence: 0xffffffff
+          }
+        ],
+        [
+          { satoshis: 5, lockingScript: LockingScript.fromASM('OP_TRUE') },
+          { change: true, lockingScript: LockingScript.fromASM('OP_TRUE') }
+        ],
+        0
+      )
+      let resume!: () => void
+      const gate = new Promise<void>(resolve => {
+        resume = resolve
+      })
+      let observedRecipient: number | undefined
+      const pending = tx.fee({
+        computeFee: async snapshot => {
+          await gate
+          observedRecipient = snapshot.outputs[0].satoshis
+          return 1
+        }
+      })
+      tx.outputs[0].satoshis = 4
+      resume()
+
+      await expect(pending).rejects.toThrow('Transaction changed while computing its fee')
+      expect(observedRecipient).toBe(5)
+      expect(tx.outputs[1].satoshis).toBeUndefined()
+    })
+
+    it('rejects a fee model that mutates its owned transaction snapshot', async () => {
+      const source = new Transaction(
+        1,
+        [],
+        [{ satoshis: 10, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+        0
+      )
+      const tx = new Transaction(
+        1,
+        [
+          {
+            sourceTransaction: source,
+            sourceOutputIndex: 0,
+            unlockingScript: new UnlockingScript([{ op: OP.OP_TRUE }])
+          }
+        ],
+        [
+          { satoshis: 5, lockingScript: LockingScript.fromASM('OP_TRUE') },
+          { change: true, lockingScript: LockingScript.fromASM('OP_TRUE') }
+        ],
+        0
+      )
+
+      await expect(
+        tx.fee({
+          computeFee: async snapshot => {
+            snapshot.outputs[0].satoshis = 1
+            return 1
+          }
+        })
+      ).rejects.toThrow('Fee model mutated its transaction snapshot')
+      expect(tx.outputs[1].satoshis).toBeUndefined()
+    })
   })
 
   describe('Broadcast', () => {
     it('Broadcasts with the default Broadcaster instance', async () => {
+      const tx = new Transaction()
+      const expectedTXID = tx.id('hex')
       const mockedFetch = jest.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -766,7 +888,7 @@ describe('Transaction', () => {
           }
         },
         json: async () => ({
-          txid: 'mocked_txid',
+          txid: expectedTXID,
           txStatus: 'success',
           extraInfo: 'received'
         })
@@ -774,7 +896,6 @@ describe('Transaction', () => {
 
       ;(global as any).window = { fetch: mockedFetch } as any
 
-      const tx = new Transaction()
       const rv = await tx.broadcast()
 
       expect(mockedFetch).toHaveBeenCalled()
@@ -782,34 +903,81 @@ describe('Transaction', () => {
       expect(url).toEqual('https://arc.gorillapool.io/v1/tx')
       expect(rv).toEqual({
         status: 'success',
-        txid: 'mocked_txid',
+        txid: expectedTXID,
         message: 'success received'
       })
     })
 
     it('Broadcasts with the provided Broadcaster instance', async () => {
+      const tx = new Transaction()
+      const expectedTxid = tx.id('hex')
       const mockBroadcast = jest.fn(async (): Promise<BroadcastResponse> => {
         return {
           status: 'success', // Explicitly matches the literal type "success"
-          txid: 'mock_txid',
+          txid: expectedTxid,
           message: 'Transaction successfully broadcasted.'
         }
       })
 
-      const tx = new Transaction()
       const rv = await tx.broadcast({
         broadcast: mockBroadcast
       })
 
-      // Ensure the mock function was called with the correct argument
-      expect(mockBroadcast).toHaveBeenCalledWith(tx)
+      // The broadcaster receives an owned invocation snapshot.
+      const broadcastTx = mockBroadcast.mock.calls[0][0]
+      expect(broadcastTx).not.toBe(tx)
+      expect(broadcastTx.toUint8Array()).toEqual(tx.toUint8Array())
 
       // Verify the return value matches the mocked response
       expect(rv).toEqual({
         status: 'success',
-        txid: 'mock_txid',
+        txid: expectedTxid,
         message: 'Transaction successfully broadcasted.'
       })
+    })
+
+    it('fails closed when a custom broadcaster acknowledges a different transaction', async () => {
+      const tx = new Transaction()
+      await expect(
+        tx.broadcast({
+          broadcast: async () => ({
+            status: 'success',
+            txid: '44'.repeat(32),
+            message: 'accepted'
+          })
+        })
+      ).resolves.toEqual({
+        status: 'error',
+        code: 'ERR_INVALID_RESPONSE',
+        description: 'Broadcaster returned a malformed or transaction-mismatched response.'
+      })
+    })
+
+    it('owns the transaction state before an asynchronous broadcaster runs', async () => {
+      const tx = new Transaction()
+      const originalVersion = tx.version
+      let resume!: () => void
+      const gate = new Promise<void>(resolve => {
+        resume = resolve
+      })
+      let broadcastTx: Transaction | undefined
+      const pending = tx.broadcast({
+        broadcast: async snapshot => {
+          broadcastTx = snapshot
+          await gate
+          return { status: 'success', txid: snapshot.id('hex'), message: 'ok' }
+        }
+      })
+      tx.version = originalVersion + 1
+      resume()
+
+      await expect(pending).resolves.toEqual({
+        status: 'success',
+        txid: broadcastTx?.id('hex'),
+        message: 'ok'
+      })
+      expect(broadcastTx).not.toBe(tx)
+      expect(broadcastTx?.version).toBe(originalVersion)
     })
 
     describe('BEEF', () => {
@@ -1441,7 +1609,7 @@ describe('Transaction', () => {
         satoshis: 1,
         lockingScript: Script.fromASM('OP_NOP')
       })
-      await tx.fee()
+      await tx.fee(1)
       await tx.sign()
 
       // An explicit local budget remains enforceable without becoming a
@@ -1484,7 +1652,7 @@ describe('Transaction', () => {
         satoshis: 1,
         lockingScript: Script.fromASM('OP_NOP')
       })
-      await tx.fee()
+      await tx.fee(1)
       await tx.sign()
 
       // P2PKH takes less than 150 bytes apparently
@@ -1498,6 +1666,7 @@ describe('Transaction', () => {
       public lastCreateActionArgs: CreateActionArgs | null = null
       public lastSignActionArgs: any = null
       public signActionCalled: boolean = false
+      private pendingTransaction: Transaction | null = null
 
       async createAction(
         args: CreateActionArgs,
@@ -1546,10 +1715,11 @@ describe('Transaction', () => {
 
         // Check if this should return signableTransaction
         if (args.options?.signAndProcess === false) {
+          this.pendingTransaction = tx
           return {
             signableTransaction: {
-              tx: tx.toBEEF(),
-              reference: 'test-reference-123'
+              tx: tx.toAtomicBEEF(true),
+              reference: 'dGVzdC1yZWZlcmVuY2UtMTIz'
             }
           }
         }
@@ -1565,17 +1735,13 @@ describe('Transaction', () => {
         this.signActionCalled = true
         this.lastSignActionArgs = args
 
-        // Get the reference to find the original transaction
-        // For testing, we'll create a new transaction with the provided unlocking scripts
-        const tx = new Transaction(1)
+        if (this.pendingTransaction == null) throw new Error('No pending transaction')
+        const tx = Transaction.fromAtomicBEEF(this.pendingTransaction.toAtomicBEEF(true))
 
-        // Add inputs with the provided unlocking scripts from spends
         for (const [index, spend] of Object.entries(args.spends)) {
-          tx.addInput({
-            sourceTXID: '00'.repeat(32),
-            sourceOutputIndex: Number.parseInt(index),
-            unlockingScript: Script.fromHex((spend as any).unlockingScript)
-          })
+          tx.inputs[Number.parseInt(index)].unlockingScript = Script.fromHex(
+            (spend as any).unlockingScript
+          )
         }
 
         // Return atomic BEEF
@@ -1827,7 +1993,7 @@ describe('Transaction', () => {
       // Verify that signAction was called
       expect(mockWallet.signActionCalled).toBe(true)
       expect(mockWallet.lastSignActionArgs).not.toBeNull()
-      expect(mockWallet.lastSignActionArgs.reference).toBe('test-reference-123')
+      expect(mockWallet.lastSignActionArgs.reference).toBe('dGVzdC1yZWZlcmVuY2UtMTIz')
       expect(mockWallet.lastSignActionArgs.spends).toHaveProperty('0')
       expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(
         Script.fromASM('OP_1 OP_2').toHex()
@@ -1922,18 +2088,14 @@ describe('Transaction', () => {
       // Verify that signAction was called (because at least one template exists)
       expect(mockWallet.signActionCalled).toBe(true)
 
-      // Verify spends includes both inputs
+      // Only the template input is supplied to signAction. The precompiled
+      // second input was already committed in createAction.
       expect(mockWallet.lastSignActionArgs.spends).toHaveProperty('0')
-      expect(mockWallet.lastSignActionArgs.spends).toHaveProperty('1')
+      expect(mockWallet.lastSignActionArgs.spends).not.toHaveProperty('1')
 
       // First input should have template-generated script
       expect(mockWallet.lastSignActionArgs.spends[0].unlockingScript).toBe(
         Script.fromASM('OP_1 OP_2').toHex()
-      )
-
-      // Second input should have pre-existing script
-      expect(mockWallet.lastSignActionArgs.spends[1].unlockingScript).toBe(
-        Script.fromASM('OP_3 OP_4').toHex()
       )
 
       // Verify createAction args
@@ -2055,8 +2217,13 @@ describe('Transaction', () => {
         options
       )
 
-      // Verify options were passed to createAction
-      expect(mockWallet.lastCreateActionArgs?.options).toEqual(options)
+      // Completion requires a returned transaction, so it always uses the
+      // validated two-step flow and overrides returnTXIDOnly.
+      expect(mockWallet.lastCreateActionArgs?.options).toEqual({
+        ...options,
+        signAndProcess: false,
+        returnTXIDOnly: false
+      })
     })
 
     it('should pass options to both createAction and signAction for template flow', async () => {
@@ -2111,7 +2278,7 @@ describe('Transaction', () => {
       expect(mockWallet.signActionCalled).toBe(true)
       expect(mockWallet.lastSignActionArgs?.options).toEqual({
         acceptDelayedBroadcast: false,
-        returnTXIDOnly: true,
+        returnTXIDOnly: false,
         noSend: true,
         sendWith: undefined
       })
@@ -2149,7 +2316,7 @@ describe('Transaction', () => {
         satoshis: 1,
         lockingScript: Script.fromASM('OP_NOP')
       })
-      await tx.fee()
+      await tx.fee(1)
       await tx.sign()
 
       await expect(tx.verify('scripts only', new SatoshisPerKilobyte(1), 35)).resolves.toBe(true)

@@ -28,28 +28,30 @@ function makeMockTx(txid: string, outputs: any[] = [], inputs: any[] = []): MTx 
   return {
     id: jest.fn().mockReturnValue(txid),
     outputs,
-    inputs,
+    inputs
   } as any
 }
 
 function makeMockOutput(scriptHex?: string): TransactionOutput {
   const hex = scriptHex || '76a914' // Default to P2PKH prefix if no script provided
-  const scriptArray = hex.match(/.{2}/g)?.map(byte => Number.parseInt(byte, 16)) || [0x76, 0xa9, 0x14]
+  const scriptArray = hex.match(/.{2}/g)?.map(byte => Number.parseInt(byte, 16)) || [
+    0x76, 0xa9, 0x14
+  ]
 
   return {
     satoshis: 1,
     lockingScript: {
       toHex: jest.fn().mockReturnValue(hex),
-      toArray: jest.fn().mockReturnValue(scriptArray),
-    },
+      toArray: jest.fn().mockReturnValue(scriptArray)
+    }
   } as any
 }
 
-function makeMockInput(sourceTransaction?: MTx): TransactionInput {
+function makeMockInput(sourceTransaction?: MTx, sourceOutputIndex = 0): TransactionInput {
   return {
     sourceTransaction,
     sourceTXID: sourceTransaction?.id('hex'),
-    sourceOutputIndex: 0,
+    sourceOutputIndex
   } as any
 }
 
@@ -185,7 +187,6 @@ describe('Historian', () => {
       const debugHistorian = new Historian(simpleInterpreter, { debug: true })
       expect(debugHistorian).toBeInstanceOf(Historian)
     })
-
   })
 
   // --------------------------------------------------------------------------
@@ -224,49 +225,122 @@ describe('Historian', () => {
         const history = await historian.buildHistory(tx)
 
         expect(history).toHaveLength(2)
-        // The order is reversed due to history.reverse() at the end
-        expect(history[0]).toMatchObject({ data: 'value_from_76a91412' })
-        expect(history[1]).toMatchObject({ data: 'value_from_76a914ab' })
+        expect(history[0]).toMatchObject({ data: 'value_from_76a914ab' })
+        expect(history[1]).toMatchObject({ data: 'value_from_76a91412' })
       })
 
       it('traverses input chain and returns history in chronological order', async () => {
         // Create a chain: tx1 <- tx2 <- tx3 (tx3 is newest)
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914111111111111111111111111111111111111111188ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914222222222222222222222222222222222222222288ac')], [
-          makeMockInput(tx1)
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914111111111111111111111111111111111111111188ac')
         ])
-        const tx3 = makeMockTx(TEST_TXID_3, [makeMockOutput('76a914333333333333333333333333333333333333333388ac')], [
-          makeMockInput(tx2)
-        ])
+        const tx2 = makeMockTx(
+          TEST_TXID_2,
+          [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+          [makeMockInput(tx1)]
+        )
+        const tx3 = makeMockTx(
+          TEST_TXID_3,
+          [makeMockOutput('76a914333333333333333333333333333333333333333388ac')],
+          [makeMockInput(tx2)]
+        )
 
         const history = await historian.buildHistory(tx3)
 
         expect(history).toHaveLength(3)
-        expect(history[0]).toMatchObject({ data: 'value_from_76a91411' })  // Chronological order
+        expect(history[0]).toMatchObject({ data: 'value_from_76a91411' }) // Chronological order
         expect(history[1]).toMatchObject({ data: 'value_from_76a91422' })
         expect(history[2]).toMatchObject({ data: 'value_from_76a91433' })
       })
 
       it('handles multiple inputs per transaction', async () => {
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa88ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb88ac')])
-        const tx3 = makeMockTx(TEST_TXID_3, [makeMockOutput('76a914cccccccccccccccccccccccccccccccccccccccc88ac')], [
-          makeMockInput(tx1),
-          makeMockInput(tx2)
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa88ac')
         ])
+        const tx2 = makeMockTx(TEST_TXID_2, [
+          makeMockOutput('76a914bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb88ac')
+        ])
+        const tx3 = makeMockTx(
+          TEST_TXID_3,
+          [makeMockOutput('76a914cccccccccccccccccccccccccccccccccccccccc88ac')],
+          [makeMockInput(tx1), makeMockInput(tx2)]
+        )
 
         const history = await historian.buildHistory(tx3)
 
         expect(history).toHaveLength(3)
-        // The order depends on traversal: tx3 outputs first, then tx1, then tx2, then reversed
-        expect(history.map(h => h.data)).toEqual(['value_from_76a914bb', 'value_from_76a914aa', 'value_from_76a914cc'])
+        expect(history.map(h => h.data)).toEqual([
+          'value_from_76a914aa',
+          'value_from_76a914bb',
+          'value_from_76a914cc'
+        ])
+      })
+
+      it('returns a topological oldest-first order for merged ancestry', async () => {
+        const genesis = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914111111111111111111111111111111111111111188ac')
+        ])
+        const branch1 = makeMockTx(
+          TEST_TXID_2,
+          [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+          [makeMockInput(genesis)]
+        )
+        const branch2 = makeMockTx(
+          TEST_TXID_3,
+          [makeMockOutput('76a914333333333333333333333333333333333333333388ac')],
+          [makeMockInput(genesis)]
+        )
+        const merge = makeMockTx(
+          '4444444444444444444444444444444444444444444444444444444444444444',
+          [makeMockOutput('76a914444444444444444444444444444444444444444488ac')],
+          [makeMockInput(branch1), makeMockInput(branch2)]
+        )
+
+        const history = await historian.buildHistory(merge)
+
+        expect(history.map(value => value.data)).toEqual([
+          'value_from_76a91411',
+          'value_from_76a91422',
+          'value_from_76a91433',
+          'value_from_76a91444'
+        ])
+      })
+
+      it('keeps exact output lineage isolated from sibling and funding ancestry', async () => {
+        const relevant = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914111111111111111111111111111111111111111188ac'),
+          makeMockOutput('76a914999999999999999999999999999999999999999988ac')
+        ])
+        const unrelatedAncestor = makeMockTx(TEST_TXID_2, [
+          makeMockOutput('76a914888888888888888888888888888888888888888888ac')
+        ])
+        const funding = makeMockTx(
+          TEST_TXID_3,
+          [
+            makeMockOutput('6a'),
+            makeMockOutput('76a914777777777777777777777777777777777777777788ac')
+          ],
+          [makeMockInput(unrelatedAncestor)]
+        )
+        const tip = makeMockTx(
+          '4444444444444444444444444444444444444444444444444444444444444444',
+          [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+          [makeMockInput(relevant), makeMockInput(funding)]
+        )
+
+        const history = await historian.buildHistory(tip, undefined, 0)
+
+        expect(history.map(value => value.data)).toEqual([
+          'value_from_76a91411',
+          'value_from_76a91422'
+        ])
       })
 
       it('passes context to interpreter function', async () => {
         const contextHistorian = new Historian(simpleInterpreter)
         const tx = makeMockTx(TEST_TXID_1, [
           makeMockOutput('76a914filtered123456789012345678901234567888ac'), // Matches filter
-          makeMockOutput('76a914other1234567890123456789012345678988ac')     // Doesn't match filter
+          makeMockOutput('76a914other1234567890123456789012345678988ac') // Doesn't match filter
         ])
 
         const history = await contextHistorian.buildHistory(tx, { filter: '76a914filtered' })
@@ -291,15 +365,15 @@ describe('Historian', () => {
         const falsyHistorian = new Historian(falsyValueInterpreter)
         const tx = makeMockTx(TEST_TXID_1, [
           makeMockOutput('76a914123456789012345678901234567890123400'), // Returns { data: '' }
-          makeMockOutput('76a914123456789012345678901234567890123430'),  // Returns { data: '0' }
+          makeMockOutput('76a914123456789012345678901234567890123430'), // Returns { data: '0' }
           makeMockOutput('76a914123456789012345678901234567890123456') // Returns undefined
         ])
 
         const history = await falsyHistorian.buildHistory(tx)
 
         expect(history).toHaveLength(2)
-        expect(history[0]).toMatchObject({ data: '0' }) // Falsy but valid
-        expect(history[1]).toMatchObject({ data: '' })  // Falsy but valid
+        expect(history[0]).toMatchObject({ data: '' }) // Falsy but valid
+        expect(history[1]).toMatchObject({ data: '0' }) // Falsy but valid
       })
     })
 
@@ -309,15 +383,14 @@ describe('Historian', () => {
         const tx = makeMockTx(TEST_TXID_1, [
           makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac'), // Good P2PKH
           makeMockOutput('76a914deadbeef1234567890123456789012345688ac'), // Contains 'deadbeef' - will throw
-          makeMockOutput('76a914fedcba0987654321fedcba0987654321fedcba88ac')  // Good P2PKH
+          makeMockOutput('76a914fedcba0987654321fedcba0987654321fedcba88ac') // Good P2PKH
         ])
 
         const history = await errorHistorian.buildHistory(tx)
 
         expect(history).toHaveLength(2)
-        // The order is reversed due to history.reverse() at the end
-        expect(history[0]).toMatchObject({ data: 'value_from_76a914fe' })
-        expect(history[1]).toMatchObject({ data: 'value_from_76a914ab' })
+        expect(history[0]).toMatchObject({ data: 'value_from_76a914ab' })
+        expect(history[1]).toMatchObject({ data: 'value_from_76a914fe' })
       })
 
       it('handles async interpreter rejection gracefully', async () => {
@@ -325,21 +398,25 @@ describe('Historian', () => {
         const tx = makeMockTx(TEST_TXID_1, [
           makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac'), // Good P2PKH
           makeMockOutput('76a914badf00d1234567890123456789012345688ac'), // Contains 'badf00d' - will reject
-          makeMockOutput('76a914fedcba0987654321fedcba0987654321fedcba88ac')  // Good P2PKH
+          makeMockOutput('76a914fedcba0987654321fedcba0987654321fedcba88ac') // Good P2PKH
         ])
 
         const history = await rejectingHistorian.buildHistory(tx)
 
         expect(history).toHaveLength(2)
-        expect(history[0]).toMatchObject({ data: 'async_value_from_76a914fe' })
-        expect(history[1]).toMatchObject({ data: 'async_value_from_76a914ab' })
+        expect(history[0]).toMatchObject({ data: 'async_value_from_76a914ab' })
+        expect(history[1]).toMatchObject({ data: 'async_value_from_76a914fe' })
       })
 
       it('handles missing sourceTransaction in inputs', async () => {
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')], [
-          makeMockInput(), // No sourceTransaction
-          makeMockInput() // No sourceTransaction
-        ])
+        const tx1 = makeMockTx(
+          TEST_TXID_1,
+          [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')],
+          [
+            makeMockInput(), // No sourceTransaction
+            makeMockInput() // No sourceTransaction
+          ]
+        )
 
         const history = await historian.buildHistory(tx1)
 
@@ -348,10 +425,14 @@ describe('Historian', () => {
       })
 
       it('prevents infinite loops in circular transaction chains', async () => {
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914111111111111111111111111111111111111111188ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914222222222222222222222222222222222222222288ac')], [
-          makeMockInput(tx1)
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914111111111111111111111111111111111111111188ac')
         ])
+        const tx2 = makeMockTx(
+          TEST_TXID_2,
+          [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+          [makeMockInput(tx1)]
+        )
 
         // Create circular reference: tx1 -> tx2 -> tx1
         tx1.inputs = [makeMockInput(tx2)]
@@ -367,7 +448,9 @@ describe('Historian', () => {
     describe('debug mode', () => {
       it('logs debug information when debug=true', async () => {
         const debugHistorian = new Historian(simpleInterpreter, { debug: true })
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')])
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')
+        ])
 
         await debugHistorian.buildHistory(tx)
 
@@ -382,10 +465,14 @@ describe('Historian', () => {
 
       it('logs cycle detection in debug mode', async () => {
         const debugHistorian = new Historian(simpleInterpreter, { debug: true })
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914111111111111111111111111111111111111111188ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914222222222222222222222222222222222222222288ac')], [
-          makeMockInput(tx1)
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914111111111111111111111111111111111111111188ac')
         ])
+        const tx2 = makeMockTx(
+          TEST_TXID_2,
+          [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+          [makeMockInput(tx1)]
+        )
 
         // Create circular reference
         tx1.inputs = [makeMockInput(tx2)]
@@ -399,9 +486,13 @@ describe('Historian', () => {
 
       it('logs missing sourceTransaction in debug mode', async () => {
         const debugHistorian = new Historian(simpleInterpreter, { debug: true })
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')], [
-          makeMockInput() // No sourceTransaction
-        ])
+        const tx = makeMockTx(
+          TEST_TXID_1,
+          [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')],
+          [
+            makeMockInput() // No sourceTransaction
+          ]
+        )
 
         await debugHistorian.buildHistory(tx)
 
@@ -427,7 +518,9 @@ describe('Historian', () => {
 
       it('does not log when debug=false', async () => {
         const quietHistorian = new Historian(simpleInterpreter, { debug: false })
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')])
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')
+        ])
 
         await quietHistorian.buildHistory(tx)
 
@@ -444,31 +537,33 @@ describe('Historian', () => {
 
       it('uses cache when provided and returns cached results', async () => {
         const cache = new Map<string, readonly TestValue[]>()
-        const cachedHistorian = new Historian(simpleInterpreter, { 
+        const cachedHistorian = new Historian(simpleInterpreter, {
           historyCache: cache,
-          debug: true // Enable debug to verify cache hit logs 
+          debug: true // Enable debug to verify cache hit logs
         })
-        
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914cached1234567890123456789012345678888ac')])
-        
+
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914cached1234567890123456789012345678888ac')
+        ])
+
         // First call - should populate cache
         const history1 = await cachedHistorian.buildHistory(tx)
         expect(cache.size).toBe(1)
         expect(history1).toHaveLength(1)
         expect(history1[0]).toMatchObject({ data: 'value_from_76a914ca' })
-        
+
         // Verify cache was populated (debug log should contain "cached")
         expect(mockConsoleLog).toHaveBeenCalledWith(
           expect.stringContaining('[Historian] History cached:'),
           expect.any(String)
         )
-        
-        // Second call - should use cache (returns shallow copy, not same reference)  
+
+        // Second call - should use cache (returns shallow copy, not same reference)
         const history2 = await cachedHistorian.buildHistory(tx)
         expect(history1).toStrictEqual(history2) // Same content from cache
         expect(history1).not.toBe(history2) // Different references (shallow copy)
         expect(cache.size).toBe(1) // No new cache entries
-        
+
         // Verify cache hit (debug log should contain "cache hit")
         expect(mockConsoleLog).toHaveBeenCalledWith(
           expect.stringContaining('[Historian] History cache hit:'),
@@ -479,15 +574,19 @@ describe('Historian', () => {
       it('generates different cache keys for different transactions', async () => {
         const cache = new Map<string, readonly TestValue[]>()
         const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
-        
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914tx1data123456789012345678901234567888ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914tx2data123456789012345678901234567888ac')])
-        
+
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914tx1data123456789012345678901234567888ac')
+        ])
+        const tx2 = makeMockTx(TEST_TXID_2, [
+          makeMockOutput('76a914tx2data123456789012345678901234567888ac')
+        ])
+
         await cachedHistorian.buildHistory(tx1)
         await cachedHistorian.buildHistory(tx2)
-        
+
         expect(cache.size).toBe(2) // Different transactions = different cache keys
-        
+
         // Verify both are cached independently
         const history1 = await cachedHistorian.buildHistory(tx1)
         const history2 = await cachedHistorian.buildHistory(tx2)
@@ -499,38 +598,68 @@ describe('Historian', () => {
       it('generates different cache keys for different contexts', async () => {
         const cache = new Map<string, readonly TestValue[]>()
         const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
-        
+
         const tx = makeMockTx(TEST_TXID_1, [
           makeMockOutput('76a914filtered123456789012345678901234567888ac'), // Matches filter
-          makeMockOutput('76a914other1234567890123456789012345678988ac')     // Doesn't match filter
+          makeMockOutput('76a914other1234567890123456789012345678988ac') // Doesn't match filter
         ])
-        
+
         // Same transaction, different contexts
         await cachedHistorian.buildHistory(tx, { filter: '76a914filtered' })
         await cachedHistorian.buildHistory(tx, { filter: '76a914other' })
         await cachedHistorian.buildHistory(tx) // No context
-        
+
         expect(cache.size).toBe(3) // Different contexts = different cache keys
+      })
+
+      it('does not collapse undefined-bearing contexts onto other cache entries', async () => {
+        const cache = new Map<string, readonly TestValue[]>()
+        const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914cached1234567890123456789012345678888ac')
+        ])
+
+        await cachedHistorian.buildHistory(tx, {})
+        await cachedHistorian.buildHistory(tx, { filter: undefined })
+
+        expect(cache.size).toBe(2)
+      })
+
+      it('rejects circular default cache contexts instead of reusing a fallback key', async () => {
+        const cache = new Map<string, readonly TestValue[]>()
+        const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914cached1234567890123456789012345678888ac')
+        ])
+        const context: any = {}
+        context.self = context
+
+        await expect(cachedHistorian.buildHistory(tx, context)).rejects.toThrow(
+          'must not contain cycles'
+        )
+        expect(cache.size).toBe(0)
       })
 
       it('invalidates cache when interpreterVersion changes', async () => {
         const cache = new Map<string, readonly TestValue[]>()
-        const historian1 = new Historian(simpleInterpreter, { 
-          historyCache: cache, 
-          interpreterVersion: 'v1' 
+        const historian1 = new Historian(simpleInterpreter, {
+          historyCache: cache,
+          interpreterVersion: 'v1'
         })
-        const historian2 = new Historian(simpleInterpreter, { 
-          historyCache: cache, 
-          interpreterVersion: 'v2' 
+        const historian2 = new Historian(simpleInterpreter, {
+          historyCache: cache,
+          interpreterVersion: 'v2'
         })
-        
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914version123456789012345678901234567888ac')])
-        
+
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914version123456789012345678901234567888ac')
+        ])
+
         await historian1.buildHistory(tx)
         await historian2.buildHistory(tx) // Different version = new cache entry
-        
+
         expect(cache.size).toBe(2) // Two entries for different versions
-        
+
         // Verify both versions work independently
         const history1 = await historian1.buildHistory(tx)
         const history2 = await historian2.buildHistory(tx)
@@ -542,22 +671,25 @@ describe('Historian', () => {
       it('returns immutable cached results that cannot be mutated externally', async () => {
         const cache = new Map<string, readonly TestValue[]>()
         const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
-        
-        const tx = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914immutable123456789012345678901234567888ac')])
-        
+
+        const tx = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914immutable123456789012345678901234567888ac')
+        ])
+
         const history1 = await cachedHistorian.buildHistory(tx)
         const history2 = await cachedHistorian.buildHistory(tx)
-        
+
         // Should be different references but same content (shallow copies from cache)
         expect(history1).toStrictEqual(history2)
         expect(history1).not.toBe(history2)
-        
+
         // Original cached value should be frozen, but returned copies are mutable
         // Mutating returned copy should not affect the cache or future calls
-        ; (history1 as any).push({ data: 'malicious', outputIndex: 999 })
-        
+        ;(history1 as any).push({ data: 'malicious', outputIndex: 999 })
+        history2[0].data = 'mutated nested value'
+
         const history3 = await cachedHistorian.buildHistory(tx)
-        expect(history3).toStrictEqual(history2) // Still original content from cache
+        expect(history3[0].data).toBe('value_from_76a914im')
         expect(history3).toHaveLength(1) // Original length preserved
         expect(history3).not.toStrictEqual(history1) // Different from mutated copy
       })
@@ -565,23 +697,27 @@ describe('Historian', () => {
       it('works correctly with transaction chains when caching is enabled', async () => {
         const cache = new Map<string, readonly TestValue[]>()
         const cachedHistorian = new Historian(simpleInterpreter, { historyCache: cache })
-        
+
         // Create a simple chain: tx1 <- tx2
-        const tx1 = makeMockTx(TEST_TXID_1, [makeMockOutput('76a914chain11234567890123456789012345678888ac')])
-        const tx2 = makeMockTx(TEST_TXID_2, [makeMockOutput('76a914chain21234567890123456789012345678888ac')], [
-          makeMockInput(tx1)
+        const tx1 = makeMockTx(TEST_TXID_1, [
+          makeMockOutput('76a914chain11234567890123456789012345678888ac')
         ])
-        
+        const tx2 = makeMockTx(
+          TEST_TXID_2,
+          [makeMockOutput('76a914chain21234567890123456789012345678888ac')],
+          [makeMockInput(tx1)]
+        )
+
         // First call - should cache the results
         const history1 = await cachedHistorian.buildHistory(tx2)
         expect(history1).toHaveLength(2)
         expect(cache.size).toBeGreaterThan(0)
-        
+
         // Second call - should use cache (same content, different reference)
         const history2 = await cachedHistorian.buildHistory(tx2)
         expect(history1).toStrictEqual(history2) // Same content from cache
         expect(history1).not.toBe(history2) // Different references (shallow copy)
-        
+
         // Individual transaction should also be cached
         const tx1History = await cachedHistorian.buildHistory(tx1)
         expect(tx1History).toHaveLength(1)
@@ -599,21 +735,30 @@ describe('Historian', () => {
         makeMockOutput('6a') // OP_RETURN (non-interpretable)
       ])
 
-      const branch1 = makeMockTx(TEST_TXID_2, [
-        makeMockOutput('76a914branch1123456789012345678901234567888ac') // P2PKH
-      ], [makeMockInput(genesis)])
+      const branch1 = makeMockTx(
+        TEST_TXID_2,
+        [
+          makeMockOutput('76a914branch1123456789012345678901234567888ac') // P2PKH
+        ],
+        [makeMockInput(genesis)]
+      )
 
-      const branch2 = makeMockTx(TEST_TXID_3, [
-        makeMockOutput('76a914branch2123456789012345678901234567888ac'), // P2PKH
-        makeMockOutput('76a914extrabr123456789012345678901234567888ac')  // P2PKH
-      ], [makeMockInput(genesis)])
+      const branch2 = makeMockTx(
+        TEST_TXID_3,
+        [
+          makeMockOutput('76a914branch2123456789012345678901234567888ac'), // P2PKH
+          makeMockOutput('76a914extrabr123456789012345678901234567888ac') // P2PKH
+        ],
+        [makeMockInput(genesis)]
+      )
 
-      const merge = makeMockTx('4444444444444444444444444444444444444444444444444444444444444444', [
-        makeMockOutput('76a914finalme123456789012345678901234567888ac') // P2PKH
-      ], [
-        makeMockInput(branch1),
-        makeMockInput(branch2)
-      ])
+      const merge = makeMockTx(
+        '4444444444444444444444444444444444444444444444444444444444444444',
+        [
+          makeMockOutput('76a914finalme123456789012345678901234567888ac') // P2PKH
+        ],
+        [makeMockInput(branch1), makeMockInput(branch2)]
+      )
 
       const history = await historian.buildHistory(merge)
 
@@ -630,11 +775,15 @@ describe('Historian', () => {
 
     it('handles deep transaction chains efficiently', async () => {
       // Create a chain of 10 transactions
-      let currentTx = makeMockTx('0000000000000000000000000000000000000000000000000000000000000000', [
-        makeMockOutput('76a914000000000000000000000000000000000000000088ac') // P2PKH for value_0
-      ])
+      let currentTx = makeMockTx(
+        '0000000000000000000000000000000000000000000000000000000000000000',
+        [
+          makeMockOutput('76a914000000000000000000000000000000000000000088ac') // P2PKH for value_0
+        ]
+      )
 
-      for (let i = 1; i < 10; i++) { // Keep it reasonable for test performance
+      for (let i = 1; i < 10; i++) {
+        // Keep it reasonable for test performance
         const scriptHex = `76a914${i.toString(16).padStart(2, '0')}000000000000000000000000000000000000000088ac`
         const newTx = makeMockTx(
           i.toString().padStart(64, '0'),
@@ -658,9 +807,12 @@ describe('Historian', () => {
       // Test stack safety with 50 transactions - not a benchmark, just sanity
       const startTime = Date.now()
 
-      let currentTx = makeMockTx('0000000000000000000000000000000000000000000000000000000000000000', [
-        makeMockOutput('76a914genesis123456789012345678901234567888ac') // P2PKH for genesis
-      ])
+      let currentTx = makeMockTx(
+        '0000000000000000000000000000000000000000000000000000000000000000',
+        [
+          makeMockOutput('76a914genesis123456789012345678901234567888ac') // P2PKH for genesis
+        ]
+      )
 
       // Build chain of 50 transactions
       for (let i = 1; i < 50; i++) {
@@ -685,6 +837,219 @@ describe('Historian', () => {
       expect(history.map(h => h.data)).toContain('value_from_76a91410') // tx 1
       expect(history.map(h => h.data)).toContain('value_from_76a91431') // tx 49 (31 in hex)
       expect(duration).toBeLessThan(1000) // Should complete in under 1 second
+    })
+  })
+
+  describe('trust-boundary validation', () => {
+    const cacheableTransaction = (): MTx =>
+      makeMockTx(TEST_TXID_1, [makeMockOutput('76a914abcdef1234567890abcdef1234567890abcdef88ac')])
+
+    const makeCachingHistorian = (
+      options: ConstructorParameters<typeof Historian<TestValue, unknown>>[1] = {}
+    ): Historian<TestValue, unknown> =>
+      new Historian(simpleInterpreter as InterpreterFunction<TestValue, unknown>, {
+        historyCache: new Map(),
+        ...options
+      })
+
+    it('reads only own data properties from cache context without invoking accessors', async () => {
+      const getter = jest.fn(() => 'secret')
+      const context: Record<string, unknown> = {}
+      Object.defineProperty(context, 'secret', { enumerable: true, get: getter })
+
+      await expect(
+        makeCachingHistorian().buildHistory(cacheableTransaction(), context)
+      ).rejects.toThrow('plain data properties')
+      expect(getter).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      [
+        'a sparse array',
+        () => {
+          const value: unknown[] = []
+          value.length = 1
+          return value
+        },
+        'arrays must be dense'
+      ],
+      [
+        'an array with an extra property',
+        () => Object.assign([1], { extra: true }),
+        'arrays must not have extra properties'
+      ],
+      ['a class instance', () => new Date(0), 'only plain objects'],
+      ['a symbol property', () => ({ value: 1, [Symbol('hidden')]: true }), 'symbol properties'],
+      ['a non-finite number', () => Number.NaN, 'numbers must be finite'],
+      ['a bigint', () => 1n, 'JSON-like plain data'],
+      [
+        'excessive nesting',
+        () => {
+          let value: Record<string, unknown> = {}
+          for (let depth = 0; depth < 66; depth++) value = { child: value }
+          return value
+        },
+        'permitted complexity'
+      ],
+      ['an oversized encoded key', () => 'x'.repeat(65 * 1024), 'key exceeds the permitted size']
+    ])('rejects cache context containing %s', async (_name, makeContext, message) => {
+      await expect(
+        makeCachingHistorian().buildHistory(cacheableTransaction(), makeContext())
+      ).rejects.toThrow(message)
+    })
+
+    it('uses distinct cache entries for primitive, array, and object context values', async () => {
+      const cache = new Map<string, readonly TestValue[]>()
+      const cachedHistorian = makeCachingHistorian({ historyCache: cache })
+      const tx = cacheableTransaction()
+
+      for (const context of [null, true, false, 0, -0, 1, '1', [1], { value: 1 }]) {
+        await cachedHistorian.buildHistory(tx, context)
+      }
+
+      expect(cache.size).toBe(9)
+    })
+
+    it('encodes object cache keys in UTF-16 code-unit order', async () => {
+      const context: Record<string, number> = {}
+      context['ä'] = 2
+      context.z = 1
+      context.A = 3
+      const orderedKeys = Object.keys(context).sort()
+      const encodedFields = orderedKeys
+        .map(key => `s${key.length}:${key}=d${context[key]}`)
+        .join(',')
+      const cache = new Map<string, readonly TestValue[]>()
+      const originalSort = Array.prototype.sort
+      Array.prototype.sort = function (compareFn?: (left: string, right: string) => number) {
+        if (typeof compareFn !== 'function') {
+          throw new Error('Array.prototype.sort was called without a comparator')
+        }
+        return originalSort.call(this, compareFn)
+      }
+      try {
+        await makeCachingHistorian({ historyCache: cache }).buildHistory(
+          cacheableTransaction(),
+          context
+        )
+      } finally {
+        Array.prototype.sort = originalSort
+      }
+      const firstKey = [...cache.keys()][0]
+      const ascendingContext = Object.fromEntries(orderedKeys.map(key => [key, context[key]]))
+      await makeCachingHistorian({ historyCache: cache }).buildHistory(
+        cacheableTransaction(),
+        ascendingContext
+      )
+      // Both insertion orders must resolve to the identical persisted cache namespace.
+      expect([...cache.keys()]).toEqual([firstKey])
+      expect([...cache.keys()].join('\n')).toContain(encodedFields)
+      expect(encodedFields.indexOf('s1:A=')).toBeLessThan(encodedFields.indexOf('s1:z='))
+      expect(encodedFields.indexOf('s1:z=')).toBeLessThan(encodedFields.indexOf('s1:ä='))
+    })
+
+    it.each([
+      ['a missing interpreter', undefined, {}, 'interpreter is required'],
+      [
+        'a non-string interpreter version',
+        simpleInterpreter,
+        { interpreterVersion: 1 },
+        'bounded string'
+      ],
+      [
+        'an oversized interpreter version',
+        simpleInterpreter,
+        { interpreterVersion: 'v'.repeat(257) },
+        'bounded string'
+      ],
+      [
+        'a zero transaction limit',
+        simpleInterpreter,
+        { maxTransactions: 0 },
+        'positive safe integer'
+      ],
+      [
+        'a fractional output limit',
+        simpleInterpreter,
+        { maxInterpretedOutputs: 1.5 },
+        'positive safe integer'
+      ]
+    ])('rejects %s', (_name, interpreter, options, message) => {
+      expect(
+        () =>
+          new Historian(interpreter as never, options as ConstructorParameters<typeof Historian>[1])
+      ).toThrow(message)
+    })
+
+    it.each([
+      [() => 1 as never, 'bounded string'],
+      [() => 'x'.repeat(65 * 1024), 'bounded string']
+    ])('rejects an unsafe custom context key', async (ctxKeyFn, message) => {
+      const historianWithCustomKey = makeCachingHistorian({ ctxKeyFn })
+
+      await expect(
+        historianWithCustomKey.buildHistory(cacheableTransaction(), { value: 1 })
+      ).rejects.toThrow(message)
+    })
+
+    it('rejects invalid transaction IDs before using cache or ancestry state', async () => {
+      const invalid = makeMockTx('not-a-transaction-id', [makeMockOutput()])
+
+      await expect(makeCachingHistorian().buildHistory(invalid)).rejects.toThrow(
+        'invalid transaction ID'
+      )
+    })
+
+    it('skips malformed, mismatched, and out-of-range source references', async () => {
+      const source = makeMockTx(TEST_TXID_1, [
+        makeMockOutput('76a914111111111111111111111111111111111111111188ac')
+      ])
+      const tip = makeMockTx(
+        TEST_TXID_2,
+        [makeMockOutput('76a914222222222222222222222222222222222222222288ac')],
+        [
+          { sourceTransaction: source, sourceTXID: TEST_TXID_1, sourceOutputIndex: -1 },
+          { sourceTransaction: source, sourceTXID: TEST_TXID_2, sourceOutputIndex: 0 },
+          { sourceTransaction: source, sourceTXID: 1, sourceOutputIndex: 0 },
+          { sourceTransaction: source, sourceTXID: TEST_TXID_1, sourceOutputIndex: 1 }
+        ] as TransactionInput[]
+      )
+
+      await expect(historian.buildHistory(tip)).resolves.toEqual([
+        expect.objectContaining({ data: 'value_from_76a91422' })
+      ])
+    })
+
+    it.each([-1, 1, 1.5])('rejects invalid lineage output index %s', async outputIndex => {
+      await expect(
+        historian.buildHistory(cacheableTransaction(), undefined, outputIndex)
+      ).rejects.toThrow('does not identify an existing output')
+    })
+
+    it('enforces transaction and output traversal budgets', async () => {
+      const source = makeMockTx(TEST_TXID_1, [makeMockOutput()])
+      const tip = makeMockTx(TEST_TXID_2, [makeMockOutput()], [makeMockInput(source)])
+      const transactionBounded = new Historian(simpleInterpreter, { maxTransactions: 1 })
+      await expect(transactionBounded.buildHistory(tip)).rejects.toThrow(
+        'transaction traversal limit exceeded'
+      )
+
+      const twoOutputs = makeMockTx(TEST_TXID_1, [makeMockOutput(), makeMockOutput()])
+      const outputBounded = new Historian(simpleInterpreter, { maxInterpretedOutputs: 1 })
+      await expect(outputBounded.buildHistory(twoOutputs)).rejects.toThrow(
+        'output interpretation limit exceeded'
+      )
+    })
+
+    it('rejects interpreter values that cannot be safely cloned into cache', async () => {
+      const uncloneableInterpreter: InterpreterFunction<unknown> = () => ({
+        callback: () => undefined
+      })
+      const cachedHistorian = new Historian(uncloneableInterpreter, { historyCache: new Map() })
+
+      await expect(cachedHistorian.buildHistory(cacheableTransaction())).rejects.toThrow(
+        'structured-cloneable'
+      )
     })
   })
 })

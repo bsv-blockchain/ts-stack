@@ -1,5 +1,6 @@
 import { Collection, Db, ObjectId } from 'mongodb'
 import { SHIPQuery, SHIPRecord, UTXOReference } from '../types.js'
+import { validatePaginationQuery } from '../utils/lookupQueryValidation.js'
 
 interface DuplicateSHIPGroup {
   _id: Pick<SHIPRecord, 'identityKey' | 'domain' | 'topic'>
@@ -213,6 +214,8 @@ export class SHIPStorage {
    * @returns {Promise<UTXOReference[]>} Returns matching UTXO references.
    */
   async findRecord (query: SHIPQuery): Promise<UTXOReference[]> {
+    const pagination = validatePaginationQuery(query)
+    if (pagination.limit === 0) return []
     await this.ensureIndexes()
     const mongoQuery: any = {}
 
@@ -236,16 +239,14 @@ export class SHIPStorage {
       .find(mongoQuery)
       .project<UTXOReference>({ txid: 1, outputIndex: 1, createdAt: 1 })
 
-    cursor.sort({ createdAt: query.sortOrder ?? -1 })
+    cursor.sort({ createdAt: pagination.sortOrder, _id: pagination.sortOrder })
 
     // Apply pagination if provided
-    if (typeof query.skip === 'number' && query.skip > 0) {
-      cursor = cursor.skip(query.skip)
+    if (pagination.skip > 0) {
+      cursor = cursor.skip(pagination.skip)
     }
 
-    if (typeof query.limit === 'number' && query.limit > 0) {
-      cursor = cursor.limit(query.limit)
-    }
+    cursor = cursor.limit(pagination.limit)
 
     return await cursor
       .toArray()
@@ -265,20 +266,20 @@ export class SHIPStorage {
    * @returns {Promise<UTXOReference[]>} returns matching UTXO references
    */
   async findAll (limit?: number, skip?: number, sortOrder?: 'asc' | 'desc'): Promise<UTXOReference[]> {
+    const pagination = validatePaginationQuery({ limit, skip, sortOrder })
+    if (pagination.limit === 0) return []
     await this.ensureIndexes()
     let cursor = this.shipRecords.find({})
       .project<UTXOReference>({ txid: 1, outputIndex: 1, createdAt: 1 })
 
     // Apply pagination if provided
-    cursor.sort({ createdAt: sortOrder ?? -1 })
+    cursor.sort({ createdAt: pagination.sortOrder, _id: pagination.sortOrder })
 
-    if (typeof skip === 'number' && skip > 0) {
-      cursor = cursor.skip(skip)
+    if (pagination.skip > 0) {
+      cursor = cursor.skip(pagination.skip)
     }
 
-    if (typeof limit === 'number' && limit > 0) {
-      cursor = cursor.limit(limit)
-    }
+    cursor = cursor.limit(pagination.limit)
 
     return await cursor
       .toArray()

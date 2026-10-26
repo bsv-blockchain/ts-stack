@@ -1,16 +1,10 @@
-import {
-  Hash,
-  LockingScript,
-  OP,
-  PrivateKey,
-  Script,
-  type ScriptTemplate,
-  Signature,
-  Transaction,
-  TransactionSignature,
-  UnlockingScript,
-  Utils
-} from '@bsv/sdk'
+import { hash160, hash256, sha256 } from '@bsv/sdk/primitives/Hash'
+import type PrivateKey from '@bsv/sdk/primitives/PrivateKey'
+import { Signature, TransactionSignature } from '@bsv/sdk/primitives'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import { LockingScript, OP, Script, UnlockingScript } from '@bsv/sdk/script'
+import type ScriptTemplate from '@bsv/sdk/script/ScriptTemplate'
+import type Transaction from '@bsv/sdk/transaction/Transaction'
 import {
   R1_K1_K1_SLOT_OFFSET,
   R1_K1_R1_CODE_SEPARATOR_OFFSET,
@@ -19,6 +13,7 @@ import {
   R1_K1_TEMPLATE_GZIP_BASE64,
   R1_K1_TEMPLATE_SHA256
 } from './R1K1Wallet.artifact.js'
+import { boundPreimage, resolveBoundSource } from './signing-context.js'
 
 export type R1K1Bytes = string | number[] | Uint8Array
 
@@ -48,12 +43,6 @@ export interface R1K1K1UnlockParams {
 }
 
 export type R1K1UnlockParams = R1K1R1UnlockParams | R1K1K1UnlockParams
-
-interface SourceDetails {
-  sourceTXID: string
-  sourceSatoshis: number
-  lockingScript: Script
-}
 
 const SIGHASH_ALL_FORKID = TransactionSignature.SIGHASH_ALL | TransactionSignature.SIGHASH_FORKID
 const CONSTRUCTOR_SLOT_EXPANSION = 20
@@ -93,29 +82,24 @@ export class R1K1Wallet implements ScriptTemplate {
     const salt = normalizeBytes(params.salt, 'R1 salt', 32)
 
     const buildPreimage = async (tx: Transaction, inputIndex: number): Promise<Uint8Array> => {
-      const source = resolveSourceDetails(
-        tx,
-        inputIndex,
-        params.sourceSatoshis,
-        params.lockingScript
-      )
+      const source = resolveBoundSource(tx, inputIndex, params.sourceSatoshis, params.lockingScript)
       const lockingBytes = await validateLockingScript(source.lockingScript)
       const expectedCommitment = lockingBytes.subarray(
         R1_K1_R1_SLOT_OFFSET + 1,
         R1_K1_R1_SLOT_OFFSET + 21
       )
-      if (!equalBytes(Hash.hash160([...publicKey, ...salt]), expectedCommitment)) {
+      if (!equalBytes(hash160([...publicKey, ...salt]), expectedCommitment)) {
         throw new Error('R1 public key and salt do not match the locking script commitment')
       }
       const subscriptBytes = lockingBytes.subarray(BAKED_R1_CODE_SEPARATOR_OFFSET + 1)
       const subscript = new Script([], subscriptBytes, undefined, false)
-      return formatPreimage(tx, inputIndex, source, subscript)
+      return Uint8Array.from(boundPreimage(tx, inputIndex, source, SIGHASH_ALL_FORKID, subscript))
     }
 
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
         const preimage = await buildPreimage(tx, inputIndex)
-        const digest = Uint8Array.from(Hash.hash256(preimage))
+        const digest = Uint8Array.from(hash256(preimage))
         const signature = normalizeP256Signature(await params.signDigest(digest))
         return new UnlockingScript()
           .writeBin(signature)
@@ -143,7 +127,7 @@ export class R1K1Wallet implements ScriptTemplate {
   } {
     return {
       sign: async (tx: Transaction, inputIndex: number) => {
-        const source = resolveSourceDetails(
+        const source = resolveBoundSource(
           tx,
           inputIndex,
           params.sourceSatoshis,
@@ -155,14 +139,14 @@ export class R1K1Wallet implements ScriptTemplate {
           BAKED_K1_SLOT_OFFSET + 1,
           BAKED_K1_SLOT_OFFSET + 21
         )
-        if (!equalBytes(Hash.hash160(publicKey), expectedCommitment)) {
+        if (!equalBytes(hash160(publicKey), expectedCommitment)) {
           throw new Error('K1 private key does not match the locking script commitment')
         }
 
-        const preimage = formatPreimage(tx, inputIndex, source, source.lockingScript)
+        const preimage = boundPreimage(tx, inputIndex, source, SIGHASH_ALL_FORKID)
         // PrivateKey.sign hashes once internally, so pre-hash once to produce
         // the HASH256(preimage) digest used by OP_CHECKSIG.
-        const rawSignature = params.privateKey.sign(Hash.sha256(preimage))
+        const rawSignature = params.privateKey.sign(sha256(preimage))
         const signature = new TransactionSignature(
           rawSignature.r,
           rawSignature.s,
@@ -177,14 +161,14 @@ export class R1K1Wallet implements ScriptTemplate {
 
 async function loadTemplateBytes(): Promise<Uint8Array> {
   templateBytesPromise ??= (async () => {
-    const compressed = Uint8Array.from(Utils.toArray(R1_K1_TEMPLATE_GZIP_BASE64, 'base64'))
+    const compressed = Uint8Array.from(toArray(R1_K1_TEMPLATE_GZIP_BASE64, 'base64'))
     const input = new Blob([compressed.buffer as ArrayBuffer]).stream()
     const decompressed = input.pipeThrough(new DecompressionStream('gzip'))
     const bytes = new Uint8Array(await new Response(decompressed).arrayBuffer())
     if (bytes.length !== R1_K1_TEMPLATE_BYTE_LENGTH) {
       throw new Error(`R1-K1 artifact length mismatch: expected ${R1_K1_TEMPLATE_BYTE_LENGTH}`)
     }
-    if (Utils.toHex(Hash.sha256(bytes)) !== R1_K1_TEMPLATE_SHA256) {
+    if (toHex(sha256(bytes)) !== R1_K1_TEMPLATE_SHA256) {
       throw new Error('R1-K1 artifact checksum mismatch')
     }
     return bytes
@@ -216,55 +200,6 @@ function substituteConstructorSlots(
   }
   output.set(template.subarray(sourceOffset), outputOffset)
   return output
-}
-
-function resolveSourceDetails(
-  tx: Transaction,
-  inputIndex: number,
-  sourceSatoshis?: number,
-  lockingScript?: Script
-): SourceDetails {
-  const input = tx.inputs[inputIndex]
-  if (input == null) throw new Error(`Transaction input ${inputIndex} does not exist`)
-  const sourceTXID = input.sourceTXID ?? input.sourceTransaction?.id('hex')
-  if (sourceTXID == null || sourceTXID.length === 0) {
-    throw new Error('The input sourceTXID or sourceTransaction is required for signing')
-  }
-  const sourceOutput = input.sourceTransaction?.outputs[input.sourceOutputIndex]
-  const resolvedSatoshis = sourceSatoshis ?? sourceOutput?.satoshis
-  if (resolvedSatoshis == null) {
-    throw new Error('The sourceSatoshis or input sourceTransaction is required for signing')
-  }
-  const resolvedScript = lockingScript ?? sourceOutput?.lockingScript
-  if (resolvedScript == null) {
-    throw new Error('The lockingScript or input sourceTransaction is required for signing')
-  }
-  return { sourceTXID, sourceSatoshis: resolvedSatoshis, lockingScript: resolvedScript }
-}
-
-function formatPreimage(
-  tx: Transaction,
-  inputIndex: number,
-  source: SourceDetails,
-  subscript: Script
-): Uint8Array {
-  const input = tx.inputs[inputIndex]!
-  return Uint8Array.from(
-    TransactionSignature.format({
-      sourceTXID: source.sourceTXID,
-      sourceOutputIndex: input.sourceOutputIndex,
-      sourceSatoshis: source.sourceSatoshis,
-      transactionVersion: tx.version,
-      otherInputs: tx.inputs.filter((_, index) => index !== inputIndex),
-      allInputs: tx.inputs,
-      outputs: tx.outputs,
-      inputIndex,
-      inputSequence: input.sequence ?? 0xffffffff,
-      subscript,
-      lockTime: tx.lockTime,
-      scope: SIGHASH_ALL_FORKID
-    })
-  )
 }
 
 async function validateLockingScript(lockingScript: Script): Promise<Uint8Array> {
@@ -308,7 +243,7 @@ function normalizeP256Signature(value: R1K1Bytes): number[] {
 }
 
 function normalizeBytes(value: R1K1Bytes, label: string, length?: number): number[] {
-  const bytes = typeof value === 'string' ? Utils.toArray(value, 'hex') : Array.from(value)
+  const bytes = typeof value === 'string' ? toArray(value, 'hex') : Array.from(value)
   if (bytes.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
     throw new Error(`${label} must contain only bytes`)
   }

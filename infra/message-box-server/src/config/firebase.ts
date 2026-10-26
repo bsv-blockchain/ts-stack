@@ -115,10 +115,7 @@ export function initializeFirebase(): App | null {
     log.info({ operation: 'firebase.init' }, 'Firebase Admin SDK initialized successfully')
     return firebaseApp
   } catch (error) {
-    log.error(
-      { operation: 'firebase.init', outcome: 'error', err: error },
-      'Firebase initialization failed'
-    )
+    log.error({ operation: 'firebase.init', outcome: 'error' }, 'Firebase initialization failed')
     throw error
   }
 }
@@ -203,14 +200,11 @@ export async function sendNotification(
     }
 
     const response = await messaging.send(message)
-    log.info(
-      { operation: 'firebase.send_notification', message_id: response },
-      'Notification sent successfully'
-    )
+    log.info({ operation: 'firebase.send_notification' }, 'Notification sent successfully')
     return { success: true, messageId: response }
   } catch (error) {
     log.error(
-      { operation: 'firebase.send_notification', outcome: 'error', err: error },
+      { operation: 'firebase.send_notification', outcome: 'error' },
       'Failed to send notification'
     )
     throw error

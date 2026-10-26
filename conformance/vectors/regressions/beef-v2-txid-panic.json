@@ -15,14 +15,14 @@
       "description": "Minimal BEEF_V2 encoded as hex — parse must succeed and TxID must be callable",
       "parity_class": "required",
       "input": {
-        "beef_hex": "0200beef000000",
+        "beef_hex": "0200beef0000",
         "format": "BEEF_V2"
       },
       "expected": {
         "parse_succeeds": true,
         "txid_non_null": false
       },
-      "notes": "0200beef = BEEF_V2 magic (LE uint32 0xBEEF0002). 000000 = 0 BUMPs, 0 txs. Minimal valid BEEF_V2 envelope. No transactions means txid is null/nil — but parse must not panic."
+      "notes": "0200beef = BEEF_V2 magic (LE uint32 0xBEEF0002). 0000 = canonical CompactSize encodings for 0 BUMPs and 0 txs. Minimal valid BEEF_V2 envelope. No transactions means txid is null/nil — but parse must not panic."
     },
     {
       "id": "regression.beef.v2-txid-panic.0002",

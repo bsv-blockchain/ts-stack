@@ -17,6 +17,12 @@ export interface ChaintracksOptions {
    */
   addLiveRecursionLimit: number
   /**
+   * Maximum number of externally submitted base headers awaiting validation.
+   * Duplicate pending headers do not consume additional capacity.
+   * @defaultValue 4096
+   */
+  maxQueuedBaseHeaders?: number
+  /**
    * Optional logging method
    */
   logging?: (...args: any[]) => void

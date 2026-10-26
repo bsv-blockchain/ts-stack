@@ -59,10 +59,11 @@ export interface SetupClientWalletArgs {
     backups?: WalletStorageProvider[];
     taalApiKey?: string;
     scriptVerifier?: SpendVerifierInterface;
+    managedChangePolicy?: ManagedChangePolicyOptions;
 }
 ```
 
-See also: [Chain](./client.md#type-chain), [WalletStorageProvider](./client.md#interface-walletstorageprovider)
+See also: [Chain](./client.md#type-chain), [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions), [WalletStorageProvider](./client.md#interface-walletstorageprovider)
 
 ###### Property active
 
@@ -82,6 +83,15 @@ backups?: WalletStorageProvider[]
 ```
 See also: [WalletStorageProvider](./client.md#interface-walletstorageprovider)
 
+###### Property managedChangePolicy
+
+Optional operator tuning for local wallet-managed liquidity shaping.
+
+```ts
+managedChangePolicy?: ManagedChangePolicyOptions
+```
+See also: [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions)
+
 ###### Property privilegedKeyGetter
 
 Optional. The privileged private key getter used to initialize the `PrivilegedKeyManager`.
@@ -91,6 +101,14 @@ Defaults to undefined.
 privilegedKeyGetter?: () => Promise<PrivateKey>
 ```
 
+###### Property rootKeyHex
+
+The non-privileged private key used to initialize the `KeyDeriver` and determine the `identityKey`.
+
+```ts
+rootKeyHex: string
+```
+
 ###### Property scriptVerifier
 
 Optional high-performance verifier for internal wallet and locally hosted
@@ -98,14 +116,6 @@ storage validation. This does not alter the BRC-100 interface.
 
 ```ts
 scriptVerifier?: SpendVerifierInterface
-```
-
-###### Property rootKeyHex
-
-The non-privileged private key used to initialize the `KeyDeriver` and determine the `identityKey`.
-
-```ts
-rootKeyHex: string
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -348,7 +358,7 @@ export interface SetupWalletArgs {
 }
 ```
 
-See also: [SetupEnv](./setup.md#interface-setupenv), [WalletStorageProvider](./client.md#interface-walletstorageprovider)
+See also: [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions), [PreparedBeefOptions](./storage.md#interface-preparedbeefoptions), [SetupEnv](./setup.md#interface-setupenv), [WalletStorageProvider](./client.md#interface-walletstorageprovider)
 
 ###### Property active
 
@@ -377,6 +387,24 @@ env: SetupEnv
 ```
 See also: [SetupEnv](./setup.md#interface-setupenv)
 
+###### Property managedChangePolicy
+
+Optional operator tuning for wallet-managed liquidity shaping.
+
+```ts
+managedChangePolicy?: ManagedChangePolicyOptions
+```
+See also: [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions)
+
+###### Property preparedBeef
+
+Optional prepared-BEEF (COOK) rollout controls for Knex storage.
+
+```ts
+preparedBeef?: PreparedBeefOptions
+```
+See also: [PreparedBeefOptions](./storage.md#interface-preparedbeefoptions)
+
 ###### Property privilegedKeyGetter
 
 Optional. The privileged private key getter used to initialize the `PrivilegedKeyManager`.
@@ -386,13 +414,13 @@ Defaults to undefined.
 privilegedKeyGetter?: () => Promise<PrivateKey>
 ```
 
-###### Property preparedBeef
+###### Property rootKeyHex
 
-Optional Knex prepared-BEEF (COOK) rollout controls. Reads, writes, and
-backfill default off. See [Prepared BEEF (COOK)](./prepared-beef.md).
+Optional. The non-privileged private key used to initialize the `KeyDeriver` and determine the `identityKey`.
+Defaults to `env.devKeys[env.identityKey]
 
 ```ts
-preparedBeef?: PreparedBeefOptions
+rootKeyHex?: string
 ```
 
 ###### Property scriptVerifier
@@ -402,15 +430,6 @@ storage validation. This does not alter the BRC-100 interface.
 
 ```ts
 scriptVerifier?: SpendVerifierInterface
-```
-
-###### Property rootKeyHex
-
-Optional. The non-privileged private key used to initialize the `KeyDeriver` and determine the `identityKey`.
-Defaults to `env.devKeys[env.identityKey]
-
-```ts
-rootKeyHex?: string
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
@@ -494,10 +513,20 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 ```ts
 export interface SetupWalletIdbArgs extends SetupClientWalletArgs {
     databaseName: string;
+    managedChangePolicy?: ManagedChangePolicyOptions;
 }
 ```
 
-See also: [SetupClientWalletArgs](./setup.md#interface-setupclientwalletargs)
+See also: [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions), [SetupClientWalletArgs](./setup.md#interface-setupclientwalletargs)
+
+###### Property managedChangePolicy
+
+Optional operator tuning for wallet-managed liquidity shaping.
+
+```ts
+managedChangePolicy?: ManagedChangePolicyOptions
+```
+See also: [ManagedChangePolicyOptions](./storage.md#type-managedchangepolicyoptions)
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -530,10 +559,21 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 export interface SetupWalletKnexArgs extends SetupWalletArgs {
     knex: Knex<any, any[]>;
     databaseName: string;
+    actionBatchMaxReservedOutputs?: number;
 }
 ```
 
 See also: [SetupWalletArgs](./setup.md#interface-setupwalletargs)
+
+###### Property actionBatchMaxReservedOutputs
+
+Maximum persisted outputs one action-batch workspace may reserve.
+Defaults to 256. Set to -1 only when the storage operator deliberately
+accepts unbounded reservations.
+
+```ts
+actionBatchMaxReservedOutputs?: number
+```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Variables](#variables)
 
@@ -611,7 +651,6 @@ DEV_KEYS = '{
     "${mainIdentityKey2}": "${mainPrivKey2.toString()}"
 }'
 `;
-        console.log(log);
         return log;
     }
     static getEnv(chain: Chain): SetupEnv {
@@ -647,16 +686,15 @@ DEV_KEYS = '{
         const services = new Services(serviceOptions);
         const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
         const monitor = new Monitor(monopts);
-        const privilegedKeyManager = args.privilegedKeyGetter
-            ? new PrivilegedKeyManager(args.privilegedKeyGetter)
-            : undefined;
+        const privilegedKeyManager = args.privilegedKeyGetter != null ? new PrivilegedKeyManager(args.privilegedKeyGetter) : undefined;
         const wallet = new Wallet({
             chain,
             keyDeriver,
             storage,
             services,
             monitor,
-            privilegedKeyManager
+            privilegedKeyManager,
+            scriptVerifier: args.scriptVerifier
         });
         const r: SetupWallet = {
             rootKey,
@@ -675,6 +713,7 @@ DEV_KEYS = '{
         rootKeyHex: string;
         storageUrl?: string;
         privilegedKeyGetter?: () => Promise<PrivateKey>;
+        scriptVerifier?: SpendVerifierInterface;
     }): Promise<Wallet> 
     static async createWalletClient(args: SetupWalletClientArgs): Promise<SetupWalletClient> {
         const wo = await Setup.createWallet(args);
@@ -707,13 +746,13 @@ DEV_KEYS = '{
         const unlock = p2pkh.unlock(priv, "all", false, satoshis, lock);
         return unlock;
     }
-    static createP2PKHOutputs(outputs: {
+    static createP2PKHOutputs(outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[]): CreateActionOutput[] {
+    }>): CreateActionOutput[] {
         const os: CreateActionOutput[] = [];
         const count = outputs.length;
         for (let i = 0; i < count; i++) {
@@ -728,19 +767,19 @@ DEV_KEYS = '{
         }
         return os;
     }
-    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: {
+    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[], options?: CreateActionOptions): Promise<{
+    }>, options?: CreateActionOptions): Promise<{
         cr: CreateActionResult;
         outpoints: string[] | undefined;
     }> {
         const os = Setup.createP2PKHOutputs(outputs);
         const createArgs: CreateActionArgs = {
-            description: `createP2PKHOutputs`,
+            description: "createP2PKHOutputs",
             outputs: os,
             options: {
                 ...options,
@@ -754,19 +793,19 @@ DEV_KEYS = '{
         }
         return { cr, outpoints };
     }
-    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<{
+    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<Array<{
         outpoint: string;
         txid?: string;
         success: boolean;
         error?: string;
-    }[]> {
-        return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF);
+    }>> {
+        return await _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, Setup.getUnlockP2PKH.bind(Setup), inputBEEF);
     }
     static async createWalletKnex(args: SetupWalletKnexArgs): Promise<SetupWalletKnex> {
         const wo = await Setup.createWallet(args);
         const activeStorage = await Setup.createStorageKnex(args);
         await wo.storage.addWalletStorageProvider(activeStorage);
-        const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+        const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
         const userId = user.userId;
         const r: SetupWalletKnex = {
             ...wo,
@@ -849,16 +888,15 @@ static async createWallet(args: SetupWalletArgs): Promise<SetupWallet> {
     const services = new Services(serviceOptions);
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
     const monitor = new Monitor(monopts);
-    const privilegedKeyManager = args.privilegedKeyGetter
-        ? new PrivilegedKeyManager(args.privilegedKeyGetter)
-        : undefined;
+    const privilegedKeyManager = args.privilegedKeyGetter != null ? new PrivilegedKeyManager(args.privilegedKeyGetter) : undefined;
     const wallet = new Wallet({
         chain,
         keyDeriver,
         storage,
         services,
         monitor,
-        privilegedKeyManager
+        privilegedKeyManager,
+        scriptVerifier: args.scriptVerifier
     });
     const r: SetupWallet = {
         rootKey,
@@ -885,6 +923,7 @@ static async createWalletClientNoEnv(args: {
     rootKeyHex: string;
     storageUrl?: string;
     privilegedKeyGetter?: () => Promise<PrivateKey>;
+    scriptVerifier?: SpendVerifierInterface;
 }): Promise<Wallet> 
 ```
 See also: [Chain](./client.md#type-chain), [Wallet](./client.md#class-wallet)
@@ -909,7 +948,7 @@ static async createWalletKnex(args: SetupWalletKnexArgs): Promise<SetupWalletKne
     const wo = await Setup.createWallet(args);
     const activeStorage = await Setup.createStorageKnex(args);
     await wo.storage.addWalletStorageProvider(activeStorage);
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
     const userId = user.userId;
     const r: SetupWalletKnex = {
         ...wo,
@@ -936,6 +975,8 @@ For MySQL, a schema corresponding to databaseName must exist with full access pe
 
 Reads a .env file of the format created by `makeEnv`.
 
+Returns the generated text without writing credentials to stdout; the
+caller must explicitly choose a protected destination.
 Returns values for designated `chain`.
 
 Access private keys through the `devKeys` object: `devKeys[identityKey]`
@@ -1007,7 +1048,6 @@ DEV_KEYS = '{
     "${mainIdentityKey2}": "${mainPrivKey2.toString()}"
 }'
 `;
-    console.log(log);
     return log;
 }
 ```
@@ -1049,16 +1089,15 @@ export abstract class SetupClient {
         const services = new Services(serviceOptions);
         const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
         const monitor = new Monitor(monopts);
-        const privilegedKeyManager = args.privilegedKeyGetter
-            ? new PrivilegedKeyManager(args.privilegedKeyGetter)
-            : undefined;
+        const privilegedKeyManager = args.privilegedKeyGetter != null ? new PrivilegedKeyManager(args.privilegedKeyGetter) : undefined;
         const wallet = new Wallet({
             chain,
             keyDeriver,
             storage,
             services,
             monitor,
-            privilegedKeyManager
+            privilegedKeyManager,
+            scriptVerifier: args.scriptVerifier
         });
         const r: SetupWallet = {
             rootKey,
@@ -1077,6 +1116,7 @@ export abstract class SetupClient {
         rootKeyHex: string;
         storageUrl?: string;
         privilegedKeyGetter?: () => Promise<PrivateKey>;
+        scriptVerifier?: SpendVerifierInterface;
     }): Promise<Wallet> 
     static async createWalletClient(args: SetupClientWalletClientArgs): Promise<SetupWalletClient> {
         const wo = await SetupClient.createWallet(args);
@@ -1109,13 +1149,13 @@ export abstract class SetupClient {
         const unlock = p2pkh.unlock(priv, "all", false, satoshis, lock);
         return unlock;
     }
-    static createP2PKHOutputs(outputs: {
+    static createP2PKHOutputs(outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[]): CreateActionOutput[] {
+    }>): CreateActionOutput[] {
         const os: CreateActionOutput[] = [];
         const count = outputs.length;
         for (let i = 0; i < count; i++) {
@@ -1130,19 +1170,19 @@ export abstract class SetupClient {
         }
         return os;
     }
-    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: {
+    static async createP2PKHOutputsAction(wallet: WalletInterface, outputs: Array<{
         address: string;
         satoshis: number;
         outputDescription?: string;
         basket?: string;
         tags?: string[];
-    }[], options?: CreateActionOptions): Promise<{
+    }>, options?: CreateActionOptions): Promise<{
         cr: CreateActionResult;
         outpoints: string[] | undefined;
     }> {
         const os = SetupClient.createP2PKHOutputs(outputs);
         const createArgs: CreateActionArgs = {
-            description: `createP2PKHOutputs`,
+            description: "createP2PKHOutputs",
             outputs: os,
             options: {
                 ...options,
@@ -1156,19 +1196,19 @@ export abstract class SetupClient {
         }
         return { cr, outpoints };
     }
-    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<{
+    static async fundWalletFromP2PKHOutpoints(wallet: WalletInterface, outpoints: string[], p2pkhKey: KeyPairAddress, inputBEEF?: BEEF): Promise<Array<{
         outpoint: string;
         txid?: string;
         success: boolean;
         error?: string;
-    }[]> {
-        return _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF);
+    }>> {
+        return await _fundWalletFromP2PKHOutpoints(wallet, outpoints, p2pkhKey, SetupClient.getUnlockP2PKH.bind(SetupClient), inputBEEF);
     }
     static async createWalletIdb(args: SetupWalletIdbArgs): Promise<SetupWalletIdb> {
         const wo = await SetupClient.createWallet(args);
         const activeStorage = await SetupClient.createStorageIdb(args);
         await wo.storage.addWalletStorageProvider(activeStorage);
-        const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+        const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
         const userId = user.userId;
         const r: SetupWalletIdb = {
             ...wo,
@@ -1215,16 +1255,15 @@ static async createWallet(args: SetupClientWalletArgs): Promise<SetupWallet> {
     const services = new Services(serviceOptions);
     const monopts = Monitor.createDefaultWalletMonitorOptions(chain, storage, services, undefined, "default");
     const monitor = new Monitor(monopts);
-    const privilegedKeyManager = args.privilegedKeyGetter
-        ? new PrivilegedKeyManager(args.privilegedKeyGetter)
-        : undefined;
+    const privilegedKeyManager = args.privilegedKeyGetter != null ? new PrivilegedKeyManager(args.privilegedKeyGetter) : undefined;
     const wallet = new Wallet({
         chain,
         keyDeriver,
         storage,
         services,
         monitor,
-        privilegedKeyManager
+        privilegedKeyManager,
+        scriptVerifier: args.scriptVerifier
     });
     const r: SetupWallet = {
         rootKey,
@@ -1251,6 +1290,7 @@ static async createWalletClientNoEnv(args: {
     rootKeyHex: string;
     storageUrl?: string;
     privilegedKeyGetter?: () => Promise<PrivateKey>;
+    scriptVerifier?: SpendVerifierInterface;
 }): Promise<Wallet> 
 ```
 See also: [Chain](./client.md#type-chain), [Wallet](./client.md#class-wallet)
@@ -1275,7 +1315,7 @@ static async createWalletIdb(args: SetupWalletIdbArgs): Promise<SetupWalletIdb> 
     const wo = await SetupClient.createWallet(args);
     const activeStorage = await SetupClient.createStorageIdb(args);
     await wo.storage.addWalletStorageProvider(activeStorage);
-    const { user, isNew } = await activeStorage.findOrInsertUser(wo.identityKey);
+    const { user } = await activeStorage.findOrInsertUser(wo.identityKey);
     const userId = user.userId;
     const r: SetupWalletIdb = {
         ...wo,

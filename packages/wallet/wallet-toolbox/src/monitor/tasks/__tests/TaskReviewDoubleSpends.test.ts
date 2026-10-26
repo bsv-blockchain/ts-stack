@@ -1,6 +1,6 @@
 import { TaskReviewDoubleSpends } from '../TaskReviewDoubleSpends'
 
-function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, durableInputConflict = false): any {
+function makeReq(provenTxReqId: number, txid: string, updatedAt: Date, durableInputConflict = false): any {
   const now = new Date()
   return {
     provenTxReqId,
@@ -17,7 +17,7 @@ function makeReq (provenTxReqId: number, txid: string, updatedAt: Date, durableI
   }
 }
 
-function makeMonitor (
+function makeMonitor(
   statusByTxid: Record<string, string>,
   reqs: any[],
   monitorEvents: Array<{ details?: string }> = [],
@@ -235,5 +235,32 @@ describe('TaskReviewDoubleSpends', () => {
 
     expect(m.updateProvenTxReq).toHaveBeenCalledWith([1], { status: 'unfail' })
     expect(log).toContain('status:mined durableInputConflict:true')
+  })
+
+  test('does not use a status result for a different transaction', async () => {
+    const now = new Date('2026-01-01T12:00:00.000Z')
+    jest.spyOn(Date, 'now').mockReturnValue(now.getTime())
+    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'))]
+    const m = makeMonitor({ tx1: 'known' }, reqs)
+    m.monitor.services.getStatusForTxids.mockResolvedValue({
+      status: 'success',
+      results: [{ txid: 'different', status: 'mined', depth: 1 }]
+    })
+
+    await new TaskReviewDoubleSpends(m.monitor as any, 0, 100, 60).runTask()
+
+    expect(m.updateProvenTxReq).not.toHaveBeenCalled()
+  })
+
+  test('ignores malformed negative or fractional checkpoint offsets', async () => {
+    const reqs = [makeReq(1, 'tx1', new Date('2026-01-01T10:00:00.000Z'))]
+    const m = makeMonitor({}, reqs, [
+      { details: JSON.stringify({ resumeOffset: -1 }) },
+      { details: JSON.stringify({ resumeOffset: 1.5 }) }
+    ])
+
+    const checkpoint = await new TaskReviewDoubleSpends(m.monitor as any).getLastReviewedCheckpoint()
+
+    expect(checkpoint).toBeUndefined()
   })
 })

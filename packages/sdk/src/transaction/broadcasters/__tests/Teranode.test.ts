@@ -7,12 +7,12 @@ import { RequestOptions } from 'node:https'
 // Mock Transaction so tests don't require a fully-formed BSV tx
 jest.mock('../../../transaction/Transaction', () => {
   class MockTransaction {
-    toEF (): number[] {
+    toEF(): number[] {
       return [0x01, 0x02, 0x03, 0x04]
     }
 
-    id (_encoding: string): string {
-      return 'mocked_txid'
+    id(_encoding: string): string {
+      return 'a'.repeat(64)
     }
   }
   return { __esModule: true, default: MockTransaction }
@@ -78,7 +78,7 @@ describe('Teranode Broadcaster', () => {
 
     expect(response).toEqual({
       status: 'success',
-      txid: 'mocked_txid',
+      txid: 'a'.repeat(64),
       message: 'broadcast successful'
     })
   })
@@ -114,7 +114,7 @@ describe('Teranode Broadcaster', () => {
 
     expect(response.status).toBe('success')
     if (response.status === 'success') {
-      expect(response.txid).toBe('mocked_txid')
+      expect(response.txid).toBe('a'.repeat(64))
     }
   })
 
@@ -221,7 +221,7 @@ describe('Teranode Broadcaster', () => {
     expect(response.status).toBe('error')
     if (response.status === 'error') {
       expect(response.code).toBe('500')
-      expect(response.description).toBe('Network error')
+      expect(response.description).toBe('Internal Server Error')
     }
   })
 
@@ -267,7 +267,7 @@ describe('Teranode Broadcaster', () => {
 
     expect(response.status).toBe('success')
     if (response.status === 'success') {
-      expect(response.txid).toBe('mocked_txid')
+      expect(response.txid).toBe('a'.repeat(64))
     }
   })
 
@@ -287,20 +287,18 @@ describe('Teranode Broadcaster', () => {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  function mockedFetch (response: { status: number, data: any }): jest.Mock {
+  function mockedFetch(response: { status: number; data: any }): jest.Mock {
     return jest.fn().mockResolvedValue({
       ok: response.status >= 200 && response.status < 300,
       status: response.status,
       statusText: response.status === 200 ? 'OK' : 'Error',
       // BinaryFetchClient calls res.text() then returns result as data
       text: async () =>
-        typeof response.data === 'string'
-          ? response.data
-          : JSON.stringify(response.data)
+        typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
     })
   }
 
-  function mockedHttps (response: { status: number, data: any }): {
+  function mockedHttps(response: { status: number; data: any }): {
     request: (
       url: string,
       options: RequestOptions,
@@ -317,21 +315,15 @@ describe('Teranode Broadcaster', () => {
     }
   } {
     return {
-      request: (
-        url: string,
-        options: RequestOptions,
-        callback: (res: any) => void
-      ) => {
+      request: (url: string, options: RequestOptions, callback: (res: any) => void) => {
         const mockResponse = {
           statusCode: response.status,
           statusMessage: response.status === 200 ? 'OK' : 'Error',
           headers: { 'content-type': 'application/octet-stream' },
-          on (event: string, handler: (chunk?: any) => void) {
+          on(event: string, handler: (chunk?: any) => void) {
             if (event === 'data') {
               handler(
-                typeof response.data === 'string'
-                  ? response.data
-                  : JSON.stringify(response.data)
+                typeof response.data === 'string' ? response.data : JSON.stringify(response.data)
               )
             }
             if (event === 'end') handler()

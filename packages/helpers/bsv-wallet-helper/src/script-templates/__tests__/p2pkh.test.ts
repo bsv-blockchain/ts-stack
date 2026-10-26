@@ -90,6 +90,22 @@ describe('P2PKH locking script', () => {
         'Failed to generate valid public key hash (must be 20 bytes)'
       )
     })
+
+    test.each([
+      [Array.from({ length: 20 }, (_, index) => (index === 19 ? -1 : 0))],
+      [Array.from({ length: 20 }, (_, index) => (index === 19 ? 256 : 0))],
+      [Array.from({ length: 20 }, (_, index) => (index === 19 ? 0.5 : 0))],
+      [
+        Object.assign(
+          Array.from({ length: 20 }, () => 0),
+          { 19: undefined }
+        )
+      ]
+    ])('should reject non-byte public key hashes', async pubkeyhash => {
+      await expect(new P2PKH().lock({ pubkeyhash: pubkeyhash as any })).rejects.toThrow(
+        'pubkeyhash must be a dense array of bytes'
+      )
+    })
   })
 
   describe('lock with BRC-100 wallet', () => {
@@ -165,11 +181,18 @@ describe('P2PKH locking script', () => {
       [{ walletParams: {} }, 'protocolID is required'],
       [{ walletParams: { protocolID: ['bad'], keyID: '0' } }, 'must be an array'],
       [{ walletParams: { protocolID: ['2', 'p2pkh'], keyID: '0' } }, 'must be [number, string]'],
+      [{ walletParams: { protocolID: [3, 'p2pkh'], keyID: '0' } }, 'must be [number, string]'],
+      [{ walletParams: { protocolID: [2, 'tiny'], keyID: '0' } }, '5 to 400 characters'],
       [{ walletParams: { protocolID: [2, 'p2pkh'] } }, 'keyID is required'],
       [{ walletParams: { protocolID: [2, 'p2pkh'], keyID: 0 } }, 'keyID must be a string'],
+      [{ walletParams: { protocolID: [2, 'p2pkh'], keyID: '' } }, '1 to 800 characters'],
       [
         { walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 1 } },
         'counterparty must be a string'
+      ],
+      [
+        { walletParams: { protocolID: [2, 'p2pkh'], keyID: '0', counterparty: 'not-a-key' } },
+        'compressed public key'
       ]
     ])('rejects invalid wallet derivation parameters', async (params, message) => {
       await expect(new P2PKH().lock(params as any)).rejects.toThrow(message)
@@ -178,6 +201,40 @@ describe('P2PKH locking script', () => {
 })
 
 describe('P2PKH unlocking and transaction verification', () => {
+  test('locks peer-scoped derivations to the local wallet key used for signing', async () => {
+    const userWallet = await makeMockWallet(new PrivateKey(99))
+    const counterparty = new PrivateKey(199).toPublicKey().toString() as WalletCounterparty
+    const protocolID = [2, 'p2pkh'] as WalletProtocol
+    const keyID = 'peer-scoped-output'
+    const template = new P2PKH(userWallet)
+    const lockingScript = await template.lock({
+      walletParams: { protocolID, keyID, counterparty }
+    })
+
+    const sourceTransaction = new Transaction()
+    sourceTransaction.addInput({
+      sourceTXID: '00'.repeat(32),
+      sourceOutputIndex: 0,
+      unlockingScript: Script.fromASM('OP_TRUE')
+    })
+    sourceTransaction.addOutput({ lockingScript, satoshis: 1000 })
+    sourceTransaction.merklePath = MerklePath.fromCoinbaseTxidAndHeight(
+      sourceTransaction.id('hex'),
+      1234
+    )
+
+    const spendingTx = new Transaction()
+    spendingTx.addInput({
+      sourceTransaction,
+      sourceOutputIndex: 0,
+      unlockingScriptTemplate: template.unlock({ protocolID, keyID, counterparty })
+    })
+    spendingTx.addOutput({ lockingScript, satoshis: 900 })
+
+    await spendingTx.sign()
+    await expect(spendingTx.verify('scripts only')).resolves.toBe(true)
+  })
+
   test('should create a valid transaction with wallet-based signing', async () => {
     // Generate deterministic test key
     const userPriv = new PrivateKey(100)

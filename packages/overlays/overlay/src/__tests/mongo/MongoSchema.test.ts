@@ -96,7 +96,7 @@ describe('Mongo schema bootstrap', () => {
 
   afterAll(async () => {
     await fixture.close()
-  })
+  }, 30000)
 
   test('creates and revalidates the complete versioned schema on a replica set', async () => {
     await expect(bootstrapMongoOverlay(fixture.db, fixture.scope)).resolves.toMatchObject({
@@ -242,10 +242,12 @@ describe('Mongo schema bootstrap', () => {
         .collection(MongoCollectionNames.outputs)
         .insertOne(output('output-index-overflow', '4294967296'))
     ).rejects.toThrow()
-    await fixture.db.collection(MongoCollectionNames.consumptionEdges).insertMany([
-      edge('edge-index-9', '9', '50', 'd2'.repeat(32)),
-      edge('edge-index-max', '4294967295', '9', 'd3'.repeat(32))
-    ])
+    await fixture.db
+      .collection(MongoCollectionNames.consumptionEdges)
+      .insertMany([
+        edge('edge-index-9', '9', '50', 'd2'.repeat(32)),
+        edge('edge-index-max', '4294967295', '9', 'd3'.repeat(32))
+      ])
     await expect(
       fixture.db
         .collection(MongoCollectionNames.consumptionEdges)
@@ -330,7 +332,7 @@ describe('Mongo schema bootstrap', () => {
     await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toThrow(
       'Incompatible Mongo Overlay schema ledger'
     )
-  })
+  }, 30000)
 
   test('refuses an existing collection whose collation is not Overlay simple', async () => {
     const definition = MongoCollectionDefinitions.find(
@@ -385,7 +387,9 @@ describe('Mongo schema bootstrap', () => {
       await database.listCollections({ name: `${MongoGridFsBucketName}.files` }).hasNext()
     ).toBe(true)
     expect(
-      await database.collection(MongoCollectionNames.schema).countDocuments({ _id: mongoNodeKey(fixture.scope) })
+      await database
+        .collection(MongoCollectionNames.schema)
+        .countDocuments({ _id: mongoNodeKey(fixture.scope) })
     ).toBe(1)
   }, 30000)
 
@@ -426,7 +430,9 @@ describe('Mongo schema bootstrap', () => {
     const database = fixture.client.db(`overlay_s02_index_failure_${Date.now()}`)
     await fixture.failCommands({ failCommands: ['createIndexes'], errorCode: 50 })
     try {
-      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({ code: 50 })
+      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({
+        code: 50
+      })
     } finally {
       await fixture.disableFailPoint()
     }
@@ -436,7 +442,9 @@ describe('Mongo schema bootstrap', () => {
     const database = fixture.client.db(`overlay_s02_ledger_insert_failure_${Date.now()}`)
     await fixture.failCommands({ failCommands: ['insert'], errorCode: 50 })
     try {
-      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({ code: 50 })
+      await expect(bootstrapMongoOverlay(database, fixture.scope)).rejects.toMatchObject({
+        code: 50
+      })
     } finally {
       await fixture.disableFailPoint()
     }

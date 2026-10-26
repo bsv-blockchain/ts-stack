@@ -1,6 +1,6 @@
 import { Request, Response } from 'express'
 import crypto from 'node:crypto'
-import { Utils } from '@bsv/sdk'
+import { PublicKey, Utils } from '@bsv/sdk'
 import getPriceForFile from '../utils/getPriceForFile'
 import getUploadURL from '../utils/getUploadURL'
 import { log } from '../logger'
@@ -37,6 +37,14 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
         description: 'Missing authfetch identityKey.'
       })
     }
+    if (!/^(?:02|03)[0-9a-f]{64}$/i.test(req.auth.identityKey)) {
+      return res.status(400).json({
+        status: 'error',
+        code: 'ERR_INVALID_IDENTITY_KEY',
+        description: 'The authenticated identity key is invalid.'
+      })
+    }
+    const uploaderIdentityKey = PublicKey.fromString(req.auth.identityKey).toString().toLowerCase()
     const { fileSize, retentionPeriod } = req.body
 
     if (!fileSize || !Number.isInteger(fileSize) || fileSize <= 0) {
@@ -85,7 +93,7 @@ export async function uploadHandler(req: UploadRequest, res: Response<UploadResp
     const { uploadURL, requiredHeaders } = await getUploadURL({
       size: fileSize,
       objectIdentifier,
-      uploaderIdentityKey: req.auth.identityKey,
+      uploaderIdentityKey,
       expiryTime: (retentionPeriod * 60) + Math.round(Date.now() / 1000)
     })
     log.info({ operation: 'upload.url_generated', object_id: objectIdentifier, header_count: Object.keys(requiredHeaders ?? {}).length }, 'Upload URL issued')

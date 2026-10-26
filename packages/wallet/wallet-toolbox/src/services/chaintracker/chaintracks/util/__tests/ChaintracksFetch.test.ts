@@ -67,6 +67,25 @@ describe('ChaintracksFetch tests', () => {
     } satisfies Partial<ChaintracksFetchError>)
   })
 
+  test('aborts a response body that stalls after headers arrive', async () => {
+    const cancelled = jest.fn()
+    const body = new ReadableStream<Uint8Array>({
+      async pull() {
+        await new Promise(() => {})
+      },
+      cancel: cancelled
+    })
+    const fetchMock = jest.fn(async () => new Response(body, { status: 200 }))
+
+    const fetch = new ChaintracksFetch({ fetch: fetchMock, timeoutMsecs: 5, maxRetries: 0 })
+    await expect(fetch.download('https://example.test/stalled-body.headers')).rejects.toMatchObject({
+      name: 'ChaintracksFetchError',
+      status: 0,
+      statusText: 'Request Timeout'
+    } satisfies Partial<ChaintracksFetchError>)
+    expect(cancelled).toHaveBeenCalled()
+  })
+
   test('rejects a response before materializing a declared oversized body', async () => {
     const fetchMock = jest.fn(
       async () =>
@@ -98,6 +117,34 @@ describe('ChaintracksFetch tests', () => {
     } satisfies Partial<ChaintracksFetchError>)
   })
 
+  test('rejects malformed Content-Length and malformed UTF-8 JSON', async () => {
+    const responses = [
+      new Response(new Uint8Array([1]), { status: 200, headers: { 'content-length': '+1' } }),
+      new Response(new Uint8Array([0xc3, 0x28]), { status: 200 })
+    ]
+    const fetchMock = jest.fn(async () => responses.shift()!)
+    const fetch = new ChaintracksFetch({ fetch: fetchMock, maxRetries: 0 })
+
+    await expect(fetch.download('https://example.test/invalid-length')).rejects.toMatchObject({
+      statusText: 'Invalid Content-Length'
+    })
+    await expect(fetch.fetchJson('https://example.test/invalid-utf8')).rejects.toThrow()
+  })
+
+  test('uses the DNS-pinned public fetch only for service-discovered resources', async () => {
+    const operatorFetch = jest.fn(async () => new Response(new Uint8Array([1]), { status: 200 }))
+    const publicNetworkFetch = jest.fn(async () => new Response(new Uint8Array([2]), { status: 200 }))
+    const fetch = new ChaintracksFetch({ fetch: operatorFetch, publicNetworkFetch, maxRetries: 0 })
+
+    await expect(fetch.download('http://127.0.0.1/operator')).resolves.toEqual(new Uint8Array([1]))
+    await expect(fetch.download('https://cdn.example/remote', 1, { publicNetworkOnly: true })).resolves.toEqual(
+      new Uint8Array([2])
+    )
+    expect(operatorFetch).toHaveBeenCalledTimes(1)
+    expect(publicNetworkFetch).toHaveBeenCalledTimes(1)
+    expect(publicNetworkFetch.mock.calls[0][1]).toMatchObject({ redirect: 'error' })
+  })
+
   test('reserves every physical retry before issuing it', async () => {
     const responses = [
       new Response(null, { status: 503 }),
@@ -113,5 +160,28 @@ describe('ChaintracksFetch tests', () => {
     )
     expect(beforeRetry).toHaveBeenNthCalledWith(1, 2)
     expect(beforeRetry).toHaveBeenNthCalledWith(2, 3)
+  })
+
+  test('joins only canonical relative paths contained by the configured base URL', () => {
+    const fetch = new ChaintracksFetch({ maxRetries: 0 })
+
+    expect(fetch.pathJoin('https://headers.example/base', 'mainNet_0.headers')).toBe(
+      'https://headers.example/base/mainNet_0.headers'
+    )
+    expect(fetch.pathJoin('https://headers.example/base/', 'nested/mainNet_0.headers')).toBe(
+      'https://headers.example/base/nested/mainNet_0.headers'
+    )
+    for (const path of [
+      '../admin',
+      '%2e%2e/admin',
+      'https://attacker.example/file',
+      '//attacker.example/file',
+      'file?query=1',
+      'file#fragment',
+      'nested/%2fadmin',
+      'nested\\admin'
+    ]) {
+      expect(() => fetch.pathJoin('https://headers.example/base/', path)).toThrow('subpath')
+    }
   })
 })

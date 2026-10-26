@@ -26,6 +26,14 @@ BSV TypeScript monorepo for the SDK, wallet tooling, overlays, messaging, middle
 
 Most applications should start with `@bsv/simple` or `@bsv/sdk`. Wallet builders usually start with `@bsv/wallet-toolbox`. Service operators usually start with the overlay, messaging, middleware, or infra packages.
 
+## Wallet recovery resources
+
+Wallet builders need both recoverable root key material and wallet records,
+including derivation metadata. Start with [Wallet backup and recovery](docs/guides/wallet-backup-recovery.md),
+then use the [BRC-38/39 integration guide](docs/guides/wallet-data-portability.md),
+[recovery drill](docs/guides/wallet-recovery-drill.md) and
+[AI-agent implementation brief](docs/guides/wallet-recovery-agent-brief.md).
+
 ## Contributing
 
 The entire stack follows one [contribution policy](./CONTRIBUTING.md), one
@@ -144,7 +152,6 @@ before running one of those suites.
 | [`packages/helpers/simple`](packages/helpers/simple)                       | [`@bsv/simple`](https://www.npmjs.com/package/@bsv/simple)               | Recommended high-level browser/server application API |
 | [`packages/helpers/bsv-wallet-helper`](packages/helpers/bsv-wallet-helper) | [`@bsv/wallet-helper`](https://www.npmjs.com/package/@bsv/wallet-helper) | Wallet helper functions                               |
 | [`packages/helpers/ts-templates`](packages/helpers/ts-templates)           | [`@bsv/templates`](https://www.npmjs.com/package/@bsv/templates)         | Script templates                                      |
-| [`packages/helpers/did-client`](packages/helpers/did-client)               | [`@bsv/did-client`](https://www.npmjs.com/package/@bsv/did-client)       | DID resolver client                                   |
 | [`packages/helpers/amountinator`](packages/helpers/amountinator)           | [`@bsv/amountinator`](https://www.npmjs.com/package/@bsv/amountinator)   | Satoshi/BSV conversion and formatting                 |
 | [`packages/helpers/fund-wallet`](packages/helpers/fund-wallet)             | [`@bsv/fund-wallet`](https://www.npmjs.com/package/@bsv/fund-wallet)     | Testnet/devnet wallet funding helper                  |
 
@@ -161,6 +168,7 @@ These deployable projects are not included in `pnpm-workspace.yaml`; they keep t
 | [`infra/uhrp-server-cloud-bucket`](infra/uhrp-server-cloud-bucket) | [`@bsv/uhrp-storage-server`](https://www.npmjs.com/package/@bsv/uhrp-storage-server) | UHRP storage server for cloud bucket deployments                         |
 | [`infra/wallet-infra`](infra/wallet-infra)                         | `@bsv/wallet-infra` private                                                          | UTXO management server                                                   |
 | [`infra/wab`](infra/wab)                                           | `@bsv/wab-server` private                                                            | Wallet Authentication Backend                                            |
+| [`infra/webrtpay-relay`](infra/webrtpay-relay)                     | `@bsv/webrtpay-relay` private                                                        | WebRTPay signalling relay for direct WebRTC payments                     |
 
 ## Conformance Vectors
 

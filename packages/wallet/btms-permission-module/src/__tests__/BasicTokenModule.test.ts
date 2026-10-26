@@ -34,8 +34,11 @@ type InternalModule = AuthorizationState & {
   dispose(): void
   extractTokenSpendInfo(args: CreateActionArgs): TokenSpendInfo
   getAssetMetadata(assetId: string): Promise<{ name?: string; iconURL?: string } | null>
+  grantSessionAuthorization(originator: string): void
   handleCreateAction(args: CreateActionArgs, originator: string): Promise<void>
+  isDenseByteArray(value: unknown, maxLength: number): value is number[]
   isIssuanceFromPreimage(preimage: number[]): boolean
+  isTokenIssuance(args: CreateActionArgs): boolean
   onRequest: BasicTokenModule['onRequest']
   outputIndicatesIssuance(output: { tags?: unknown; lockingScript?: unknown }): boolean
   parseTokenLockingScript(lockingScriptHex: string): ParsedTokenInfo | null
@@ -239,7 +242,7 @@ describe('BasicTokenModule authorization boundary', () => {
       reference: 'approved-reference',
       timestamp: Date.now()
     })
-    const preimage = Array.from({ length: 157 }, () => 0)
+    const preimage = Array.from({ length: 158 }, () => 0)
 
     await expect(request(module, 'createSignature', { data: preimage })).rejects.toThrow(
       'Signature request does not match the approved transaction'
@@ -621,7 +624,7 @@ describe('BasicTokenModule security primitives', () => {
       .mockReturnValue(decoded([Array.from(Buffer.from('ISSUE')), Array.from(Buffer.from('10'))]))
     expect(module.outputIndicatesIssuance({ lockingScript: '00' })).toBe(true)
 
-    const preimage = Array.from({ length: 157 }, () => 0)
+    const preimage = Array.from({ length: 158 }, () => 0)
     preimage[104] = 1
     preimage[105] = 0
     expect(module.isIssuanceFromPreimage(preimage)).toBe(true)
@@ -638,6 +641,41 @@ describe('BasicTokenModule security primitives', () => {
       request(new BasicTokenModule(prompt), 'createSignature', { data: preimage })
     ).resolves.toEqual({ args: { data: preimage } })
     expect(prompt).not.toHaveBeenCalled()
+  })
+
+  it('rejects truthy non-boolean prompt verdicts', async () => {
+    const prompt = jestApi.fn().mockResolvedValue({ approved: true })
+    const module = new BasicTokenModule(prompt as never)
+
+    await expect(request(module, 'listOutputs', { basket: 'p btms' })).rejects.toThrow(
+      'User denied permission'
+    )
+    expect(state(module).sessionAuthorizations).toHaveProperty('size', 0)
+  })
+
+  it('requires dense bytes and exact canonical BIP-143 framing for unbound issuance', async () => {
+    const prompt = jestApi.fn().mockResolvedValue(false)
+    const module = new BasicTokenModule(prompt)
+    const sparse = Array(32) as number[]
+    sparse[0] = 1
+    await expect(request(module, 'createSignature', { data: sparse })).rejects.toThrow(
+      'bounded dense byte array'
+    )
+
+    const trailing = Array.from({ length: 159 }, () => 0)
+    trailing[104] = 1
+    trailing[105] = 0
+    await expect(request(module, 'createSignature', { data: trailing })).rejects.toThrow(
+      'User denied permission'
+    )
+
+    const nonCanonical = Array.from({ length: 158 }, () => 0)
+    nonCanonical.splice(104, 1, 0xfd, 1, 0)
+    nonCanonical[107] = 0
+    await expect(request(module, 'createSignature', { data: nonCanonical })).rejects.toThrow(
+      'User denied permission'
+    )
+    expect(prompt).toHaveBeenCalledTimes(2)
   })
 
   it('computes exact PushDrop signing digests for every transaction input', () => {
@@ -722,6 +760,32 @@ describe('BasicTokenModule security primitives', () => {
     )
   })
 
+  it('rejects oversized or sparse signature bytes at the private verification boundary', () => {
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    expect(module.isDenseByteArray([1, 2], 1)).toBe(false)
+    expect(module.isDenseByteArray([1], 1)).toBe(true)
+
+    module.authorizedTransactions.set(ORIGINATOR, {
+      authorizedDigests: new Set(['00'.repeat(32)]),
+      reference: 'approved-reference',
+      timestamp: Date.now()
+    })
+    expect(() => module.verifyAuthorizedTransaction(Array(32) as never, ORIGINATOR)).toThrow()
+    expect(() =>
+      module.verifyAuthorizedTransaction({ data: Array(32) } as never, ORIGINATOR)
+    ).toThrow('Signature data must be a bounded dense byte array')
+  })
+
+  it('classifies only well-shaped input-free issuance outputs', () => {
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    expect(module.isTokenIssuance(null as never)).toBe(false)
+    expect(module.isTokenIssuance({ outputs: null } as never)).toBe(false)
+    expect(module.isTokenIssuance({ outputs: [null, 1] } as never)).toBe(false)
+    expect(
+      module.isTokenIssuance({ inputs: [], outputs: [{ tags: ['btms_type_issue'] }] } as never)
+    ).toBe(true)
+  })
+
   it('enriches prompts from BTMS metadata and tolerates lookup failure', async () => {
     const getAssetInfo = jestApi
       .fn()
@@ -798,6 +862,20 @@ describe('BasicTokenModule security primitives', () => {
         ]
       })
     ).toThrow('Asset swap support coming soon')
+
+    resolve
+      .mockReset()
+      .mockReturnValueOnce({ amount: Number.MAX_SAFE_INTEGER, assetId: 'asset.0' })
+      .mockReturnValueOnce({ amount: 1, assetId: 'asset.0' })
+    expect(() =>
+      module.extractTokenSpendInfo({
+        description: 'Overflow token totals',
+        outputs: [
+          { lockingScript: '00', outputDescription: 'First token', satoshis: 1 },
+          { lockingScript: '00', outputDescription: 'Second token', satoshis: 1 }
+        ]
+      })
+    ).toThrow('safe integer range')
   })
 
   it('aggregates parsed input amounts and detects mixed input assets', () => {
@@ -848,5 +926,14 @@ describe('BasicTokenModule security primitives', () => {
       assetIdMismatch: true,
       totalInputAmount: 1
     })
+  })
+
+  it('bounds authorization state and evicts the oldest originator', () => {
+    const module = state(new BasicTokenModule(jestApi.fn()))
+    for (let i = 0; i < 1025; i++) module.grantSessionAuthorization(`app-${i}.example`)
+
+    expect(module.sessionAuthorizations.size).toBe(1024)
+    expect(module.sessionAuthorizations.has('app-0.example')).toBe(false)
+    expect(module.sessionAuthorizations.has('app-1024.example')).toBe(true)
   })
 })

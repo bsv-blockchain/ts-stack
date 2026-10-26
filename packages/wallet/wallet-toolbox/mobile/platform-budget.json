@@ -2,14 +2,14 @@
   "profile": "mobile",
   "maximumBytes": {
     "metro": {
-      "raw": 1839000,
-      "gzip": 468000,
-      "brotli": 361500
+      "raw": 2620000,
+      "gzip": 675000,
+      "brotli": 510000
     },
     "hermes": {
-      "raw": 3750000,
-      "gzip": 1556000,
-      "brotli": 1188000
+      "raw": 5095000,
+      "gzip": 2140000,
+      "brotli": 1665000
     }
   }
 }

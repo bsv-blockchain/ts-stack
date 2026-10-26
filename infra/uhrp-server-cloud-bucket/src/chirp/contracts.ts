@@ -29,7 +29,15 @@ export interface ChirpObjectRead {
 }
 
 export type ChirpStageResult =
-  'created' | 'exists' | 'session_missing' | 'digest_mismatch' | 'size_mismatch' | 'too_large'
+  | 'created'
+  | 'exists'
+  | 'session_missing'
+  | 'digest_mismatch'
+  | 'size_mismatch'
+  | 'too_large'
+  | 'quota_exceeded'
+  | 'insufficient_storage'
+  | 'busy'
 
 export interface ChirpStore {
   createSession(
@@ -52,7 +60,11 @@ export interface ChirpStore {
     identityKey: string,
     objectIdentifier: string
   ): Promise<Uint8Array>
-  withCommitLock<T>(uploadId: string, operation: () => Promise<T>): Promise<T>
+  withCommitLock<T>(
+    uploadId: string,
+    rootIdentifier: string,
+    operation: () => Promise<T>
+  ): Promise<T>
   getCommit(rootIdentifier: string): Promise<ChirpCommitRecord | null>
   prepareCommit(record: ChirpCommitRecord): Promise<void>
   activateCommit(rootIdentifier: string): Promise<void>

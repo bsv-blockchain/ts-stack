@@ -358,12 +358,10 @@ describe('AESGCM IV validation', () => {
     }).toThrow(new Error('Key must not be empty'))
   })
 
-  it('AESGCMDecrypt throws when cipher text is empty', () => {
+  it('AESGCMDecrypt rejects empty cipher text without an authentication tag', () => {
     const iv = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 
-    expect(() => {
-      AESGCMDecrypt(new Uint8Array(), iv, new Uint8Array(), key)
-    }).toThrow(new Error('Cipher text must not be empty'))
+    expect(AESGCMDecrypt(new Uint8Array(), iv, new Uint8Array(), key)).toBeNull()
   })
 
   it('AESGCM still work with a valid IV', () => {

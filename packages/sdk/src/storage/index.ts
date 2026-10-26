@@ -4,3 +4,9 @@ export { StorageUtils } // NOSONAR -- direct namespace re-exports fail the Metro
 export { StorageUploader, DEFAULT_UHRP_SERVERS, RenewResiliencyError } from './StorageUploader.js'
 
 export { StorageDownloader } from './StorageDownloader.js'
+export * from './UHRPAdvertisementValidation.js'
+export {
+  createPublicHTTPSFetch,
+  createPublicNetworkFetch,
+  isPublicNetworkAddress
+} from './PublicHTTPSFetch.js'

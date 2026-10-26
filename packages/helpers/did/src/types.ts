@@ -1,4 +1,5 @@
-import type { PrivateKey, PublicKey } from '@bsv/sdk'
+import type PrivateKey from '@bsv/sdk/primitives/PrivateKey'
+import type PublicKey from '@bsv/sdk/primitives/PublicKey'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
@@ -35,6 +36,43 @@ export interface DidDocument {
   assertionMethod: string[]
   capabilityDelegation: string[]
   capabilityInvocation: string[]
+}
+
+export interface DidResolutionOptions {
+  /** Only the BRC-202 JSON-LD representation is supported. */
+  accept?: string
+}
+
+export type DidResolutionError = 'invalidDid' | 'methodNotSupported' | 'representationNotSupported'
+
+export interface DidResolutionMetadata {
+  error?: DidResolutionError
+  contentType?: 'application/did+ld+json'
+}
+
+export interface DidResolutionResult {
+  didResolutionMetadata: DidResolutionMetadata
+  didDocument: DidDocument | null
+  didDocumentMetadata: Record<string, never>
+}
+
+export interface DidRepresentationResult {
+  didResolutionMetadata: DidResolutionMetadata
+  didDocumentStream: Uint8Array | null
+  didDocumentMetadata: Record<string, never>
+}
+
+export interface DidDereferencingResult {
+  dereferencingMetadata: {
+    error?: 'invalidDidUrl' | 'methodNotSupported' | 'notFound'
+  }
+  contentStream: VerificationMethod | null
+  contentMetadata: Record<string, never>
+}
+
+export interface DidUnsupportedOperationResult {
+  supported: false
+  error: 'operationNotSupported'
 }
 
 export interface DisclosureFrame {
@@ -74,13 +112,20 @@ export interface GeneratePresentationOptions {
   audience?: string
   nonce?: string
   issuedAt?: number
+  verificationOptions?: SdJwtVcVerificationOptions
 }
 
 export interface SdJwtVcVerificationOptions {
   issuerPublicKey?: PublicKeyInput | Jwk
+  expectedIssuer?: string
+  expectedVct?: string
+  expectedCredentialAudience?: string
   expectedAudience?: string
   expectedNonce?: string
   requireKeyBinding?: boolean
+  now?: number
+  clockToleranceSeconds?: number
+  maxKeyBindingAgeSeconds?: number
 }
 
 export interface SdJwtVcVerificationResult {

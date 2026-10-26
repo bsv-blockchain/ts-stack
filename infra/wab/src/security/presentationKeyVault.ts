@@ -93,7 +93,7 @@ export function decryptPresentationKey(encoded: string): string {
   if (nonce.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
     throw new Error('Stored presentation key has invalid encrypted fields.')
   }
-  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), nonce)
+  const decipher = createDecipheriv('aes-256-gcm', encryptionKey(), nonce, { authTagLength: 16 })
   decipher.setAAD(KEY_CONTEXT)
   decipher.setAuthTag(tag)
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8')

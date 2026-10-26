@@ -113,7 +113,7 @@ function loadEvidenceTransaction(
   hint: string | undefined,
   outputIndex: number
 ): Transaction {
-  const beef = Beef.fromBinary(bytes)
+  const beef = Beef.fromBinaryStrict(bytes)
   if (beef.txs.length > limits.transactions) throw new TransactionEvidenceError('limit')
   const target = beef.atomicTxid ?? beef.txs.at(-1)?.txid
   if (target === undefined) throw new TransactionEvidenceError('invalid-evidence')
@@ -180,17 +180,23 @@ export function parseEvidence(
   evidence: TransactionEvidence,
   limits: TransactionEvidenceLimits
 ): EvidenceCandidate {
-  const outputIndex = evidence.outputIndex
-  const bytes = snapshotEvidenceBytes(evidence, limits)
-  const tx = loadEvidenceTransaction(bytes, limits, evidence.txid, outputIndex)
-  assertUnconfirmedGraph(tx, limits)
-  return {
-    tx,
-    txid: tx.id('hex'),
-    receipt: toHex(sha256(bytes)),
-    byteLength: bytes.length,
-    outputIndex,
-    graphBinding: toHex(sha256(tx.toBEEF()))
+  try {
+    const outputIndex = evidence.outputIndex
+    const bytes = snapshotEvidenceBytes(evidence, limits)
+    const tx = loadEvidenceTransaction(bytes, limits, evidence.txid, outputIndex)
+    assertUnconfirmedGraph(tx, limits)
+    return {
+      tx,
+      txid: tx.id('hex'),
+      receipt: toHex(sha256(bytes)),
+      byteLength: bytes.length,
+      outputIndex,
+      graphBinding: toHex(sha256(tx.toBEEF()))
+    }
+  } catch (error) {
+    // Parser failures may include untrusted serialized data in their message.
+    // Keep this boundary payload-free and expose only the documented outcome.
+    throw evidenceError(error)
   }
 }
 

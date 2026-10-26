@@ -39,7 +39,7 @@ const KNOWN_PUBKEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b
 const KNOWN_PUBKEY2 = '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
 
 // Synthetic certificate data for certificate-related methods
-const CERT_TYPE = 'AGFjZXJ0dHlwZQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=='
+const CERT_TYPE = 'YWNlcnR0eXBlAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 const CERT_CERTIFIER = KNOWN_PUBKEY
 const CERT_SERIAL = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 const CERT_REVOCATION = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.0'
@@ -1781,8 +1781,8 @@ function generateDiscoverByAttributesVectors() {
       'wallet.brc100.discoverbyattributes.7',
       'discoverByAttributes empty attributes',
       { args: { attributes: {} } },
-      { totalCertificates: 0, certificates: [] },
-      ['brc-100', 'discoverByAttributes', 'empty-attrs']
+      { error: true, code: 'ERR_INVALID_PARAMETER' },
+      ['brc-100', 'discoverByAttributes', 'empty-attrs', 'validation']
     ),
     makeVector(
       'wallet.brc100.discoverbyattributes.8',

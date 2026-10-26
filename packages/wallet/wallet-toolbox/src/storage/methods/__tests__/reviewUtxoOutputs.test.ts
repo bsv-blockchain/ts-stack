@@ -1,5 +1,5 @@
 import { WERR_UTXO_REVIEW_INCONCLUSIVE } from '../../../sdk/WERR_errors'
-import { reviewUtxoOutputs, UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS } from '../reviewUtxoOutputs'
+import { MAX_UTXO_REVIEW_CANDIDATES, reviewUtxoOutputs, UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS } from '../reviewUtxoOutputs'
 
 function output(outputId: number): any {
   return {
@@ -115,5 +115,33 @@ describe('reviewUtxoOutputs', () => {
     } finally {
       jest.useRealTimers()
     }
+  })
+
+  test('rejects excessive, duplicate, foreign, or impossible candidates before provider work', async () => {
+    const base = output(9)
+    const h = harness([base], () => ({ name: 'mock', status: 'success', details: [], isUtxo: true }))
+
+    await expect(reviewUtxoOutputs(h.storage as any, auth, [base, base])).rejects.toThrow('unique output')
+    await expect(reviewUtxoOutputs(h.storage as any, auth, [{ ...base, userId: 8 }])).rejects.toThrow('owned by user 7')
+    await expect(
+      reviewUtxoOutputs(h.storage as any, auth, [{ ...base, satoshis: Number.MAX_SAFE_INTEGER }])
+    ).rejects.toThrow('satoshis')
+    const excessive = Array.from({ length: MAX_UTXO_REVIEW_CANDIDATES + 1 }, (_, index) => ({
+      ...base,
+      outputId: index + 1
+    }))
+    await expect(reviewUtxoOutputs(h.storage as any, auth, excessive)).rejects.toThrow('bounded array')
+    expect(h.storage.validateOutputScript).not.toHaveBeenCalled()
+  })
+
+  test('binds a release to the exact output state that was classified', async () => {
+    const candidate = output(10)
+    const h = harness([candidate], () => ({ name: 'mock', status: 'success', details: [], isUtxo: false }))
+    h.current.get(10).vout = 1
+
+    await expect(reviewUtxoOutputs(h.storage as any, auth, [candidate], 'conclusive')).rejects.toThrow(
+      'changed state during UTXO review'
+    )
+    expect(h.storage.updateOutput).not.toHaveBeenCalled()
   })
 })

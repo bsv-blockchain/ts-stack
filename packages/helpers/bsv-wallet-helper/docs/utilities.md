@@ -52,6 +52,13 @@ const { preimage, signatureScope } = calculatePreimage(
 - `sourceSatoshis?`: `number` - Optional satoshi amount (or use input.sourceTransaction)
 - `lockingScript?`: `Script` - Optional locking script (or use input.sourceTransaction)
 
+When explicit values are supplied alongside `input.sourceTransaction`, the
+transaction ID, output amount, and locking script must match that embedded
+source output exactly. The input index and sequence must be unsigned 32-bit
+integers and satoshi amounts must be safe, non-negative integers. This prevents
+the preimage from authorizing a different prevout context than the one shown to
+the caller.
+
 **Returns:** `{ preimage: number[], signatureScope: number }`
 
 **Throws:** `Error` if parameters are invalid or required data is missing
@@ -137,6 +144,9 @@ if (isOrdinal(lockingScript)) {
 #### `hasOrd(script | hex): boolean`
 
 Checks if a script contains a BSV-20 Ordinal inscription envelope.
+
+Recognition is structural: marker bytes hidden inside a pushed data field do
+not cause a script to be classified as an ordinal.
 
 ```typescript
 import { hasOrd } from '@bsv/wallet-helper';

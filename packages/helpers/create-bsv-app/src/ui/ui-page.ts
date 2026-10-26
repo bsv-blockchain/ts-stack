@@ -127,6 +127,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
   var SCHEMA = window.__SCHEMA__ || [];
   var SEED = window.__SEED__ || {};
   var INCLUDED = window.__INCLUDED__ || [{ label: '@bsv/sdk' }, { label: 'AGENTS.md' }];
+  var SESSION_TOKEN = window.__SESSION_TOKEN__ || '';
   var ACCENT = window.__ACCENT__ || '#2196F3';
   var CMD_LABEL = window.__CMD_LABEL__ || 'Your command';
 
@@ -237,7 +238,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
     if (window.__DEMO__) { state.plan = []; return; }
     clearTimeout(planTimer);
     planTimer = setTimeout(function () {
-      fetch('/plan', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft) })
+      fetch('/plan', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(draft) })
         .then(function (r) { return r.json(); })
         .then(function (d) { state.plan = (d && d.files) || []; renderRail(); })
         .catch(function () { state.plan = []; renderRail(); });
@@ -473,7 +474,7 @@ const CLIENT_SCRIPT = String.raw`/* create-bsv-app --ui : schema-driven static p
       return;
     }
     state.generating = true; renderRail();
-    fetch('/generate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(draft) })
+    fetch('/generate', { method: 'POST', headers: { 'content-type': 'application/json', 'x-create-bsv-app-session': SESSION_TOKEN }, body: JSON.stringify(draft) })
       .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
       .then(function (res) {
         state.generating = false;
@@ -518,21 +519,38 @@ export function buildPage(opts: {
   included?: Array<{ label: string }>
   accent?: string
   commandLabel?: string
+  sessionToken?: string
+  scriptNonce?: string
 }): string {
+  const scriptJson = (value: unknown): string => {
+    const json = JSON.stringify(value)
+    return (json ?? 'null')
+      .replaceAll('<', '\\u003c')
+      .replaceAll('\u2028', '\\u2028')
+      .replaceAll('\u2029', '\\u2029')
+  }
   const data =
     'window.__SCHEMA__ = ' +
-    JSON.stringify(opts.schema) +
+    scriptJson(opts.schema) +
     ';\n' +
     'window.__SEED__ = ' +
-    JSON.stringify(opts.seed) +
+    scriptJson(opts.seed) +
     ';\n' +
     'window.__INCLUDED__ = ' +
-    JSON.stringify(opts.included ?? []) +
+    scriptJson(opts.included ?? []) +
     ';\n' +
-    (opts.accent == null ? '' : 'window.__ACCENT__ = ' + JSON.stringify(opts.accent) + ';\n') +
+    'window.__SESSION_TOKEN__ = ' +
+    scriptJson(opts.sessionToken ?? '') +
+    ';\n' +
+    (opts.accent == null ? '' : 'window.__ACCENT__ = ' + scriptJson(opts.accent) + ';\n') +
     (opts.commandLabel == null
       ? ''
-      : 'window.__CMD_LABEL__ = ' + JSON.stringify(opts.commandLabel) + ';\n')
+      : 'window.__CMD_LABEL__ = ' + scriptJson(opts.commandLabel) + ';\n')
+
+  if (opts.scriptNonce != null && !/^[A-Za-z0-9_-]{16,128}$/u.test(opts.scriptNonce)) {
+    throw new Error('scriptNonce must be a base64url token')
+  }
+  const nonce = opts.scriptNonce == null ? '' : ` nonce="${opts.scriptNonce}"`
 
   return `<!doctype html>
 <html lang="en">
@@ -553,8 +571,8 @@ export function buildPage(opts: {
   <aside class="rail" id="rail"></aside>
 </div>
 <div id="overlayHost"></div>
-<script>${data}</script>
-<script>${CLIENT_SCRIPT}</script>
+<script${nonce}>${data}</script>
+<script${nonce}>${CLIENT_SCRIPT}</script>
 </body>
 </html>`
 }

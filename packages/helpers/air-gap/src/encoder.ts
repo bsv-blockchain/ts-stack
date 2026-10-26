@@ -80,7 +80,7 @@ export class AirGapEncoder {
    */
   constructor(message: Uint8Array, options: AirGapEncoderOptions = {}) {
     const blockBytes = options.blockBytes ?? DEFAULT_BLOCK_BYTES
-    if (message.length === 0) throw new AirGapError('cannot encode an empty message')
+    if (!message.length) throw new AirGapError('cannot encode an empty message')
     if (message.length > MAX_MESSAGE_BYTES) {
       throw new AirGapError(
         `message of ${message.length} bytes exceeds the ${MAX_MESSAGE_BYTES}-byte maximum`

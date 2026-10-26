@@ -191,6 +191,12 @@ resolution. Server applications must constrain both. Supply
 `authorizeHeaderSigner` to `LCHReader` only when an application permits a
 delegated header signer in addition to the declared rights controllers.
 
+Treat a range request as an exact integrity boundary. The LCH source adapter
+rejects a CHIRP result with the wrong byte count and an HTTPS result without an
+exact `206 Content-Range` and matching body length. Do not add a compatibility
+fallback that accepts a host's full, shifted, or truncated body for a ranged
+segment request.
+
 Each released CHIRP blob is hash-verified, but a complete CHIRP stream can only
 verify the root `contentHash` at termination. Buffer atomically when early
 consumption is unsafe. Never pass unverified or unauthenticated bytes to a
@@ -206,7 +212,12 @@ Payees, and settlement profiles before calling it.
 ```typescript
 import { LCHMultipayBuyer, toHex, type AuthorizedOutputEvidence, type SignedObject } from '@bsv/lch'
 
-const buyer = await LCHMultipayBuyer.create(buyerWallet, { endpointPolicy })
+const buyer = await LCHMultipayBuyer.create(buyerWallet, {
+  endpointPolicy,
+  // Implement the complete ODRL profile your application accepts. Return true
+  // only when the License Agreement preserves the signed Offer terms.
+  agreementEvaluator: evaluateAcceptedAgreement
+})
 const request = await buyer.createRequest({
   offerId,
   assetId,
@@ -215,7 +226,7 @@ const request = await buyer.createRequest({
   acceptedPolicyDigest,
   createdAt: BigInt(Math.floor(Date.now() / 1000))
 })
-const plan = await buyer.quote(acquisitionEndpoint, request, issuerIdentity, {
+const plan = await buyer.quote(selectedOffer, request, sellerIdentity, {
   type: 'segmented',
   encryption: inspected.representation.encryption,
   delivery: selectedOffer.keyDelivery.mechanism
@@ -250,8 +261,15 @@ await recoveryStore.complete(funded.plan.requestId)
 The required key-grant expectation comes from the already verified Asset and
 selected Offer, not from the Quote. On completion the client rejects a signed
 License with a different Asset, Offer, buyer, Selection, segment coverage,
-settlement evidence, key-period set, or key-delivery mechanism. Persist this
-expectation with the funded plan so recovery performs the same checks.
+settlement evidence, key-period set, or key-delivery mechanism. It validates
+the Agreement reference and inline digest and requires the configured
+`agreementEvaluator` to accept the Agreement against the signed Offer before
+returning it. Persist the funded plan, policy context, key expectation, and
+settlement proofs. Recover only through
+`buyer.recover(funded, receipts, authorizedOutputs)`, which applies the same
+complete validation. The lower-level `recoverUnverified(endpoint, requestId)`
+transport method cannot supply those trust anchors and must never authorize key
+storage or content access by itself.
 Authorized-output fallback begins only when the direct Payee transport rejects;
 a syntactically returned Receipt that fails signature, Demand, transaction,
 output-index, or amount validation is a protocol error and MUST NOT be routed
@@ -378,19 +396,19 @@ transaction for an already claimed Demand or Authorization must fail atomically.
 
 ## Failure And Recovery Matrix
 
-| Failure                                               | Required behavior                                                                                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| One CHIRP host fails during upload                    | Continue only if the requested resilience level can still be committed; retain the checkpoint for resumable hosts |
-| A host omits `Content-Length`                         | Enforce the expected referenced length while streaming; the header is advisory, not an integrity dependency       |
-| A host returns bad object bytes                       | Reject before release and retry another resolved host within configured limits                                    |
-| A full CHIRP stream ends early or has the wrong hash  | Reject terminal validation; do not treat previously consumed bytes as an atomic verified file                     |
-| Quote or readiness expires before wallet confirmation | Refresh readiness or obtain a new Quote before creating a transaction                                             |
-| A Payee is offline before payment                     | Preflight fails; no transaction should be created                                                                 |
-| A receipt-complete Payee is offline after payment     | Persist pending state and retry the same signed Delivery through `recoveryUntil`                                  |
-| An authorized-output Payee is offline after payment   | Obtain only the exact signed provider evidence the Authorization named; otherwise remain pending                  |
-| Evidence or Delivery provider is unavailable          | Remain pending and retry; do not weaken the profile or create another transaction                                 |
-| Completion response is lost                           | Call `recover(endpoint, requestId)` and reconcile the returned License before retrying completion                 |
-| Reorganization or mined-state policy matters          | Use a separately defined proof/finality profile; signed processor acceptance does not claim mining                |
+| Failure                                               | Required behavior                                                                                                                                               |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One CHIRP host fails during upload                    | Continue only if the requested resilience level can still be committed; retain the checkpoint for resumable hosts                                               |
+| A host omits `Content-Length`                         | Enforce the expected referenced length while streaming; the header is advisory, not an integrity dependency                                                     |
+| A host returns bad object bytes                       | Reject before release and retry another resolved host within configured limits                                                                                  |
+| A full CHIRP stream ends early or has the wrong hash  | Reject terminal validation; do not treat previously consumed bytes as an atomic verified file                                                                   |
+| Quote or readiness expires before wallet confirmation | Refresh readiness or obtain a new Quote before creating a transaction                                                                                           |
+| A Payee is offline before payment                     | Preflight fails; no transaction should be created                                                                                                               |
+| A receipt-complete Payee is offline after payment     | Persist pending state and retry the same signed Delivery through `recoveryUntil`                                                                                |
+| An authorized-output Payee is offline after payment   | Obtain only the exact signed provider evidence the Authorization named; otherwise remain pending                                                                |
+| Evidence or Delivery provider is unavailable          | Remain pending and retry; do not weaken the profile or create another transaction                                                                               |
+| Completion response is lost                           | Call `buyer.recover(funded, receipts, authorizedOutputs)` with the persisted acquisition and proof context; never authorize from `recoverUnverified` alone       |
+| Reorganization or mined-state policy matters          | Use a separately defined proof/finality profile; signed processor acceptance does not claim mining                                                              |
 
 ## Security And Privacy Checklist
 

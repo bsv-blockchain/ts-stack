@@ -1,11 +1,13 @@
 import { WalletInterface } from '@bsv/sdk'
+import { WalletErrorFromJson } from '../../sdk/WalletErrorFromJson'
 import { StorageClientBase, type StorageClientOptions } from './StorageClientBase'
 import {
   BINARY_ENCODING,
   BINARY_ENCODING_HEADER,
   BINARY_REQUEST_ENCODING_HEADER,
   parseJsonRpc,
-  stringifyJsonRpc
+  stringifyJsonRpc,
+  validateJsonRpcResponse
 } from './BinaryJson'
 
 /**
@@ -14,6 +16,11 @@ import {
  *
  * Internally, it uses JSON-RPC over HTTPS to make requests of a remote server.
  * Typically this server uses the `StorageServer` class to implement the service.
+ * Responses must complete mutual authentication. By default, the first authenticated
+ * server identity is trusted for this client instance; callers can instead supply
+ * `serverIdentityKey` as an independently validated pin. The distinct storage-provider
+ * identity advertised by the authenticated `makeAvailable` response is authoritative
+ * by default; callers can independently pin it with `storageIdentityKey`.
  *
  * This mobile variant omits the full logger support present in `StorageClient` to keep
  * the bundle lean for mobile / browser environments.
@@ -36,7 +43,7 @@ export class StorageClient extends StorageClientBase {
    */
   protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
     return await this.traceRpcCall(method, params, async rpcSpan => {
-      const id = this.nextId++
+      const id = this.nextRequestId()
       const body = {
         jsonrpc: '2.0',
         method,
@@ -55,7 +62,7 @@ export class StorageClient extends StorageClientBase {
         'wallet.storage.http',
         rpcSpan,
         async () =>
-          await this.authClient.fetch(this.endpointUrl, {
+          await this.authenticatedFetch(this.endpointUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -88,19 +95,14 @@ export class StorageClient extends StorageClientBase {
       const json = await this.traceRpcStep(
         'wallet.storage.response.parse',
         rpcSpan,
-        () => parseJsonRpc(responseText, responseUsesBinary),
+        () => validateJsonRpcResponse(parseJsonRpc(responseText, responseUsesBinary), id),
         {
           'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json',
           'response.size_bytes': responseText.length
         }
       )
-      if (json.error) {
-        const { code, message, data } = json.error
-        const err = new Error(`RPC Error: ${message}`)
-        // You could attach more info here if you like:
-        ;(err as any).code = code
-        ;(err as any).data = data
-        throw err
+      if ('error' in json) {
+        throw WalletErrorFromJson(json.error as object)
       }
 
       rpcSpan?.end({
@@ -109,7 +111,7 @@ export class StorageClient extends StorageClientBase {
           'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json'
         }
       })
-      return json.result
+      return json.result as T
     })
   }
 }

@@ -1,8 +1,8 @@
+import { toArray, toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   WalletClient,
   Transaction,
   Beef,
-  Utils,
   TopicBroadcaster,
   LookupResolver,
   LockingScript,
@@ -23,7 +23,6 @@ import {
   normalizeBRC100ByteArray,
   stringifyBRC100
 } from '@bsv/sdk'
-
 import { BTMSToken } from './BTMSToken.js'
 import { parseCustomInstructions } from './utils.js'
 import {
@@ -33,6 +32,9 @@ import {
   tokenMatchesAsset,
   validateOutputForBadness,
   verifyProvenTokenAssetId,
+  addTokenAmounts,
+  subtractTokenAmounts,
+  assertSafeTokenAmount,
   type AssetAccumulator,
   type BadOutput
 } from './BTMSHelpers.js'
@@ -83,6 +85,20 @@ function normalizeIncomingTokenBeef(value: unknown): AtomicBEEF | undefined {
     throw new Error('Incoming token BEEF must be a non-empty BRC-100 byte array')
   }
   return beef
+}
+
+function requireWalletVerdict(
+  result: unknown,
+  field: 'accepted' | 'relinquished',
+  operation: string
+): void {
+  if (
+    typeof result !== 'object' ||
+    result === null ||
+    (result as Record<string, unknown>)[field] !== true
+  ) {
+    throw new Error(`Wallet did not ${operation}`)
+  }
 }
 
 /**
@@ -166,8 +182,8 @@ export class BTMS {
   async issue(amount: number, metadata?: BTMSAssetMetadata): Promise<IssueResult> {
     try {
       // Generate random derivation keys for privacy
-      const derivationPrefix = Utils.toBase64(Random(32))
-      const derivationSuffix = Utils.toBase64(Random(32))
+      const derivationPrefix = toBase64(Random(32))
+      const derivationSuffix = toBase64(Random(32))
       const keyID = `${derivationPrefix} ${derivationSuffix}`
 
       // Create the issuance locking script
@@ -227,7 +243,7 @@ export class BTMS {
       const assetId = BTMSToken.computeAssetId(createResult.txid, 0)
 
       // Now internalize the action into the BTMS basket
-      await this.wallet.internalizeAction({
+      const internalizeResult = await this.wallet.internalizeAction({
         tx: createResult.tx,
         labels: [
           `${BTMS_LABEL_PREFIX}type issue`,
@@ -260,6 +276,7 @@ export class BTMS {
         ],
         description: `Issue ${amount} ${tokenName}`
       })
+      requireWalletVerdict(internalizeResult, 'accepted', 'accept the issued token')
 
       // Broadcast to overlay
       await this.broadcastWithRetry(
@@ -314,9 +331,7 @@ export class BTMS {
       if (!BTMSToken.isValidAssetId(assetId)) {
         throw new Error(`Invalid assetId: ${assetId}`)
       }
-      if (amount < 1 || !Number.isInteger(amount)) {
-        throw new Error('Amount must be a positive integer')
-      }
+      assertSafeTokenAmount(amount, 'Amount')
 
       // Fetch spendable UTXOs for this asset
       const { tokens: utxos } = await this.getSpendableTokens(assetId)
@@ -344,8 +359,8 @@ export class BTMS {
       const timestampTag = this.getTimestampTag()
 
       // Generate random derivation for recipient output
-      const transferDerivationPrefix = Utils.toBase64(Random(32))
-      const recipientDerivationSuffix = Utils.toBase64(Random(32))
+      const transferDerivationPrefix = toBase64(Random(32))
+      const recipientDerivationSuffix = toBase64(Random(32))
       const recipientKeyID = `${transferDerivationPrefix} ${recipientDerivationSuffix}`
 
       // Recipient output
@@ -378,7 +393,7 @@ export class BTMS {
       })
 
       // Change outputs (if needed)
-      const changeAmount = totalInput - amount
+      const changeAmount = subtractTokenAmounts(totalInput, amount, 'Change amount')
       if (changeAmount > 0) {
         const changeOutputItems = await this.buildChangeOutputs(
           { changeAmount, paymentAmount: amount, totalInput, assetId },
@@ -514,9 +529,7 @@ export class BTMS {
       if (!BTMSToken.isValidAssetId(assetId)) {
         throw new Error(`Invalid assetId: ${assetId}`)
       }
-      if (amount !== undefined && (amount < 1 || !Number.isInteger(amount))) {
-        throw new Error('Amount must be a positive integer')
-      }
+      if (amount !== undefined) assertSafeTokenAmount(amount, 'Amount')
 
       // Fetch spendable UTXOs for this asset
       const { tokens: utxos } = await this.getSpendableTokens(assetId)
@@ -526,7 +539,10 @@ export class BTMS {
       }
 
       // Calculate total available
-      const totalAvailable = utxos.reduce((sum, u) => sum + u.token.amount, 0)
+      const totalAvailable = utxos.reduce(
+        (sum, u) => addTokenAmounts(sum, u.token.amount, 'Available balance'),
+        0
+      )
 
       // Determine amount to burn
       const amountToBurn = amount ?? totalAvailable
@@ -548,13 +564,13 @@ export class BTMS {
 
       // Build outputs (only change if partial burn)
       const outputs: CreateActionOutput[] = []
-      const changeAmount = totalInput - amountToBurn
+      const changeAmount = subtractTokenAmounts(totalInput, amountToBurn, 'Change amount')
       const monthLabel = this.getMonthLabel()
       const timestampLabel = this.getTimestampLabel()
       const counterparty = await this.getIdentityKey()
 
       if (changeAmount > 0) {
-        const changeDerivationPrefix = Utils.toBase64(Random(32))
+        const changeDerivationPrefix = toBase64(Random(32))
         const changeOutputItems = await this.buildChangeOutputs(
           { changeAmount, paymentAmount: amountToBurn, totalInput, assetId },
           options.changeStrategy,
@@ -731,7 +747,7 @@ export class BTMS {
       const monthTag = this.getMonthTag()
       const timestampTag = this.getTimestampTag()
 
-      await this.wallet.internalizeAction({
+      const internalizeResult = await this.wallet.internalizeAction({
         tx: beef as AtomicBEEF,
         labels: [
           `${BTMS_LABEL_PREFIX}type receive`,
@@ -762,6 +778,7 @@ export class BTMS {
         description: `Receive ${token.amount} tokens`,
         seekPermission: true
       })
+      requireWalletVerdict(internalizeResult, 'accepted', 'accept the incoming token')
 
       // Acknowledge receipt via comms layer
       if (this.comms && token.messageId) {
@@ -821,7 +838,8 @@ export class BTMS {
         }
       }
 
-      const inputBeef = overlayLookup.beef ?? (beef != null ? Beef.fromBinary(beef) : undefined)
+      const inputBeef =
+        overlayLookup.beef ?? (beef != null ? Beef.fromBinaryStrict(beef) : undefined)
 
       if (!inputBeef) {
         throw new Error('Missing BEEF data required to refund token')
@@ -862,8 +880,8 @@ export class BTMS {
       const timestampTag = this.getTimestampTag()
 
       // Create a new transfer back to the sender
-      const refundDerivationPrefix = Utils.toBase64(Random(32))
-      const refundDerivationSuffix = Utils.toBase64(Random(32))
+      const refundDerivationPrefix = toBase64(Random(32))
+      const refundDerivationSuffix = toBase64(Random(32))
       const refundKeyID = `${refundDerivationPrefix} ${refundDerivationSuffix}`
 
       const refundScript = await this.tokenTemplate.createTransfer(
@@ -1008,7 +1026,7 @@ export class BTMS {
    */
   async getBalance(assetId: string): Promise<number> {
     const { tokens: utxos } = await this.getSpendableTokens(assetId)
-    return utxos.reduce((sum, u) => sum + u.token.amount, 0)
+    return utxos.reduce((sum, u) => addTokenAmounts(sum, u.token.amount, 'Asset balance'), 0)
   }
 
   /**
@@ -1282,10 +1300,11 @@ export class BTMS {
 
     for (const bad of badOutputs) {
       try {
-        await this.wallet.relinquishOutput({
+        const result = await this.wallet.relinquishOutput({
           basket: BTMS_BASKET,
           output: bad.outpoint
         })
+        requireWalletVerdict(result, 'relinquished', 'relinquish the output')
         relinquished.push(bad.outpoint)
       } catch (error) {
         failed.push({
@@ -1329,9 +1348,7 @@ export class BTMS {
       if (!BTMSToken.isValidAssetId(assetId)) {
         throw new Error(`Invalid assetId: ${assetId}`)
       }
-      if (amount < 1 || !Number.isInteger(amount)) {
-        throw new Error('Amount must be a positive integer')
-      }
+      assertSafeTokenAmount(amount, 'Amount')
 
       // Get prover's identity key
       const prover = await this.getIdentityKey()
@@ -1428,6 +1445,8 @@ export class BTMS {
    */
   async verifyOwnership(proof: OwnershipProof): Promise<VerifyOwnershipResult> {
     try {
+      assertSafeTokenAmount(proof.amount, 'Claimed amount')
+
       // Get verifier's identity key
       const verifierKey = await this.getIdentityKey()
 
@@ -1446,7 +1465,11 @@ export class BTMS {
           throw new Error(`Duplicate token outpoint in proof: ${outpoint}`)
         }
         seenOutpoints.add(outpoint)
-        amountProven += await this.verifySingleProvenToken(provenToken, proof.assetId, proof.prover)
+        amountProven = addTokenAmounts(
+          amountProven,
+          await this.verifySingleProvenToken(provenToken, proof.assetId, proof.prover),
+          'Proven amount'
+        )
       }
 
       // Verify the total amount matches
@@ -1490,7 +1513,7 @@ export class BTMS {
 
       // Check if we got a valid result
       if (result.type === 'output-list' && result.outputs.length > 0) {
-        const beef = includeBeef ? Beef.fromBinary(result.outputs[0].beef) : undefined
+        const beef = includeBeef ? Beef.fromBinaryStrict(result.outputs[0].beef) : undefined
         return { found: true, beef }
       }
       return { found: false }
@@ -1542,7 +1565,7 @@ export class BTMS {
     selected: BTMSTokenOutput[],
     unsignedTx: number[] | Uint8Array
   ): Promise<Record<number, { unlockingScript: string }>> {
-    const txData = Array.isArray(unsignedTx) ? unsignedTx : Utils.toArray(unsignedTx)
+    const txData = Array.isArray(unsignedTx) ? unsignedTx : toArray(unsignedTx)
     const txForSigning = Transaction.fromAtomicBEEF(txData)
     const spends: Record<number, { unlockingScript: string }> = {}
     for (let i = 0; i < selected.length; i++) {
@@ -1573,7 +1596,7 @@ export class BTMS {
       throw new Error('Failed to sign transaction')
     }
 
-    const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
+    const txData = Array.isArray(signResult.tx) ? signResult.tx : toArray(signResult.tx)
     const finalTx = Transaction.fromAtomicBEEF(txData)
     const txid = finalTx.id('hex')
 
@@ -1743,7 +1766,7 @@ export class BTMS {
     const monthTag = this.getMonthTag()
     const result: CreateActionOutput[] = []
     for (const changeOutput of changeOutputItems) {
-      const changeDerivationSuffix = Utils.toBase64(Random(32))
+      const changeDerivationSuffix = toBase64(Random(32))
       const changeKeyID = `${derivationPrefix} ${changeDerivationSuffix}`
       const changeScript = await this.tokenTemplate.createTransfer(
         context.assetId,
@@ -1795,7 +1818,7 @@ export class BTMS {
       // Sign-only path for burn-all (overlay won't admit with no outputs)
       const signResult = await this.wallet.signAction({ reference, spends })
       if (!signResult.tx) throw new Error('Failed to sign transaction')
-      const txData = Array.isArray(signResult.tx) ? signResult.tx : Utils.toArray(signResult.tx)
+      const txData = Array.isArray(signResult.tx) ? signResult.tx : toArray(signResult.tx)
       return Transaction.fromAtomicBEEF(txData).id('hex')
     }
   }
@@ -1968,12 +1991,12 @@ export class BTMS {
   }): Promise<{ found: boolean; beef?: Beef }> {
     if (!utxo.beef) return { found: false }
     try {
-      const beefArr = Array.isArray(utxo.beef) ? utxo.beef : Utils.toArray(utxo.beef)
+      const beefArr = Array.isArray(utxo.beef) ? utxo.beef : toArray(utxo.beef)
       const tx = Transaction.fromAtomicBEEF(Transaction.fromBEEF(beefArr, utxo.txid).toAtomicBEEF())
       const broadcaster = new TopicBroadcaster([BTMS_TOPIC], { networkPreset: this.networkPreset })
       const response = await broadcaster.broadcast(tx)
       if (response.status === 'success') {
-        return { found: true, beef: Beef.fromBinary(beefArr) }
+        return { found: true, beef: Beef.fromBinaryStrict(beefArr) }
       }
     } catch {
       // fall through
@@ -1998,12 +2021,17 @@ export class BTMS {
     amount: number,
     options: SelectionOptions = {}
   ): SelectionResult<T> {
+    assertSafeTokenAmount(amount, 'Target amount')
+
     const {
       strategy = 'largest-first',
       fallbackStrategy = 'largest-first',
       maxInputs,
       minUtxoAmount = 0
     } = options
+
+    assertSafeTokenAmount(minUtxoAmount, 'Minimum UTXO amount', true)
+    for (const utxo of utxos) assertSafeTokenAmount(utxo.token.amount, 'UTXO amount')
 
     // Filter by minimum amount
     const eligible = utxos.filter(u => u.token.amount >= minUtxoAmount)
@@ -2053,7 +2081,7 @@ export class BTMS {
       if (totalInput >= amount) break
       if (maxInputs !== undefined && selected.length >= maxInputs) break
       selected.push(utxo)
-      totalInput += utxo.token.amount
+      totalInput = addTokenAmounts(totalInput, utxo.token.amount, 'Selected input total')
     }
 
     return { selected, totalInput, excluded }
@@ -2070,7 +2098,14 @@ export class BTMS {
     context: ChangeContext,
     options: ChangeStrategyOptions = {}
   ): ChangeOutput[] {
-    const { changeAmount } = context
+    const { changeAmount, paymentAmount, totalInput } = context
+
+    assertSafeTokenAmount(changeAmount, 'Change amount', true)
+    assertSafeTokenAmount(paymentAmount, 'Payment amount', true)
+    assertSafeTokenAmount(totalInput, 'Total input amount', true)
+    if (addTokenAmounts(changeAmount, paymentAmount, 'Change context total') !== totalInput) {
+      throw new RangeError('Change amount plus payment amount must equal total input amount')
+    }
 
     if (changeAmount <= 0) {
       return []
@@ -2078,23 +2113,38 @@ export class BTMS {
 
     const { strategy = 'single', splitCount = 2, minOutputAmount = 1 } = options
 
+    let outputs: ChangeOutput[]
+
     // If a custom strategy object is provided, use it
     if (typeof strategy === 'object' && 'computeChange' in strategy) {
-      return strategy.computeChange(context)
+      outputs = strategy.computeChange(context)
+    } else {
+      // Built-in strategies
+      switch (strategy) {
+        case 'split-equal':
+          outputs = BTMS.splitEqualChange(changeAmount, splitCount, minOutputAmount)
+          break
+
+        case 'split-random':
+          outputs = BTMS.splitRandomChange(changeAmount, splitCount, minOutputAmount)
+          break
+
+        case 'single':
+        default:
+          outputs = [{ amount: changeAmount }]
+          break
+      }
     }
 
-    // Built-in strategies
-    switch (strategy) {
-      case 'split-equal':
-        return BTMS.splitEqualChange(changeAmount, splitCount, minOutputAmount)
-
-      case 'split-random':
-        return BTMS.splitRandomChange(changeAmount, splitCount, minOutputAmount)
-
-      case 'single':
-      default:
-        return [{ amount: changeAmount }]
+    let outputTotal = 0
+    for (const output of outputs) {
+      assertSafeTokenAmount(output.amount, 'Change output amount')
+      outputTotal = addTokenAmounts(outputTotal, output.amount, 'Change output total')
     }
+    if (outputTotal !== changeAmount) {
+      throw new RangeError('Change outputs must exactly equal the change amount')
+    }
+    return outputs
   }
 
   /**

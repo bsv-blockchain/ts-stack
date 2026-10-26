@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "artifactSchemaVersion": 1,
-  "publicPackageCount": 34,
+  "publicPackageCount": 35,
   "releaseWorkflow": ".github/workflows/release.yaml",
   "releaseEnvironment": "npm-production",
   "buildRuntime": {
     "runner": "ubuntu-24.04",
-    "node": "24.18.0",
+    "node": "24.22.1",
     "npmMinimum": "11.5.1",
     "pnpm": "10.33.2"
   },

@@ -1,8 +1,19 @@
-import { Point, PrivateKey, PublicKey, SymmetricKey } from '../primitives/index.js'
+import Point from '../primitives/Point.js'
+import PrivateKey from '../primitives/PrivateKey.js'
+import PublicKey from '../primitives/PublicKey.js'
+import SymmetricKey from '../primitives/SymmetricKey.js'
 import { Counterparty, KeyDeriver, KeyDeriverApi, PrivateKeyDerivation } from './KeyDeriver.js'
 import { WalletProtocol } from './Wallet.interfaces.js'
 
 type CachedKeyValue = PublicKey | PrivateKey | SymmetricKey | Point | number[]
+
+function cloneCachedKeyValue(value: CachedKeyValue): CachedKeyValue {
+  if (value instanceof PublicKey) return new PublicKey(value)
+  if (value instanceof PrivateKey) return new PrivateKey(value)
+  if (value instanceof SymmetricKey) return new SymmetricKey(value.toArray())
+  if (value instanceof Point) return new Point(value.getX(), value.getY())
+  return Array.from(value)
+}
 
 /**
  * A cached version of KeyDeriver that caches the results of key derivation methods.
@@ -317,7 +328,7 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
     if (value !== undefined) {
       this.cache.set(cacheKey, value)
     }
-    return value
+    return value === undefined ? undefined : cloneCachedKeyValue(value)
   }
 
   /**
@@ -331,6 +342,6 @@ export default class CachedKeyDeriver implements KeyDeriverApi {
       const firstKey = this.cache.keys().next().value
       if (firstKey !== undefined) this.cache.delete(firstKey)
     }
-    this.cache.set(cacheKey, value)
+    this.cache.set(cacheKey, cloneCachedKeyValue(value))
   }
 }

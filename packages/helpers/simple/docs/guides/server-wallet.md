@@ -18,11 +18,11 @@ console.log('Identity Key:', wallet.getIdentityKey())
 
 ### Configuration
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `privateKey` | `string` | *required* | Hex-encoded private key |
-| `network` | `'main' \| 'testnet'` | `'main'` | Network to operate on |
-| `storageUrl` | `string` | `'https://storage.babbage.systems'` | Wallet storage provider URL |
+| Parameter    | Type                  | Default                             | Description                 |
+| ------------ | --------------------- | ----------------------------------- | --------------------------- |
+| `privateKey` | `string`              | _required_                          | Hex-encoded private key     |
+| `network`    | `'main' \| 'testnet'` | `'main'`                            | Network to operate on       |
+| `storageUrl` | `string`              | `'https://storage.babbage.systems'` | Wallet storage provider URL |
 
 ### What Happens During Creation
 
@@ -54,7 +54,7 @@ This generates a random BRC-29 derivation suffix so the server can later prove o
 // On the client (browser):
 const result = await browserWallet.fundServerWallet(
   paymentRequest,
-  'server-funding'       // basket for tracking
+  'server-funding' // basket for tracking
 )
 ```
 
@@ -102,16 +102,32 @@ For Next.js API routes, use the handler factory which manages key persistence au
 ```typescript
 // app/api/server-wallet/route.ts
 import { createServerWalletHandler } from '@bsv/simple/server'
-const handler = createServerWalletHandler()
-export const GET = handler.GET, POST = handler.POST
+const handler = createServerWalletHandler({
+  authorize: async ({ action, headers }) => {
+    const session = await authenticateApplicationRequest(headers)
+    return session?.canUseServerWallet(action) === true
+  }
+})
+export const GET = handler.GET,
+  POST = handler.POST
 ```
 
+The generated server-wallet route defaults closed. Its status, key creation,
+payment-request, receive, balance, output-list, and destructive reset actions
+all require the authorization callback to return literal `true`. Bind that
+callback to your application's authenticated session and action-level policy;
+never expose an unconditional `authorize: () => true` route publicly.
+
 Key persistence order (automatic):
+
 1. `process.env.SERVER_PRIVATE_KEY` — Environment variable (production)
 2. `.server-wallet.json` file — Persisted from previous run (development)
 3. Auto-generated via `generatePrivateKey()` — Fresh key (first run)
 
 > **Important:** Add `.server-wallet.json` to your `.gitignore`. Never commit private keys.
+> Key files are atomically written as owner-only regular files. If an existing
+> file is corrupt, oversized, symlinked, or inconsistent, initialization fails
+> closed instead of silently replacing the wallet identity.
 
 ## Shared Methods
 
@@ -123,8 +139,8 @@ The server wallet has all the same methods as the browser wallet:
 - `inscribeText()`, `inscribeJSON()`, `inscribeFileHash()`, `inscribeImageHash()`
 - `certifyForMessageBox()`, `sendMessageBoxPayment()`, `listIncomingPayments()`, `acceptIncomingPayment()`
 - `acquireCertificateFrom()`, `listCertificatesFrom()`, `relinquishCert()`
-- `getDID()`, `resolveDID()`, `registerDID()`
-- `acquireCredential()`, `listCredentials()`, `createPresentation()`
+- `getDID()`, `resolveDID()`
+- `acquireCredential()`, `listCredentials()`
 - `advertiseSHIP()`, `advertiseSLAP()`, `broadcastAction()`, `withRetry()`
 
 ## Next.js API Route Example

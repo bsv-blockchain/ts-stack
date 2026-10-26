@@ -35,7 +35,7 @@ locked in the repository:
   `tools/codegen/go.mod` and `tools/codegen/go.sum`;
 - `datamodel-code-generator==0.71.0` plus its transitive Python packages and
   artifact hashes in `tools/codegen/pyproject.toml` and `tools/codegen/uv.lock`;
-- Go `1.26.5`, uv `0.11.32`, and Python `3.12` in the codegen workflow.
+- Go `1.26.6`, uv `0.11.32`, and Python `3.12` in the codegen workflow.
 
 CI generates all nine files into a temporary directory and compares them
 byte-for-byte with the committed copies. The workflow has read-only repository

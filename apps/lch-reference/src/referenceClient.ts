@@ -5,6 +5,7 @@ import {
   PublicBRC77Verifier,
   WalletBRC78KeyDelivery,
   objectId,
+  parsePinnedPolicy,
   toHex,
   validateOffer,
   type ContentSource,
@@ -12,6 +13,7 @@ import {
   type EndpointPolicy,
   type InspectedLCH,
   type LCHFundedMultipay,
+  type LCHAgreementEvaluationContext,
   type LCHMultipayPlan,
   type SegmentedEncryptionDescriptor,
   type LCHTransactionState,
@@ -52,6 +54,7 @@ export class ReferenceLCHClient {
   private readonly reader: LCHReader
   private readonly multipay: Promise<LCHMultipayBuyer>
   private readonly now: () => bigint
+  private readonly allowInsecureLocalOrigins: readonly string[]
   private recoveryState?: {
     requestId: string
     payment: LCHFundedMultipay
@@ -65,8 +68,12 @@ export class ReferenceLCHClient {
     options: { endpointPolicy?: EndpointPolicy; now?: () => bigint } = {}
   ) {
     this.reader = new LCHReader(source)
-    this.multipay = LCHMultipayBuyer.create(wallet, options)
+    this.multipay = LCHMultipayBuyer.create(wallet, {
+      ...options,
+      agreementEvaluator: evaluateReferenceAgreement
+    })
     this.now = options.now ?? (() => BigInt(Math.floor(Date.now() / 1000)))
+    this.allowInsecureLocalOrigins = options.endpointPolicy?.allowLocalOrigins ?? []
   }
 
   async prepare(bytes: Uint8Array): Promise<ReferenceAcquisitionPlan> {
@@ -74,11 +81,11 @@ export class ReferenceLCHClient {
     await this.reader.resolve(inspected)
     const offer = inlineOffer(inspected.header.acquisition)
     const seller = memberBytes(offer.body, 'seller', 33)
-    await validateOffer(offer, new PublicBRC77Verifier(), seller)
+    await validateOffer(offer, new PublicBRC77Verifier(), seller, {
+      allowInsecureLocalOrigins: this.allowInsecureLocalOrigins
+    })
     equal(offer.body.assetId, inspected.assetId, 'Offer Asset ID')
     const offerId = await objectId('offer', offer.body)
-    const payment = memberMap(offer.body, 'payment')
-    const endpoint = memberString(payment, 'endpoint')
     const policy = memberMap(offer.body, 'policy')
     const multipay = await this.multipay
     const request = await multipay.createRequest({
@@ -89,10 +96,9 @@ export class ReferenceLCHClient {
       acceptedPolicyDigest: memberBytes(policy, 'digest', 32),
       createdAt: this.now()
     })
-    const issuer = memberBytes(offer.body, 'licenseIssuer', 33)
     const encryption = memberMap(inspected.representation, 'encryption')
     const keyDelivery = memberMap(offer.body, 'keyDelivery')
-    const paymentPlan = await multipay.quote(endpoint, request, issuer, {
+    const paymentPlan = await multipay.quote(offer, request, seller, {
       type: 'segmented',
       encryption: encryption as unknown as SegmentedEncryptionDescriptor,
       delivery: memberString(keyDelivery, 'mechanism')
@@ -145,7 +151,7 @@ export class ReferenceLCHClient {
     }
     const plaintext = await this.reader.decrypt(plan.inspected, keys)
     const licenseId = await objectId('license', license.body)
-    const recovered = await multipay.recover(plan.endpoint, plan.requestId)
+    const recovered = await multipay.recover(payment, receipts, authorizedOutputs)
     if (
       recovered === undefined ||
       toHex(await objectId('license', recovered.body)) !== toHex(licenseId)
@@ -184,6 +190,79 @@ export class ReferenceLCHClient {
       recoveryUntil: state.payment.plan.recoveryUntil
     }
   }
+}
+
+async function evaluateReferenceAgreement(
+  context: LCHAgreementEvaluationContext
+): Promise<boolean> {
+  const offerId = await objectId('offer', context.offer.body)
+  const licenseId = await objectId('license', context.license.body)
+  const offer = await parsePinnedPolicy(
+    context.offerPolicy,
+    'Offer',
+    `lch:offer:sha256:${toHex(offerId)}`
+  )
+  const agreement = await parsePinnedPolicy(
+    context.agreement,
+    'Agreement',
+    `lch:license:sha256:${toHex(licenseId)}`
+  )
+  const target = `lch:asset:sha256:${toHex(memberBytes(context.offer.body, 'assetId', 32))}`
+  const action = memberString(context.request.body, 'action')
+  const fulfilledDuties = new Set(
+    mapArray(context.license.body.fulfillments, 'License fulfillments').map(fulfillment =>
+      memberString(fulfillment, 'dutyUid')
+    )
+  )
+  const offerPermissions = new Map<string, Record<string, unknown>>()
+  for (const permission of offer.permissions) {
+    if (!exactRuleMembers(permission, ['action', 'duty', 'target'])) return false
+    const key = ruleKey(permission)
+    if (key === undefined || offerPermissions.has(key)) return false
+    offerPermissions.set(key, permission)
+  }
+  const agreementPermissions = new Set<string>()
+  for (const permission of agreement.permissions) {
+    if (!exactRuleMembers(permission, ['action', 'target'])) return false
+    const key = ruleKey(permission)
+    const accepted = key === undefined ? undefined : offerPermissions.get(key)
+    if (key === undefined || accepted === undefined || agreementPermissions.has(key)) return false
+    const duties = Array.isArray(accepted.duty)
+      ? accepted.duty
+      : accepted.duty === undefined
+        ? []
+        : [accepted.duty]
+    if (
+      !duties.every(
+        duty =>
+          duty !== null &&
+          typeof duty === 'object' &&
+          !Array.isArray(duty) &&
+          typeof (duty as Record<string, unknown>).uid === 'string' &&
+          fulfilledDuties.has((duty as Record<string, unknown>).uid as string)
+      )
+    )
+      return false
+    agreementPermissions.add(key)
+  }
+  if (!agreementPermissions.has(`${action}\u0000${target}`)) return false
+  for (const prohibition of offer.prohibitions) {
+    if (!exactRuleMembers(prohibition, ['action', 'target'])) return false
+    const key = ruleKey(prohibition)
+    if (key === undefined || !agreement.prohibitions.some(rule => ruleKey(rule) === key))
+      return false
+  }
+  return agreement.prohibitions.every(rule => exactRuleMembers(rule, ['action', 'target']))
+}
+
+function exactRuleMembers(rule: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(rule).every(key => allowed.includes(key))
+}
+
+function ruleKey(rule: Record<string, unknown>): string | undefined {
+  return typeof rule.action === 'string' && typeof rule.target === 'string'
+    ? `${rule.action}\u0000${rule.target}`
+    : undefined
 }
 
 function inlineOffer(value: LCHValue | undefined): SignedObject {

@@ -1,4 +1,4 @@
-import { Validation } from '@bsv/sdk'
+import { parseWalletOutpoint } from '@bsv/sdk/wallet/validationHelpers'
 import { WERR_BAD_REQUEST, WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { WalletError } from '../../sdk/WalletError'
 import {
@@ -13,18 +13,14 @@ import { ReqHistoryNote } from '../../sdk/types'
 // ---------------------------------------------------------------------------
 
 /** Handle a double-spend / missing-inputs error response from WoC */
-function handleDoubleSpendError (
-  r: PostTxResultForTxid,
-  nne: () => Record<string, unknown>,
-  what: string
-): void {
+function handleDoubleSpendError(r: PostTxResultForTxid, nne: () => Record<string, unknown>, what: string): void {
   r.doubleSpend = true
   r.competingTxs = undefined
   r.notes!.push({ ...nne(), what })
 }
 
 /** Handle any other non-OK, non-recognised error response from WoC */
-function handleGenericPostError (
+function handleGenericPostError(
   r: PostTxResultForTxid,
   nne: () => Record<string, unknown>,
   response: { data?: unknown; statusText?: unknown; status?: unknown }
@@ -54,7 +50,7 @@ function handleGenericPostError (
 /**
  * Classify an error-status WoC response and mutate `r` accordingly.
  */
-export function handlePostRawTxErrorResponse (
+export function handlePostRawTxErrorResponse(
   r: PostTxResultForTxid,
   nne: () => Record<string, unknown>,
   response: { data?: unknown; statusText?: unknown; status?: unknown; ok?: boolean }
@@ -75,7 +71,7 @@ export function handlePostRawTxErrorResponse (
 // ---------------------------------------------------------------------------
 
 /** Populate UTXO details from a WoC result array */
-export function populateUtxoDetails (
+export function populateUtxoDetails(
   r: GetUtxoStatusResult,
   result: Array<{ tx_hash: string; value: number; height: number; tx_pos: number }>,
   outpoint?: string
@@ -89,7 +85,7 @@ export function populateUtxoDetails (
     })
   }
   if (outpoint) {
-    const { txid, vout } = Validation.parseWalletOutpoint(outpoint)
+    const { txid, vout } = parseWalletOutpoint(outpoint)
     r.isUtxo = r.details.some(d => d.txid === txid && d.index === vout)
   } else {
     r.isUtxo = r.details.length > 0
@@ -100,18 +96,19 @@ export function populateUtxoDetails (
  * Decide whether the ECONNRESET error is retryable and, if not, set `r.error`.
  * Returns true when the caller should retry, false when it should return.
  */
-export function handleUtxoConnReset (
+export function handleUtxoConnReset(
   r: GetUtxoStatusResult,
   error_: unknown,
-  url: string,
+  _url: string,
   retry: number,
   maxRetry: number
 ): boolean {
   const e = WalletError.fromUnknown(error_)
   if (e.code === 'ECONNRESET' && retry < maxRetry) return true
-  r.error = new WERR_INTERNAL(
-    `service failure: ${url}, error: ${JSON.stringify(e)}`
-  )
+  r.status = 'error'
+  r.details = []
+  r.isUtxo = undefined
+  r.error = new WERR_INTERNAL('UTXO status service unavailable.')
   return false
 }
 
@@ -137,7 +134,7 @@ export interface ScriptHashHistoryResponse {
  *  - `'return'`    — done, caller should return `r`
  *  - `'ok'`        — response was successful, continue parsing
  */
-export function handleScriptHashHistoryResponse (
+export function handleScriptHashHistoryResponse(
   r: GetScriptHashHistoryResult,
   response: ScriptHashHistoryResponse,
   methodName: string,
@@ -153,14 +150,12 @@ export function handleScriptHashHistoryResponse (
   }
 
   if (!response.data || !response.ok || response.status !== 200) {
-    r.error = new WERR_BAD_REQUEST(
-      `WoC ${methodName} response ${response.ok} ${response.status} ${response.statusText}`
-    )
+    r.error = new WERR_BAD_REQUEST(`WoC ${methodName} request failed.`)
     return 'return'
   }
 
   if (response.data.error) {
-    r.error = new WERR_BAD_REQUEST(`WoC ${methodName} error ${response.data.error}`)
+    r.error = new WERR_BAD_REQUEST(`WoC ${methodName} returned an error.`)
     return 'return'
   }
 
@@ -171,19 +166,17 @@ export function handleScriptHashHistoryResponse (
  * Decide whether a caught error is retryable for script-hash history calls.
  * If not retryable, sets `r.error` and returns false.
  */
-export function handleScriptHashHistoryCatch (
+export function handleScriptHashHistoryCatch(
   r: GetScriptHashHistoryResult,
   error_: unknown,
-  url: string,
+  _url: string,
   methodName: string,
   retry: number,
   maxRetry: number
 ): boolean {
   const e = WalletError.fromUnknown(error_)
   if (e.code === 'ECONNRESET' && retry < maxRetry) return true
-  r.error = new WERR_INTERNAL(
-    `WoC ${methodName} service failure: ${url}, error: ${JSON.stringify(e)}`
-  )
+  r.error = new WERR_INTERNAL(`WoC ${methodName} service unavailable.`)
   return false
 }
 
@@ -212,7 +205,7 @@ export interface MerklePathNote {
   [key: string]: boolean | string | number | undefined
 }
 
-export function makeMerklePathNote (
+export function makeMerklePathNote(
   what: MerklePathNoteWhat,
   name: string,
   extra: Partial<MerklePathNote> = {}
@@ -226,7 +219,7 @@ export function makeMerklePathNote (
  * Returns `'retry'` when the request was rate-limited and the caller should retry,
  * `'notFound'` for 404, `'badStatus'` for other non-200 codes.
  */
-export function classifyMerklePathResponse (
+export function classifyMerklePathResponse(
   status: number,
   statusText: string,
   retry: number

@@ -2,15 +2,13 @@ import type ScriptTemplate from '../ScriptTemplate.js'
 import LockingScript from '../LockingScript.js'
 import UnlockingScript from '../UnlockingScript.js'
 import OP from '../OP.js'
-import {
-  Utils,
-  Hash,
-  TransactionSignature,
-  Signature,
-  PublicKey
-} from '../../primitives/index.js'
-import { WalletInterface, WalletProtocol } from '../../wallet/Wallet.interfaces.js'
-import { Transaction } from '../../transaction/index.js'
+import { toArray, toHex } from '../../primitives/utils.js'
+import { sha256 } from '../../primitives/Hash.js'
+import TransactionSignature from '../../primitives/TransactionSignature.js'
+import Signature from '../../primitives/Signature.js'
+import PublicKey from '../../primitives/PublicKey.js'
+import type { WalletInterface, WalletProtocol } from '../../wallet/Wallet.interfaces.js'
+import Transaction from '../../transaction/Transaction.js'
 import { verifyNotNull } from '../../primitives/utils.js'
 import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './SignatureUtils.js'
 
@@ -19,9 +17,7 @@ import { computeSignatureScope, resolveSourceDetails, formatPreimage } from './S
  * including the correct push operation.
  *
  */
-const createMinimallyEncodedScriptChunk = (
-  data: number[]
-): { op: number, data?: number[] } => {
+const createMinimallyEncodedScriptChunk = (data: number[]): { op: number; data?: number[] } => {
   if (data.length === 0) {
     // Could have used OP_0.
     return { op: 0 }
@@ -64,7 +60,10 @@ export default class PushDrop implements ScriptTemplate {
    * @param lockPosition Where the locking public key is positioned in the script ('before' = at start, 'after' = at end after DROP operations)
    * @returns An object containing PushDrop token fields and the locking public key. If a signature was included, it will be the last field.
    */
-  static decode (script: LockingScript, lockPosition: 'before' | 'after' = 'before'): {
+  static decode(
+    script: LockingScript,
+    lockPosition: 'before' | 'after' = 'before'
+  ): {
     lockingPublicKey: PublicKey
     fields: number[][]
   } {
@@ -73,7 +72,7 @@ export default class PushDrop implements ScriptTemplate {
 
     if (lockPosition === 'before') {
       lockingPublicKey = PublicKey.fromString(
-        Utils.toHex(verifyNotNull(script.chunks[0].data, 'script.chunks[0].data must have value'))
+        toHex(verifyNotNull(script.chunks[0].data, 'script.chunks[0].data must have value'))
       )
       startIndex = 2
     } else {
@@ -84,7 +83,12 @@ export default class PushDrop implements ScriptTemplate {
         throw new Error('Expected OP_CHECKSIG at the end of the script')
       }
       lockingPublicKey = PublicKey.fromString(
-        Utils.toHex(verifyNotNull(script.chunks[lastChunkIndex - 1].data, 'public key chunk data must have value'))
+        toHex(
+          verifyNotNull(
+            script.chunks[lastChunkIndex - 1].data,
+            'public key chunk data must have value'
+          )
+        )
       )
       startIndex = 0
     }
@@ -123,7 +127,7 @@ export default class PushDrop implements ScriptTemplate {
    * @param {WalletInterface} wallet - The wallet interface used for creating signatures and accessing public keys.
    * @param {string} originator — The originator to use with Wallet requests
    */
-  constructor (wallet: WalletInterface, originator?: string) {
+  constructor(wallet: WalletInterface, originator?: string) {
     this.wallet = wallet
     this.originator = originator
   }
@@ -139,7 +143,7 @@ export default class PushDrop implements ScriptTemplate {
    * @param {boolean} [includeSignature=true] - Flag indicating if a signature should be included in the script (default yes).
    * @returns {Promise<LockingScript>} The generated PushDrop locking script.
    */
-  async lock (
+  async lock(
     fields: number[][],
     protocolID: WalletProtocol,
     keyID: string,
@@ -148,29 +152,35 @@ export default class PushDrop implements ScriptTemplate {
     includeSignature = true,
     lockPosition: 'before' | 'after' = 'before'
   ): Promise<LockingScript> {
-    const { publicKey } = await this.wallet.getPublicKey({
-      protocolID,
-      keyID,
-      counterparty,
-      forSelf
-    }, this.originator)
-    const lockChunks: Array<{ op: number, data?: number[] }> = []
-    const pushDropChunks: Array<{ op: number, data?: number[] }> = []
+    const { publicKey } = await this.wallet.getPublicKey(
+      {
+        protocolID,
+        keyID,
+        counterparty,
+        forSelf
+      },
+      this.originator
+    )
+    const lockChunks: Array<{ op: number; data?: number[] }> = []
+    const pushDropChunks: Array<{ op: number; data?: number[] }> = []
     lockChunks.push(
       {
         op: publicKey.length / 2,
-        data: Utils.toArray(publicKey, 'hex')
+        data: toArray(publicKey, 'hex')
       },
       { op: OP.OP_CHECKSIG }
     )
     if (includeSignature) {
       const dataToSign = fields.flat()
-      const { signature } = await this.wallet.createSignature({
-        data: dataToSign,
-        protocolID,
-        keyID,
-        counterparty
-      }, this.originator)
+      const { signature } = await this.wallet.createSignature(
+        {
+          data: dataToSign,
+          protocolID,
+          keyID,
+          counterparty
+        },
+        this.originator
+      )
       fields.push(signature)
     }
     for (const field of fields) {
@@ -204,7 +214,7 @@ export default class PushDrop implements ScriptTemplate {
    * @param {boolean} [anyoneCanPay=false] - Specifies if the anyone-can-pay flag is set.
    * @returns {Object} An object containing functions to sign the transaction and estimate the script length.
    */
-  unlock (
+  unlock(
     protocolID: WalletProtocol,
     keyID: string,
     counterparty: string,
@@ -213,18 +223,13 @@ export default class PushDrop implements ScriptTemplate {
     sourceSatoshis?: number,
     lockingScript?: LockingScript
   ): {
-      sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
-      estimateLength: () => Promise<73>
-    } {
+    sign: (tx: Transaction, inputIndex: number) => Promise<UnlockingScript>
+    estimateLength: () => Promise<73>
+  } {
     return {
-      sign: async (
-        tx: Transaction,
-        inputIndex: number
-      ): Promise<UnlockingScript> => {
+      sign: async (tx: Transaction, inputIndex: number): Promise<UnlockingScript> => {
         const signatureScope = computeSignatureScope(signOutputs, anyoneCanPay)
         const resolved = resolveSourceDetails(tx, inputIndex, sourceSatoshis, lockingScript)
-        sourceSatoshis = resolved.sourceSatoshis
-        lockingScript = resolved.lockingScript as LockingScript
 
         const preimage = formatPreimage({
           tx,
@@ -237,23 +242,20 @@ export default class PushDrop implements ScriptTemplate {
           inputSequence: tx.inputs[inputIndex].sequence ?? 0xffffffff
         })
 
-        const preimageHash = Hash.sha256(preimage)
-        const { signature: bareSignature } = await this.wallet.createSignature({
-          data: preimageHash,
-          protocolID,
-          keyID,
-          counterparty
-        }, this.originator)
-        const signature = Signature.fromDER([...bareSignature])
-        const txSignature = new TransactionSignature(
-          signature.r,
-          signature.s,
-          signatureScope
+        const preimageHash = sha256(preimage)
+        const { signature: bareSignature } = await this.wallet.createSignature(
+          {
+            data: preimageHash,
+            protocolID,
+            keyID,
+            counterparty
+          },
+          this.originator
         )
+        const signature = Signature.fromDER([...bareSignature])
+        const txSignature = new TransactionSignature(signature.r, signature.s, signatureScope)
         const sigForScript = txSignature.toChecksigFormat()
-        return new UnlockingScript([
-          { op: sigForScript.length, data: sigForScript }
-        ])
+        return new UnlockingScript([{ op: sigForScript.length, data: sigForScript }])
       },
       estimateLength: async () => 73
     }

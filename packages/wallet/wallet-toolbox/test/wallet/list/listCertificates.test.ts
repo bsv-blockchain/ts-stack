@@ -10,6 +10,7 @@ describe('listCertificates tests', () => {
 
   beforeAll(async () => {
     if (env.runMySQL) ctxs.push(await _tu.createLegacyWalletMySQLCopy('listCertificatesTests'))
+    if (env.runPostgres) ctxs.push(await _tu.createLegacyWalletPostgresCopy('listCertificatesTests'))
     ctxs.push(await _tu.createLegacyWalletSQLiteCopy('listCertificatesTests'))
   })
 

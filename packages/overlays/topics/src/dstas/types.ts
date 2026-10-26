@@ -35,4 +35,6 @@ export interface DstasQuery {
    * find frozen ones. Omitted ⇒ both.
    */
   frozen?: boolean
+  limit?: number
+  skip?: number
 }

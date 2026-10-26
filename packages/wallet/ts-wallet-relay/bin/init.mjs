@@ -20,15 +20,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const templateDir = path.join(__dirname, '..', 'template')
+export function scaffoldWalletRelay(args = process.argv.slice(2)) {
+  const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
+  const templateDir = path.join(scriptDirectory, '..', 'template')
 
-// ── Parse args ───────────────────────────────────────────────────────────────
+  // ── Parse args ───────────────────────────────────────────────────────────────
 
-const args = process.argv.slice(2)
-
-if (args.includes('--help') || args.includes('-h')) {
-  console.log(`Usage: wallet-relay [target] [options]
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`Usage: wallet-relay [target] [options]
 
 Scaffold wallet-relay integration files without overwriting existing files.
 
@@ -39,76 +38,147 @@ Options:
   --frontend-dir <directory> choose the frontend output directory
   --nextjs                  scaffold the Next.js custom-server variant
   -h, --help                show this help`)
-  process.exit(0)
-}
+    return []
+  }
 
-function flagValue(name) {
-  const i = args.indexOf(name)
-  if (i === -1) return null
-  // If next arg exists and isn't another flag, treat it as the value
-  const next = args[i + 1]
-  return next && !next.startsWith('--') ? next : true
-}
+  function flagValue(name) {
+    const i = args.indexOf(name)
+    if (i === -1) return null
+    // If next arg exists and isn't another flag, treat it as the value
+    const next = args[i + 1]
+    return next && !next.startsWith('-') ? next : true
+  }
 
-const isNextjs = args.includes('--nextjs')
-const backendOnly = args.includes('--backend')
-const frontendOnly = args.includes('--frontend')
-const positional = args.find(a => !a.startsWith('--'))
-const targetRoot = path.resolve(positional ?? '.')
+  const valueFlags = new Set(['--backend-dir', '--frontend-dir'])
 
-const frontendDirName = flagValue('--frontend-dir') || 'frontend'
-const backendDirName = flagValue('--backend-dir') || 'backend'
+  function positionalTarget() {
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i]
+      if (valueFlags.has(arg)) {
+        i += 1
+        continue
+      }
+      if (!arg.startsWith('-')) return arg
+    }
+    return '.'
+  }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+  function outputDirectory(name, fallback) {
+    const value = flagValue(name)
+    if (value === true) throw new Error(`${name} requires a directory value`)
+    const selected = value ?? fallback
+    if (
+      typeof selected !== 'string' ||
+      selected.length === 0 ||
+      selected.includes('\0') ||
+      path.isAbsolute(selected)
+    ) {
+      throw new Error(`${name} must be a relative directory inside the target project`)
+    }
+    const resolved = path.resolve(targetRoot, selected)
+    const relative = path.relative(targetRoot, resolved)
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error(`${name} must stay inside the target project`)
+    }
+    return resolved
+  }
 
-function copyDir(src, dest, created) {
-  if (!fs.existsSync(src)) return
-  fs.mkdirSync(dest, { recursive: true })
-  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
-    const srcPath = path.join(src, entry.name)
-    const destPath = path.join(dest, entry.name)
-    if (entry.isDirectory()) {
-      copyDir(srcPath, destPath, created)
-    } else if (fs.existsSync(destPath)) {
-      console.warn(`  ⚠  skipped (already exists): ${path.relative(targetRoot, destPath)}`)
-    } else {
-      fs.mkdirSync(path.dirname(destPath), { recursive: true })
-      fs.copyFileSync(srcPath, destPath)
-      created.push(path.relative(targetRoot, destPath))
+  const isNextjs = args.includes('--nextjs')
+  const backendOnly = args.includes('--backend')
+  const frontendOnly = args.includes('--frontend')
+  const requestedRoot = path.resolve(positionalTarget())
+  fs.mkdirSync(requestedRoot, { recursive: true })
+  const targetRoot = fs.realpathSync(requestedRoot)
+
+  const frontendDir = outputDirectory('--frontend-dir', 'frontend')
+  const backendDir = outputDirectory('--backend-dir', 'backend')
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  function ensureSafeDirectory(dest) {
+    const relative = path.relative(targetRoot, dest)
+    if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      throw new Error('Scaffold destination escaped the target project')
+    }
+    let current = targetRoot
+    for (const segment of relative.split(path.sep).filter(Boolean)) {
+      current = path.join(current, segment)
+      try {
+        const stat = fs.lstatSync(current)
+        if (stat.isSymbolicLink() || !stat.isDirectory()) {
+          throw new Error(
+            `Refusing unsafe scaffold directory: ${path.relative(targetRoot, current)}`
+          )
+        }
+      } catch (error) {
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+          fs.mkdirSync(current)
+        } else {
+          throw error
+        }
+      }
     }
   }
-}
 
-// ── Copy templates ────────────────────────────────────────────────────────────
+  function pathExists(pathname) {
+    try {
+      fs.lstatSync(pathname)
+      return true
+    } catch (error) {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') return false
+      throw error
+    }
+  }
 
-const created = []
+  function copyDir(src, dest, created) {
+    if (!fs.existsSync(src)) return
+    ensureSafeDirectory(dest)
+    for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+      if (entry.isSymbolicLink()) throw new Error(`Refusing symbolic-link template: ${entry.name}`)
+      const srcPath = path.join(src, entry.name)
+      const destPath = path.join(dest, entry.name)
+      if (entry.isDirectory()) {
+        copyDir(srcPath, destPath, created)
+      } else if (pathExists(destPath)) {
+        console.warn(`  ⚠  skipped (already exists): ${path.relative(targetRoot, destPath)}`)
+      } else {
+        ensureSafeDirectory(path.dirname(destPath))
+        fs.copyFileSync(srcPath, destPath)
+        created.push(path.relative(targetRoot, destPath))
+      }
+    }
+  }
 
-if (isNextjs) {
-  // Next.js template drops files directly at the target root so they land in
-  // the right relative positions for App Router (app/api/..., lib/, components/).
-  copyDir(path.join(templateDir, 'nextjs'), targetRoot, created)
-} else if (!frontendOnly) {
-  copyDir(path.join(templateDir, 'backend'), path.join(targetRoot, backendDirName), created)
-}
+  // ── Copy templates ────────────────────────────────────────────────────────────
 
-if (!isNextjs && !backendOnly) {
-  copyDir(path.join(templateDir, 'frontend'), path.join(targetRoot, frontendDirName), created)
-}
+  const created = []
 
-// ── Summary ──────────────────────────────────────────────────────────────────
+  if (isNextjs) {
+    // Next.js template drops files directly at the target root so they land in
+    // the right relative positions for App Router (app/api/..., lib/, components/).
+    copyDir(path.join(templateDir, 'nextjs'), targetRoot, created)
+  } else if (!frontendOnly) {
+    copyDir(path.join(templateDir, 'backend'), backendDir, created)
+  }
 
-if (created.length === 0) {
-  console.log('\nNothing to do — all template files already exist.\n')
-  process.exit(0)
-}
+  if (!isNextjs && !backendOnly) {
+    copyDir(path.join(templateDir, 'frontend'), frontendDir, created)
+  }
 
-console.log('\nCreated:')
-for (const f of created) console.log(`  ${f}`)
+  // ── Summary ──────────────────────────────────────────────────────────────────
 
-console.log('\nNext steps:')
+  if (created.length === 0) {
+    console.log('\nNothing to do — all template files already exist.\n')
+    return created
+  }
 
-if (isNextjs) {
-  console.log(`
+  console.log('\nCreated:')
+  for (const f of created) console.log(`  ${f}`)
+
+  console.log('\nNext steps:')
+
+  if (isNextjs) {
+    console.log(`
   Next.js
   ───────
   1. Install deps:
@@ -145,10 +215,10 @@ if (isNextjs) {
     - Move app/, components/, hooks/, types/, lib/ into src/
     - Update the relay import in server.mjs:
         import { initRelay } from './src/lib/relay.js'`)
-} else {
-  if (!frontendOnly) {
-    const bdir = backendDirName
-    console.log(`
+  } else {
+    if (!frontendOnly) {
+      const bdir = path.relative(targetRoot, backendDir)
+      console.log(`
   Backend
   ───────
   1. Install deps:
@@ -163,11 +233,11 @@ if (isNextjs) {
 
   4. For a standalone server:
        npx ts-node ${bdir}/server.ts`)
-  }
+    }
 
-  if (!backendOnly) {
-    const fdir = frontendDirName
-    console.log(`
+    if (!backendOnly) {
+      const fdir = path.relative(targetRoot, frontendDir)
+      console.log(`
   Frontend (React + Vite)
   ───────────────────────
   1. Install @bsv/wallet-relay as a dependency (if not already):
@@ -195,7 +265,16 @@ if (isNextjs) {
        }
      If your backend is on a different origin (not proxied), update the
      API constant at the top of ${fdir}/hooks/useWalletSession.ts.`)
+    }
   }
+
+  console.log()
+  return created
 }
 
-console.log()
+if (
+  process.argv[1] !== undefined &&
+  fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url))
+) {
+  scaffoldWalletRelay()
+}

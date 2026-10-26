@@ -2,6 +2,11 @@ import HTTPWalletJSON from '../HTTPWalletJSON'
 import { WERR_INVALID_PARAMETER } from '../../WERR_INVALID_PARAMETER'
 import { WERR_INSUFFICIENT_FUNDS } from '../../WERR_INSUFFICIENT_FUNDS'
 import { WERR_REVIEW_ACTIONS } from '../../WERR_REVIEW_ACTIONS'
+import Transaction from '../../../transaction/Transaction'
+import UnlockingScript from '../../../script/UnlockingScript'
+import { withDoubleSpendRetry } from '../../../overlay-tools/withDoubleSpendRetry'
+import Beef from '../../../transaction/Beef'
+import type TopicBroadcaster from '../../../overlay-tools/SHIPBroadcaster'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -10,6 +15,15 @@ import { WERR_REVIEW_ACTIONS } from '../../WERR_REVIEW_ACTIONS'
 const TEST_ORIGINATOR = 'example.com'
 const TEST_ORIGIN_HEADER = 'http://example.com'
 const BASE_URL = 'http://localhost:3321'
+const VALID_TXID = 'ab'.repeat(32)
+const VALID_PUBLIC_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+const VALID_CERT_TYPE = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+const VALID_CERT_SERIAL = 'AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI='
+const VALID_DER_SIGNATURE = [0x30, 0x06, 0x02, 0x01, 1, 0x02, 0x01, 1]
+const MINIMAL_TRANSACTION = new Transaction()
+const MINIMAL_BEEF = MINIMAL_TRANSACTION.toAtomicBEEF()
+const MINIMAL_TXID = MINIMAL_TRANSACTION.id('hex')
+const VALID_BEEF = new Transaction().toBEEF()
 
 /** Build a minimal fetch mock that resolves with a JSON-shaped Response. */
 function makeFetch(
@@ -38,8 +52,17 @@ function makeClient(mockFetch: jest.Mock): HTTPWalletJSON {
 
 describe('HTTPWalletJSON – constructor', () => {
   it('stores the provided baseUrl', () => {
-    const client = new HTTPWalletJSON(TEST_ORIGINATOR, 'http://my-server:9000')
-    expect(client.baseUrl).toBe('http://my-server:9000')
+    const client = new HTTPWalletJSON(TEST_ORIGINATOR, 'https://my-server.example:9000/')
+    expect(client.baseUrl).toBe('https://my-server.example:9000')
+  })
+
+  it.each([
+    'http://wallet.example:9000',
+    'https://user:password@wallet.example',
+    'https://wallet.example/rpc',
+    'https://wallet.example?tenant=alice'
+  ])('rejects unsafe base URL %s', baseUrl => {
+    expect(() => new HTTPWalletJSON(TEST_ORIGINATOR, baseUrl)).toThrow()
   })
 
   it('uses http://localhost:3321 as the default baseUrl', () => {
@@ -48,8 +71,12 @@ describe('HTTPWalletJSON – constructor', () => {
   })
 
   it('stores the originator', () => {
-    const client = new HTTPWalletJSON('wallet.example.com')
+    const client = new HTTPWalletJSON('  Wallet.Example.COM  ')
     expect(client.originator).toBe('wallet.example.com')
+  })
+
+  it('rejects a non-hostname originator', () => {
+    expect(() => new HTTPWalletJSON('https://wallet.example.com')).toThrow(WERR_INVALID_PARAMETER)
   })
 
   it('stores the custom httpClient', () => {
@@ -78,6 +105,7 @@ describe('HTTPWalletJSON – api() successful responses', () => {
     const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(`${BASE_URL}/getVersion`)
     expect(init.method).toBe('POST')
+    expect(init.redirect).toBe('error')
     expect(JSON.parse(init.body as string)).toEqual({})
     expect(result).toEqual({ version: '1.0.0.0.0.0.0' })
   })
@@ -112,6 +140,59 @@ describe('HTTPWalletJSON – api() successful responses', () => {
 
     await expect(client.getVersion({})).rejects.toThrow('HTTPWalletJSON: originator is required')
     expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized response before reading its body', async () => {
+    const response = new Response('{}', {
+      headers: { 'content-length': String(256 * 1024 * 1024 + 1) }
+    })
+    const mockFetch = jest.fn().mockResolvedValue(response)
+    const client = makeClient(mockFetch)
+
+    await expect(client.getVersion({})).rejects.toThrow('exceeds the maximum permitted size')
+  })
+
+  it('rejects malformed UTF-8 JSON', async () => {
+    const response = new Response(Uint8Array.from([0xff]))
+    const mockFetch = jest.fn().mockResolvedValue(response)
+    const client = makeClient(mockFetch)
+
+    await expect(client.getVersion({})).rejects.toThrow(/valid.*utf-8/i)
+  })
+
+  it('rejects prototype-sensitive response keys', async () => {
+    const mockFetch = makeFetch(
+      JSON.parse('{"version":"wallet-1.0.0","nested":{"__proto__":{"admin":true}}}')
+    )
+    const client = makeClient(mockFetch)
+
+    await expect(client.getVersion({})).rejects.toThrow('safe record key')
+  })
+
+  it('rejects compatibility-response accessors before byte-field normalization', async () => {
+    const versionGetter = jest.fn(() => 'wallet-1.0.0')
+    const body = Object.create(null)
+    Object.defineProperty(body, 'version', { enumerable: true, get: versionGetter })
+    const client = makeClient(makeFetch(body))
+
+    await expect(client.getVersion({})).rejects.toThrow('data property')
+    expect(versionGetter).not.toHaveBeenCalled()
+  })
+
+  it('rejects list results larger than the requested page', async () => {
+    const outputs = Array.from({ length: 11 }, (_, index) => ({
+      outpoint: `${index.toString(16).padStart(64, '0')}.0`,
+      satoshis: 1,
+      spendable: true
+    }))
+    const client = makeClient(makeFetch({ totalOutputs: outputs.length, outputs }))
+
+    await expect(client.listOutputs({ basket: 'default' })).rejects.toThrow('requested limit of 10')
+  })
+
+  it('rejects a non-affirmative authentication result', async () => {
+    const client = makeClient(makeFetch({ authenticated: false }))
+    await expect(client.isAuthenticated({})).rejects.toThrow('authenticated')
   })
 })
 
@@ -188,9 +269,9 @@ describe('HTTPWalletJSON – api() error responses', () => {
     const errorBody = {
       isError: true,
       code: 5,
-      reviewActionResults: [{ txid: 'abc', status: 'failed' }],
+      reviewActionResults: [{ txid: VALID_TXID, status: 'invalidTx' }],
       sendWithResults: [],
-      txid: 'abc123'
+      txid: VALID_TXID
     }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
@@ -204,9 +285,428 @@ describe('HTTPWalletJSON – api() error responses', () => {
     } catch (e: unknown) {
       const err = e as WERR_REVIEW_ACTIONS
       expect(err.code).toBe(5)
-      expect(err.txid).toBe('abc123')
-      expect(err.reviewActionResults).toEqual([{ txid: 'abc', status: 'failed' }])
+      expect(err.txid).toBe(VALID_TXID)
+      expect(err.reviewActionResults).toEqual([{ txid: VALID_TXID, status: 'invalidTx' }])
     }
+  })
+
+  it.each([
+    [{ isError: 'true', code: 6, parameter: 'x', message: 'bad' }, 'envelope'],
+    [{ isError: true, code: 6, parameter: { nested: true }, message: 'bad' }, 'parameter'],
+    [
+      {
+        isError: true,
+        code: 7,
+        totalSatoshisNeeded: 1,
+        moreSatoshisNeeded: 2
+      },
+      'moreSatoshisNeeded'
+    ],
+    [
+      {
+        isError: true,
+        code: 5,
+        reviewActionResults: [{ txid: 'short', status: 'invalidTx' }],
+        sendWithResults: [],
+        txid: VALID_TXID
+      },
+      'reviewActionResults'
+    ]
+  ])('rejects malformed wallet error data %#', async (errorBody, message) => {
+    const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(message)
+  })
+
+  it('rejects a review error for a wallet method that cannot produce one', async () => {
+    const errorBody = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [{ txid: VALID_TXID, status: 'invalidTx' }],
+      sendWithResults: [],
+      txid: VALID_TXID
+    }
+    const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+
+    await expect(client.getVersion({})).rejects.toThrow('Invalid getVersion wallet error code')
+  })
+
+  it('binds reviewed transaction IDs to the returned action and requested batch', async () => {
+    const errorBody = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [{ txid: 'cd'.repeat(32), status: 'invalidTx' }],
+      sendWithResults: [],
+      txid: VALID_TXID
+    }
+    const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
+      'reviewActionResults[0].txid'
+    )
+  })
+
+  it('preserves pre-construction double-spend evidence bound to an explicit requested input', async () => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const body = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [
+        {
+          txid: '',
+          status: 'doubleSpend',
+          competingTxs: [winner.id('hex')],
+          competingBeef: winner.toBEEF(true)
+        }
+      ],
+      sendWithResults: []
+    }
+    const client = makeClient(makeFetch(body, { ok: false, status: 400 }))
+    const error = await client
+      .createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing shared checkpoint'
+          }
+        ]
+      })
+      .catch(error => error)
+    expect(error).toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error.reviewActionResults).toEqual(body.reviewActionResults)
+    expect(error.txid).toBeUndefined()
+  })
+
+  it('synchronizes proven conflict evidence before invoking a fresh save attempt', async () => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [
+            {
+              txid: '',
+              status: 'doubleSpend',
+              competingTxs: [winner.id('hex')],
+              competingBeef: winner.toBEEF(true)
+            }
+          ],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const events: string[] = []
+    const broadcast = jest.fn(async (tx: Transaction) => {
+      events.push('synchronize')
+      expect(tx.id('hex')).toBe(winner.id('hex'))
+      return { status: 'success', txid: tx.id('hex'), message: 'accepted' }
+    })
+    let attempts = 0
+    const result = await withDoubleSpendRetry(
+      async () => {
+        events.push('read latest checkpoint')
+        if (++attempts === 1)
+          return await client.createAction({
+            description: 'hello world',
+            inputs: [
+              {
+                outpoint: `${VALID_TXID}.0`,
+                unlockingScript: '00',
+                inputDescription: 'existing checkpoint'
+              }
+            ]
+          })
+        return 'saved'
+      },
+      { broadcast } as unknown as TopicBroadcaster
+    )
+    expect(result).toBe('saved')
+    expect(events).toEqual(['read latest checkpoint', 'synchronize', 'read latest checkpoint'])
+    expect(broadcast).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['missing inputs', { inputs: [] }, {}],
+    [
+      'different input',
+      {
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.1`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ]
+      },
+      {}
+    ],
+    ['constructed transaction', {}, { txid: VALID_TXID }],
+    ['returned envelope', {}, { tx: MINIMAL_BEEF }],
+    ['change outputs', {}, { noSendChange: [] }],
+    ['batch results', {}, { sendWithResults: [{ txid: VALID_TXID, status: 'success' }] }],
+    [
+      'missing proof',
+      {},
+      { reviewActionResults: [{ txid: '', status: 'doubleSpend', competingTxs: [MINIMAL_TXID] }] }
+    ],
+    [
+      'unrelated proof',
+      {},
+      {
+        reviewActionResults: [
+          {
+            txid: '',
+            status: 'doubleSpend',
+            competingTxs: [MINIMAL_TXID],
+            competingBeef: VALID_BEEF
+          }
+        ]
+      }
+    ],
+    ['non-conflict status', {}, { reviewActionResults: [{ txid: '', status: 'serviceError' }] }],
+    [
+      'multiple reviews',
+      {},
+      {
+        reviewActionResults: [
+          { txid: '', status: 'doubleSpend' },
+          { txid: VALID_TXID, status: 'success' }
+        ]
+      }
+    ]
+  ])('rejects pre-construction review with %s', async (_name, requestChanges, responseChanges) => {
+    const winner = new Transaction(
+      1,
+      [
+        {
+          sourceTXID: VALID_TXID,
+          sourceOutputIndex: 0,
+          unlockingScript: new UnlockingScript(),
+          sequence: 0xffffffff
+        }
+      ],
+      [],
+      0
+    )
+    const body = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [
+        {
+          txid: '',
+          status: 'doubleSpend',
+          competingTxs: [winner.id('hex')],
+          competingBeef: winner.toBEEF(true)
+        }
+      ],
+      sendWithResults: [],
+      ...responseChanges
+    }
+    const client = makeClient(makeFetch(body, { ok: false, status: 400 }))
+    const error = await client
+      .createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ],
+        ...requestChanges
+      })
+      .catch(error => error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).not.toBeInstanceOf(WERR_REVIEW_ACTIONS)
+  })
+
+  it('rejects ID-only competing evidence without a transaction to bind', async () => {
+    const proof = new Beef()
+    proof.mergeTxidOnly(VALID_TXID)
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [
+            {
+              txid: '',
+              status: 'doubleSpend',
+              competingTxs: [VALID_TXID],
+              competingBeef: proof.toBinary()
+            }
+          ],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    await expect(
+      client.createAction({
+        description: 'hello world',
+        inputs: [
+          {
+            outpoint: `${VALID_TXID}.0`,
+            unlockingScript: '00',
+            inputDescription: 'existing checkpoint'
+          }
+        ]
+      })
+    ).rejects.toThrow('competingBeef')
+  })
+
+  it('does not accept a pre-construction review for signAction', async () => {
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          reviewActionResults: [{ txid: '', status: 'doubleSpend' }],
+          sendWithResults: []
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    await expect(client.signAction({ reference: 'AQ==', spends: {} })).rejects.toThrow(
+      'pre-construction review'
+    )
+  })
+
+  it('rejects malformed competing BEEF before constructing a review error', async () => {
+    const errorBody = {
+      isError: true,
+      code: 5,
+      reviewActionResults: [
+        {
+          txid: VALID_TXID,
+          status: 'doubleSpend',
+          competingTxs: ['cd'.repeat(32)],
+          competingBeef: [1, 2, 3]
+        }
+      ],
+      sendWithResults: [],
+      txid: VALID_TXID
+    }
+    const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
+      'reviewActionResults[0].competingBeef'
+    )
+  })
+
+  it.each([
+    ['conflict evidence on a successful result', { status: 'success' }, 'competingTxs'],
+    ['non-array competitors', { competingTxs: 'invalid' }, 'competingTxs'],
+    [
+      'too many competitors',
+      { competingTxs: Array.from({ length: 1001 }, () => MINIMAL_TXID) },
+      'competingTxs'
+    ],
+    ['non-string competitor', { competingTxs: [42] }, 'competingTxs[0]'],
+    ['malformed competitor', { competingTxs: ['not-a-txid'] }, 'competingTxs[0]'],
+    ['self competitor', { competingTxs: [VALID_TXID] }, 'competingTxs'],
+    [
+      'duplicate competitors',
+      { competingTxs: [MINIMAL_TXID, MINIMAL_TXID.toUpperCase()] },
+      'competingTxs'
+    ],
+    ['proof without competitor IDs', { competingTxs: [] }, 'competingBeef'],
+    ['invalid proof byte', { competingBeef: [-1] }, 'competingBeef'],
+    ['missing competitor transaction', { competingTxs: ['cd'.repeat(32)] }, 'competingBeef']
+  ])('rejects a constructed review containing %s', async (_name, changes, field) => {
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          txid: VALID_TXID,
+          sendWithResults: [],
+          reviewActionResults: [
+            {
+              txid: VALID_TXID,
+              status: 'doubleSpend',
+              competingTxs: [MINIMAL_TXID],
+              competingBeef: VALID_BEEF,
+              ...changes
+            }
+          ]
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const error = await client.createAction({ description: 'hello world' }).catch(error => error)
+    expect(error).not.toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain(`reviewActionResults[0].${field}`)
+  })
+
+  it('preserves constructed review compatibility without pre-construction input binding', async () => {
+    const review = {
+      txid: VALID_TXID,
+      status: 'doubleSpend',
+      competingTxs: [MINIMAL_TXID],
+      competingBeef: VALID_BEEF
+    }
+    const client = makeClient(
+      makeFetch(
+        {
+          isError: true,
+          code: 5,
+          txid: VALID_TXID,
+          sendWithResults: [],
+          reviewActionResults: [review]
+        },
+        { ok: false, status: 400 }
+      )
+    )
+    const error = await client.createAction({ description: 'hello world' }).catch(error => error)
+    expect(error).toBeInstanceOf(WERR_REVIEW_ACTIONS)
+    expect(error.reviewActionResults).toEqual([review])
+  })
+
+  it('bounds review-action collections before iterating their entries', async () => {
+    const errorBody = {
+      isError: true,
+      code: 5,
+      reviewActionResults: Array.from({ length: 1002 }, () => ({
+        txid: VALID_TXID,
+        status: 'invalidTx'
+      })),
+      sendWithResults: [],
+      txid: VALID_TXID
+    }
+    const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+
+    await expect(client.createAction({ description: 'hello world' })).rejects.toThrow(
+      'reviewActionResults'
+    )
   })
 
   it('throws a generic Error when the server returns a non-400 error status', async () => {
@@ -220,11 +720,12 @@ describe('HTTPWalletJSON – api() error responses', () => {
     } catch (e: unknown) {
       const err = e as Error
       expect(err.message).toContain('getVersion')
-      expect(err.message).toContain('Internal Server Error')
+      expect(err.message).toContain('HTTP status 500')
+      expect(err.message).not.toContain('Internal Server Error')
     }
   })
 
-  it('falls back to "HTTP Client error <status>" when the 500 body has no message', async () => {
+  it('returns a stable status error when the 500 body has no message', async () => {
     const mockFetch = makeFetch({}, { ok: false, status: 503 })
     const client = makeClient(mockFetch)
 
@@ -232,7 +733,37 @@ describe('HTTPWalletJSON – api() error responses', () => {
       await client.getVersion({})
     } catch (e: unknown) {
       const err = e as Error
-      expect(err.message).toContain('HTTP Client error 503')
+      expect(err.message).toContain('HTTP status 503')
+    }
+  })
+
+  it('does not copy request secrets or remote diagnostics into HTTP errors', async () => {
+    const client = makeClient(
+      makeFetch(
+        { message: 'sqlite /private/wallet.db exposed secret_key' },
+        { ok: false, status: 500 }
+      )
+    )
+
+    await expect(
+      client.encrypt({
+        plaintext: [115, 101, 99, 114, 101, 116],
+        protocolID: [0, 'tests'],
+        keyID: 'private-key-id'
+      })
+    ).rejects.toThrow('HTTPWalletJSON encrypt failed with HTTP status 500')
+
+    try {
+      await client.encrypt({
+        plaintext: [115, 101, 99, 114, 101, 116],
+        protocolID: [0, 'tests'],
+        keyID: 'private-key-id'
+      })
+    } catch (error) {
+      const message = String((error as Error).message)
+      expect(message).not.toContain('private-key-id')
+      expect(message).not.toContain('/private/wallet.db')
+      expect(message).not.toContain('secret_key')
     }
   })
 
@@ -298,7 +829,22 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('internalizeAction calls /internalizeAction', async () => {
     await expectCallName(
-      () => client.internalizeAction({ tx: [], outputs: [], description: 'hello world' }),
+      () =>
+        client.internalizeAction({
+          tx: MINIMAL_BEEF,
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'wallet payment',
+              paymentRemittance: {
+                derivationPrefix: 'AQ==',
+                derivationSuffix: 'Ag==',
+                senderIdentityKey: VALID_PUBLIC_KEY
+              }
+            }
+          ],
+          description: 'hello world'
+        }),
       '/internalizeAction'
     )
   })
@@ -309,7 +855,7 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('relinquishOutput calls /relinquishOutput', async () => {
     await expectCallName(
-      () => client.relinquishOutput({ basket: 'default', output: 'abc.0' }),
+      () => client.relinquishOutput({ basket: 'default', output: `${VALID_TXID}.0` }),
       '/relinquishOutput'
     )
   })
@@ -320,7 +866,11 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('revealCounterpartyKeyLinkage calls /revealCounterpartyKeyLinkage', async () => {
     await expectCallName(
-      () => client.revealCounterpartyKeyLinkage({ counterparty: 'aa', verifier: 'bb' }),
+      () =>
+        client.revealCounterpartyKeyLinkage({
+          counterparty: VALID_PUBLIC_KEY,
+          verifier: VALID_PUBLIC_KEY
+        }),
       '/revealCounterpartyKeyLinkage'
     )
   })
@@ -329,8 +879,8 @@ describe('HTTPWalletJSON – method routing', () => {
     await expectCallName(
       () =>
         client.revealSpecificKeyLinkage({
-          counterparty: 'aa',
-          verifier: 'bb',
+          counterparty: VALID_PUBLIC_KEY,
+          verifier: VALID_PUBLIC_KEY,
           protocolID: [0, 'proto'],
           keyID: 'k1'
         }),
@@ -361,7 +911,13 @@ describe('HTTPWalletJSON – method routing', () => {
 
   it('verifyHmac calls /verifyHmac', async () => {
     await expectCallName(
-      () => client.verifyHmac({ data: [1], hmac: [2], protocolID: [0, 'proto'], keyID: 'k1' }),
+      () =>
+        client.verifyHmac({
+          data: [1],
+          hmac: Array(32).fill(2),
+          protocolID: [0, 'proto'],
+          keyID: 'k1'
+        }),
       '/verifyHmac'
     )
   })
@@ -378,7 +934,7 @@ describe('HTTPWalletJSON – method routing', () => {
       () =>
         client.verifySignature({
           data: [1],
-          signature: [2],
+          signature: VALID_DER_SIGNATURE,
           protocolID: [0, 'proto'],
           keyID: 'k1'
         }),
@@ -390,8 +946,8 @@ describe('HTTPWalletJSON – method routing', () => {
     await expectCallName(
       () =>
         client.acquireCertificate({
-          type: 'dHlwZQ==',
-          certifier: 'aa',
+          type: VALID_CERT_TYPE,
+          certifier: VALID_PUBLIC_KEY,
           acquisitionProtocol: 'issuance',
           fields: {},
           certifierUrl: 'https://certifier.example.com'
@@ -413,7 +969,7 @@ describe('HTTPWalletJSON – method routing', () => {
         client.proveCertificate({
           certificate: {} as any,
           fieldsToReveal: [],
-          verifier: 'vv'
+          verifier: VALID_PUBLIC_KEY
         }),
       '/proveCertificate'
     )
@@ -422,14 +978,18 @@ describe('HTTPWalletJSON – method routing', () => {
   it('relinquishCertificate calls /relinquishCertificate', async () => {
     await expectCallName(
       () =>
-        client.relinquishCertificate({ type: 'dHlwZQ==', serialNumber: 'c2Vy', certifier: 'aa' }),
+        client.relinquishCertificate({
+          type: VALID_CERT_TYPE,
+          serialNumber: VALID_CERT_SERIAL,
+          certifier: VALID_PUBLIC_KEY
+        }),
       '/relinquishCertificate'
     )
   })
 
   it('discoverByIdentityKey calls /discoverByIdentityKey', async () => {
     await expectCallName(
-      () => client.discoverByIdentityKey({ identityKey: 'aa' }),
+      () => client.discoverByIdentityKey({ identityKey: VALID_PUBLIC_KEY }),
       '/discoverByIdentityKey'
     )
   })
@@ -481,7 +1041,20 @@ describe('HTTPWalletJSON – response body passthrough', () => {
   })
 
   it('returns the exact JSON body from a successful listActions call', async () => {
-    const expected = { totalActions: 2, actions: [{ txid: 'aa', status: 'completed' }] }
+    const expected = {
+      totalActions: 2,
+      actions: [
+        {
+          txid: VALID_TXID,
+          satoshis: 1,
+          status: 'completed',
+          isOutgoing: false,
+          description: 'test action',
+          version: 1,
+          lockTime: 0
+        }
+      ]
+    }
     const mockFetch = makeFetch(expected)
     const client = makeClient(mockFetch)
 
@@ -507,44 +1080,47 @@ describe('HTTPWalletJSON – byte-field wire compatibility', () => {
   it('repairs a createAction tx returned as a numeric-keyed object', async () => {
     // Wallets that JSON.stringify a Uint8Array result serialize tx as
     // {"0":1,"1":1,...} instead of an array (observed in the wild).
-    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 72])))
-    const mockFetch = makeFetch({ txid: 'abc', tx: mangledTx })
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array(MINIMAL_BEEF)))
+    const mockFetch = makeFetch({ txid: MINIMAL_TXID, tx: mangledTx })
     const client = makeClient(mockFetch)
 
     const result = await client.createAction({ description: 'test action' })
-    expect(result.tx).toEqual([1, 1, 1, 1, 128, 72])
+    expect(result.tx).toEqual(MINIMAL_BEEF)
   })
 
   it('repairs a signAction tx returned as a numeric-keyed object', async () => {
-    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 73])))
-    const mockFetch = makeFetch({ txid: 'def', tx: mangledTx })
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array(MINIMAL_BEEF)))
+    const mockFetch = makeFetch({ txid: MINIMAL_TXID, tx: mangledTx })
     const client = makeClient(mockFetch)
 
     const result = await client.signAction({ spends: {}, reference: 'cmVm' })
-    expect(result.tx).toEqual([1, 1, 1, 1, 128, 73])
+    expect(result.tx).toEqual(MINIMAL_BEEF)
   })
 
   it('repairs a nested createAction signableTransaction tx', async () => {
-    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array([1, 1, 1, 1, 128, 74])))
+    const mangledTx = JSON.parse(JSON.stringify(new Uint8Array(MINIMAL_BEEF)))
     const mockFetch = makeFetch({
       signableTransaction: { tx: mangledTx, reference: 'cmVm' }
     })
     const client = makeClient(mockFetch)
 
-    const result = await client.createAction({ description: 'test action' })
-    expect(result.signableTransaction?.tx).toEqual([1, 1, 1, 1, 128, 74])
+    const result = await client.createAction({
+      description: 'test action',
+      options: { signAndProcess: false }
+    })
+    expect(result.signableTransaction?.tx).toEqual(MINIMAL_BEEF)
   })
 
   it('repairs listOutputs BEEF and cryptographic byte results', async () => {
     const mangled = (bytes: number[]): Record<string, number> =>
       JSON.parse(JSON.stringify(new Uint8Array(bytes)))
     const listClient = makeClient(
-      makeFetch({ totalOutputs: 0, outputs: [], BEEF: mangled([2, 3]) })
+      makeFetch({ totalOutputs: 0, outputs: [], BEEF: mangled(VALID_BEEF) })
     )
-    const cryptoClient = makeClient(makeFetch({ hmac: mangled([4, 5]) }))
+    const cryptoClient = makeClient(makeFetch({ hmac: mangled(Array(32).fill(4)) }))
 
     await expect(listClient.listOutputs({ basket: 'test' })).resolves.toMatchObject({
-      BEEF: [2, 3]
+      BEEF: VALID_BEEF
     })
     await expect(
       cryptoClient.createHmac({
@@ -552,12 +1128,12 @@ describe('HTTPWalletJSON – byte-field wire compatibility', () => {
         protocolID: [1, 'test protocol'],
         keyID: '1'
       })
-    ).resolves.toEqual({ hmac: [4, 5] })
+    ).resolves.toEqual({ hmac: Array(32).fill(4) })
   })
 
   it('leaves a healthy number[] tx untouched', async () => {
-    const tx = [1, 1, 1, 1, 42]
-    const mockFetch = makeFetch({ txid: 'abc', tx })
+    const tx = MINIMAL_BEEF
+    const mockFetch = makeFetch({ txid: MINIMAL_TXID, tx })
     const client = makeClient(mockFetch)
 
     const result = await client.createAction({ description: 'test action' })
@@ -565,15 +1141,16 @@ describe('HTTPWalletJSON – byte-field wire compatibility', () => {
   })
 
   it('serializes Uint8Array request args (inputBEEF) as JSON arrays', async () => {
-    const mockFetch = makeFetch({ txid: 'abc' })
+    const mockFetch = makeFetch({ txid: VALID_TXID })
     const client = makeClient(mockFetch)
 
     await client.createAction({
       description: 'test action',
-      inputBEEF: new Uint8Array([2, 0, 190, 239])
+      inputBEEF: new Uint8Array(VALID_BEEF),
+      options: { returnTXIDOnly: true }
     })
 
     const body = JSON.parse(mockFetch.mock.calls[0][1].body)
-    expect(body.inputBEEF).toEqual([2, 0, 190, 239])
+    expect(body.inputBEEF).toEqual(VALID_BEEF)
   })
 })

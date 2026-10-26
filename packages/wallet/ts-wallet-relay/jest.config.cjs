@@ -1,3 +1,6 @@
+const nobleTransform = ['babel-jest', { plugins: ['@babel/plugin-transform-modules-commonjs'] }]
+const nobleTransformIgnore = ['node_modules/.pnpm/(?!(?:@noble\\+curves|@noble\\+hashes)@)']
+
 /** @type {import('jest').Config} */
 module.exports = {
   preset: 'ts-jest',
@@ -6,10 +9,10 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',
     '!src/**/*.d.ts',
-    // Public entrypoints contain re-exports only; executable modules remain measured.
-    '!src/client.ts',
-    '!src/index.ts',
-    '!src/react.tsx'
+    // React's public barrel contains re-exports only; executable modules remain measured.
+    '!src/react.tsx',
+    'template/backend/server.ts',
+    'template/nextjs/app/api/**/*.ts'
   ],
   coverageThreshold: {
     global: {
@@ -20,6 +23,7 @@ module.exports = {
     }
   },
   transform: {
+    '^.+\\.js$': nobleTransform,
     '^.+\\.tsx?$': [
       'ts-jest',
       {
@@ -31,9 +35,12 @@ module.exports = {
       }
     ]
   },
+  transformIgnorePatterns: nobleTransformIgnore,
   moduleNameMapper: {
     // Strip .js extensions so ts-jest can resolve TypeScript source files
-    '^(\\.{1,2}/.*)\\.js$': '$1'
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^next/server$': '<rootDir>/tests/fixtures/next-server.ts',
+    '^(?:\\.\\./){3,4}lib/relay$': '<rootDir>/tests/fixtures/template-relay.ts'
   },
   testMatch: ['**/tests/**/*.test.ts', '**/tests/**/*.test.tsx'],
   projects: [
@@ -42,6 +49,7 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'node',
       transform: {
+        '^.+\\.js$': nobleTransform,
         '^.+\\.tsx?$': [
           'ts-jest',
           {
@@ -52,7 +60,12 @@ module.exports = {
           }
         ]
       },
-      moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
+      transformIgnorePatterns: nobleTransformIgnore,
+      moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
+        '^next/server$': '<rootDir>/tests/fixtures/next-server.ts',
+        '^(?:\\.\\./){3,4}lib/relay$': '<rootDir>/tests/fixtures/template-relay.ts'
+      },
       testMatch: ['**/tests/**/*.test.ts']
     },
     {
@@ -60,6 +73,7 @@ module.exports = {
       preset: 'ts-jest',
       testEnvironment: 'jsdom',
       transform: {
+        '^.+\\.js$': nobleTransform,
         '^.+\\.tsx?$': [
           'ts-jest',
           {
@@ -71,6 +85,7 @@ module.exports = {
           }
         ]
       },
+      transformIgnorePatterns: nobleTransformIgnore,
       moduleNameMapper: { '^(\\.{1,2}/.*)\\.js$': '$1' },
       testMatch: ['**/tests/**/*.test.tsx'],
       setupFilesAfterEnv: ['@testing-library/jest-dom']

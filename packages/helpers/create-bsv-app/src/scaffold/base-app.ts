@@ -56,16 +56,17 @@ import { SERVER_PRIVATE_KEY, PORT, CLIENT_ORIGIN } from './bsv/config.js'
 /*{{server.imports}}*/
 
 const app = express()
-app.use(cors({ origin: CLIENT_ORIGIN })) // allow the browser client (different dev origin) to call the API
-app.use(express.json())
+// CORS controls browser sharing only; it is not authentication or authorization.
+app.use(cors({ origin: CLIENT_ORIGIN }))
+app.use(express.json({ limit: '64kb', strict: true }))
 
 // Verify-only server wallet. All config (incl. SERVER_PRIVATE_KEY) lives in bsv/config.ts.
 const serverWallet = new ProtoWallet(PrivateKey.fromString(SERVER_PRIVATE_KEY))
 
 app.get('/health', (_req, res) => { res.json({ status: 'ok' }) })
 
-// The server's identity public key. Clients fetch this and use it as the proof
-// \`counterparty\` (login / signed requests) — no need to hard-code a key anywhere.
+// The server's identity public key. Auto-discovery trusts the configured endpoint/TLS
+// authority. Pin an independently validated key when deployment continuity matters.
 app.get('/api/identity', async (_req, res) => {
   const { publicKey } = await serverWallet.getPublicKey({ identityKey: true })
   res.json({ identityKey: publicKey })
@@ -85,14 +86,43 @@ import { PrivateKey } from '@bsv/sdk'
 
 // Server wallet key. Set SERVER_PRIVATE_KEY for a stable identity; a random key is
 // used as a dev fallback (the server's identity then changes on every restart).
-export const SERVER_PRIVATE_KEY = process.env.SERVER_PRIVATE_KEY ?? PrivateKey.fromRandom().toString()
+const configuredServerKey = process.env.SERVER_PRIVATE_KEY
+if (process.env.NODE_ENV === 'production' && configuredServerKey == null) {
+  throw new Error('SERVER_PRIVATE_KEY is required in production')
+}
+const parsedServerKey = configuredServerKey == null
+  ? PrivateKey.fromRandom()
+  : PrivateKey.fromString(configuredServerKey)
+if (configuredServerKey != null && parsedServerKey.toString() !== configuredServerKey) {
+  throw new Error('SERVER_PRIVATE_KEY must use its canonical encoding')
+}
+export const SERVER_PRIVATE_KEY = parsedServerKey.toString()
 
-export const PORT = Number(process.env.PORT ?? 3000)
+const portText = process.env.PORT ?? '3000'
+if (!/^(?:[1-9]\\d{0,4})$/.test(portText)) throw new Error('PORT must be an integer from 1 to 65535')
+export const PORT = Number(portText)
+if (PORT > 65535) throw new Error('PORT must be an integer from 1 to 65535')
 
-// Browser origin allowed by CORS — your client's dev URL by default.
-export const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173'
+// Browser origin allowed by CORS — your client's dev URL by default. CORS is not auth.
+const configuredClientOrigin = process.env.CLIENT_ORIGIN
+if (process.env.NODE_ENV === 'production' && configuredClientOrigin == null) {
+  throw new Error('CLIENT_ORIGIN is required in production')
+}
+const parsedClientOrigin = new URL(configuredClientOrigin ?? 'http://localhost:5173')
+const localClient = parsedClientOrigin.protocol === 'http:' &&
+  (parsedClientOrigin.hostname === 'localhost' || parsedClientOrigin.hostname === '127.0.0.1' || parsedClientOrigin.hostname === '[::1]')
+if ((parsedClientOrigin.protocol !== 'https:' && !localClient) || parsedClientOrigin.username !== '' ||
+    parsedClientOrigin.password !== '' || parsedClientOrigin.pathname !== '/' ||
+    parsedClientOrigin.search !== '' || parsedClientOrigin.hash !== '') {
+  throw new Error('CLIENT_ORIGIN must be credential-free HTTPS (or exact HTTP localhost development) origin')
+}
+export const CLIENT_ORIGIN = parsedClientOrigin.origin
 
-export const BSV_NETWORK = process.env.BSV_NETWORK ?? '${ctx.network}'
+const configuredNetwork = process.env.BSV_NETWORK ?? '${ctx.network}'
+if (configuredNetwork !== 'main' && configuredNetwork !== 'test' && configuredNetwork !== 'ttn') {
+  throw new Error('BSV_NETWORK must be main, test, or ttn')
+}
+export const BSV_NETWORK = configuredNetwork
 `
 }
 

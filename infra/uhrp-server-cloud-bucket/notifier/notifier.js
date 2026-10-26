@@ -24,8 +24,15 @@ const buildAdvertiseRequest = ({
   if (typeof adminToken !== 'string' || adminToken.length < 32) {
     throw new Error('ADMIN_TOKEN must contain at least 32 characters')
   }
+  const origin = new URL(hostingDomain)
+  if (
+    origin.protocol !== 'https:' || origin.username !== '' || origin.password !== '' ||
+    origin.pathname !== '/' || origin.search !== '' || origin.hash !== ''
+  ) {
+    throw new Error('HOSTING_DOMAIN must be a credential-free HTTPS origin')
+  }
   return {
-    url: `${hostingDomain}/advertise`,
+    url: `${origin.origin}/advertise`,
     body: {
       uhrpUrl,
       uploaderIdentityKey,
@@ -36,7 +43,12 @@ const buildAdvertiseRequest = ({
     config: {
       headers: {
         Authorization: `Bearer ${adminToken}`
-      }
+      },
+      maxRedirects: 0,
+      timeout: 15_000,
+      maxContentLength: 1024 * 1024,
+      maxBodyLength: 64 * 1024,
+      validateStatus: status => status >= 200 && status < 300
     }
   }
 }
@@ -49,6 +61,10 @@ exports.buildAdvertiseRequest = buildAdvertiseRequest
  * @param {object} context The event metadata.
  */
 exports.notifier = async (file, context) => {
+  if (file == null || typeof file !== 'object' || typeof file.name !== 'string' ||
+      typeof file.bucket !== 'string') {
+    throw new Error('Malformed Cloud Storage event')
+  }
   const objectIdentifier = file.name.split('/').pop()
   console.log(`  Event: ${context.eventId}`)
   console.log(`  Event Type: ${context.eventType}`)
@@ -63,6 +79,13 @@ exports.notifier = async (file, context) => {
     // Only files uploaded to the CDN folder are advertised this way.
     return
   }
+  if (
+    typeof objectIdentifier !== 'string' ||
+    file.name !== `cdn/${objectIdentifier}` ||
+    !/^[1-9A-HJ-NP-Za-km-z]{1,128}$/.test(objectIdentifier)
+  ) {
+    throw new Error('Invalid finalized UHRP object name')
+  }
 
   const storageFile = storage.bucket(file.bucket).file(file.name)
   const [metadata] = await storageFile.getMetadata()
@@ -71,6 +94,10 @@ exports.notifier = async (file, context) => {
     uploaderIdentityKey = metadata.metadata.uploaderidentitykey
   }
   const expiryTime = Math.round(new Date(metadata.customTime).getTime() / 1000)
+  const fileSize = typeof file.size === 'string' && /^(?:0|[1-9]\d*)$/.test(file.size)
+    ? Number(file.size)
+    : file.size
+  if (!Number.isSafeInteger(fileSize) || fileSize < 1) throw new Error('Invalid finalized object size')
   const digest = crypto.createHash('sha256')
   for await (const chunk of storageFile.createReadStream()) {
     digest.update(chunk)
@@ -83,7 +110,7 @@ exports.notifier = async (file, context) => {
     uploaderIdentityKey,
     objectIdentifier,
     expiryTime,
-    fileSize: file.size
+    fileSize
   })
   await axios.post(request.url, request.body, request.config)
   return true

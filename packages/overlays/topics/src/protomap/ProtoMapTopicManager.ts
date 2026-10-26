@@ -1,48 +1,25 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import {
-  LockingScript,
-  PushDrop,
-  SecurityLevel,
-  WalletProtocol
-} from '@bsv/sdk'
+import { LockingScript, WalletProtocol } from '@bsv/sdk'
 import { identifyPushDropOutputs } from '../shared/identifyPushDropOutputs.js'
 import {
-  decodeRegistryUtf8Fields,
-  verifyRegistryToken
+  authenticateRegistryToken,
+  registryText,
+  registryUrl,
+  validateRegistryProtocol
 } from '../shared/registryTokenValidation.js'
 
 export function deserializeWalletProtocol(str: string): WalletProtocol {
-  const parsed = JSON.parse(str)
-
-  if (!Array.isArray(parsed) || parsed.length !== 2) {
-    throw new Error('Invalid wallet protocol format.')
-  }
-
-  const [security, protocolString] = parsed
-
-  if (![0, 1, 2].includes(security)) {
-    throw new Error('Invalid security level.')
-  }
-
-  if (typeof protocolString !== 'string') {
-    throw new TypeError('Invalid protocolID')
-  }
-
-  return [security as SecurityLevel, protocolString]
+  return validateRegistryProtocol(str)
 }
 
 async function validateProtoMapOutput(lockingScript: LockingScript): Promise<void> {
-  const { fields, lockingPublicKey } = PushDrop.decode(lockingScript)
-
-  const [serializedProtocolID, , , , , registryOperator] = decodeRegistryUtf8Fields(fields, 6)
-  deserializeWalletProtocol(serializedProtocolID)
-  await verifyRegistryToken({
-    fields,
-    lockingPublicKey,
-    registryOperator,
-    protocolID: [1, 'protomap'],
-    linkageError: 'ProtoMap token not linked to registry operator!'
-  })
+  const [serializedProtocolID, name, iconURL, description, documentationURL] =
+    await authenticateRegistryToken('protocol', lockingScript)
+  validateRegistryProtocol(serializedProtocolID)
+  registryText(name, 'Protocol name', 1, 300)
+  registryUrl(iconURL, 'Protocol icon URL')
+  registryText(description, 'Protocol description')
+  registryUrl(documentationURL, 'Protocol documentation URL')
 }
 
 export default class ProtoMapTopicManager implements TopicManager {

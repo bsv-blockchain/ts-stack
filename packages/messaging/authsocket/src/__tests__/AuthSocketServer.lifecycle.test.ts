@@ -9,7 +9,7 @@ const mockPeer = {
 }
 
 const mockIoServerConstructor = jest.fn(() => mockIoServer)
-const mockPeerConstructor = jest.fn(() => mockPeer)
+const mockPeerConstructor = jest.fn((..._arguments: unknown[]) => mockPeer)
 
 jest.mock('socket.io', () => ({
   Server: mockIoServerConstructor
@@ -47,13 +47,15 @@ describe('AuthSocketServer lifecycle', () => {
       cors: { origin: '*' }
     })
 
-    const rawListeners = new Map<string, (...arguments_: any[]) => any>()
+    const rawListeners = new Map<string, Array<(...arguments_: any[]) => any>>()
     const rawSocket = {
       id: 'socket-1',
       disconnect: jest.fn(),
       emit: jest.fn(),
       on: jest.fn((eventName: string, callback: (...arguments_: any[]) => any) => {
-        rawListeners.set(eventName, callback)
+        const listeners = rawListeners.get(eventName) ?? []
+        listeners.push(callback)
+        rawListeners.set(eventName, listeners)
       })
     }
     const connectionListener = mockIoServer.on.mock.calls.find(
@@ -69,35 +71,67 @@ describe('AuthSocketServer lifecycle', () => {
       requestedCertificates,
       sessionManager
     )
-    expect(connectionCallback).toHaveBeenCalledTimes(1)
-    const authenticatedSocket = connectionCallback.mock.calls[0][0]
-    expect(authenticatedSocket.id).toBe('socket-1')
-    expect(authenticatedSocket.identityKey).toBeUndefined()
+    expect(connectionCallback).not.toHaveBeenCalled()
 
     const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls[0][0]
-    generalMessageListener(
+    await generalMessageListener(
       'identity-key',
       Array.from(Buffer.from(JSON.stringify({ eventName: 'ready', data: 1 })))
     )
 
+    expect(connectionCallback).toHaveBeenCalledTimes(1)
+    const authenticatedSocket = connectionCallback.mock.calls[0][0]
+    expect(authenticatedSocket.id).toBe('socket-1')
     expect(authenticatedSocket.identityKey).toBe('identity-key')
     expect(server.emitToIdentity('identity-key', 'private', { ok: true })).toBe(1)
     expect(mockPeer.toPeer).toHaveBeenLastCalledWith(expect.any(Array), 'identity-key')
 
-    rawListeners.get('disconnect')?.()
+    for (const listener of rawListeners.get('disconnect') ?? []) listener('transport close')
     expect(server.emitToIdentity('identity-key', 'private', { ok: false })).toBe(0)
 
     await connectionListener(rawSocket)
-    rawListeners.get('disconnect')?.()
+    for (const listener of rawListeners.get('disconnect') ?? []) listener('transport close')
     const disconnectedGeneralMessageListener = mockPeer.listenForGeneralMessages.mock.calls[1][0]
 
     expect(() => {
-      disconnectedGeneralMessageListener(
+      void disconnectedGeneralMessageListener(
         'late-identity',
         Array.from(Buffer.from(JSON.stringify({ eventName: 'late', data: null })))
       )
     }).not.toThrow()
     expect(server.emitToIdentity('late-identity', 'private', null)).toBe(0)
+  })
+
+  it('does not route to an identity while authenticated connection setup is pending', async () => {
+    let finishSetup!: () => void
+    const setup = new Promise<void>(resolve => {
+      finishSetup = resolve
+    })
+    const server = new AuthSocketServer({} as never, { wallet: {} as never })
+    server.on('connection', async () => await setup)
+    const connectionListener = mockIoServer.on.mock.calls.find(
+      ([eventName]) => eventName === 'connection'
+    )?.[1]
+    const rawSocket = {
+      id: 'pending-setup',
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+      on: jest.fn()
+    }
+    connectionListener(rawSocket)
+    const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls.at(-1)[0]
+    const incoming = generalMessageListener(
+      'identity-key',
+      Array.from(Buffer.from(JSON.stringify({ eventName: 'ready', data: true })))
+    )
+    await Promise.resolve()
+
+    expect(server.emitToIdentity('identity-key', 'private', true)).toBe(0)
+
+    finishSetup()
+    await incoming
+
+    expect(server.emitToIdentity('identity-key', 'private', true)).toBe(1)
   })
 
   it('passes non-connection events through to Socket.IO', () => {
@@ -107,6 +141,27 @@ describe('AuthSocketServer lifecycle', () => {
     server.on('maintenance', callback)
 
     expect(mockIoServer.on).toHaveBeenCalledWith('maintenance', callback)
+  })
+
+  it('shares one bounded default session and replay store across raw connections', () => {
+    new AuthSocketServer({} as never, { wallet: {} as never })
+    const connectionListener = mockIoServer.on.mock.calls.find(
+      ([eventName]) => eventName === 'connection'
+    )?.[1]
+    const socket = (id: string) => ({
+      id,
+      disconnect: jest.fn(),
+      emit: jest.fn(),
+      on: jest.fn()
+    })
+
+    connectionListener(socket('first'))
+    connectionListener(socket('second'))
+
+    const firstManager = mockPeerConstructor.mock.calls.at(-2)?.[3]
+    const secondManager = mockPeerConstructor.mock.calls.at(-1)?.[3]
+    expect(firstManager).toBeDefined()
+    expect(secondManager).toBe(firstManager)
   })
 
   it('contains connection construction and asynchronous application failures', async () => {
@@ -145,6 +200,11 @@ describe('AuthSocketServer lifecycle', () => {
       on: jest.fn()
     }
     connectionListener(secondSocket)
+    const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls.at(-1)[0]
+    await generalMessageListener(
+      'identity-key',
+      Array.from(Buffer.from(JSON.stringify({ eventName: 'ready', data: true })))
+    )
     await new Promise(resolve => setImmediate(resolve))
 
     expect(onError).toHaveBeenCalledWith(callbackFailure, {
@@ -189,10 +249,13 @@ describe('AuthSocketServer lifecycle', () => {
     const connectionCallback = jest.fn()
     server.on('connection', connectionCallback)
     connectionListener(rawSocket)
-    await new Promise(resolve => setImmediate(resolve))
+    const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls.at(-1)[0]
+    await generalMessageListener(
+      'identity-key',
+      Array.from(Buffer.from(JSON.stringify({ eventName: 'ready', data: true })))
+    )
     const authenticatedSocket = connectionCallback.mock.calls[0][0]
     authenticatedSocket.on('message', async () => await Promise.reject(applicationFailure))
-    const generalMessageListener = mockPeer.listenForGeneralMessages.mock.calls.at(-1)[0]
 
     await generalMessageListener(
       'identity-key',

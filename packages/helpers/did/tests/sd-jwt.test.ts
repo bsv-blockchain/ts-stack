@@ -86,7 +86,8 @@ describe('SD-JWT VC', () => {
     const result = await SdJwtVcVerifier.verify(wirePayload, {
       expectedAudience: 'https://verifier.example',
       expectedNonce: 'nonce-123',
-      requireKeyBinding: true
+      requireKeyBinding: true,
+      now: 1770000100
     })
 
     expect(result.verified).toBe(true)
@@ -104,7 +105,8 @@ describe('SD-JWT VC', () => {
     const objectResult = await SdJwtVcVerifier.verify(presentation, {
       expectedAudience: 'https://verifier.example',
       expectedNonce: 'nonce-123',
-      requireKeyBinding: true
+      requireKeyBinding: true,
+      now: 1770000100
     })
     expect(objectResult.verified).toBe(true)
     expect(objectResult.keyBindingVerified).toBe(true)
@@ -175,8 +177,18 @@ describe('SD-JWT VC', () => {
       },
       issuerPrivateKey
     )
+    const invalidKeyBinding = signJwt(
+      { typ: 'kb+jwt' },
+      {
+        iat: 1770000000,
+        aud: 'https://verifier.example',
+        nonce: 'nonce-123',
+        sd_hash: 'invalid'
+      },
+      holderPrivateKey
+    )
     const result = await SdJwtVcVerifier.verify(
-      serializeSdJwt(issuerSignedJwt, [], 'invalid-key-binding')
+      serializeSdJwt(issuerSignedJwt, [], invalidKeyBinding)
     )
 
     expect(result).toMatchObject({
@@ -239,12 +251,15 @@ describe('SD-JWT VC', () => {
     const vcSvg = generateQrCode(credential.sdJwt, 'vc')
     const dataUrl = generateQrCode({ sdJwt: credential.sdJwt }, 'vc', {
       output: 'data-url',
-      darkColor: '<black&"',
+      darkColor: '#111111',
       lightColor: '#fff'
     })
 
     expect(didSvg).toContain('<svg')
     expect(vcSvg).toContain('<rect')
     expect(dataUrl).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
+    expect(() =>
+      generateQrCode('payload', 'vc', { darkColor: 'url(https://attacker.example/pixel)' })
+    ).toThrow('hexadecimal color')
   })
 })

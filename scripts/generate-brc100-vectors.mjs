@@ -68,7 +68,13 @@ async function generateGetPublicKeyVectors() {
 
   for (const [root, proto, kid, cp, priv] of cases) {
     const w = makeWallet(root)
-    const args = { protocolID: proto, keyID: kid, counterparty: cp, privileged: priv }
+    const args = {
+      protocolID: proto,
+      keyID: kid,
+      counterparty: cp,
+      privileged: priv,
+      ...(priv ? { privilegedReason: 'Conformance key derivation' } : {})
+    }
     try {
       const res = await w.getPublicKey(args)
       vectors.push(
@@ -112,7 +118,15 @@ async function generateCryptoVectors(method, fnName, extraArgs = {}) {
   for (const [root, proto, kid, cp] of cases) {
     const w = makeWallet(root)
     const data = 'test data for ' + fnName
-    const args = { protocolID: proto, keyID: kid, counterparty: cp, data, ...extraArgs }
+    const linkageArgs = fnName.startsWith('reveal') ? { verifier: COUNTERPARTIES[2] } : {}
+    const args = {
+      protocolID: proto,
+      keyID: kid,
+      counterparty: cp,
+      data,
+      ...linkageArgs,
+      ...extraArgs
+    }
     try {
       const res = await w[fnName](args)
       vectors.push(

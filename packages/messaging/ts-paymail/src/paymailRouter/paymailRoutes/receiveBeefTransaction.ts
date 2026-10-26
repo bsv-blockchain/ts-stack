@@ -1,15 +1,25 @@
-import { Transaction } from '@bsv/sdk'
 import Joi from 'joi'
 import PaymailRoute, { DomainLogicHandler } from './paymailRoute.js'
 import P2pReceiveBeefTransactionCapability from '../../capability/p2pReceiveBeefTransactionCapability.js'
 import { PaymailBadRequestError } from '../../errors/index.js'
 import PaymailClient from '../../paymailClient/paymailClient.js'
 import { verifyP2PSignature } from '../../p2pSignature.js'
+import { transactionIdFromHex } from '../../transactionEncoding.js'
 
 interface ReceiveTransactionResponse {
   txid: string
   note?: string
 }
+
+interface ValidatedReceiveTransactionBody {
+  beef: string
+  metadata?: { sender?: string; pubkey?: string; signature?: string; note?: string | null }
+  reference: string
+}
+
+const COMPACT_SIGNATURE = /^[A-Za-z0-9+/]{87}=$/
+const COMPRESSED_PUBLIC_KEY = /^(?:02|03)[0-9a-fA-F]{64}$/
+const EVEN_HEX = /^(?:[0-9a-fA-F]{2})+$/
 
 interface ReceiveBeefTransactionRouteConfig {
   domainLogicHandler: DomainLogicHandler
@@ -22,12 +32,16 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
   private readonly paymailClient: PaymailClient
 
   constructor(config: ReceiveBeefTransactionRouteConfig) {
+    const verifySignature = config.verifySignature
+    if (verifySignature !== undefined && typeof verifySignature !== 'boolean') {
+      throw new TypeError('verifySignature must be a boolean')
+    }
     super({
       capability: P2pReceiveBeefTransactionCapability,
       endpoint: '/receive-beef-transaction/:paymail',
       domainLogicHandler: config.domainLogicHandler
     })
-    this.verifySignature = config.verifySignature ?? false
+    this.verifySignature = verifySignature ?? false
     this.paymailClient = config.paymailClient
   }
 
@@ -41,34 +55,44 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
     return value
   }
 
+  protected override snapshotValidatedBody(body: unknown): unknown {
+    return { beef: (body as ValidatedReceiveTransactionBody).beef }
+  }
+
   private buildSchema() {
     const metadataSchema = Joi.object({
-      sender: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
-      pubkey: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
-      signature: this.verifySignature ? Joi.string().required() : Joi.string().allow('').optional(),
+      sender: this.verifySignature
+        ? Joi.string().max(318).required()
+        : Joi.string().max(318).allow('').optional(),
+      pubkey: this.verifySignature
+        ? Joi.string().pattern(COMPRESSED_PUBLIC_KEY).required()
+        : Joi.string().pattern(COMPRESSED_PUBLIC_KEY).allow('').optional(),
+      signature: this.verifySignature
+        ? Joi.string().pattern(COMPACT_SIGNATURE).required()
+        : Joi.string().pattern(COMPACT_SIGNATURE).allow('').optional(),
       note: Joi.string().allow('', null).optional()
-    }).options({ stripUnknown: true })
+    }).options({ stripUnknown: true, convert: false })
 
     return Joi.object({
-      beef: Joi.string().required(),
+      beef: Joi.string().pattern(EVEN_HEX).required(),
       metadata: this.verifySignature ? metadataSchema.required() : metadataSchema,
       reference: Joi.string().required()
-    }).options({ stripUnknown: true })
+    }).options({ stripUnknown: true, convert: false })
   }
 
   private async validateBeefTransaction(value: {
     beef: string
     metadata: { sender: string; pubkey: string; signature: string }
   }): Promise<void> {
-    const tx = this.validateTransactionFormat(value.beef)
+    const transactionId = this.validateTransactionFormat(value.beef)
     if (this.verifySignature) {
-      await this.validateSignature(tx, value.metadata)
+      await this.validateSignature(transactionId, value.metadata)
     }
   }
 
-  private validateTransactionFormat(beef: string): Transaction {
+  private validateTransactionFormat(beef: string): string {
     try {
-      return Transaction.fromHexBEEF(beef)
+      return transactionIdFromHex(beef, true)
     } catch (error) {
       throw new PaymailBadRequestError(
         `Invalid body: ${error instanceof Error ? error.message : String(error)}`
@@ -77,7 +101,7 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
   }
 
   private async validateSignature(
-    tx: Transaction,
+    transactionId: string,
     metadata: {
       sender: string
       pubkey: string
@@ -85,7 +109,7 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
     }
   ): Promise<void> {
     const { sender, pubkey, signature } = metadata
-    this.verifyTransactionSignature(tx.id('hex'), signature, pubkey)
+    this.verifyTransactionSignature(transactionId, signature, pubkey)
     const match = await this.verifySenderPublicKey(sender, pubkey)
     if (!match) {
       throw new PaymailBadRequestError('Invalid Public Key for sender')
@@ -107,10 +131,28 @@ export default class ReceiveBeefTransactionRoute extends PaymailRoute {
     }
   }
 
-  protected override serializeResponse(domainLogicResponse: ReceiveTransactionResponse): string {
+  protected override serializeResponse(
+    domainLogicResponse: ReceiveTransactionResponse,
+    validatedBody?: ValidatedReceiveTransactionBody
+  ): string {
+    if (validatedBody == null) throw new Error('Validated transaction body is required')
+    const expectedTransactionId = this.validateTransactionFormat(validatedBody.beef)
+    if (
+      !/^[0-9a-fA-F]{64}$/.test(domainLogicResponse.txid) ||
+      domainLogicResponse.txid.toLowerCase() !== expectedTransactionId
+    ) {
+      throw new Error('Domain handler acknowledged a different transaction')
+    }
+    if (domainLogicResponse.note != null && typeof domainLogicResponse.note !== 'string') {
+      throw new Error('Domain handler returned an invalid transaction note')
+    }
     return JSON.stringify({
-      txid: domainLogicResponse.txid,
+      txid: expectedTransactionId,
       note: domainLogicResponse.note || ''
     })
+  }
+
+  public override getSenderValidationMode(): 'required' | 'disabled' {
+    return this.verifySignature ? 'required' : 'disabled'
   }
 }

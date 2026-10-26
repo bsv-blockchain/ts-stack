@@ -6,6 +6,20 @@ const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder('utf-8', { fatal: true })
 const MAX_UINT64 = 0xffffffffffffffffn
 
+interface EncodingBudget {
+  bytes: number
+  entries: number
+}
+
+function charge(budget: EncodingBudget, bytes: number): void {
+  budget.bytes += bytes
+  lchAssert(
+    budget.bytes <= LCH_LIMITS.headerBytes,
+    'ERR_LCH_CBOR',
+    'CBOR encoded-byte limit exceeded'
+  )
+}
+
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const length = parts.reduce((total, part) => total + part.length, 0)
   const output = new Uint8Array(length)
@@ -53,29 +67,51 @@ function encodeHead(major: number, input: number | bigint): Uint8Array {
   return output
 }
 
-function encode(value: LCHValue, depth: number): Uint8Array {
+function encode(value: LCHValue, depth: number, budget: EncodingBudget): Uint8Array {
   lchAssert(depth <= LCH_LIMITS.cborDepth, 'ERR_LCH_CBOR', 'CBOR nesting limit exceeded')
-  if (value === null) return Uint8Array.of(0xf6)
-  if (value === false) return Uint8Array.of(0xf4)
-  if (value === true) return Uint8Array.of(0xf5)
+  budget.entries += 1
+  lchAssert(budget.entries <= LCH_LIMITS.cborEntries, 'ERR_LCH_CBOR', 'CBOR item limit exceeded')
+  if (value === null || value === false || value === true) {
+    charge(budget, 1)
+    return Uint8Array.of(value === null ? 0xf6 : value ? 0xf5 : 0xf4)
+  }
   if (typeof value === 'number') {
     lchAssert(
       Number.isSafeInteger(value) && value >= 0,
       'ERR_LCH_CBOR',
       'CBOR numbers must be safe uints'
     )
-    return encodeHead(0, value)
+    const head = encodeHead(0, value)
+    charge(budget, head.length)
+    return head
   }
-  if (typeof value === 'bigint') return encodeHead(0, value)
+  if (typeof value === 'bigint') {
+    const head = encodeHead(0, value)
+    charge(budget, head.length)
+    return head
+  }
   if (typeof value === 'string') {
     lchAssert(value.normalize('NFC') === value, 'ERR_LCH_CBOR', 'CBOR text must be NFC')
+    lchAssert(
+      value.length <= LCH_LIMITS.headerBytes,
+      'ERR_LCH_CBOR',
+      'CBOR text exceeds the encoded-byte limit'
+    )
     const bytes = textEncoder.encode(value)
-    return concat([encodeHead(3, bytes.length), bytes])
+    const head = encodeHead(3, bytes.length)
+    charge(budget, head.length + bytes.length)
+    return concat([head, bytes])
   }
-  if (value instanceof Uint8Array) return concat([encodeHead(2, value.length), value])
+  if (value instanceof Uint8Array) {
+    const head = encodeHead(2, value.length)
+    charge(budget, head.length + value.length)
+    return concat([head, value])
+  }
   if (Array.isArray(value)) {
     lchAssert(value.length <= LCH_LIMITS.cborEntries, 'ERR_LCH_CBOR', 'CBOR array limit exceeded')
-    return concat([encodeHead(4, value.length), ...value.map(item => encode(item, depth + 1))])
+    const head = encodeHead(4, value.length)
+    charge(budget, head.length)
+    return concat([head, ...value.map(item => encode(item, depth + 1, budget))])
   }
   lchAssert(
     Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null,
@@ -86,14 +122,16 @@ function encode(value: LCHValue, depth: number): Uint8Array {
   lchAssert(entries.length <= LCH_LIMITS.cborEntries, 'ERR_LCH_CBOR', 'CBOR map limit exceeded')
   const encoded = entries.map(([key, item]) => {
     lchAssert(item !== undefined, 'ERR_LCH_CBOR', `Undefined CBOR map value: ${key}`)
-    return [encode(key, depth + 1), encode(item, depth + 1)] as const
+    return [encode(key, depth + 1, budget), encode(item, depth + 1, budget)] as const
   })
   encoded.sort((left, right) => compareBytes(left[0], right[0]))
-  return concat([encodeHead(5, encoded.length), ...encoded.flat()])
+  const head = encodeHead(5, encoded.length)
+  charge(budget, head.length)
+  return concat([head, ...encoded.flat()])
 }
 
 export function encodeDeterministicCbor(value: LCHValue): Uint8Array {
-  return encode(value, 0)
+  return encode(value, 0, { bytes: 0, entries: 0 })
 }
 
 class Decoder {
@@ -215,6 +253,11 @@ class Decoder {
 }
 
 export function decodeDeterministicCbor(bytes: Uint8Array): LCHValue {
+  lchAssert(
+    bytes instanceof Uint8Array && bytes.length <= LCH_LIMITS.headerBytes,
+    'ERR_LCH_CBOR',
+    'CBOR input is malformed or exceeds the encoded-byte limit'
+  )
   const decoder = new Decoder(bytes)
   const value = decoder.decode()
   lchAssert(decoder.done(), 'ERR_LCH_CBOR', 'Trailing bytes after CBOR value')

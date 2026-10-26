@@ -1,5 +1,5 @@
 import { parseJsonRpc } from '../BinaryJson'
-import { validateSyncChunkEntities } from '../entityValidationHelpers'
+import { validateEntities, validateSyncChunkEntities } from '../entityValidationHelpers'
 import { type Request, type Response } from 'express'
 import { TelemetryEvent, WalletLoggerInterface, Transaction, Script, MerklePath } from '@bsv/sdk'
 import { toBinaryBaseBlockHeader } from '../../../services/Services'
@@ -9,6 +9,7 @@ import { WalletLogger } from '../../../WalletLogger'
 import { SyncChunk } from '../../../sdk/WalletStorage.interfaces'
 import { StorageServer, WalletStorageServerOptions } from '../StorageServer'
 import { BINARY_ENCODING, BINARY_ENCODING_HEADER, BINARY_REQUEST_ENCODING_HEADER } from '../BinaryJson'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../../sdk/WERR_errors'
 
 interface CapturedResponse {
   body?: any
@@ -176,6 +177,69 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(validateSyncChunkEntities(parseJsonRpc(wire, binary).result)).toEqual(chunk)
     expect(chunk.provenTxs[0].rawTx).toBe(bytes)
   })
+
+  test.each([false, true])('encodes only declared row bytes when binary is negotiated: %s', async binary => {
+    const bytes = Array.from({ length: 2048 }, (_, i) => i % 256)
+    const time = { created_at: new Date(), updated_at: new Date() }
+    const outputs = [{ ...time, outputId: 1, lockingScript: bytes, extraNumbers: bytes }]
+    const reqs = [{ ...time, provenTxReqId: 1, rawTx: bytes, inputBEEF: bytes, extraNumbers: bytes }]
+    const server = makeServer({ findOutputsAuth: async () => outputs, findProvenTxReqsAuth: async () => reqs })
+    for (const { method, params, rows, fields } of [
+      {
+        method: 'findOutputsAuth',
+        params: [{ identityKey: 'alice' }, { partial: {} }],
+        rows: outputs,
+        fields: ['lockingScript']
+      },
+      { method: 'findProvenTxReqs', params: [{ partial: {} }], rows: reqs, fields: ['rawTx', 'inputBEEF'] }
+    ]) {
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest(
+          { jsonrpc: '2.0', method, params, id: 1 },
+          binary ? { [BINARY_ENCODING_HEADER]: BINARY_ENCODING } : {}
+        ),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(200)
+      for (const field of fields) {
+        if (binary) expect(captured.body.result[0][field].$bsvBinary).toBe('base64')
+        else expect(captured.body.result[0][field]).toEqual(bytes)
+      }
+      expect(captured.body.result[0].extraNumbers).toEqual(bytes)
+      expect(validateEntities(parseJsonRpc(JSON.stringify(captured.body), binary).result)).toEqual(rows)
+    }
+    expect(outputs[0].lockingScript).toBe(bytes)
+    expect(reqs[0].rawTx).toBe(bytes)
+  })
+
+  test.each([false, true])(
+    'retains the response ceiling for large row bytes with binary negotiation %s',
+    async binary => {
+      const bytes = Array.from({ length: 150_000 }, (_, i) => i % 256)
+      const now = new Date()
+      const rows = [{ provenTxReqId: 1, rawTx: bytes, created_at: now, updated_at: now }]
+      const server = makeServer({ findProvenTxReqsAuth: async () => rows }, { maxRpcResponseBytes: 300_000 })
+      const captured = makeResponse()
+      await invoke(
+        server,
+        'handleRpcRequest',
+        makeRequest(
+          { jsonrpc: '2.0', method: 'findProvenTxReqs', params: [{ partial: {} }], id: 1 },
+          binary ? { [BINARY_ENCODING_HEADER]: BINARY_ENCODING } : {}
+        ),
+        captured.response
+      )
+      expect(captured.statusCode).toBe(binary ? 200 : 413)
+      if (binary) {
+        expect(validateEntities(parseJsonRpc(JSON.stringify(captured.body), true).result)).toEqual(rows)
+        expect(Buffer.byteLength(JSON.stringify(captured.body))).toBeLessThan(300_000)
+      }
+      expect(rows[0].rawTx).toBe(bytes)
+    }
+  )
 
   test('accounts for HTML escaping when enforcing the response-size ceiling', async () => {
     const server = makeServer({ getSettings: () => ({ value: '<'.repeat(25) }) }, { maxRpcResponseBytes: 100 })
@@ -408,7 +472,7 @@ describe('StorageServer JSON-RPC boundary', () => {
     })
   })
 
-  test('normalizes storage failures into JSON-RPC wallet errors', async () => {
+  test('redacts internal storage failures from JSON-RPC wallet errors', async () => {
     const server = makeServer(
       {
         getSettings: jest.fn(() => {
@@ -436,8 +500,55 @@ describe('StorageServer JSON-RPC boundary', () => {
     expect(captured.statusCode).toBe(200)
     expect(captured.body).toMatchObject({
       jsonrpc: '2.0',
-      error: { isError: true, message: 'storage failed', name: 'Error' },
+      error: { isError: true, message: 'An internal error has occurred.', name: 'WERR_INTERNAL' },
       id: 5
+    })
+    expect(JSON.stringify(captured.body)).not.toContain('storage failed')
+
+    const explicitInternal = makeResponse()
+    await invoke(
+      makeServer({
+        getSettings: jest.fn(() => {
+          throw new WERR_INTERNAL('sqlite /private/wallet.db failed: select secret_key from users')
+        })
+      }),
+      'handleRpcRequest',
+      makeRequest({
+        jsonrpc: '2.0',
+        method: 'getSettings',
+        params: [{ userId: 7 }, {}],
+        id: 6
+      }),
+      explicitInternal.response
+    )
+    expect(explicitInternal.body).toMatchObject({
+      error: { isError: true, message: 'An internal error has occurred.', name: 'WERR_INTERNAL' }
+    })
+    expect(JSON.stringify(explicitInternal.body)).not.toContain('/private/wallet.db')
+
+    const publicError = makeResponse()
+    await invoke(
+      makeServer({
+        getSettings: jest.fn(() => {
+          throw new WERR_INVALID_PARAMETER('limit', 'bounded')
+        })
+      }),
+      'handleRpcRequest',
+      makeRequest({
+        jsonrpc: '2.0',
+        method: 'getSettings',
+        params: [{ userId: 7 }, {}],
+        id: 7
+      }),
+      publicError.response
+    )
+    expect(publicError.body).toMatchObject({
+      error: {
+        isError: true,
+        message: 'The limit parameter must be bounded',
+        name: 'WERR_INVALID_PARAMETER',
+        parameter: 'limit'
+      }
     })
   })
 
@@ -446,25 +557,33 @@ describe('StorageServer JSON-RPC boundary', () => {
       {},
       {
         defaultRpcListLimit: 100,
-        maxRpcListLimit: 1_000
+        maxRpcListLimit: 1_000,
+        maxRpcListOffset: 10_000
       }
     )
     const listParams: any[] = [{ identityKey: 'alice' }, {}]
     await invoke(server, 'enforceRpcRequestBudgets', 'listActions', listParams)
     expect(listParams[1].limit).toBe(100)
+    expect(listParams[1].offset).toBe(0)
 
     const findParams: any[] = [{ identityKey: 'alice' }, { partial: {} }]
     await invoke(server, 'enforceRpcRequestBudgets', 'findOutputsAuth', findParams)
-    expect(findParams[1].paged).toEqual({ limit: 100 })
+    expect(findParams[1].paged).toEqual({ limit: 100, offset: 0 })
 
     await expect(
       invoke(server, 'enforceRpcRequestBudgets', 'listOutputs', [{ identityKey: 'alice' }, { limit: 1_001 }])
     ).rejects.toThrow('must not exceed 1000')
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'listOutputs', [{ identityKey: 'alice' }, { offset: 10_001 }])
+    ).rejects.toThrow('offsets must not exceed 10000')
   })
 
   test('validates configured, paged, and synchronization RPC limits', async () => {
     expect(() => makeServer({}, { defaultRpcListLimit: 11, maxRpcListLimit: 10 })).toThrow(
       'defaultRpcListLimit must not exceed maxRpcListLimit'
+    )
+    expect(() => makeServer({}, { maxRpcListOffset: -2 })).toThrow(
+      'maxRpcListOffset must be -1 or a non-negative safe integer'
     )
 
     const server = makeServer(
@@ -472,6 +591,7 @@ describe('StorageServer JSON-RPC boundary', () => {
       {
         defaultRpcListLimit: 5,
         maxRpcListLimit: 10,
+        maxRpcListOffset: 20,
         maxRpcResponseBytes: 128
       }
     )
@@ -487,6 +607,18 @@ describe('StorageServer JSON-RPC boundary', () => {
     await expect(
       invoke(server, 'enforceRpcRequestBudgets', 'listActions', [{}, { limit: Number.MAX_SAFE_INTEGER + 1 }])
     ).rejects.toThrow('positive safe integers')
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'findOutputsAuth', [{}, { paged: { offset: 21 } }])
+    ).rejects.toThrow('offsets must not exceed 20')
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', [{ offsets: [{ name: 'provenTx', offset: 21 }] }])
+    ).rejects.toThrow('offsets must not exceed 20')
+    await expect(
+      invoke(server, 'enforceRpcRequestBudgets', 'processSyncChunk', [
+        { offsets: [{ name: 'provenTx', offset: -1 }] },
+        {}
+      ])
+    ).rejects.toThrow('non-negative safe integers')
 
     const syncParams: any[] = [{ maxRoughSize: 'unbounded', includeTotals: true, syncStateId: 42 }]
     await invoke(server, 'enforceRpcRequestBudgets', 'getSyncChunk', syncParams)
@@ -735,6 +867,14 @@ describe('StorageServer JSON-RPC boundary', () => {
     const destroyLog: Record<string, unknown> = {}
     await expect(invoke(server, 'authorizeRpcCall', 'destroy', [], request, destroyLog)).resolves.toBe(false)
     expect(destroyLog).toMatchObject({ comment: 'IGNORED' })
+    const migrateLog: Record<string, unknown> = {}
+    await expect(invoke(server, 'authorizeRpcCall', 'migrate', ['tenant-name'], request, migrateLog)).resolves.toBe(false)
+    expect(migrateLog).toMatchObject({ comment: 'IGNORED' })
+    const migrate = jest.fn(async () => 'should-not-run')
+    const migrationServer = makeServer({ migrate })
+    await expect(invoke(migrationServer, 'dispatchRpcCall', 'migrate', ['tenant-name'], request))
+      .resolves.toEqual({ found: true, result: undefined })
+    expect(migrate).not.toHaveBeenCalled()
     await expect(invoke(server, 'authorizeRpcCall', 'getSettings', [], request)).resolves.toBe(true)
     await expect(invoke(server, 'authorizeRpcCall', 'findOrInsertUser', ['mallory'], request)).rejects.toThrow(
       'authenticated user'
@@ -746,6 +886,24 @@ describe('StorageServer JSON-RPC boundary', () => {
       'admin user'
     )
     await expect(invoke(server, 'authorizeRpcCall', 'adminStats', ['alice'], request)).resolves.toBe(true)
+
+    const proofReadArgs = { partial: {}, paged: { limit: 10, offset: 0 } }
+    const proofReadParams: any[] = [proofReadArgs]
+    await expect(invoke(server, 'authorizeRpcCall', 'findProvenTxReqs', proofReadParams, request)).resolves.toBe(true)
+    expect(proofReadParams).toEqual([
+      expect.objectContaining({ identityKey: 'alice', userId: 7 }),
+      proofReadArgs
+    ])
+
+    const proofUpdateArgs = { provenTxReqId: 1, txid: '1'.repeat(64) }
+    const proofUpdateParams: any[] = [proofUpdateArgs]
+    await expect(
+      invoke(server, 'authorizeRpcCall', 'updateProvenTxReqWithNewProvenTx', proofUpdateParams, request)
+    ).resolves.toBe(true)
+    expect(proofUpdateParams).toEqual([
+      expect.objectContaining({ identityKey: 'alice', userId: 7, isActive: true }),
+      proofUpdateArgs
+    ])
 
     const syncParams: any[] = [{ identityKey: 'alice' }, { ...emptyChunk }]
     await expect(invoke(server, 'authorizeRpcCall', 'processSyncChunk', syncParams, request)).resolves.toBe(true)

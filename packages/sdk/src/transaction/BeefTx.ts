@@ -7,7 +7,10 @@ import {
   ReaderUint8Array,
   WriterUint8Array
 } from '../primitives/utils.js'
-import Transaction from './Transaction.js'
+import Transaction, {
+  cacheKnownTransactionId,
+  transactionSerializationIdentity
+} from './Transaction.js'
 import { BEEF_V2, TX_DATA_FORMAT } from './BeefConstants.js'
 
 function skipBytes(br: Reader | ReaderUint8Array, length: number): void {
@@ -15,7 +18,7 @@ function skipBytes(br: Reader | ReaderUint8Array, length: number): void {
     throw new RangeError('Serialized transaction exceeds available BEEF data')
   }
   if (br instanceof ReaderUint8Array) br.skip(length)
-  else br.pos += length
+  else br.read(length)
 }
 
 function scanRawTransaction(br: Reader | ReaderUint8Array): {
@@ -24,18 +27,18 @@ function scanRawTransaction(br: Reader | ReaderUint8Array): {
 } {
   const start = br.pos
   skipBytes(br, 4)
-  const inputCount = br.readVarIntNum(false)
+  const inputCount = br.readVarIntNumStrict(false)
   const inputTxids = new Set<string>()
   for (let i = 0; i < inputCount; i++) {
     inputTxids.add(toHex(br.readReverse(32)))
     skipBytes(br, 4)
-    const scriptLength = br.readVarIntNum(false)
+    const scriptLength = br.readVarIntNumStrict(false)
     skipBytes(br, scriptLength + 4)
   }
-  const outputCount = br.readVarIntNum(false)
+  const outputCount = br.readVarIntNumStrict(false)
   for (let i = 0; i < outputCount; i++) {
     skipBytes(br, 8)
-    const scriptLength = br.readVarIntNum(false)
+    const scriptLength = br.readVarIntNumStrict(false)
     skipBytes(br, scriptLength)
   }
   skipBytes(br, 4)
@@ -116,6 +119,7 @@ export default class BeefTx {
     if (this._tx != null) return this._tx
     if (this._rawTx != null) {
       this._tx = Transaction.fromBinaryView(this._rawTx)
+      if (this._txid != null) cacheKnownTransactionId(this._tx, this._txid)
       return this._tx
     }
     return undefined
@@ -133,6 +137,11 @@ export default class BeefTx {
    * Raw transaction bytes, if available as Uint8Array
    */
   get rawTxUint8Array(): Uint8Array | undefined {
+    const bytes = this.getRawTxBytes()
+    return bytes == null ? undefined : Uint8Array.from(bytes)
+  }
+
+  private getRawTxBytes(): Uint8Array | undefined {
     if (this._tx != null) {
       if (this._rawTx == null) this._rawTx = this._tx.toUint8Array()
       else this.syncRawTxFromTransaction()
@@ -150,7 +159,7 @@ export default class BeefTx {
    */
   syncRawTxFromTransaction(): boolean {
     if (this._tx == null) return false
-    const bytes = this._tx.toUint8Array()
+    const bytes = transactionSerializationIdentity(this._tx)
     if (this._rawTx != null) {
       if (bytes === this._rawTx) return false
       this._rawTx = bytes
@@ -174,12 +183,13 @@ export default class BeefTx {
   constructor(
     tx: Transaction | Uint8Array | number[] | string,
     bumpIndex?: number,
-    inputTxids?: string[]
+    inputTxids?: string[],
+    retainRawView: boolean = false
   ) {
     if (typeof tx === 'string') {
       this._txid = tx
     } else if (tx instanceof Uint8Array) {
-      this._rawTx = tx
+      this._rawTx = retainRawView ? tx : Uint8Array.from(tx)
     } else if (Array.isArray(tx)) {
       this._rawTx = new Uint8Array(tx)
     } else if (tx instanceof Transaction) {
@@ -189,7 +199,7 @@ export default class BeefTx {
     }
     this._bumpIndex = bumpIndex
     if (this.hasProof) this.inputTxids = []
-    else if (inputTxids != null) this.inputTxids = inputTxids
+    else if (inputTxids != null) this.inputTxids = Array.from(inputTxids)
     else this.updateInputTxids()
   }
 
@@ -241,7 +251,7 @@ export default class BeefTx {
     }
 
     const writeTx = (): void => {
-      const bytes = this.rawTxUint8Array
+      const bytes = this.getRawTxBytes()
       if (bytes == null) {
         throw new Error('a valid serialized Transaction is expected')
       }
@@ -285,16 +295,16 @@ export default class BeefTx {
         beefTx = BeefTx.fromTxid(toHex(br.readReverse(32)))
       } else {
         if (format === TX_DATA_FORMAT.RAWTX_AND_BUMP_INDEX) {
-          bumpIndex = br.readVarIntNum()
+          bumpIndex = br.readVarIntNumStrict(false)
         }
         const { rawTx, inputTxids } = scanRawTransaction(br)
-        beefTx = new BeefTx(rawTx, bumpIndex, inputTxids)
+        beefTx = new BeefTx(rawTx, bumpIndex, inputTxids, true)
       }
     } else {
       // V1
       const { rawTx, inputTxids } = scanRawTransaction(br)
-      bumpIndex = br.readUInt8() === 0 ? undefined : br.readVarIntNum()
-      beefTx = new BeefTx(rawTx, bumpIndex, inputTxids)
+      bumpIndex = br.readUInt8() === 0 ? undefined : br.readVarIntNumStrict(false)
+      beefTx = new BeefTx(rawTx, bumpIndex, inputTxids, true)
     }
 
     return beefTx

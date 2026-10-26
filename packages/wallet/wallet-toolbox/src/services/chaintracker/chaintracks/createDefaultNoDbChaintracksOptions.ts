@@ -7,7 +7,7 @@ import {
   resolveDefaultChaintracksArguments
 } from './configureChaintracksIngestors'
 
-export function createDefaultNoDbChaintracksOptions (...args: DefaultChaintracksArguments): ChaintracksOptions {
+export function createDefaultNoDbChaintracksOptions(...args: DefaultChaintracksArguments): ChaintracksOptions {
   const params = resolveDefaultChaintracksArguments(args)
   const storage = new ChaintracksStorageNoDb(createDefaultChaintracksStorageOptions(params))
   return buildChaintracksOptionsWithIngestors(params, storage)

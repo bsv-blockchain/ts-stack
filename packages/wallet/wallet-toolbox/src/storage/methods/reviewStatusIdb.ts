@@ -1,4 +1,4 @@
-import * as sdk from '../../sdk'
+import type * as sdk from '../../sdk'
 import { StorageIdb } from '../StorageIdb'
 
 const provenTxReqStatusesSafeForInputRestore = new Set<sdk.ProvenTxReqStatus>(['invalid', 'doubleSpend'])
@@ -6,7 +6,7 @@ const provenTxReqStatusesSafeForInputRestore = new Set<sdk.ProvenTxReqStatus>(['
 /**
  * 1. set transactions to 'failed' if not already failed and provenTxReq with matching txid has status of 'invalid'.
  */
-async function failTransactionsForInvalidReqs (storage: StorageIdb, r: { log: string }): Promise<void> {
+async function failTransactionsForInvalidReqs(storage: StorageIdb, r: { log: string }): Promise<void> {
   const invalidTxids: string[] = []
   await storage.filterProvenTxReqs({ partial: { status: 'invalid' } }, txReq => {
     invalidTxids.push(txReq.txid)
@@ -26,9 +26,9 @@ async function failTransactionsForInvalidReqs (storage: StorageIdb, r: { log: st
  * Partitions failed transactions into all failed ids and the subset that is safe for input restore
  * (terminal failure: no blocking ProvenTxReq, i.e. all reqs are 'invalid'/'doubleSpend').
  */
-async function collectFailedTransactionIds (
+async function collectFailedTransactionIds(
   storage: StorageIdb
-): Promise<{ failedTransactionIds: Set<number>, safeFailedTransactionIds: Set<number> }> {
+): Promise<{ failedTransactionIds: Set<number>; safeFailedTransactionIds: Set<number> }> {
   const failedTxs = await storage.findTransactions({ partial: { status: 'failed' }, noRawTx: true })
   const failedTransactionIds = new Set<number>()
   const safeFailedTransactionIds = new Set<number>()
@@ -55,9 +55,9 @@ async function collectFailedTransactionIds (
  * @param args
  * @returns
  */
-export async function reviewStatusIdb (
+export async function reviewStatusIdb(
   storage: StorageIdb,
-  args: { agedLimit: Date, trx?: sdk.TrxToken }
+  args: { agedLimit: Date; trx?: sdk.TrxToken }
 ): Promise<{ log: string }> {
   const r: { log: string } = { log: '' }
 

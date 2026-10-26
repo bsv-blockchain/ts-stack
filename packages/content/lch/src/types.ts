@@ -1,4 +1,4 @@
-import type { WalletInterface } from '@bsv/sdk'
+import type { WalletInterface } from '@bsv/sdk/wallet/Wallet.interfaces'
 
 export type LCHUint = number | bigint
 export type LCHValue =
@@ -26,6 +26,17 @@ export type LCHObjectType =
 export interface SignedObject<T extends Record<string, LCHValue> = Record<string, LCHValue>> {
   body: T
   signatures: Uint8Array[]
+}
+
+/**
+ * Raw License recovery payload returned by a transport.
+ *
+ * The wrapper deliberately prevents transport recovery from being confused
+ * with a verified License. Only a context-aware buyer can unwrap and return a
+ * License after validating it against the funded acquisition.
+ */
+export interface UnverifiedLicenseResponse {
+  unverifiedLicense: SignedObject
 }
 
 export type RangeTuple = readonly [start: LCHUint, end: LCHUint]

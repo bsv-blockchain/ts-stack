@@ -10,6 +10,8 @@ import {
 import { StorageClient } from '../StorageClient'
 import type { WalletInterface } from '@bsv/sdk'
 
+const SERVER_IDENTITY_KEY = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+
 describe('binary JSON-RPC encoding', () => {
   it('round-trips nested Uint8Arrays through compact base64 tags', () => {
     const bytes = new Uint8Array(1024 * 1024)
@@ -31,8 +33,11 @@ describe('binary JSON-RPC encoding', () => {
     }
     const text = stringifyJsonRpc(fixture, true)
     expect(parseJsonRpc(text, true)).toEqual(JSON.parse(text, binaryJsonReviver))
-    const overwritten = '{"$bsvBinary":"escaped","entries":[["x",{"$bsvBinary":"base64-v1","data":"!!!="}],["x",1]]}'
-      .replace('base64-v1', BINARY_ENCODING)
+    const overwritten =
+      '{"$bsvBinary":"escaped","entries":[["x",{"$bsvBinary":"base64-v1","data":"!!!="}],["x",1]]}'.replace(
+        'base64-v1',
+        BINARY_ENCODING
+      )
     expect(() => parseJsonRpc(overwritten, true)).toThrow('Invalid base64')
     expect(() => JSON.parse(overwritten, binaryJsonReviver)).toThrow('Invalid base64')
   })
@@ -116,10 +121,10 @@ describe('binary JSON-RPC encoding', () => {
 
   it('rejects malformed base64 tags instead of silently corrupting bytes', () => {
     expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: '!!!=' })).toThrow('Invalid base64')
-    expect(() => parseJsonRpc(`{"bytes":{"$bsvBinary":"${BINARY_ENCODING}","data":"A==="}}`, true)).toThrow('Invalid base64')
-    expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: 'A' })).toThrow(
+    expect(() => parseJsonRpc(`{"bytes":{"$bsvBinary":"${BINARY_ENCODING}","data":"A==="}}`, true)).toThrow(
       'Invalid base64'
     )
+    expect(() => decodeBinaryJsonValue({ $bsvBinary: BINARY_ENCODING, data: 'A' })).toThrow('Invalid base64')
   })
 
   it('leaves primitive values untouched during iterative decoding', () => {
@@ -141,24 +146,18 @@ describe('binary JSON-RPC encoding', () => {
   })
 
   it('decodes reserved property names without mutating object prototypes', () => {
-    const value = JSON.parse(
-      `{"holder":{"__proto__":{"$bsvBinary":"${BINARY_ENCODING}","data":"AQID"}}}`
-    )
+    const value = JSON.parse(`{"holder":{"__proto__":{"$bsvBinary":"${BINARY_ENCODING}","data":"AQID"}}}`)
     const holderPrototype = Object.getPrototypeOf(value.holder)
 
     decodeBinaryJsonValue(value)
 
     expect(Object.getPrototypeOf(value.holder)).toBe(holderPrototype)
     expect(Object.hasOwn(value.holder, '__proto__')).toBe(true)
-    expect(Reflect.get(value.holder, '__proto__')).toEqual(
-      new Uint8Array([1, 2, 3])
-    )
+    expect(Reflect.get(value.holder, '__proto__')).toEqual(new Uint8Array([1, 2, 3]))
   })
 
   it('restores escaped reserved keys as own data properties', () => {
-    const value = JSON.parse(
-      '{"holder":{"__proto__":{"$bsvBinary":"escaped","entries":[["safe","value"]]}}}'
-    )
+    const value = JSON.parse('{"holder":{"__proto__":{"$bsvBinary":"escaped","entries":[["safe","value"]]}}}')
     const holderPrototype = Object.getPrototypeOf(value.holder)
 
     decodeBinaryJsonValue(value)
@@ -175,9 +174,15 @@ describe('binary JSON-RPC encoding', () => {
       requests.push(String(init?.body))
       requestHeaders.push(new Headers(init?.headers))
       const id = requests.length
-      return new Response(stringifyJsonRpc({ jsonrpc: '2.0', id, result: { bytes: new Uint8Array([id, 2, 3]) } }, true), {
-        headers: { [BINARY_ENCODING_HEADER]: BINARY_ENCODING }
-      })
+      return new Response(
+        stringifyJsonRpc({ jsonrpc: '2.0', id, result: { bytes: new Uint8Array([id, 2, 3]) } }, true),
+        {
+          headers: {
+            [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
+            'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY
+          }
+        }
+      )
     }
     const wallet = Object.create(null) as WalletInterface
     const client = new StorageClient(wallet, 'https://storage.example')
@@ -200,8 +205,12 @@ describe('binary JSON-RPC encoding', () => {
     const fetch = async (_input: string, init?: RequestInit): Promise<Response> => {
       requests.push(String(init?.body))
       requestHeaders.push(new Headers(init?.headers))
-      return new Response('{"jsonrpc":"2.0","id":1,"result":{}}', {
-        headers: { [BINARY_ENCODING_HEADER]: BINARY_ENCODING }
+      const id = JSON.parse(String(init?.body)).id
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id, result: {} }), {
+        headers: {
+          [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
+          'x-bsv-auth-identity-key': SERVER_IDENTITY_KEY
+        }
       })
     }
     const wallet = Object.create(null) as WalletInterface

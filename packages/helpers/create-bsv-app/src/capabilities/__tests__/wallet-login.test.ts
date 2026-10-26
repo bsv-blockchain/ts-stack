@@ -29,6 +29,8 @@ describe('wallet-login', () => {
     expect(hook?.content).toContain('useWallet')
     expect(hook?.content).toContain('createAuthProof')
     expect(hook?.content).toContain("'login'")
+    expect(hook?.content).toContain('apiFetch')
+    expect(hook?.content).toContain('readIdentityKeyResponse')
   })
   test('counterparty is auto-resolved (no hard-coded SERVER_IDENTITY_KEY placeholder)', () => {
     const client = walletLogin.files(ctx).client ?? []
@@ -38,12 +40,15 @@ describe('wallet-login', () => {
     expect(page?.content).not.toContain("SERVER_IDENTITY_KEY = ''")
     expect(hook?.content).toContain('getServerIdentity')
     expect(hook?.content).toContain('serverIdentityKey?: string') // now optional
+    expect(hook?.content).toContain('requireIdentityKey')
   })
   test('server route verifies via the shared auth helper', () => {
     const server = walletLogin.files(ctx).server ?? []
     const route = server.find(f => f.path === 'loginRoute.ts')
     expect(route?.content).toContain('verifyAuthProof')
     expect(route?.content).toContain("action: 'login'")
+    expect(route?.content).toContain("json({ error: 'invalid proof' })")
+    expect(route?.content).not.toContain('result.error')
   })
   test('wallet-login adds a WalletLogin page + route descriptor + server route via baseEdits', () => {
     expect((walletLogin.files(ctx).client ?? []).map(f => f.path)).toContain('WalletLogin.tsx')
@@ -70,5 +75,7 @@ describe('wallet-login', () => {
     expect(md).toContain("### How it's used")
     expect(md).toContain('### Future integrations')
     expect(md).toContain('SignJWT') // the going-further JWT snippet
+    expect(md).toContain('JWT_SECRET must contain at least 32 bytes')
+    expect(md).not.toContain("'dev-only-secret'")
   })
 })

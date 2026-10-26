@@ -70,7 +70,7 @@ describe('ChaintracksChaintracker tests', () => {
     expect(chaintracks.findHeaderForHeight).toHaveBeenCalledTimes(2)
   })
 
-  test('traces retry attempts and cache disposition without roots or headers', async () => {
+  test('traces retry attempts and diagnostic-cache disposition without roots or headers', async () => {
     const events: any[] = []
     let nextSpanId = 1
     const chaintracks = makeChaintracksClient([undefined, HEADER_877599, HEADER_877599])
@@ -365,8 +365,11 @@ async function testChaintracksChaintracker(chain: sdk.Chain) {
   expect(okTest).toBe(chain === 'test')
 }
 
-function jsonResponse(body: unknown): any {
-  return { ok: true, status: 200, json: async () => body }
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
 }
 
 function makeChaintracksClient(responses: Array<BlockHeader | undefined | Error>): any {

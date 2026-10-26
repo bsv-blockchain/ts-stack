@@ -190,11 +190,11 @@ test('container release workflows scan before push and publish signed evidence',
   assert.match(infraRelease, /cosign verify[\s\S]+"\$image_ref" >\/dev\/null/)
   assert.match(infraRelease, /gh attestation verify[\s\S]+--deny-self-hosted-runners >\/dev\/null/)
   assert.match(infraRelease, /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/)
-  assert.match(infraRelease, /anchore\/sbom-action@e22c389904149dbc22b58101806040fa8d37a610/)
-  assert.match(infraRelease, /actions\/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d/)
+  assert.match(infraRelease, /anchore\/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26/)
+  assert.match(infraRelease, /actions\/attest@1e69f48acb82d1966a394da916b4c1698aa569d6/)
   assert.match(infraRelease, /sigstore\/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6/)
   assert.equal(
-    infraRelease.match(/docker\/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a/g)
+    infraRelease.match(/docker\/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc/g)
       ?.length,
     1,
     'the scanned release image must be built exactly once'
@@ -214,8 +214,8 @@ test('container release workflows scan before push and publish signed evidence',
     marketplaceRelease,
     /aquasecurity\/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25/
   )
-  assert.match(marketplaceRelease, /anchore\/sbom-action@e22c389904149dbc22b58101806040fa8d37a610/)
-  assert.match(marketplaceRelease, /actions\/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d/)
+  assert.match(marketplaceRelease, /anchore\/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26/)
+  assert.match(marketplaceRelease, /actions\/attest@1e69f48acb82d1966a394da916b4c1698aa569d6/)
   assert.ok(
     marketplaceRelease.indexOf('Reject high and critical image vulnerabilities') <
       marketplaceRelease.indexOf('Push image to Marketplace ECR'),
@@ -301,7 +301,7 @@ test('Docker refreshes and OpenSSF posture checks remain automated', () => {
   assert.match(scorecard, /publish_results: true/)
   assert.match(
     scorecard,
-    /github\/codeql-action\/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81/
+    /github\/codeql-action\/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63/
   )
   assert.match(scorecard, /security-events: write/)
   assert.match(scorecard, /id-token: write/)

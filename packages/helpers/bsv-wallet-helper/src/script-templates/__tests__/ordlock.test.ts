@@ -1,5 +1,5 @@
 import { describe, expect, test } from '@jest/globals'
-import { PrivateKey, Transaction, Script } from '@bsv/sdk'
+import { PrivateKey, Transaction, Script, Utils } from '@bsv/sdk'
 import OrdLock from '../ordlock'
 import { makeMockWallet } from '../../utils/mockWallet'
 
@@ -44,6 +44,40 @@ describe('OrdLock script template', () => {
     )
   })
 
+  test('rejects malformed financial, address, and metadata values', async () => {
+    const ordLock = new OrdLock()
+
+    for (const price of [0, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 21e14 + 1]) {
+      await expect(ordLock.lock({ ...lockParams, price })).rejects.toThrow(
+        'price must be a safe integer'
+      )
+    }
+    const shortAddress = Utils.toBase58Check(Array.from({ length: 19 }, () => 0))
+    await expect(ordLock.lock({ ...lockParams, ordAddress: shortAddress })).rejects.toThrow(
+      'ordAddress must contain a 20-byte public key hash'
+    )
+    await expect(ordLock.lock({ ...lockParams, payAddress: shortAddress })).rejects.toThrow(
+      'payAddress must contain a 20-byte public key hash'
+    )
+    await expect(ordLock.lock({ ...lockParams, metadata: { score: Number.NaN } })).rejects.toThrow(
+      'metadata.score must be a finite JSON number'
+    )
+
+    const accessor = Object.defineProperty({}, 'secret', {
+      enumerable: true,
+      get: () => 'value'
+    })
+    await expect(ordLock.lock({ ...lockParams, metadata: accessor })).rejects.toThrow(
+      'metadata.secret must be a data property'
+    )
+
+    const cyclic: Record<string, unknown> = {}
+    cyclic.self = cyclic
+    await expect(ordLock.lock({ ...lockParams, itemData: cyclic })).rejects.toThrow(
+      'itemData.self must not contain a cycle'
+    )
+  })
+
   test('cancel unlock should produce unlocking script ending with OP_1', async () => {
     const priv = new PrivateKey(42)
     const wallet = await makeMockWallet(priv)
@@ -72,6 +106,7 @@ describe('OrdLock script template', () => {
     const asm = unlockingScript.toASM()
 
     expect(asm.trim().endsWith('OP_1')).toBe(true)
+    await expect(unlock.estimateLength()).resolves.toBe(109)
   }, 30000)
 
   test('unlock dispatches cancel and purchase templates', async () => {

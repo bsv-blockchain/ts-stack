@@ -14,9 +14,13 @@ import { AuthRequest } from '@bsv/auth-express-middleware'
 import { Logger } from '../utils/logger.js'
 import { runtimeDeps } from '../runtimeDeps.js'
 import { readMessageBoxResourceConfig } from '../config/resources.js'
+import {
+  isCanonicalMessageId,
+  MAX_MESSAGE_ID_BYTES as MAX_CANONICAL_MESSAGE_ID_BYTES
+} from '../security/messageFields.js'
 
 export const MAX_ACKNOWLEDGMENT_IDS = 1_000
-export const MAX_MESSAGE_ID_BYTES = 256
+export const MAX_MESSAGE_ID_BYTES = MAX_CANONICAL_MESSAGE_ID_BYTES
 
 /**
  * @interface AcknowledgeRequest
@@ -48,7 +52,8 @@ export interface AcknowledgeRequest extends AuthRequest {
  *                 type: array
  *                 items:
  *                   type: string
- *                 description: Array of message IDs to acknowledge
+ *                   maxLength: 256
+ *                 description: Array of exact control-free UTF-8 message IDs to acknowledge
  *     responses:
  *       200:
  *         description: Successfully acknowledged messages
@@ -116,11 +121,7 @@ export default {
         })
       }
 
-      Logger.log(
-        '[SERVER] acknowledgeMessage called for',
-        Array.isArray(messageIds) ? messageIds.length : 0,
-        'message(s)'
-      )
+      Logger.log('[SERVER] acknowledgeMessage request received.')
       const maxAcknowledgmentIds = readMessageBoxResourceConfig().maxAcknowledgmentIds
 
       // Validate request: must be a non-empty array of strings
@@ -135,20 +136,15 @@ export default {
       if (
         !Array.isArray(messageIds) ||
         (maxAcknowledgmentIds !== -1 && messageIds.length > maxAcknowledgmentIds) ||
-        messageIds.some(
-          id =>
-            typeof id !== 'string' ||
-            id.trim() === '' ||
-            Buffer.byteLength(id, 'utf8') > MAX_MESSAGE_ID_BYTES
-        )
+        messageIds.some(id => !isCanonicalMessageId(id))
       ) {
         const maximumIds = maxAcknowledgmentIds === -1 ? '' : ` of at most ${maxAcknowledgmentIds}`
         return res.status(400).json({
           status: 'error',
           code: 'ERR_INVALID_MESSAGE_ID',
           description:
-            `Message IDs must be a non-empty array${maximumIds} ` +
-            `non-empty strings no longer than ${MAX_MESSAGE_ID_BYTES} bytes each.`
+            `Message IDs must be a non-empty array${maximumIds} of exact, control-free ` +
+            `strings no longer than ${MAX_MESSAGE_ID_BYTES} bytes each.`
         })
       }
 
@@ -176,8 +172,8 @@ export default {
       }
 
       return res.status(200).json({ status: 'success' })
-    } catch (e) {
-      Logger.error(e)
+    } catch {
+      Logger.error('[ERROR] Message acknowledgment failed.')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL_ERROR',

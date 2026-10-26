@@ -21,7 +21,7 @@ describe('ProtoWallet – additional coverage', () => {
       const wallet = new ProtoWallet(PrivateKey.fromRandom())
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await expect(wallet.getPublicKey({} as any)).rejects.toThrow(
-        'protocolID and keyID are required'
+        'protocolID parameter must be a [securityLevel, protocolName] tuple'
       )
     })
 
@@ -29,7 +29,7 @@ describe('ProtoWallet – additional coverage', () => {
       const wallet = walletWithNullKeyDeriver()
       await expect(
         wallet.getPublicKey({
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'key1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -42,7 +42,7 @@ describe('ProtoWallet – additional coverage', () => {
       await expect(
         wallet.encrypt({
           plaintext: [1, 2, 3],
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -55,7 +55,7 @@ describe('ProtoWallet – additional coverage', () => {
       await expect(
         wallet.decrypt({
           ciphertext: [1, 2, 3],
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -68,7 +68,7 @@ describe('ProtoWallet – additional coverage', () => {
       await expect(
         wallet.createHmac({
           data: [1, 2, 3],
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -82,7 +82,7 @@ describe('ProtoWallet – additional coverage', () => {
         wallet.verifyHmac({
           data: [1, 2, 3],
           hmac: Array.from({ length: 32 }).fill(0),
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -92,10 +92,9 @@ describe('ProtoWallet – additional coverage', () => {
   describe('createSignature', () => {
     it('throws when both data and hashToDirectlySign are missing', async () => {
       const wallet = new ProtoWallet(PrivateKey.fromRandom())
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(wallet.createSignature({} as any)).rejects.toThrow(
-        'args.data or args.hashToDirectlySign must be valid'
-      )
+      await expect(
+        wallet.createSignature({ protocolID: [1, 'tests'], keyID: 'key1' } as any)
+      ).rejects.toThrow('data, hashToDirectlySign parameter must be exactly one value')
     })
 
     it('throws when keyDeriver is null', async () => {
@@ -103,7 +102,7 @@ describe('ProtoWallet – additional coverage', () => {
       await expect(
         wallet.createSignature({
           data: [1, 2, 3],
-          protocolID: [1, 'test'],
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')
@@ -113,19 +112,24 @@ describe('ProtoWallet – additional coverage', () => {
   describe('verifySignature', () => {
     it('throws when both data and hashToDirectlyVerify are missing', async () => {
       const wallet = new ProtoWallet(PrivateKey.fromRandom())
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await expect(wallet.verifySignature({} as any)).rejects.toThrow(
-        'args.data or args.hashToDirectlyVerify must be valid'
-      )
+      await expect(
+        wallet.verifySignature({ protocolID: [1, 'tests'], keyID: 'key1' } as any)
+      ).rejects.toThrow('data, hashToDirectlyVerify parameter must be exactly one value')
     })
 
     it('throws when keyDeriver is null', async () => {
       const wallet = walletWithNullKeyDeriver()
+      const signer = new ProtoWallet(PrivateKey.fromRandom())
+      const { signature } = await signer.createSignature({
+        data: [1, 2, 3],
+        protocolID: [1, 'tests'],
+        keyID: 'key1'
+      })
       await expect(
         wallet.verifySignature({
           data: [1, 2, 3],
-          signature: [1, 2, 3],
-          protocolID: [1, 'test'],
+          signature,
+          protocolID: [1, 'tests'],
           keyID: 'k1'
         })
       ).rejects.toThrow('keyDeriver is undefined')

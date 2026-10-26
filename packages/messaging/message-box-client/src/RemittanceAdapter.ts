@@ -28,8 +28,10 @@
  * ```
  */
 
-import { PubKeyHex, stringifyBRC100 } from '@bsv/sdk'
-import type { CommsLayer as SdkCommsLayer, PeerMessage as SdkRemittancePeerMessage } from '@bsv/sdk'
+import type { CommsLayer as SdkCommsLayer } from '@bsv/sdk/remittance/CommsLayer'
+import type { PeerMessage as SdkRemittancePeerMessage } from '@bsv/sdk/remittance/types'
+import { stringifyBRC100 } from '@bsv/sdk/wallet/BRC100ByteEncoding'
+import type { PubKeyHex } from '@bsv/sdk/wallet/Wallet.interfaces'
 import type { MessageBoxClient } from './MessageBoxClient.js'
 import type { PeerMessage as MessageBoxPeerMessage } from './types.js'
 

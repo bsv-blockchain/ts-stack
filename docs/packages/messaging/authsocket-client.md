@@ -3,7 +3,7 @@ id: pkg-authsocket-client
 title: '@bsv/authsocket-client'
 kind: package
 domain: messaging
-version: '2.1.6'
+version: '2.1.9'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
@@ -15,6 +15,10 @@ tags: [messaging, websocket, brc-31, auth]
 ---
 
 # @bsv/authsocket-client
+
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
+a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
+before adopting it.
 
 > Client-side BRC-103 mutual authentication wrapper for socket.io-client. Signs all outbound messages and verifies inbound messages using a wallet, enabling authenticated peer-to-peer WebSocket communication.
 
@@ -36,7 +40,7 @@ const clientWallet = new ProtoWallet(
 const socket = AuthSocketClient('http://localhost:3000', { wallet: clientWallet })
 
 socket.on('connect', () => {
-  console.log('Connected. Socket ID:', socket.id)
+  console.log('Socket.IO transport connected. Socket ID:', socket.id)
   socket.emit('chatMessage', { text: 'Hello from client!' })
 })
 
@@ -48,6 +52,12 @@ socket.on('disconnect', () => {
   console.log('Disconnected')
 })
 ```
+
+`connect` and `connected` describe the raw Socket.IO transport, not a completed
+BRC-103 identity proof. Outbound application events complete the handshake
+before their signed payload is sent, and inbound application callbacks receive
+only verified general messages. When local behavior requires a known server,
+set `expectedServerIdentityKey` and wait for a verified application event.
 
 ## What it provides
 
@@ -63,7 +73,7 @@ socket.on('disconnect', () => {
 
 ## Common patterns
 
-### Basic authenticated connection
+### Basic transport connection and authenticated events
 
 ```typescript
 import { AuthSocketClient } from '@bsv/authsocket-client'
@@ -75,7 +85,7 @@ const wallet = new ProtoWallet(
 const socket = AuthSocketClient('http://localhost:3000', { wallet })
 
 socket.on('connect', () => {
-  console.log('Authenticated')
+  console.log('Transport connected; the first emit performs BRC-103 authentication')
   socket.emit('joinRoom', 'general')
 })
 
@@ -152,6 +162,7 @@ throws or rejects is also contained.
 3. **Nonce tracking handled automatically** — library auto-generates nonces; don't manually set them
 4. **Signature verification automatic** — inbound messages verified; if verification fails, message is dropped
 5. **Handshake must complete first** — BRC-103 handshake completes before general messages; library handles this
+6. **`connect` is transport state** — wait for a verified application event before treating an unpinned server as authenticated
 
 ## Related packages
 

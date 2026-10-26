@@ -75,6 +75,15 @@ describe('getListOutputsSpecOp', () => {
     expect(result.tags).toEqual([])
   })
 
+  it('bounds invalid-change candidates without truncating wallet-balance aggregation', () => {
+    expect(getListOutputsSpecOp(specOpInvalidChange, []).specOp).toMatchObject({
+      maximumCandidateCount: 10_000
+    })
+    expect(
+      getListOutputsSpecOp(specOpWalletBalance, []).specOp?.maximumCandidateCount
+    ).toBeUndefined()
+  })
+
   it('resolves the wallet-balance tag for the default basket', () => {
     const result = getListOutputsSpecOp('default', ['ordinary', specOpWalletBalance, 'remaining'])
 
@@ -200,12 +209,12 @@ describe('getListOutputsSpecOp', () => {
     })
   })
 
-  it('bounds provider names and provider count in release audit evidence', async () => {
+  it('bounds provider count in release audit evidence', async () => {
     const outputs = Array.from({ length: 10 }, (_, index) => makeOutput(100 + index))
     const harness = makeInvalidChangeHarness(async outpoint => {
       const output = outputs.find(candidate => outpoint.startsWith(candidate.txid))!
       return {
-        name: `${output.outputId}-${'provider-name'.repeat(20)}`,
+        name: `provider-${output.outputId}`,
         status: 'success',
         details: [],
         isUtxo: true

@@ -26,7 +26,11 @@ Provide a BRC-103-compatible `Wallet` implementation, such as one from
 
 ## Usage
 
-Below is a minimal **Express** + **HTTP** + **Socket.IO** + `authsocket` server. You can adapt it to your own setup (e.g. Fastify, Koa, etc.) since only the raw `http.Server` is needed for Socket.IO.
+Below is a minimal loopback **Express** + **HTTP** + **Socket.IO** +
+`authsocket` server. Production deployments must terminate TLS at this process
+or a trusted reverse proxy; BRC-103 authenticates messages but does not encrypt
+their payloads or Socket.IO metadata. You can adapt the example to another HTTP
+framework because only the raw `http.Server` is needed for Socket.IO.
 
 ```ts
 import express from 'express'
@@ -86,16 +90,41 @@ accessible with `origin: '*'`; deployments with a closed caller set can supply
 an explicit allowlist instead. AuthSocket does not impose a restrictive
 cross-origin default of its own.
 
+It is a browser-origin policy, not authentication or authorization. Authorize
+each authenticated BRC-103 identity for the requested operation in application
+code.
+
 1. Create an `AuthSocketServer` with the `wallet` option.
 2. On `'connection'`, receive an `AuthSocket` that supports normal
    `socket.on(...)` and `socket.emit(...)` calls.
 3. Messages are signed and verified under the hood.
 
-Authenticated event data preserves arbitrary JSON exactly, including plain
+The application `'connection'` callback runs only after the client proves its
+claimed identity with its first verified signed message. That first event waits
+for all connection callbacks, and every concurrently received event shares that
+same activation gate, so handlers can be installed or the connection can be
+denied before any application dispatch. A peer is not eligible for broadcast or
+identity-targeted delivery until activation finishes. Unauthenticated transport
+connections are excluded from broadcasts and never receive an application
+`AuthSocket`. A registered `'disconnect'` handler reports the underlying
+Socket.IO disconnect; a signed application event cannot spoof it.
+
+Authenticated event data preserves supported JSON exactly, including plain
 numeric-key objects under names such as `data`, `payload`, `transaction`, and
 `tx`. Real `Uint8Array` values are serialized as portable number arrays. Code
 that owns a typed payment or wallet protocol may recover a historical
 numeric-key byte object at that protocol's explicit byte field after receipt.
+Non-JSON values, negative zero, nested `undefined`, accessors, hidden/extra
+properties, sparse arrays, and serialization hooks are rejected before signing
+so the validated object cannot change meaning or expand work during encoding.
+
+`requestedCertificates` configures the SDK's v0.1 certificate allowlist, not a
+complete application authorization policy. The legacy shape cannot express
+all/any/optional/threshold fulfillment, and this wrapper does not expose the
+received evidence to the connection callback. Do not grant application access
+merely because this option was configured; authorize the authenticated identity
+independently, or use an integration that exposes validated certificate fields
+for an explicit application decision.
 
 Call `await io.close()` during shutdown. It is idempotent and disconnects
 active Socket.IO clients before closing the attached HTTP server.
@@ -114,6 +143,20 @@ At most 32 authentication messages are processed concurrently per socket by
 default. Set `maxPendingAuthMessages` to a positive safe integer when a
 deployment needs a different per-connection bound. A client that exceeds the
 bound is disconnected while the server continues accepting other clients.
+
+Authenticated application frames default to a 1 MiB encoded limit. Set
+`maxEventPayloadBytes` to another positive safe integer if necessary. Event
+names are bounded and may not use Socket.IO lifecycle names or the internal
+`_unknown` sentinel. Malformed, oversized, or reserved-name frames disconnect
+only the offending socket and are never dispatched to application handlers.
+
+The default SDK session manager retains at most 10,000 sessions for 30 minutes
+of idle time and consumes each signed message nonce once. A custom shared
+`AsyncSessionManager` must implement atomic `claimMessageNonce`; the SDK fails
+closed if it does not. It must also atomically implement
+`claimInitialRequestNonce` so unsigned handshake replays are rejected before
+wallet or callback work. Wallet Toolbox's `KnexSessionManager` provides both
+contracts after its replay-claim migration has run.
 
 ### Targeted authenticated delivery
 

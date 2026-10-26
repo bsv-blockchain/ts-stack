@@ -1,7 +1,8 @@
 import { WalletCore } from '../WalletCore'
-import { WalletInterface } from '@bsv/sdk'
+import { LockingScript, Transaction, UnlockingScript, WalletInterface } from '@bsv/sdk'
 import { PaymentRequest, IncomingPayment } from '../types'
 import { createMessageBoxMethods } from '../../modules/messagebox'
+import { PeerPayClient } from '@bsv/message-box-client'
 
 // Mock PeerPayClient
 jest.mock('@bsv/message-box-client', () => {
@@ -21,6 +22,68 @@ const VALID_KEY_1 = '030dbed53c3613c887ad36e8bde365c2e58f6196735a589cd09d6bc316f
 const VALID_KEY_2 = '02ca066fa6b7557188b0a4013ad44e7b4a32e2f5e32fbd8d460b9f49caa0b275bd'
 const VALID_KEY_3 = '0230035191be460ab6438ed694899a04b9656637eef4330e39c45f0f504d415963'
 const VALID_KEY_4 = '03509d5a5d90f53ee5273f59e85292fd3e5bb90c6bd52ba2c5872037cd456536b4'
+const DERIVATION_PREFIX = 'cHJlZml4'
+const DERIVATION_SUFFIX = 'c3VmZml4'
+
+function completedAction(args: any): { txid: string; tx: number[] } {
+  const outputs = args.outputs.map((output: any) => ({
+    satoshis: output.satoshis,
+    lockingScript: LockingScript.fromHex(output.lockingScript)
+  }))
+  const totalOutputSatoshis = outputs.reduce(
+    (total: number, output: { satoshis: number }) => total + output.satoshis,
+    0
+  )
+  const fundingTransaction = new Transaction(
+    1,
+    [],
+    [{ satoshis: totalOutputSatoshis, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+    0
+  )
+  const tx = new Transaction(
+    args.version ?? 1,
+    totalOutputSatoshis === 0
+      ? []
+      : [
+          {
+            sourceTransaction: fundingTransaction,
+            sourceOutputIndex: 0,
+            unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+          }
+        ],
+    outputs,
+    args.lockTime ?? 0
+  )
+  return { txid: tx.id('hex'), tx: tx.toAtomicBEEF() }
+}
+
+function validAtomicBeef(extraScriptBytes = 0): number[] {
+  const outputs = Array.from({ length: 6 }, (_, index) => ({
+    satoshis: 1,
+    lockingScript:
+      index === 0 && extraScriptBytes > 0
+        ? LockingScript.fromHex('00'.repeat(extraScriptBytes))
+        : LockingScript.fromASM('OP_TRUE')
+  }))
+  const funding = new Transaction(
+    1,
+    [],
+    [{ satoshis: outputs.length, lockingScript: LockingScript.fromASM('OP_TRUE') }],
+    0
+  )
+  return new Transaction(
+    1,
+    [
+      {
+        sourceTransaction: funding,
+        sourceOutputIndex: 0,
+        unlockingScript: UnlockingScript.fromASM('OP_TRUE')
+      }
+    ],
+    outputs,
+    0
+  ).toAtomicBEEF()
+}
 
 // Concrete subclass for testing
 class TestWallet extends WalletCore {
@@ -44,10 +107,7 @@ describe('WalletCore Direct Payment', () => {
       getPublicKey: jest.fn().mockResolvedValue({
         publicKey: VALID_KEY_3
       }),
-      createAction: jest.fn().mockResolvedValue({
-        txid: 'abc123',
-        tx: [1, 2, 3]
-      }),
+      createAction: jest.fn().mockImplementation(async args => completedAction(args)),
       internalizeAction: jest.fn().mockResolvedValue({ accepted: true })
     }
   })
@@ -84,14 +144,10 @@ describe('WalletCore Direct Payment', () => {
       expect(r1.derivationSuffix).not.toBe(r2.derivationSuffix)
     })
 
-    it('should allow zero satoshis (caller validates)', () => {
+    it('should reject a zero-value payment request', () => {
       const wallet = new TestWallet(mockClient)
-      const request = wallet.createPaymentRequest({ satoshis: 0 })
 
-      expect(request.satoshis).toBe(0)
-      expect(request.serverIdentityKey).toBe(wallet.getIdentityKey())
-      expect(request.derivationPrefix).toBeDefined()
-      expect(request.derivationSuffix).toBeDefined()
+      expect(() => wallet.createPaymentRequest({ satoshis: 0 })).toThrow('at least 1 satoshis')
     })
 
     it('should handle large satoshi amounts', () => {
@@ -122,6 +178,23 @@ describe('WalletCore Direct Payment', () => {
       const request = wallet.createPaymentRequest({ satoshis: 500, memo: unicodeMemo })
 
       expect(request.memo).toBe(unicodeMemo)
+    })
+
+    it('does not inherit payment-request options and returns an own-data record', () => {
+      const wallet = new TestWallet(mockClient)
+      Object.defineProperties(Object.prototype, {
+        satoshis: { value: 5000, configurable: true },
+        memo: { value: 'ambient memo', configurable: true }
+      })
+      try {
+        expect(() => wallet.createPaymentRequest({} as never)).toThrow('valid number of satoshis')
+        const request = wallet.createPaymentRequest({ satoshis: 1 })
+        expect(Object.getPrototypeOf(request)).toBeNull()
+        expect('memo' in request).toBe(false)
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'satoshis')
+        Reflect.deleteProperty(Object.prototype, 'memo')
+      }
     })
 
     it('should handle empty string memo', () => {
@@ -172,7 +245,7 @@ describe('WalletCore Direct Payment', () => {
       )
 
       // Should return remittance data
-      expect(result.txid).toBe('abc123')
+      expect(result.txid).toMatch(/^[0-9a-f]{64}$/)
       expect(result.senderIdentityKey).toBe(wallet.getIdentityKey())
       expect(result.derivationPrefix).toBe(request.derivationPrefix)
       expect(result.derivationSuffix).toBe(request.derivationSuffix)
@@ -202,8 +275,8 @@ describe('WalletCore Direct Payment', () => {
       const wallet = new TestWallet(mockClient)
       const request: PaymentRequest = {
         serverIdentityKey: VALID_KEY_2,
-        derivationPrefix: 'a',
-        derivationSuffix: 'b',
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         satoshis: 999999999
       }
 
@@ -291,7 +364,7 @@ describe('WalletCore Direct Payment', () => {
       expect(createCall.outputs).toHaveLength(1)
     })
 
-    it('should handle very long memo', async () => {
+    it('should reject a memo above the wallet description bound', async () => {
       const wallet = new TestWallet(mockClient)
       const longMemo = 'A'.repeat(10000)
       const request: PaymentRequest = {
@@ -302,12 +375,8 @@ describe('WalletCore Direct Payment', () => {
         memo: longMemo
       }
 
-      await wallet.sendDirectPayment(request)
-
-      const createCall = mockClient.createAction.mock.calls[0][0]
-      expect(createCall.outputs).toHaveLength(2)
-      expect(createCall.outputs[1].satoshis).toBe(0)
-      expect(createCall.description).toBe(longMemo)
+      await expect(wallet.sendDirectPayment(request)).rejects.toThrow('no more than 2000')
+      expect(mockClient.createAction).not.toHaveBeenCalled()
     })
 
     it('should use default description when no memo is provided', async () => {
@@ -324,6 +393,128 @@ describe('WalletCore Direct Payment', () => {
       const createCall = mockClient.createAction.mock.calls[0][0]
       expect(createCall.description).toBe('Direct payment (4200 sats)')
     })
+
+    it('owns the validated payment request across asynchronous key derivation', async () => {
+      let resolveKey!: (value: { publicKey: string }) => void
+      mockClient.getPublicKey.mockReturnValue(
+        new Promise(resolve => {
+          resolveKey = resolve
+        })
+      )
+      const wallet = new TestWallet(mockClient)
+      const request: PaymentRequest = {
+        serverIdentityKey: VALID_KEY_2,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
+        satoshis: 500
+      }
+
+      const pending = wallet.sendDirectPayment(request)
+      await Promise.resolve()
+      request.serverIdentityKey = VALID_KEY_4
+      request.satoshis = 9999
+      resolveKey({ publicKey: VALID_KEY_3 })
+      await pending
+
+      expect(mockClient.getPublicKey).toHaveBeenCalledWith(
+        expect.objectContaining({ counterparty: VALID_KEY_2 })
+      )
+      expect(mockClient.createAction.mock.calls[0][0].outputs[0].satoshis).toBe(500)
+    })
+
+    it('rejects malformed request and derived-key authority before creating an action', async () => {
+      const wallet = new TestWallet(mockClient)
+      await expect(
+        wallet.sendDirectPayment({
+          serverIdentityKey: VALID_KEY_2,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          satoshis: Number.NaN
+        })
+      ).rejects.toThrow('valid number of satoshis')
+
+      mockClient.getPublicKey.mockResolvedValue({ publicKey: 'not-a-key' })
+      await expect(
+        wallet.sendDirectPayment({
+          serverIdentityKey: VALID_KEY_2,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          satoshis: 1
+        })
+      ).rejects.toThrow('Invalid getPublicKey result publicKey')
+      expect(mockClient.createAction).not.toHaveBeenCalled()
+    })
+
+    it('does not normalize an inherited payment request', async () => {
+      const wallet = new TestWallet(mockClient)
+      Object.defineProperties(Object.prototype, {
+        serverIdentityKey: { value: VALID_KEY_2, configurable: true },
+        derivationPrefix: { value: DERIVATION_PREFIX, configurable: true },
+        derivationSuffix: { value: DERIVATION_SUFFIX, configurable: true },
+        satoshis: { value: 1, configurable: true }
+      })
+      try {
+        await expect(wallet.sendDirectPayment({} as PaymentRequest)).rejects.toThrow(
+          'Payment request server identity key'
+        )
+        expect(mockClient.getPublicKey).not.toHaveBeenCalled()
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'serverIdentityKey')
+        Reflect.deleteProperty(Object.prototype, 'derivationPrefix')
+        Reflect.deleteProperty(Object.prototype, 'derivationSuffix')
+        Reflect.deleteProperty(Object.prototype, 'satoshis')
+      }
+    })
+  })
+
+  describe('pay', () => {
+    it('preserves PeerPay void success without consuming inherited options', async () => {
+      const sendPayment = jest.fn().mockResolvedValue(undefined)
+      jest
+        .mocked(PeerPayClient)
+        .mockImplementationOnce(() => ({ sendPayment }) as unknown as PeerPayClient)
+      const wallet = new TestWallet(mockClient)
+
+      await expect(wallet.pay({ to: VALID_KEY_2, satoshis: 1 })).resolves.toEqual({
+        txid: '',
+        tx: undefined
+      })
+      expect(sendPayment).toHaveBeenCalledWith({ recipient: VALID_KEY_2, amount: 1 })
+
+      Object.defineProperties(Object.prototype, {
+        to: { value: VALID_KEY_2, configurable: true },
+        satoshis: { value: 1, configurable: true }
+      })
+      try {
+        await expect(wallet.pay({} as never)).rejects.toThrow('Payment recipient')
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'to')
+        Reflect.deleteProperty(Object.prototype, 'satoshis')
+      }
+    })
+
+    it('rejects prototype-only or malformed claimed PeerPay evidence', async () => {
+      jest.mocked(PeerPayClient).mockImplementationOnce(
+        () =>
+          ({
+            sendPayment: jest.fn().mockResolvedValue(Object.create({ txid: 'a'.repeat(64) }))
+          }) as unknown as PeerPayClient
+      )
+      const wallet = new TestWallet(mockClient)
+      await expect(wallet.pay({ to: VALID_KEY_2, satoshis: 1 })).rejects.toThrow(
+        'invalid payment result'
+      )
+
+      jest.mocked(PeerPayClient).mockImplementationOnce(
+        () =>
+          ({
+            sendPayment: jest.fn().mockResolvedValue({ txid: 'not-a-txid', tx: [1] })
+          }) as unknown as PeerPayClient
+      )
+      await expect(wallet.pay({ to: VALID_KEY_2, satoshis: 1 })).rejects.toThrow(
+        'invalid payment txid'
+      )
+    })
   })
 
   // ==========================================================================
@@ -333,25 +524,26 @@ describe('WalletCore Direct Payment', () => {
   describe('receiveDirectPayment', () => {
     it('should internalize with wallet payment protocol', async () => {
       const wallet = new TestWallet(mockClient)
+      const tx = validAtomicBeef()
 
       await wallet.receiveDirectPayment({
-        tx: [1, 2, 3],
-        senderIdentityKey: '02' + 'aa'.repeat(32),
-        derivationPrefix: 'prefix',
-        derivationSuffix: 'suffix',
+        tx,
+        senderIdentityKey: VALID_KEY_2,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         outputIndex: 0
       })
 
       expect(mockClient.internalizeAction).toHaveBeenCalledWith({
-        tx: [1, 2, 3],
+        tx,
         outputs: [
           {
             outputIndex: 0,
             protocol: 'wallet payment',
             paymentRemittance: {
-              senderIdentityKey: '02' + 'aa'.repeat(32),
-              derivationPrefix: 'prefix',
-              derivationSuffix: 'suffix'
+              senderIdentityKey: VALID_KEY_2,
+              derivationPrefix: DERIVATION_PREFIX,
+              derivationSuffix: DERIVATION_SUFFIX
             }
           }
         ],
@@ -362,18 +554,19 @@ describe('WalletCore Direct Payment', () => {
 
     it('should convert Uint8Array tx to number array', async () => {
       const wallet = new TestWallet(mockClient)
-      const txBytes = new Uint8Array([10, 20, 30])
+      const tx = validAtomicBeef()
+      const txBytes = new Uint8Array(tx)
 
       await wallet.receiveDirectPayment({
         tx: txBytes,
-        senderIdentityKey: '02' + 'bb'.repeat(32),
-        derivationPrefix: 'p',
-        derivationSuffix: 's',
+        senderIdentityKey: VALID_KEY_3,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         outputIndex: 1
       })
 
       const call = mockClient.internalizeAction.mock.calls[0][0]
-      expect(call.tx).toEqual([10, 20, 30])
+      expect(call.tx).toEqual(tx)
       expect(call.outputs[0].outputIndex).toBe(1)
     })
 
@@ -381,10 +574,10 @@ describe('WalletCore Direct Payment', () => {
       const wallet = new TestWallet(mockClient)
 
       await wallet.receiveDirectPayment({
-        tx: [1],
-        senderIdentityKey: '02' + 'cc'.repeat(32),
-        derivationPrefix: 'p',
-        derivationSuffix: 's',
+        tx: validAtomicBeef(),
+        senderIdentityKey: VALID_KEY_4,
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         outputIndex: 0,
         description: 'Custom payment description'
       })
@@ -399,20 +592,35 @@ describe('WalletCore Direct Payment', () => {
 
       await expect(
         wallet.receiveDirectPayment({
-          tx: [1],
-          senderIdentityKey: '02' + 'dd'.repeat(32),
-          derivationPrefix: 'p',
-          derivationSuffix: 's',
+          tx: validAtomicBeef(),
+          senderIdentityKey: VALID_KEY_2,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
           outputIndex: 0
         })
       ).rejects.toThrow('Failed to receive direct payment: Invalid tx')
+    })
+
+    it('should throw when the wallet resolves with a negative internalization verdict', async () => {
+      mockClient.internalizeAction.mockResolvedValue({ accepted: false })
+      const wallet = new TestWallet(mockClient)
+
+      await expect(
+        wallet.receiveDirectPayment({
+          tx: validAtomicBeef(),
+          senderIdentityKey: VALID_KEY_2,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          outputIndex: 0
+        })
+      ).rejects.toThrow('Invalid internalizeAction result accepted')
     })
 
     it('should handle outputIndex > 0', async () => {
       const wallet = new TestWallet(mockClient)
 
       await wallet.receiveDirectPayment({
-        tx: [10, 20, 30, 40, 50],
+        tx: validAtomicBeef(),
         senderIdentityKey: VALID_KEY_2,
         derivationPrefix: 'cGF5bWVudA==',
         derivationSuffix: 'dGVzdA==',
@@ -429,10 +637,10 @@ describe('WalletCore Direct Payment', () => {
       const senderKey = VALID_KEY_4
 
       await wallet.receiveDirectPayment({
-        tx: [1, 2, 3],
+        tx: validAtomicBeef(),
         senderIdentityKey: senderKey,
-        derivationPrefix: 'prefix',
-        derivationSuffix: 'suffix',
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         outputIndex: 0
       })
 
@@ -443,7 +651,7 @@ describe('WalletCore Direct Payment', () => {
 
     it('should handle large tx array', async () => {
       const wallet = new TestWallet(mockClient)
-      const largeTx = Array.from({ length: 100000 }, (_, i) => i % 256)
+      const largeTx = validAtomicBeef(100_000)
 
       await wallet.receiveDirectPayment({
         tx: largeTx,
@@ -454,24 +662,65 @@ describe('WalletCore Direct Payment', () => {
       })
 
       const call = mockClient.internalizeAction.mock.calls[0][0]
-      expect(call.tx).toHaveLength(100000)
-      expect(call.tx[0]).toBe(0)
-      expect(call.tx[255]).toBe(255)
+      expect(call.tx).toEqual(largeTx)
+      expect(call.tx.length).toBeGreaterThan(100_000)
     })
 
     it('should always use direct_payment label', async () => {
       const wallet = new TestWallet(mockClient)
 
       await wallet.receiveDirectPayment({
-        tx: [1],
+        tx: validAtomicBeef(),
         senderIdentityKey: VALID_KEY_3,
-        derivationPrefix: 'x',
-        derivationSuffix: 'y',
+        derivationPrefix: DERIVATION_PREFIX,
+        derivationSuffix: DERIVATION_SUFFIX,
         outputIndex: 0
       })
 
       const call = mockClient.internalizeAction.mock.calls[0][0]
       expect(call.labels).toEqual(['direct_payment'])
+    })
+
+    it('does not receive a payment from inherited fields', async () => {
+      const wallet = new TestWallet(mockClient)
+      Object.defineProperties(Object.prototype, {
+        tx: { value: [1], configurable: true },
+        senderIdentityKey: { value: VALID_KEY_2, configurable: true },
+        derivationPrefix: { value: DERIVATION_PREFIX, configurable: true },
+        derivationSuffix: { value: DERIVATION_SUFFIX, configurable: true },
+        outputIndex: { value: 0, configurable: true }
+      })
+      try {
+        await expect(wallet.receiveDirectPayment({} as IncomingPayment)).rejects.toThrow(
+          'Incoming payment transaction must be a bounded dense byte array'
+        )
+        expect(mockClient.internalizeAction).not.toHaveBeenCalled()
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'tx')
+        Reflect.deleteProperty(Object.prototype, 'senderIdentityKey')
+        Reflect.deleteProperty(Object.prototype, 'derivationPrefix')
+        Reflect.deleteProperty(Object.prototype, 'derivationSuffix')
+        Reflect.deleteProperty(Object.prototype, 'outputIndex')
+      }
+    })
+
+    it('rejects accessor-backed transaction bytes without invoking or rereading them', async () => {
+      const wallet = new TestWallet(mockClient)
+      const getter = jest.fn(() => 1)
+      const tx = [0]
+      Object.defineProperty(tx, '0', { enumerable: true, get: getter })
+
+      await expect(
+        wallet.receiveDirectPayment({
+          tx,
+          senderIdentityKey: VALID_KEY_2,
+          derivationPrefix: DERIVATION_PREFIX,
+          derivationSuffix: DERIVATION_SUFFIX,
+          outputIndex: 0
+        })
+      ).rejects.toThrow('bounded dense byte array')
+      expect(getter).not.toHaveBeenCalled()
+      expect(mockClient.internalizeAction).not.toHaveBeenCalled()
     })
   })
 
@@ -488,7 +737,7 @@ describe('WalletCore Direct Payment', () => {
       }
       const senderClient: any = {
         getPublicKey: jest.fn().mockResolvedValue({ publicKey: VALID_KEY_4 }),
-        createAction: jest.fn().mockResolvedValue({ txid: 'tx123', tx: [5, 6, 7] }),
+        createAction: jest.fn().mockImplementation(async args => completedAction(args)),
         internalizeAction: jest.fn()
       }
 
@@ -501,7 +750,7 @@ describe('WalletCore Direct Payment', () => {
 
       // Step 2: Sender creates payment
       const payment = await sender.sendDirectPayment(request)
-      expect(payment.txid).toBe('tx123')
+      expect(payment.txid).toMatch(/^[0-9a-f]{64}$/)
       expect(payment.derivationPrefix).toBe(request.derivationPrefix)
       expect(payment.derivationSuffix).toBe(request.derivationSuffix)
 
@@ -539,15 +788,24 @@ describe('WalletCore Direct Payment', () => {
   describe('acceptIncomingPayment (messagebox module)', () => {
     let messageboxMockClient: any
     let mockAcknowledgeMessage: jest.Mock
+    let mockListIncomingPayments: jest.Mock
+    let mockFindIncomingPaymentsByMessageId: jest.Mock
 
     beforeEach(() => {
       mockAcknowledgeMessage = jest.fn().mockResolvedValue(undefined)
+      mockListIncomingPayments = jest.fn().mockResolvedValue([])
+      mockFindIncomingPaymentsByMessageId = jest.fn(async (messageId: string) =>
+        (await mockListIncomingPayments()).filter(
+          (candidate: { messageId?: string }) => candidate.messageId === messageId
+        )
+      )
 
       // Reset the PeerPayClient mock to track acknowledgeMessage calls
       const { PeerPayClient } = require('@bsv/message-box-client')
       PeerPayClient.mockImplementation(() => ({
         acknowledgeMessage: mockAcknowledgeMessage,
-        listIncomingPayments: jest.fn().mockResolvedValue([]),
+        listIncomingPayments: mockListIncomingPayments,
+        findIncomingPaymentsByMessageId: mockFindIncomingPaymentsByMessageId,
         sendPayment: jest.fn().mockResolvedValue({ txid: 'mock-txid' }),
         createPaymentToken: jest.fn().mockResolvedValue({}),
         sendMessage: jest.fn().mockResolvedValue(undefined),
@@ -561,18 +819,22 @@ describe('WalletCore Direct Payment', () => {
       }
     })
 
-    const createMockPayment = (senderKey: string) => ({
-      messageId: 'msg-123',
-      sender: senderKey,
-      token: {
-        transaction: [1, 2, 3, 4, 5],
-        outputIndex: 0,
-        customInstructions: {
-          derivationPrefix: 'cGF5bWVudA==',
-          derivationSuffix: 'dGVzdA=='
+    const createMockPayment = (senderKey: string) => {
+      const payment = {
+        messageId: 'msg-123',
+        sender: senderKey,
+        token: {
+          transaction: [1, 2, 3, 4, 5],
+          outputIndex: 0,
+          customInstructions: {
+            derivationPrefix: 'cGF5bWVudA==',
+            derivationSuffix: 'dGVzdA=='
+          }
         }
       }
-    })
+      mockListIncomingPayments.mockResolvedValue([payment])
+      return payment
+    }
 
     it('should use basket insertion when basket is provided', async () => {
       const wallet = new TestWallet(messageboxMockClient)
@@ -691,6 +953,7 @@ describe('WalletCore Direct Payment', () => {
           }
         }
       }
+      mockListIncomingPayments.mockResolvedValue([payment])
 
       await methods.acceptIncomingPayment(payment)
 
@@ -713,6 +976,7 @@ describe('WalletCore Direct Payment', () => {
           }
         }
       }
+      mockListIncomingPayments.mockResolvedValue([payment])
 
       await methods.acceptIncomingPayment(payment)
 
@@ -762,6 +1026,58 @@ describe('WalletCore Direct Payment', () => {
       expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
     })
 
+    it.each([undefined, 'my-basket'])(
+      'should NOT acknowledge when internalization resolves negatively (basket: %s)',
+      async basket => {
+        messageboxMockClient.internalizeAction.mockResolvedValue({ accepted: false })
+        const wallet = new TestWallet(messageboxMockClient)
+        const methods = createMessageBoxMethods(wallet)
+
+        await expect(
+          methods.acceptIncomingPayment(createMockPayment(VALID_KEY_2), basket)
+        ).rejects.toThrow('Receiving wallet did not accept')
+        expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
+      }
+    )
+
+    it.each([undefined, 'my-basket'])(
+      'does not accept an inherited wallet verdict (basket: %s)',
+      async basket => {
+        Object.defineProperty(Object.prototype, 'accepted', {
+          value: true,
+          configurable: true
+        })
+        try {
+          messageboxMockClient.internalizeAction.mockResolvedValue({})
+          const wallet = new TestWallet(messageboxMockClient)
+          const methods = createMessageBoxMethods(wallet)
+          await expect(
+            methods.acceptIncomingPayment(createMockPayment(VALID_KEY_2), basket)
+          ).rejects.toThrow('Receiving wallet did not accept')
+          expect(mockAcknowledgeMessage).not.toHaveBeenCalled()
+        } finally {
+          Reflect.deleteProperty(Object.prototype, 'accepted')
+        }
+      }
+    )
+
+    it('does not select a payment by an inherited message ID', async () => {
+      Object.defineProperty(Object.prototype, 'messageId', {
+        value: 'msg-123',
+        configurable: true
+      })
+      try {
+        const wallet = new TestWallet(messageboxMockClient)
+        const methods = createMessageBoxMethods(wallet)
+        await expect(methods.acceptIncomingPayment({})).rejects.toThrow(
+          'Incoming payment message ID is invalid'
+        )
+        expect(mockFindIncomingPaymentsByMessageId).not.toHaveBeenCalled()
+      } finally {
+        Reflect.deleteProperty(Object.prototype, 'messageId')
+      }
+    })
+
     it('should still succeed if ack fails after successful internalization', async () => {
       mockAcknowledgeMessage.mockRejectedValue(new Error('Network timeout'))
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation()
@@ -777,8 +1093,41 @@ describe('WalletCore Direct Payment', () => {
       expect(messageboxMockClient.internalizeAction).toHaveBeenCalled()
 
       // Warning logged
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('message ack failed'))
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('acknowledgement failed'))
       consoleSpy.mockRestore()
+    })
+
+    it('rebinds the selected message ID to fresh authenticated inbox metadata', async () => {
+      const wallet = new TestWallet(messageboxMockClient)
+      const methods = createMessageBoxMethods(wallet)
+      const supplied = createMockPayment(VALID_KEY_2)
+      const authentic = createMockPayment(VALID_KEY_3)
+      authentic.messageId = 'fresh-payment'
+      mockListIncomingPayments.mockResolvedValue([authentic])
+
+      await methods.acceptIncomingPayment({
+        ...supplied,
+        messageId: 'fresh-payment'
+      })
+
+      const call = messageboxMockClient.internalizeAction.mock.calls[0][0]
+      expect(call.outputs[0].paymentRemittance.senderIdentityKey).toBe(VALID_KEY_3)
+    })
+
+    it('refuses a payment that is absent or duplicated in the authenticated inbox', async () => {
+      const wallet = new TestWallet(messageboxMockClient)
+      const methods = createMessageBoxMethods(wallet)
+      const payment = createMockPayment(VALID_KEY_2)
+
+      mockListIncomingPayments.mockResolvedValue([])
+      await expect(methods.acceptIncomingPayment(payment)).rejects.toThrow(
+        'not present exactly once'
+      )
+      mockListIncomingPayments.mockResolvedValue([payment, payment])
+      await expect(methods.acceptIncomingPayment(payment)).rejects.toThrow(
+        'not present exactly once'
+      )
+      expect(messageboxMockClient.internalizeAction).not.toHaveBeenCalled()
     })
   })
 
@@ -852,7 +1201,7 @@ describe('WalletCore Direct Payment', () => {
       const wallet = new TestWallet(mockClient)
 
       await wallet.receiveDirectPayment({
-        tx: [1, 2, 3],
+        tx: validAtomicBeef(),
         senderIdentityKey: VALID_KEY_2,
         derivationPrefix: 'cGF5bWVudA==',
         derivationSuffix: 'dGVzdA==',
@@ -871,7 +1220,7 @@ describe('WalletCore Direct Payment', () => {
       // but receivePayment uses 'server_funding' and receiveDirectPayment uses 'direct_payment'
       const wallet = new TestWallet(mockClient)
       const payment: IncomingPayment = {
-        tx: [5, 10, 15],
+        tx: validAtomicBeef(),
         senderIdentityKey: VALID_KEY_4,
         derivationPrefix: 'cHJlZml4',
         derivationSuffix: 'c3VmZml4',

@@ -7,6 +7,7 @@
  */
 
 import WERR_INVALID_PARAMETER from '../WERR_INVALID_PARAMETER'
+import Transaction from '../../transaction/Transaction'
 import {
   parseWalletOutpoint,
   validateSatoshis,
@@ -26,6 +27,7 @@ import {
   validateWalletPayment,
   validateBasketInsertion,
   validateInternalizeOutput,
+  validateInternalizeActionArgs,
   validateOriginator,
   validateOptionalOutpointString,
   validateOutpointString,
@@ -39,7 +41,19 @@ import {
   validateDiscoverByAttributesArgs,
   validateListOutputsArgs,
   validateListActionsArgs,
-  specOpThrowReviewActions
+  validateGetPublicKeyArgs,
+  validateRevealCounterpartyKeyLinkageArgs,
+  validateRevealSpecificKeyLinkageArgs,
+  validateWalletEncryptArgs,
+  validateWalletDecryptArgs,
+  validateCreateHmacArgs,
+  validateVerifyHmacArgs,
+  validateCreateSignatureArgs,
+  validateVerifySignatureArgs,
+  validateGetHeaderArgs,
+  validateNoArgs,
+  specOpThrowReviewActions,
+  MAXIMUM_SEND_WITH_TRANSACTIONS
 } from '../validationHelpers'
 
 // ---------------------------------------------------------------------------
@@ -51,10 +65,13 @@ const VALID_TXID = 'a'.repeat(64)
 // Valid outpoint string
 const VALID_OUTPOINT = `${VALID_TXID}.0`
 // Valid compressed pubkey hex (66 chars)
-const VALID_PUBKEY_HEX = '02' + 'ab'.repeat(32)
+const VALID_PUBKEY_HEX = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 // Valid base64 strings
-const VALID_BASE64 = 'SGVsbG8='          // "Hello" in base64
-const VALID_BASE64_NOPAD = 'SGVsbG8'     // without padding (valid 4n+3)
+const VALID_BASE64 = 'SGVsbG8=' // "Hello" in base64
+const VALID_BASE64_NOPAD = 'SGVsbG8' // without padding (valid 4n+3)
+const VALID_CERT_TYPE = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE='
+const VALID_CERT_SERIAL = 'AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI='
+const VALID_SIGNATURE_HEX = '3006020101020101'
 
 // ============================================================================
 // parseWalletOutpoint
@@ -69,6 +86,16 @@ describe('parseWalletOutpoint', () => {
 
   it('handles vout 0', () => {
     expect(parseWalletOutpoint(`${VALID_TXID}.0`).vout).toBe(0)
+  })
+
+  it.each([
+    `${'a'.repeat(62)}.0`,
+    `${VALID_TXID}.01`,
+    `${VALID_TXID}.+1`,
+    `${VALID_TXID}.4294967296`,
+    `${VALID_TXID}.1.trailing`
+  ])('rejects non-canonical or out-of-range outpoint %s', outpoint => {
+    expect(() => parseWalletOutpoint(outpoint)).toThrow(WERR_INVALID_PARAMETER)
   })
 })
 
@@ -250,7 +277,9 @@ describe('validateBase64String', () => {
   })
 
   it('throws when bytes exceed max', () => {
-    expect(() => validateBase64String(VALID_BASE64, 's', undefined, 3)).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateBase64String(VALID_BASE64, 's', undefined, 3)).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('throws for unpadded base64 where length % 4 == 3 (not accepted by this validator)', () => {
@@ -310,7 +339,9 @@ describe('validateOutpointString', () => {
   })
 
   it('throws when vout is not numeric', () => {
-    expect(() => validateOutpointString(`${VALID_TXID}.abc`, 'output')).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateOutpointString(`${VALID_TXID}.abc`, 'output')).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('throws when txid is not valid hex', () => {
@@ -318,7 +349,9 @@ describe('validateOutpointString', () => {
   })
 
   it('throws when vout is negative', () => {
-    expect(() => validateOutpointString(`${VALID_TXID}.-1`, 'output')).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateOutpointString(`${VALID_TXID}.-1`, 'output')).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -362,9 +395,7 @@ describe('validateCreateActionInput', () => {
   })
 
   it('throws when neither unlockingScript nor unlockingScriptLength is provided', () => {
-    expect(() =>
-      validateCreateActionInput({ ...validBase })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateActionInput({ ...validBase })).toThrow(WERR_INVALID_PARAMETER)
   })
 
   it('throws when unlockingScriptLength does not match actual script length', () => {
@@ -431,15 +462,15 @@ describe('validateCreateActionOutput', () => {
   })
 
   it('throws for invalid satoshis', () => {
-    expect(() =>
-      validateCreateActionOutput({ ...validBase, satoshis: -1 })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateActionOutput({ ...validBase, satoshis: -1 })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('throws for invalid locking script (odd hex length)', () => {
-    expect(() =>
-      validateCreateActionOutput({ ...validBase, lockingScript: 'abc' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateActionOutput({ ...validBase, lockingScript: 'abc' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -496,6 +527,28 @@ describe('validateCreateActionOptions', () => {
     const v = validateCreateActionOptions({})
     expect(v.trustSelf).toBeUndefined()
   })
+
+  it('bounds, deduplicates, and safely snapshots atomic broadcast sets', () => {
+    const maximum = Array.from({ length: MAXIMUM_SEND_WITH_TRANSACTIONS }, (_, index) =>
+      index.toString(16).padStart(64, '0')
+    )
+    expect(validateCreateActionOptions({ sendWith: maximum }).sendWith).toHaveLength(
+      MAXIMUM_SEND_WITH_TRANSACTIONS
+    )
+    expect(() => validateCreateActionOptions({ sendWith: [...maximum, 'f'.repeat(64)] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateCreateActionOptions({ sendWith: [VALID_TXID, VALID_TXID] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+
+    const accessorBacked: string[] = []
+    Object.defineProperty(accessorBacked, '0', { enumerable: true, get: () => VALID_TXID })
+    Object.defineProperty(accessorBacked, 'length', { value: 1 })
+    expect(() => validateCreateActionOptions({ sendWith: accessorBacked })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+  })
 })
 
 // ============================================================================
@@ -512,6 +565,56 @@ describe('validateCreateActionArgs', () => {
     expect(v.description).toBe('A valid action description')
     expect(v.inputs).toEqual([])
     expect(v.outputs).toEqual([])
+  })
+
+  it('rejects duplicate requested input outpoints before transaction construction', () => {
+    const input = {
+      outpoint: VALID_OUTPOINT,
+      inputDescription: 'Duplicate action input',
+      unlockingScript: '51'
+    }
+    expect(() =>
+      validateCreateActionArgs({
+        description: 'Duplicate action inputs',
+        inputs: [input, { ...input }]
+      } as any)
+    ).toThrow('unique input outpoints')
+  })
+
+  it('retains typed transaction evidence without boxing it during validation', () => {
+    const inputBEEF = new Transaction().toBEEFBytes()
+    const result = validateCreateActionArgs({ ...minimalArgs, inputBEEF } as any)
+
+    expect(result.inputBEEF).toBe(inputBEEF)
+    expect(result.inputBEEF).toBeInstanceOf(Uint8Array)
+  })
+
+  it('does not reuse BEEF validation after the bytes change', () => {
+    const inputBEEF = Uint8Array.from(new Transaction().toBEEFBytes())
+    const args = { ...minimalArgs, inputBEEF }
+
+    expect(() => validateCreateActionArgs(args as any)).not.toThrow()
+    inputBEEF[0] ^= 0xff
+    expect(() => validateCreateActionArgs(args as any)).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it('does not reuse Atomic BEEF validation after the bytes change', () => {
+    const tx = Uint8Array.from(new Transaction().toAtomicBEEF())
+    const args = {
+      tx,
+      outputs: [
+        {
+          outputIndex: 0,
+          protocol: 'basket insertion',
+          insertionRemittance: { basket: 'test' }
+        }
+      ],
+      description: 'Validate an exact Atomic BEEF envelope'
+    }
+
+    expect(() => validateInternalizeActionArgs(args as any)).not.toThrow()
+    tx[0] ^= 0xff
+    expect(() => validateInternalizeActionArgs(args as any)).toThrow(WERR_INVALID_PARAMETER)
   })
 
   it('sets isRemixChange = true when no inputs and no outputs and no sendWith', () => {
@@ -576,9 +679,9 @@ describe('validateCreateActionArgs', () => {
   })
 
   it('throws for a description that is too short', () => {
-    expect(() =>
-      validateCreateActionArgs({ description: 'hi' } as any)
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateActionArgs({ description: 'hi' } as any)).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('validates labels via validateLabel (trim + lowercase)', () => {
@@ -587,6 +690,19 @@ describe('validateCreateActionArgs', () => {
       labels: ['  MyLabel  ']
     } as any)
     expect(v.labels).toEqual(['mylabel'])
+  })
+
+  it('reserves one broadcast slot for a newly created transaction', () => {
+    const sendWith = Array.from({ length: MAXIMUM_SEND_WITH_TRANSACTIONS }, (_, index) =>
+      index.toString(16).padStart(64, '0')
+    )
+    expect(() =>
+      validateCreateActionArgs({
+        ...minimalArgs,
+        outputs: [{ satoshis: 1, lockingScript: '51', outputDescription: 'new output' }],
+        options: { sendWith }
+      } as any)
+    ).toThrow(WERR_INVALID_PARAMETER)
   })
 })
 
@@ -633,6 +749,18 @@ describe('validateSignActionArgs', () => {
     } as any)
     expect(v.isSendWith).toBe(true)
   })
+
+  it('reserves one broadcast slot for the signed transaction', () => {
+    const sendWith = Array.from({ length: MAXIMUM_SEND_WITH_TRANSACTIONS }, (_, index) =>
+      index.toString(16).padStart(64, '0')
+    )
+    expect(() =>
+      validateSignActionArgs({
+        ...minimalSignArgs,
+        options: { sendWith }
+      } as any)
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
 })
 
 // ============================================================================
@@ -646,9 +774,9 @@ describe('validateAbortActionArgs', () => {
   })
 
   it('throws for an invalid reference', () => {
-    expect(() =>
-      validateAbortActionArgs({ reference: '!invalid!' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateAbortActionArgs({ reference: '!invalid!' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -702,9 +830,7 @@ describe('validateBasketInsertion', () => {
   })
 
   it('throws for an empty basket name', () => {
-    expect(() =>
-      validateBasketInsertion({ basket: '' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateBasketInsertion({ basket: '' })).toThrow(WERR_INVALID_PARAMETER)
   })
 })
 
@@ -772,6 +898,15 @@ describe('validateOriginator', () => {
     expect(validateOriginator('example.com')).toBe('example.com')
   })
 
+  it.each([
+    ['Example.COM:8443', 'example.com'],
+    ['localhost:3000', 'localhost'],
+    ['example.com:0', 'example.com'],
+    ['example.com:65535', 'example.com']
+  ])('accepts %s and scopes every port to %s', (originator, expected) => {
+    expect(validateOriginator(originator)).toBe(expected)
+  })
+
   it('throws for an empty originator after trimming', () => {
     expect(() => validateOriginator('   ')).toThrow(WERR_INVALID_PARAMETER)
   })
@@ -784,6 +919,21 @@ describe('validateOriginator', () => {
   it('throws for an originator exceeding 250 total bytes', () => {
     const longOriginator = 'a'.repeat(251)
     expect(() => validateOriginator(longOriginator)).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it.each([
+    'https://example.com',
+    'user@example.com',
+    'example.com/path',
+    'example_com',
+    '-example.com',
+    'example-.com',
+    'example..com',
+    'example.com:',
+    'example.com:65536',
+    'example.com:not-a-port'
+  ])('rejects a non-hostname originator: %s', originator => {
+    expect(() => validateOriginator(originator)).toThrow(WERR_INVALID_PARAMETER)
   })
 })
 
@@ -802,9 +952,9 @@ describe('validateRelinquishOutputArgs', () => {
   })
 
   it('throws for invalid basket', () => {
-    expect(() =>
-      validateRelinquishOutputArgs({ basket: '', output: VALID_OUTPOINT })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateRelinquishOutputArgs({ basket: '', output: VALID_OUTPOINT })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -815,18 +965,18 @@ describe('validateRelinquishOutputArgs', () => {
 describe('validateRelinquishCertificateArgs', () => {
   it('validates a valid certificate reference', () => {
     const v = validateRelinquishCertificateArgs({
-      type: VALID_BASE64,
-      serialNumber: VALID_BASE64,
+      type: VALID_CERT_TYPE,
+      serialNumber: VALID_CERT_SERIAL,
       certifier: VALID_PUBKEY_HEX
     })
-    expect(v.type).toBe(VALID_BASE64)
+    expect(v.type).toBe(VALID_CERT_TYPE)
   })
 
   it('throws for an invalid type', () => {
     expect(() =>
       validateRelinquishCertificateArgs({
         type: '!!!',
-        serialNumber: VALID_BASE64,
+        serialNumber: VALID_CERT_SERIAL,
         certifier: VALID_PUBKEY_HEX
       })
     ).toThrow(WERR_INVALID_PARAMETER)
@@ -840,7 +990,7 @@ describe('validateRelinquishCertificateArgs', () => {
 describe('validateListCertificatesArgs', () => {
   const validArgs = {
     certifiers: [VALID_PUBKEY_HEX],
-    types: [VALID_BASE64],
+    types: [VALID_CERT_TYPE],
     limit: 10,
     offset: 0
   }
@@ -858,15 +1008,15 @@ describe('validateListCertificatesArgs', () => {
   })
 
   it('throws when limit exceeds 10000', () => {
-    expect(() =>
-      validateListCertificatesArgs({ ...validArgs, limit: 10001 } as any)
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateListCertificatesArgs({ ...validArgs, limit: 10001 } as any)).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('throws when limit is below 1', () => {
-    expect(() =>
-      validateListCertificatesArgs({ ...validArgs, limit: 0 } as any)
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateListCertificatesArgs({ ...validArgs, limit: 0 } as any)).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -877,7 +1027,7 @@ describe('validateListCertificatesArgs', () => {
 describe('validateAcquireIssuanceCertificateArgs', () => {
   const validIssuanceArgs: any = {
     acquisitionProtocol: 'issuance',
-    type: VALID_BASE64,
+    type: VALID_CERT_TYPE,
     certifier: VALID_PUBKEY_HEX,
     certifierUrl: 'https://example.com/certify',
     fields: { name: 'Alice' },
@@ -892,7 +1042,10 @@ describe('validateAcquireIssuanceCertificateArgs', () => {
 
   it('throws when acquisitionProtocol is not "issuance"', () => {
     expect(() =>
-      validateAcquireIssuanceCertificateArgs({ ...validIssuanceArgs, acquisitionProtocol: 'direct' })
+      validateAcquireIssuanceCertificateArgs({
+        ...validIssuanceArgs,
+        acquisitionProtocol: 'direct'
+      })
     ).toThrow('Only acquire certificate via issuance requests allowed here.')
   })
 
@@ -910,7 +1063,10 @@ describe('validateAcquireIssuanceCertificateArgs', () => {
 
   it('throws when revocationOutpoint is present', () => {
     expect(() =>
-      validateAcquireIssuanceCertificateArgs({ ...validIssuanceArgs, revocationOutpoint: VALID_OUTPOINT })
+      validateAcquireIssuanceCertificateArgs({
+        ...validIssuanceArgs,
+        revocationOutpoint: VALID_OUTPOINT
+      })
     ).toThrow(WERR_INVALID_PARAMETER)
   })
 
@@ -955,12 +1111,12 @@ describe('validateAcquireIssuanceCertificateArgs', () => {
 describe('validateAcquireDirectCertificateArgs', () => {
   const validDirectArgs: any = {
     acquisitionProtocol: 'direct',
-    type: VALID_BASE64,
-    serialNumber: VALID_BASE64,
+    type: VALID_CERT_TYPE,
+    serialNumber: VALID_CERT_SERIAL,
     certifier: VALID_PUBKEY_HEX,
     revocationOutpoint: VALID_OUTPOINT,
     fields: { name: 'Bob' },
-    signature: VALID_PUBKEY_HEX,
+    signature: VALID_SIGNATURE_HEX,
     keyringRevealer: 'certifier',
     keyringForSubject: { fieldA: VALID_BASE64 },
     privileged: false
@@ -1010,7 +1166,11 @@ describe('validateAcquireDirectCertificateArgs', () => {
 
   it('throws when privileged is true but privilegedReason is absent', () => {
     expect(() =>
-      validateAcquireDirectCertificateArgs({ ...validDirectArgs, privileged: true, privilegedReason: undefined })
+      validateAcquireDirectCertificateArgs({
+        ...validDirectArgs,
+        privileged: true,
+        privilegedReason: undefined
+      })
     ).toThrow(WERR_INVALID_PARAMETER)
   })
 
@@ -1030,8 +1190,8 @@ describe('validateAcquireDirectCertificateArgs', () => {
 describe('validateProveCertificateArgs', () => {
   const validArgs: any = {
     certificate: {
-      type: VALID_BASE64,
-      serialNumber: VALID_BASE64,
+      type: VALID_CERT_TYPE,
+      serialNumber: VALID_CERT_SERIAL,
       certifier: VALID_PUBKEY_HEX,
       subject: VALID_PUBKEY_HEX
     },
@@ -1048,9 +1208,9 @@ describe('validateProveCertificateArgs', () => {
   })
 
   it('throws when privileged is true but privilegedReason is absent', () => {
-    expect(() =>
-      validateProveCertificateArgs({ ...validArgs, privileged: true })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateProveCertificateArgs({ ...validArgs, privileged: true })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('accepts privileged=true with a valid reason', () => {
@@ -1086,7 +1246,7 @@ describe('validateDiscoverByIdentityKeyArgs', () => {
   it('validates a valid request', () => {
     const v = validateDiscoverByIdentityKeyArgs(validArgs)
     expect(v.identityKey).toBe(VALID_PUBKEY_HEX.toLowerCase())
-    expect(v.seekPermission).toBe(false)
+    expect(v.seekPermission).toBe(true)
   })
 
   it('applies default limit of 10', () => {
@@ -1095,9 +1255,9 @@ describe('validateDiscoverByIdentityKeyArgs', () => {
   })
 
   it('throws for identity key that is not 66 chars', () => {
-    expect(() =>
-      validateDiscoverByIdentityKeyArgs({ ...validArgs, identityKey: '0234' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateDiscoverByIdentityKeyArgs({ ...validArgs, identityKey: '0234' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 })
 
@@ -1115,7 +1275,7 @@ describe('validateDiscoverByAttributesArgs', () => {
   it('validates a valid request', () => {
     const v = validateDiscoverByAttributesArgs(validArgs)
     expect(v.attributes).toEqual({ name: 'Alice' })
-    expect(v.seekPermission).toBe(false)
+    expect(v.seekPermission).toBe(true)
   })
 
   it('applies default limit of 10', () => {
@@ -1168,9 +1328,9 @@ describe('validateListOutputsArgs', () => {
   })
 
   it('throws for invalid tagQueryMode', () => {
-    expect(() =>
-      validateListOutputsArgs({ ...validArgs, tagQueryMode: 'none' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateListOutputsArgs({ ...validArgs, tagQueryMode: 'none' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('applies default limit', () => {
@@ -1204,9 +1364,9 @@ describe('validateListActionsArgs', () => {
   })
 
   it('throws for invalid labelQueryMode', () => {
-    expect(() =>
-      validateListActionsArgs({ ...validArgs, labelQueryMode: 'none' })
-    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateListActionsArgs({ ...validArgs, labelQueryMode: 'none' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
   })
 
   it('applies default limit of 10', () => {
@@ -1241,5 +1401,189 @@ describe('specOpThrowReviewActions', () => {
   it('is a non-empty string constant', () => {
     expect(typeof specOpThrowReviewActions).toBe('string')
     expect(specOpThrowReviewActions.length).toBeGreaterThan(0)
+  })
+})
+
+describe('security-sensitive runtime argument validation', () => {
+  const cryptoArgs = {
+    protocolID: [2, 'security protocol'] as [2, string],
+    keyID: 'key-1'
+  }
+
+  it('rejects truthy non-booleans in authorization and consent flags', () => {
+    expect(() => validateCreateActionOptions({ noSend: 'false' as any })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateListActionsArgs({ labels: [], seekPermission: 'false' as any })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateGetPublicKeyArgs({ identityKey: true, privileged: 1 as any })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() =>
+      validateVerifySignatureArgs({
+        ...cryptoArgs,
+        data: [1],
+        signature: [0x30, 0x06, 0x02, 0x01, 1, 0x02, 0x01, 1],
+        forSelf: 'false' as any
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it('requires a reason for a privileged cryptographic request', () => {
+    expect(() =>
+      validateWalletEncryptArgs({ ...cryptoArgs, plaintext: [1], privileged: true })
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it('validates protocol tuples, key IDs, aliases, and curve points', () => {
+    expect(() =>
+      validateGetPublicKeyArgs({ protocolID: [3 as any, 'security protocol'], keyID: 'key-1' })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateGetPublicKeyArgs({ protocolID: [2, 'tiny'], keyID: 'key-1' })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() =>
+      validateGetPublicKeyArgs({ protocolID: [2, 'security protocol'], keyID: '' })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateRevealCounterpartyKeyLinkageArgs({
+        counterparty: `04${'00'.repeat(32)}`,
+        verifier: VALID_PUBKEY_HEX
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateRevealSpecificKeyLinkageArgs({
+        ...cryptoArgs,
+        counterparty: 'self',
+        verifier: VALID_PUBKEY_HEX
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects sparse and non-byte cryptographic inputs', () => {
+    const sparse: number[] = []
+    sparse.length = 2
+    sparse[1] = 1
+    expect(() => validateWalletEncryptArgs({ ...cryptoArgs, plaintext: sparse })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateWalletDecryptArgs({ ...cryptoArgs, ciphertext: [256] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateCreateHmacArgs({ ...cryptoArgs, data: [1.5] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateVerifyHmacArgs({ ...cryptoArgs, data: [], hmac: [1] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+  })
+
+  it('requires exactly one message source and a 32-byte direct hash', () => {
+    expect(() => validateCreateSignatureArgs({ ...cryptoArgs })).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateCreateSignatureArgs({
+        ...cryptoArgs,
+        data: [1],
+        hashToDirectlySign: Array.from({ length: 32 }, () => 0)
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateSignatureArgs({ ...cryptoArgs, hashToDirectlySign: [1] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() =>
+      validateVerifySignatureArgs({ ...cryptoArgs, data: [1], signature: [1, 2, 3] })
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it('rejects ambiguous spend maps and invalid action option identifiers', () => {
+    expect(() =>
+      validateSignActionArgs({
+        reference: VALID_BASE64,
+        spends: { '01': { unlockingScript: '00' } } as any
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateSignActionArgs({
+        reference: VALID_BASE64,
+        spends: { 0: { unlockingScript: '00', sequenceNumber: Number.MAX_SAFE_INTEGER } }
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateCreateActionOptions({ knownTxids: ['ab'] })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() => validateCreateActionOptions({ trustSelf: 'yes' as any })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+    expect(() =>
+      validateCreateActionOptions({
+        knownTxids: Array.from({ length: 100_001 }, () => VALID_TXID)
+      })
+    ).toThrow('at most 100000 items')
+  })
+
+  it('requires exact BEEF framing at action and internalization boundaries', () => {
+    expect(() =>
+      validateCreateActionArgs({ description: 'invalid input BEEF', inputBEEF: [1, 2, 3] })
+    ).toThrow(WERR_INVALID_PARAMETER)
+    expect(() =>
+      validateInternalizeActionArgs({
+        tx: [1, 2, 3],
+        outputs: [
+          {
+            outputIndex: 0,
+            protocol: 'basket insertion',
+            insertionRemittance: { basket: 'test-basket' }
+          }
+        ],
+        description: 'invalid atomic BEEF'
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it.each([
+    'http://certifier.example.com',
+    'https://user:secret@certifier.example.com',
+    'https://certifier.example.com/path?redirect=https://127.0.0.1',
+    'https://certifier.example.com/path#fragment',
+    'https://localhost:3998',
+    'https://127.0.0.1',
+    'https://[::1]',
+    'https://2130706433'
+  ])('rejects unsafe certificate issuer URL %s', certifierUrl => {
+    expect(() =>
+      validateAcquireIssuanceCertificateArgs({
+        acquisitionProtocol: 'issuance',
+        type: VALID_CERT_TYPE,
+        certifier: VALID_PUBKEY_HEX,
+        fields: {},
+        certifierUrl
+      })
+    ).toThrow(WERR_INVALID_PARAMETER)
+  })
+
+  it('rejects unsafe record keys, accessors, and non-string field values', () => {
+    const attributes = Object.create(null) as Record<string, string>
+    Object.defineProperty(attributes, 'constructor', {
+      value: 'poison',
+      enumerable: true
+    })
+    expect(() => validateDiscoverByAttributesArgs({ attributes })).toThrow(WERR_INVALID_PARAMETER)
+
+    const args = Object.create(null) as Record<string, unknown>
+    Object.defineProperty(args, 'height', { get: () => 1, enumerable: true })
+    expect(() => validateGetHeaderArgs(args as any)).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateDiscoverByAttributesArgs({ attributes: { name: 42 as any } })).toThrow(
+      WERR_INVALID_PARAMETER
+    )
+  })
+
+  it('rejects unsafe empty-call objects and invalid header heights', () => {
+    expect(() => validateNoArgs(Object.create({ inherited: true }))).toThrow(WERR_INVALID_PARAMETER)
+    const attackerPrototype = Object.create(null) as Record<string, unknown>
+    attackerPrototype.privileged = true
+    expect(() => validateNoArgs(Object.create(attackerPrototype))).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateGetHeaderArgs({ height: 0 })).toThrow(WERR_INVALID_PARAMETER)
+    expect(() => validateGetHeaderArgs({ height: 0x100000000 })).toThrow(WERR_INVALID_PARAMETER)
   })
 })

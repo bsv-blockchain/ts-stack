@@ -16,6 +16,7 @@ fc.configureGlobal({
 })
 
 type ManagerInternals = {
+  addTokenAmounts(left: number, right: number): number
   canonicalAssetId(assetIdField: string, txid: string, outputIndex: number): string
   parseTokenAmount(raw: string): number | undefined
 }
@@ -25,6 +26,12 @@ function internals(): ManagerInternals {
 }
 
 describe('BTMS topic parser properties', () => {
+  test('fails closed when an aggregate exceeds the exact-integer range', () => {
+    expect(() => internals().addTokenAmounts(Number.MAX_SAFE_INTEGER, 1)).toThrow(
+      'exact-integer range'
+    )
+  })
+
   test('accepts exactly canonical positive safe-integer token amounts', () => {
     const amountText = fc.oneof(
       fc.string({ maxLength: 200 }),

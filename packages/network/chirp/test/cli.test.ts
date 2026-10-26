@@ -1,4 +1,7 @@
 import { fileURLToPath } from 'node:url'
+import { promises as fs } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test } from '@jest/globals'
 import {
   allowAnyHost,
@@ -12,7 +15,10 @@ import {
   parseRange,
   requirePublicHost,
   requiredPositional,
-  runCHIRPCLI
+  runCHIRPCLI,
+  createPrivateOutput,
+  readPrivateFileBounded,
+  writePrivateFileAtomic
 } from '../src/cli.js'
 import type { CHIRPCLIRuntime } from '../src/cli.js'
 import type { CHIRPUploadCheckpoint } from '../src/uploader.js'
@@ -132,7 +138,9 @@ describe('CLI option parsing and network policy', () => {
   test('parses ranges, networks, scalar/repeated options, positionals, and flags', () => {
     expect(parseRange(undefined)).toBeUndefined()
     expect(parseRange('0:12')).toEqual({ start: 0n, endExclusive: 12n })
-    for (const value of ['01:2', '1:02', 'bad']) expect(() => parseRange(value)).toThrow('--range')
+    for (const value of ['01:2', '1:02', 'bad', `${'9'.repeat(21)}:1`, '18446744073709551616:1']) {
+      expect(() => parseRange(value)).toThrow('--range')
+    }
 
     expect(network([])).toBe('mainnet')
     for (const preset of ['mainnet', 'testnet', 'teratestnet'] as const) {
@@ -229,7 +237,10 @@ describe('CLI commands', () => {
 
   test('publishes with resume checkpoints and explicit local-development transport', async () => {
     const { runtime, evidence } = fakeRuntime({
-      readFile: async () => JSON.stringify(CHECKPOINT)
+      readFile: async (_path, maximumBytes) => {
+        expect(maximumBytes).toBe(1024 * 1024)
+        return JSON.stringify(CHECKPOINT)
+      }
     })
     const code = await runCHIRPCLI(
       [
@@ -249,6 +260,7 @@ describe('CLI commands', () => {
         'application/octet-stream',
         '--resume-file',
         'resume.json',
+        '--allow-private-hosts',
         '--allow-insecure-http'
       ],
       runtime
@@ -257,7 +269,8 @@ describe('CLI commands', () => {
     expect(evidence.uploaderConfig).toMatchObject({
       storageURLs: ['https://a.example', 'https://b.example'],
       resilienceLevel: 2,
-      allowInsecureHTTP: true
+      allowInsecureHTTP: true,
+      allowPrivateHosts: true
     })
     expect(evidence.publishOptions).toMatchObject({
       retentionSeconds: '60',
@@ -323,7 +336,7 @@ describe('CLI commands', () => {
       networkPreset: 'testnet',
       concurrency: 2,
       allowInsecureHTTP: true,
-      urlPolicy: allowAnyHost
+      allowPrivateHosts: true
     })
 
     const failed = fakeRuntime({
@@ -350,6 +363,41 @@ describe('CLI commands', () => {
     expect(failed.evidence.removed).toEqual(['partial.bin'])
   })
 
+  test('handles output errors emitted before the first downloaded chunk', async () => {
+    let destroyed = false
+    let discarded = false
+    const removed: string[] = []
+    const { runtime } = fakeRuntime({
+      createOutput: () =>
+        ({
+          write: () => true,
+          once(event: string, listener: (error?: Error) => void) {
+            if (event === 'error') listener(new Error('early output failure'))
+            return this
+          },
+          end(listener: () => void) {
+            listener()
+            return this
+          },
+          destroy() {
+            destroyed = true
+          },
+          async discard() {
+            discarded = true
+          }
+        }) as never,
+      rm: async path => {
+        removed.push(path)
+      }
+    })
+    expect(
+      await runCHIRPCLI(['retrieve', `chirp://${IDENTIFIER}`, '--output', 'partial.bin'], runtime)
+    ).toBe(1)
+    expect(destroyed).toBe(true)
+    expect(discarded).toBe(true)
+    expect(removed).toEqual([])
+  })
+
   test('verifies full content and validates retrieve/verify positionals', async () => {
     const verified = fakeRuntime()
     expect(
@@ -367,6 +415,67 @@ describe('CLI commands', () => {
     expect(await runCHIRPCLI(['retrieve'], invalid.runtime)).toBe(1)
     expect(await runCHIRPCLI(['retrieve', `chirp://${IDENTIFIER}`], invalid.runtime)).toBe(1)
     expect(await runCHIRPCLI(['verify'], invalid.runtime)).toBe(1)
+  })
+})
+
+describe('CLI checkpoint persistence', () => {
+  test('reads bounded regular files and atomically replaces symlinks with private files', async () => {
+    const directory = await fs.mkdtemp(join(tmpdir(), 'chirp-cli-'))
+    try {
+      const checkpoint = join(directory, 'checkpoint.json')
+      await writePrivateFileAtomic(checkpoint, '{"one":1}', 0o600)
+      expect(await readPrivateFileBounded(checkpoint, 64)).toBe('{"one":1}')
+      expect((await fs.stat(checkpoint)).mode & 0o777).toBe(0o600)
+
+      const target = join(directory, 'target.json')
+      const link = join(directory, 'link.json')
+      await fs.writeFile(target, 'target remains')
+      await fs.symlink(target, link)
+      await expect(readPrivateFileBounded(link, 64)).rejects.toBeDefined()
+      await writePrivateFileAtomic(link, '{"safe":true}', 0o600)
+      expect(await fs.readFile(target, 'utf8')).toBe('target remains')
+      expect(await fs.readFile(link, 'utf8')).toBe('{"safe":true}')
+      expect((await fs.lstat(link)).isSymbolicLink()).toBe(false)
+      expect((await fs.stat(link)).mode & 0o777).toBe(0o600)
+
+      const oversized = join(directory, 'oversized.json')
+      await fs.writeFile(oversized, '12345')
+      await expect(readPrivateFileBounded(oversized, 4)).rejects.toThrow('byte limit')
+      const invalidUTF8 = join(directory, 'invalid.json')
+      await fs.writeFile(invalidUTF8, Uint8Array.of(0xff))
+      await expect(readPrivateFileBounded(invalidUTF8, 4)).rejects.toBeDefined()
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  test('publishes downloaded output without following or replacing an existing path', async () => {
+    const directory = await fs.mkdtemp(join(tmpdir(), 'chirp-output-'))
+    try {
+      const output = join(directory, 'output.bin')
+      const writer = createPrivateOutput(output)
+      const streamError = new Promise<never>((_resolve, reject) => writer.once('error', reject))
+      writer.write(Uint8Array.of(1, 2, 3))
+      await Promise.race([new Promise<void>(resolve => writer.end(resolve)), streamError])
+      await writer.commit?.()
+      expect(await fs.readFile(output)).toEqual(Buffer.from([1, 2, 3]))
+      expect((await fs.stat(output)).mode & 0o777).toBe(0o600)
+
+      const protectedTarget = join(directory, 'protected.bin')
+      const occupied = join(directory, 'occupied.bin')
+      await fs.writeFile(protectedTarget, 'unchanged')
+      await fs.symlink(protectedTarget, occupied)
+      const refused = createPrivateOutput(occupied)
+      const refusedError = new Promise<never>((_resolve, reject) => refused.once('error', reject))
+      refused.write(Uint8Array.of(9))
+      await Promise.race([new Promise<void>(resolve => refused.end(resolve)), refusedError])
+      await expect(refused.commit?.()).rejects.toMatchObject({ code: 'EEXIST' })
+      await refused.discard?.()
+      expect(await fs.readFile(protectedTarget, 'utf8')).toBe('unchanged')
+      expect((await fs.lstat(occupied)).isSymbolicLink()).toBe(true)
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true })
+    }
   })
 })
 

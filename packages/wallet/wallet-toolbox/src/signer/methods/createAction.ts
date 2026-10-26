@@ -1,4 +1,9 @@
 import {
+  type ValidCreateActionArgs,
+  type ValidCreateActionInput,
+  type ValidProcessActionArgs
+} from '@bsv/sdk/wallet/validationHelpers'
+import {
   AtomicBEEF,
   Beef,
   CreateActionResult,
@@ -7,8 +12,7 @@ import {
   SignableTransaction,
   TelemetrySpan,
   TXIDHexString,
-  Transaction,
-  Validation
+  Transaction
 } from '@bsv/sdk'
 import { buildSignableTransaction } from './buildSignableTransaction'
 import {
@@ -21,6 +25,8 @@ import { completeSignedTransaction, verifyUnlockScripts } from './completeSigned
 import { PendingSignAction, Wallet } from '../../Wallet'
 import { WERR_INTERNAL } from '../../sdk/WERR_errors'
 import { setResultBeef } from './resultBeef'
+import { setExactActionSpend } from '../../utility/exactActionSpend'
+import { setActionOutputAuthorizations } from '../../utility/actionOutputAuthorizations'
 
 export interface CreateActionResultX extends CreateActionResult {
   txid?: TXIDHexString
@@ -34,7 +40,7 @@ export interface CreateActionResultX extends CreateActionResult {
 export async function createAction(
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidCreateActionArgs
+  vargs: ValidCreateActionArgs
 ): Promise<CreateActionResultX> {
   if (!wallet.telemetry.enabled) return await createActionCore(wallet, auth, vargs)
   return await wallet.telemetry.withSpan(
@@ -66,7 +72,7 @@ export async function createAction(
 async function createActionCore(
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   parent?: TelemetrySpan
 ): Promise<CreateActionResultX> {
   const r: CreateActionResultX = {}
@@ -93,23 +99,18 @@ async function createActionCore(
     logger?.log('completed signed transaction')
 
     r.txid = prior.tx.id('hex')
-    const beef = await traceActionStep(
-      wallet,
-      'wallet.create_action.assemble_result_beef',
-      parent,
-      () => {
-        const result = new Beef()
-        if (prior!.dcr.inputBeef != null) {
-          const inputBeef =
-            prior!.dcr.inputBeef instanceof Uint8Array
-              ? Beef.fromBinaryView(prior!.dcr.inputBeef)
-              : Beef.fromBinary(prior!.dcr.inputBeef)
-          result.mergeBeef(inputBeef)
-        }
-        result.mergeTransaction(prior!.tx)
-        return result
+    const beef = await traceActionStep(wallet, 'wallet.create_action.assemble_result_beef', parent, () => {
+      const result = new Beef()
+      if (prior!.dcr.inputBeef != null) {
+        const inputBeef =
+          prior!.dcr.inputBeef instanceof Uint8Array
+            ? Beef.fromBinaryView(prior!.dcr.inputBeef)
+            : Beef.fromBinaryStrict(prior!.dcr.inputBeef)
+        result.mergeBeef(inputBeef)
       }
-    )
+      result.mergeTransaction(prior!.tx)
+      return result
+    })
     logger?.log('merged beef')
 
     await traceActionStep(
@@ -124,11 +125,8 @@ async function createActionCore(
     beef.atomicTxid = r.txid
     setResultBeef(r, beef)
     if (!vargs.options.returnTXIDOnly) {
-      r.tx = await traceActionStep(
-        wallet,
-        'wallet.create_action.serialize_result_beef',
-        parent,
-        () => beef.toBinaryAtomic(r.txid!)
+      r.tx = await traceActionStep(wallet, 'wallet.create_action.serialize_result_beef', parent, () =>
+        serializeResultBeef(beef, r.txid!, vargs.options.knownTxids)
       )
     }
   }
@@ -166,7 +164,7 @@ async function traceActionStep<T>(
 
 async function createNewTx(
   wallet: Wallet,
-  vargs: Validation.ValidCreateActionArgs,
+  vargs: ValidCreateActionArgs,
   parent?: TelemetrySpan
 ): Promise<PendingSignAction> {
   const logger = vargs.logger
@@ -193,10 +191,54 @@ async function createNewTx(
   return prior
 }
 
+/**
+ * Serialize the result BEEF, re-applying `options.knownTxids` on the way out.
+ *
+ * THE INVARIANT THIS PROTECTS: a declared ancestor may be omitted, but it must never be carried
+ * in full with its own ancestry missing. A recipient can skip an absent or txid-only ancestor and
+ * restore it from its own records; it can verify one carried complete. It can do neither with a
+ * transaction that is present, unproven, and whose input sources are gone -- that is neither
+ * provable nor marked as omitted.
+ *
+ * That third shape is reachable because the result BEEF is rebuilt after storage has already
+ * trimmed it: `result.mergeBeef(inputBeef)` then `result.mergeTransaction(prior.tx)`.
+ * `Beef.mergeTransactionGraph` merges every node it walks as a FULL entry, so wherever an input's
+ * `sourceTransaction` is populated, a trimmed ancestor is re-materialized whole -- and the walk
+ * then stops, because that source transaction does not carry its own sources.
+ *
+ * `verifyReturnedTxidOnlyAtomicBEEF` does not catch it: it asserts that every txid-only entry WAS
+ * declared, not that every declared entry IS omitted.
+ *
+ * Trimming a CLONE is deliberate. `Wallet.createAction` merges the result BEEF into the wallet's
+ * own retained BEEF (`this.beef.mergeBeefFromParty(...)`), which must keep the full ancestry for
+ * later actions. `Beef.clone` is shallow, but `makeTxidOnly` replaces the array slot rather than
+ * mutating the shared `BeefTx`, so the original is unaffected.
+ *
+ * Parameters:
+ *  - `beef`: assembled result BEEF; left untouched
+ *  - `txid`: subject transaction, the atomic root
+ *  - `knownTxids`: ancestors the recipient has said it already holds
+ *
+ * Returns: AtomicBEEF with each declared ancestor reduced to a txid-only entry.
+ */
+export function serializeResultBeef(beef: Beef, txid: TXIDHexString, knownTxids?: string[]): AtomicBEEF {
+  const known = knownTxids ?? []
+  if (known.length === 0) return beef.toBinaryAtomic(txid)
+
+  const trimmed = beef.clone()
+  trimmed.atomicTxid = beef.atomicTxid
+  for (const knownTxid of known) {
+    // Never the subject: it is the transaction the recipient is being asked to verify.
+    if (knownTxid === txid) continue
+    if (trimmed.findTxid(knownTxid) != null) trimmed.makeTxidOnly(knownTxid)
+  }
+  return trimmed.toBinaryAtomic(txid)
+}
+
 function makeSignableTransactionResult(
   prior: PendingSignAction,
   wallet: Wallet,
-  args: Validation.ValidCreateActionArgs
+  args: ValidCreateActionArgs
 ): CreateActionResult {
   if (prior.dcr.inputBeef == null) throw new WERR_INTERNAL('prior.dcr.inputBeef must be valid')
 
@@ -209,6 +251,18 @@ function makeSignableTransactionResult(
       tx: makeSignableTransactionBeef(prior.tx)
     }
   }
+  setExactActionSpend(r, prior.amount)
+  // buildSignableTransaction has independently validated the requested outputs,
+  // bounded commission and client-derived change. Carry that local decision to
+  // completion without treating remotely serialized metadata as authority.
+  setActionOutputAuthorizations(
+    r,
+    prior.dcr.outputs.slice(args.outputs.length).map(output => ({
+      outputIndex: output.vout,
+      lockingScript: prior.tx.outputs[output.vout].lockingScript.toHex(),
+      satoshis: prior.tx.outputs[output.vout].satoshis!
+    }))
+  )
 
   wallet.pendingSignActions[r.signableTransaction!.reference] = prior
 
@@ -231,13 +285,13 @@ function makeSignableTransactionBeef(tx: Transaction): number[] {
   return beef.toBinaryAtomic(tx.id('hex'))
 }
 
-function removeUnlockScripts(args: Validation.ValidCreateActionArgs) {
+function removeUnlockScripts(args: ValidCreateActionArgs) {
   let storageArgs = args
   if (!storageArgs.inputs.every(i => i.unlockingScript === undefined)) {
     // Never send unlocking scripts to storage, all it needs is the script length.
     storageArgs = { ...args, inputs: [] }
     for (const i of args.inputs) {
-      const di: Validation.ValidCreateActionInput = {
+      const di: ValidCreateActionInput = {
         ...i,
         unlockingScriptLength: i.unlockingScript !== undefined ? i.unlockingScript.length : i.unlockingScriptLength
       }
@@ -252,7 +306,7 @@ export async function processAction(
   prior: PendingSignAction | undefined,
   wallet: Wallet,
   auth: AuthId,
-  vargs: Validation.ValidProcessActionArgs
+  vargs: ValidProcessActionArgs
 ): Promise<StorageProcessActionResults> {
   const batchResult = await wallet.actionBatch.process(prior, vargs)
   if (batchResult != null) return batchResult

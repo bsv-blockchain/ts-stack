@@ -18,8 +18,13 @@ import {
   readMessageBoxResourceConfig,
   type MessageBoxResourceConfig
 } from '../config/resources.js'
+import {
+  isCanonicalMessageBox,
+  isCanonicalMessageId,
+  MAX_MESSAGE_BOX_BYTES as MAX_CANONICAL_MESSAGE_BOX_BYTES
+} from '../security/messageFields.js'
 
-export const MAX_LIST_MESSAGE_BOX_BYTES = 128
+export const MAX_LIST_MESSAGE_BOX_BYTES = MAX_CANONICAL_MESSAGE_BOX_BYTES
 export const MAX_LIST_MESSAGES_PAGE_SIZE = 1_000
 export const MAX_LIST_MESSAGES_OFFSET = 100_000
 
@@ -34,6 +39,7 @@ interface ListMessagesRequest extends AuthRequest {
     limit?: number
     offset?: number
     skip?: number
+    messageId?: string
   }
 }
 
@@ -79,15 +85,14 @@ function normalizeMessageBoxName(value: unknown): string | RouteFailure {
   if (typeof value !== 'string') {
     return routeFailure(400, 'ERR_INVALID_MESSAGEBOX', 'MessageBox name must be a string!')
   }
-  const normalized = value.trim()
-  if (Buffer.byteLength(normalized, 'utf8') > MAX_LIST_MESSAGE_BOX_BYTES) {
+  if (!isCanonicalMessageBox(value)) {
     return routeFailure(
       400,
       'ERR_INVALID_MESSAGEBOX',
-      `MessageBox names must not exceed ${MAX_LIST_MESSAGE_BOX_BYTES} bytes.`
+      `MessageBox names must be exact, control-free strings of at most ${MAX_LIST_MESSAGE_BOX_BYTES} bytes.`
     )
   }
-  return normalized
+  return value
 }
 
 function isBoundedInteger(value: number, minimum: number, maximum: number): boolean {
@@ -181,7 +186,8 @@ async function readMessagePage(
   identityKey: string,
   messageBoxId: number,
   pagination: ListPagination,
-  resources: MessageBoxResourceConfig
+  resources: MessageBoxResourceConfig,
+  messageId?: string
 ): Promise<MessagePage | RouteFailure> {
   const accumulator: PageAccumulator = {
     messages: [],
@@ -194,12 +200,14 @@ async function readMessagePage(
   while (accumulator.messages.length <= pagination.limit) {
     const remaining = pagination.limit - accumulator.messages.length
     const take = Math.max(1, Math.min(batchSize, remaining + 1))
-    const messageRows = await runtimeDeps
+    const query = runtimeDeps
       .knex('messages')
       .where({ recipient: identityKey, messageBoxId })
       .where(function () {
         this.whereNull('expires_at').orWhere('expires_at', '>', new Date())
       })
+    if (messageId !== undefined) query.andWhere({ messageId })
+    const messageRows = await query
       .select('messageId', 'body', 'sender', 'created_at', 'updated_at')
       .orderBy('created_at', 'asc')
       .orderBy('messageId', 'asc')
@@ -247,7 +255,8 @@ async function readMessagePage(
  *             properties:
  *               messageBox:
  *                 type: string
- *                 description: The name of the messageBox to retrieve messages from
+ *                 maxLength: 128
+ *                 description: Exact control-free UTF-8 name of the messageBox; surrounding whitespace is not normalized
  *               limit:
  *                 type: integer
  *                 minimum: 1
@@ -371,6 +380,14 @@ export default {
         })
       }
       const resourceConfig = readMessageBoxResourceConfig()
+      const messageId = req.body.messageId
+      if (messageId !== undefined && !isCanonicalMessageId(messageId)) {
+        return res.status(400).json({
+          status: 'error',
+          code: 'ERR_INVALID_MESSAGE_ID',
+          description: 'messageId must be an exact bounded control-free string.'
+        })
+      }
       const pagination = parseListPagination(req.body, resourceConfig)
       if (isRouteFailure(pagination)) {
         return res.status(pagination.statusCode).json({
@@ -402,7 +419,8 @@ export default {
         identityKey,
         messageBoxRecord.messageBoxId,
         pagination,
-        resourceConfig
+        resourceConfig,
+        messageId
       )
       if (isRouteFailure(page)) {
         return res.status(page.statusCode).json({
@@ -412,8 +430,8 @@ export default {
         })
       }
       return res.status(200).json({ status: 'success', ...page })
-    } catch (e) {
-      log.error({ operation: 'messages.list', outcome: 'error', err: e }, 'Failed to list messages')
+    } catch {
+      log.error({ operation: 'messages.list', outcome: 'error' }, 'Failed to list messages')
       return res.status(500).json({
         status: 'error',
         code: 'ERR_INTERNAL_ERROR',

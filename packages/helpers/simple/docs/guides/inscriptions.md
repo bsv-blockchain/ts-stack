@@ -1,6 +1,6 @@
 # Inscriptions
 
-Inscriptions write data permanently to the blockchain using OP_RETURN outputs. They cost 0 satoshis (beyond the transaction fee) and are immutable once confirmed.
+Inscriptions write data permanently to the blockchain using OP_RETURN outputs. They cost 0 satoshis (beyond the transaction fee) and are immutable once confirmed. Text and encoded JSON are limited to 1 MiB and are fully validated before the wallet is asked to create a transaction.
 
 ## Text Inscription
 
@@ -8,9 +8,9 @@ Inscriptions write data permanently to the blockchain using OP_RETURN outputs. T
 const result = await wallet.inscribeText('Hello blockchain!')
 
 console.log('TXID:', result.txid)
-console.log('Type:', result.type)       // 'text'
-console.log('Size:', result.dataSize)   // 17
-console.log('Basket:', result.basket)   // 'text'
+console.log('Type:', result.type) // 'text'
+console.log('Size:', result.dataSize) // 17
+console.log('Basket:', result.basket) // 'text'
 ```
 
 ## JSON Inscription
@@ -22,8 +22,8 @@ const result = await wallet.inscribeJSON({
   created: Date.now()
 })
 
-console.log('Type:', result.type)       // 'json'
-console.log('Basket:', result.basket)   // 'json'
+console.log('Type:', result.type) // 'json'
+console.log('Basket:', result.basket) // 'json'
 ```
 
 ## File Hash Inscription
@@ -41,8 +41,8 @@ const hash = Array.from(new Uint8Array(hashBuffer))
 // Inscribe the hash
 const result = await wallet.inscribeFileHash(hash)
 
-console.log('Type:', result.type)       // 'file-hash'
-console.log('Basket:', result.basket)   // 'hash-document'
+console.log('Type:', result.type) // 'file-hash'
+console.log('Basket:', result.basket) // 'hash-document'
 ```
 
 The hash must be a 64-character hexadecimal string (SHA-256). The method validates the format and throws if invalid.
@@ -54,8 +54,8 @@ Same as file hash, but stored in a separate basket for organization:
 ```typescript
 const result = await wallet.inscribeImageHash(imageHash)
 
-console.log('Type:', result.type)       // 'image-hash'
-console.log('Basket:', result.basket)   // 'hash-image'
+console.log('Type:', result.type) // 'image-hash'
+console.log('Basket:', result.basket) // 'hash-image'
 ```
 
 ## Custom Baskets
@@ -69,25 +69,27 @@ await wallet.inscribeJSON(data, { basket: 'documents', description: 'Contract v1
 
 ## Default Baskets
 
-| Method | Default Basket |
-|--------|---------------|
-| `inscribeText()` | `'text'` |
-| `inscribeJSON()` | `'json'` |
-| `inscribeFileHash()` | `'hash-document'` |
-| `inscribeImageHash()` | `'hash-image'` |
+| Method                | Default Basket    |
+| --------------------- | ----------------- |
+| `inscribeText()`      | `'text'`          |
+| `inscribeJSON()`      | `'json'`          |
+| `inscribeFileHash()`  | `'hash-document'` |
+| `inscribeImageHash()` | `'hash-image'`    |
 
 ## InscriptionResult
 
 ```typescript
 interface InscriptionResult {
-  txid: string           // Transaction ID
-  tx: number[]           // Raw transaction bytes
-  type: InscriptionType  // 'text' | 'json' | 'file-hash' | 'image-hash'
-  dataSize: number       // Size of the inscribed data in bytes
-  basket: string         // Basket the inscription was stored in
-  outputs: OutputInfo[]  // Output details
+  txid: string // Transaction ID
+  tx: number[] // Raw transaction bytes
+  type: InscriptionType // 'text' | 'json' | 'file-hash' | 'image-hash'
+  dataSize: number // Size of the inscribed data in bytes
+  basket: string // Basket the inscription was stored in
+  outputs: OutputInfo[] // Output details
 }
 ```
+
+`dataSize` is measured in UTF-8 bytes. JSON values that are cyclic or otherwise serialize to no JSON value are rejected before any transaction is created.
 
 ## Under the Hood
 

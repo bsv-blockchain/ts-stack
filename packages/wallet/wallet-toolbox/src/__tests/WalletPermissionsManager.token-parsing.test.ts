@@ -1,4 +1,4 @@
-import { PushDrop, Utils } from '@bsv/sdk'
+import { Utils } from '@bsv/sdk'
 import { WalletPermissionsManager } from '../WalletPermissionsManager'
 
 jest.mock('@bsv/sdk', () => {
@@ -7,18 +7,18 @@ jest.mock('@bsv/sdk', () => {
 })
 
 describe('WalletPermissionsManager permission-token parsing', () => {
-  const output = { outpoint: 'txid.0', satoshis: 7 }
+  const txid = 'ab'.repeat(32)
+  const output = { outpoint: `${txid}.0`, satoshis: 1 }
   const result = { outputs: [output] }
   const transaction = {
     outputs: [{ lockingScript: { toHex: () => 'locking-script' } }],
+    id: () => txid,
     toBEEF: () => [1, 2, 3]
   }
   let manager: WalletPermissionsManager
 
   beforeEach(() => {
     manager = new WalletPermissionsManager({} as any, 'admin.example')
-    jest.spyOn(manager as any, 'parseOutpoint').mockReturnValue(['txid', 0])
-    jest.spyOn(manager as any, 'transactionFromResultBeef').mockReturnValue(transaction)
   })
 
   afterEach(() => {
@@ -26,9 +26,12 @@ describe('WalletPermissionsManager permission-token parsing', () => {
   })
 
   test('parses a matching protocol permission token', async () => {
-    jest.spyOn(PushDrop, 'decode').mockReturnValue({
+    jest.spyOn(manager as any, 'authenticatedPermissionTokenSource').mockResolvedValue({
+      tx: transaction,
+      txid,
+      outputIndex: 0,
       fields: Array.from({ length: 6 }, () => [1])
-    } as any)
+    })
     jest.spyOn(manager as any, 'decryptProtocolTokenFields').mockResolvedValue({
       domainDecoded: 'example.com',
       expiryDecoded: 123,
@@ -48,10 +51,10 @@ describe('WalletPermissionsManager permission-token parsing', () => {
 
     expect(token).toMatchObject({
       tx: [1, 2, 3],
-      txid: 'txid',
+      txid,
       outputIndex: 0,
       outputScript: 'locking-script',
-      satoshis: 7,
+      satoshis: 1,
       originator: 'example.com',
       privileged: true,
       protocol: 'protocol',
@@ -62,28 +65,62 @@ describe('WalletPermissionsManager permission-token parsing', () => {
   })
 
   test('parses a matching basket permission token', async () => {
-    jest.spyOn(PushDrop, 'decode').mockReturnValue({
-      fields: [Utils.toArray('example.com', 'utf8'), Utils.toArray('123', 'utf8'), Utils.toArray('basket', 'utf8')]
-    } as any)
+    jest.spyOn(manager as any, 'authenticatedPermissionTokenSource').mockResolvedValue({
+      tx: transaction,
+      txid,
+      outputIndex: 0,
+      fields: [Utils.toArray('example.com:8443', 'utf8'), Utils.toArray('123', 'utf8'), Utils.toArray('basket', 'utf8')]
+    })
     jest.spyOn(manager as any, 'decryptPermissionTokenField').mockImplementation(async field => field)
 
     const token = await (manager as any).parseBasketTokenOutput(result, output, 'example.com', 'basket')
 
     expect(token).toMatchObject({
       tx: [1, 2, 3],
-      txid: 'txid',
+      txid,
       outputIndex: 0,
       outputScript: 'locking-script',
-      satoshis: 7,
+      satoshis: 1,
       originator: 'example.com',
-      rawOriginator: 'example.com',
+      rawOriginator: 'example.com:8443',
       basketName: 'basket',
       expiry: 123
     })
   })
 
+  test('finds a legacy grant minted for another port through a bounded hostname fallback', async () => {
+    const basketToken = {
+      txid: 'basket',
+      outputIndex: 0,
+      originator: 'example.com',
+      rawOriginator: 'example.com:8443',
+      expiry: 200
+    }
+    const listOutputs = jest
+      .fn()
+      .mockResolvedValueOnce({ outputs: [] })
+      .mockResolvedValueOnce({ outputs: [] })
+      .mockResolvedValueOnce({ outputs: [output] })
+    ;(manager as any).underlying.listOutputs = listOutputs
+    jest.spyOn(manager as any, 'parseBasketTokenOutput').mockResolvedValue(basketToken)
+    jest.spyOn(manager as any, 'isTokenExpired').mockReturnValue(false)
+
+    await expect(
+      (manager as any).findBasketToken('example.com', 'basket', false, ['example.com:9443', 'example.com', undefined])
+    ).resolves.toBe(basketToken)
+    expect(listOutputs.mock.calls.map(([args]) => args.tags)).toEqual([
+      ['originator example.com:9443', 'basket basket'],
+      ['originator example.com', 'basket basket'],
+      ['basket basket']
+    ])
+    expect(listOutputs.mock.calls[2][0].limit).toBe(10000)
+  })
+
   test('parses a matching certificate permission token', async () => {
-    jest.spyOn(PushDrop, 'decode').mockReturnValue({
+    jest.spyOn(manager as any, 'authenticatedPermissionTokenSource').mockResolvedValue({
+      tx: transaction,
+      txid,
+      outputIndex: 0,
       fields: [
         Utils.toArray('example.com', 'utf8'),
         Utils.toArray('123', 'utf8'),
@@ -92,7 +129,7 @@ describe('WalletPermissionsManager permission-token parsing', () => {
         Utils.toArray(JSON.stringify(['name', 'email']), 'utf8'),
         Utils.toArray('verifier', 'utf8')
       ]
-    } as any)
+    })
     jest.spyOn(manager as any, 'decryptPermissionTokenField').mockImplementation(async field => field)
 
     const token = await (manager as any).parseCertificateTokenOutput(result, output, {
@@ -105,10 +142,10 @@ describe('WalletPermissionsManager permission-token parsing', () => {
 
     expect(token).toMatchObject({
       tx: [1, 2, 3],
-      txid: 'txid',
+      txid,
       outputIndex: 0,
       outputScript: 'locking-script',
-      satoshis: 7,
+      satoshis: 1,
       originator: 'example.com',
       rawOriginator: 'example.com',
       privileged: true,
@@ -228,6 +265,13 @@ describe('WalletPermissionsManager permission-token parsing', () => {
         {
           protocol: 'basket insertion',
           insertionRemittance: {
+            basket: 'savings',
+            customInstructions: 'already-encrypted'
+          }
+        },
+        {
+          protocol: 'basket insertion',
+          insertionRemittance: {
             basket: 'p module'
           }
         },
@@ -245,6 +289,7 @@ describe('WalletPermissionsManager permission-token parsing', () => {
     await (manager as any).encryptInternalizeActionModuleMetadata(requestArgs)
 
     expect(requestArgs.outputs[0].insertionRemittance?.customInstructions).toBe('encrypted')
+    expect(requestArgs.outputs[1].insertionRemittance?.customInstructions).toBe('already-encrypted')
     expect((manager as any).maybeEncryptMetadata).toHaveBeenCalledTimes(1)
   })
 })

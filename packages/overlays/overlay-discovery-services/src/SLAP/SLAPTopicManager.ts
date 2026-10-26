@@ -1,7 +1,7 @@
 import { AdmittanceInstructions, TopicManager } from '@bsv/overlay'
-import { Transaction } from '@bsv/sdk'
 import SLAPTopicDocs from './SLAPTopic.docs.js'
 import { isAdmissibleDiscoveryOutput } from '../utils/isAdmissibleDiscoveryOutput.js'
+import { parseDiscoveryTransaction } from '../utils/discoveryBEEFValidation.js'
 import {
   logDiscoveryIdentificationError,
   logDiscoverySummary
@@ -27,7 +27,7 @@ export class SLAPTopicManager implements TopicManager {
   ): Promise<AdmittanceInstructions> {
     const outputsToAdmit: number[] = []
     try {
-      const parsedTransaction = Transaction.fromBEEF(beef)
+      const parsedTransaction = parseDiscoveryTransaction(beef)
 
       for (const [i, output] of parsedTransaction.outputs.entries()) {
         try {

@@ -1,7 +1,7 @@
 import { LookupFormula } from '@bsv/overlay'
 
 export interface OwnerOutpointStorage {
-  findByOwner: (ownerHash160: string) => Promise<LookupFormula>
+  findByOwner: (ownerHash160: string, limit?: number, skip?: number) => Promise<LookupFormula>
   findByOutpoint: (txid: string, outputIndex: number) => Promise<LookupFormula>
 }
 
@@ -10,14 +10,16 @@ export interface OwnerOutpointStorage {
  * token-specific primary key (assetId/tokenId) has been checked and missed,
  * every token type falls back to the same owner/outpoint queries.
  */
-export async function lookupByOwnerOrOutpoint (
+export async function lookupByOwnerOrOutpoint(
   storage: OwnerOutpointStorage,
-  query: { ownerHash160?: unknown, txid?: unknown, outputIndex?: unknown }
+  query: { ownerHash160?: string; txid?: string; outputIndex?: number },
+  limit = 100,
+  skip = 0
 ): Promise<LookupFormula> {
-  if (typeof query.ownerHash160 === 'string') {
-    return await storage.findByOwner(query.ownerHash160)
+  if (query.ownerHash160 !== undefined) {
+    return await storage.findByOwner(query.ownerHash160, limit, skip)
   }
-  if (typeof query.txid === 'string' && typeof query.outputIndex === 'number') {
+  if (query.txid !== undefined && query.outputIndex !== undefined) {
     return await storage.findByOutpoint(query.txid, query.outputIndex)
   }
   throw new Error('Unsupported query')

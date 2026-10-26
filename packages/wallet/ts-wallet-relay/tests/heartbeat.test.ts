@@ -267,12 +267,17 @@ describe('WebSocketRelay close reporting', () => {
     expect(disconnects).toHaveLength(0)
   })
 
-  it('fires for both roles and for a socket that was replaced on its topic', async () => {
+  it('rejects mobile replacement and reports disconnects for both active roles', async () => {
     const desktop = connect('desktop')
     const mobileA = connect('mobile')
     await Promise.all([opened(desktop), opened(mobileA)])
-    const mobileB = connect('mobile') // takes over the mobile slot
+    const mobileB = connect('mobile')
+    const bClosed = closed(mobileB)
     await opened(mobileB)
+    await expect(bClosed).resolves.toMatchObject({
+      code: 1008,
+      reason: 'A mobile connection is already active'
+    })
 
     const aClosed = closed(mobileA)
     mobileA.close(1000)
@@ -286,8 +291,6 @@ describe('WebSocketRelay close reporting', () => {
       ['mobile', 1000],
       ['desktop', 1001]
     ])
-    // mobileA no longer held the slot, so only the desktop close is a disconnect.
-    expect(disconnects.map(d => d.role)).toEqual(['desktop'])
-    mobileB.close()
+    expect(disconnects.map(d => d.role)).toEqual(['mobile', 'desktop'])
   })
 })

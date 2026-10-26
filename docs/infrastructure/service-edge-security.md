@@ -183,7 +183,7 @@ identity.
 | Endpoints                                             | Access and controls                                                                                                                                                                                                              |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Static `GET`/`HEAD` under the public object directory | Public immutable object retrieval with CDN MIME handling.                                                                                                                                                                        |
-| `PUT /put`                                            | HMAC-authorized streaming upload. Authorization and declared size are checked before body consumption; bytes stream to a private temporary file, hash incrementally, and atomically commit without overwriting an existing path. |
+| `PUT /put`                                            | HMAC-authorized streaming upload. Flat Base58 object names are confined beneath the canonical CDN root; authorization and declared size are checked before body consumption; bytes stream to a private temporary file, hash incrementally, and atomically commit without overwriting an existing path. |
 | `POST /quote`                                         | Public, bounded pricing calculation.                                                                                                                                                                                             |
 | `POST /upload`                                        | BRC-103 identity required; payment price is based on declared size/retention. Returns an upload authorization rather than accepting object bytes.                                                                                |
 | `GET /list`, `GET /find`                              | BRC-103 identity required; queries are scoped to the authenticated uploader.                                                                                                                                                     |
@@ -201,16 +201,22 @@ Prefix: `UHRP`. JSON limit: 256 KiB. Concurrency: 200. Pre-auth:
 
 | Endpoints                   | Access and controls                                                                                                   |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Static `GET`/`HEAD` content | Public object retrieval; cloud storage remains the object source of truth.                                            |
+| Static `GET`/`HEAD` content | Public object retrieval; cloud storage remains the object source of truth. Upload capabilities force binary attachment metadata to prevent active content from inheriting the API origin. |
 | `POST /advertise`           | Administrative operation using an `Authorization: Bearer` token of at least 32 characters, compared in constant time. |
 | `POST /quote`               | Public, bounded pricing calculation.                                                                                  |
-| `POST /upload`              | BRC-103 identity required; creates the cloud upload workflow and applies payment policy.                              |
-| `GET /list`, `GET /find`    | BRC-103 identity required and uploader-scoped.                                                                        |
-| `POST /renew`               | BRC-103 identity required; ownership and payment policy apply.                                                        |
+| `POST /upload`              | BRC-103 identity required; payment-bound size, short expiry, safe response metadata, and generation-zero make the signed GCS capability exact and single-use. |
+| `GET /list`, `GET /find`    | BRC-103 identity required; uploader scope comes from server-signed local metadata bound to the exact public token and BEEF output. |
+| `POST /renew`               | BRC-103 identity required; signed ownership, current GCS size, exact source/action/final transaction, overlay acknowledgment, and payment policy apply. |
 
 Production HTTPS enforcement relies only on Express `req.secure` after an
 explicit proxy trust configuration. Nginx and the service configuration cap
 JSON bodies at 256 KiB and use 60-second request/upstream timeouts.
+
+The public UHRP wire token does not carry uploader identity or local object ID.
+Unsigned legacy wallet metadata is never treated as owner authorization and
+must be re-advertised before private list/find/renew operations. The notifier
+uses an exact credential-free HTTPS callback origin, refuses redirects, and
+bounds response time and size so its bearer token cannot follow a redirect.
 
 ### Message Box
 

@@ -40,14 +40,18 @@ export async function keyIdFor(cek: Uint8Array): Promise<Uint8Array> {
 }
 
 function periodFor(index: number, periods: readonly KeyPeriod[]): KeyPeriod {
-  const period = periods.find(candidate => {
-    const first = toSafeNumber(candidate.firstSegment, 'firstSegment')
-    const count = toSafeNumber(candidate.segmentCount, 'segmentCount')
-    return index >= first && index < first + count
-  })
-  if (period === undefined)
-    throw new LCHError('ERR_LCH_KEY', `No key period covers segment ${index}`)
-  return period
+  let low = 0
+  let high = periods.length - 1
+  while (low <= high) {
+    const middle = low + Math.floor((high - low) / 2)
+    const period = periods[middle]
+    const first = toSafeNumber(period.firstSegment, 'firstSegment')
+    const count = toSafeNumber(period.segmentCount, 'segmentCount')
+    if (index < first) high = middle - 1
+    else if (index >= first + count) low = middle + 1
+    else return period
+  }
+  throw new LCHError('ERR_LCH_KEY', `No key period covers segment ${index}`)
 }
 
 function segmentAad(
@@ -72,20 +76,23 @@ function segmentIv(prefix: Uint8Array, index: number): Uint8Array {
 
 export function validateEncryptionDescriptor(descriptor: SegmentedEncryptionDescriptor): void {
   lchAssert(
-    descriptor.algorithm === LCH_MECHANISMS.encryption,
+    descriptor !== null &&
+      typeof descriptor === 'object' &&
+      descriptor.algorithm === LCH_MECHANISMS.encryption,
     'ERR_LCH_KEY',
     'Unsupported encryption mechanism'
   )
   lchAssert(
-    descriptor.encryptionId.length === 32,
+    descriptor.encryptionId instanceof Uint8Array && descriptor.encryptionId.length === 32,
     'ERR_LCH_KEY',
     'Encryption ID must contain 32 bytes'
   )
   lchAssert(
-    descriptor.noncePrefix.length === 4,
+    descriptor.noncePrefix instanceof Uint8Array && descriptor.noncePrefix.length === 4,
     'ERR_LCH_KEY',
     'Nonce prefix must contain four bytes'
   )
+  lchAssert(Array.isArray(descriptor.keyPeriods), 'ERR_LCH_KEY', 'Key periods are invalid')
   const plaintextLength = toSafeNumber(descriptor.plaintextLength, 'plaintextLength')
   const segmentSize = toSafeNumber(descriptor.segmentSize, 'segmentSize')
   const segmentCount = toSafeNumber(descriptor.segmentCount, 'segmentCount')
@@ -105,10 +112,14 @@ export function validateEncryptionDescriptor(descriptor: SegmentedEncryptionDesc
   )
   let cursor = 0
   for (const period of descriptor.keyPeriods) {
+    lchAssert(period !== null && typeof period === 'object', 'ERR_LCH_KEY', 'Key period is invalid')
     const first = toSafeNumber(period.firstSegment, 'firstSegment')
     const count = toSafeNumber(period.segmentCount, 'key period segmentCount')
     lchAssert(
-      period.keyId.length === 32 && count > 0 && first === cursor,
+      period.keyId instanceof Uint8Array &&
+        period.keyId.length === 32 &&
+        count > 0 &&
+        first === cursor,
       'ERR_LCH_KEY',
       'Invalid key-period partition'
     )
@@ -122,24 +133,47 @@ export async function encryptSegmented(
   options: SegmentedEncryptionOptions = {}
 ): Promise<EncryptionResult> {
   const segmentSize = options.segmentSize ?? 4_194_288
+  lchAssert(
+    plaintext instanceof Uint8Array && Number.isSafeInteger(segmentSize) && segmentSize > 0,
+    'ERR_LCH_KEY',
+    'Segment size must be a positive safe integer'
+  )
   const segmentCount = Math.max(1, Math.ceil(plaintext.length / segmentSize))
+  lchAssert(
+    segmentCount <= LCH_LIMITS.encryptionSegments,
+    'ERR_LCH_KEY',
+    'Encryption segment limit exceeded'
+  )
   const keyPeriodSegments = options.keyPeriodSegments ?? segmentCount
   lchAssert(
-    Number.isSafeInteger(segmentSize) &&
-      segmentSize > 0 &&
-      Number.isSafeInteger(keyPeriodSegments) &&
-      keyPeriodSegments > 0,
+    Number.isSafeInteger(keyPeriodSegments) && keyPeriodSegments > 0,
     'ERR_LCH_KEY',
-    'Segment and key-period sizes must be positive safe integers'
+    'Key-period size must be a positive safe integer'
   )
   const random = options.random ?? secureRandom
+  const keyPeriodCount = Math.ceil(segmentCount / keyPeriodSegments)
+  lchAssert(
+    keyPeriodCount <= LCH_LIMITS.cborEntries,
+    'ERR_LCH_KEY',
+    'Encryption key-period limit exceeded'
+  )
+  const encryptionId = random(32)
+  const noncePrefix = random(4)
+  lchAssert(
+    encryptionId instanceof Uint8Array &&
+      encryptionId.length === 32 &&
+      noncePrefix instanceof Uint8Array &&
+      noncePrefix.length === 4,
+    'ERR_LCH_KEY',
+    'Random source returned invalid encryption or nonce material'
+  )
   const descriptor: SegmentedEncryptionDescriptor = {
     algorithm: LCH_MECHANISMS.encryption,
-    encryptionId: random(32),
+    encryptionId,
     plaintextLength: plaintext.length,
     segmentSize,
     segmentCount,
-    noncePrefix: random(4),
+    noncePrefix,
     keyPeriods: []
   }
   const keys = new Map<string, Uint8Array>()
@@ -238,7 +272,10 @@ export function keyPeriodsForSelection(
   return descriptor.keyPeriods.filter(period => {
     const first = toSafeNumber(period.firstSegment, 'firstSegment')
     const count = toSafeNumber(period.segmentCount, 'segmentCount')
-    return Array.from(selected).some(index => index >= first && index < first + count)
+    for (let index = first; index < first + count; index += 1) {
+      if (selected.has(index)) return true
+    }
+    return false
   })
 }
 
@@ -248,16 +285,27 @@ export function validateKeyGrantsForSelection(
   grants: ReadonlyArray<{ keyId: Uint8Array }>
 ): void {
   const expected = keyPeriodsForSelection(descriptor, selection).map(period => toHex(period.keyId))
-  const actual = grants.map(grant => toHex(grant.keyId))
   lchAssert(
-    new Set(actual).size === actual.length,
+    Array.isArray(grants) &&
+      grants.length <= LCH_LIMITS.cborEntries &&
+      grants.every(
+        grant =>
+          grant !== null &&
+          typeof grant === 'object' &&
+          grant.keyId instanceof Uint8Array &&
+          grant.keyId.length === 32
+      ),
     'ERR_LCH_KEY',
-    'License contains duplicate Key IDs'
+    'License key grants are invalid'
   )
+  const actual = grants.map(grant => toHex(grant.keyId))
+  const expectedSet = new Set(expected)
+  const actualSet = new Set(actual)
+  lchAssert(actualSet.size === actual.length, 'ERR_LCH_KEY', 'License contains duplicate Key IDs')
   lchAssert(
     expected.length === actual.length &&
-      expected.every(keyId => actual.includes(keyId)) &&
-      actual.every(keyId => expected.includes(keyId)),
+      expected.every(keyId => actualSet.has(keyId)) &&
+      actual.every(keyId => expectedSet.has(keyId)),
     'ERR_LCH_KEY',
     'License must grant every and only the key periods intersecting its segment selection'
   )

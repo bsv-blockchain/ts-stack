@@ -162,7 +162,7 @@ export function logCreateActionArgs (args: CreateActionArgs): object {
     description: args.description
   }
   if (args.labels != null) o.labels = args.labels
-  if (args.inputBEEF != null) o.inputBEEF = Beef.fromBinary(args.inputBEEF).toLogString()
+  if (args.inputBEEF != null) o.inputBEEF = Beef.fromBinaryStrict(args.inputBEEF).toLogString()
   if (args.lockTime !== undefined) o.lockTime = args.lockTime
   if (args.version !== undefined) o.version = args.version
   /*

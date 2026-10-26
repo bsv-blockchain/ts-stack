@@ -31,6 +31,8 @@ describe('device routes', () => {
 
   it.each([
     [{ fcmToken: 'x'.repeat(MAX_FCM_TOKEN_LENGTH + 1) }, 'ERR_INVALID_FCM_TOKEN'],
+    [{ fcmToken: ' token' }, 'ERR_INVALID_FCM_TOKEN'],
+    [{ fcmToken: 'token\n' }, 'ERR_INVALID_FCM_TOKEN'],
     [
       {
         fcmToken: 'token',
@@ -38,6 +40,8 @@ describe('device routes', () => {
       },
       'ERR_INVALID_DEVICE_ID'
     ],
+    [{ fcmToken: 'token', deviceId: ' device' }, 'ERR_INVALID_DEVICE_ID'],
+    [{ fcmToken: 'token', deviceId: 'device\u0085' }, 'ERR_INVALID_DEVICE_ID'],
     [{ fcmToken: 'token', platform: 'desktop' }, 'ERR_INVALID_PLATFORM']
   ] as const)('rejects invalid registration input', async (body, code) => {
     const res = response()

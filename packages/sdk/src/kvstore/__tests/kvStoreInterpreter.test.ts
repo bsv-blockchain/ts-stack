@@ -4,6 +4,7 @@ import { kvProtocol } from '../types'
 import Transaction from '../../transaction/Transaction'
 import PushDrop from '../../script/templates/PushDrop'
 import * as Utils from '../../primitives/utils'
+import { decodeAndVerifyKVStoreToken } from '../kvStoreTokenValidation'
 
 // --- Module mocks -----------------------------------------------------------
 
@@ -19,6 +20,9 @@ jest.mock('../../primitives/utils.js', () => ({
   toArray: jest.fn((str: string) => Array.from(Buffer.from(str, 'utf8'))),
   toUTF8: jest.fn((arr: number[] | Uint8Array) => Buffer.from(arr).toString('utf8'))
 }))
+jest.mock('../kvStoreTokenValidation.js', () => ({
+  decodeAndVerifyKVStoreToken: jest.fn()
+}))
 
 // --- Typed mock refs --------------------------------------------------------
 
@@ -27,6 +31,9 @@ const MockedPushDrop = PushDrop as jest.MockedClass<typeof PushDrop> & {
 }
 const MockedPushDropDecode = MockedPushDrop.decode
 const MockedUtils = Utils as jest.Mocked<typeof Utils>
+const MockedDecodeAndVerifyKVStoreToken = decodeAndVerifyKVStoreToken as jest.MockedFunction<
+  typeof decodeAndVerifyKVStoreToken
+>
 
 // --- Helpers ----------------------------------------------------------------
 
@@ -35,6 +42,7 @@ const MockedUtils = Utils as jest.Mocked<typeof Utils>
  * Old format has one fewer (no tags field).
  */
 const expectedFieldCount = Object.keys(kvProtocol).length // 6
+const TEST_CONTROLLER = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
 
 function makeMockTransaction(outputs: Array<{ lockingScript?: any } | null>): Transaction {
   return {
@@ -72,7 +80,7 @@ function makeCtx(
   key: string,
   protocolID: WalletProtocol = [2 as SecurityLevel, 'kvstore']
 ): KVContext {
-  return { key, protocolID }
+  return { key, protocolID, controller: TEST_CONTROLLER }
 }
 
 // --- Tests ------------------------------------------------------------------
@@ -90,6 +98,25 @@ describe('kvStoreInterpreter', () => {
     MockedUtils.toUTF8.mockImplementation((arr: number[] | Uint8Array) =>
       Buffer.from(arr).toString('utf8')
     )
+    MockedDecodeAndVerifyKVStoreToken.mockImplementation(async lockingScript => {
+      const decoded = MockedPushDropDecode(lockingScript)
+      if (
+        decoded.fields.length !== expectedFieldCount &&
+        decoded.fields.length !== expectedFieldCount - 1
+      ) {
+        throw new Error('Invalid field count')
+      }
+      const key = MockedUtils.toUTF8(decoded.fields[kvProtocol.key])
+      const protocolIDText = MockedUtils.toUTF8(decoded.fields[kvProtocol.protocolID])
+      const value = MockedUtils.toUTF8(decoded.fields[kvProtocol.value])
+      return {
+        key,
+        value,
+        protocolIDText,
+        protocolID: JSON.parse(protocolIDText),
+        controller: TEST_CONTROLLER
+      }
+    })
   })
 
   // --- Missing / null guard cases -------------------------------------------
@@ -129,7 +156,8 @@ describe('kvStoreInterpreter', () => {
       const tx = makeMockTransaction([{ lockingScript: {} }])
       const result = await kvStoreInterpreter(tx, 0, {
         key: null as any,
-        protocolID: testProtocolID
+        protocolID: testProtocolID,
+        controller: TEST_CONTROLLER
       })
       expect(result).toBeUndefined()
     })
@@ -138,7 +166,8 @@ describe('kvStoreInterpreter', () => {
       const tx = makeMockTransaction([{ lockingScript: {} }])
       const result = await kvStoreInterpreter(tx, 0, {
         key: undefined as any,
-        protocolID: testProtocolID
+        protocolID: testProtocolID,
+        controller: TEST_CONTROLLER
       })
       expect(result).toBeUndefined()
     })
@@ -188,7 +217,7 @@ describe('kvStoreInterpreter', () => {
 
   // --- Key / protocolID mismatch cases --------------------------------------
 
-  describe('returns undefined when key or protocolID does not match ctx', () => {
+  describe('returns undefined when key, protocolID, or controller does not match ctx', () => {
     it('returns undefined when key does not match ctx.key (new format)', async () => {
       MockedPushDropDecode.mockReturnValue({
         fields: makeFieldArray(protocolIDStr, 'different-key', testValue)
@@ -224,6 +253,20 @@ describe('kvStoreInterpreter', () => {
         .mockReturnValueOnce(JSON.stringify(differentProtocol)) // protocolID field
       const tx = makeMockTransaction([{ lockingScript: {} }])
       const result = await kvStoreInterpreter(tx, 0, testCtx)
+      expect(result).toBeUndefined()
+    })
+
+    it('returns undefined when the authenticated controller does not match ctx.controller', async () => {
+      MockedPushDropDecode.mockReturnValue({
+        fields: makeFieldArray(protocolIDStr, testKey, testValue)
+      })
+      const tx = makeMockTransaction([{ lockingScript: {} }])
+
+      const result = await kvStoreInterpreter(tx, 0, {
+        ...testCtx,
+        controller: `03${'11'.repeat(32)}`
+      })
+
       expect(result).toBeUndefined()
     })
   })
