@@ -578,19 +578,6 @@ jobs:
         run: |
           echo "Direct packages: $DIRECT_PROJECTS"
 
-      - name: Pin complete immutable mutation execution batches
-        id: mutation-execution
-        env:
-          MUTATION_MATRIX: ${{ needs.scope.outputs.mutation-matrix }}
-          BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
-          BUILD_ARTIFACT_NAME: build-outputs
-        run: |
-          batches="$(node scripts/mutation-execution-batches.mjs plan)"
-          matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
-          identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
-          printf 'batches=%s\nmatrix-digest=%s\nidentity=%s\n' \
-            "$batches" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
-
   package-artifacts:
     name: Package artifacts and documentation consumers (${{ matrix.shard }}/${{ matrix.total }})
     if: always() && !cancelled() && needs.prepare.result == 'success'

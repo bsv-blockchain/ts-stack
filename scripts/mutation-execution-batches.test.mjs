@@ -278,13 +278,33 @@ test('actual caller output commands fail preparation when any planner or identit
       '#!/bin/sh\nif [ "$2" = "$FAIL_COMMAND" ]; then exit 42; fi\nprintf "result-%s\\n" "$2"\n',
       { mode: 0o755 }
     )
-    for (const file of ['ci.yml', 'mutation-tests.yml']) {
+    // CI plans batches in scope and pins the build identity after upload in build.
+    for (const [file, name, step, commands, expected] of [
+      [
+        'ci.yml',
+        'scope',
+        'Pin complete immutable mutation execution batches',
+        ['plan', 'digest'],
+        'batches=result-plan\nmatrix-digest=result-digest\n'
+      ],
+      [
+        'ci.yml',
+        'build',
+        'Pin the immutable mutation build identity',
+        ['build-identity'],
+        'identity=result-build-identity\n'
+      ],
+      [
+        'mutation-tests.yml',
+        'prepare',
+        'Pin complete immutable mutation execution batches',
+        ['plan', 'digest', 'build-identity'],
+        'batches=result-plan\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
+      ]
+    ]) {
       const source = readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8')
-      const script = stepScript(
-        job(source, 'prepare'),
-        'Pin complete immutable mutation execution batches'
-      )
-      for (const failing of ['', 'plan', 'digest', 'build-identity']) {
+      const script = stepScript(job(source, name), step)
+      for (const failing of ['', ...commands]) {
         writeFileSync(output, '')
         const result = spawnSync('/bin/bash', ['-e', '-o', 'pipefail', '-c', script], {
           env: { PATH: join(root, 'bin'), GITHUB_OUTPUT: output, FAIL_COMMAND: failing },
@@ -296,10 +316,7 @@ test('actual caller output commands fail preparation when any planner or identit
           assert.equal(readFileSync(output, 'utf8'), '')
         } else {
           assert.equal(result.status, 0)
-          assert.equal(
-            readFileSync(output, 'utf8'),
-            'batches=result-plan\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
-          )
+          assert.equal(readFileSync(output, 'utf8'), expected)
         }
       }
     }
@@ -378,7 +395,8 @@ test('both callers dispatch serial immutable batches and the reusable executor r
     [full, 'qualification']
   ]) {
     const caller = job(source, 'mutation-tests'),
-      prepare = job(source, 'prepare')
+      prepare = job(source, profile === 'ci' ? 'build' : 'prepare'),
+      pinned = profile === 'ci' ? 'id: mutation-identity' : 'id: mutation-execution'
     assert.match(caller, /max-parallel: 1\n/)
     assert.match(caller, /fail-fast: false/)
     assert.match(caller, /uses: \.\/\.github\/workflows\/mutation-execution\.yml/)
@@ -402,7 +420,7 @@ test('both callers dispatch serial immutable batches and the reusable executor r
     )
     assert.match(prepare, /BUILD_ARTIFACT_NAME: /)
     assert.match(prepare, /scripts\/mutation-execution-batches\.mjs build-identity/)
-    assert.ok(prepare.indexOf('id: mutation-build') < prepare.indexOf('id: mutation-execution'))
+    assert.ok(prepare.indexOf('id: mutation-build') < prepare.indexOf(pinned))
   }
   assert.match(executor, /fail-fast: false/)
   assert.match(
