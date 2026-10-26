@@ -1308,11 +1308,11 @@
       "sourceHashes": {
         "src/storage/remoting/KnexSessionManager.ts": "09f6feb977a8b600fb2a81d0180989150e8026c685aafa4c5c59c1954ecf9c7a",
         "src/storage/schema/knexDatabaseSystem.ts": "a66fabb85785ccae40eb335af08eb72bee795c017054a9632a354c7592a7ffe8",
-        "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts": "0eef350d6c0dde6a865cc35ce57baaa6560a4add4bf9c80396dd48afbe16c5e8",
+        "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts": "f6eef20829842037e605b460e90af30fe0561fb954f9548f9e7aa2e5d4501659",
         "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts": "58e0179dba97a229d48a00dc92d0a2774aaf3dc857c9017fa0ef43b6259a6314",
         "src/storage/snapshot/archive/captureKnexSnapshotArchive.ts": "5ebbac6c61d9eedcfc8ad251e18b25fcfb71453c6280b3bfaccbadd23e251100"
       },
-      "canonicalCount": 1251,
+      "canonicalCount": 1254,
       "packingHint": 250,
       "parts": [
         {
@@ -1358,24 +1358,30 @@
             "src/storage/remoting/KnexSessionManager.ts:474-484",
             "src/storage/remoting/KnexSessionManager.ts:486-490",
             "src/storage/schema/knexDatabaseSystem.ts:6-13",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:34-38",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:46-46",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:48-51",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:53-85",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:87-95",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:97-105",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:107-109",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:111-132",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:138-207"
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:35-39",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:47-47",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:49-52",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:54-87",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:89-97",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:99-107",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:109-111",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:113-134"
           ],
-          "count": 249,
+          "count": 176,
           "id": "range-003"
         },
         {
           "mutate": [
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:213-268",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:274-374",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:376-379",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:140-209",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:215-270"
+          ],
+          "count": 144,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:276-376",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:378-381",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:55-55",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:59-63",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:65-69",
@@ -1385,20 +1391,20 @@
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:92-100",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:103-107",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:113-121",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:127-135"
-          ],
-          "count": 245,
-          "id": "range-004"
-        },
-        {
-          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:127-135",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:140-152",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:154-166",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:168-180",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:182-194",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:199-199",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:200-200",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:201-201",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:201-201"
+          ],
+          "count": 227,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:202-256",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:261-347",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:349-352",
@@ -1417,17 +1423,11 @@
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:429-439",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:441-449",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:451-457",
-            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:460-468"
-          ],
-          "count": 248,
-          "id": "range-005"
-        },
-        {
-          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:460-468",
             "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:470-473",
             "src/storage/snapshot/archive/captureKnexSnapshotArchive.ts:27-44"
           ],
-          "count": 18,
+          "count": 216,
           "id": "range-006"
         }
       ]

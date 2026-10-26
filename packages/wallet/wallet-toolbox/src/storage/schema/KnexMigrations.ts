@@ -1,4 +1,9 @@
 import { promiseFromSync } from '../../utility/promiseFromSync'
+import {
+  SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION,
+  widenSnapshotArchivePacketLabels,
+  refuseSnapshotArchivePacketLabelDowngrade
+} from './snapshotArchivePacketLabels'
 import { addSnapshotJournalMysqlPrimaryControl } from '../snapshot/journal/SnapshotJournalMysqlSourceUpgrade'
 import {
   PRIMARY_HANDOFF_MIGRATION,
@@ -272,6 +277,12 @@ export class KnexMigrations implements MigrationSource<string> {
       config: { transaction: true },
       up: forSnapshotSqlDialect(addSnapshotArchiveTables),
       down: forSnapshotSqlDialect(removeSnapshotArchiveTables)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(widenSnapshotArchivePacketLabels),
+      down: refuseSnapshotArchivePacketLabelDowngrade
     }
 
     migrations[SNAPSHOT_SYNC_MIGRATION] = {

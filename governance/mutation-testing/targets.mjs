@@ -7652,6 +7652,7 @@ export function buildMutationTargets(repositoryRoot) {
         'packages/wallet/wallet-toolbox/src/storage/snapshot/archive/SnapshotArchiveProtocol.property.test.ts',
       mutate: [
         'src/storage/snapshot/archive/SnapshotArchiveChain.ts',
+        'src/storage/schema/snapshotArchivePacketLabels.ts',
         'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
         'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
         'src/storage/snapshot/archive/SnapshotArchiveTransport.ts',
@@ -7726,6 +7727,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.cjs',
         [
           '<rootDir>/src/storage/snapshot/archive/SnapshotArchive*.test.ts',
+          '<rootDir>/src/storage/schema/snapshotArchivePacketLabels.test.ts',
           '<rootDir>/src/storage/snapshot/archive/RemoteSnapshotReaderHttp.test.ts',
           '<rootDir>/src/storage/snapshot/archive/KnexSnapshotArchiveRpc.test.ts',
           '<rootDir>/src/storage/remoting/__test/BinaryJson.test.ts',

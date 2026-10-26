@@ -1,6 +1,6 @@
 ## Held #569 implementation candidate — unreleased
 
-TTN now supports authenticated snapshot archives, row/field journal archives and the dependent remote primary handoff. Producers, stored-artifact readers and full/mobile clients preserve the literal `ttn` binding; cross-network artifacts still refuse. Existing main/test bytes, schema, protocol versions and resource bounds are unchanged. No consumer migration is required; every archive/handoff participant must advertise compatible support.
+TTN now supports authenticated snapshot archives, row/field journal archives and the dependent remote primary handoff. Producers, stored-artifact readers and full/mobile clients preserve the literal `ttn` binding; cross-network artifacts still refuse. Existing main/test bytes, protocol versions and resource bounds are unchanged. MySQL receives the forward-only32-to64 archive packet-label migration, with capability admission checking the physical width; existing rows/charset/collation and SQLite/native DDL are preserved. No consumer migration is required; every archive/handoff participant must advertise compatible support.
 
 WAL recovery copies now finish through the pinned SQLite engine's rollback journal before frozen comparison opens the new scratch. The original retained source snapshot, physical/working quotas, operation deadline and financial expiry remain enforced. No WAL/SHM allowance, immutable-open shortcut, API, wire, persisted schema or native ABI change; complete platform and expired-recovery qualification remains required.
 

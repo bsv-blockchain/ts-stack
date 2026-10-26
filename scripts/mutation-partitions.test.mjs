@@ -264,6 +264,7 @@ test('HTTP execution preserves every canonical range, full configuration and fut
   }
   assert.deepEqual(parts[0].target.mutate, [
     'src/storage/snapshot/archive/SnapshotArchiveChain.ts',
+    'src/storage/schema/snapshotArchivePacketLabels.ts',
     'src/storage/snapshot/archive/SnapshotArchiveProtocol.ts',
     'src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts',
     'src/storage/snapshot/archive/SnapshotArchiveTransport.ts',

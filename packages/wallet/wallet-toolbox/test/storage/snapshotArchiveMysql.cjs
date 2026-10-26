@@ -30,6 +30,15 @@ const {
   snapshotArchiveLimits
 } = require('../../out/src/storage/snapshot/archive/KnexSnapshotArchiveStore.js')
 const { addSnapshotArchiveTables } = require('../../out/src/storage/schema/snapshotArchiveMigration.js')
+const packetLabels = require('../../out/src/storage/schema/snapshotArchivePacketLabels.js')
+const qualifyPacketLabels = require('./snapshotArchivePacketLabelsMysql.cjs')
+const {
+  snapshotJournalArchiveStreams
+} = require('../../out/src/storage/snapshot/journal/SnapshotJournalArchiveBinding.js')
+const {
+  snapshotJournalArchiveStorageTable,
+  snapshotJournalFieldArchiveStorageTable
+} = require('../../out/src/storage/snapshot/journal/SnapshotJournalArchiveStorageTable.js')
 const { StorageKnex } = require('../../out/src/storage/StorageKnex.js')
 const { StorageProvider } = require('../../out/src/storage/StorageProvider.js')
 const { KnexMigrations, SNAPSHOT_JOURNAL_SOURCE_MIGRATION } = require('../../out/src/storage/schema/KnexMigrations.js')
@@ -585,6 +594,14 @@ async function main() {
       return
     }
     await addSnapshotArchiveTables(database)
+    const packetLabelSchema = await qualifyPacketLabels(
+      database,
+      packetLabels,
+      snapshotJournalArchiveStreams.flatMap(stream => [
+        ...['frame', 'identities'].map(kind => snapshotJournalArchiveStorageTable(kind, stream)),
+        ...['frame', 'identities', 'content'].map(kind => snapshotJournalFieldArchiveStorageTable(kind, stream))
+      ])
+    )
     const store = new KnexSnapshotArchiveStore(database),
       peer = new KnexSnapshotArchiveStore(replica),
       final = new KnexSnapshotArchiveStore(third)
@@ -645,6 +662,7 @@ async function main() {
         expiredPartialUnreadable: true,
         profileReservationRace: true,
         idempotentPartialDdl: true,
+        packetLabelSchema,
         ...indexes,
         capture
       })

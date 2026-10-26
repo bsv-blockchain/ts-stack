@@ -15,7 +15,13 @@ Other networks retain their previous unavailable archive behavior.
 Remote primary handoff requires the negotiated journal archive and destination
 content contracts plus the actual SQL control backend. Upgrade every participant
 before using this path on TTN; older servers may omit these capabilities. No
-schema migration or wire-version change is needed for the TTN correction.
+wire-version change is needed for TTN. MySQL must apply
+`2026-10-26-001 widen snapshot archive packet labels` before archive negotiation.
+It widens only the auxiliary label column from32 to64, preserving its character
+set, collation and existing rows; SQLite/native DDL remains unchanged. The source
+refuses a narrowing downgrade. A cold rollback to an older binary requires a
+source-verified exact migration inventory adapter; do not delete the new journal
+entry or truncate stored labels.
 
 ## Application entry point
 

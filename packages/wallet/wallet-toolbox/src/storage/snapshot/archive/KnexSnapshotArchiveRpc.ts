@@ -1,4 +1,5 @@
 import { isSnapshotArchiveChain } from './SnapshotArchiveChain'
+import { supportsSnapshotArchivePacketLabels } from '../../schema/snapshotArchivePacketLabels'
 import {
   snapshotJournalFieldArchiveMethods,
   isSnapshotJournalFieldArchiveMethod,
@@ -81,6 +82,7 @@ export class KnexSnapshotArchiveRpc {
     ]) {
       if (!(await this.database.schema.hasColumn(table, column))) return undefined
     }
+    if (!(await supportsSnapshotArchivePacketLabels(this.database))) return undefined
     return this.stopped || this.storage.knex !== this.database ? undefined : snapshotArchiveCapabilities
   }
 
