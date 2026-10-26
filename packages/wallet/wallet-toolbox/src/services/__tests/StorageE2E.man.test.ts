@@ -20,7 +20,7 @@ import { WalletStorageManager } from '../../storage/WalletStorageManager'
 import { StorageClient } from '../../storage/remoting/StorageClient'
 import { ScriptTemplateBRC29 } from '../../utility/ScriptTemplateBRC29'
 import { randomBytesBase64 } from '../../utility/utilityHelpers'
-import { ARCADE_POST_BEEF_CONCURRENCY } from '../providers/Arcade'
+import { BSV_BROADCASTER_POST_BEEF_CONCURRENCY } from '../providers/BsvBroadcaster'
 
 const ALLOW_MAINNET = process.env.STORAGE_E2E_ALLOW_MAINNET === 'true'
 const ROOT_KEY_HEX = process.env.STORAGE_E2E_ROOT_KEY ?? ''
@@ -222,7 +222,7 @@ function batchMetrics (result: BatchResult): BatchMetrics {
     },
     arcadeSubmission: {
       httpRequests: transactionCount,
-      configuredMaxConcurrency: ARCADE_POST_BEEF_CONCURRENCY,
+      configuredMaxConcurrency: BSV_BROADCASTER_POST_BEEF_CONCURRENCY,
       wallMs: result.arcadeWallMs,
       transactionsPerSecond: throughput(transactionCount, result.arcadeWallMs)
     },

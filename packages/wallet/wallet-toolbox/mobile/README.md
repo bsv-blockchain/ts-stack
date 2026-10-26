@@ -175,7 +175,7 @@ use ordinary AsyncStorage, logs, analytics, crash reports, clipboard data, or
 unprotected device/cloud backups. Treat any snapshot that leaves trusted
 storage as a wallet-credential compromise and rotate the affected wallet.
 
-`StorageClient` and credential-bearing Arcade SSE clients require HTTPS for
+`StorageClient` and credential-bearing BSV Broadcaster SSE clients require HTTPS for
 remote endpoints. Plain HTTP is accepted only for explicit loopback hosts
 during development. SSE dependency debug logging is disabled so callback
 tokens and authorization headers do not reach device logs.

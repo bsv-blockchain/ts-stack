@@ -12,7 +12,7 @@ import { createDefaultWalletServicesOptions } from './createDefaultWalletService
 import { WhatsOnChain } from './providers/WhatsOnChain'
 import { updateChaintracksFiatExchangeRates, updateExchangeratesapi } from './providers/exchangeRates'
 import { ARC } from './providers/ARC'
-import { Arcade } from './providers/Arcade'
+import { BsvBroadcaster } from './providers/BsvBroadcaster'
 import { Bitails } from './providers/Bitails'
 import { getBeefForTxid } from './providers/getBeefForTxid'
 import {
@@ -94,8 +94,8 @@ export class Services implements WalletServices {
   whatsonchain: WhatsOnChain
   arcTaal: ARC
   arcGorillaPool?: ARC
-  /** Primary Arcade (bsv-blockchain/arcade) broadcaster, when `options.arcadeUrl` is set. */
-  arcade?: Arcade
+  /** Primary BSV Broadcaster (bsv-blockchain/broadcaster), when `options.arcadeUrl` is set. */
+  arcade?: BsvBroadcaster
   bitails?: Bitails
 
   getMerklePathServices!: ServiceCollection<GetMerklePathService>
@@ -136,13 +136,13 @@ export class Services implements WalletServices {
       this.arcGorillaPool = new ARC(this.options.arcGorillaPoolUrl, this.options.arcGorillaPoolConfig, 'arcGorillaPool')
     }
     if (this.options.arcadeUrl != null && this.options.arcadeUrl !== '') {
-      this.arcade = new Arcade(this.options.arcadeUrl, this.options.arcadeConfig, 'arcade')
+      this.arcade = new BsvBroadcaster(this.options.arcadeUrl, this.options.arcadeConfig, 'arcade')
     }
 
     const hasBitails = this.chain === 'main' || this.chain === 'test'
 
     // The public WhatsOnChain API documents mainnet and testnet only.
-    // Teranode-family networks use Arcade/ChainTracks and explicit operator
+    // Teranode-family networks use BSV Broadcaster/ChainTracks and explicit operator
     // endpoints instead of being silently aliased to testnet.
     const hasWhatsOnChain = this.chain === 'main' || this.chain === 'test'
 
@@ -154,7 +154,7 @@ export class Services implements WalletServices {
 
   private initializeReadServices(hasBitails: boolean, hasWhatsOnChain: boolean): void {
     this.getMerklePathServices = new ServiceCollection<GetMerklePathService>('getMerklePath')
-    // Arcade is first when configured: it can return proofs for transactions
+    // BSV Broadcaster is first when configured: it can return proofs for transactions
     // it broadcast and otherwise allows the collection to fall through.
     if (this.arcade != null) {
       // prettier-ignore
@@ -190,7 +190,7 @@ export class Services implements WalletServices {
         .add({ name: 'WhatsOnChain', service: this.whatsonchain.getStatusForTxids.bind(this.whatsonchain) })
     }
     if (this.arcade != null) {
-      // Arcade's lifecycle store keeps status reconciliation available when
+      // BSV Broadcaster's lifecycle store keeps status reconciliation available when
       // the explorer is disabled or unavailable. Keep the existing explorer
       // first when configured because a successful `unknown` is a valid,
       // conservative answer and the shared collection does not merge partial
@@ -211,7 +211,7 @@ export class Services implements WalletServices {
 
   private initializePostBeefServices(hasBitails: boolean, hasWhatsOnChain: boolean): void {
     this.postBeefServices = new ServiceCollection<PostBeefService>('postBeef')
-    // Arcade remains the primary broadcaster. ARC and explorer providers
+    // BSV Broadcaster remains the primary broadcaster. ARC and explorer providers
     // retain their existing fallback order under the default UntilSuccess mode.
     if (this.arcade != null) {
       // prettier-ignore

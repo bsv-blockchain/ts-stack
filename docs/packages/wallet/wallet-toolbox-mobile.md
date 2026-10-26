@@ -34,7 +34,7 @@ an expiry.
 Wallet snapshots are wallet-equivalent secrets and belong only in the iOS
 Keychain, Android Keystore-backed encrypted storage, or a comparably trusted
 store, never ordinary AsyncStorage, logs, analytics, or unprotected backups.
-Remote storage and credential-bearing Arcade SSE require HTTPS except for
+Remote storage and credential-bearing BSV Broadcaster SSE require HTTPS except for
 explicit loopback development, and transport debugging cannot expose
 credentials. Spending approvals are never cached or coalesced; certificate
 acquisition and identity discovery require valid certifier signatures before

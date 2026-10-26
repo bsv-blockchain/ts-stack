@@ -4,6 +4,20 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox (unreleased)
+
+- Arcade was renamed to BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster),
+  so its client is now `BsvBroadcaster` in `services/providers/BsvBroadcaster`, and
+  `TaskArcadeSSE` is now `TaskBsvBroadcasterSSE`. `ARCADE_POST_BEEF_CONCURRENCY` and
+  `validateArcadeTxData` gain `BSV_BROADCASTER_POST_BEEF_CONCURRENCY` and
+  `validateBsvBroadcasterTxData` equivalents. Every old name, and the
+  `services/providers/Arcade` import path, remains as a deprecated alias of the new one, so
+  existing code compiles and behaves identically. Nothing on the wire or in storage changes:
+  the `arcadeUrl`, `arcadeApiKey` and `arcadeConfig` options, the `*_ARCADE_URL` environment
+  variables, the public `arcade-*` hostnames, the `arcade` provider name, history-note
+  `what` values and the `ArcadeSSE` monitor task name stay as they were. No configuration
+  or consumer migration is required.
+
 ## wallet-toolbox 2.15.1
 
 - The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are

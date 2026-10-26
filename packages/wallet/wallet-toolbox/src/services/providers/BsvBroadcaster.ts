@@ -1,0 +1,555 @@
+import { Beef, HexString, HttpClient, HttpClientResponse, HttpClientRequestOptions, MerklePath, Random } from '@bsv/sdk'
+import { toArray, toHex } from '@bsv/sdk/primitives/utils'
+import {
+  GetMerklePathResult,
+  GetStatusForTxidsResult,
+  PostBeefResult,
+  PostTxResultForTxid,
+  PostTxResultForTxidError,
+  WalletServices
+} from '../../sdk/WalletServices.interfaces'
+import { doubleSha256BE } from '../../utility/utilityHelpers'
+import { ReqHistoryNote } from '../../sdk/types'
+import { WalletError } from '../../sdk/WalletError'
+import { normalizeTxid, validateMerklePathResult } from '../validateMerklePathResult'
+import {
+  MAX_POST_BEEF_BYTES,
+  normalizePostRawHex,
+  normalizePostTxids,
+  snapshotPostBeefRequest,
+  validatePostBeefResultOrServiceError,
+  validatePostTxResultOrServiceError
+} from '../validatePostBeefResult'
+import { validateStatusForTxidsResult } from '../validateStatusForTxidsResult'
+import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+// Shared wire-contract types only (no behavior coupling): BSV Broadcaster is ARC-compatible on the
+// configuration and `getTxData` response shape, so it reuses those interfaces.
+import { ArcConfig, ArcMinerGetTxData, isArcDoubleSpendTxStatus, isArcServiceErrorStatus } from './ARC'
+import { classifyArcadeRejection } from './arcadeStatus'
+import { normalizeArcProviderConfig } from './arcProviderConfig'
+import { validateArcTxData } from './arcTxDataValidation'
+
+/**
+ * BSV Broadcaster's API-key middleware answers 401 for a missing-but-required, malformed, unknown,
+ * revoked or expired key, and 403 for a key not allowed to make the call. Both are decided
+ * before the transaction is parsed, so they say nothing about the transaction.
+ */
+function isBsvBroadcasterAuthStatus(status: number | undefined): boolean {
+  return status === 401 || status === 403
+}
+
+/**
+ * BSV Broadcaster-specific service-error classification: ARC's transient statuses (408, 429, 476, 5xx,
+ * rate-limit/backpressure details) plus BSV Broadcaster's credential refusals. A refused API key must be
+ * a service error so the wallet fails over or retries instead of marking the transaction invalid.
+ */
+function isBsvBroadcasterServiceErrorStatus(status: number | undefined, detail?: string): boolean {
+  return isBsvBroadcasterAuthStatus(status) || isArcServiceErrorStatus(status, detail)
+}
+
+function defaultDeploymentId(): string {
+  return `ts-sdk-${toHex(Random(16))}`
+}
+
+// Storage sendWith can aggregate many transactions into one BEEF. BSV Broadcaster accepts
+// one EF transaction per request, so submit independent transactions concurrently
+// while preserving dependency order and avoiding an unbounded burst.
+export const BSV_BROADCASTER_POST_BEEF_CONCURRENCY = 4
+export { validateArcTxData as validateBsvBroadcasterTxData } from './arcTxDataValidation'
+
+/** @deprecated Use BSV_BROADCASTER_POST_BEEF_CONCURRENCY. Arcade was renamed to BSV Broadcaster. */
+export const ARCADE_POST_BEEF_CONCURRENCY = BSV_BROADCASTER_POST_BEEF_CONCURRENCY
+/** @deprecated Use validateBsvBroadcasterTxData. Arcade was renamed to BSV Broadcaster. */
+export const validateArcadeTxData = validateArcTxData
+
+interface BsvBroadcasterPostNoteContext {
+  nn: () => { name: string; when: string }
+  nne: () => {
+    rawTx: HexString
+    txids: string
+    url: string
+    name: string
+    when: string
+  }
+}
+
+/**
+ * Client for BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster, formerly Arcade) —
+ * the Teranode-native, ARC-compatible broadcaster.
+ *
+ * `BsvBroadcaster` is intentionally a separate, self-contained class (not a subclass of {@link ARC}) so
+ * the audited ARC transport is never altered. It is ARC-compatible on headers, configuration and
+ * the `getTxData` response shape — but differs where it must:
+ *
+ *  - Endpoints are served at the root: `/tx` and `/tx/{txid}` (no `/v1` prefix).
+ *  - A submit returns HTTP 202; HTTP 400 is a terminal validation failure (REJECTED) and is
+ *    surfaced as an invalid-transaction status error rather than a transient service error.
+ *  - Submission encoding is Extended Format (EF), not BEEF: BSV Broadcaster's `/tx` parser rejects BEEF
+ *    ("failed to parse transaction") and runs fee/script validation that needs per-input source
+ *    data, which EF carries inline.
+ */
+export class BsvBroadcaster {
+  readonly name: string
+  readonly URL: string
+  readonly apiKey: string | undefined
+  readonly deploymentId: string
+  readonly callbackUrl: string | undefined
+  readonly callbackToken: string | undefined
+  readonly headers: Record<string, string> | undefined
+  private readonly httpClient: HttpClient
+
+  /**
+   * @param URL - The BSV Broadcaster endpoint base URL.
+   * @param config - BSV Broadcaster configuration (shares ARC's {@link ArcConfig} shape).
+   */
+  constructor(URL: string, config?: ArcConfig, name?: string)
+  constructor(URL: string, apiKey?: string, name?: string)
+  constructor(URL: string, config?: string | ArcConfig, name?: string) {
+    this.name = name ?? 'arcade'
+    this.URL = URL
+    const normalized = normalizeArcProviderConfig(config, defaultDeploymentId)
+    this.apiKey = normalized.apiKey
+    this.httpClient = normalized.httpClient
+    this.deploymentId = normalized.deploymentId
+    this.callbackToken = normalized.callbackToken
+    this.callbackUrl = normalized.callbackUrl
+    this.headers = normalized.headers
+  }
+
+  /** Constructs a dictionary of the default & supplied request headers. */
+  private requestHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'XDeployment-ID': this.deploymentId
+    }
+
+    if (this.apiKey != null && this.apiKey !== '') {
+      headers.Authorization = `Bearer ${this.apiKey}`
+    }
+
+    if (this.callbackUrl != null && this.callbackUrl !== '') {
+      headers['X-CallbackUrl'] = this.callbackUrl
+    }
+
+    if (this.callbackToken != null && this.callbackToken !== '') {
+      headers['X-CallbackToken'] = this.callbackToken
+    }
+
+    if (this.headers != null) {
+      for (const [key, value] of Object.entries(this.headers)) {
+        headers[key] = value
+      }
+    }
+
+    return headers
+  }
+
+  private applySuccessfulPostRawTx(
+    result: PostTxResultForTxid,
+    data: BsvBroadcasterResponse,
+    notes: BsvBroadcasterPostNoteContext
+  ): void {
+    const { txid, extraInfo, txStatus, competingTxs } = data
+    result.data = extraInfo != null && extraInfo !== '' ? `${txStatus} ${extraInfo}` : `${txStatus}`
+    if (result.txid !== txid) result.data += ` txid altered from ${result.txid} to ${txid}`
+    result.txid = txid
+    const responseNote = {
+      txid,
+      extraInfo,
+      txStatus,
+      competingTxs: competingTxs?.join(',')
+    }
+    if (isArcDoubleSpendTxStatus(txStatus)) {
+      result.status = 'error'
+      result.doubleSpend = true
+      result.competingTxs = competingTxs
+      result.notes!.push({ ...notes.nne(), ...responseNote, what: 'postRawTxDoubleSpend' })
+      return
+    }
+    result.notes!.push({ ...notes.nn(), ...responseNote, what: 'postRawTxSuccess' })
+  }
+
+  private applyFailedPostRawTx(
+    result: PostTxResultForTxid,
+    response: Exclude<HttpClientResponse<BsvBroadcasterResponse>, { ok: true }>,
+    data: BsvBroadcasterResponse,
+    notes: BsvBroadcasterPostNoteContext
+  ): void {
+    result.status = 'error'
+    const responseNote = {
+      txid: data.txid,
+      extraInfo: data.extraInfo,
+      txStatus: data.txStatus,
+      competingTxs: data.competingTxs?.join(',')
+    }
+    const note: ReqHistoryNote = {
+      ...notes.nn(),
+      ...notes.nne(),
+      ...responseNote,
+      what: 'postRawTxError'
+    }
+    const errorData: PostTxResultForTxidError = {}
+    result.data = errorData
+    const responseStatus: unknown = response.status
+    let numericStatus: number | undefined
+    if (typeof responseStatus === 'number' || typeof responseStatus === 'string') {
+      note.status = responseStatus
+      errorData.status = responseStatus.toString()
+      const parsed = Number(responseStatus)
+      if (Number.isFinite(parsed)) numericStatus = parsed
+    } else {
+      note.status = typeof responseStatus
+      errorData.status = 'ERR_UNKNOWN'
+    }
+
+    const responseData: unknown = response.data
+    if (typeof responseData === 'string' && responseData !== '') {
+      note.data = responseData.slice(0, 128)
+    } else if (responseData != null && typeof responseData === 'object') {
+      errorData.more = responseData
+      if ('detail' in responseData && typeof responseData.detail === 'string') {
+        errorData.detail = responseData.detail
+        note.detail = responseData.detail
+      }
+    }
+    if (isBsvBroadcasterAuthStatus(numericStatus)) {
+      const reason =
+        this.apiKey != null && this.apiKey !== ''
+          ? 'Arcade refused the configured API key'
+          : 'Arcade requires an API key'
+      errorData.detail ??= reason
+      note.detail ??= reason
+    }
+    result.serviceError = isBsvBroadcasterServiceErrorStatus(numericStatus, errorData.detail)
+    result.notes!.push(note)
+  }
+
+  private applyPostRawTxResponse(
+    result: PostTxResultForTxid,
+    response: HttpClientResponse<BsvBroadcasterResponse>,
+    notes: BsvBroadcasterPostNoteContext
+  ): void {
+    if (response.ok) {
+      this.applySuccessfulPostRawTx(result, response.data, notes)
+    } else {
+      this.applyFailedPostRawTx(result, response, response.data as BsvBroadcasterResponse, notes)
+    }
+  }
+
+  private applyPostRawTxCatch(
+    result: PostTxResultForTxid,
+    error_: unknown,
+    notes: BsvBroadcasterPostNoteContext
+  ): void {
+    const error = WalletError.fromUnknown(error_)
+    result.status = 'error'
+    result.serviceError = true
+    result.data = `${error.code} ${error.message}`
+    result.notes!.push({
+      ...notes.nne(),
+      what: 'postRawTxCatch',
+      code: error.code,
+      description: error.description
+    })
+  }
+
+  /**
+   * Submit a single transaction to BSV Broadcaster's `POST /tx` endpoint.
+   *
+   * `rawTx` must be a single (raw or Extended Format) transaction hex — NOT BEEF. The canonical
+   * txid is taken from `txids` when supplied (BSV Broadcaster derives the same txid from the parsed tx).
+   */
+  async postRawTx(rawTx: HexString, txids?: string[]): Promise<PostTxResultForTxid> {
+    rawTx = normalizePostRawHex(rawTx, MAX_POST_BEEF_BYTES)
+    let txid = toHex(doubleSha256BE(toArray(rawTx, 'hex')))
+    if (txids == null) {
+      txids = [txid]
+    } else {
+      txids = normalizePostTxids(txids)
+      txid = txids.at(-1)!
+    }
+
+    const requestOptions: HttpClientRequestOptions = {
+      method: 'POST',
+      headers: this.requestHeaders(),
+      data: { rawTx },
+      signal: AbortSignal.timeout(1000 * 30) // 30 seconds timeout, error.code will be 'ABORT_ERR'
+    }
+
+    const r: PostTxResultForTxid = {
+      txid,
+      status: 'success',
+      notes: []
+    }
+
+    const url = `${this.URL}/tx`
+    const notes: BsvBroadcasterPostNoteContext = {
+      nn: () => ({ name: this.name, when: new Date().toISOString() }),
+      nne: () => ({
+        name: this.name,
+        when: new Date().toISOString(),
+        rawTx,
+        txids: txids.join(','),
+        url
+      })
+    }
+
+    try {
+      const response = await this.httpClient.request<BsvBroadcasterResponse>(url, requestOptions)
+      this.applyPostRawTxResponse(r, response, notes)
+    } catch (error_: unknown) {
+      this.applyPostRawTxCatch(r, error_, notes)
+    }
+
+    return validatePostTxResultOrServiceError(r, txid, this.name)
+  }
+
+  /**
+   * Post each tx of interest as Extended Format (EF).
+   *
+   * EF needs each input's source output (satoshis + locking script). For a BEEF that carries every
+   * direct parent transaction in full (e.g. the atomic BEEF produced by createAction), that data is
+   * present and {@link Transaction.fromBEEF} can reconstruct EF. A BEEF is NOT guaranteed to contain
+   * it, however: BEEF V2 `txidOnly` entries (or an otherwise pruned BEEF) can reference a direct
+   * parent without its bytes, leaving no source output to embed — so BEEF -> EF is not always
+   * possible. When EF cannot be built for a txid, it is recorded as a (non-terminal) service error
+   * so cross-provider aggregation falls through to a BEEF-capable broadcaster, which can still
+   * broadcast the (valid) transaction.
+   */
+  async postBeef(beef: Beef, txids: string[]): Promise<PostBeefResult> {
+    const request = snapshotPostBeefRequest(beef, txids)
+    beef = Beef.fromBinaryStrict(request.beefBytes)
+    txids = request.txids
+    const r: PostBeefResult = {
+      name: this.name,
+      status: 'success',
+      txidResults: Array.from({ length: txids.length }),
+      notes: []
+    }
+    const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
+
+    const txidSet = new Set(txids)
+    const prepared = txids.map(txid => {
+      try {
+        // Extract each transaction from the shared parsed bundle.
+        // findAtomicTransaction attaches the source-transaction ancestry
+        // required by the EF serialization below.
+        const tx = beef.findAtomicTransaction(txid)
+        if (tx == null) throw new Error(`transaction ${txid} not found in beef`)
+        const dependencies = tx.inputs
+          .map(input => input.sourceTXID ?? input.sourceTransaction?.id('hex'))
+          .filter(
+            (sourceTxid): sourceTxid is string => sourceTxid != null && sourceTxid !== txid && txidSet.has(sourceTxid)
+          )
+        return { txid, efHex: tx.toHexEF(), dependencies }
+      } catch (error_: unknown) {
+        const e = WalletError.fromUnknown(error_)
+        const error: PostTxResultForTxid = {
+          txid,
+          status: 'error',
+          serviceError: true,
+          notes: [{ ...nn(), what: 'arcadeEfBuildFailed', txid, code: e.code, description: e.description }]
+        }
+        return { txid, dependencies: [] as string[], error }
+      }
+    })
+    const indexByTxid = new Map(txids.map((txid, index) => [txid, index]))
+    const pending = new Set(txids.map((_, index) => index))
+
+    while (pending.size > 0) {
+      let ready = [...pending].filter(index =>
+        prepared[index].dependencies.every(dependency => {
+          const dependencyIndex = indexByTxid.get(dependency)
+          return dependencyIndex == null || !pending.has(dependencyIndex)
+        })
+      )
+      // A valid transaction graph is acyclic. Preserve forward progress for a
+      // malformed/cyclic graph and let BSV Broadcaster return the authoritative error.
+      if (ready.length === 0) ready = [[...pending][0]]
+
+      let nextReady = 0
+      const worker = async (): Promise<void> => {
+        while (nextReady < ready.length) {
+          const index = ready[nextReady++]
+          const item = prepared[index]
+          r.txidResults[index] = item.error ?? (await this.postRawTx(item.efHex, [item.txid]))
+        }
+      }
+
+      await Promise.all(Array.from({ length: Math.min(BSV_BROADCASTER_POST_BEEF_CONCURRENCY, ready.length) }, worker))
+      for (const index of ready) pending.delete(index)
+    }
+    if (r.txidResults.some(result => result.status === 'error')) r.status = 'error'
+
+    return validatePostBeefResultOrServiceError(r, txids, this.name)
+  }
+
+  /** Look up a transaction's current status (and merkle path once mined) via `GET /tx/{txid}`. */
+  async getTxData(txid: string): Promise<ArcMinerGetTxData> {
+    const normalizedTxid = normalizeTxid(txid)
+    const requestOptions: HttpClientRequestOptions = {
+      method: 'GET',
+      headers: this.requestHeaders(),
+      signal: AbortSignal.timeout(1000 * 30)
+    }
+
+    const response = await this.httpClient.request<ArcMinerGetTxData>(
+      `${this.URL}/tx/${normalizedTxid}`,
+      requestOptions
+    )
+
+    if (!response.ok || Number(response.status) !== 200) {
+      throw new WERR_INVALID_OPERATION(`Arcade transaction data response ${String(response.status)}`)
+    }
+    return validateArcTxData(response.data, normalizedTxid, Number(response.status))
+  }
+
+  /**
+   * Adapt BSV Broadcaster's lifecycle endpoint to the shared transaction-status
+   * provider contract. This lets monitor reconciliation remain operational
+   * when an explorer such as WhatsOnChain is absent. Only network-observed
+   * states count as known; RECEIVED/PENDING_RETRY and terminal rejection
+   * states remain unknown, while MINED/IMMUTABLE are authoritative mined
+   * observations whose proof is validated separately.
+   */
+  async getStatusForTxids(txids: string[]): Promise<GetStatusForTxidsResult> {
+    const normalizedTxids = txids.map((txid, index) => normalizeTxid(txid, `txids[${index}]`))
+    const r: GetStatusForTxidsResult = {
+      name: this.name,
+      status: 'success',
+      results: []
+    }
+    let firstError: WalletError | undefined
+    r.results = await Promise.all(
+      normalizedTxids.map(async txid => {
+        try {
+          const response = await this.httpClient.request<ArcMinerGetTxData>(`${this.URL}/tx/${txid}`, {
+            method: 'GET',
+            headers: this.requestHeaders(),
+            signal: AbortSignal.timeout(1000 * 30)
+          })
+          if (Number(response.status) === 404) return { txid, status: 'unknown' as const, depth: undefined }
+          if (!response.ok || Number(response.status) !== 200) {
+            throw new WERR_INVALID_OPERATION(`Arcade transaction status response ${String(response.status)}`)
+          }
+          const data = validateArcTxData(response.data, txid, Number(response.status))
+          const status = data.txStatus
+          if (status === 'MINED' || status === 'IMMUTABLE') {
+            return { txid, status: 'mined' as const, depth: 1 }
+          }
+          if (status === 'ACCEPTED_BY_NETWORK' || status === 'SEEN_ON_NETWORK' || status === 'SEEN_MULTIPLE_NODES') {
+            return { txid, status: 'known' as const, depth: 0 }
+          }
+          const classification = classifyArcadeRejection(data)
+          return {
+            txid,
+            status: 'unknown' as const,
+            depth: undefined,
+            providerStatus: status,
+            ...(classification.terminal
+              ? {
+                  terminal: true,
+                  inputConflict: classification.inputConflict,
+                  statusCode: data.status,
+                  description: data.extraInfo || classification.reason,
+                  competingTxs: data.competingTxs ?? []
+                }
+              : {})
+          }
+        } catch (error_: unknown) {
+          firstError ??= WalletError.fromUnknown(error_)
+          return { txid, status: 'unknown' as const, depth: undefined }
+        }
+      })
+    )
+    if (firstError != null) {
+      r.status = 'error'
+      r.error = firstError
+    }
+    return r.status === 'success' ? validateStatusForTxidsResult(r, normalizedTxids, this.name) : r
+  }
+
+  /**
+   * `getMerklePath` provider: obtain a BUMP merkle proof for a mined transaction from BSV Broadcaster.
+   *
+   * BSV Broadcaster only has a proof for transactions it tracked (i.e. broadcast through it) that have
+   * been mined while tracked; for anything else `GET /tx/{txid}` reports a non-mined status (or
+   * 404) and this returns no `merklePath`, so {@link Services.getMerklePath} falls through to the
+   * other providers (WhatsOnChain/Bitails).
+   *
+   * The proof is NOT trusted blindly: the canonical block header is resolved from the wallet's
+   * own chaintracker via `services.hashToHeader(blockHash)` (which only knows real, mined blocks),
+   * and the BUMP's computed merkle root must equal that header's `merkleRoot`. Only then is the
+   * proof returned, with the canonical `header` that downstream proof completion requires.
+   */
+  async getMerklePath(txid: string, services: WalletServices): Promise<GetMerklePathResult> {
+    const r: GetMerklePathResult = { name: this.name, notes: [] }
+    const nn = (): { name: string; when: string } => ({ name: this.name, when: new Date().toISOString() })
+
+    try {
+      const data = await this.getTxData(txid)
+      const mined = data.txStatus === 'MINED' || data.txStatus === 'IMMUTABLE'
+      if (
+        !mined ||
+        data.merklePath == null ||
+        data.merklePath === '' ||
+        data.blockHash == null ||
+        data.blockHash === ''
+      ) {
+        // No proof from BSV Broadcaster yet (not mined / untracked / 404) — fall through to other providers.
+        r.notes!.push({ ...nn(), what: 'getMerklePathArcadeNoProof', txid, txStatus: data.txStatus })
+        return r
+      }
+
+      const merklePath = MerklePath.fromHex(data.merklePath)
+      // Resolve the canonical header from our own chaintracker; throws if the block is unknown.
+      const header = await services.hashToHeader(data.blockHash)
+      if (header.hash.toLowerCase() !== data.blockHash.toLowerCase()) {
+        throw new Error('Arcade proof header did not match its requested block hash.')
+      }
+      let validated
+      try {
+        validated = validateMerklePathResult(txid, { merklePath, header })
+      } catch {
+        // BSV Broadcaster's BUMP does not reconcile with the canonical block — reject and fall through.
+        r.notes!.push({
+          ...nn(),
+          what: 'getMerklePathArcadeRootMismatch',
+          txid,
+          blockHash: data.blockHash
+        })
+        return r
+      }
+
+      r.merklePath = validated.merklePath
+      r.header = validated.header
+      r.notes!.push({
+        ...nn(),
+        what: 'getMerklePathArcadeSuccess',
+        txid,
+        height: header.height,
+        blockHash: header.hash
+      })
+    } catch (error_: unknown) {
+      const e = WalletError.fromUnknown(error_)
+      r.error = e
+      r.notes!.push({ ...nn(), what: 'getMerklePathArcadeError', txid, code: e.code, description: e.description })
+    }
+
+    return r
+  }
+}
+
+/** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */
+export const Arcade = BsvBroadcaster
+/** @deprecated Use BsvBroadcaster. Arcade was renamed to BSV Broadcaster. */
+export type Arcade = BsvBroadcaster
+
+/** BSV Broadcaster's `POST /tx` response body. `extraInfo`/`competingTxs` are absent on the 202. */
+interface BsvBroadcasterResponse {
+  txid: string
+  extraInfo?: string
+  txStatus: string
+  competingTxs?: string[]
+  status?: number
+}

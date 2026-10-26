@@ -38,10 +38,13 @@ export {
 } from './src/OverlayMonitor.js'
 export {
   ArcadeProvider,
+  BsvBroadcasterProvider,
   isTerminalArcStatus,
   type ArcadeMerkleProof,
-  type ArcadeProviderConfig
-} from './src/ArcadeProvider.js'
+  type ArcadeProviderConfig,
+  type BsvBroadcasterMerkleProof,
+  type BsvBroadcasterProviderConfig
+} from './src/BsvBroadcasterProvider.js'
 export { ProviderChainBroadcaster, type NamedBroadcaster } from './src/ProviderChainBroadcaster.js'
 export {
   ChaintracksProvider,

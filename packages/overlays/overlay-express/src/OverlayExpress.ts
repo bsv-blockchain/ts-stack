@@ -56,7 +56,11 @@ import { BanAwareSHIPStorage, BanAwareSLAPStorage } from './BanAwareDiscoverySto
 import { ReorgSseAdapter, type ReorgHandlerInput } from './ReorgStream.js'
 import { Wallet, WalletSigner, WalletStorageManager, Services } from '@bsv/wallet-toolbox-client'
 import { createAuthMiddleware, type AuthRequest } from '@bsv/auth-express-middleware'
-import { ArcadeProvider, isTerminalArcStatus, type ArcadeMerkleProof } from './ArcadeProvider.js'
+import {
+  BsvBroadcasterProvider,
+  isTerminalArcStatus,
+  type BsvBroadcasterMerkleProof
+} from './BsvBroadcasterProvider.js'
 import { ProviderChainBroadcaster, type NamedBroadcaster } from './ProviderChainBroadcaster.js'
 import { ChaintracksProvider } from './ChaintracksProvider.js'
 import {
@@ -520,7 +524,7 @@ export default class OverlayExpress {
 
   private unprovenMaintenanceTimer?: ReturnType<typeof setInterval>
 
-  // Optional go-chaintracks (Arcade) reorg SSE URL (e.g. `<base>/v2/reorg/stream`).
+  // Optional go-chaintracks (BSV Broadcaster) reorg SSE URL (e.g. `<base>/v2/reorg/stream`).
   // When set, reorgs are reconciled in real time; the block poll also runs a
   // revalidation sweep as a fallback / reconnect catch-up.
   reorgStreamUrl?: string
@@ -541,7 +545,7 @@ export default class OverlayExpress {
   // Optional ARC callback token for /arc-ingest notifications
   arcCallbackToken: string | undefined = undefined
 
-  // Optional Arcade URL/API key used for propagation, proof refresh, and
+  // Optional BSV Broadcaster URL/API key used for propagation, proof refresh, and
   // go-chaintracks header/reorg access when available.
   arcadeUrl: string | undefined = undefined
   arcadeApiKey: string | undefined = undefined
@@ -549,7 +553,7 @@ export default class OverlayExpress {
   arcadeChaintracksApiPrefix: string = '/chaintracks/v2'
   arcadeAllowPrivateHosts: boolean = false
 
-  private arcadeProvider?: ArcadeProvider
+  private arcadeProvider?: BsvBroadcasterProvider
 
   // Verbose request logging
   verboseRequestLogging: boolean = false
@@ -1042,9 +1046,10 @@ export default class OverlayExpress {
   }
 
   /**
-   * Configures Arcade for first-choice transaction propagation and proof lookup.
+   * Configures BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster, formerly
+   * Arcade) for first-choice transaction propagation and proof lookup.
    */
-  configureArcade(
+  configureBsvBroadcaster(
     url: string,
     config: {
       apiKey?: string
@@ -1087,8 +1092,23 @@ export default class OverlayExpress {
   }
 
   /**
+   * @deprecated Use configureBsvBroadcaster. Arcade was renamed to BSV Broadcaster.
+   */
+  configureArcade(
+    url: string,
+    config: {
+      apiKey?: string
+      deploymentId?: string
+      chaintracksApiPrefix?: string
+      allowPrivateHosts?: boolean
+    } = {}
+  ): void {
+    this.configureBsvBroadcaster(url, config)
+  }
+
+  /**
    * Configures a go-chaintracks compatible service for header validation and
-   * BASM reorg streaming. Arcade exposes this at `/chaintracks/v2`.
+   * BASM reorg streaming. BSV Broadcaster exposes this at `/chaintracks/v2`.
    */
   configureChaintracks(
     url: string,
@@ -1163,7 +1183,7 @@ export default class OverlayExpress {
   }
 
   /**
-   * Configures the go-chaintracks (Arcade) reorg SSE stream used to reconcile
+   * Configures the go-chaintracks (BSV Broadcaster) reorg SSE stream used to reconcile
    * BASM anchors with blockchain reorganizations in real time.
    * @param url - The reorg stream URL, e.g. `https://arcade.example/v2/reorg/stream`.
    * @param scanDepth - Optional revalidation-sweep depth in blocks (default 3).
@@ -1573,7 +1593,7 @@ export default class OverlayExpress {
     const callbackUrl = `https://${this.advertisableFQDN}/arc-ingest`
 
     if (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0) {
-      this.arcadeProvider = new ArcadeProvider(this.arcadeUrl, {
+      this.arcadeProvider = new BsvBroadcasterProvider(this.arcadeUrl, {
         apiKey: this.arcadeApiKey,
         callbackUrl,
         callbackToken: this.arcCallbackToken,
@@ -1605,10 +1625,10 @@ export default class OverlayExpress {
     return new ProviderChainBroadcaster(providers)
   }
 
-  private ensureArcadeProvider(): ArcadeProvider | undefined {
+  private ensureBsvBroadcasterProvider(): BsvBroadcasterProvider | undefined {
     if (this.arcadeProvider !== undefined) return this.arcadeProvider
     if (typeof this.arcadeUrl !== 'string' || this.arcadeUrl.length === 0) return undefined
-    this.arcadeProvider = new ArcadeProvider(this.arcadeUrl, {
+    this.arcadeProvider = new BsvBroadcasterProvider(this.arcadeUrl, {
       apiKey: this.arcadeApiKey,
       callbackUrl: `https://${this.advertisableFQDN}/arc-ingest`,
       callbackToken: this.arcCallbackToken,
@@ -1618,8 +1638,10 @@ export default class OverlayExpress {
     return this.arcadeProvider
   }
 
-  private async fetchArcadeProof(txid: string): Promise<ArcadeMerkleProof | undefined> {
-    const provider = this.ensureArcadeProvider()
+  private async fetchBsvBroadcasterProof(
+    txid: string
+  ): Promise<BsvBroadcasterMerkleProof | undefined> {
+    const provider = this.ensureBsvBroadcasterProvider()
     if (provider === undefined) return undefined
     const proof = await provider.fetchMerkleProof(txid)
     if (proof === undefined) return undefined
@@ -1646,7 +1668,7 @@ export default class OverlayExpress {
   private async fetchConfiguredMerkleProof(
     txid: string
   ): Promise<{ merklePath: MerklePath; blockHeight?: number } | undefined> {
-    const proof = await this.fetchArcadeProof(txid)
+    const proof = await this.fetchBsvBroadcasterProof(txid)
     if (proof === undefined) return undefined
     return {
       merklePath: proof.merklePath,
@@ -2778,7 +2800,7 @@ export default class OverlayExpress {
       })
     })
 
-    // ARC/Arcade ingest route (only if a provider is configured)
+    // ARC/BSV Broadcaster ingest route (only if a provider is configured)
     const hasArcProvider =
       (typeof this.arcApiKey === 'string' && this.arcApiKey.length > 0) ||
       (typeof this.arcadeUrl === 'string' && this.arcadeUrl.length > 0)
@@ -3773,7 +3795,7 @@ export default class OverlayExpress {
     this.basmBlockPollTimer.unref?.()
   }
 
-  /** Real-time reorg reconciliation via the go-chaintracks (Arcade) reorg SSE. */
+  /** Real-time reorg reconciliation via the go-chaintracks (BSV Broadcaster) reorg SSE. */
   private startBASMReorgStream(): void {
     const reorgStreamUrl = this.engineConfig.reorgStreamUrl ?? this.reorgStreamUrl
     const reorgScanDepth = this.engineConfig.reorgScanDepth ?? this.reorgScanDepth

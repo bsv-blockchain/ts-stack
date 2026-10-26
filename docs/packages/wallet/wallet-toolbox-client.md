@@ -35,7 +35,7 @@ the optimization without a browser configuration or wire change.
 Wallet snapshots are wallet-equivalent secrets and belong only in browser or
 extension storage backed by an OS Keychain or comparably trusted store, never
 ordinary localStorage, logs, analytics, or unprotected sync. Remote storage and
-credential-bearing Arcade SSE require HTTPS except for explicit loopback
+credential-bearing BSV Broadcaster SSE require HTTPS except for explicit loopback
 development, and transport debugging cannot expose credentials. Spending
 approvals are never cached or coalesced; certificate acquisition and identity
 discovery require valid certifier signatures before storage or trust scoring.

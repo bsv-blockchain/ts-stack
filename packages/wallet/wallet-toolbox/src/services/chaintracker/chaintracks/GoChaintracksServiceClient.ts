@@ -8,7 +8,7 @@ import { containsControlCharacter, safeDiagnostic } from './util/safeDiagnostic'
 export interface GoChaintracksServiceClientOptions {
   /**
    * Path prefix for the go-chaintracks HTTP API.
-   * Arcade exposes this at `/chaintracks/v2`.
+   * BSV Broadcaster exposes this at `/chaintracks/v2`.
    */
   apiPrefix?: string
   /** Receives single-line stream diagnostics of at most 512 characters; observer failures are isolated. */
@@ -40,7 +40,7 @@ interface SseSubscription {
 }
 
 /**
- * Client for go-chaintracks compatible HTTP services, including Arcade's
+ * Client for go-chaintracks compatible HTTP services, including BSV Broadcaster's
  * `/chaintracks/v2` surface. Unlike the legacy ChaintracksServiceClient, this
  * can subscribe to tip/reorg SSE streams and therefore drive Monitor block
  * processing without a local WhatsOnChain polling ingestor.

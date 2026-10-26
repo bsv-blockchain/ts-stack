@@ -11,6 +11,13 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Rename `ArcadeProvider` to `BsvBroadcasterProvider`, `ArcadeProviderConfig` to
+  `BsvBroadcasterProviderConfig`, `ArcadeMerkleProof` to `BsvBroadcasterMerkleProof`
+  and `configureArcade` to `configureBsvBroadcaster`, because Arcade was renamed to
+  BSV Broadcaster (https://github.com/bsv-blockchain/broadcaster). The old names and the
+  `ArcadeProvider.ts` import path remain as deprecated aliases. The `Arcade` provider name
+  in broadcast results, the `arcade*` instance fields, hostnames, HTTP paths and headers
+  are unchanged. No consumer migration is required.
 - Page bounded discovery overflow probes in chunks of at most 1000 without silently truncating the engine ceiling.
 
 ### 2.7.2 candidate — outbound and deployment hardening

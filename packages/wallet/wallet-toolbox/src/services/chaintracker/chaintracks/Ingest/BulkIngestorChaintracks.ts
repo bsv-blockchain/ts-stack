@@ -15,7 +15,7 @@ export interface BulkIngestorChaintracksOptions extends BulkIngestorBaseOptions 
 }
 
 /**
- * Uses a go-chaintracks/Arcade-compatible service as a validated bulk source.
+ * Uses a go-chaintracks/BSV Broadcaster-compatible service as a validated bulk source.
  * Retrieved bytes still pass through ChainTracks' local serialization, hash,
  * continuity, and genesis checks before storage.
  */

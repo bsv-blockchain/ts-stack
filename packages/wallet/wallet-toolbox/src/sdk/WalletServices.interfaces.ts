@@ -7,7 +7,7 @@ import {
   WalletLoggerInterface
 } from '@bsv/sdk'
 // ArcConfig is sourced from the local ARC provider (a superset of the @bsv/sdk ArcConfig
-// adding `deployment` and `apiPrefix` for Arcade support). Type-only import avoids a
+// adding `deployment` and `apiPrefix` for BSV Broadcaster support). Type-only import avoids a
 // runtime circular dependency with the ARC provider module.
 import type { ArcConfig } from '../services/providers/ARC'
 import { Chain, ReqHistoryNote } from './types'
@@ -351,24 +351,24 @@ export interface WalletServicesOptions {
    */
   arcGorillaPoolConfig?: ArcConfig
   /**
-   * Optional bsv-blockchain/arcade endpoint to use as the primary transaction broadcaster.
+   * Optional bsv-blockchain/broadcaster endpoint to use as the primary transaction broadcaster.
    *
-   * When set, an Arcade broadcaster is registered ahead of the ARC providers (Arcade-first,
-   * ARC fallback) and the Monitor's SSE/proof task (`TaskArcadeSSE`) targets this URL.
+   * When set, a BSV Broadcaster is registered ahead of the ARC providers (BSV Broadcaster-first,
+   * ARC fallback) and the Monitor's SSE/proof task (`TaskBsvBroadcasterSSE`) targets this URL.
    *
-   * Default is undefined (Arcade disabled; ARC providers used as before).
+   * Default is undefined (BSV Broadcaster disabled; ARC providers used as before).
    * mainnet:   `https://arcade-v2-us-1.bsvblockchain.tech`
    * teratest:  `https://arcade-v2-ttn-us-1.bsvblockchain.tech`
    * tstn:      supplied at runtime via the `TSTN_ARCADE_URL` environment variable (not public)
    */
   arcadeUrl?: string
   /**
-   * Arcade service configuration options (used to construct the `Arcade` broadcaster).
+   * BSV Broadcaster service configuration options (used to construct the `BsvBroadcaster` broadcaster).
    *
-   * `callbackToken` must equal the Monitor's `callbackToken` so Arcade routes each
+   * `callbackToken` must equal the Monitor's `callbackToken` so BSV Broadcaster routes each
    * submitted transaction's status events to this wallet's SSE subscription.
    *
-   * `callbackUrl` should be left undefined for the SSE (pull) flow — Arcade rejects
+   * `callbackUrl` should be left undefined for the SSE (pull) flow — BSV Broadcaster rejects
    * private/loopback webhook URLs.
    */
   arcadeConfig?: ArcConfig

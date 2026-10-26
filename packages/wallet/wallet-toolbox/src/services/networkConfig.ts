@@ -8,17 +8,17 @@ import { Chain } from '../sdk/types'
  * hardcoded in this (public) source tree. They are supplied at runtime through environment
  * variables:
  *
- *   STN_ARCADE_URL        STN Arcade broadcaster / ARC endpoint base.
+ *   STN_ARCADE_URL        STN BSV Broadcaster / ARC endpoint base.
  *   STN_CHAINTRACKS_URL   STN ChainTracks service URL.
- *   TSTN_ARCADE_URL       Arcade broadcaster / ARC endpoint base. Also the fallback host for
+ *   TSTN_ARCADE_URL       BSV Broadcaster / ARC endpoint base. Also the fallback host for
  *                         ChainTracks when TSTN_CHAINTRACKS_URL is unset
  *                         (`${TSTN_ARCADE_URL}/chaintracks/v1`, mirroring the ttn layout).
  *   TSTN_CHAINTRACKS_URL  ChainTracks service URL.
- *   REGTEST_ARCADE_URL        regtest Arcade broadcaster / ARC endpoint base. Also the fallback
+ *   REGTEST_ARCADE_URL        regtest BSV Broadcaster / ARC endpoint base. Also the fallback
  *                             host for ChainTracks when REGTEST_CHAINTRACKS_URL is unset.
  *   REGTEST_CHAINTRACKS_URL   regtest ChainTracks service URL.
  *
- * stn/tstn/regtest run only operator-configured Arcade and ChainTracks services; there is no
+ * stn/tstn/regtest run only operator-configured BSV Broadcaster and ChainTracks services; there is no
  * documented WhatsOnChain service for them, so no WhatsOnChain endpoint is configured and
  * the WhatsOnChain-only lookups (raw tx, utxo status, txid status, script-hash history) are not
  * available on stn/tstn/regtest.
@@ -34,7 +34,7 @@ function readEnv(name: string): string | undefined {
   return value != null && value.trim() !== '' ? value.trim() : undefined
 }
 
-/** Credential-free public Arcade host for supported networks. */
+/** Credential-free public BSV Broadcaster host for supported networks. */
 export function publicArcadeUrl(chain: Chain): string | undefined {
   switch (chain) {
     case 'main':
@@ -57,12 +57,12 @@ const stripTrailingSlash = (url: string): string => {
   return url.slice(0, end)
 }
 
-/** Arcade broadcaster / ARC endpoint for tstn, or `undefined` when `TSTN_ARCADE_URL` is unset. */
+/** BSV Broadcaster / ARC endpoint for tstn, or `undefined` when `TSTN_ARCADE_URL` is unset. */
 export function tstnArcadeUrl(): string | undefined {
   return readEnv('TSTN_ARCADE_URL')
 }
 
-/** Arcade broadcaster / ARC endpoint for stn, or `undefined` when unset. */
+/** BSV Broadcaster / ARC endpoint for stn, or `undefined` when unset. */
 export function stnArcadeUrl(): string | undefined {
   return readEnv('STN_ARCADE_URL')
 }
@@ -82,7 +82,7 @@ export function tstnChaintracksUrl(): string {
 }
 
 /**
- * ChainTracks service URL for stn. Falls back to the configured Arcade host's
+ * ChainTracks service URL for stn. Falls back to the configured BSV Broadcaster host's
  * legacy-compatible path when STN_CHAINTRACKS_URL is unset.
  */
 export function stnChaintracksUrl(): string {
@@ -95,7 +95,7 @@ export function stnChaintracksUrl(): string {
   )
 }
 
-/** Arcade broadcaster / ARC endpoint for regtest, or `undefined` when `REGTEST_ARCADE_URL` is unset. */
+/** BSV Broadcaster / ARC endpoint for regtest, or `undefined` when `REGTEST_ARCADE_URL` is unset. */
 export function regtestArcadeUrl(): string | undefined {
   return readEnv('REGTEST_ARCADE_URL')
 }

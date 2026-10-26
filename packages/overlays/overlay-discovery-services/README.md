@@ -54,7 +54,7 @@ certificate signatures and apply their selected certifier trust policy. Identity
 
 For TerraTestNet, pass `ttn` as the chain and a TTN wallet-storage URL. Unless
 overridden with `lookupResolverConfig`, the advertiser uses the isolated
-`teratestnet` resolver preset and TTN Arcade-backed wallet services.
+`teratestnet` resolver preset and TTN BSV Broadcaster-backed wallet services.
 
 ## Quick start (overlay operator)
 

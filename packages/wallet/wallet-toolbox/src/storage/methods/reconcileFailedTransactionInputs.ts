@@ -76,7 +76,7 @@ async function findLocalInputs(
 
 /**
  * Conservatively quarantine every locally-owned input of a transaction after
- * Arcade supplies explicit missing-input/conflict evidence. This path is
+ * BSV Broadcaster supplies explicit missing-input/conflict evidence. This path is
  * deliberately independent of explorer or UTXO providers: a positive
  * broadcaster verdict is enough to stop the failed transaction from feeding
  * the same inputs into another action. A later validated mined proof remains

@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from '../tasks/WalletMonitorTask'
 import { genesisHeader } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
-import { TaskArcadeSSE } from '../tasks/TaskArcSSE'
+import { TaskBsvBroadcasterSSE } from '../tasks/TaskArcSSE'
 
 class ControlledTask extends WalletMonitorTask {
   constructor(
@@ -362,7 +362,7 @@ describe('Monitor.runOnce compatibility', () => {
 
   it('closes Arcade SSE tasks during monitor destruction', async () => {
     const { monitor } = createMonitor()
-    const task = new TaskArcadeSSE(monitor)
+    const task = new TaskBsvBroadcasterSSE(monitor)
     const close = jest.fn()
     task.sseClient = { close } as any
     monitor.addTask(task)

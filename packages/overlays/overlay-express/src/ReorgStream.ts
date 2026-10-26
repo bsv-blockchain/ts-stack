@@ -1,5 +1,5 @@
 /**
- * Consumes the go-chaintracks (Arcade) reorg SSE stream (`GET /v2/reorg/stream`)
+ * Consumes the go-chaintracks (BSV Broadcaster) reorg SSE stream (`GET /v2/reorg/stream`)
  * and normalizes each `ReorgEvent` into the overlay engine's `handleReorg` input.
  *
  * The stream emits `data: <JSON>\n\n` frames (no `event:`/`id:` lines) with

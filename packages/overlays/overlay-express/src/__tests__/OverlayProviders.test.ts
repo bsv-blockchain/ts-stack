@@ -1,5 +1,8 @@
 import { MerklePath } from '@bsv/sdk'
-import { ArcadeProvider, type ArcadeProviderConfig } from '../ArcadeProvider.js'
+import {
+  BsvBroadcasterProvider,
+  type BsvBroadcasterProviderConfig
+} from '../BsvBroadcasterProvider.js'
 import { ChaintracksProvider } from '../ChaintracksProvider.js'
 import { ProviderChainBroadcaster } from '../ProviderChainBroadcaster.js'
 
@@ -139,7 +142,7 @@ describe('Overlay transaction providers', () => {
         { status: 202 }
       )
     }) as any
-    const arcade = new ArcadeProvider('https://arcade.example/', {
+    const arcade = new BsvBroadcasterProvider('https://arcade.example/', {
       apiKey: 'secret',
       callbackUrl: 'https://overlay.example/arc-ingest',
       callbackToken: 'callback',
@@ -166,7 +169,7 @@ describe('Overlay transaction providers', () => {
     ) as any
     const headers = { 'X-Tenant': 'original' }
     const config = { apiKey: 'original-key', headers, fetch: fetcher }
-    const arcade = new ArcadeProvider('https://arcade.example', config)
+    const arcade = new BsvBroadcasterProvider('https://arcade.example', config)
 
     config.apiKey = 'attacker-key'
     headers['X-Tenant'] = 'attacker'
@@ -180,7 +183,7 @@ describe('Overlay transaction providers', () => {
   it('rejects type-confused private-host options and reserved custom headers', () => {
     expect(
       () =>
-        new ArcadeProvider('http://127.0.0.1:8080', {
+        new BsvBroadcasterProvider('http://127.0.0.1:8080', {
           allowPrivateHosts: 'false' as unknown as boolean
         })
     ).toThrow('boolean')
@@ -192,13 +195,13 @@ describe('Overlay transaction providers', () => {
     ).toThrow('boolean')
     expect(
       () =>
-        new ArcadeProvider('https://arcade.example', {
+        new BsvBroadcasterProvider('https://arcade.example', {
           headers: { Authorization: 'substitute' }
         })
     ).toThrow('reserved')
     expect(
       () =>
-        new ArcadeProvider('https://arcade.example', {
+        new BsvBroadcasterProvider('https://arcade.example', {
           headers: { 'x-custom': undefined as unknown as string }
         })
     ).toThrow('must be a bounded string')
@@ -210,7 +213,8 @@ describe('Overlay transaction providers', () => {
     Object.defineProperty(config, 'allowPrivateHosts', { get: getter, enumerable: true })
 
     expect(
-      () => new ArcadeProvider('https://arcade.example', config as ArcadeProviderConfig)
+      () =>
+        new BsvBroadcasterProvider('https://arcade.example', config as BsvBroadcasterProviderConfig)
     ).toThrow('own data property')
     expect(getter).not.toHaveBeenCalled()
   })
@@ -245,7 +249,7 @@ describe('Overlay transaction providers', () => {
   })
 
   it('fails closed on a mismatched or unknown Arcade success response', async () => {
-    const mismatched = new ArcadeProvider('https://arcade.example', {
+    const mismatched = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () =>
           new Response(
@@ -257,7 +261,7 @@ describe('Overlay transaction providers', () => {
           )
       ) as any
     })
-    const unknown = new ArcadeProvider('https://arcade.example', {
+    const unknown = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () =>
           new Response(
@@ -306,7 +310,8 @@ describe('Overlay transaction providers', () => {
     [{ requestTimeoutMs: 300_001 }, 'between 1 and 300000']
   ])('rejects hostile Arcade configuration %#', (config, message) => {
     expect(
-      () => new ArcadeProvider('https://arcade.example', config as ArcadeProviderConfig)
+      () =>
+        new BsvBroadcasterProvider('https://arcade.example', config as BsvBroadcasterProviderConfig)
     ).toThrow(message)
   })
 
@@ -314,7 +319,7 @@ describe('Overlay transaction providers', () => {
     const fetcher = jest.fn(
       async () => new Response(JSON.stringify({ txStatus: 'RECEIVED' }), { status: 202 })
     ) as any
-    const arcade = new ArcadeProvider('http://127.0.0.1:8080/', {
+    const arcade = new BsvBroadcasterProvider('http://127.0.0.1:8080/', {
       allowPrivateHosts: true,
       callbackUrl: 'http://127.0.0.1:8081/callback',
       callbackToken: 'callback-token',
@@ -339,7 +344,7 @@ describe('Overlay transaction providers', () => {
     [{ error: 'error' }, 'error'],
     [{ txStatus: 'REJECTED', extraInfo: 'policy' }, 'REJECTED policy']
   ])('uses bounded Arcade error detail priority %#', async (body, description) => {
-    const arcade = new ArcadeProvider('https://arcade.example', {
+    const arcade = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(async () => new Response(JSON.stringify(body), { status: 400 })) as any
     })
 
@@ -362,7 +367,7 @@ describe('Overlay transaction providers', () => {
     ['invalid block height', { txStatus: 'RECEIVED', blockHeight: -1 }],
     ['invalid block hash', { txStatus: 'RECEIVED', blockHash: 'not-a-hash' }]
   ])('fails closed on an Arcade response with %s', async (_label, body) => {
-    const arcade = new ArcadeProvider('https://arcade.example', {
+    const arcade = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(async () => new Response(JSON.stringify(body), { status: 202 })) as any
     })
 
@@ -370,10 +375,10 @@ describe('Overlay transaction providers', () => {
   })
 
   it('bounds non-JSON error bodies and rejects malformed successful JSON', async () => {
-    const errorProvider = new ArcadeProvider('https://arcade.example', {
+    const errorProvider = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(async () => new Response('plain failure', { status: 503 })) as any
     })
-    const malformedProvider = new ArcadeProvider('https://arcade.example', {
+    const malformedProvider = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(async () => new Response('{', { status: 202 })) as any
     })
 
@@ -386,19 +391,19 @@ describe('Overlay transaction providers', () => {
 
   it('handles missing, rejected, pending, and height-mismatched proof responses', async () => {
     const txid = tx.id()
-    const missing = new ArcadeProvider('https://arcade.example', {
+    const missing = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(async () => new Response('', { status: 404 })) as any
     })
     await expect(missing.fetchMerkleProof(txid)).resolves.toBeUndefined()
 
-    const rejected = new ArcadeProvider('https://arcade.example', {
+    const rejected = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () => new Response(JSON.stringify({ detail: 'not ready' }), { status: 503 })
       ) as any
     })
     await expect(rejected.fetchMerkleProof(txid)).rejects.toThrow('not ready')
 
-    const pending = new ArcadeProvider('https://arcade.example', {
+    const pending = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () => new Response(JSON.stringify({ txid, txStatus: 'RECEIVED' }), { status: 200 })
       ) as any
@@ -406,7 +411,7 @@ describe('Overlay transaction providers', () => {
     await expect(pending.fetchMerkleProof(txid)).resolves.toBeUndefined()
 
     const merklePath = new MerklePath(7, [[{ offset: 0, txid: true, hash: txid }]])
-    const mismatched = new ArcadeProvider('https://arcade.example', {
+    const mismatched = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () =>
           new Response(
@@ -426,7 +431,7 @@ describe('Overlay transaction providers', () => {
   it('returns a correlated mined Arcade proof', async () => {
     const txid = tx.id()
     const merklePath = new MerklePath(7, [[{ offset: 0, txid: true, hash: txid }]])
-    const arcade = new ArcadeProvider('https://arcade.example', {
+    const arcade = new BsvBroadcasterProvider('https://arcade.example', {
       fetch: jest.fn(
         async () =>
           new Response(
