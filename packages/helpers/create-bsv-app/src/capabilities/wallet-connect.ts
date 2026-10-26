@@ -538,9 +538,9 @@ export const walletConnect: Capability = {
   },
   npmDependencies: () => ({
     shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.4.1' },
-    client: { '@bsv/wallet-relay': '^0.6.0', react: '>=18', 'react-router-dom': '^7.0.0' },
+    client: { '@bsv/wallet-relay': '^0.7.0', react: '>=18', 'react-router-dom': '^7.0.0' },
     // Server-side WalletRelayService + its qrcode peer (ws ships with the relay).
-    server: { '@bsv/wallet-relay': '^0.6.0', qrcode: '^1.5.0' }
+    server: { '@bsv/wallet-relay': '^0.7.0', qrcode: '^1.5.0' }
   }),
   agentsSection
 }
