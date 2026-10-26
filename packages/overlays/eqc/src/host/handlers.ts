@@ -17,7 +17,7 @@ import {
   validateQuery,
   type EconomicQuery
 } from '../protocol/query.js'
-import { verifyAndInternalizePayment } from './paymentVerifier.js'
+import { verifyAndInternalizePayment, type PaymentVerification } from './paymentVerifier.js'
 import { InMemoryPendingStore, type PendingQuery, type PendingStore } from './pendingStore.js'
 import type { QueryProvider } from './providers.js'
 
@@ -222,6 +222,29 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     return floor
   }
 
+  /** Maps a payment that did not verify to the error the client is answered with. */
+  const refusePayment = (
+    payment: Extract<PaymentVerification, { ok: false }>,
+    context: { queryId: string; rank: number; client: string; required: number }
+  ): never => {
+    if (payment.reason === 'malformed') {
+      throw new HostError(400, 'ERR_INVALID_COLLECT', 'Payment is not bound to this query and rank')
+    }
+    if (payment.reason === 'wallet-error') {
+      // The payout may be valid and is already broadcast. This is the host's failure: tell the
+      // operator everything needed to claim the output later, and never ask the client for more.
+      logger.error('Economic query payout could not be internalized', {
+        queryId: context.queryId,
+        rank: context.rank,
+        client: context.client,
+        txid: payment.txid,
+        error: payment.message
+      })
+      throw new HostError(500, 'ERR_INTERNAL', 'Internal error')
+    }
+    throw paymentRequired(context.required)
+  }
+
   const handle =
     (run: (req: HostRequest, res: HostResponse) => Promise<void>): HostHandler =>
     async (req, res) => {
@@ -397,26 +420,7 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
         originator
       })
       if (!payment.ok) {
-        if (payment.reason === 'malformed') {
-          throw new HostError(
-            400,
-            'ERR_INVALID_COLLECT',
-            'Payment is not bound to this query and rank'
-          )
-        }
-        if (payment.reason === 'wallet-error') {
-          // The payout may be valid and is already broadcast. This is the host's failure: tell the
-          // operator everything needed to claim the output later, and never ask the client for more.
-          logger.error('Economic query payout could not be internalized', {
-            queryId: request.queryId,
-            rank,
-            client,
-            txid: payment.txid,
-            error: payment.message
-          })
-          throw new HostError(500, 'ERR_INTERNAL', 'Internal error')
-        }
-        throw paymentRequired(required)
+        return refusePayment(payment, { queryId: request.queryId, rank, client, required })
       }
       const delivery = await signDelivery(
         wallet,

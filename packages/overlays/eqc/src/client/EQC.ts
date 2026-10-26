@@ -577,6 +577,29 @@ export class EQC {
     }
   }
 
+  /**
+   * Sends one paid collect, again with the same payment while it fails in transit or finds the
+   * host still settling, up to `collectAttempts` sends. The last answer or failure is final.
+   */
+  private async sendCollect(
+    url: string,
+    body: unknown,
+    attempt: number
+  ): Promise<TransportResponse> {
+    const last = attempt >= (this.options.collectAttempts ?? DEFAULT_COLLECT_ATTEMPTS)
+    let answer: TransportResponse | undefined
+    try {
+      answer = await this.transport.post(url, ECONOMIC_PATHS.collect, body, this.hostTimeoutMs())
+    } catch (error) {
+      // The host may have taken the payment and lost only its answer: ask again.
+      if (last) throw error
+    }
+    if (answer !== undefined && (last || !isStillSettling(answer))) return answer
+    const retryDelayMs = this.options.collectRetryDelayMs ?? DEFAULT_COLLECT_RETRY_DELAY_MS
+    await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+    return await this.sendCollect(url, body, attempt + 1)
+  }
+
   /** Resolves with verified bytes or throws after recording why this host failed. */
   private async collect(
     plan: PayoutPlan,
@@ -598,25 +621,11 @@ export class EQC {
       ranking: committed.ranking,
       payment: settlement.envelopes.get(plan.host)
     }
-    const attempts = this.options.collectAttempts ?? DEFAULT_COLLECT_ATTEMPTS
-    const retryDelayMs = this.options.collectRetryDelayMs ?? DEFAULT_COLLECT_RETRY_DELAY_MS
-    let response: TransportResponse | undefined
-    for (let attempt = 1; response === undefined; attempt++) {
-      try {
-        const answer = await this.transport.post(
-          plan.url,
-          ECONOMIC_PATHS.collect,
-          body,
-          this.hostTimeoutMs()
-        )
-        if (!isStillSettling(answer) || attempt >= attempts) response = answer
-      } catch (error) {
-        // The host may have taken the payment and lost only its answer: ask again.
-        if (attempt >= attempts) {
-          return fail('collect-failed', error instanceof Error ? error.message : String(error))
-        }
-      }
-      if (response === undefined) await new Promise(resolve => setTimeout(resolve, retryDelayMs))
+    let response: TransportResponse
+    try {
+      response = await this.sendCollect(plan.url, body, 1)
+    } catch (error) {
+      return fail('collect-failed', error instanceof Error ? error.message : String(error))
     }
     if (response.status !== 200) return fail('collect-failed', `status ${response.status}`)
     if (response.identityKey !== plan.host) return fail('identity-mismatch')
