@@ -134,6 +134,7 @@ the log line is what lets the operator claim it later.
 | `minPayoutSats`   | 1       | Smallest output a collect is served for.                                 |
 | `maxQueryTtlMs`   | 60000   | Furthest `expires` accepted.                                             |
 | `maxPayloadBytes` | 2 MiB   | Largest estimated encoded delivery attested.                             |
+| `rateLimit`       | 240/min | Requests per client across the mounted routes; `{ windowMs, limit }`.    |
 
 `floorFeeSats` is a floor on the fee of a query, not on what this host earns from a delivery. The
 host is held to the fee it quoted in its signed attestation: at rank `i` of `k` it requires
@@ -166,6 +167,12 @@ must accept a transaction it already holds.
 `InMemoryPendingStore` lives in process memory, so a restart forgets pending queries and retained
 deliveries alike. To replay paid deliveries across restarts, or across several host instances,
 pass a durable `PendingStore` that persists every record field before each call resolves.
+
+`mount()` puts an [`express-rate-limit`](https://github.com/express-rate-limit/express-rate-limit)
+limiter in front of all three routes, shared between them. An authenticated client is counted by
+its BRC-103 identity key, and anything else by address (IPv6 by `/56`); past the limit a route
+answers 429 `ERR_RATE_LIMITED`. Behind a proxy, set express `trust proxy` to the real hop count so
+unauthenticated requests are counted by client address rather than the proxy's.
 
 Providers: `overlayLookupProvider` (BRC-24 lookups, with BRC-136 topic anchors),
 `messageListProvider` (BRC-33 listings, served only to the authenticated recipient), and

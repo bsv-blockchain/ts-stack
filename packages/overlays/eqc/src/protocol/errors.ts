@@ -34,6 +34,7 @@ export type HostErrorCode =
   | 'ERR_PAYLOAD_TOO_LARGE'
   | 'ERR_UNSUPPORTED_CLASS'
   | 'ERR_TOO_MANY_PENDING'
+  | 'ERR_RATE_LIMITED'
   | 'ERR_INTERNAL'
 
 /** Thrown inside host handlers and providers; mapped to `{ status: 'error', code, description }`. */

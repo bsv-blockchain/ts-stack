@@ -134,15 +134,18 @@ describe('params', () => {
   it('mounts the three economic routes', () => {
     const { host } = makeHost()
     const routes: string[] = []
+    const limiters = new Set<unknown>()
     host.mount({
-      get: path => routes.push(`GET ${path}`),
-      post: path => routes.push(`POST ${path}`)
+      get: (path, limiter) => limiters.add(limiter) && routes.push(`GET ${path}`),
+      post: (path, limiter) => limiters.add(limiter) && routes.push(`POST ${path}`)
     })
     expect(routes).toEqual([
       'GET /economic/params',
       'POST /economic/query',
       'POST /economic/collect'
     ])
+    // One limiter, so the three routes share one budget per client.
+    expect(limiters.size).toBe(1)
   })
 })
 

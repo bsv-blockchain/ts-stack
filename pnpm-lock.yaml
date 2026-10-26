@@ -1236,6 +1236,10 @@ importers:
         version: '@typescript/typescript6@6.0.2'
 
   packages/overlays/eqc:
+    dependencies:
+      express-rate-limit:
+        specifier: 8.7.0
+        version: 8.7.0(express@5.3.0)
     devDependencies:
       '@bsv/auth-express-middleware':
         specifier: workspace:^

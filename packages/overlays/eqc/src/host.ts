@@ -7,8 +7,15 @@ export {
   type PendingQuery,
   type PendingState,
   type PendingStore,
-  type PendingStoreLimits
+  type PendingStoreLimits,
+  type SettledDelivery
 } from './host/pendingStore.js'
+export {
+  DEFAULT_HOST_RATE_LIMIT,
+  createHostRateLimiter,
+  rateLimitKey,
+  type HostRateLimit
+} from './host/rateLimit.js'
 export { verifyAndInternalizePayment, type PaymentVerification } from './host/paymentVerifier.js'
 export {
   bytesProvider,

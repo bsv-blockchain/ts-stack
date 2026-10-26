@@ -1,4 +1,5 @@
 import type { WalletInterface } from '@bsv/sdk'
+import type { RateLimitRequestHandler } from 'express-rate-limit'
 
 import { signAttestation, signDelivery } from '../protocol/attestation.js'
 import { HostError } from '../protocol/errors.js'
@@ -20,6 +21,7 @@ import {
 import { verifyAndInternalizePayment, type PaymentVerification } from './paymentVerifier.js'
 import { InMemoryPendingStore, type PendingQuery, type PendingStore } from './pendingStore.js'
 import type { QueryProvider } from './providers.js'
+import { createHostRateLimiter, type HostRateLimit } from './rateLimit.js'
 
 /** The slice of an express `Request` the handlers read. `auth` is set by BRC-103 middleware. */
 export interface HostRequest {
@@ -37,10 +39,13 @@ export interface HostResponse {
 
 export type HostHandler = (req: HostRequest, res: HostResponse) => Promise<void>
 
-/** Satisfied by an express `Router` or `Application`. */
+/**
+ * Satisfied by an express `Router` or `Application`. Each route is registered with the rate
+ * limiter first and the handler second.
+ */
 export interface RouterLike {
-  get(path: string, handler: HostHandler): unknown
-  post(path: string, handler: HostHandler): unknown
+  get(path: string, limiter: RateLimitRequestHandler, handler: HostHandler): unknown
+  post(path: string, limiter: RateLimitRequestHandler, handler: HostHandler): unknown
 }
 
 export interface EconomicQueryHostOptions {
@@ -76,6 +81,12 @@ export interface EconomicQueryHostOptions {
    */
   maxPayloadBytes?: number
   store?: PendingStore
+  /**
+   * Requests one client may make to the mounted routes, together, per window: 240 a minute by
+   * default. Clients are counted by BRC-103 identity key, or by address before authentication.
+   * Past the limit a route answers 429 `ERR_RATE_LIMITED`.
+   */
+  rateLimit?: Partial<HostRateLimit>
   now?: () => number
   originator?: string
   logger?: { error: (...args: unknown[]) => void }
@@ -442,9 +453,11 @@ export function createEconomicQueryHost(options: EconomicQueryHostOptions): Econ
     query,
     collect,
     mount(router) {
-      router.get(ECONOMIC_PATHS.params, params)
-      router.post(ECONOMIC_PATHS.query, query)
-      router.post(ECONOMIC_PATHS.collect, collect)
+      // One budget per client across the three routes, and per mount.
+      const limiter = createHostRateLimiter(options.rateLimit)
+      router.get(ECONOMIC_PATHS.params, limiter, params)
+      router.post(ECONOMIC_PATHS.query, limiter, query)
+      router.post(ECONOMIC_PATHS.collect, limiter, collect)
     }
   }
 }

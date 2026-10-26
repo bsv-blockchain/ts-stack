@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import type { LookupAnswer, LookupQuestion, WalletInterface } from '@bsv/sdk'
 import express from 'express'
+import { rateLimit } from 'express-rate-limit'
 
 import type { LookupResolverLike } from '../../src/client/discovery.js'
 import { createEconomicQueryHost } from '../../src/host/handlers.js'
@@ -42,6 +43,8 @@ export async function startHost(options: {
   const wallet = new HostWallet()
   const app = express()
   app.use(express.json({ limit: '1mb' }))
+  // Generous: the e2e suite drives many queries from one address in a few seconds.
+  app.use(rateLimit({ windowMs: 60_000, limit: 10_000, legacyHeaders: false }))
   app.use(createAuthMiddleware({ wallet, allowUnauthenticated: true, logLevel: 'error' }))
   if (options.delayMs !== undefined) {
     const delayMs = options.delayMs
