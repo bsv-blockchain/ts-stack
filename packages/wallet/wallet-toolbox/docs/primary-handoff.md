@@ -160,7 +160,14 @@ bounded250ms..60s hint delay. This unsigned hint only schedules backoff; every
 result still requires authenticated transport and the actual destination ACK.
 Backoff retains no manager writer or in-flight HTTP request, observes cancellation,
 and runs outside each new control request's independent I/O deadline. All server
-rate, admission and resource limits remain unchanged.
+rate, admission and resource limits remain unchanged. A full archive-and-handoff
+round trip can exceed the default 300/minute unauthenticated IP budget when sent
+as one burst to a single endpoint. Integration callers should pace actual HTTP
+requests, including authentication handshakes, within that deployment budget;
+a diagnostic uses 250ms spacing without changing the server or protocol limits.
+The TTN remote-source/direct-local-target regression verifies a complete round
+trip and replacement-manager recovery with zero HTTP throttles under the default
+gate.
 The ordinary `binaryRequests` flag does not redefine these separately negotiated
 compact control RPCs or the mandatory binary codec of version-one transfer parts.
 Disable optional server capabilities during a mixed deployment if every serving

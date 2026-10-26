@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises'
 import { PrivateKey } from '@bsv/sdk'
 import { StorageClient } from '../../remoting/StorageClient'
 import { StorageClient as StorageMobile } from '../../remoting/StorageMobile'
@@ -106,3 +107,63 @@ test.each([
   },
   120000
 )
+
+test('TTN remote source hands primary to a direct local Knex target and back within HTTP limits', async () => {
+  const key = PrivateKey.fromRandom()
+  const source = await snapshotHttpFixture(true, false, 'ttn', 'ttn-source', key)
+  let target: Awaited<ReturnType<typeof snapshotHttpFixture>> | undefined
+  const originalFetch = globalThis.fetch
+  let throttles = 0
+  try {
+    target = await snapshotHttpFixture(true, false, 'ttn', 'ttn-local-target')
+    const http = await source.serve()
+    http.server.server.on('request', (_req, res) => {
+      res.on('finish', () => {
+        if (res.statusCode === 429) throttles++
+      })
+    })
+    // A complete round trip exceeds the unchanged 300/minute unauthenticated
+    // IP budget when sent as a burst. Pace the real HTTP calls, including auth
+    // handshakes, rather than disabling the server gate or extending deadlines.
+    let nextRequest = performance.now()
+    globalThis.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      if (url.startsWith(http.url)) {
+        const at = Math.max(nextRequest, performance.now())
+        nextRequest = at + 250
+        await delay(Math.max(0, at - performance.now()), undefined, { signal: init?.signal ?? undefined })
+      }
+      return await originalFetch(input, init)
+    }
+    const client = new StorageClient(source.wallet, http.url, { serverIdentityKey: source.serverIdentityKey })
+    await client.makeAvailable()
+    await target.storage.findOrInsertUser(source.identityKey)
+    const initial = new WalletStorageManager(source.identityKey, client)
+    await initial.makeAvailable()
+    await initial.setActive('ttn-source')
+    const manager = new WalletStorageManager(source.identityKey, client, [target.storage])
+    await manager.makeAvailable()
+    const copied = await manager.syncToWriterResumable(await manager.getAuth(), target.storage)
+    expect(copied.status).toBe('completed')
+    await manager.setActive('ttn-local-target')
+    expect(manager.getActiveStore()).toBe('ttn-local-target')
+    expect(manager.isActiveEnabled).toBe(true)
+    await manager.setActive('ttn-source')
+    const replacement = new WalletStorageManager(source.identityKey, client, [target.storage])
+    await replacement.makeAvailable()
+    expect(replacement.getActiveStore()).toBe('ttn-source')
+    expect(replacement.isActiveEnabled).toBe(true)
+    for (const storage of [source.storage, target.storage]) {
+      const user = (await storage.findOrInsertUser(source.identityKey)).user
+      expect(user.activeStorage).toBe('ttn-source')
+      const control = await storage.getPrimaryHandoffControl()
+      expect(await control!.status({ identityKey: source.identityKey, userId: user.userId })).toMatchObject({
+        phase: 'complete'
+      })
+    }
+    expect(throttles).toBe(0)
+  } finally {
+    globalThis.fetch = originalFetch
+    await closeFixtures([source, target])
+  }
+}, 120000)
