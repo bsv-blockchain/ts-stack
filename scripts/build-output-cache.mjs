@@ -16,7 +16,8 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const CACHE_FORMAT = 'build-output-cache-v1'
+// v2 adds the reference applications' server bundles; v1 entries lack them.
+const CACHE_FORMAT = 'build-output-cache-v2'
 const ROOT_INPUTS = [
   '.npmrc',
   'config/typescript',
@@ -32,7 +33,8 @@ const DEPENDENCY_FIELDS = [
   'optionalDependencies',
   'peerDependencies'
 ]
-const OUTPUT_DIRECTORIES = new Set(['dist', 'out'])
+// Reference applications also emit server bundles beside their client `dist`.
+const OUTPUT_DIRECTORIES = new Set(['dist', 'dist-proposals', 'dist-server', 'out'])
 
 function git(arguments_) {
   return execFileSync('/usr/bin/git', arguments_, { cwd: REPOSITORY_ROOT, encoding: 'utf8' })
