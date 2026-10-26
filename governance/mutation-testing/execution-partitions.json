@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "engine": "9.6.1",
-  "canonicalTargets": 101,
+  "canonicalTargets": 102,
   "executionRows": 256,
   "units": [
     {

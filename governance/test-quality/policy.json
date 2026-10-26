@@ -46,7 +46,8 @@
       "packages/network/chirp/package.json",
       "packages/content/lch/package.json",
       "packages/messaging/webrtpay/package.json",
-      "packages/messaging/group-messaging/package.json"
+      "packages/messaging/group-messaging/package.json",
+      "packages/overlays/eqc/package.json"
     ],
     "suites": [
       {
@@ -1290,6 +1291,18 @@
           "Every well-formed bootstrap and MLS envelope round-trips through encode and decode unchanged.",
           "Arbitrary bytes, any JSON header value, hostile header fields and mutated or truncated valid envelopes only ever throw EnvelopeError.",
           "A decoded key package request never carries a ciphersuite the library does not implement."
+        ]
+      },
+      {
+        "path": "packages/overlays/eqc/src/protocol/protocol.property.test.ts",
+        "manifest": "packages/overlays/eqc/package.json",
+        "risk": "critical",
+        "boundary": "BRC-178 payout arithmetic and the canonical encodings hashed into query identifiers and content hashes",
+        "target": "Fee conservation and rank monotonicity of the square-root split, and order independence of canonical JSON, message-list, and outpoint-list bytes",
+        "invariants": [
+          "Payouts sum exactly to the fee, never increase with rank, and give every rank but the first its floored square-root share.",
+          "Canonical JSON is independent of object key order and survives a parse and re-encode.",
+          "Canonical message-list and outpoint-list bytes are independent of input order."
         ]
       }
     ],
