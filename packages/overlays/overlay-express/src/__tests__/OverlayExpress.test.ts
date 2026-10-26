@@ -675,7 +675,7 @@ describe('OverlayExpress', () => {
 
     it('applies default tracker and provider configuration', () => {
       overlayExpress.configureChainTracker()
-      overlayExpress.configureArcade('https://arcade.example')
+      overlayExpress.configureBsvBroadcaster('https://arcade.example')
       overlayExpress.configureChaintracks('https://chaintracks.example')
 
       expect(overlayExpress.chainTracker).toBeDefined()
@@ -693,7 +693,7 @@ describe('OverlayExpress', () => {
 
     it('rejects type-confused provider security options', () => {
       expect(() =>
-        overlayExpress.configureArcade('http://127.0.0.1', {
+        overlayExpress.configureBsvBroadcaster('http://127.0.0.1', {
           allowPrivateHosts: 'false' as unknown as boolean
         })
       ).toThrow('allowPrivateHosts')

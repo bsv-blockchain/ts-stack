@@ -177,7 +177,17 @@ addresses, and enforces a 15-second deadline plus a 256 KiB response limit.
 controlled local development; production applications should retain the
 default transport.
 
-### ARC and Arcade provider configuration
+### ARC and BSV Broadcaster provider configuration
+
+[BSV Broadcaster](https://github.com/bsv-blockchain/broadcaster) was previously
+called Arcade. Its client is `BsvBroadcaster`
+(`services/providers/BsvBroadcaster`) and its monitor task is
+`TaskBsvBroadcasterSSE`. `Arcade`, `TaskArcadeSSE`, `ARCADE_POST_BEEF_CONCURRENCY`,
+`validateArcadeTxData` and the `services/providers/Arcade` import path remain as
+deprecated aliases. Configuration keys (`arcadeUrl`, `arcadeApiKey`,
+`arcadeConfig`), the `*_ARCADE_URL` environment variables, the public
+`arcade-*` hostnames, the `arcade` provider name and the `ArcadeSSE` monitor
+task name are unchanged.
 
 ARC-compatible broadcaster configuration is snapshotted when the provider is
 constructed. API keys, callback tokens, deployment IDs, callback URLs, and
@@ -577,9 +587,9 @@ clipboard data, or cloud sync. If a snapshot may have escaped trusted storage,
 treat the wallet credentials as compromised and rotate them; deleting one copy
 does not revoke other copies.
 
-Remote `StorageClient` and credential-bearing Arcade SSE endpoints require
+Remote `StorageClient` and credential-bearing BSV Broadcaster SSE endpoints require
 HTTPS. Plain HTTP is accepted only for explicit loopback hosts during local
-development. Arcade SSE dependency debug logging remains disabled because its
+development. BSV Broadcaster SSE dependency debug logging remains disabled because its
 request URL and headers carry wallet callback credentials.
 
 Remote storage responses must also complete BRC-103 mutual authentication;
@@ -611,7 +621,7 @@ are discovered through a bounded compatibility lookup and compared by hostname.
 
 Wallet services do not require a WhatsOnChain key for ChainTracks. Node
 runtimes on mainnet, testnet, and TerraTestNet use the public
-Arcade/go-chaintracks v2 HTTP and SSE surfaces by default. Browser and webview
+BSV Broadcaster/go-chaintracks v2 HTTP and SSE surfaces by default. Browser and webview
 runtimes on mainnet/testnet temporarily select the legacy CORS-enabled service
 until the v2 edge serves CORS and OPTIONS; `Services.getHeight` also falls back
 to WhatsOnChain on those networks if ChainTracks is unavailable. Bulk batches
@@ -625,8 +635,8 @@ The supported chain identifiers are `main`, `test`, `stn`, `ttn`, `tstn`, and
 `regtest` (`mock` remains available for test utilities). STN, Terra Scaling
 TestNet, and regtest do not have operator-independent public endpoints: set
 `STN_CHAINTRACKS_URL`, `TSTN_CHAINTRACKS_URL`, or `REGTEST_CHAINTRACKS_URL`, use
-the matching Arcade environment variable, or inject an explicit
-`ChaintracksClientApi`. Like TTN, the default regtest services use Arcade
+the matching BSV Broadcaster environment variable, or inject an explicit
+`ChaintracksClientApi`. Like TTN, the default regtest services use BSV Broadcaster
 (`REGTEST_ARCADE_URL`) as broadcaster and Merkle-path provider and register no
 legacy ARC fallback.
 
@@ -767,31 +777,31 @@ for a definite not-found error; permission, size, parse, and integrity failures
 remain visible. Local files must form a contiguous genesis-anchored chain and
 all reads, writes, reader buffers, and queued lock operations are bounded.
 
-Arcade is the HTTPS/SSE gateway for Teranode-backed header data. Its v2 edge
+BSV Broadcaster is the HTTPS/SSE gateway for Teranode-backed header data. Its v2 edge
 must allow browser origins and OPTIONS before browser defaults can use it;
 direct Teranode P2P is not included in browser/mobile artifacts.
 
 TTN wallets also register
 `https://arcade-v2-ttn-us-1.bsvblockchain.tech` as their first broadcast and
-Merkle-proof provider. Mainnet and testnet Arcade broadcasting remains opt-in.
+Merkle-proof provider. Mainnet and testnet BSV Broadcaster broadcasting remains opt-in.
 Pass an explicit `arcadeUrl` to override the TTN endpoint or an empty string to
 disable it. TTN overlay lookups use the separate `teratestnet` resolver preset
 and never fall back to testnet discovery.
 
 ### Broadcast rejection and monitor reconciliation
 
-When Arcade is configured, Wallet Toolbox consumes Arcade's status code and
+When BSV Broadcaster is configured, Wallet Toolbox consumes BSV Broadcaster's status code and
 validator detail instead of treating every `REJECTED` event alike. Retryable
 parent and locktime conditions stay pending. Terminal validator failures fail
 the request, and explicit missing-input or conflict evidence also quarantines
 every wallet-owned copy of the consumed input in the same storage transaction.
-That quarantine uses Arcade's positive rejection evidence and does not require
+That quarantine uses BSV Broadcaster's positive rejection evidence and does not require
 WhatsOnChain or another UTXO explorer.
 
-Arcade is also registered as a transaction-status provider, so monitor review
+BSV Broadcaster is also registered as a transaction-status provider, so monitor review
 continues on networks without WhatsOnChain. A scheduled bounded pass revisits
 pending requests after their immutable creation-age threshold and applies
-durable Arcade lifecycle verdicts that may have arrived while SSE was
+durable BSV Broadcaster lifecycle verdicts that may have arrived while SSE was
 disconnected, including `SEEN_IN_ORPHAN_MEMPOOL`. Routine proof checks may
 refresh diagnostic timestamps without postponing that review. A descendant of
 a locally terminal parent is also failed from that storage evidence; the failed
@@ -801,7 +811,7 @@ absence and provider errors are treated as inconclusive, never as proof that an
 output was spent.
 After an input conflict has been recorded, a later cached accepted/seen label
 cannot restore the failed transaction; recovery requires a mined status and a
-Merkle proof validated by the configured chain tracker. Arcade SSE events are
+Merkle proof validated by the configured chain tracker. BSV Broadcaster SSE events are
 acknowledged in order only after their storage update and cursor persistence
 succeed, so a transient storage failure is retried instead of skipped.
 The SSE client validates and owns every status record, retains at most 64 events
@@ -812,7 +822,7 @@ prevents queued successors from advancing beyond the last durable cursor.
 Client logging is silent unless `log` is supplied, and transport errors never
 forward credential-bearing EventSource objects. Monitor startup awaits its
 ChainTracks subscriptions and retries transient setup failures; removal and
-teardown close Arcade SSE before storage is destroyed. Monitor operational
+teardown close BSV Broadcaster SSE before storage is destroyed. Monitor operational
 logging is likewise opt-in through `MonitorOptions.logging`.
 
 ### Transaction-status authentication
@@ -826,7 +836,7 @@ diagnostics are bounded, and the durable provider name comes from local
 configuration rather than the remote response.
 
 A malformed provider response is recorded as that provider's failure and the
-service tries the next configured source. Arcade additionally binds the whole
+service tries the next configured source. BSV Broadcaster additionally binds the whole
 `GET /tx/{txid}` response to the request before interpreting lifecycle or proof
 fields. Provider errors and omitted results remain unknown; they never become
 mined, known, terminal, or input-conflict evidence by default.

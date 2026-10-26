@@ -1,4 +1,4 @@
-import { ArcadeProvider } from '../ArcadeProvider.js'
+import { BsvBroadcasterProvider } from '../BsvBroadcasterProvider.js'
 import { ChaintracksProvider } from '../ChaintracksProvider.js'
 
 const runLive = process.env.RUN_LIVE_OVERLAY_PROVIDER_TESTS === '1'
@@ -26,7 +26,7 @@ describeLive('Overlay providers live integration', () => {
   test('fetches and validates a real mined mainnet Arcade proof', async () => {
     const txid = process.env.ARCADE_PROOF_TXID ?? 'f283c15af7fb9301ef35445eaa76e92d36382880078490b2f4fbae55b6f9551a'
     const arcadeUrl = process.env.ARCADE_MAINNET_URL ?? 'https://arcade-v2-us-1.bsvblockchain.tech'
-    const arcade = new ArcadeProvider(arcadeUrl)
+    const arcade = new BsvBroadcasterProvider(arcadeUrl)
     const chaintracks = new ChaintracksProvider(arcadeUrl)
 
     const proof = await arcade.fetchMerkleProof(txid)

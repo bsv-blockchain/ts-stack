@@ -12,7 +12,7 @@ An opinionated but configurable Overlay Services deployment system:
 - Uses common Knex/SQL and Mongo databases across all services for efficiency
 - Supports SHIP, SLAP, and GASP sync out of the box (or it can be disabled)
 - Supports Arc callbacks natively for production (or disable it for simplicity during local development)
-- Supports Arcade-first broadcast/proof lookup, Arc fallback broadcast,
+- Supports BSV Broadcaster-first broadcast/proof lookup, Arc fallback broadcast,
   Chaintracks header validation, BASM reorg streaming, and active
   monitor-driven maintenance
 
@@ -108,9 +108,9 @@ const main = async () => {
   server.configureEnableGASPSync(false)
 
   // Production deployments should configure at least one transaction
-  // propagation provider. Arcade can be used as the primary provider with Arc
+  // propagation provider. BSV Broadcaster can be used as the primary provider with Arc
   // as a fallback. A callback token is required before /arc-ingest is enabled.
-  server.configureArcade(process.env.ARCADE_URL!, {
+  server.configureBsvBroadcaster(process.env.ARCADE_URL!, {
     apiKey: process.env.ARCADE_API_KEY,
     deploymentId: process.env.ARCADE_DEPLOYMENT_ID,
     chaintracksApiPrefix: '/chaintracks/v2'
@@ -123,7 +123,7 @@ const main = async () => {
   }
 
   // Chaintracks-compatible services provide block headers for BASM and can
-  // stream reorg notifications. Arcade exposes go-chaintracks under
+  // stream reorg notifications. BSV Broadcaster exposes go-chaintracks under
   // /chaintracks/v2.
   server.configureChaintracks(process.env.CHAINTRACKS_URL ?? process.env.ARCADE_URL!, {
     apiPrefix: '/chaintracks/v2',
@@ -182,7 +182,7 @@ wildcard origin.
 Call `await server.close()` during shutdown. It is idempotent and closes the
 HTTP listener, BASM maintenance timers, the reorg stream, Knex, and MongoDB.
 
-Janitor, Arcade, Chaintracks, reorg-stream, and monitor outbound connections
+Janitor, BSV Broadcaster, Chaintracks, reorg-stream, and monitor outbound connections
 accept credential-free public HTTPS, pin resolved public addresses to the exact
 origin, and do not follow redirects by default. Response headers and streamed
 bodies are bounded under deadlines. `allowPrivateHosts: true` permits HTTP and
@@ -230,7 +230,7 @@ overlay admission may proceed without current network propagation.
 Overlay Express can compose multiple transaction propagation and proof sources:
 
 ```typescript
-server.configureArcade('https://arcade-v2-us-1.bsvblockchain.tech', {
+server.configureBsvBroadcaster('https://arcade-v2-us-1.bsvblockchain.tech', {
   apiKey: process.env.ARCADE_API_KEY,
   deploymentId: 'my-overlay-node',
   chaintracksApiPrefix: '/chaintracks/v2'
@@ -246,8 +246,16 @@ server.configureChaintracks('https://arcade-v2-us-1.bsvblockchain.tech', {
 })
 ```
 
-- `configureArcade` registers Arcade as the first-choice broadcaster and proof
-  lookup provider.
+- `configureBsvBroadcaster` registers [BSV Broadcaster](https://github.com/bsv-blockchain/broadcaster)
+  as the first-choice broadcaster and proof lookup provider. BSV Broadcaster was
+  previously called Arcade: `configureArcade`, `ArcadeProvider`,
+  `ArcadeProviderConfig`, `ArcadeMerkleProof` and the `ArcadeProvider.ts` import
+  path remain as deprecated aliases of `configureBsvBroadcaster`,
+  `BsvBroadcasterProvider`, `BsvBroadcasterProviderConfig`,
+  `BsvBroadcasterMerkleProof` and `BsvBroadcasterProvider.ts`. The provider name
+  reported in broadcast results (`Arcade`), the `arcade*` instance fields, the
+  public `arcade-*` hostnames and the `ARCADE_*` environment variables used in
+  these examples are unchanged.
 - `configureArcApiKey` registers the standard Arc broadcaster as fallback.
 - `configureArcCallbackToken` is required to enable `/arc-ingest`; inbound
   callbacks must present the expected token as `Authorization: Bearer ...` or
@@ -420,7 +428,7 @@ pnpm --filter @bsv/overlay-express pack:check
 The package check builds locally packed release candidates for Overlay Express
 and its workspace Overlay dependencies, then verifies the npm tarball with
 publint, strict type resolution, and clean ESM/CommonJS consumer projects.
-`test:live` separately verifies public Arcade/Chaintracks endpoints without a
+`test:live` separately verifies public BSV Broadcaster/Chaintracks endpoints without a
 private credential; it is scheduled/release evidence, not deterministic PR
 coverage.
 

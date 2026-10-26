@@ -1,5 +1,5 @@
 import { Services } from '../Services'
-import { Arcade } from '../providers/Arcade'
+import { BsvBroadcaster } from '../providers/BsvBroadcaster'
 import { arcadeDefaultUrl, createDefaultWalletServicesOptions } from '../createDefaultWalletServicesOptions'
 
 /**
@@ -46,7 +46,7 @@ describe('Services Arcade wiring', () => {
     const options = createDefaultWalletServicesOptions('ttn')
     expect(options.arcadeUrl).toBe(ARCADE_URL)
     const services = new Services(options)
-    expect(services.arcade).toBeInstanceOf(Arcade)
+    expect(services.arcade).toBeInstanceOf(BsvBroadcaster)
     expect(services.postBeefServices.services[0].name).toBe('ArcadeBeef')
     expect(services.postBeefServices.services.some(s => s.name === 'TaalArcBeef')).toBe(false)
   })
@@ -84,7 +84,7 @@ describe('Services Arcade wiring', () => {
     expect(options.arcadeConfig?.callbackToken).toBe('cb-token')
 
     const services = new Services(options)
-    expect(services.arcade).toBeInstanceOf(Arcade)
+    expect(services.arcade).toBeInstanceOf(BsvBroadcaster)
     // Arcade must be the FIRST broadcaster tried under 'UntilSuccess'.
     expect(services.postBeefServices.services[0].name).toBe('ArcadeBeef')
     // ARC (Taal) remains present as fallback.

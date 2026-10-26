@@ -39,7 +39,7 @@ interface AppliedTerminalVerdict {
 
 /**
  * Poll durable transaction lifecycle state for aged, non-terminal requests.
- * This closes the gap where an Arcade rejection event was missed before the
+ * This closes the gap where a BSV Broadcaster rejection event was missed before the
  * monitor subscribed or while it was offline. Unknown/provider-error results
  * never mutate storage; only a provider's explicit terminal verdict does.
  */

@@ -94,7 +94,7 @@ function validateHttpClient(value: unknown): HttpClient {
   return client as HttpClient
 }
 
-/** Snapshot security-relevant ARC/Arcade constructor configuration exactly once. */
+/** Snapshot security-relevant ARC/BSV Broadcaster constructor configuration exactly once. */
 export function normalizeArcProviderConfig(
   config: string | ArcConfig | undefined,
   defaultDeploymentId: () => string

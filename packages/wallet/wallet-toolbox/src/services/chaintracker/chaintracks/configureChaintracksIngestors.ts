@@ -18,9 +18,9 @@ import type { BulkFileDataCacheApi, BulkFileDownloadBudgetApi } from './Api/Bulk
 import type { BulkFileDataValidatorApi } from './Api/BulkFileDataValidatorApi'
 
 export interface ChaintracksSourceOptions {
-  /** Preferred go-chaintracks or Arcade source. */
+  /** Preferred go-chaintracks or BSV Broadcaster source. */
   chaintracks?: ChaintracksClientApi
-  /** Disable the credential-free public Arcade default. */
+  /** Disable the credential-free public BSV Broadcaster default. */
   disableChaintracks?: boolean
   /** Maximum number of headers requested from the remote source at once. */
   remoteMaxHeadersPerRequest?: number

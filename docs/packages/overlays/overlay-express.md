@@ -59,7 +59,7 @@ process.once('SIGINT', () => void server.close())
 - **Web UI** — Auto-generated documentation and service explorer
 - **BanService** — Optional output banning by txid.outputIndex
 - **JanitorService** — Health validation for SHIP/SLAP peer hosts
-- **Provider chain** — Arcade-first broadcast/proof lookup with Arc fallback
+- **Provider chain** — BSV Broadcaster-first broadcast/proof lookup with Arc fallback
 - **Chaintracks integration** — Header resolution and reorg SSE for BASM
 - **OverlayMonitor** — Lookup probes plus optional admin maintenance actions
 - **Graceful lifecycle** — Idempotent `close()` drains HTTP and closes background work and databases
@@ -131,7 +131,7 @@ server.configureEngineParams({
 })
 
 server.configureEnableGASPSync(true)
-server.configureArcade(process.env.ARCADE_URL!, {
+server.configureBsvBroadcaster(process.env.ARCADE_URL!, {
   apiKey: process.env.ARCADE_API_KEY,
   deploymentId: process.env.ARCADE_DEPLOYMENT_ID
 })
@@ -196,7 +196,7 @@ monitor.start()
   headers by default; set `OVERLAY_CORS_ALLOWED_HEADERS` only for a strict
   comma-separated browser header allowlist
 - **JanitorService** — Periodically validates SHIP/SLAP hosts; revokes failing entries
-- **Provider callbacks** — `/arc-ingest` accepts Arc/Arcade callback notifications,
+- **Provider callbacks** — `/arc-ingest` accepts Arc/BSV Broadcaster callback notifications,
   applies proofs, and evicts terminal invalid or double-spent transactions
 - **Unproven maintenance** — Proof refresh runs before eviction so mined
   transactions can recover before stale unproven rows are removed
@@ -220,7 +220,7 @@ monitor.start()
 - Implements BSV Overlay protocol with SHIP/SLAP peer discovery
 - Supports Graph Aware Sync Protocol (GASP) for historical sync
 - Health endpoints follow Kubernetes liveness/readiness probe patterns
-- Optional Arc and Arcade callback integration for proof-of-inclusion on mainnet
+- Optional Arc and BSV Broadcaster callback integration for proof-of-inclusion on mainnet
 - Chaintracks-compatible header and reorg handling for BRC-136 BASM
 
 ## Common pitfalls
@@ -233,7 +233,7 @@ monitor.start()
 6. **Strict broadcast** — Keep `throwOnBroadcastFailure: true` for production so
    provider outages do not create local-only overlay state.
 7. **BASM dependencies** — BASM should use a Chaintracks-compatible chain tracker;
-   Arcade exposes this under `/chaintracks/v2`.
+   BSV Broadcaster exposes this under `/chaintracks/v2`.
 8. **Lifecycle ownership** — Call `await server.close()` from the owning runtime
    so listeners, sync timers, reorg streaming, Knex, and MongoDB close together.
 

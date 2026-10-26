@@ -1,7 +1,7 @@
 /**
- * Client for Arcade transaction status updates.
+ * Client for BSV Broadcaster transaction status updates.
  *
- * Uses react-native-sse EventSource to connect to Arcade's
+ * Uses react-native-sse EventSource to connect to BSV Broadcaster's
  * `GET /events?callbackToken=<token>` endpoint for real-time status updates.
  */
 
@@ -54,11 +54,11 @@ export interface ArcSSEEvent {
   txid: string
   txStatus: string
   timestamp: string
-  /** Transport cursor attached by ArcSSEClient; not part of Arcade's JSON payload. */
+  /** Transport cursor attached by ArcSSEClient; not part of BSV Broadcaster's JSON payload. */
   eventId?: string
-  /** ARC rejection code supplied by Arcade for classifiable REJECTED events. */
+  /** ARC rejection code supplied by BSV Broadcaster for classifiable REJECTED events. */
   status?: number
-  /** Arcade's validator or network rejection detail. */
+  /** BSV Broadcaster's validator or network rejection detail. */
   extraInfo?: string
   blockHash?: string
   blockHeight?: number
@@ -66,7 +66,7 @@ export interface ArcSSEEvent {
 }
 
 export interface ArcSSEClientOptions {
-  /** Base URL of the Arcade instance (e.g. "https://arcade-us-1.bsvb.tech") */
+  /** Base URL of the BSV Broadcaster instance (e.g. "https://arcade-us-1.bsvb.tech") */
   baseUrl: string
   /** Stable per-wallet token matching the X-CallbackToken sent on broadcast */
   callbackToken: string
