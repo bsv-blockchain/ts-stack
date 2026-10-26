@@ -219,19 +219,16 @@ jobs:
           fi
           echo "qualified-sha=$qualified" >> "$GITHUB_OUTPUT"
 
-  release:
-    name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
-    needs: [discover, qualification]
-    # always(): a release.yaml call deliberately skips full-mutation, and the
-    # implicit success() would treat that skipped ancestor as a failure.
-    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha
+  # Build, scan and describe each image while the mutation campaign qualifies
+  # the source. This job has no publishing permissions; the release job
+  # publishes exactly this image only after qualification succeeds.
+  build-image:
+    name: Build ${{ matrix.component.name }}@${{ matrix.component.tag }}
+    needs: discover
+    if: needs.discover.outputs.count != '0'
     runs-on: ubuntu-latest
     permissions:
-      artifact-metadata: write
-      attestations: write
       contents: read
-      id-token: write
-      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -243,12 +240,6 @@ jobs:
           ref: ${{ needs.discover.outputs.source-sha }}
 
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-
-      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve reproducible source metadata
         id: source
@@ -326,11 +317,89 @@ jobs:
           upload-artifact-retention: 90
           upload-release-assets: false
 
+      - name: Save the reviewed image for publication
+        env:
+          IMAGE: ${{ matrix.component.image }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+          VERSION_TAG: ${{ matrix.component.tag }}
+          SBOM: ${{ runner.temp }}/${{ matrix.component.name }}-${{ matrix.component.version }}.spdx.json
+        run: |
+          mkdir -p "$RUNNER_TEMP/reviewed-image"
+          cp "$SBOM" "$RUNNER_TEMP/reviewed-image/sbom.spdx.json"
+          cd "$RUNNER_TEMP/reviewed-image"
+          printf '%s\n' "$TAGS" | sed '/^$/d' > tags
+          docker image inspect --format '{{.Id}}' "$IMAGE:$VERSION_TAG" > image-id
+          # shellcheck disable=SC2046
+          docker save --output image.tar $(cat tags)
+
+      - name: Upload the reviewed image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: reviewed-image-${{ matrix.component.name }}-${{ matrix.component.version }}
+          path: ${{ runner.temp }}/reviewed-image
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+
+  release:
+    name: Release ${{ matrix.component.name }}@${{ matrix.component.tag }}
+    needs: [discover, qualification, build-image]
+    # always(): a release.yaml call deliberately skips full-mutation, and the
+    # implicit success() would treat that skipped ancestor as a failure.
+    # build-image may fail for one component without blocking the others: each
+    # component publishes only its own reviewed image, and a component whose
+    # build or scan failed has no image to download.
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha && needs.build-image.result != 'cancelled' && needs.build-image.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJson(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download the reviewed image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: reviewed-image-${{ matrix.component.name }}-${{ matrix.component.version }}
+          path: ${{ runner.temp }}/reviewed-image
+
+      # Load exactly the image that was scanned and described, and refuse to
+      # publish unless every tag resolves to that reviewed image ID.
+      - name: Load the reviewed image
+        id: reviewed
+        run: |
+          cd "$RUNNER_TEMP/reviewed-image"
+          docker load --input image.tar
+          expected="$(cat image-id)"
+          while IFS= read -r tag; do
+            actual="$(docker image inspect --format '{{.Id}}' "$tag")"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::$tag is $actual, not the reviewed image $expected."
+              exit 1
+            fi
+          done < tags
+          {
+            echo 'tags<<EOF'
+            cat tags
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Push the reviewed image
         id: push
         env:
           IMAGE: ${{ matrix.component.image }}
-          TAGS: ${{ steps.meta.outputs.tags }}
+          TAGS: ${{ steps.reviewed.outputs.tags }}
           VERSION_TAG: ${{ matrix.component.tag }}
         run: |
           version_ref="$IMAGE:$VERSION_TAG"
@@ -369,7 +438,7 @@ jobs:
         with:
           subject-name: ${{ matrix.component.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
-          sbom-path: ${{ runner.temp }}/${{ matrix.component.name }}-${{ matrix.component.version }}.spdx.json
+          sbom-path: ${{ runner.temp }}/reviewed-image/sbom.spdx.json
           push-to-registry: true
 
       - name: Install Cosign
@@ -381,7 +450,7 @@ jobs:
         env:
           IMAGE: ${{ matrix.component.image }}
           DIGEST: ${{ steps.push.outputs.digest }}
-          SBOM: ${{ runner.temp }}/${{ matrix.component.name }}-${{ matrix.component.version }}.spdx.json
+          SBOM: ${{ runner.temp }}/reviewed-image/sbom.spdx.json
         run: |
           image_ref="$IMAGE@$DIGEST"
           cosign sign --yes "$image_ref"

@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals'
-import { Transaction } from '@bsv/sdk'
+import { Beef, Transaction, type CreateActionArgs } from '@bsv/sdk'
 import { OneColor } from '@bsv/templates'
 import { maybeDecryptMetadata, WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
 import { ColorPlan } from '../ColorPlan.js'
@@ -60,6 +60,13 @@ describe('color module registered on a WalletPermissionsManager', () => {
     )
 
     const recipient = (await tokenPayment(wallet, new FakeWallet(), assetId, 120n)).tx.outputs[0]
+    // The base wallet requires every input's source transaction in inputBEEF, as wallet-toolbox does.
+    const received: CreateActionArgs[] = []
+    const createAction = wallet.createAction.bind(wallet)
+    wallet.createAction = async args => {
+      received.push(args)
+      return await createAction(args)
+    }
     const sent = await manager.createAction(
       {
         description: 'Send tokens',
@@ -87,6 +94,14 @@ describe('color module registered on a WalletPermissionsManager', () => {
     const tx = Transaction.fromAtomicBEEF(sent.tx!)
     expect(sent.signableTransaction).toBeUndefined()
     expect(validInput(tx, 0)).toBe(true)
+    // The module supplied the selected input's transaction, with its source, and nothing else.
+    expect(received).toHaveLength(1)
+    expect(received[0].inputs?.map(input => input.outpoint)).toEqual([`${receipt.id('hex')}.0`])
+    expect(
+      Beef.fromBinary(received[0].inputBEEF!)
+        .txs.map(beefTx => beefTx.txid)
+        .sort()
+    ).toEqual([receipt.id('hex'), receipt.inputs[0].sourceTransaction!.id('hex')].sort())
     expect(tx.outputs.map(output => OneColor.decode(output.lockingScript).amount)).toEqual([
       120n,
       180n

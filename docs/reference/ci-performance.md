@@ -456,14 +456,29 @@ mutants take under two minutes; 358 `brc52-envelope` mutants took fifteen), so
 the estimate is the target's measured seconds in
 `governance/mutation-testing/durations.json`. A target never measured uses a
 deliberately pessimistic one second per code line. A file whose share of the
-estimate exceeds one 240-second part is cut inside at top-level declaration
-lines (`function`, `class`, `const`, `export …` at column zero) that are unique
-line prefixes, balanced by code lines; a mutant cannot span two top-level
-statements. Whole files and file segments are then grouped heaviest first into
-the estimate over 240 seconds parts. Explicit plans, including hand-placed line
-cuts, keep priority. Today only `color-permission` splits automatically, into
-eight parts; the exhaustiveness replay covers every target that executes in
-parts, so an automatic cut that dropped or duplicated a mutant fails CI.
+estimate exceeds one 180-second part is cut inside at top-level declaration
+lines (`function`, `class`, `const`, `export …` at column zero), or at member
+declarations of a top-level class (methods, constructor and accessors at the
+two-space Prettier indent), that are unique line prefixes, balanced by code
+lines; a mutant cannot span two top-level statements or two class members, and
+a two-space line inside a function, method, string, template, or comment is
+never a cut. Whole files and file segments are then grouped heaviest first into
+the estimate over 180 seconds parts. Explicit plans, including hand-placed line
+cuts, keep priority. Today `color-permission` splits automatically into twelve
+parts and `reorg-stream` into two; the exhaustiveness replay covers every target
+that executes in parts, so an automatic cut that dropped or duplicated a mutant
+fails CI.
+
+In release run
+[39845676503](https://github.com/bsv-blockchain/ts-stack/actions/runs/39845676503)
+the slowest `color-permission` part held the whole `strictJson.ts` `Parser`
+class and ran 7m37s. With class member cuts and a 240-second part the slowest
+part was the head of `identifiers.ts` at 6m48s
+([39917134050](https://github.com/bsv-blockchain/ts-stack/actions/runs/39917134050)).
+The part target is now 180 seconds: estimated from that run's per-part times,
+the slowest of twelve parts takes about 4m40s, below the hand-planned
+`webrtpay-codes/sdp` (5m17s). An extra part costs only its own setup now that
+every part starts at once.
 
 ### Stop-on-kill Jest environment
 
@@ -506,5 +521,16 @@ Fork benchmark, same runners, about six concurrent jobs, every gate passing:
 | Partitions + stop-on-kill | 17m01s | 6m10s `sdk-auth-http/core`  | 105m48s         |
 
 Partitions alone were slower there because long parts queued behind short ones,
-which longest-first ordering addresses. With twenty slots the campaign is bounded
-by its longest part or total part time divided by twenty.
+which longest-first ordering addresses.
+
+The full campaign has since grown to about 70 parts. `mutation-tests.yml` now
+allows 100 parallel parts, so the whole campaign starts at once and its longest
+part bounds wall time; total runner time is unchanged. The canonical global
+gates that merge each partitioned target's parts ran two at a time and added
+about three minutes after the last part; they now all start together. The PR
+diagnostic campaign in `ci.yml` keeps its 6-part limit.
+
+| Campaign (org runners)                              | Parts | Global gates | Full campaign |
+| --------------------------------------------------- | ----- | ------------ | ------------- |
+| Release run 39845676503 (20 parts, 2 gates at once) | 7m42s | 3m30s        | 13m24s        |
+| Dispatch 39917134050 (all parts at once, 2 gates)   | 6m48s | 2m54s        | 11m48s        |

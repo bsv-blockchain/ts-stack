@@ -51,6 +51,14 @@ position above `INT32_MAX`. Operands of eight bytes or fewer are unchanged and
 no API, wire or wallet-data migration is required. This candidate is not
 publication.
 
+The 4.0.0 source candidate refuses a one-level Merkle proof whose only leaf
+is not at offset 0. A block of one transaction contains only its coinbase, at
+index 0, so any other offset is a missing sibling. Parsing, construction, and
+root computation throw `Missing hash for index <offset> at height 0`, and
+`combine()` leaves the receiver unchanged when the merged root differs.
+Offset 0, including `fromCoinbaseTxidAndHeight`, is unchanged. This candidate
+is not publication.
+
 For `RegistryClient` and optional ProtoMap, BasketMap and CertMap descriptions,
 see [registry metadata](../../guides/registry-metadata.md). It covers exact
 lookups, BRC-based inclusion requests, publisher choice and the boundary between
@@ -557,3 +565,13 @@ applies; SDK2 consumers need an additive backport or that migration. Serialized
 wallet results do not carry local authority. The fee fix does not change signup
 persistence or interrupted-funding reconciliation. See the package README and
 [release and migration ledger](../../reference/package-api-migrations.md).
+
+## Existing certificate compatibility
+
+The source candidate restores bounded historical types through existing BRC-100
+listing, proof, discovery and relinquishment APIs; SDK verification and BRC-103
+requests retain the original type. New signing and acquisition require exactly
+32 decoded bytes. Legacy binary use needs upgraded adapters on both ends.
+Listing and proof need no storage protocol or schema change; servers enforcing
+strict relinquishment must upgrade their SDK reference validator. See the
+[wire profile and rollout contract](https://github.com/bsv-blockchain/ts-stack/blob/main/specs/wallet/legacy-certificate-wire.md).

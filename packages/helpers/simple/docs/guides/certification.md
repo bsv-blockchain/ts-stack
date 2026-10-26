@@ -44,10 +44,13 @@ New issuance always uses a canonical 32-byte type. For migration tooling,
 `certifier.getCertificateTypeMigration()` returns the exact canonical/legacy
 mapping for this instance.
 
-Do not pass a short legacy identifier to current SDK wallet methods or expose
-it from a remote service: current `WalletInterface` validation rejects short
-types. Export legacy records with the storage version that created them,
-authenticate them offline, and reissue/import a canonical replacement.
+The SDK 4.0.0 compatibility candidate permits bounded historical types in
+existing listing, proof and relinquishment calls, while signing/acquisition and
+remote issuance metadata remain strictly 32 bytes. Legacy binary use requires
+upgraded app and wallet adapters; storage servers must upgrade their SDK for
+legacy relinquishment. Older SDKs may reject these references. Do not hash,
+pad or rewrite an existing signed type. See the repository protocol contract
+at `specs/wallet/legacy-certificate-wire.md`.
 
 ## Issuing a Certificate
 

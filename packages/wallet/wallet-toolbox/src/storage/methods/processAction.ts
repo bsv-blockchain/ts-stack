@@ -460,9 +460,11 @@ async function validateNoSendExpiryRelease (
   if (!params.isNoSend || params.isSendWith) {
     throw new WERR_INVALID_OPERATION('BRC-177 protected actions must remain noSend and cannot use sendWith')
   }
-  if (transaction.noSendExpiryState !== 'unsigned' || transaction.noSendExpiryReclaimRawTx == null) {
+  const never = transaction.noSendExpiryMode === 'never'
+  if (transaction.noSendExpiryState !== 'unsigned' || (!never && transaction.noSendExpiryReclaimRawTx == null)) {
     throw new WERR_INVALID_OPERATION('BRC-177 protected action is not armed for signature release')
   }
+  if (never) return
   const deadline = verifyInteger(transaction.noSendExpiryDeadline)
   const expired =
     transaction.noSendExpiryMode === 'blockheight'
@@ -629,12 +631,14 @@ async function commitNewTxToStorage (
       if (current.noSendExpiryState !== 'unsigned') {
         throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
       }
-      const deadline = verifyInteger(current.noSendExpiryDeadline)
-      const expired =
-        current.noSendExpiryMode === 'blockheight'
-          ? observedBlockheight == null || observedBlockheight >= deadline
-          : Math.floor(Date.now() / 1000) >= deadline
-      if (expired) throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
+      if (current.noSendExpiryMode !== 'never') {
+        const deadline = verifyInteger(current.noSendExpiryDeadline)
+        const expired =
+          current.noSendExpiryMode === 'blockheight'
+            ? observedBlockheight == null || observedBlockheight >= deadline
+            : Math.floor(Date.now() / 1000) >= deadline
+        if (expired) throw new WERR_INVALID_OPERATION('BRC-177 protected action expired before signature release')
+      }
       if (!(await storage.compareAndSetNoSendExpiryState(current.transactionId, 'unsigned', 'signed', trx))) {
         throw new WERR_INVALID_OPERATION('BRC-177 protected action changed before signature release')
       }
