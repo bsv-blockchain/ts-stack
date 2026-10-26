@@ -341,3 +341,55 @@ describe('errors raised while the backend starts', () => {
     expect(reported.map(error => error.message)).toEqual(['live delivery was refused'])
   })
 })
+
+describe('TransportService construction and unheard faults', () => {
+  it('builds a MessageBox transport from a bare client', async () => {
+    const client = {
+      sendMessage: vi.fn(async () => ({ status: 'success', messageId: 'm1' })),
+      listMessages: vi.fn(async () => []),
+      acknowledgeMessage: vi.fn(async () => {})
+    }
+    const service = await TransportService.open(
+      client as unknown as Parameters<typeof TransportService.messageBox>[0]
+    )
+
+    await service.send(BOB, mls(1))
+
+    expect(client.sendMessage).toHaveBeenCalledTimes(1)
+    await service.close()
+  })
+
+  it('builds an in-process transport for one identity', async () => {
+    const hub = new InProcessTransportHub()
+    const received: number[] = []
+    const bob = await TransportService.open(TransportService.inProcess(hub, BOB))
+    bob.onMessage((_from, payload) => {
+      received.push(markerOf(payload)!)
+    })
+
+    await hub.endpoint(ALICE).send(BOB, mls(7))
+
+    expect(received).toEqual([7])
+    await bob.close()
+  })
+
+  it('rethrows a handler fault on a fresh task when nobody listens for errors', async () => {
+    const scheduled: Array<() => void> = []
+    vi.stubGlobal('queueMicrotask', (task: () => void) => scheduled.push(task))
+    try {
+      const backend = fakeBackend()
+      const service = await TransportService.open(backend)
+      const boom = new Error('boom')
+      service.onMessage(() => {
+        throw boom
+      })
+
+      await expect(backend.deliver(ALICE, mls(1))).rejects.toThrow(DeliveryFailed)
+
+      expect(scheduled).toHaveLength(1)
+      expect(() => scheduled[0]?.()).toThrow(boom)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})

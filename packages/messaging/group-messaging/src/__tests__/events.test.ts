@@ -76,4 +76,20 @@ describe('Emitter', () => {
 
     expect(listener).not.toHaveBeenCalled()
   })
+  it('rethrows a listener error on a fresh task when no handler was supplied', () => {
+    const scheduled: Array<() => void> = []
+    vi.stubGlobal('queueMicrotask', (task: () => void) => scheduled.push(task))
+    try {
+      const emitter = new Emitter<TestEvents>()
+      const boom = new Error('boom')
+      emitter.on('ping', () => {
+        throw boom
+      })
+      expect(() => emitter.emit('ping', { n: 1 })).not.toThrow()
+      expect(scheduled).toHaveLength(1)
+      expect(() => scheduled[0]?.()).toThrow(boom)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

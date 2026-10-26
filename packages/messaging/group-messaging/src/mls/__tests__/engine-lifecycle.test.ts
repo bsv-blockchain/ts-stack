@@ -148,3 +148,28 @@ describe('MlsEngine group lifecycle', () => {
     ).rejects.toThrow(GroupMessagingError)
   })
 })
+
+describe('MlsEngine membership guards', () => {
+  it('refuses to add nobody or remove nobody', async () => {
+    const alice = await newEngine()
+    const minted = await alice.createKeyPackage()
+    const { state } = await alice.createGroup({
+      keyPackage: minted.keyPackage,
+      privateKeyPackage: minted.privateKeyPackage
+    })
+
+    await expect(alice.addMembers({ state, keyPackages: [] })).rejects.toThrow(
+      new GroupMessagingError('addMembers needs at least one KeyPackage')
+    )
+    await expect(alice.removeMembers({ state, identityKeys: [] })).rejects.toThrow(
+      new GroupMessagingError('removeMembers needs at least one identity')
+    )
+  })
+
+  it('rejects, rather than throws, when asked to read corrupt state', async () => {
+    const alice = await newEngine()
+    const reading = alice.info(new Uint8Array([0xff, 0x00, 0x01]))
+    expect(reading).toBeInstanceOf(Promise)
+    await expect(reading).rejects.toThrow()
+  })
+})

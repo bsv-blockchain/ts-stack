@@ -1,6 +1,10 @@
 import 'fake-indexeddb/auto'
-import { describe, expect, it } from 'vitest'
-import { IndexedDbStorageBackend, openDatabase } from '../backends/indexeddb.js'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  IndexedDbStorageBackend,
+  IndexedDbUnavailableError,
+  openDatabase
+} from '../backends/indexeddb.js'
 
 /**
  * A write must not claim persistence before its transaction commits.
@@ -156,5 +160,31 @@ describe('IndexedDbStorageBackend durability', () => {
     const reopened = new IndexedDbStorageBackend(second)
     expect(await reopened.get('groups', 'g1')).toEqual(new Uint8Array([9, 9]))
     await reopened.close()
+  })
+})
+
+describe('IndexedDB backend edges', () => {
+  it('reports a missing IndexedDB as its own error', async () => {
+    vi.stubGlobal('indexedDB', undefined)
+    try {
+      await expect(openDatabase('absent')).rejects.toThrow(IndexedDbUnavailableError)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('reads an ArrayBuffer back as bytes and refuses a value that is not binary', async () => {
+    const database = await openDatabase('durability-raw-values')
+    const raw = database.transaction('groups', 'readwrite')
+    raw.objectStore('groups').put(new Uint8Array([4, 5]).buffer, 'buffer')
+    raw.objectStore('groups').put('text', 'text')
+    await new Promise(resolve => {
+      raw.oncomplete = resolve
+    })
+
+    const backend = new IndexedDbStorageBackend(database)
+    expect(await backend.get('groups', 'buffer')).toEqual(new Uint8Array([4, 5]))
+    await expect(backend.get('groups', 'text')).rejects.toThrow('Stored value is not binary')
+    await backend.close()
   })
 })

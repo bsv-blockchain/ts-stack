@@ -423,3 +423,69 @@ describe('two clients over one database', () => {
     await bob.close()
   })
 })
+
+describe('GroupMessagingClient.joinFromWelcome refusals', () => {
+  const privateKeyPackage = new Uint8Array([1]) as Parameters<
+    GroupMessagingClient['joinFromWelcome']
+  >[0]['privateKeyPackage']
+  const welcomeInvite = {
+    inviteId: 'i1',
+    direction: 'inbound' as const,
+    kind: 'welcome' as const,
+    peer: PrivateKey.fromRandom().toPublicKey().toString(),
+    requestId: 'r1',
+    welcome: '00',
+    ref: 'aa',
+    receivedAt: new Date(0).toISOString()
+  }
+
+  const refusal = async (
+    seed: (client: GroupMessagingClient) => Promise<void>,
+    message: RegExp
+  ): Promise<void> => {
+    const client = await openClient('memory')
+    await seed(client)
+    await expect(
+      client.joinFromWelcome({ inviteId: 'i1', chatId: 'c1', privateKeyPackage })
+    ).rejects.toThrow(message)
+    await client.close()
+  }
+
+  it('refuses an invite it does not hold', async () => {
+    await refusal(async () => {}, /No invite i1/)
+  })
+
+  it('refuses an invite that carries no Welcome', async () => {
+    await refusal(
+      async client => client.storage.putInvite({ ...welcomeInvite, kind: 'keyPackageRequest' }),
+      /carries no Welcome/
+    )
+  })
+
+  it('refuses a Welcome that matched none of its stored KeyPackages', async () => {
+    const { ref: _ref, ...unmatched } = welcomeInvite
+    await refusal(async client => client.storage.putInvite(unmatched), /names no stored KeyPackage/)
+  })
+
+  it('refuses a Welcome whose KeyPackage is no longer stored', async () => {
+    await refusal(
+      async client => client.storage.putInvite(welcomeInvite),
+      /No stored KeyPackage aa/
+    )
+  })
+
+  it('refuses to join into a chat ID already in use', async () => {
+    await refusal(async client => {
+      await client.storage.putInvite(welcomeInvite)
+      await client.storage.putKeyPackage(
+        'aa',
+        new Uint8Array([2]) as Parameters<typeof client.storage.putKeyPackage>[1]
+      )
+      await client.storage.putChat({
+        chatId: 'c1',
+        mlsGroupId: 'bb',
+        createdAt: new Date(0).toISOString()
+      })
+    }, /Chat c1 already exists/)
+  })
+})

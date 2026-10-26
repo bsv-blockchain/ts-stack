@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DeliveryFailed,
+  EpochMismatchError,
   GroupMessagingError,
   isPermanent,
-  PermanentProcessingError
+  NotImplementedError,
+  PermanentProcessingError,
+  UnknownGroupError
 } from '../errors.js'
 
 describe('PermanentProcessingError', () => {
@@ -91,5 +94,26 @@ describe('isPermanent', () => {
 
     expect(() => isPermanent(new HostileAggregate('hostile'))).not.toThrow()
     expect(isPermanent(new HostileAggregate('hostile'))).toBe(false)
+  })
+})
+
+describe('named errors', () => {
+  it('describe what failed and stay GroupMessagingErrors', () => {
+    const notImplemented = new NotImplementedError('Removal')
+    expect(notImplemented.name).toBe('NotImplementedError')
+    expect(notImplemented.message).toBe('Removal is not implemented yet')
+
+    const unknown = new UnknownGroupError('g1')
+    expect(unknown.name).toBe('UnknownGroupError')
+    expect(unknown.message).toBe('No local state for group g1')
+
+    const epoch = new EpochMismatchError('g1', 3n, 5n)
+    expect(epoch.name).toBe('EpochMismatchError')
+    expect([epoch.groupId, epoch.expected, epoch.received]).toEqual(['g1', 3n, 5n])
+    expect(epoch.message).toBe('Group g1 is at epoch 3, message is for epoch 5')
+
+    for (const error of [notImplemented, unknown, epoch]) {
+      expect(error).toBeInstanceOf(GroupMessagingError)
+    }
   })
 })
