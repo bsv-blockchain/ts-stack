@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec2.0.0.html).
 
+## Legacy certificate compatibility (4.0.0 candidate)
+
+- Restore existing certificate listing, discovery, proof, relinquishment, signature
+  verification and BRC-103 requests for canonical Base64 types of 1–128 bytes.
+  New signing and both acquisition protocols still require exactly 32 bytes.
+- Add an opt-in binary substrate profile with sentinel type slots and phantom
+  certificate metadata; original signed objects and ordinary encodings remain
+  unchanged. Binary HTTP includes a dedicated internal capability endpoint and
+  explicit missing-route probe fallback; wallet routers must register the new
+  transport route. Both adapters must upgrade for legacy binary use. No new BRC-100
+  app API or storage schema/RPC is required; strict remote relinquishment servers
+  must upgrade their SDK reference validator.
+- Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier
+  signing/JSON paths. Those types never reliably round-tripped through the old
+  fixed-width binary parser. This profile restores their use without reissuance.
+
 ## Table of Contents
 
 - [Unreleased](#unreleased)
@@ -213,6 +229,41 @@ All notable changes to this project will be documented in this file. The format 
 - [Template for New Releases](#template-for-new-releases)
 
 ## [Unreleased]
+
+### Performance (4.0.0 candidate)
+
+- Bound the windowed point-multiplication table cache. Every distinct public
+  key verified added a table that was never released (about 3 KiB per key);
+  the generator's tables are kept and other points share a 64-entry
+  least-recently-used cache.
+- `PrivateKey.toPublicKey()` caches its result, so P2PKH signing and key
+  derivation no longer recompute k·G per call. The cache checks a SHA-256
+  fingerprint of the key's current value, never a copy of the secret; each
+  call still returns an independent `PublicKey`, and an in-place change to
+  the key recomputes it. `KeyDeriver` reuses its `anyone` public key.
+- `toArray` from a `Uint8Array`, hex decoding to `number[]`, `Writer.toArray`,
+  `Transaction.toBEEF`/`fromHexBEEF`, `Beef.toBinary` and `Beef.mergeBeef(Beef)`
+  convert bytes with a presized loop instead of `Array.from` or a growing
+  `number[]` writer. Output bytes are unchanged.
+- Adds `benchmarks/key-cache-bench.js` and `benchmarks/beef-conversion-bench.js`.
+
+### Fixed (4.0.0 candidate)
+
+- `MerklePath` refuses a one-level proof whose only leaf is not at offset 0.
+  A block of one transaction contains only its coinbase, at index 0, so any
+  other offset is a missing sibling. `fromHex`, the constructor (including
+  deferred root validation), and root computation throw
+  `Missing hash for index <offset> at height 0`. `combine()` recomputes the
+  merged root and leaves the receiver unchanged when that root differs from
+  the paths it merged. Offset 0, including `fromCoinbaseTxidAndHeight`, is
+  unchanged. Valid proofs need no migration. Fixes #1083.
+
+- `verifyNonce` returns `false` when the wallet rejects an HMAC mismatch
+  (`ERR_INVALID_HMAC`, or an error whose message is exactly `HMAC is not valid`)
+  instead of propagating that rejection. `Peer` can then raise its own
+  unverifiable-nonce error, and an authentication server can answer 401 so
+  `AuthFetch` drops the stale session and re-handshakes (issue #1086).
+  Other wallet failures still reject. No API, wire, or wallet-data migration.
 
 ### Overlay topic and lookup service names (4.0.0 candidate)
 

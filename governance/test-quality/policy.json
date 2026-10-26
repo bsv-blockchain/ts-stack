@@ -1387,7 +1387,7 @@
       "policy": "wallet-operator",
       "pathPrefix": "packages/wallet/wallet-toolbox/",
       "suffix": ".man.test.ts",
-      "expectedFiles": 29
+      "expectedFiles": 30
     },
     {
       "policy": "wallet-public-live",

@@ -14,6 +14,11 @@ describe('BRC-177 noSend expiry labels', () => {
     expect(hasBrc177NoSendExpiryLabel([label])).toBe(true)
   })
 
+  test('parses never, which carries no value', () => {
+    const label = 'p nosend expiry never'
+    expect(parseBrc177NoSendExpiryLabels([label])).toEqual({ label, mode: 'never', value: null })
+  })
+
   test('ignores labels outside the reserved module', () => {
     expect(parseBrc177NoSendExpiryLabels(undefined)).toBeUndefined()
     expect(parseBrc177NoSendExpiryLabels(['application label'])).toBeUndefined()
@@ -30,6 +35,9 @@ describe('BRC-177 noSend expiry labels', () => {
     'p nosend expiry seconds 1 ',
     'p nosend expiry seconds',
     'p nosend expiry minutes 1',
+    'p nosend expiry never 0',
+    'p nosend expiry never ',
+    'p nosend expiry Never',
     'p nosend unsupported payload',
     `p nosend expiry timestamp ${Number.MAX_SAFE_INTEGER + 1}`
   ])('rejects non-canonical or unsupported label %s', label => {

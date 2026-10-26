@@ -351,7 +351,7 @@ const userPlan = {
 export function walletCoverageMatrix() {
   return {
     include: [
-      ...[1, 2, 3, 4].map(shard => ({ id: `shard-${shard}`, shard })),
+      ...[1, 2, 3, 4, 5, 6].map(shard => ({ id: `shard-${shard}`, shard })),
       ...[0, 1000].map(latency => ({ id: `sync-http-${latency}`, latency })),
       ...composedNativeCohorts.map(cohort => ({
         id: `native-${cohort.id}`,

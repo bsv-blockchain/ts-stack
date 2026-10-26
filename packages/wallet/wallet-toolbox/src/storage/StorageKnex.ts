@@ -3612,6 +3612,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return this.validateEntities(r, undefined, ['notified', 'wasBroadcast'])
   }
 
+  override async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const [row] = await this.toDb()('proven_txs').min('height as minimum')
+    return row.minimum == null ? undefined : Number(row.minimum)
+  }
+
   override async findProvenTxs(args: FindProvenTxsArgs): Promise<TableProvenTx[]> {
     const q = this.findProvenTxsQuery(args)
     // Writable exact-proof lookups are read/modify/write authority checks.

@@ -787,7 +787,30 @@ describe('ExpressTransport hardening', () => {
       'ERR_INTERNAL_SERVER_ERROR',
       'Authentication processing failed.'
     ],
-    ['session invalid', 401, 'ERR_AUTH_FAILED', 'Authentication failed.']
+    ['session invalid', 401, 'ERR_AUTH_FAILED', 'Authentication failed.'],
+    [
+      new Error('Unable to verify nonce for general message from: peer'),
+      401,
+      'ERR_AUTH_FAILED',
+      'Authentication failed.'
+    ],
+    [new Error('HMAC is not valid'), 401, 'ERR_AUTH_FAILED', 'Authentication failed.'],
+    [
+      Object.assign(new Error('rejected'), { code: 'ERR_INVALID_HMAC' }),
+      401,
+      'ERR_AUTH_FAILED',
+      'Authentication failed.'
+    ],
+    [
+      new Proxy(new Error('descriptor access denied'), {
+        getOwnPropertyDescriptor() {
+          throw new Error('descriptor access denied')
+        }
+      }),
+      500,
+      'ERR_INTERNAL_SERVER_ERROR',
+      'Authentication processing failed.'
+    ]
   ])(
     'maps peer processing failures to stable public errors',
     async (error, status, code, description) => {

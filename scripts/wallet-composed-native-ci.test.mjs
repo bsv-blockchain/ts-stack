@@ -75,23 +75,24 @@ test('routing preserves all21 original cases including both identical completed 
   const originalMatrix = matrix.filter(
     value =>
       !['journal-field', 'archive-native-cache'].includes(value.native_pair_cohort) &&
+      ![5, 6].includes(value.shard) &&
       !value.native_read_cohort &&
       !value.native_user_cohort &&
       !value.native_integrity_cohort
   )
   assert.equal(originalMatrix.length, 56)
   assert.equal(new Set(originalMatrix.map(value => value.id)).size, 56)
-  assert.equal(matrix.length, 73)
-  assert.equal(new Set(matrix.map(value => value.id)).size, 73)
+  assert.equal(matrix.length, 75)
+  assert.equal(new Set(matrix.map(value => value.id)).size, 75)
   assert.equal(
     createHash('sha256')
-      .update(JSON.stringify(matrix.slice(0, 58)))
+      .update(JSON.stringify(matrix.filter(value => ![5, 6].includes(value.shard)).slice(0, 58)))
       .digest('hex'),
     'f78766b20998647f31b51293092c6804d860cf71d509faee0a0067eb0d70848d'
   )
   assert.deepEqual(
     matrix.filter(value => value.shard).map(value => value.shard),
-    [1, 2, 3, 4]
+    [1, 2, 3, 4, 5, 6]
   )
   assert.deepEqual(
     matrix.filter(value => value.latency !== undefined).map(value => value.latency),
@@ -620,12 +621,12 @@ test('all39 original integrity comparisons retain names, multiplicities and disj
   const matrix = walletCoverageMatrix().include
   assert.equal(
     createHash('sha256')
-      .update(JSON.stringify(matrix.slice(0, 67)))
+      .update(JSON.stringify(matrix.filter(value => ![5, 6].includes(value.shard)).slice(0, 67)))
       .digest('hex'),
     'dd62fabe497f3c76ffb5a660c477eb11ce2980d8a93ffbf9aa2ff8380392be6a'
   )
   assert.deepEqual(
-    matrix.slice(67).map(value => value.native_integrity_cohort),
+    matrix.slice(69).map(value => value.native_integrity_cohort),
     nativeRouting.nativeIntegrityCohorts.map(cohort => cohort.id)
   )
 })

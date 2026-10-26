@@ -29,7 +29,12 @@ test('prebuilt package scripts remove only an exact leading standard build comma
 
 test('prebuilt package script arguments require one named script', () => {
   assert.deepEqual(parseArguments(['--script', 'test:coverage']), {
-    scriptName: 'test:coverage'
+    scriptName: 'test:coverage',
+    ifPresent: false
+  })
+  assert.deepEqual(parseArguments(['--if-present', '--script', 'pack:check']), {
+    scriptName: 'pack:check',
+    ifPresent: true
   })
   assert.throws(() => parseArguments([]), /--script is required/)
   assert.throws(() => parseArguments(['--package', 'example']), /Unknown argument/)
@@ -50,6 +55,11 @@ test('prebuilt package script resolution reads the current package manifest', as
       command: 'jest --coverage'
     })
     await assert.rejects(() => resolvePackageScript(directory, 'test:browser'), /does not define/)
+    // --if-present skips only a missing script, never an empty one.
+    assert.equal(
+      await resolvePackageScript(directory, 'test:browser', { ifPresent: true }),
+      undefined
+    )
   } finally {
     await rm(directory, { recursive: true })
   }

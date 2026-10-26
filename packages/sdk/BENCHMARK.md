@@ -1,10 +1,11 @@
 # Performance benchmarks — `@bsv/sdk`
 
-The SDK has twelve dependency-free Node benchmark programs under
-`benchmarks/`. They exercise atomic BEEF, BigNumber arithmetic and
-serialization, elliptic-curve scalar/signature work, hashing, large wallet
-payloads, readers/writers, script deletion and serialization, symmetric
-encryption, transaction operations, and the end-to-end transaction pipeline.
+The SDK has fourteen dependency-free Node benchmark programs under
+`benchmarks/`. They exercise atomic BEEF, legacy and byte BEEF conversions,
+BigNumber arithmetic and serialization, elliptic-curve scalar/signature work,
+public-key reuse and verifier memory, hashing, large wallet payloads,
+readers/writers, script deletion and serialization, symmetric encryption,
+transaction operations, and the end-to-end transaction pipeline.
 
 Build the ESM artifact before running a benchmark:
 

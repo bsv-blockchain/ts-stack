@@ -175,6 +175,19 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.1
+
+- The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
+  what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
+  invalid, revoked or expired key, before it reads the transaction. Previously a refused
+  key was recorded as a transaction rejection, so a mistyped or revoked `arcadeApiKey`
+  marked broadcasts `invalid` and failed their transactions. The wallet now fails over
+  or keeps the transaction queued for retry, and the history note says whether the
+  configured key was refused or the endpoint requires one. No configuration or consumer
+  migration is required.
+
+## wallet-toolbox 2.15.0
+
 ## 2.15.0 candidate — bounded sync and portable recovery
 
 - Integrate current main892 interrupted WAB registration continuity. An optional durable checkpoint saver retains the encrypted unpublished UMP token before funding; retries keep the same root and verify an already internalized faucet payment. Existing published tokens and backup identity/network contracts remain. No required consumer migration; use the new callback for cross-process pending registration recovery. Full combined system qualification remains pending.
@@ -283,6 +296,35 @@ require their operational authorization after complete artifact validation.
 
 ### Additional public-main 2.15.0 changes
 
+- `GoChaintracksServiceClient` accepts Go orphan-hash reorg announcements as well
+  as the existing TypeScript shape. Orphan headers are resolved sequentially under
+  one event deadline and validated before Monitor receives the ordered list.
+  Adds `streamErrorCount` and optional bounded `onStreamError` diagnostics.
+  Rejected events do not discard following complete events in the same chunk.
+  No listener, schema or consumer migration is required.
+
+- `TaskReorg` rechecks the latest 12 heights after each processed tip without
+  requiring reorg events. It persists unresolved recovery ranges before remote
+  work and retries them once per minute, including after restart and after
+  a height leaves the recent window. It also journals the gap observed after
+  monitor downtime. `recentDepth = 0` disables this recovery.
+- The lagged proof audit leaves an empty wallet uncheckpointed, starts at the
+  minimum stored proof height, repairs legacy empty-prefix checkpoints, and
+  retains bounded fair retries even if the tip retreats. Its compact recovery
+  state fits the monitor-event limit, independently of diagnostic size.
+- IndexedDB monitor history honors descending reads. IndexedDB automatically
+  upgrades to version 7 with a nonunique `proven_txs.height` index so bootstrap
+  does not deserialize proof blobs. Close older database connections before
+  upgrading and retain a backup; there is no SQL schema or manual data rewrite.
+
+- With the compatibility SDK, existing certificate references accept bounded
+  historical types through the normal BRC-100 APIs. Storage listing and proof
+  retain their existing queries; relinquishment inherits the updated SDK
+  reference validator on both manager and provider. Upgrade the remote storage
+  SDK for legacy relinquishment. No records, signatures or schemas are rewritten,
+  and new signing/acquisition remain strict at 32 bytes.
+
+
 - Adds a `regtest` `Chain` for Teranode regression-network deployments
   (go-chaincfg `RegressionNetParams`). `genesisHeader('regtest')` returns the
   canonical regtest genesis header; `ChaintracksServiceClient` and
@@ -306,6 +348,15 @@ require their operational authorization after complete artifact validation.
   sending it to a relative URL, which a browser resolves against the page's
   origin. `Services.hashToHeader` no longer falls back to WhatsOnChain on those
   networks, so their headers come only from ChainTracks.
+- BRC-177 `p nosend expiry never` is supported. The anchor funds the protected
+  action without a reclaim allowance, no reclaim transaction is built or
+  armed, and the action has no deadline, so the monitor never reclaims it. An
+  unreleased `never` action can still be aborted; aborting a released one, in
+  any later state, fails because its payment is permanently sent. Released
+  `never` actions are left out of the expiry lifecycle scan, and storage
+  `createAction` refuses caller-supplied BRC-177 metadata. `Brc177NoSendExpiryMode` gains
+  `never`, `Brc177NoSendExpiry.value` is `null` for it, and the activation
+  result's `deadline` is `null`.
 - `WalletPermissionsManager` passes `signAction` through the permission modules
   that handled the action's `createAction`, both for a caller's `signAction`
   and for the signing step of a one-call `createAction`. Modules receive it via

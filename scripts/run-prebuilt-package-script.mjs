@@ -21,20 +21,30 @@ export function stripLeadingBuildCommand(script) {
 
 export function parseArguments(arguments_) {
   let scriptName = ''
+  let ifPresent = false
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]
+    if (argument === '--if-present') {
+      ifPresent = true
+      continue
+    }
     if (argument !== '--script') throw new Error(`Unknown argument: ${argument}`)
     scriptName = arguments_[index + 1] ?? ''
     index += 1
   }
   if (scriptName === '') throw new Error('--script is required')
-  return { scriptName }
+  return { scriptName, ifPresent }
 }
 
-export async function resolvePackageScript(packageDirectory, scriptName) {
+export async function resolvePackageScript(
+  packageDirectory,
+  scriptName,
+  { ifPresent = false } = {}
+) {
   const manifestPath = path.join(packageDirectory, 'package.json')
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   const script = manifest.scripts?.[scriptName]
+  if (ifPresent && script === undefined) return undefined
   if (typeof script !== 'string' || script === '') {
     throw new Error(`${manifest.name ?? manifestPath} does not define ${scriptName}`)
   }
@@ -71,9 +81,10 @@ async function main(arguments_) {
       'PREBUILT_PACKAGE_OUTPUTS=1 is required; use the package script directly outside audited CI'
     )
   }
-  const { scriptName } = parseArguments(arguments_)
+  const { scriptName, ifPresent } = parseArguments(arguments_)
   const packageDirectory = process.cwd()
-  const resolved = await resolvePackageScript(packageDirectory, scriptName)
+  const resolved = await resolvePackageScript(packageDirectory, scriptName, { ifPresent })
+  if (resolved === undefined) return
   console.log(`Running prebuilt ${resolved.name} ${scriptName}: ${resolved.command}`)
   await runCommand(resolved.command, packageDirectory)
 }

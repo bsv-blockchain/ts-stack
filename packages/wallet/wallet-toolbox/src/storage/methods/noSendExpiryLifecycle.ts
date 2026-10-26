@@ -940,7 +940,10 @@ async function processPage(
   context: LifecycleContext,
   result: NoSendExpiryLifecycleResult
 ): Promise<void> {
-  const selected = await activeTransactionsOnPage(storage, page)
+  const selected = await activeTransactionsOnPage(
+    storage,
+    page.filter(transaction => transaction.noSendExpiryMode !== 'never')
+  )
   result.inspected += selected.length
   const writes = new Map<number, LifecycleWrite>()
   const profiles = new Map<number, StorageActiveWrite>()

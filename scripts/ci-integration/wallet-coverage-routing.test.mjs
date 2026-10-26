@@ -14,7 +14,7 @@ import { selectedMutationPartition } from '../mutation-partitions.mjs'
 test('actual scope Bash routes every affected wallet to complete coverage exactly once', async () => {
   const { parse } = await import('yaml')
   const workflow = parse(readFileSync(join(REPOSITORY_ROOT, '.github/workflows/ci.yml'), 'utf8'))
-  const script = workflow.jobs.prepare.steps.find(step => step.id === 'scope').run
+  const script = workflow.jobs.scope.steps.find(step => step.id === 'lanes').run
   const wallet = {
     name: '@bsv/wallet-toolbox',
     path: join(REPOSITORY_ROOT, 'packages/wallet/wallet-toolbox')
@@ -33,6 +33,15 @@ test('actual scope Bash routes every affected wallet to complete coverage exactl
       copyFileSync(
         join(REPOSITORY_ROOT, 'scripts/run-ci-tests.mjs'),
         join(directory, 'scripts/run-ci-tests.mjs')
+      )
+      copyFileSync(
+        join(REPOSITORY_ROOT, 'scripts/ci-shard-plan.mjs'),
+        join(directory, 'scripts/ci-shard-plan.mjs')
+      )
+      mkdirSync(join(directory, 'governance'))
+      copyFileSync(
+        join(REPOSITORY_ROOT, 'governance/ci-lane-durations.json'),
+        join(directory, 'governance/ci-lane-durations.json')
       )
       const output = join(directory, 'output')
       const summary = join(directory, 'summary')
@@ -172,7 +181,13 @@ test('the complete browser inventory runs serially inside original shard-4 with 
   assert.notEqual(job['continue-on-error'], true)
   const hash = value => createHash('sha256').update(value).digest('hex')
   assert.equal(
-    hash(JSON.stringify(walletCoverageMatrix().include.slice(0, 67))),
+    hash(
+      JSON.stringify(
+        walletCoverageMatrix()
+          .include.filter(value => ![5, 6].includes(value.shard))
+          .slice(0, 67)
+      )
+    ),
     'dd62fabe497f3c76ffb5a660c477eb11ce2980d8a93ffbf9aa2ff8380392be6a'
   )
   const browser = job.steps.find(step =>
@@ -342,7 +357,9 @@ test('native integrity routing removes only its original fullfile and requires t
           NATIVE_READ_COHORT: '',
           NATIVE_USER_COHORT: '',
           NATIVE_INTEGRITY_COHORT: lane.native_integrity_cohort,
-          GITHUB_WORKSPACE: REPOSITORY_ROOT
+          GITHUB_WORKSPACE: REPOSITORY_ROOT,
+          JEST_SHARD_LANE: 'wallet-toolbox-coverage',
+          JEST_SHARD_DURATIONS: join(REPOSITORY_ROOT, 'governance/ci-lane-durations.json')
         }
       }
     )
@@ -416,7 +433,17 @@ test('all original retained suites remain in actual ordinary or receipt-gated br
         '--json',
         '--watchman=false'
       ],
-      { cwd: wallet, encoding: 'utf8', timeout: 15000, maxBuffer: 4194304 }
+      {
+        cwd: wallet,
+        encoding: 'utf8',
+        timeout: 15000,
+        maxBuffer: 4194304,
+        env: {
+          ...process.env,
+          JEST_SHARD_LANE: 'wallet-toolbox-coverage',
+          JEST_SHARD_DURATIONS: join(REPOSITORY_ROOT, 'governance/ci-lane-durations.json')
+        }
+      }
     )
     assert.equal(result.status, 0, result.stderr)
     return JSON.parse(result.stdout).map(file => file.replaceAll('\\', '/'))
@@ -435,7 +462,7 @@ test('all original retained suites remain in actual ordinary or receipt-gated br
   const dispatch = ordinary.run
     .split('pnpm --filter @bsv/wallet-toolbox exec jest')[0]
     .replaceAll('${{ matrix.id }}', 'discovery')
-  for (const shard of [1, 2, 3, 4]) {
+  for (const shard of [1, 2, 3, 4, 5, 6]) {
     const result = spawnSync(
       '/bin/bash',
       ['-e', '-c', dispatch + '\nprintf "%s\\0" "${args[@]}"'],
@@ -455,14 +482,16 @@ test('all original retained suites remain in actual ordinary or receipt-gated br
           NATIVE_USER_COHORT: '',
           NATIVE_INTEGRITY_COHORT: '',
           POSTGRES_PASSWORD: 'synthetic-discovery-only',
-          GITHUB_WORKSPACE: REPOSITORY_ROOT
+          GITHUB_WORKSPACE: REPOSITORY_ROOT,
+          JEST_SHARD_LANE: 'wallet-toolbox-coverage',
+          JEST_SHARD_DURATIONS: join(REPOSITORY_ROOT, 'governance/ci-lane-durations.json')
         }
       }
     )
     assert.equal(result.status, 0, result.stderr)
     const args = result.stdout.split('\0').filter(Boolean)
     assert.ok(args.every(value => !value.startsWith('--testNamePattern')))
-    assert.ok(args.includes(`--shard=${shard}/4`))
+    assert.ok(args.includes(`--shard=${shard}/6`))
     ordinaryFiles.push(...discover(args))
   }
   const browserFiles = walletBrowserSuites.map(suite => join(REPOSITORY_ROOT, suite.file))

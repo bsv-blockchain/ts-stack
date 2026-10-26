@@ -6,6 +6,14 @@ All notable changes to this package are documented here. The format is based on
 
 ## 0.2.2
 
+- Publishes the already merged React Native answerer compatibility fix: reliable channels
+  may report unlimited retransmission/lifetime limits as `-1` or `65535`, as well as DOM
+  `null`. Ordering and the remaining protocol checks are preserved.
+- Repairs the missing provenance on the earlier 0.2.1 registry artifact by preparing this
+  patch for the protected trusted-publisher workflow. Publication and attestation remain
+  gated on that workflow's successful qualification; no verifier requirement is waived.
+- No consumer migration is required. Exports, dependency ranges and relay behavior remain.
+
 ### Fixed
 
 - The offer expiry timer rechecks the whole-second deadline encoded in the offer

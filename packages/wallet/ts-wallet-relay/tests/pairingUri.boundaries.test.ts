@@ -119,6 +119,31 @@ describe('pairing URI route and field boundaries', () => {
       url.searchParams.set('origin', 'http://wallet.example.org')
     })
     expect(parsePairingUri(invalidOrigin).error).toMatch(/HTTPS/)
+    for (const origin of [
+      'http://192.168.1.1.example.com',
+      'http://192.168.1.20.nip.io:3000',
+      'http://printer.local',
+      'http://172.32.0.1',
+      'http://100.64.0.1',
+      'http://169.254.169.254',
+      'http://[::ffff:192.168.1.1]',
+      'http://[fe80::1]'
+    ]) {
+      const tricky = editValidUri(url => {
+        url.searchParams.set('origin', origin)
+      })
+      expect(parsePairingUri(tricky).error).toBe(
+        'origin must be HTTPS, except for loopback development'
+      )
+      expect(parsePairingUri(tricky, undefined, { allowLocalNetworkHttp: true }).error).toBe(
+        'origin must be HTTPS, except for loopback or local-network development'
+      )
+    }
+    const lan = editValidUri(url => {
+      url.searchParams.set('origin', 'http://192.168.1.20:3000')
+    })
+    expect(parsePairingUri(lan).error).toBe('origin must be HTTPS, except for loopback development')
+    expect(parsePairingUri(lan, undefined, { allowLocalNetworkHttp: true }).error).toBeNull()
 
     const uri = buildValidUri()
     jest.spyOn(validation, 'normalizeHttpOrigin').mockImplementationOnce(() => {
