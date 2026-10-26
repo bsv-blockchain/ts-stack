@@ -30,7 +30,11 @@ import { createAuthMiddleware } from '@bsv/auth-express-middleware'
 import { rateLimit } from 'express-rate-limit'
 import { setupSwagger } from './swagger.js'
 import { bindMessageBoxRuntime } from './runtimeDeps.js'
-import { registerMessageBoxPreAuthRoutes, registerMessageBoxPostAuthRoutes } from './compose.js'
+import {
+  createLiveDelivery,
+  registerMessageBoxPreAuthRoutes,
+  registerMessageBoxPostAuthRoutes
+} from './compose.js'
 import * as crypto from 'node:crypto'
 import { configureTrustProxy, rateLimitOptions } from './security/rateLimitPolicy.js'
 import {
@@ -96,6 +100,9 @@ if (authSessionTtlMs === -1) {
   throw new Error('MESSAGE_BOX_AUTH_SESSION_TTL_MS must be finite')
 }
 export const sessionManager = new KnexSessionManager(knex, { ttlMs: authSessionTtlMs })
+/** Shared with index.ts so HTTP sends reach the sockets it attaches. */
+export const liveDelivery = createLiveDelivery()
+
 export const paymentReplayStore = new KnexPaymentReplayStore(
   knex,
   readResourceLimit('MESSAGE_BOX', 'PAYMENT_REPLAY_TTL_DAYS', 365)
@@ -240,7 +247,8 @@ export async function useRoutes(): Promise<void> {
       knex,
       wallet: _wallet,
       calculateRequestPrice: calculateConfiguredRequestPrice,
-      paymentReplayStore
+      paymentReplayStore,
+      liveDelivery
     },
     ROUTING_PREFIX
   )
