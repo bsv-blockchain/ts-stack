@@ -651,10 +651,9 @@ export class MessageBoxTransport implements TransportBackend {
     // which is the contract the client itself keeps.
     const last = this.#lastStatus
     if (
-      last !== undefined &&
-      last.phase === status.phase &&
-      last.source === status.source &&
-      last.detail === status.detail
+      last?.phase === status.phase &&
+      last?.source === status.source &&
+      last?.detail === status.detail
     ) {
       return
     }
