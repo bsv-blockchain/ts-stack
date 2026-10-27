@@ -273,11 +273,12 @@ class PollingSource implements MessageBoxSource {
     this.#arm()
   }
 
-  async start(deliver: (messages: InboxMessage[]) => Promise<void>): Promise<void> {
-    if (this.#deliver !== undefined) return
+  start(deliver: (messages: InboxMessage[]) => Promise<void>): Promise<void> {
+    if (this.#deliver !== undefined) return Promise.resolve()
     this.#stopped = false
     this.#deliver = deliver
     this.#arm()
+    return Promise.resolve()
   }
 
   /**

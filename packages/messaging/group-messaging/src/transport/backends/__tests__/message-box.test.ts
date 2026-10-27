@@ -393,7 +393,7 @@ describe('MessageBoxTransport', () => {
     await transport.start()
     await vi.advanceTimersByTimeAsync(1000)
 
-    expect(client.listed.length).toBe(listedAtClose + 1)
+    expect(client.listed).toHaveLength(listedAtClose + 1)
     await transport.close()
   })
 
@@ -1174,10 +1174,10 @@ describe('MessageBoxTransport backs off when the relay refuses it', () => {
     let seen = 0
     for (const wait of waits) {
       await vi.advanceTimersByTimeAsync(wait - 1)
-      expect(errors.length).toBe(seen)
+      expect(errors).toHaveLength(seen)
       await vi.advanceTimersByTimeAsync(1)
       seen += 1
-      expect(errors.length).toBe(seen)
+      expect(errors).toHaveLength(seen)
     }
 
     await transport.close()
@@ -1199,7 +1199,7 @@ describe('MessageBoxTransport backs off when the relay refuses it', () => {
 
     for (let tick = 1; tick <= 6; tick++) {
       await vi.advanceTimersByTimeAsync(1000)
-      expect(client.listed.length).toBe(tick)
+      expect(client.listed).toHaveLength(tick)
     }
     expect(errors.length).toBeGreaterThan(0)
 
@@ -1220,12 +1220,12 @@ describe('MessageBoxTransport backs off when the relay refuses it', () => {
     await transport.start()
 
     await vi.advanceTimersByTimeAsync(120_000)
-    expect(client.listed.length).toBe(1)
+    expect(client.listed).toHaveLength(1)
     // The ceiling is 60s, well under this host's floor; the floor wins.
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(client.listed.length).toBe(1)
+    expect(client.listed).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(60_000)
-    expect(client.listed.length).toBe(2)
+    expect(client.listed).toHaveLength(2)
 
     await transport.close()
   })
@@ -1250,12 +1250,12 @@ describe('MessageBoxTransport backs off when the relay refuses it', () => {
 
     fail = false
     await vi.advanceTimersByTimeAsync(8000)
-    expect(client.listed.length).toBe(backedOff + 1)
+    expect(client.listed).toHaveLength(backedOff + 1)
     // Back at the floor: one call per 1000ms window.
     await vi.advanceTimersByTimeAsync(1000)
-    expect(client.listed.length).toBe(backedOff + 2)
+    expect(client.listed).toHaveLength(backedOff + 2)
     await vi.advanceTimersByTimeAsync(1000)
-    expect(client.listed.length).toBe(backedOff + 3)
+    expect(client.listed).toHaveLength(backedOff + 3)
 
     await transport.close()
   })
@@ -1281,9 +1281,9 @@ describe('MessageBoxTransport follows the client it was given', () => {
 
     // A configured interval's worth of silence buys nothing while live.
     await vi.advanceTimersByTimeAsync(1000)
-    expect(client.listed.length).toBe(settled)
+    expect(client.listed).toHaveLength(settled)
     await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-    expect(client.listed.length).toBe(settled + 1)
+    expect(client.listed).toHaveLength(settled + 1)
 
     await transport.close()
   })
@@ -1302,9 +1302,9 @@ describe('MessageBoxTransport follows the client it was given', () => {
     // so the poll is the only thing that will carry it.
     client.reportLive('reconnecting')
     await vi.advanceTimersByTimeAsync(1000)
-    expect(client.listed.length).toBe(settled + 1)
+    expect(client.listed).toHaveLength(settled + 1)
     await vi.advanceTimersByTimeAsync(1000)
-    expect(client.listed.length).toBe(settled + 2)
+    expect(client.listed).toHaveLength(settled + 2)
 
     await transport.close()
   })
@@ -1365,7 +1365,7 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await vi.advanceTimersByTimeAsync(10_000)
 
     expect(client.statusListeners.size).toBe(0)
-    expect(client.listed.length).toBe(settled)
+    expect(client.listed).toHaveLength(settled)
   })
 
   it('never relaxes the poll for a client too old to report anything', async () => {
@@ -1386,9 +1386,86 @@ describe('MessageBoxTransport follows the client it was given', () => {
     // relaxed: it runs at the interval the host asked for, exactly as it would
     // with no socket at all.
     await vi.advanceTimersByTimeAsync(1000)
-    expect((bare['listed'] as unknown[]).length).toBe(settled + 1)
+    expect(bare['listed'] as unknown[]).toHaveLength(settled + 1)
     await vi.advanceTimersByTimeAsync(1000)
-    expect((bare['listed'] as unknown[]).length).toBe(settled + 2)
+    expect(bare['listed'] as unknown[]).toHaveLength(settled + 2)
+
+    await transport.close()
+  })
+})
+
+/**
+ * Edges the relay and the host can reach but the happy path never does. Each
+ * one is a decision this backend already makes; none of them had a test.
+ */
+describe('MessageBoxTransport edges the relay can reach', () => {
+  it('orders a batch the relay timestamped unparseably, without losing any of it', async () => {
+    const client = fakeClient()
+    client.inbox.push(
+      {
+        messageId: 'm1',
+        sender: '02aa',
+        body: encodeBody(Uint8Array.from([1])),
+        created_at: 'not a date'
+      },
+      {
+        messageId: 'm2',
+        sender: '02aa',
+        body: encodeBody(Uint8Array.from([2])),
+        created_at: 'not a date'
+      },
+      {
+        messageId: 'm3',
+        sender: '02aa',
+        body: encodeBody(Uint8Array.from([3])),
+        created_at: '2026-01-01T00:00:00Z'
+      }
+    )
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onError(() => undefined)
+    const seen: string[] = []
+    transport.onMessage((_from, payload) => {
+      seen.push(String(payload[0]))
+    })
+    await transport.start()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(seen).toHaveLength(3)
+    expect(new Set(seen)).toEqual(new Set(['1', '2', '3']))
+
+    await transport.close()
+  })
+
+  it('reports a handler that threw something that is not an Error', async () => {
+    const client = fakeClient()
+    client.inbox.push({ messageId: 'm1', sender: '02aa', body: encodeBody(Uint8Array.from([1])) })
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000, maxAttempts: 1 })
+    const errors: Error[] = []
+    transport.onError(error => errors.push(error))
+    transport.onMessage(() => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw 'a string, as a careless handler might'
+    })
+    await transport.start()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(errors.length).toBeGreaterThanOrEqual(1)
+    expect(errors.every(error => error instanceof Error)).toBe(true)
+    expect(errors.some(error => error.message.includes('careless handler'))).toBe(true)
+
+    await transport.close()
+  })
+
+  it('ignores a second start, so the box is read on one cadence', async () => {
+    const client = fakeClient()
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    await transport.start()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(client.listed).toHaveLength(1)
 
     await transport.close()
   })
