@@ -1368,7 +1368,7 @@ describe('MessageBoxTransport follows the client it was given', () => {
     expect(client.listed.length).toBe(settled)
   })
 
-  it('still runs when the client is too old to report anything', async () => {
+  it('never relaxes the poll for a client too old to report anything', async () => {
     const client = fakeLiveClient()
     const bare: Record<string, unknown> = { ...client }
     delete bare['onLiveStatus']
@@ -1382,11 +1382,13 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.start()
     const settled = (bare['listed'] as unknown[]).length
 
-    // No report to go on: the socket is trusted and the poll stays a backstop.
+    // Nothing will say when the socket stops carrying, so the poll is never
+    // relaxed: it runs at the interval the host asked for, exactly as it would
+    // with no socket at all.
     await vi.advanceTimersByTimeAsync(1000)
-    expect((bare['listed'] as unknown[]).length).toBe(settled)
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
     expect((bare['listed'] as unknown[]).length).toBe(settled + 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect((bare['listed'] as unknown[]).length).toBe(settled + 2)
 
     await transport.close()
   })

@@ -1,5 +1,5 @@
-import { eachInOrder } from '../../inOrder.js'
 import { DeliveryFailed, GroupMessagingError, isPermanent } from '../../errors.js'
+import { eachInOrder } from '../../inOrder.js'
 import type { IdentityKey, Unsubscribe, WirePayload } from '../../types.js'
 import type { TransportBackend } from '../backend.js'
 import { decodeBody, encodeBody, UnparsableBodyError } from './message-box-body.js'
@@ -538,9 +538,17 @@ export class MessageBoxTransport implements TransportBackend {
     }
     // Polling keeps running underneath a live socket, just slower: the socket
     // is never a sole source, so the poll is what makes the gap recoverable.
+    //
+    // Relaxing it is only safe against a client that says when the socket stops
+    // carrying — this backend no longer judges that for itself. A client too
+    // old to report one leaves the poll at the interval the host asked for,
+    // which is what it would run at with no socket at all.
     this.#pollIntervalMs = pollIntervalMs
+    const reports = typeof client.onLiveStatus === 'function'
     this.#backstopIntervalMs =
-      live === undefined ? pollIntervalMs : Math.max(pollIntervalMs, LIVE_BACKSTOP_INTERVAL_MS)
+      live === undefined || !reports
+        ? pollIntervalMs
+        : Math.max(pollIntervalMs, LIVE_BACKSTOP_INTERVAL_MS)
     this.#poll = new PollingSource(client, this.messageBox, this.#backstopIntervalMs, error =>
       this.#report(error)
     )
