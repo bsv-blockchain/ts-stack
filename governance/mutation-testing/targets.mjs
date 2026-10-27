@@ -2693,7 +2693,8 @@ export function buildMutationTargets(repositoryRoot) {
           'this.#wallet = wallet'
         ],
         ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
-        ['src/auth/Peer.ts', 'const outbound =', '} catch (error: unknown)'],
+        ['src/auth/Peer.ts', 'function sameBytes(', '/**'],
+        ['src/auth/Peer.ts', 'const unchanged = sameBytes(', '} catch (error: unknown)'],
         [
           'src/auth/Peer.ts',
           'message = snapshotAuthMessage(message,',

@@ -21,9 +21,10 @@ and after:
 - The received message's shape check no longer re-reads payload and signature
   arrays that the snapshot has just verified as bytes.
 - Which inputs are accepted or rejected, the error messages, the byte limits
-  and the message sent are unchanged. The one exception is a wallet that
-  replaces a payload element with a getter returning the same byte, which
-  `toPeer` no longer rejects.
+  and the message sent are unchanged. The exception is a wallet that installs a
+  getter on the array it was asked to sign: the comparison reads it once, so a
+  getter returning the original byte lets the checked bytes be sent instead of
+  the array being rejected, and a getter that throws surfaces its own error.
 
 Reproduce with `node benchmarks/auth-peer-bench.js`.
 

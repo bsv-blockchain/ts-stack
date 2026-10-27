@@ -34,6 +34,15 @@ const AUTH_VERSION = '0.1'
 const INITIAL_RESPONSE_TIMEOUT_MS = 30_000
 const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis as any).Buffer
 
+/** Whether `value` is an array holding exactly the elements of `bytes`, with no holes. */
+function sameBytes(value: unknown, bytes: number[]): boolean {
+  if (!Array.isArray(value) || value.length !== bytes.length) return false
+  for (let index = 0; index < bytes.length; index++) {
+    if (!Object.hasOwn(value, index) || !Object.is(value[index], bytes[index])) return false
+  }
+  return true
+}
+
 /**
  * Represents a peer capable of performing mutual authentication.
  * Manages sessions, handles authentication handshakes, certificate requests and responses,
@@ -45,15 +54,6 @@ const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis a
  * claimed identity. BRC-103 does not encrypt the transport; callers must add
  * confidentiality and authorize the authenticated identity separately.
  */
-/** Whether `value` is an array holding exactly the elements of `bytes`, with no holes. */
-function sameBytes(value: unknown, bytes: number[]): boolean {
-  if (!Array.isArray(value) || value.length !== bytes.length) return false
-  for (let index = 0; index < bytes.length; index++) {
-    if (!Object.hasOwn(value, index) || !Object.is(value[index], bytes[index])) return false
-  }
-  return true
-}
-
 export class Peer {
   // Declared as the synchronous {@link SessionManager} for back-compat with
   // pre-existing consumers that read `peer.sessionManager.getSession(...)`

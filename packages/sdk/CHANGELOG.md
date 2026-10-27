@@ -296,9 +296,10 @@ replay, payment authorization, wire change or consumer migration is introduced.
   the receiver no longer re-reads payload and signature bytes its snapshot has
   just checked (1 MiB round trip 212 → 159 ms). Accepted and rejected inputs,
   errors, limits and the message sent are unchanged, including when a wallet
-  changes the `data` array it was asked to sign. The one exception: a wallet
-  that replaces a payload element with a getter returning the same byte no
-  longer makes `toPeer` throw.
+  changes the `data` array it was asked to sign. The exception is a wallet that
+  installs a getter on that array: `toPeer` now reads the getter once instead
+  of rejecting the array, so a getter returning the original byte lets the
+  checked bytes be sent, and a getter that throws surfaces its own error.
 - The global overlay host reputation tracker is created on first use, so
   importing the SDK no longer reads `localStorage`. Node's `ExperimentalWarning`
   about `localStorage` now appears only when a `LookupResolver` is first used.
