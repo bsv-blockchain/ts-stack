@@ -10,10 +10,11 @@ import { encodeBody } from '../message-box-body.js'
 import {
   DEFAULT_MESSAGE_BOX,
   LIVE_BACKSTOP_INTERVAL_MS,
-  LIVE_DEAF_STRIKES,
-  LIVE_MAX_RESUBSCRIBES,
   MAX_REMEMBERED_MESSAGES,
-  MessageBoxTransport
+  MessageBoxTransport,
+  type ClientLiveState,
+  type ClientLiveStatus,
+  type LiveStatus
 } from '../message-box.js'
 
 /**
@@ -349,6 +350,92 @@ describe('MessageBoxTransport', () => {
     expect(listed.mock.calls).toHaveLength(afterFirst)
   })
 
+  it('does not start a tick while the previous one is still running', async () => {
+    const client = fakeClient()
+    let release = (): void => undefined
+    const slow = new Promise<void>(resolve => {
+      release = () => resolve()
+    })
+    const original = client.listMessages.bind(client)
+    let calls = 0
+    client.listMessages = async args => {
+      calls += 1
+      if (calls === 1) await slow
+      return original(args)
+    }
+
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(calls).toBe(1)
+    // Four windows pass while the first call is still in flight.
+    await vi.advanceTimersByTimeAsync(4000)
+    expect(calls).toBe(1)
+
+    release()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(calls).toBe(2)
+
+    await transport.close()
+  })
+
+  it('polls again when started after a close', async () => {
+    const client = fakeClient()
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onMessage(async () => {})
+    await transport.start()
+    await vi.advanceTimersByTimeAsync(1000)
+    await transport.close()
+    const listedAtClose = client.listed.length
+
+    await transport.start()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(client.listed.length).toBe(listedAtClose + 1)
+    await transport.close()
+  })
+
+  it('runs no further poll once closed, even if a tick was in flight', async () => {
+    // The only path that reaches `#arm()` after close: a tick already running
+    // whose `finally` re-arms once it settles. Closing with nothing in flight
+    // proves nothing — the cleared timer covers that on its own.
+    const client = fakeClient()
+    let release = (): void => undefined
+    const slow = new Promise<void>(resolve => {
+      release = () => resolve()
+    })
+    const original = client.listMessages.bind(client)
+    let calls = 0
+    client.listMessages = async args => {
+      calls += 1
+      if (calls === 1) await slow
+      return original(args)
+    }
+
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(calls).toBe(1)
+
+    // `close()` waits for the in-flight tick, so do not await it yet.
+    const closing = transport.close()
+    release()
+    await closing
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(calls).toBe(1)
+    // The guard's real job. `#arm()` runs from the in-flight tick's `finally`,
+    // which is after `close()` has set `#stopped` — without the guard it arms a
+    // timer whose tick returns early and arms another, forever. No poll is
+    // visible because `#deliver` is cleared, so a poll count cannot see it; a
+    // pending timer can.
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('reports a failed poll without stopping the timer', async () => {
     const client = fakeClient()
     const transport = new MessageBoxTransport(client)
@@ -362,7 +449,8 @@ describe('MessageBoxTransport', () => {
     expect(errors.map(error => error.message)).toEqual(['401'])
 
     client.inbox.push({ messageId: 'm1', sender: '02aa', body: encodeBody(Uint8Array.from([1])) })
-    await vi.advanceTimersByTimeAsync(5000)
+    // The failed tick doubled the wait to 10000; the timer keeps running, just slower.
+    await vi.advanceTimersByTimeAsync(10_000)
     expect(client.acked).toEqual(['m1'])
   })
 
@@ -452,7 +540,8 @@ describe('MessageBoxTransport failure policy', () => {
     await transport.start()
 
     await vi.advanceTimersByTimeAsync(5000)
-    await vi.advanceTimersByTimeAsync(5000)
+    // The failed acknowledgement doubled the wait to 10000 before the retry.
+    await vi.advanceTimersByTimeAsync(10_000)
 
     expect(delivered).toBe(1)
     expect(client.acked).toEqual(['m1'])
@@ -646,6 +735,9 @@ describe('GroupMessagingClient.close over MessageBox', () => {
   })
 })
 
+/** The identity the transports under test read for. */
+const ME = `02${'ee'.repeat(32)}`
+
 /** One message as the live socket hands it over. */
 interface LivePush {
   messageId: string
@@ -662,7 +754,41 @@ interface LivePush {
 const fakeLiveClient = () => ({
   ...fakeClient(),
   calls: [] as string[],
+  /**
+   * What a self-addressed live send does. The relay stores it in the box and,
+   * for a socket that works, pushes it too; the live probe kept with this
+   * package's demo application saw both. `'box'` is a deaf socket: the
+   * message is filed and nothing is pushed.
+   */
+  echo: 'box' as 'none' | 'box' | 'both',
+  liveSent: [] as Array<{ recipient: string; messageBox: string; body: string }>,
+  async sendLiveMessage(args: { recipient: string; messageBox: string; body: string }) {
+    this.liveSent.push(args)
+    if (this.echo === 'none' || args.recipient !== ME) return {}
+    const messageId = `live-${this.liveSent.length}`
+    this.inbox.push({ messageId, sender: ME, body: args.body })
+    if (this.echo === 'both') {
+      this.listener?.({
+        messageId,
+        sender: ME,
+        body: tryParse(args.body),
+        created_at: arrivalOf(0)
+      })
+    }
+    return {}
+  },
   listener: undefined as undefined | ((message: LivePush) => void),
+  statusListeners: new Set<(status: ClientLiveStatus) => void>(),
+  onLiveStatus(listener: (status: ClientLiveStatus) => void) {
+    this.statusListeners.add(listener)
+    return () => {
+      this.statusListeners.delete(listener)
+    }
+  },
+  /** Say what the socket is doing, the way the real client would. */
+  reportLive(state: ClientLiveState, rooms: readonly string[] = []) {
+    for (const listener of this.statusListeners) listener({ state, rooms })
+  },
   async initializeConnection() {
     this.calls.push('initializeConnection')
   },
@@ -717,6 +843,33 @@ describe('MessageBoxTransport live delivery', () => {
 
     await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS - 5000)
     expect(client.listed).toHaveLength(1)
+  })
+
+  it('goes back to the backstop cadence when a restart brings the socket up', async () => {
+    const client = fakeLiveClient()
+    const transport = new MessageBoxTransport(client, { live: true, pollIntervalMs: 5000 })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+
+    // Abandoning drops the poll to its configured rate, because the socket is
+    // no longer carrying. That cadence must not outlive the socket's return.
+    const initialize = client.initializeConnection.bind(client)
+    client.initializeConnection = async () => {
+      throw new Error('down')
+    }
+    await transport.start()
+    await transport.close()
+
+    client.initializeConnection = initialize.bind(client)
+    await transport.start()
+
+    client.listed.length = 0
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(client.listed).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS - 5000)
+    expect(client.listed).toHaveLength(1)
+
+    await transport.close()
   })
 
   it('leaves the room before disconnecting, so the stale room bookkeeping clears', async () => {
@@ -775,246 +928,8 @@ describe('MessageBoxTransport live delivery', () => {
   })
 })
 
-describe('MessageBoxTransport notices a deaf socket', () => {
-  const inboxMessage = (id: string, byte: number) => ({
-    messageId: id,
-    sender: '02aa',
-    body: encodeBody(Uint8Array.from([byte]))
-  })
-
-  it('delivers a message once when the socket pushes it twice', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true })
-    const seen: string[] = []
-    transport.onMessage(async from => {
-      seen.push(from)
-    })
-    await transport.start()
-
-    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
-    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(seen).toEqual(['02aa'])
-  })
-
-  it('re-subscribes once two backstop polls in a row carry what the socket did not', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true })
-    transport.onMessage(async () => {})
-    await transport.start()
-    client.calls.length = 0
-
-    client.inbox.push(inboxMessage('m1', 1))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-    expect(client.calls).toEqual([])
-
-    client.inbox.push(inboxMessage('m2', 2))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    expect(client.calls).toEqual([
-      'leaveRoom',
-      'disconnectWebSocket',
-      'initializeConnection',
-      'listenForLiveMessages'
-    ])
-  })
-
-  it('forgets a strike as soon as the socket delivers something', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true })
-    transport.onMessage(async () => {})
-    await transport.start()
-    client.calls.length = 0
-
-    client.inbox.push(inboxMessage('m1', 1))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    client.push({ messageId: 'm2', sender: '02aa', payload: Uint8Array.from([2]) })
-    await vi.advanceTimersByTimeAsync(1)
-
-    client.inbox.push(inboxMessage('m3', 3))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    expect(client.calls).toEqual([])
-  })
-
-  it('gives up on live delivery, and speeds the poll back up, once reconnecting stops helping', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true, pollIntervalMs: 5000 })
-    const errors: Error[] = []
-    transport.onError(error => errors.push(error))
-    transport.onMessage(async () => {})
-    await transport.start()
-
-    // Every backstop window is carried by the poll, so every reconnect fails to help.
-    let id = 0
-    const deafWindows = LIVE_DEAF_STRIKES * (LIVE_MAX_RESUBSCRIBES + 1)
-    for (let window = 0; window < deafWindows; window++) {
-      client.inbox.push(inboxMessage(`m${(id += 1)}`, 1))
-      await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-    }
-
-    expect(errors.map(error => error.name)).toContain('LiveDeliveryUnavailable')
-    expect(client.calls).toContain('disconnectWebSocket')
-
-    // Live is gone, so the poll carries everything at its own interval again.
-    client.calls.length = 0
-    const listedBefore = client.listed.length
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(client.listed.length).toBeGreaterThan(listedBefore)
-  })
-})
-
-describe('MessageBoxTransport recovery does not strand delivery', () => {
-  const inboxMessage = (id: string, byte: number) => ({
-    messageId: id,
-    sender: '02aa',
-    body: encodeBody(Uint8Array.from([byte]))
-  })
-
-  /**
-   * Abandoning live delivery happens inside the delivery chain, and a push that
-   * arrived mid-batch is queued behind it. Waiting for that push to drain
-   * before tearing down would be a cycle: the wait cannot finish until the
-   * batch does, and the batch cannot finish until the wait does.
-   */
-  it('keeps delivering when a push lands during the batch that abandons live', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true, pollIntervalMs: 5000 })
-    const errors: Error[] = []
-    transport.onError(error => errors.push(error))
-
-    let gateArmed = false
-    let release: (() => void) | undefined
-    const seen: string[] = []
-    transport.onMessage(async (_from, payload) => {
-      seen.push(String(payload[0]))
-      if (!gateArmed) return
-      gateArmed = false
-      client.push({ messageId: 'live-1', sender: '02aa', payload: Uint8Array.from([9]) })
-      await new Promise<void>(resolve => {
-        release = resolve
-      })
-    })
-    await transport.start()
-
-    const windows = LIVE_DEAF_STRIKES * (LIVE_MAX_RESUBSCRIBES + 1)
-    for (let window = 0; window < windows; window += 1) {
-      if (window === windows - 1) gateArmed = true
-      client.inbox.push(inboxMessage(`m${window}`, 1))
-      const advancing = vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-      if (window === windows - 1) {
-        await vi.advanceTimersByTimeAsync(0)
-        release?.()
-      }
-      await advancing
-    }
-
-    expect(errors.map(error => error.name)).toContain('LiveDeliveryUnavailable')
-
-    // The chain must still run: a later poll delivers, and close resolves.
-    client.inbox.push(inboxMessage('after', 7))
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(seen).toContain('7')
-
-    const closed = await Promise.race([
-      transport.close().then(() => 'closed'),
-      vi.advanceTimersByTimeAsync(10_000).then(() => 'hung')
-    ])
-    expect(closed).toBe('closed')
-  })
-
-  /**
-   * The upstream client clears `this.socket` on a disconnect but not its
-   * `joinedRooms`, and `leaveRoom` refuses to clear the entry once the socket
-   * is gone. Rejoining then silently never happens.
-   */
-  it('clears stale room bookkeeping when leaveRoom cannot', async () => {
-    const client = fakeLiveClient()
-    const rooms = new Set<string>()
-    const withRooms = Object.assign(client, {
-      getJoinedRooms: () => rooms,
-      async listenForLiveMessages(args: {
-        messageBox: string
-        onMessage: (message: LivePush) => void
-      }) {
-        client.calls.push('listenForLiveMessages')
-        // The real joinRoom refuses to rejoin a room it thinks it is in.
-        if (rooms.has(`02aa-${args.messageBox}`)) return
-        rooms.add(`02aa-${args.messageBox}`)
-        client.listener = args.onMessage
-      },
-      async leaveRoom(_messageBox: string) {
-        client.calls.push('leaveRoom')
-        // Socket already gone: the real one warns and returns, clearing nothing.
-      }
-    })
-    const transport = new MessageBoxTransport(withRooms, { live: true })
-    transport.onMessage(async () => {})
-    await transport.start()
-    expect(rooms.size).toBe(1)
-
-    client.inbox.push(inboxMessage('m1', 1))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-    client.inbox.push(inboxMessage('m2', 2))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    // The reconnect must have actually rejoined, not re-registered into nothing.
-    expect(client.listener).toBeDefined()
-    expect(rooms.size).toBe(1)
-  })
-
-  it('credits the socket for a delivery even when the poll already carried it', async () => {
-    const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { live: true })
-    transport.onMessage(async () => {})
-    await transport.start()
-    client.calls.length = 0
-
-    client.inbox.push(inboxMessage('m1', 1))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    // The socket delivers the same id the poll just won the race for. It is
-    // proof the socket works, even though the message is already seen.
-    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
-    await vi.advanceTimersByTimeAsync(1)
-
-    client.inbox.push(inboxMessage('m2', 2))
-    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
-
-    expect(client.calls).toEqual([])
-  })
-
-  it('drops the socket it opened when live delivery cannot start', async () => {
-    const client = fakeLiveClient()
-    const failing = Object.assign(client, {
-      async listenForLiveMessages() {
-        client.calls.push('listenForLiveMessages')
-        throw new Error('auth timed out')
-      }
-    })
-    const transport = new MessageBoxTransport(failing, { live: true })
-    const errors: Error[] = []
-    transport.onError(error => errors.push(error))
-    transport.onMessage(async () => {})
-
-    await transport.start()
-
-    expect(errors.map(error => error.name)).toContain('LiveDeliveryUnavailable')
-    expect(client.calls).toContain('disconnectWebSocket')
-  })
-})
-
 describe('MessageBoxTransport live sending and status', () => {
-  const liveSendingClient = () =>
-    Object.assign(fakeLiveClient(), {
-      liveSent: [] as Array<{ recipient: string; messageBox: string; body: string }>,
-      async sendLiveMessage(args: { recipient: string; messageBox: string; body: string }) {
-        this.liveSent.push(args)
-        return {}
-      }
-    })
+  const liveSendingClient = fakeLiveClient
 
   it('sends over the socket while live delivery is carrying', async () => {
     const client = liveSendingClient()
@@ -1027,27 +942,33 @@ describe('MessageBoxTransport live sending and status', () => {
     expect(client.sent).toHaveLength(0)
   })
 
-  it('goes back to HTTP once live delivery is abandoned', async () => {
+  it('sends over the socket again after a close taken while the socket was dormant', async () => {
     const client = liveSendingClient()
-    const transport = new MessageBoxTransport(client, { live: true })
+    const transport = new MessageBoxTransport(client, {
+      pollIntervalMs: 1000,
+      live: true
+    })
+    transport.onError(() => undefined)
     transport.onMessage(async () => {})
-    transport.onError(() => {})
-    await transport.start()
 
-    const windows = LIVE_DEAF_STRIKES * (LIVE_MAX_RESUBSCRIBES + 1)
-    for (let window = 0; window < windows; window += 1) {
-      client.inbox.push({
-        messageId: `m${window}`,
-        sender: '02aa',
-        body: encodeBody(Uint8Array.from([1]))
-      })
-      await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
+    const initialize = client.initializeConnection.bind(client)
+    client.initializeConnection = async () => {
+      throw new Error('down')
     }
+    await transport.start()
+    await transport.close()
 
+    // The restart is carrying again, so sending must go back to the socket. An
+    // HTTP `sendMessage` files the message without broadcasting it, so a stale
+    // dormant flag leaves the recipient's own live subscriber pushed nothing.
+    client.initializeConnection = initialize.bind(client)
+    await transport.start()
     await transport.send('02bb', Uint8Array.from([7]))
 
-    expect(client.liveSent).toHaveLength(0)
-    expect(client.sent).toHaveLength(1)
+    expect(client.liveSent).toHaveLength(1)
+    expect(client.sent).toHaveLength(0)
+
+    await transport.close()
   })
 
   it('stays on HTTP when live was never asked for', async () => {
@@ -1227,5 +1148,246 @@ describe('a storage write that fails', () => {
     )
 
     await groupMessagingClient.close()
+  })
+})
+
+describe('MessageBoxTransport backs off when the relay refuses it', () => {
+  const inboxMessage = (id: string, byte: number) => ({
+    messageId: id,
+    sender: '02aa',
+    body: encodeBody(Uint8Array.from([byte]))
+  })
+
+  it('backs the poll off when the relay refuses it, and stops at the ceiling', async () => {
+    const client = fakeClient()
+    client.listMessages = async () => {
+      throw new Error('429 Too Many Requests')
+    }
+    const errors: Error[] = []
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onError(error => errors.push(error))
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    // 1000 -> 2000 -> 4000 … each failure doubles the wait before the next try.
+    const waits = [1000, 2000, 4000, 8000, 16_000, 32_000, 60_000, 60_000]
+    let seen = 0
+    for (const wait of waits) {
+      await vi.advanceTimersByTimeAsync(wait - 1)
+      expect(errors.length).toBe(seen)
+      await vi.advanceTimersByTimeAsync(1)
+      seen += 1
+      expect(errors.length).toBe(seen)
+    }
+
+    await transport.close()
+  })
+
+  it('does not back off when the acknowledgement fails and reads keep succeeding', async () => {
+    // A relay refusing an acknowledgement says nothing about whether it will
+    // serve reads; treating it as a read failure walked the poll to the ceiling.
+    const client = fakeClient()
+    client.inbox.push(inboxMessage('m1', 1))
+    client.acknowledgeMessage = async () => {
+      throw new Error('Failed to acknowledge messages on all hosts')
+    }
+    const errors: Error[] = []
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onError(error => errors.push(error))
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    for (let tick = 1; tick <= 6; tick++) {
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(client.listed.length).toBe(tick)
+    }
+    expect(errors.length).toBeGreaterThan(0)
+
+    await transport.close()
+  })
+
+  it('never polls a slow host faster than it asked for', async () => {
+    const client = fakeClient()
+    // Records the call before throwing, since the assertions below count calls
+    // through `client.listed` the way every other test in this file does.
+    client.listMessages = async args => {
+      client.listed.push(args)
+      throw new Error('nope')
+    }
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 120_000 })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(client.listed.length).toBe(1)
+    // The ceiling is 60s, well under this host's floor; the floor wins.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(client.listed.length).toBe(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(client.listed.length).toBe(2)
+
+    await transport.close()
+  })
+
+  it('returns to the configured cadence on the first poll that succeeds', async () => {
+    const client = fakeClient()
+    let fail = true
+    const original = client.listMessages.bind(client)
+    client.listMessages = async args => {
+      if (fail) throw new Error('429')
+      return original(args)
+    }
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    await vi.advanceTimersByTimeAsync(1000)
+    await vi.advanceTimersByTimeAsync(2000)
+    await vi.advanceTimersByTimeAsync(4000)
+    const backedOff = client.listed.length
+
+    fail = false
+    await vi.advanceTimersByTimeAsync(8000)
+    expect(client.listed.length).toBe(backedOff + 1)
+    // Back at the floor: one call per 1000ms window.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBe(backedOff + 2)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBe(backedOff + 3)
+
+    await transport.close()
+  })
+})
+
+/**
+ * The client reconnects and rejoins its own rooms from 2.7.0, so this backend
+ * no longer probes the socket. What it still decides is how hard to poll, and
+ * it decides that from what the client says about its socket.
+ */
+describe('MessageBoxTransport follows the client it was given', () => {
+  const live = (client: ReturnType<typeof fakeLiveClient>) =>
+    new MessageBoxTransport(client, { pollIntervalMs: 1000, live: true })
+
+  it('polls at the backstop while the socket is live', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+    const settled = client.listed.length
+
+    // A configured interval's worth of silence buys nothing while live.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBe(settled)
+    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
+    expect(client.listed.length).toBe(settled + 1)
+
+    await transport.close()
+  })
+
+  it('tightens to the configured interval the moment the socket is not live', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
+    const settled = client.listed.length
+
+    // Anything stored while the socket is away is never pushed once it is back,
+    // so the poll is the only thing that will carry it.
+    client.reportLive('reconnecting')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBe(settled + 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBe(settled + 2)
+
+    await transport.close()
+  })
+
+  it("reports the client's states as its own phases", async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+    await transport.start()
+    phases.length = 0
+
+    client.reportLive('reconnecting')
+    client.reportLive('connecting')
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+    client.reportLive('closed')
+
+    expect(phases).toEqual(['reconnecting', 'connecting', 'subscribed', 'closed'])
+
+    await transport.close()
+  })
+
+  it('passes on the reason the client gave, when it gave one', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const details: Array<string | undefined> = []
+    transport.onLiveStatus(status => {
+      details.push(status.detail)
+    })
+    await transport.start()
+    details.length = 0
+
+    for (const listener of client.statusListeners) {
+      listener({ state: 'reconnecting', rooms: [], reason: 'transport close' })
+    }
+
+    expect(details).toEqual(['transport close'])
+
+    await transport.close()
+  })
+
+  it('stops listening on close, so a late status cannot retune a closed poll', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    await transport.close()
+    const settled = client.listed.length
+
+    client.reportLive('reconnecting')
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(client.statusListeners.size).toBe(0)
+    expect(client.listed.length).toBe(settled)
+  })
+
+  it('still runs when the client is too old to report anything', async () => {
+    const client = fakeLiveClient()
+    const bare: Record<string, unknown> = { ...client }
+    delete bare['onLiveStatus']
+    Object.setPrototypeOf(bare, Object.getPrototypeOf(client) as object)
+    const transport = new MessageBoxTransport(
+      bare as unknown as ReturnType<typeof fakeLiveClient>,
+      { pollIntervalMs: 1000, live: true }
+    )
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    const settled = (bare['listed'] as unknown[]).length
+
+    // No report to go on: the socket is trusted and the poll stays a backstop.
+    await vi.advanceTimersByTimeAsync(1000)
+    expect((bare['listed'] as unknown[]).length).toBe(settled)
+    await vi.advanceTimersByTimeAsync(LIVE_BACKSTOP_INTERVAL_MS)
+    expect((bare['listed'] as unknown[]).length).toBe(settled + 1)
+
+    await transport.close()
   })
 })

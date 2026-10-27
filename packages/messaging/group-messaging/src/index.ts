@@ -49,6 +49,8 @@ export {
   UnparsableBodyError
 } from './transport/index.js'
 export type {
+  ClientLiveState,
+  ClientLiveStatus,
   LiveStatus,
   MessageBoxClientLike,
   MessageBoxTransportOptions
@@ -102,6 +104,7 @@ export {
   CredentialBindingError,
   EpochMismatchError,
   PermanentProcessingError,
+  WelcomeDeliveryError,
   isPermanent
 } from './errors.js'
 export { IndexedDbUnavailableError } from './storage/index.js'

@@ -179,7 +179,7 @@ export class TransportService {
     )
     const failed = recipients.filter((_, index) => results[index]?.status === 'rejected')
     if (failed.length > 0) {
-      throw new BroadcastError(groupId, failed, recipients.length - failed.length)
+      throw new BroadcastError(groupId, failed, recipients.length - failed.length, payload)
     }
   }
 }
@@ -189,7 +189,20 @@ export class BroadcastError extends GroupMessagingError {
   constructor(
     readonly groupId: MlsGroupId,
     readonly failed: IdentityKey[],
-    readonly delivered: number
+    readonly delivered: number,
+    /**
+     * The exact envelope that was sent — what a retry re-sends, byte for byte.
+     *
+     * Carried as data rather than as a bound `retry()` closure so the error
+     * stays a value: it survives a log line, a spell in a queue and a look in a
+     * debugger, none of which a closure does. It does not survive
+     * `structuredClone`, which keeps an Error's name, message, stack and cause
+     * and drops every other property, so a host crossing a worker boundary has
+     * to copy the fields out itself.
+     * A closure would also capture a transport whose lifetime it does not own,
+     * so a retry fired after `close()` would reach through a dead socket.
+     */
+    readonly payload: WirePayload
   ) {
     super(
       `Delivered to ${delivered} of ${delivered + failed.length} members of ${groupId}; ` +

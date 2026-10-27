@@ -268,3 +268,36 @@ describe('decodeEnvelope bounds the chat name it stores', () => {
     expect(envelope.message.chatName).toBe('Project Alpha')
   })
 })
+
+/**
+ * Everything here is sender-chosen. A decoder that throws anything but an
+ * `EnvelopeError` breaks its own contract, and the caller that catches
+ * `EnvelopeError` sees an unhandled `TypeError` instead.
+ */
+describe('a bootstrap header a stranger chose', () => {
+  const encoder = new TextEncoder()
+  const framed = (headerText: string): Uint8Array => {
+    const header = encoder.encode(headerText)
+    const out = new Uint8Array(6 + header.length)
+    out[0] = 1
+    out[1] = 1
+    new DataView(out.buffer).setUint32(2, header.length, false)
+    out.set(header, 6)
+    return out
+  }
+
+  it.each([
+    ['null', 'null'],
+    ['a number', '123'],
+    ['an array', '[]'],
+    ['a string', '"nope"']
+  ])('refuses a header that is %s', (_label, json) => {
+    expect(() => decodeEnvelope(framed(json))).toThrow(EnvelopeError)
+  })
+
+  it('refuses a type whose toString cannot be called', () => {
+    expect(() =>
+      decodeEnvelope(framed(JSON.stringify({ type: { toString: null, valueOf: null } })))
+    ).toThrow(EnvelopeError)
+  })
+})

@@ -91,27 +91,57 @@ export class InviteService {
 
   /**
    * Answer an inbound request with a KeyPackage the caller minted and stored.
-   *
-   * The library never mints one on the caller's behalf: the private half must
-   * be retained by the caller before the public half goes on the wire.
-   *
    * The invite is deleted only once the send resolves, so a transport failure
    * leaves it pending and retryable. **A retry MUST pass the same KeyPackage.**
    * Minting a fresh one orphans the first: its private half is already in the
    * caller's store with nothing that will ever reference it, and if the failed
    * send in fact reached the peer, they hold a KeyPackage this device will not
    * recognize when the Welcome arrives.
+   *
+   * The KeyPackage is also bound to the requesting peer, if this client stored
+   * it, and only that peer's Welcome for it is accepted afterwards. It throws
+   * before sending anything if the KeyPackage was already handed to a different
+   * peer: mint one per invitation. Answering the same peer again is fine.
    */
   async accept(inviteId: string, keyPackage: KeyPackageBytes): Promise<void> {
     const invite = await this.#require(inviteId)
     this.#requireInboundRequest(invite)
     this.#requireSupportedCiphersuite(invite)
+    await this.#bind(invite.peer, keyPackage)
     await this.#send(invite.peer, {
       type: 'keyPackageResponse',
       requestId: invite.requestId,
       keyPackage
     })
     await this.deps.storage.deleteInvite(inviteId)
+  }
+
+  /**
+   * Record whom a stored KeyPackage is being handed to, before the send: the
+   * binding must exist by the time the KeyPackage is on the wire, since a
+   * Welcome can follow at once, and a send that arrived unacknowledged must
+   * still be bound. The KeyPackage is found by its bytes among those
+   * `keyPackages.create` stored; one never stored cannot resolve a Welcome
+   * later, so there is nothing to bind.
+   *
+   * A KeyPackage already handed to a different peer is refused. Rebinding it
+   * would silently retarget the ref and the first peer's genuine Welcome would
+   * then be turned away; a KeyPackage is single-use, so it has one owner.
+   */
+  async #bind(peer: IdentityKey, keyPackage: KeyPackageBytes): Promise<void> {
+    for (const ref of await this.deps.storage.listKeyPackageRefs()) {
+      const stored = await this.deps.storage.getKeyPackage(ref)
+      if (stored === undefined || toHex(stored) !== toHex(keyPackage)) continue
+      const owner = await this.deps.storage.keyPackageOwner(ref)
+      if (owner !== undefined && owner !== peer) {
+        throw new GroupMessagingError(
+          `KeyPackage ${ref} was already handed to ${owner}; answer ${peer} with a fresh one. ` +
+            `Nothing was sent and the invitation is still pending.`
+        )
+      }
+      await this.deps.storage.bindKeyPackage(ref, peer)
+      return
+    }
   }
 
   /**
@@ -146,6 +176,25 @@ export class InviteService {
         `uses ${this.deps.ciphersuite}. Nothing was minted: a KeyPackage for that suite ` +
         `could answer the invitation but never join the group.`
     )
+  }
+
+  /**
+   * Give up on an invitation, and on the public ref it names in storage.
+   *
+   * The ref goes with the row because one left behind would still match a
+   * Welcome that arrives later, which the host has decided never to join.
+   * Retired quietly, without `keyPackageConsumed`: that event tells the host to
+   * destroy a private half, and the host that abandons holds its own.
+   *
+   * The library does not expire invitations on a timer: how long to wait is the
+   * host's to decide, and a wallet that forgets a pending join while its user
+   * is still expecting it is worse than one that keeps a few bytes.
+   * `invites.list()` is how a host finds candidates.
+   */
+  async abandon(inviteId: string): Promise<void> {
+    const invite = await this.#require(inviteId)
+    if (invite.ref !== undefined) await this.deps.storage.deleteKeyPackage(invite.ref)
+    await this.deps.storage.deleteInvite(inviteId)
   }
 
   /** Refuse an inbound request, telling the peer so it stops waiting. */
@@ -262,7 +311,10 @@ export class InviteService {
     await this.deps.emit('keyPackageReceived', {
       inviteId: invite.inviteId,
       peer,
-      keyPackage: message.keyPackage
+      keyPackage: message.keyPackage,
+      // The row is already gone, so this is the host's only way to learn which
+      // chat the invitation was sent for.
+      ...(invite.chatName === undefined ? {} : { chatName: invite.chatName })
     })
   }
 
@@ -306,18 +358,31 @@ export class InviteService {
         'no stored KeyPackage matches this Welcome'
       )
     }
-    // The ref is cleartext, so naming one proves nothing. A KeyPackage is
-    // single-use, so one pending row per ref bounds forged Welcomes — and
-    // refusing a genuine resend is free, the row it duplicates still joins.
+    // The ref is cleartext, so naming one proves nothing. A KeyPackage this
+    // device answered with is bound to the peer it was answered to, and any
+    // other sender is refused before a row exists: a forger costs no storage
+    // and cannot shadow the genuine Welcome. The ref-and-sender key below then
+    // amounts to one row per bound ref. A ref never bound (a hand-minted or
+    // pooled KeyPackage) has no known owner, so there the key is the only bound:
+    // one row per identity a forger controls.
+    const owner = await this.deps.storage.keyPackageOwner(ref)
+    if (owner !== undefined && owner !== peer) {
+      return this.#refuse(
+        peer,
+        'welcome',
+        message.requestId,
+        'this KeyPackage was handed to a different peer'
+      )
+    }
     const held = (await this.deps.storage.listInvites()).find(
-      invite => invite.kind === 'welcome' && invite.ref === ref
+      invite => invite.kind === 'welcome' && invite.ref === ref && invite.peer === peer
     )
     if (held !== undefined) {
       return this.#refuse(
         peer,
         'welcome',
         message.requestId,
-        "a pending invite already holds this Welcome's KeyPackage"
+        'this sender already has a pending Welcome for this KeyPackage'
       )
     }
     const inviteId = randomId()

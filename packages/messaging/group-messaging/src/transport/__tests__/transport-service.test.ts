@@ -181,6 +181,26 @@ describe('TransportService', () => {
     expect(broadcastError.delivered).toBe(1)
   })
 
+  it('carries the payload it was asked to send, so a retry can re-send those bytes', async () => {
+    // Without this the only re-send available to a caller is a fresh message,
+    // which moves the ratchet, burns a generation and duplicates the line for
+    // everyone who did receive it. The bytes are the whole point of a retry.
+    const backend: TransportBackend = {
+      send: async (recipient: IdentityKey) => {
+        if (recipient === CAROL) throw new Error('unreachable')
+      },
+      onMessage: () => () => undefined
+    }
+    const service = await TransportService.open(backend)
+    const payload = mls(7)
+
+    const error = await service
+      .broadcast('g1', [BOB, CAROL], payload)
+      .catch((cause: unknown) => cause)
+
+    expect((error as BroadcastError).payload).toBe(payload)
+  })
+
   it('stops delivering once closed', async () => {
     const hub = new InProcessTransportHub()
     const bob = await TransportService.open(hub.endpoint(BOB))
