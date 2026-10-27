@@ -2664,8 +2664,13 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/AuthMessageValidation.ts',
-          'if (context.ownedByteArrays?.has(candidate) === true) {',
-          '// Capture each descriptor value once'
+          '/** Copies a byte array the caller owns;',
+          'function visitAuthArray('
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'if (!Array.isArray(candidate)) return visitAuthObject(',
+          'function walkAuthData<T>('
         ],
         [
           'src/auth/AuthMessageValidation.ts',

@@ -199,13 +199,13 @@ interface AuthDataWalk {
 
 type RetainAuthData = (value: unknown) => void
 
-function visitAuthArray(
+/** Reads an array's length and checks it against the array's byte limit. */
+function authArrayLength(
   candidate: unknown[],
   current: AuthDataFrame,
-  context: AuthDataWalk,
-  retain: RetainAuthData
-): number {
-  const { snapshot, maxGeneralPayloadBytes, pending } = context
+  context: AuthDataWalk
+): { length: number; separatePayload: boolean } {
+  const { maxGeneralPayloadBytes } = context
   const separatePayload =
     maxGeneralPayloadBytes !== undefined && current.depth === 1 && current.key === 'payload'
   const maxArrayBytes = separatePayload
@@ -216,15 +216,33 @@ function visitAuthArray(
   if (!Number.isSafeInteger(length) || length < 0 || length > maxArrayBytes) {
     throw new Error('Authentication message array exceeds its limit.')
   }
-  if (context.ownedByteArrays?.has(candidate) === true) {
-    const bytes = separatePayload ? 0 : length * 4 + 2
-    if (snapshot) {
-      const copy = candidate.slice()
-      context.verifiedByteArrays.add(copy)
-      retain(copy)
-    }
-    return bytes
+  return { length, separatePayload }
+}
+
+/** Copies a byte array the caller owns; see {@link snapshotOutboundAuthMessage}. */
+function visitOwnedByteArray(
+  candidate: unknown[],
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const { length, separatePayload } = authArrayLength(candidate, current, context)
+  if (context.snapshot) {
+    const copy = candidate.slice()
+    context.verifiedByteArrays.add(copy)
+    retain(copy)
   }
+  return separatePayload ? 0 : length * 4 + 2
+}
+
+function visitAuthArray(
+  candidate: unknown[],
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const { snapshot, pending } = context
+  const { length, separatePayload } = authArrayLength(candidate, current, context)
   // Capture each descriptor value once without retaining one descriptor object
   // per byte. The captured values supply both validation and the owned snapshot.
   const values: unknown[] = []
@@ -315,9 +333,11 @@ function visitAuthValue(
   if (context.seen.has(candidate))
     throw new Error('Authentication messages must not contain cycles.')
   context.seen.add(candidate)
-  return Array.isArray(candidate)
-    ? visitAuthArray(candidate, current, context, retain)
-    : visitAuthObject(candidate, current, context, retain)
+  if (!Array.isArray(candidate)) return visitAuthObject(candidate, current, context, retain)
+  if (context.ownedByteArrays?.has(candidate) === true) {
+    return visitOwnedByteArray(candidate, current, context, retain)
+  }
+  return visitAuthArray(candidate, current, context, retain)
 }
 
 function walkAuthData<T>(
