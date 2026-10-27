@@ -24,8 +24,14 @@ import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 const SQL_IN_CHUNK = 500
 
 async function whereInChunks<T>(ids: number[], query: (chunk: number[]) => Promise<T[]>): Promise<T[]> {
+  const chunks: number[][] = []
+  for (let i = 0; i < ids.length; i += SQL_IN_CHUNK) chunks.push(ids.slice(i, i + SQL_IN_CHUNK))
   const rows: T[] = []
-  for (let i = 0; i < ids.length; i += SQL_IN_CHUNK) rows.push(...(await query(ids.slice(i, i + SQL_IN_CHUNK))))
+  // One chunk at a time, in order.
+  await chunks.reduce(async (previous, chunk) => {
+    await previous
+    rows.push(...(await query(chunk)))
+  }, Promise.resolve())
   return rows
 }
 
@@ -34,9 +40,9 @@ function groupBy<T>(rows: T[], key: (row: T) => number | undefined): Map<number,
   for (const row of rows) {
     const id = key(row)
     if (id === undefined) continue
-    let group = groups.get(id)
-    if (group == null) groups.set(id, (group = []))
-    group.push(row)
+    const group = groups.get(id)
+    if (group == null) groups.set(id, [row])
+    else group.push(row)
   }
   return groups
 }
@@ -74,9 +80,9 @@ async function findMappedNames(
     const name = nameById.get(Number(row[map.id]))
     if (name === undefined) continue
     const key = Number(row[map.key])
-    let list = result.get(key)
-    if (list == null) result.set(key, (list = []))
-    list.push(name)
+    const list = result.get(key)
+    if (list == null) result.set(key, [name])
+    else list.push(name)
   }
   return result
 }
@@ -131,7 +137,10 @@ async function findOutputsByTransactionIds(
         .orderBy(column === 'transactionId' ? 'vout' : 'outputId')
   )
   if (includeScript) {
-    for (const o of rows) await storage.validateOutputScript(o)
+    await rows.reduce(async (previous, o) => {
+      await previous
+      await storage.validateOutputScript(o)
+    }, Promise.resolve())
   }
   return storage.validateEntities(rows, undefined, ['spendable', 'change'])
 }
@@ -373,27 +382,37 @@ export async function listActions(
     })
   }
 
-  // Load each association for the whole page at once rather than per action.
+  await enrichActions(storage, txs, r.actions, vargs, timeFilterRequested)
+  return r
+}
+
+/** Loads each association for the whole page at once rather than per action. */
+async function enrichActions(
+  storage: StorageKnex,
+  txs: Array<Partial<TableTransaction>>,
+  actions: WalletAction[],
+  vargs: ValidListActionsArgs,
+  timeFilterRequested: boolean
+): Promise<void> {
   const transactionIds = txs.map(tx => tx.transactionId).filter((id): id is number => id !== undefined)
   if (vargs.includeLabels) {
     const labelsByTransactionId = await findLabelsByTransactionId(storage, transactionIds)
     txs.forEach((tx, i) => {
       const labels = tx.transactionId === undefined ? [] : (labelsByTransactionId.get(tx.transactionId) ?? [])
-      r.actions[i].labels = actionLabels(tx, labels, timeFilterRequested)
+      actions[i].labels = actionLabels(tx, labels, timeFilterRequested)
     })
   }
   if (vargs.includeOutputs && transactionIds.length > 0) {
-    await enrichActionOutputs(storage, txs, r.actions, transactionIds, !!vargs.includeOutputLockingScripts)
+    await enrichActionOutputs(storage, txs, actions, transactionIds, !!vargs.includeOutputLockingScripts)
   }
   if (vargs.includeInputs && transactionIds.length > 0) {
     await enrichActionInputs(
       storage,
       txs,
-      r.actions,
+      actions,
       transactionIds,
       !!vargs.includeInputSourceLockingScripts,
       !!vargs.includeInputUnlockingScripts
     )
   }
-  return r
 }

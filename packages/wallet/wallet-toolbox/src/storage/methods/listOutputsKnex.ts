@@ -211,16 +211,23 @@ async function loadKnexOutputAssociations(
   return { labelsByTransactionId, tagsByOutputId }
 }
 
+/** What every output on the page shares while it is hydrated. */
+interface KnexOutputPage {
+  labelsByTransactionId: Record<number, string[]>
+  tagsByOutputId: Record<number, string[]>
+  beef: Beef
+  /** The outputs' proven transactions, by txid. */
+  provenTxs: Map<string, TableProvenTx>
+}
+
 async function hydrateKnexWalletOutput(
   storage: StorageKnex,
   output: TableOutput,
   vargs: ValidListOutputsArgs,
-  labelsByTransactionId: Record<number, string[]>,
-  tagsByOutputId: Record<number, string[]>,
-  beef: Beef,
-  provenTxs: Map<string, TableProvenTx>,
+  page: KnexOutputPage,
   trx?: TrxToken
 ): Promise<WalletOutput> {
+  const { labelsByTransactionId, tagsByOutputId, beef, provenTxs } = page
   const walletOutput: WalletOutput = {
     satoshis: Number(output.satoshis),
     spendable: !!output.spendable,
@@ -347,11 +354,12 @@ export async function listOutputs(
   if (vargs.includeTransactions && txids.length > 0) {
     for (const proven of await dsk.findProvenTxs({ partial: {}, txids, trx })) provenTxs.set(proven.txid, proven)
   }
-  for (const output of outputs) {
-    result.outputs.push(
-      await hydrateKnexWalletOutput(dsk, output, vargs, labelsByTransactionId, tagsByOutputId, beef, provenTxs, trx)
-    )
-  }
+  const page: KnexOutputPage = { labelsByTransactionId, tagsByOutputId, beef, provenTxs }
+  // One output at a time, in order: each may add to the shared BEEF.
+  await outputs.reduce(async (previous, output) => {
+    await previous
+    result.outputs.push(await hydrateKnexWalletOutput(dsk, output, vargs, page, trx))
+  }, Promise.resolve())
   if (vargs.includeTransactions) result.BEEF = beef.toUint8Array()
   return result
 }
