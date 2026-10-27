@@ -779,14 +779,18 @@ const fakeLiveClient = () => ({
   },
   listener: undefined as undefined | ((message: LivePush) => void),
   statusListeners: new Set<(status: ClientLiveStatus) => void>(),
+  /** The real client keeps a last status and replays it to each subscriber. */
+  liveStatusNow: { state: 'closed', rooms: [] } as ClientLiveStatus,
   onLiveStatus(listener: (status: ClientLiveStatus) => void) {
     this.statusListeners.add(listener)
+    listener(this.liveStatusNow)
     return () => {
       this.statusListeners.delete(listener)
     }
   },
   /** Say what the socket is doing, the way the real client would. */
   reportLive(state: ClientLiveState, rooms: readonly string[] = []) {
+    this.liveStatusNow = { state, rooms }
     for (const listener of this.statusListeners) listener({ state, rooms })
   },
   async initializeConnection() {
@@ -798,6 +802,7 @@ const fakeLiveClient = () => ({
   }) {
     this.calls.push('listenForLiveMessages')
     this.listener = args.onMessage
+    this.reportLive('live', [`${ME}-${args.messageBox}`])
   },
   async leaveRoom(_messageBox: string) {
     this.calls.push('leaveRoom')
@@ -805,6 +810,7 @@ const fakeLiveClient = () => ({
   async disconnectWebSocket() {
     this.calls.push('disconnectWebSocket')
     this.listener = undefined
+    this.reportLive('closed')
   },
   push(message: { messageId: string; sender: string; payload: Uint8Array }) {
     this.listener?.({
@@ -992,7 +998,9 @@ describe('MessageBoxTransport live sending and status', () => {
     transport.onMessage(async () => {})
     await transport.start()
 
-    expect(status).toEqual(['connecting', 'subscribed'])
+    // The client replays its current status the moment the transport
+    // subscribes, so the host now learns the socket was down before it came up.
+    expect(status).toEqual(['closed', 'connecting', 'subscribed'])
 
     client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
     await vi.advanceTimersByTimeAsync(1)
@@ -1288,6 +1296,53 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * The client reports a room list, not just a state. A room refused
+   * permanently is deleted from it and never requested again, and the socket
+   * stays `live` and authenticated throughout — so `live` on its own does not
+   * mean anything will be pushed to this transport.
+   */
+  it('does not relax the poll for a live socket that is not holding our room', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+    await transport.start()
+    phases.length = 0
+
+    // Authenticated, live, and holding no room of ours: nothing will arrive.
+    client.reportLive('live', [])
+    const settled = client.listed.length
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed).toHaveLength(settled + 1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed).toHaveLength(settled + 2)
+    expect(phases).not.toContain('subscribed')
+
+    await transport.close()
+  })
+
+  it('relaxes only for a room that is ours, not merely any room', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+
+    client.reportLive('live', [`${ME}-somebody-elses-box`])
+    const settled = client.listed.length
+
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed).toHaveLength(settled + 1)
+
+    await transport.close()
+  })
+
   it('tightens to the configured interval the moment the socket is not live', async () => {
     const client = fakeLiveClient()
     const transport = live(client)
@@ -1305,6 +1360,51 @@ describe('MessageBoxTransport follows the client it was given', () => {
     expect(client.listed).toHaveLength(settled + 1)
     await vi.advanceTimersByTimeAsync(1000)
     expect(client.listed).toHaveLength(settled + 2)
+
+    await transport.close()
+  })
+
+  /**
+   * A reconnecting socket reports every attempt. Each report used to re-arm the
+   * poll from zero, so a socket flapping faster than the interval silenced the
+   * backstop entirely — in the one window where the socket carries nothing.
+   */
+  it('keeps polling while the socket reports faster than the poll interval', async () => {
+    const client = fakeLiveClient()
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 5000, live: true })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.listed.length = 0
+
+    for (let second = 0; second < 60; second++) {
+      client.reportLive(second % 2 === 0 ? 'reconnecting' : 'connecting')
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+
+    // 60s at a 5s floor: a dozen reads, not none.
+    expect(client.listed.length).toBeGreaterThanOrEqual(10)
+
+    await transport.close()
+  })
+
+  it('keeps polling while the socket flaps in and out of carrying', async () => {
+    const client = fakeLiveClient()
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 5000, live: true })
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.listed.length = 0
+
+    // Alternating genuinely changes the cadence each time, so an equality
+    // guard alone would not save it.
+    for (let second = 0; second < 60; second++) {
+      if (second % 2 === 0) client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+      else client.reportLive('reconnecting')
+      await vi.advanceTimersByTimeAsync(1000)
+    }
+
+    expect(client.listed.length).toBeGreaterThanOrEqual(1)
 
     await transport.close()
   })
@@ -1348,6 +1448,38 @@ describe('MessageBoxTransport follows the client it was given', () => {
     }
 
     expect(details).toEqual(['transport close'])
+
+    await transport.close()
+  })
+
+  /**
+   * `close()` releases the subscription, so `start()` has to take it again.
+   * Without that a restarted transport follows nothing: it never hears the
+   * socket come back and never hears it go, and its poll keeps whatever
+   * cadence the restart happened to set.
+   */
+  it('follows the socket again after a restart', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    await transport.close()
+    await transport.start()
+
+    expect(client.statusListeners.size).toBe(1)
+
+    // The socket comes back: the restarted transport still relaxes for it.
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+    const relaxed = client.listed.length
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed).toHaveLength(relaxed)
+
+    // And still tightens when it goes. The first read lands at once: the
+    // backstop had already outrun the interval it is dropping back to.
+    client.reportLive('reconnecting')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(client.listed.length).toBeGreaterThanOrEqual(relaxed + 1)
 
     await transport.close()
   })

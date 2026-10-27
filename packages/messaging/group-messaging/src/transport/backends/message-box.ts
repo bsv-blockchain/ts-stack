@@ -60,8 +60,9 @@ export interface MessageBoxClientLike {
    * The client's own account of its socket, from @bsv/message-box-client 2.7.0.
    *
    * Optional because this is a structural interface and older clients have no
-   * such thing. Without it the socket is simply trusted while it is configured,
-   * which is how this backend behaved before the client could be asked.
+   * such thing. Without it nothing says when the socket stops carrying, so the
+   * poll is never relaxed: it runs at the interval the host configured, which
+   * is what it would run at with no socket at all.
    */
   onLiveStatus?: (listener: (status: ClientLiveStatus) => void) => Unsubscribe
 }
@@ -218,6 +219,13 @@ interface MessageBoxSource {
 class PollingSource implements MessageBoxSource {
   #timer: ReturnType<typeof setTimeout> | undefined
   #inFlight: Promise<void> | undefined
+  /**
+   * When the current wait started: the end of the last tick, or the start that
+   * preceded it. `#arm` waits the remainder from here rather than a fresh
+   * interval, so a retune cannot push the next read further away than it
+   * already was, however often it arrives.
+   */
+  #waitingSince = 0
   #stopped = false
   /** The floor: the backstop while the socket carries delivery, `pollIntervalMs` otherwise. */
   #baseIntervalMs: number
@@ -277,6 +285,7 @@ class PollingSource implements MessageBoxSource {
     if (this.#deliver !== undefined) return Promise.resolve()
     this.#stopped = false
     this.#deliver = deliver
+    this.#waitingSince = Date.now()
     this.#arm()
     return Promise.resolve()
   }
@@ -299,16 +308,24 @@ class PollingSource implements MessageBoxSource {
     if (this.#inFlight !== undefined) return
     if (this.#timer !== undefined) clearTimeout(this.#timer)
     if (this.#stopped) return
-    this.#timer = setTimeout(() => {
-      this.#timer = undefined
-      const running = this.#tick()
-        .then(failed => this.#settle(failed))
-        .finally(() => {
-          if (this.#inFlight === running) this.#inFlight = undefined
-          this.#arm()
-        })
-      this.#inFlight = running
-    }, this.#nextWaitMs())
+    const waited = Date.now() - this.#waitingSince
+    this.#timer = setTimeout(
+      () => {
+        this.#timer = undefined
+        const running = this.#tick()
+          .then(failed => this.#settle(failed))
+          .finally(() => {
+            if (this.#inFlight === running) this.#inFlight = undefined
+            // The next wait starts now, so a read that took four windows is not
+            // followed straight away by another: that is how a slow relay gets
+            // hammered rather than backed off.
+            this.#waitingSince = Date.now()
+            this.#arm()
+          })
+        this.#inFlight = running
+      },
+      Math.max(0, this.#nextWaitMs() - waited)
+    )
   }
 
   /**
@@ -490,6 +507,8 @@ export class MessageBoxTransport implements TransportBackend {
   #chain: Promise<unknown> = Promise.resolve()
   /** Releases the client's status subscription on close. */
   #unfollow: Unsubscribe | undefined
+  /** The last status reported, so an unchanged one is not reported again. */
+  #lastStatus: LiveStatus | undefined
   /** The cadence the poll runs at while the socket is carrying delivery. */
   readonly #backstopIntervalMs: number
   /**
@@ -562,7 +581,6 @@ export class MessageBoxTransport implements TransportBackend {
             error => this.#report(error),
             status => this.#status(status)
           )
-    if (live !== undefined) this.#unfollow = this.#follow(live)
   }
 
   /**
@@ -576,19 +594,41 @@ export class MessageBoxTransport implements TransportBackend {
    * interval the host configured, because joining a room replays no backlog and
    * anything stored while the socket is away is reachable only by listing it.
    *
-   * A client too old to report leaves the poll at the backstop, which is how
-   * this backend behaved before there was anything to ask.
+   * A client too old to report leaves the poll at the interval the host asked
+   * for, which is what it would run at with no socket at all.
    */
-  #follow(client: LiveCapableClient): Unsubscribe | undefined {
-    const follow = client.onLiveStatus
+  #follow(): Unsubscribe | undefined {
+    const follow = this.client.onLiveStatus
     if (follow === undefined) return undefined
-    return follow.call(client, status => {
-      this.#poll.retune(status.state === 'live' ? this.#backstopIntervalMs : this.#pollIntervalMs)
+    return follow.call(this.client, status => {
+      const carrying = status.state === 'live' && this.#holdsOurRoom(status.rooms)
+      this.#poll.retune(carrying ? this.#backstopIntervalMs : this.#pollIntervalMs)
+      let phase: LiveStatus['phase'] = CLIENT_PHASE[status.state]
+      // A live socket that is not in our room is not carrying for us, and
+      // saying `subscribed` would be the lie the whole report exists to avoid.
+      if (status.state === 'live') phase = carrying ? 'subscribed' : 'connecting'
       this.#status({
-        phase: CLIENT_PHASE[status.state],
+        phase,
         ...(status.reason === undefined ? {} : { detail: status.reason })
       })
     })
+  }
+
+  /**
+   * Whether the socket holds the room this transport reads.
+   *
+   * `state: 'live'` is about the socket, not about us: the client deletes a
+   * refused room from the list it reports and, for a permanent refusal, never
+   * requests it again, while the socket stays live and authenticated
+   * throughout. Reading only the state would relax the poll for a socket that
+   * will never push anything here.
+   *
+   * Matched on the suffix because the relay names a room
+   * `<identityKey>-<messageBox>` and the identity is the client's business,
+   * not this backend's.
+   */
+  #holdsOurRoom(rooms: readonly string[]): boolean {
+    return rooms.some(room => room.endsWith(`-${this.messageBox}`))
   }
 
   /**
@@ -606,6 +646,19 @@ export class MessageBoxTransport implements TransportBackend {
   }
 
   #status(status: LiveStatus): void {
+    // The socket's lifecycle and the client's report both describe the same
+    // socket, so they can say the same thing twice. Only transitions go out,
+    // which is the contract the client itself keeps.
+    const last = this.#lastStatus
+    if (
+      last !== undefined &&
+      last.phase === status.phase &&
+      last.source === status.source &&
+      last.detail === status.detail
+    ) {
+      return
+    }
+    this.#lastStatus = status
     for (const handler of this.#liveStatusHandlers) {
       try {
         handler(status)
@@ -654,9 +707,11 @@ export class MessageBoxTransport implements TransportBackend {
     await this.#poll.start(async messages => this.#enqueue(messages, 'poll'))
     const live = this.#live
     if (live === undefined) return
-    // A restart is a fresh judgement about the socket, so the poll goes back to
-    // being a backstop rather than staying wherever the last run left it.
-    this.#poll.retune(this.#backstopIntervalMs)
+    // Taken per run, not per instance: `close()` releases it, and a restarted
+    // transport that followed nothing would never hear the socket come back.
+    // Subscribing replays the client's current status, which is what sets the
+    // cadence — a restart does not assume the socket is carrying.
+    this.#unfollow ??= this.#follow()
     try {
       await live.start(async messages => this.#enqueue(messages, 'live'))
     } catch (cause) {

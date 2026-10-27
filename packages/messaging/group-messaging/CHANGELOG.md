@@ -14,10 +14,13 @@
   in-process hub and `@bsv/message-box-client`, the latter with optional live
   socket delivery and a polling backstop.
 - A complete invitation exchange: `invites.abandon` gives up an exchange and
-  returns the KeyPackage shelf, a minted KeyPackage is bound to the peer it was
-  answered to and cannot be rebound, a Welcome is joined only from the peer that
-  answered, and `retryDelivery` resends a Welcome that never arrived without
-  touching the group. A failed Welcome send surfaces as `WelcomeDeliveryError`.
+  destroys the KeyPackage it minted, a KeyPackage minted by `invites.accept` is
+  bound to the peer it was answered to and cannot be rebound, a Welcome naming a
+  bound KeyPackage is joined only from the peer it was handed to, and
+  `retryDelivery` resends a Welcome that never arrived without touching the
+  group. A failed Welcome send surfaces as `WelcomeDeliveryError`. A KeyPackage
+  minted by hand and published is bound to nobody, so a Welcome naming one is
+  accepted from any sender and the host chooses between them.
 - `MessageBoxTransport.onLiveStatus`, reporting what the live socket is doing.
   The socket's own recovery is left to `@bsv/message-box-client` 2.7.0, which
   reconnects and rejoins its rooms; this package follows that report and uses it
