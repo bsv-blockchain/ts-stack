@@ -22,6 +22,25 @@ attention to changes that materially alter behavior or extend functionality.
   unchanged. No API, wire, or schema migration; `unlockingScriptLength` already
   meant bytes. Upgrade the signer package; storage is unchanged.
 
+- Knex storage `listActions` loads labels, outputs, output tags and baskets,
+  inputs and the spending transactions for the whole page in a fixed number of
+  queries instead of several per action: a page of 50 with every include went
+  from 408 queries to 10. `listOutputs` with `include: 'entire transactions'`
+  loads the outputs' proven transactions in one query instead of one per output
+  (34 to 6 for the test wallet's default basket). Results, including BEEF bytes
+  and the order of labels, tags, outputs and inputs, are unchanged on SQLite and
+  MySQL. On Postgres the contents are unchanged; an action's outputs now always
+  come back in output index order and its inputs in output id order, as on the
+  other databases. Previously Postgres returned them in physical row order,
+  which moves when an output is updated and could differ between two calls.
+- A migration adds the `idx_outputs_txid_vout_user` index on
+  `outputs (txid, vout, userId)`. Outpoint lookups in createAction,
+  internalizeAction and action batches previously scanned the outputs table.
+- SQLite storage no longer issues `PRAGMA foreign_keys = ON` before every write
+  made inside a transaction, where SQLite ignores it (syncing the test wallet:
+  1,994 of 6,801 statements). No consumer migration is required; the index
+  migration runs with the other storage migrations.
+
 ## wallet-toolbox 2.15.0 (source candidate)
 
 - Preserve the existing storage `internalizeAction(storage, auth, args, receipt?)`

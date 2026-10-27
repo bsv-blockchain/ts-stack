@@ -13,85 +13,209 @@ import { AuthId } from '../../sdk/WalletStorage.interfaces'
 import { TableTxLabel } from '../schema/tables/TableTxLabel'
 import { TableTransaction } from '../schema/tables/TableTransaction'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
-import { TableOutputX } from '../schema/tables/TableOutput'
+import { TableOutput } from '../schema/tables/TableOutput'
+import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
 
-async function enrichActionLabels(
+// Keep each statement below SQLite's and Postgres's bind-parameter limits: a
+// page of 10000 actions can hold far more outputs than either accepts at once.
+const SQL_IN_CHUNK = 500
+
+async function whereInChunks<T>(ids: number[], query: (chunk: number[]) => Promise<T[]>): Promise<T[]> {
+  const rows: T[] = []
+  for (let i = 0; i < ids.length; i += SQL_IN_CHUNK) rows.push(...(await query(ids.slice(i, i + SQL_IN_CHUNK))))
+  return rows
+}
+
+function groupBy<T>(rows: T[], key: (row: T) => number | undefined): Map<number, T[]> {
+  const groups = new Map<number, T[]>()
+  for (const row of rows) {
+    const id = key(row)
+    if (id === undefined) continue
+    let group = groups.get(id)
+    if (group == null) groups.set(id, (group = []))
+    group.push(row)
+  }
+  return groups
+}
+
+/**
+ * Reads the names mapped to each key (labels of transactions, tags of outputs)
+ * for many keys at once.
+ *
+ * Like getLabelsForTransactionId and getTagsForOutputId, there is no ORDER BY:
+ * each key's names keep the order its map rows come back in, which on SQLite,
+ * MySQL and Postgres is the order they were added. Reading the map table on
+ * its own, then the names, keeps that order whatever join the planner would
+ * pick for many keys. `postgresIdOrder` instead orders each key's names by id
+ * on Postgres, which is what its plan for the single-key query returns.
+ */
+async function findMappedNames(
   storage: StorageKnex,
-  tx: Partial<TableTransaction>,
-  action: WalletAction,
-  timeFilterRequested: boolean
-): Promise<void> {
-  action.labels = (await storage.getLabelsForTransactionId(tx.transactionId)).map(l => l.label)
+  keys: number[],
+  map: { table: string; key: string; id: string },
+  names: { table: string; name: string },
+  postgresIdOrder = false
+): Promise<Map<number, string[]>> {
+  const result = new Map<number, string[]>()
+  if (keys.length === 0) return result
+  const mapRows: Array<Record<string, unknown>> = await whereInChunks(keys, async chunk =>
+    await storage.toDb()(map.table).whereIn(map.key, chunk).whereNot('isDeleted', true)
+  )
+  if (postgresIdOrder && storage.dbtype === 'Postgres') mapRows.sort((a, b) => Number(a[map.id]) - Number(b[map.id]))
+  const ids = [...new Set(mapRows.map(r => Number(r[map.id])))]
+  const nameRows: Array<Record<string, unknown>> = await whereInChunks(ids, async chunk =>
+    await storage.toDb()(names.table).whereIn(map.id, chunk).whereNot('isDeleted', true).select(map.id, names.name)
+  )
+  const nameById = new Map(nameRows.map(r => [Number(r[map.id]), String(r[names.name])]))
+  for (const row of mapRows) {
+    const name = nameById.get(Number(row[map.id]))
+    if (name === undefined) continue
+    const key = Number(row[map.key])
+    let list = result.get(key)
+    if (list == null) result.set(key, (list = []))
+    list.push(name)
+  }
+  return result
+}
+
+async function findLabelsByTransactionId(storage: StorageKnex, transactionIds: number[]): Promise<Map<number, string[]>> {
+  return await findMappedNames(
+    storage,
+    transactionIds,
+    { table: 'tx_labels_map', key: 'transactionId', id: 'txLabelId' },
+    { table: 'tx_labels', name: 'label' }
+  )
+}
+
+async function findTagsByOutputId(storage: StorageKnex, outputIds: number[]): Promise<Map<number, string[]>> {
+  return await findMappedNames(
+    storage,
+    outputIds,
+    { table: 'output_tags_map', key: 'outputId', id: 'outputTagId' },
+    { table: 'output_tags', name: 'tag' },
+    true
+  )
+}
+
+async function findBasketNamesById(storage: StorageKnex, basketIds: number[]): Promise<Map<number, string>> {
+  const names = new Map<number, string>()
+  if (basketIds.length === 0) return names
+  const rows: TableOutputBasket[] = await whereInChunks(
+    basketIds,
+    async chunk => await storage.toDb()('output_baskets').whereIn('basketId', chunk)
+  )
+  for (const basket of rows) names.set(Number(basket.basketId), basket.name)
+  return names
+}
+
+/**
+ * Loads the outputs whose `column` (transactionId or spentBy) is one of
+ * transactionIds, in the same row shape findOutputs returns.
+ */
+async function findOutputsByTransactionIds(
+  storage: StorageKnex,
+  column: 'transactionId' | 'spentBy',
+  transactionIds: number[],
+  includeScript: boolean
+): Promise<TableOutput[]> {
+  const rows: TableOutput[] = await whereInChunks(
+    transactionIds,
+    async chunk =>
+      await storage
+        .findOutputsQuery({ partial: {}, noScript: !includeScript })
+        .whereIn(column, chunk)
+        .orderBy(column)
+        .orderBy(column === 'transactionId' ? 'vout' : 'outputId')
+  )
+  if (includeScript) {
+    for (const o of rows) await storage.validateOutputScript(o)
+  }
+  return storage.validateEntities(rows, undefined, ['spendable', 'change'])
+}
+
+function actionLabels(tx: Partial<TableTransaction>, labels: string[], timeFilterRequested: boolean): string[] {
+  let result = labels
   if (tx.reference != null && tx.reference !== '') {
-    action.labels = applyBrc153ReferenceLabel(action.labels, tx.reference)
+    result = applyBrc153ReferenceLabel(result, tx.reference)
   }
   if (timeFilterRequested) {
     const ts = tx.created_at != null ? new Date(tx.created_at as any).getTime() : Number.NaN
     if (!Number.isNaN(ts)) {
       const timeLabel = makeBrc114ActionTimeLabel(ts)
-      if (!action.labels.includes(timeLabel)) action.labels.push(timeLabel)
+      if (!result.includes(timeLabel)) result.push(timeLabel)
     }
   }
+  return result
 }
 
 async function enrichActionOutputs(
   storage: StorageKnex,
-  tx: Partial<TableTransaction>,
-  action: WalletAction,
+  txs: Array<Partial<TableTransaction>>,
+  actions: WalletAction[],
+  transactionIds: number[],
   includeOutputLockingScripts: boolean
 ): Promise<void> {
-  const outputs: TableOutputX[] = await storage.findOutputs({
-    partial: { transactionId: tx.transactionId },
-    noScript: !includeOutputLockingScripts
+  const outputs = await findOutputsByTransactionIds(storage, 'transactionId', transactionIds, includeOutputLockingScripts)
+  const basketIds = [...new Set(outputs.map(o => o.basketId).filter((id): id is number => id != null && id > 0))]
+  const [tagsByOutputId, basketNames] = await Promise.all([
+    findTagsByOutputId(storage, outputs.map(o => o.outputId)),
+    findBasketNamesById(storage, basketIds)
+  ])
+  const outputsByTransactionId = groupBy(outputs, o => o.transactionId)
+  txs.forEach((tx, i) => {
+    actions[i].outputs = (outputsByTransactionId.get(tx.transactionId as number) ?? []).map(o => {
+      const wo: WalletActionOutput = {
+        satoshis: o.satoshis || 0,
+        spendable: !!o.spendable,
+        tags: tagsByOutputId.get(o.outputId) ?? [],
+        outputIndex: Number(o.vout),
+        outputDescription: o.outputDescription || '',
+        basket: (o.basketId != null && o.basketId > 0 ? basketNames.get(o.basketId) : undefined) || ''
+      }
+      if (includeOutputLockingScripts) wo.lockingScript = asString(o.lockingScript || [])
+      return wo
+    })
   })
-  action.outputs = []
-  for (const o of outputs) {
-    await storage.extendOutput(o, true, true)
-    const wo: WalletActionOutput = {
-      satoshis: o.satoshis || 0,
-      spendable: !!o.spendable,
-      tags: o.tags?.map(t => t.tag) || [],
-      outputIndex: Number(o.vout),
-      outputDescription: o.outputDescription || '',
-      basket: o.basket?.name || ''
-    }
-    if (includeOutputLockingScripts) wo.lockingScript = asString(o.lockingScript || [])
-    action.outputs.push(wo)
-  }
 }
 
 async function enrichActionInputs(
   storage: StorageKnex,
-  tx: Partial<TableTransaction>,
-  action: WalletAction,
+  txs: Array<Partial<TableTransaction>>,
+  actions: WalletAction[],
+  transactionIds: number[],
   includeSourceLockingScripts: boolean,
   includeUnlockingScripts: boolean
 ): Promise<void> {
-  const inputs: TableOutputX[] = await storage.findOutputs({
-    partial: { spentBy: tx.transactionId },
-    noScript: !includeSourceLockingScripts
-  })
-  action.inputs = []
-  if (inputs.length === 0) return
-  const rawTx = await storage.getRawTxOfKnownValidTransaction(tx.txid)
-  let bsvTx: BsvTransaction | undefined
-  if (rawTx != null) bsvTx = BsvTransaction.fromBinary(rawTx)
-  for (const o of inputs) {
-    await storage.extendOutput(o, true, true)
-    const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
-    const wo: WalletActionInput = {
-      sourceOutpoint: `${o.txid}.${o.vout}`,
-      sourceSatoshis: o.satoshis || 0,
-      inputDescription: o.outputDescription || '',
-      sequenceNumber: input?.sequence || 0
+  const inputs = await findOutputsByTransactionIds(storage, 'spentBy', transactionIds, includeSourceLockingScripts)
+  const inputsByTransactionId = groupBy(inputs, o => o.spentBy)
+  const spendingTxids = txs
+    .filter(tx => inputsByTransactionId.has(tx.transactionId as number) && tx.txid != null && tx.txid !== '')
+    .map(tx => tx.txid as string)
+  const rawTxs = await storage.getProvenOrRawTxs(spendingTxids)
+  txs.forEach((tx, i) => {
+    const action = actions[i]
+    action.inputs = []
+    const txInputs = inputsByTransactionId.get(tx.transactionId as number)
+    if (txInputs == null) return
+    const r = tx.txid != null && tx.txid !== '' ? rawTxs.get(tx.txid) : undefined
+    const rawTx = r?.proven != null ? r.proven.rawTx : r?.rawTx
+    const bsvTx = rawTx != null ? BsvTransaction.fromBinary(rawTx) : undefined
+    for (const o of txInputs) {
+      const input = bsvTx?.inputs.find(v => v.sourceTXID === o.txid && v.sourceOutputIndex === o.vout)
+      const wo: WalletActionInput = {
+        sourceOutpoint: `${o.txid}.${o.vout}`,
+        sourceSatoshis: o.satoshis || 0,
+        inputDescription: o.outputDescription || '',
+        sequenceNumber: input?.sequence || 0
+      }
+      action.inputs.push(wo)
+      if (includeSourceLockingScripts) wo.sourceLockingScript = asString(o.lockingScript || [])
+      if (includeUnlockingScripts) wo.unlockingScript = input?.unlockingScript?.toHex()
     }
-    action.inputs.push(wo)
-    if (includeSourceLockingScripts) wo.sourceLockingScript = asString(o.lockingScript || [])
-    if (includeUnlockingScripts) wo.unlockingScript = input?.unlockingScript?.toHex()
-  }
+  })
 }
 
 export async function listActions(
@@ -249,22 +373,26 @@ export async function listActions(
     })
   }
 
-  if (vargs.includeLabels || vargs.includeInputs || vargs.includeOutputs) {
-    await Promise.all(
-      txs.map(async (tx, i) => {
-        const action = r.actions[i]
-        if (vargs.includeLabels) await enrichActionLabels(storage, tx, action, timeFilterRequested)
-        if (vargs.includeOutputs) await enrichActionOutputs(storage, tx, action, !!vargs.includeOutputLockingScripts)
-        if (vargs.includeInputs) {
-          await enrichActionInputs(
-            storage,
-            tx,
-            action,
-            !!vargs.includeInputSourceLockingScripts,
-            !!vargs.includeInputUnlockingScripts
-          )
-        }
-      })
+  // Load each association for the whole page at once rather than per action.
+  const transactionIds = txs.map(tx => tx.transactionId).filter((id): id is number => id !== undefined)
+  if (vargs.includeLabels) {
+    const labelsByTransactionId = await findLabelsByTransactionId(storage, transactionIds)
+    txs.forEach((tx, i) => {
+      const labels = tx.transactionId === undefined ? [] : (labelsByTransactionId.get(tx.transactionId) ?? [])
+      r.actions[i].labels = actionLabels(tx, labels, timeFilterRequested)
+    })
+  }
+  if (vargs.includeOutputs && transactionIds.length > 0) {
+    await enrichActionOutputs(storage, txs, r.actions, transactionIds, !!vargs.includeOutputLockingScripts)
+  }
+  if (vargs.includeInputs && transactionIds.length > 0) {
+    await enrichActionInputs(
+      storage,
+      txs,
+      r.actions,
+      transactionIds,
+      !!vargs.includeInputSourceLockingScripts,
+      !!vargs.includeInputUnlockingScripts
     )
   }
   return r

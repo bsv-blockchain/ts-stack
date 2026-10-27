@@ -1961,11 +1961,11 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
   async verifyReadyForDatabaseAccess(trx?: TrxToken): Promise<DBType> {
     this._settings ??= await this.readSettings(trx)
 
-    // Always run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
+    // Run the PRAGMA for SQLite to ensure foreign key constraints are enabled.
     // This is necessary because PRAGMA foreign_keys is a per-connection setting,
     // and connection pools may create new connections that don't have it set.
-    // The performance impact is minimal as SQLite handles this efficiently.
-    if (this._settings.dbtype === 'SQLite') {
+    // SQLite ignores it inside a transaction, so skip the round trip there.
+    if (this._settings.dbtype === 'SQLite' && trx == null) {
       await this.toDb(trx).raw('PRAGMA foreign_keys = ON;')
     }
 
