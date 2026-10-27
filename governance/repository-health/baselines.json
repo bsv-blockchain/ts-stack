@@ -14,11 +14,11 @@
     "run": "https://github.com/BSV-blockchain/ts-stack/actions/runs/30144812565"
   },
   "conformance": {
-    "passed": 6499,
-    "skipped": 211,
-    "total": 6710,
-    "vectorFiles": 77,
-    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test (2026-10-21); 6499 required vector cases plus 2 metadata/wire tests, 211 unchanged governed skips; adds four required published SDK3.2.1 binary listOutputs interoperability vectors in both directions. Prior 2026-10-07 evidence: 6495 vector cases plus 2 metadata/wire tests, 211 unchanged governed skips, including six required SV Node v1.2.3 checked int64 splice-operand vectors."
+    "passed": 6505,
+    "skipped": 213,
+    "total": 6718,
+    "vectorFiles": 78,
+    "run": "Local: pnpm --filter @bsv/conformance-runner-ts test (2026-10-27); 6505 required vector cases plus 2 metadata/wire tests, 213 governed skips; adds six required Atomic BEEF (BRC-95) vectors and two intended ones skipped for the @bsv/sdk 3.x graph cut at proven transactions (BRCs#350). Prior 2026-10-21 evidence: 6499 vector cases plus 2 metadata/wire tests, 211 unchanged governed skips; adds four required published SDK3.2.1 binary listOutputs interoperability vectors in both directions."
   },
   "testExceptions": {
     "explicitSkipDeclarations": 60,
@@ -324,7 +324,7 @@
     "@bsv/overlay-discovery-services": "2.2.8",
     "@bsv/overlay-express": "2.8.0",
     "@bsv/overlay-topics": "2.0.2",
-    "@bsv/sdk": "4.0.0",
+    "@bsv/sdk": "4.0.1",
     "@bsv/verifast": "0.3.8",
     "@bsv/btms": "1.2.5",
     "@bsv/btms-permission-module": "1.2.3",
@@ -334,6 +334,6 @@
     "@bsv/wallet-toolbox-mobile": "2.15.1",
     "@bsv/wallet-toolbox": "2.15.1",
     "@bsv/output-knowledge": "0.1.0",
-    "@bsv/color-permission-module": "0.1.0"
+    "@bsv/color-permission-module": "0.1.1"
   }
 }

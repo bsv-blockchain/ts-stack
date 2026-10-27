@@ -7,6 +7,8 @@ export default {
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/__tests/**',
+    'docs/examples/src/client/getPki.ts',
+    'docs/examples/src/client/getProfile.ts',
     'docs/examples/src/client/sendP2P.ts',
     'docs/examples/src/client/sendP2PBeef.ts',
     'docs/examples/src/mockUser.ts',

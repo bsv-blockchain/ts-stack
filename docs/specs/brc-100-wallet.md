@@ -260,11 +260,11 @@ Optional args:
 
 Returns:
 
-| Field          | Type                                                                                                                                                                                                                                    |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `totalOutputs` | `number`; total matching outputs before pagination, independent of `limit` and `offset`. For a BRC-112 module balance query (`p <module> balance <basket>`), the exact balance as canonical decimal text, with no outputs and no `BEEF` |
-| `BEEF`         | `BEEF`, when `include: 'entire transactions'`                                                                                                                                                                                           |
-| `outputs`      | `WalletOutput[]`                                                                                                                                                                                                                        |
+| Field          | Type                                                                                                                                                                                                                                                                                                                  |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `totalOutputs` | `number`; total matching outputs before pagination, independent of `limit` and `offset`. For a BRC-112 balance query (`balance <basket>` or `p <module> balance <basket>`), a numeric summary with no outputs or `BEEF`; exact through 2^53, possibly rounded above. Binary serialization requires a value below 2^64 |
+| `BEEF`         | `BEEF`, when `include: 'entire transactions'`                                                                                                                                                                                                                                                                         |
+| `outputs`      | `WalletOutput[]`                                                                                                                                                                                                                                                                                                      |
 
 `WalletOutput` includes `outpoint`, `satoshis`, `spendable`, optional `lockingScript`, optional `customInstructions`, optional `tags`, and optional action `labels`.
 

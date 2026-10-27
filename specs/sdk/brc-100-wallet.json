@@ -53,6 +53,11 @@
       "minimum": 0,
       "maximum": 4294967295
     },
+    "PositiveInteger64OrZero": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "A finite nonnegative integer summary. JavaScript numbers are exact through 2^53 and may round above; JSON has no uint64 ceiling. Binary serialization requires a value below 2^64."
+    },
     "DecimalString": {
       "type": "string",
       "pattern": "^(0|[1-9][0-9]*)$",
@@ -616,11 +621,8 @@
         "required": ["totalOutputs", "outputs"],
         "properties": {
           "totalOutputs": {
-            "oneOf": [
-              { "$ref": "#/$defs/PositiveIntegerOrZero" },
-              { "$ref": "#/$defs/DecimalString" }
-            ],
-            "description": "The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as a DecimalString with no outputs and no BEEF."
+            "$ref": "#/$defs/PositiveInteger64OrZero",
+            "description": "Ordinary output count; for balance <basket> or p <module> balance <basket>, the numeric balance with no outputs or BEEF."
           },
           "BEEF": { "$ref": "#/$defs/ByteArray" },
           "outputs": { "type": "array", "items": { "$ref": "#/$defs/WalletOutput" } }

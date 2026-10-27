@@ -75,10 +75,18 @@ function source(
 }
 
 describe('finite wallet output source', () => {
-  it.each(['0', '90071992547409931234567890'])(
-    'does not present SDK4 module balance %s as an empty output scan',
-    async totalOutputs => {
-      const balanceQuery = { basket: 'p color balance asset' },
+  it.each([
+    ['balance asset', 0],
+    ['balance asset', 180],
+    ['balance asset', 2 ** 64],
+    ['p color balance asset', 0],
+    ['p color balance asset', 180],
+    ['p color balance asset', 2 ** 64]
+  ] as const)(
+    'does not present query %s with numeric balance %s as an empty output scan',
+    async (basket, totalOutputs) => {
+      const listOutputs = jest.fn(async () => ({ totalOutputs, outputs: [] })),
+        balanceQuery = { basket },
         balanceScope = {
           ...scope,
           queryDigest: walletOutputQueryDigest(scope.service, balanceQuery)
@@ -87,7 +95,7 @@ describe('finite wallet output source', () => {
           id: 'wallet-balance',
           scope: balanceScope,
           query: balanceQuery,
-          wallet: { listOutputs: async () => ({ totalOutputs, outputs: [] }) }
+          wallet: { listOutputs }
         }),
         batches: SourceBatch[] = []
       await expect(
@@ -100,6 +108,7 @@ describe('finite wallet output source', () => {
         })()
       ).rejects.toMatchObject({ code: 'unsupported' })
       expect(batches).toEqual([])
+      expect(listOutputs).not.toHaveBeenCalled()
     }
   )
 

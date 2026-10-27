@@ -1513,11 +1513,9 @@ components:
           BEEF: [2, 0, 190, 239]
       properties:
         totalOutputs:
-          oneOf:
-            - type: number
-            - type: string
-              pattern: '^(0|[1-9][0-9]*)$'
-          description: The number of matching outputs; for a BRC-112 module balance query (p <module> balance <basket>), the exact balance as decimal text with no outputs and no BEEF.
+          type: integer
+          minimum: 0
+          description: Numeric count, or a BRC-112 balance with no outputs and no BEEF. Finite nonnegative integer summaries may round above 2^53; binary serialization requires a value below 2^64.
           examples:
             - 1
         BEEF:

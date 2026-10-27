@@ -2,7 +2,8 @@ import { Transaction, WalletLoggerInterface } from '@bsv/sdk'
 import type * as sdk from '../../sdk'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
-import { TableOutput } from '../schema/tables'
+import { ProvenTxReqNonTerminalStatus } from '../../sdk/types'
+import { TableOutput, TableProvenTxReq } from '../schema/tables'
 import { verifyId } from '../../utility/utilityHelpers'
 import {
   classifyOutputUtxo,
@@ -75,20 +76,46 @@ async function findLocalInputs(
 }
 
 /**
- * Conservatively quarantine every locally-owned input of a transaction after
- * Arcade supplies explicit missing-input/conflict evidence. This path is
- * deliberately independent of explorer or UTXO providers: a positive
- * broadcaster verdict is enough to stop the failed transaction from feeding
- * the same inputs into another action. A later validated mined proof remains
- * able to repair the transaction through the ordinary proof recovery path.
+ * The outpoints a rejection names as spent, as `txid.vout`. Arcade relays the
+ * validator's text, e.g. "UTXO_SPENT (70): [ProcessTransaction][<txid>]
+ * <txid>:<vout> utxo already spent by tx <spender>[0]".
+ */
+function namedOutpoints(extraInfo: string | undefined): Set<string> {
+  const named = new Set<string>()
+  for (const match of (extraInfo ?? '').matchAll(/\b([0-9a-fA-F]{64})[:.](\d+)\b/g)) {
+    named.add(`${match[1].toLowerCase()}.${Number(match[2])}`)
+  }
+  return named
+}
+
+/**
+ * Quarantine the locally-owned inputs of a transaction after Arcade supplies
+ * explicit missing-input/conflict evidence. This path is deliberately
+ * independent of explorer or UTXO providers: a positive broadcaster verdict
+ * is enough to stop the failed transaction from feeding the same inputs into
+ * another action. When the rejection names which of the transaction's inputs
+ * were spent, only those are quarantined: the others were released when the
+ * transaction failed and are still the wallet's on chain (a retry's change
+ * input must not leave the balance because the retry lost its race for a
+ * different input). When it names none, every local input is quarantined. A
+ * later validated mined proof remains able to repair the transaction through
+ * the ordinary proof recovery path.
  */
 export async function quarantineReqInputs(
   req: EntityProvenTxReq,
   storage: StorageProvider,
   trx?: sdk.TrxToken,
-  logger?: WalletLoggerInterface
+  logger?: WalletLoggerInterface,
+  evidence?: { extraInfo?: string }
 ): Promise<FailedInputReconciliationResult> {
-  const localInputs = await findLocalInputs(req, storage, trx)
+  let localInputs = await findLocalInputs(req, storage, trx)
+  const inputOutpoints = new Set(
+    Transaction.fromBinary(req.rawTx).inputs.map(input => `${input.sourceTXID ?? ''}.${input.sourceOutputIndex}`)
+  )
+  const named = [...namedOutpoints(evidence?.extraInfo)].filter(outpoint => inputOutpoints.has(outpoint))
+  if (named.length > 0) {
+    localInputs = localInputs.filter(({ outpoint }) => named.includes(`${outpoint.txid}.${outpoint.vout}`))
+  }
   const result = await quarantineLocalInputs(localInputs, storage, trx)
   if (result.staleConfirmed > 0) {
     logger?.log(
@@ -121,6 +148,100 @@ export async function quarantineReqInputsFromFailedParents(
     )
   }
   return result
+}
+
+/**
+ * Fail every pending local action that spends an output of a terminal
+ * transaction, and every pending action that spends theirs, in turn. Such an
+ * action can never be mined; left pending it holds its other inputs as spent
+ * and offers its own outputs as funding, so the wallet keeps building on a
+ * dead chain until an aged-request poll catches up. Each descendant request
+ * becomes `invalid`, its transaction `failed` (which releases its inputs),
+ * and only the inputs it took from a failed parent stay quarantined.
+ *
+ * @returns the txids of the descendants failed here, in the order failed.
+ */
+export async function failPendingDescendants(
+  terminalTxids: string[],
+  storage: StorageProvider,
+  trx?: sdk.TrxToken
+): Promise<string[]> {
+  const pending = await storage.findProvenTxReqs({ partial: {}, status: ProvenTxReqNonTerminalStatus, trx })
+  const descendants = findPendingDescendants(terminalTxids, pending)
+  // Descendants fail one at a time, in order, inside the caller's storage transaction.
+  await descendants.reduce<Promise<void>>(async (previous, descendant) => {
+    await previous
+    await failDescendant(descendant, storage, trx)
+  }, Promise.resolve())
+  return descendants.map(({ reqApi }) => reqApi.txid)
+}
+
+interface PendingDescendant {
+  reqApi: TableProvenTxReq
+  parentTxids: string[]
+}
+
+/**
+ * The pending requests that spend an output of a terminal transaction, or of
+ * a request found here, in the order they fail, each with the failed parents
+ * it spends. Passes over `pending` repeat until one finds nothing new.
+ */
+function findPendingDescendants(terminalTxids: string[], pending: TableProvenTxReq[]): PendingDescendant[] {
+  const failed = new Set(terminalTxids)
+  const candidates = pending.map(reqApi => ({ reqApi, sources: sourceTxids(reqApi.rawTx) }))
+  const descendants: PendingDescendant[] = []
+  let grew = true
+  while (grew) {
+    grew = false
+    for (const { reqApi, sources } of candidates) {
+      if (failed.has(reqApi.txid)) continue
+      const parentTxids = [...new Set(sources.filter(txid => failed.has(txid)))]
+      if (parentTxids.length === 0) continue
+      failed.add(reqApi.txid)
+      descendants.push({ reqApi, parentTxids })
+      grew = true
+    }
+  }
+  return descendants
+}
+
+/** The txids a raw transaction spends from; none when it does not parse. */
+function sourceTxids(rawTx: number[]): string[] {
+  try {
+    return Transaction.fromBinary(rawTx)
+      .inputs.map(input => input.sourceTXID)
+      .filter((txid): txid is string => txid != null)
+  } catch {
+    return []
+  }
+}
+
+async function failDescendant(
+  { reqApi, parentTxids }: PendingDescendant,
+  storage: StorageProvider,
+  trx?: sdk.TrxToken
+): Promise<void> {
+  const req = new EntityProvenTxReq(reqApi)
+  req.status = 'invalid'
+  req.addHistoryNote({
+    when: new Date().toISOString(),
+    what: 'failedParentCascade',
+    parentTxids: parentTxids.join(',')
+  })
+  await req.updateStorageDynamicProperties(storage, trx)
+  let transactionIds = req.notify.transactionIds ?? []
+  if (transactionIds.length === 0) {
+    transactionIds = (await storage.findTransactions({ partial: { txid: req.txid }, noRawTx: true, trx })).map(
+      tx => tx.transactionId
+    )
+  }
+  await transactionIds.reduce<Promise<void>>(async (previous, transactionId) => {
+    await previous
+    const tx = (await storage.findTransactions({ partial: { transactionId }, noRawTx: true, trx }))[0]
+    if (tx == null || tx.status === 'failed' || tx.status === 'completed' || tx.provenTxId != null) return
+    await storage.updateTransactionStatus('failed', transactionId, undefined, undefined, trx)
+  }, Promise.resolve())
+  await quarantineReqInputsFromFailedParents(req, parentTxids, storage, trx)
 }
 
 /**

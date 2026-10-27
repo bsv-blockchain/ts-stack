@@ -313,10 +313,10 @@ local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
 its existing request-signature and withdrawal/consumption checks using the same
 underlying verifier.
 
-`WalletOutputSource` consumes ordinary BRC-100 output-count pages. SDK 4.0's
-BRC-112 module balance queries return exact decimal text, not output counts;
-the adapter refuses those results before emitting observations or an empty-scan
-completion. Use the wallet module balance API separately; balances must not be
+`WalletOutputSource` consumes ordinary BRC-100 output-count pages. BRC-112
+balance queries return numeric summaries, not output counts; the adapter rejects
+ordinary and module balance queries before calling the wallet, emitting
+observations or reporting an empty-scan completion. Use the wallet module balance API separately; balances must not be
 coerced into pagination counts or interpreted as output withdrawal evidence.
 
 ## Getting started

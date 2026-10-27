@@ -938,7 +938,7 @@ Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](
 
 ```ts
 export interface ListOutputsResult {
-  totalOutputs: PositiveIntegerOrZero | DecimalString
+  totalOutputs: PositiveInteger64OrZero
   BEEF?: BEEF
   outputs: WalletOutput[]
 }
@@ -4725,7 +4725,7 @@ export default class WindowCWISubstrate implements WalletInterface {
     },
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<{
-    totalOutputs: PositiveIntegerOrZero | DecimalString
+    totalOutputs: PositiveInteger64OrZero
     outputs: Array<{
       outpoint: OutpointString
       satoshis: SatoshiValue
@@ -7097,3 +7097,15 @@ specOpThrowReviewActions = 'a496e747fc3ad5fabdd4ae8f91184e71f87539bd3d962aa25489
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)
 
 ---
+
+### Type: PositiveInteger64OrZero
+
+```ts
+export type PositiveInteger64OrZero = number
+```
+
+A finite nonnegative count or BRC-112 balance summary. JSON summaries may exceed
+uint64; numeric binary serialization requires a value below 2^64. JavaScript
+numbers are exact through 2^53 and may round above. DecimalString remains an
+exported compatibility alias. The default binary layout retains legacy clients.
+See the SDK README for #674’s explicitly acknowledged spendability extension.

@@ -292,7 +292,7 @@ export class ProtoWallet {
       keyID,
       counterparty
     )
-    return { hmac: sha256hmac(key.toArray(), data) }
+    return { hmac: sha256hmac(key.toArray('be', 32), data) }
   }
 
   async verifyHmac(args: VerifyHmacArgs): Promise<VerifyHmacResult> {
@@ -308,7 +308,7 @@ export class ProtoWallet {
       keyID,
       counterparty
     )
-    const computed = sha256hmac(key.toArray(), data)
+    const computed = sha256hmac(key.toArray('be', 32), data)
 
     const valid = constantTimeEquals(toArray(computed), toArray(provided))
     if (!valid) {

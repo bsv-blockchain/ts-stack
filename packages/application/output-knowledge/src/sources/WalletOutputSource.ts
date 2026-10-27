@@ -85,6 +85,11 @@ export class WalletOutputSource implements Source {
     let offset = 0,
       bytes = 0
     try {
+      if (/^(?:balance |p [^ ]+ balance )/.test(this.query.basket))
+        throw new OutputProtocolError(
+          'unsupported',
+          'Wallet output sources require output-count pages, not balance summaries'
+        )
       const deadline = this.session.now() + request.limits.deadlineMs
       for (let page = 0; page < this.maximumPages; page++) {
         this.session.check(signal)
@@ -106,11 +111,6 @@ export class WalletOutputSource implements Source {
           )
         this.session.check(signal)
         const result = validateWalletResult('listOutputs', raw, args)
-        if (typeof result.totalOutputs !== 'number')
-          throw new OutputProtocolError(
-            'unsupported',
-            'Wallet output sources require output-count pages, not module balances'
-          )
         const beef = Utils.toBase64(result.BEEF ?? []),
           observations: OutputObservation[] = result.outputs.map((row, index) => {
             const [txid, outputIndex] = row.outpoint.split('.')

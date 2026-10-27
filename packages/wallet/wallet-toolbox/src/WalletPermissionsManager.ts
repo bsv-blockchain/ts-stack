@@ -2534,11 +2534,10 @@ export class WalletPermissionsManager implements WalletInterface {
       return await fn()
     } finally {
       release?.()
-      currentTail.finally(() => {
-        if (this.groupedPermissionFlowTail.get(originator) === currentTail) {
-          this.groupedPermissionFlowTail.delete(originator)
-        }
-      })
+      await currentTail
+      if (this.groupedPermissionFlowTail.get(originator) === currentTail) {
+        this.groupedPermissionFlowTail.delete(originator)
+      }
     }
   }
 

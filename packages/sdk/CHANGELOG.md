@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file. The format 
 - Historical note: SDK 2.8.0 began rejecting non-32-byte types accepted by earlier
   signing/JSON paths. Those types never reliably round-tripped through the old
   fixed-width binary parser. This profile restores their use without reissuance.
+
 ### Revenue profile spend construction
 
 Revenue listing profile witness estimates use the existing Script encoder for
@@ -275,6 +276,31 @@ replay, payment authorization, wire change or consumer migration is introduced.
 - [Template for New Releases](#template-for-new-releases)
 
 ## [Unreleased]
+
+### BRC-112 balances as numbers; listOutputs encoding restored (4.0.1 hotfix)
+
+- `ListOutputsResult.totalOutputs` is a number again, typed
+  `PositiveInteger64OrZero` (new alias: a finite non-negative integer summary,
+  exact through 2^53 as a JavaScript number). `DecimalString` is
+  retained as a deprecated export for source compatibility. A BRC-112 balance query (`balance <basket>` or
+  `p <module> balance <basket>`) returns the balance as a nonnegative integer,
+  which may exceed the 2^32 - 1 output-count bound. A JavaScript number is exact
+  to 2^53 and rounded above; code that moves coins sums the outputs. Result
+  validation accepts that integer at any magnitude, with no outputs and no
+  BEEF, for both balance forms (JSON carries the Number), and keeps the
+  safe-integer count rule for every other query.
+- The BRC-100 binary `listOutputs` response encodes a balance result like any
+  other result: `totalOutputs` is its varint, without the 2^32 - 1 count bound
+  (up to 2^64 - 1), read as a bigint and converted to a number. The processor
+  refuses a balance of 2^64 or more, which the varint cannot carry. This also lets
+  `balance <basket>` satoshi sums above 2^32 - 1 cross the binary wire.
+- Default binary responses restore the deployed SDK 2/3 layout without an
+  unnegotiated per-output `spendable` byte. The explicitly selected,
+  acknowledged spendability extension from #674 remains available. No separate
+  profile for the defective 4.0.0 layout is introduced.
+- Migration: `typeof totalOutputs === 'number'` checks added for 4.0.0 are
+  always true and may be removed. A module balance read as text is now a
+  number.
 
 ### Performance (4.0.0 candidate)
 

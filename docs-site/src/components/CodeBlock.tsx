@@ -44,10 +44,13 @@ export default function CodeBlock({ children, ...rest }: Readonly<Props>) {
   }
 
   function copy() {
-    navigator.clipboard.writeText(rawCode).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    })
+    navigator.clipboard
+      .writeText(rawCode)
+      .then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1800)
+      })
+      .catch(() => setCopied(false))
   }
 
   return (

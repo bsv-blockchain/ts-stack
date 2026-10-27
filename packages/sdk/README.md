@@ -28,40 +28,24 @@ See [identity integration](../../docs/guides/identity-did-vc.md) and
 [migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
 This is a source candidate; publication and deployment are separate actions.
 
-## Module balances and listOutputs spendability (4.0 candidate)
+## Numeric results and wallet wire compatibility (4.0.1 hotfix)
 
-`ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`. A
-BRC-112 module balance query (`p <module> balance <basket>`) returns the exact
-balance as decimal text, with no outputs and no BEEF. Every other query still
-returns a count. Ordinary binary `listOutputs` requests and responses retain
-the SDK 2/3 encoding, with implicit `spendable: true`; existing applications
-and wallets can upgrade independently. Module balance text is selected only
-by the new balance query.
+`ListOutputsResult.totalOutputs` is a number. Ordinary listings return counts;
+BRC-112 `balance <basket>` and `p <module> balance <basket>` return nonnegative
+integer summaries with empty outputs and no BEEF. Sums are computed exactly
+before Number conversion. Values above 2^53 may round; enumerate outputs for
+exact accounting or value movement. JSON can carry a larger finite summary;
+the numeric binary serializer rejects values at or above 2^64.
 
-Module inventory can include non-spendable records. To carry those over binary,
-explicitly construct `new WalletWireTransceiver(wire, { listOutputsEncoding:
-'spendable' })` against a processor supporting that extension. The request
-appends one version byte (`1`) after `seekPermission`; the response acknowledges
-it with signed VarInt `-1` immediately after the success byte, then carries a
-byte (`0` or `1`) after each output's locking script. Default
-`WalletClient` connections do not request this extension. Unknown extensions
-and trailing bytes are rejected before calling the wallet. A legacy request
-whose result contains `spendable: false` fails rather than reporting it as true.
-JSON also preserves those records. There is no format guessing or automatic
-retry against an older processor.
+Default binary requests retain deployed SDK2/3 bytes and imply spendable:true.
+The #674 extension is preserved: `new WalletWireTransceiver(wire,
+{ listOutputsEncoding: 'spendable' })` explicitly requests and requires an
+acknowledged spendability byte. JSON and this extension preserve reserved or
+pending module inventory records. No format guessing or automatic retry occurs.
 
-Code that uses `totalOutputs` as a number narrows it first:
-
-```ts
-// 3.x
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-const pages = Math.ceil(totalOutputs / 100)
-
-// 4.0
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-if (typeof totalOutputs !== 'number') throw new Error('Expected an output count')
-const pages = Math.ceil(totalOutputs / 100)
-```
+`DecimalString` and the previous module-balance helpers remain exported for
+source compatibility. Existing applications retain numeric results without
+selecting a separate compatibility profile.
 
 ## Wallet integration
 
