@@ -1,5 +1,32 @@
 # Performance Benchmarks
 
+## BRC-103 general message checks (October 2026)
+
+Measured on Node 26.9, Apple Silicon, `BENCH_SAMPLES=5`, same machine before
+and after:
+
+| Benchmark                                         | Before   | After    |
+| ------------------------------------------------- | -------- | -------- |
+| `Peer.toPeer` round trip, 1 MiB payload           | 212 ms   | 159 ms   |
+| `Peer.toPeer` round trip, 1 KiB payload           | 3.59 ms  | 3.50 ms  |
+| `snapshotAuthMessage`, 1 MiB general payload      | 64.5 ms  | 58.8 ms  |
+
+- Checking a byte array reads every element's property descriptor (about
+  60 ms per MiB), so that accessors, holes and proxies are rejected exactly.
+  `Peer.toPeer` checked the payload once when copying it and again when
+  snapshotting the outbound message. It now keeps a private copy of the checked
+  bytes; when sending, if the array it gave the wallet to sign still holds the
+  same bytes, it sends that copy without checking each byte again. If the
+  wallet changed the array, it is checked in full as before.
+- The received message's shape check no longer re-reads payload and signature
+  arrays that the snapshot has just verified as bytes.
+- Which inputs are accepted or rejected, the error messages, the byte limits
+  and the message sent are unchanged. The one exception is a wallet that
+  replaces a payload element with a getter returning the same byte, which
+  `toPeer` no longer rejects.
+
+Reproduce with `node benchmarks/auth-peer-bench.js`.
+
 ## Public-key reuse, verifier memory and legacy byte paths (October 2026)
 
 Three low-risk changes from a library-wide performance review. Measured on

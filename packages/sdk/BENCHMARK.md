@@ -1,7 +1,8 @@
 # Performance benchmarks — `@bsv/sdk`
 
-The SDK has fourteen dependency-free Node benchmark programs under
+The SDK has sixteen dependency-free Node benchmark programs under
 `benchmarks/`. They exercise atomic BEEF, legacy and byte BEEF conversions,
+BEEF dependency sorting, BRC-103 peer messages,
 BigNumber arithmetic and serialization, elliptic-curve scalar/signature work,
 public-key reuse and verifier memory, hashing, large wallet payloads,
 readers/writers, script deletion and serialization, symmetric encryption,

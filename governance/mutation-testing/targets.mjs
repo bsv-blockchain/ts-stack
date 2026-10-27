@@ -2664,6 +2664,11 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/AuthMessageValidation.ts',
+          'if (context.ownedByteArrays?.has(candidate) === true) {',
+          '// Capture each descriptor value once'
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
           'if (!separatePayload) bytes +=',
           'if (snapshot) retain('
         ],
@@ -2757,6 +2762,8 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/src/auth/__tests/Peer.boundary.test.ts',
           '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
+          '<rootDir>/src/auth/__tests/Peer.outboundSnapshot.test.ts',
+          '<rootDir>/src/auth/__tests/AuthMessageValidation.outbound.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.certificateWait.test.ts',

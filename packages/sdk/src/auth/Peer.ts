@@ -19,6 +19,7 @@ import {
   copyAuthByteArray,
   snapshotAuthMessage,
   snapshotBoundedAuthData,
+  snapshotOutboundAuthMessage,
   MAX_AUTH_MESSAGE_BYTES
 } from './AuthMessageValidation.js'
 import Random from '../primitives/Random.js'
@@ -44,6 +45,15 @@ const BufferCtor = typeof globalThis === 'undefined' ? undefined : (globalThis a
  * claimed identity. BRC-103 does not encrypt the transport; callers must add
  * confidentiality and authorize the authenticated identity separately.
  */
+/** Whether `value` is an array holding exactly the elements of `bytes`, with no holes. */
+function sameBytes(value: unknown, bytes: number[]): boolean {
+  if (!Array.isArray(value) || value.length !== bytes.length) return false
+  for (let index = 0; index < bytes.length; index++) {
+    if (!Object.hasOwn(value, index) || !Object.is(value[index], bytes[index])) return false
+  }
+  return true
+}
+
 export class Peer {
   // Declared as the synchronous {@link SessionManager} for back-compat with
   // pre-existing consumers that read `peer.sessionManager.getSession(...)`
@@ -186,6 +196,8 @@ export class Peer {
         : (this.#maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
       true
     )
+    // The wallet signs `message` and could change it; keep the checked bytes separately.
+    const checkedPayload = message.slice()
     if (identityKey !== undefined) assertAuthPeerTarget(identityKey)
     if (
       this.#autoPersistLastSession &&
@@ -230,12 +242,14 @@ export class Peer {
     await this.#touchSession(peerSession.sessionNonce as string)
 
     try {
-      const outbound =
-        this.#maxGeneralPayloadBytes === undefined
-          ? snapshotBoundedAuthData(generalMessage)
-          : snapshotAuthMessage(generalMessage, {
-              maxGeneralPayloadBytes: this.#maxGeneralPayloadBytes
-            })
+      // While `message` still holds the checked bytes, send that copy without
+      // checking every byte again; otherwise check `message` as it is now.
+      const unchanged = sameBytes(message, checkedPayload)
+      const outbound = snapshotOutboundAuthMessage(
+        unchanged ? { ...generalMessage, payload: checkedPayload } : generalMessage,
+        new Set(unchanged ? [checkedPayload, signature] : [signature]),
+        this.#maxGeneralPayloadBytes
+      )
       await this.#transport.send(outbound)
     } catch (error: unknown) {
       this.propagateTransportError(peerSession.peerIdentityKey, error)
