@@ -29,8 +29,21 @@ const requireEnvelope = (payload: WirePayload): void => {
   }
 }
 
+/**
+ * A MessageBox client together with the options its backend takes.
+ *
+ * The shape a host reaches for when it wants anything other than the defaults —
+ * live socket delivery, most of all. Without it the only way to set them is to
+ * build {@link MessageBoxTransport} by hand, which means not using
+ * `GroupMessagingClient.create` at all.
+ */
+export type MessageBoxTransportInput = MessageBoxTransportOptions & {
+  client: MessageBoxClientLike
+}
+
 /** Anything {@link TransportService.open} knows how to turn into delivery. */
-export type TransportInput = TransportService | TransportBackend | MessageBoxClientLike
+export type TransportInput =
+  TransportService | TransportBackend | MessageBoxClientLike | MessageBoxTransportInput
 
 /**
  * Delivery, as the rest of the library sees it.
@@ -211,7 +224,19 @@ export class BroadcastError extends GroupMessagingError {
   }
 }
 
-const resolve = (input: TransportBackend | MessageBoxClientLike): TransportService => {
+const resolve = (
+  input: TransportBackend | MessageBoxClientLike | MessageBoxTransportInput
+): TransportService => {
+  // Checked first: the wrapper carries neither `send` nor `sendMessage`, so it
+  // would fall through every other branch to the refusal below.
+  const wrapped = (input as MessageBoxTransportInput).client
+  if (wrapped !== undefined) {
+    const { client, ...options } = input as MessageBoxTransportInput
+    if (typeof client.sendMessage !== 'function') {
+      throw new GroupMessagingError('Unrecognized transport. `client` must be a MessageBoxClient.')
+    }
+    return TransportService.messageBox(client, options)
+  }
   if (
     typeof (input as TransportBackend).send === 'function' &&
     typeof (input as TransportBackend).onMessage === 'function'
