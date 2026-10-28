@@ -1,6 +1,6 @@
 # BSV Script Templates
 
-Candidate `2.1.0` adds the `OneColor` BRC-162 template and SDK4 peer support from current main, alongside updated packed first-party dependency ranges. Existing templates, wire formats and defaults remain supported. The additive `OneColor` API and migration guidance are documented below.
+Candidate `2.2.0` adds the 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`), `OneColor.lockRemainder` and the 36-byte-aware `oneColorTokenId*` helpers on top of published `2.1.1` (the `OneColor` BRC-162 template and SDK4 peer support). Existing templates, wire formats and defaults remain supported. The additive APIs and migration guidance are documented below.
 
 BSV BLOCKCHAIN | Script Templates
 
