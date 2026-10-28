@@ -3,7 +3,7 @@ id: pkg-did
 title: '@bsv/did'
 kind: package
 domain: helpers
-version: '0.3.1'
+version: '0.3.2'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
@@ -93,3 +93,7 @@ Some eIDAS/EUDI profiles might require P-256 `ES256`. Those profiles need a P-25
 
 - [@bsv/sdk](../sdk/bsv-sdk.md) — Core keys, signatures, and wallet interfaces
 - [@bsv/simple](simple.md) — Higher-level wallet-aware app helpers
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

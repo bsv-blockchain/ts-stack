@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.2.9` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+- Prepare `2.2.8` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
 - `isValidTopicOrServiceName`, SHIP/SLAP admission, `WalletAdvertiser` and the
   SHIP/SLAP lookup filters accept topic and service names with digits, up to
   256 bytes, matching the `@bsv/sdk` overlay name grammar and the BRC-207

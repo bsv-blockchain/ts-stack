@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   parseArguments,
+  parseJestShard,
   resolvePackageScript,
   stripLeadingBuildCommand
 } from './run-prebuilt-package-script.mjs'
@@ -30,14 +31,29 @@ test('prebuilt package scripts remove only an exact leading standard build comma
 test('prebuilt package script arguments require one named script', () => {
   assert.deepEqual(parseArguments(['--script', 'test:coverage']), {
     scriptName: 'test:coverage',
-    ifPresent: false
+    ifPresent: false,
+    jestShard: undefined
   })
   assert.deepEqual(parseArguments(['--if-present', '--script', 'pack:check']), {
     scriptName: 'pack:check',
-    ifPresent: true
+    ifPresent: true,
+    jestShard: undefined
+  })
+  assert.deepEqual(parseArguments(['--script', 'test', '--jest-shard', '2/4']), {
+    scriptName: 'test',
+    ifPresent: false,
+    jestShard: '2/4'
   })
   assert.throws(() => parseArguments([]), /--script is required/)
   assert.throws(() => parseArguments(['--package', 'example']), /Unknown argument/)
+})
+
+test('prebuilt package script Jest shards accept only k/n with 1 <= k <= n', () => {
+  assert.equal(parseJestShard('1/4'), '1/4')
+  assert.equal(parseJestShard('4/4'), '4/4')
+  for (const value of [undefined, '', '0/4', '5/4', '1/0', '01/4', '1/4 && true', '1/4;', 'a/b'])
+    assert.throws(() => parseJestShard(value), /--jest-shard must be k\/n/)
+  assert.throws(() => parseArguments(['--script', 'test', '--jest-shard']), /--jest-shard/)
 })
 
 test('prebuilt package script resolution reads the current package manifest', async () => {

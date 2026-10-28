@@ -61,7 +61,7 @@ to approve.
 | Receive tokens                | `internalizeAction` with `basket insertion` into `p color <assetTag>` and the BRC-207 receipt instructions                                                       |
 | Sign an app-built transaction | `createSignature` with a `p color` protocol ID and a BRC-207 signature envelope                                                                                  |
 | Discover holdings             | `listOutputs` on `p color assets`                                                                                                                                |
-| Exact balance                 | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a decimal string                                                                                |
+| Balance                       | `listOutputs` on `p color balance <assetTag>`; `totalOutputs` is a number, exact to 2^53                                                                         |
 
 ## Required profiles
 
@@ -72,10 +72,12 @@ profile an asset requires must be registered, and handlers only restrict. A
 handler's `admitReceipt` decides each receipt of its asset as `settled` or
 `pending`; pending receipts and the change of a plain-noSend hand-over are tagged
 `color_offline` until the host calls the in-process `markSettled(txid)` after
-submitting them. Receipts carry BRC-207 custody instructions only; the module
+submitting them. The pending balance, `p color balance <assetTag>` with
+`tags: ['color_offline']`, is a number like every balance, and pending outputs stay
+in `p color assets` with their `color_state_*` tag. Receipts carry BRC-207 custody instructions only; the module
 transports and validates no token history. Errors carry a `[ClassName] ` message
 prefix; a declined request throws `ColorConsentDeclinedError`. Without `profiles` the
-module behaves as 0.1.0, apart from `seekPermission` on every consent message and
+module behaves as 0.1.1, apart from `seekPermission` on every consent message and
 `ColorConsentDeclinedError` on a decline. See the package README for each
 handler hook.
 

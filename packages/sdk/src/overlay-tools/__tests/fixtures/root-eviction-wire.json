@@ -1,0 +1,505 @@
+{
+  "version": 1,
+  "specification": "BRC-199",
+  "scope": "Wire representation, digest and BRC-77 signature conformance only. Mock chain, opaque non-transaction BEEF and OP_TRUE script fixtures do not prove a valid advertisement, authority, durable decision or serving eligibility.",
+  "advertisementScript": "UQ==",
+  "vectors": [
+    {
+      "id": "suppress-a",
+      "request": {
+        "body": {
+          "action": "suppress",
+          "chain": {
+            "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "network": "mock"
+          },
+          "expiresAt": "200",
+          "issuedAt": "100",
+          "reason": "wire-conformance-only",
+          "recipient": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "requestId": "root_wire_request_a",
+          "requester": "027754b4fa0e8aced06d4167a2c59cca4cda1869c06ebadfb6488550015a88522c",
+          "targets": [
+            {
+              "advertisement": {
+                "beef": "AA==",
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+              "evidence": {
+                "detailDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+                "kind": "operator-policy",
+                "policy": "fixture-manual-review"
+              },
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "service": "ls_ship"
+            }
+          ],
+          "version": 1
+        },
+        "signature": "QkIzAQJ3VLT6DorO0G1BZ6LFnMpM2hhpwG6637ZIhVABWohSLAAEMQjpdrNGld5Dzs6w38eaq7xhoMUV5dc9zDemFAxErDBFAiEAsvQzr4CA4QE+PhEmdqStnZ3GytnOxFJWjdIYffjclKECIHPOldVeiO5lyuRqHWRHQQ3jr3eK3Q/1VSu9MM1HmkOZ"
+      },
+      "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+      "response": {
+        "body": {
+          "issuedAt": "150",
+          "outcomes": [
+            {
+              "actionStatus": "applied",
+              "affectedDecisionIds": [
+                "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"
+              ],
+              "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "reasonCode": "fixture-applied",
+              "revision": "1",
+              "service": "ls_ship",
+              "serving": {
+                "blockers": [
+                  {
+                    "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+                    "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+                  }
+                ],
+                "revision": "1",
+                "state": "suppressed"
+              }
+            }
+          ],
+          "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+          "requestDigest": "b91e0adfe4e8a08b0dc192b654ab28be41970f345d458063abdd493094229669",
+          "root": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "version": 1
+        },
+        "signature": "QkIzAQPjW8a7GwWyEwo3wo53HGy0vomzl7RUyLWeWU/swTtZ3wDqZZsQejMl61F0AITesptUgDSHr4/3SmSQ+OesQVMzCDBEAiBHY4e0EALjwa60vAi+s7iJEXQkVABt/keq07MZEOIitwIgE4hBf1zm4AN9ea3BFu/CDrDt5fRYOZz2U1hK2TBaR1w="
+      },
+      "expected": {
+        "requestDigest": "b91e0adfe4e8a08b0dc192b654ab28be41970f345d458063abdd493094229669",
+        "resultDigest": "2e44346f1835094e5913ec08b357f24d1dffcc13c2e901b60c8df939e9d68055",
+        "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+        "actionRevision": "1",
+        "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+        "affectedDecisionIds": ["df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"],
+        "servingRevision": "1",
+        "blockers": [
+          {
+            "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+            "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      }
+    },
+    {
+      "id": "suppress-b",
+      "request": {
+        "body": {
+          "action": "suppress",
+          "chain": {
+            "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "network": "mock"
+          },
+          "expiresAt": "200",
+          "issuedAt": "100",
+          "reason": "wire-conformance-only",
+          "recipient": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "requestId": "root_wire_request_b",
+          "requester": "027754b4fa0e8aced06d4167a2c59cca4cda1869c06ebadfb6488550015a88522c",
+          "targets": [
+            {
+              "advertisement": {
+                "beef": "AA==",
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+              "evidence": {
+                "detailDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+                "kind": "operator-policy",
+                "policy": "fixture-manual-review"
+              },
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "service": "ls_ship"
+            }
+          ],
+          "version": 1
+        },
+        "signature": "QkIzAQJ3VLT6DorO0G1BZ6LFnMpM2hhpwG6637ZIhVABWohSLABpA/jxxhxCJIc7BAdX0LPpTEWlo0VkI8WohTvDh4vO5DBEAiBeH6+UfcHHH9KzX2nelHpUVeDsAImeaDcIRlNmfr46dAIgIfK2O6imHAj1TzZ6Pa7aL8ZNoGKl/GELgEsfpbED4tM="
+      },
+      "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+      "response": {
+        "body": {
+          "issuedAt": "150",
+          "outcomes": [
+            {
+              "actionStatus": "applied",
+              "affectedDecisionIds": [
+                "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d"
+              ],
+              "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "reasonCode": "fixture-applied",
+              "revision": "2",
+              "service": "ls_ship",
+              "serving": {
+                "blockers": [
+                  {
+                    "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+                    "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666"
+                  },
+                  {
+                    "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+                    "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+                  }
+                ],
+                "revision": "2",
+                "state": "suppressed"
+              }
+            }
+          ],
+          "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+          "requestDigest": "8138d70d3b920e926bea3e508ffae3dfe9884c56e186a181a4fc89734a93958c",
+          "root": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "version": 1
+        },
+        "signature": "QkIzAQPjW8a7GwWyEwo3wo53HGy0vomzl7RUyLWeWU/swTtZ3wCrdndypNdhvRd4zGgXSb2Aqdiqby6JHb/VqwJZ0WC4IDBFAiEAx0VoVQmNQc1b+pNk4SPPkLLjhMoI7Y8CS7v8Tjk3p5oCIBx16yb1vGpSt5ig4llBooEs+ryUKve9yTPHz+XYCePL"
+      },
+      "expected": {
+        "requestDigest": "8138d70d3b920e926bea3e508ffae3dfe9884c56e186a181a4fc89734a93958c",
+        "resultDigest": "2557a39f209671298fe85cc81cbff0d86f7cbb2ac0820cdf429bd3a7aeb5257e",
+        "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+        "actionRevision": "2",
+        "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+        "affectedDecisionIds": ["62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d"],
+        "servingRevision": "2",
+        "blockers": [
+          {
+            "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+            "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666"
+          },
+          {
+            "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+            "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      }
+    },
+    {
+      "id": "restore-a-still-blocked",
+      "request": {
+        "body": {
+          "action": "restore",
+          "chain": {
+            "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "network": "mock"
+          },
+          "expiresAt": "200",
+          "issuedAt": "100",
+          "reason": "wire-conformance-only",
+          "recipient": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "requestId": "root_wire_restore_a",
+          "requester": "027754b4fa0e8aced06d4167a2c59cca4cda1869c06ebadfb6488550015a88522c",
+          "targets": [
+            {
+              "advertisement": {
+                "beef": "AA==",
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+              "evidence": {
+                "detailDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+                "kind": "operator-policy",
+                "policy": "fixture-manual-review"
+              },
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "restores": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+              "service": "ls_ship"
+            }
+          ],
+          "version": 1
+        },
+        "signature": "QkIzAQJ3VLT6DorO0G1BZ6LFnMpM2hhpwG6637ZIhVABWohSLACv8W1vw9ipIMUqRBGQmOcWEda4gA2Mtxrh7U6ZPc5JETBFAiEA0MjHILT8K3Jc2HL5przPZVG07M+O7HtKK0hVlivgbtECIHxc0WhIzyySzUt2C31TFoAgN+SxdRaRObY6dbaCDejs"
+      },
+      "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+      "response": {
+        "body": {
+          "issuedAt": "150",
+          "outcomes": [
+            {
+              "actionStatus": "applied",
+              "affectedDecisionIds": [
+                "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"
+              ],
+              "decisionId": "6042661f82f6feca9b09a5ba17c866dd70ef5a1875458bf8220c9f63bc59fc55",
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "reasonCode": "fixture-applied",
+              "revision": "3",
+              "service": "ls_ship",
+              "serving": {
+                "blockers": [
+                  {
+                    "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+                    "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666"
+                  }
+                ],
+                "revision": "3",
+                "state": "suppressed"
+              }
+            }
+          ],
+          "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+          "requestDigest": "889299f5090b3ae33ef3ac34fa6b03aa4f89a6eb337d074da4f1b09288cef6f1",
+          "root": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "version": 1
+        },
+        "signature": "QkIzAQPjW8a7GwWyEwo3wo53HGy0vomzl7RUyLWeWU/swTtZ3wAUlLp0z4K72QcK0gpZsZBlE3W89c0POaL+qwcHoWO51zBEAiAeusXXkxf3+BQOO2x96R+xQEkK1UmuonyMCmre1T3UYwIgNkqQL4AYy8+QYVB/KvsIJIw1WHC0qLTlwb4MsUTvipQ="
+      },
+      "expected": {
+        "requestDigest": "889299f5090b3ae33ef3ac34fa6b03aa4f89a6eb337d074da4f1b09288cef6f1",
+        "resultDigest": "2b12c6a2ded9f8f537c3412c46e4e0db7af83bb12eb7c36500d669a8a58022be",
+        "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+        "actionRevision": "3",
+        "decisionId": "6042661f82f6feca9b09a5ba17c866dd70ef5a1875458bf8220c9f63bc59fc55",
+        "affectedDecisionIds": ["df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"],
+        "servingRevision": "3",
+        "blockers": [
+          {
+            "decisionId": "62ba5f50f3019850bc2bd75799f59baaaca692bcea3d42239a9f006bcc7c5f0d",
+            "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666"
+          }
+        ]
+      }
+    },
+    {
+      "id": "restore-a-later-assessment",
+      "request": {
+        "body": {
+          "action": "restore",
+          "chain": {
+            "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "network": "mock"
+          },
+          "expiresAt": "200",
+          "issuedAt": "100",
+          "reason": "wire-conformance-only",
+          "recipient": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "requestId": "root_wire_restore_a",
+          "requester": "027754b4fa0e8aced06d4167a2c59cca4cda1869c06ebadfb6488550015a88522c",
+          "targets": [
+            {
+              "advertisement": {
+                "beef": "AA==",
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+              "evidence": {
+                "detailDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+                "kind": "operator-policy",
+                "policy": "fixture-manual-review"
+              },
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "restores": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+              "service": "ls_ship"
+            }
+          ],
+          "version": 1
+        },
+        "signature": "QkIzAQJ3VLT6DorO0G1BZ6LFnMpM2hhpwG6637ZIhVABWohSLACv8W1vw9ipIMUqRBGQmOcWEda4gA2Mtxrh7U6ZPc5JETBFAiEA0MjHILT8K3Jc2HL5przPZVG07M+O7HtKK0hVlivgbtECIHxc0WhIzyySzUt2C31TFoAgN+SxdRaRObY6dbaCDejs"
+      },
+      "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+      "response": {
+        "body": {
+          "issuedAt": "150",
+          "outcomes": [
+            {
+              "actionStatus": "applied",
+              "affectedDecisionIds": [
+                "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"
+              ],
+              "decisionId": "6042661f82f6feca9b09a5ba17c866dd70ef5a1875458bf8220c9f63bc59fc55",
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "reasonCode": "fixture-applied",
+              "revision": "3",
+              "service": "ls_ship",
+              "serving": {
+                "blockers": [],
+                "revision": "4",
+                "state": "unresolved"
+              }
+            }
+          ],
+          "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+          "requestDigest": "889299f5090b3ae33ef3ac34fa6b03aa4f89a6eb337d074da4f1b09288cef6f1",
+          "root": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "version": 1
+        },
+        "signature": "QkIzAQPjW8a7GwWyEwo3wo53HGy0vomzl7RUyLWeWU/swTtZ3wAV4IMKRD4jhI7uPkJwyg9G0LM8Ym8jUAiPDHXyKBfB+DBEAiANUof+BZ5inxa6b2HftfhSxD6k4N4nr7BMUE48yraCMgIgMkyFJxUnQLTGGb1ZYxtpDVHN5eivCnzY1H+ueg/LnTM="
+      },
+      "expected": {
+        "requestDigest": "889299f5090b3ae33ef3ac34fa6b03aa4f89a6eb337d074da4f1b09288cef6f1",
+        "resultDigest": "5ab3d59287cbfe054159530ec6dce733cbb1db14ddaca099b14283d95e5f10a7",
+        "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+        "actionRevision": "3",
+        "decisionId": "6042661f82f6feca9b09a5ba17c866dd70ef5a1875458bf8220c9f63bc59fc55",
+        "affectedDecisionIds": ["df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce"],
+        "servingRevision": "4",
+        "blockers": []
+      }
+    },
+    {
+      "id": "pending-b",
+      "request": {
+        "body": {
+          "action": "suppress",
+          "chain": {
+            "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "network": "mock"
+          },
+          "expiresAt": "200",
+          "issuedAt": "100",
+          "reason": "wire-conformance-only",
+          "recipient": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "requestId": "root_wire_request_b",
+          "requester": "027754b4fa0e8aced06d4167a2c59cca4cda1869c06ebadfb6488550015a88522c",
+          "targets": [
+            {
+              "advertisement": {
+                "beef": "AA==",
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+              "evidence": {
+                "detailDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+                "kind": "operator-policy",
+                "policy": "fixture-manual-review"
+              },
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "service": "ls_ship"
+            }
+          ],
+          "version": 1
+        },
+        "signature": "QkIzAQJ3VLT6DorO0G1BZ6LFnMpM2hhpwG6637ZIhVABWohSLABpA/jxxhxCJIc7BAdX0LPpTEWlo0VkI8WohTvDh4vO5DBEAiBeH6+UfcHHH9KzX2nelHpUVeDsAImeaDcIRlNmfr46dAIgIfK2O6imHAj1TzZ6Pa7aL8ZNoGKl/GELgEsfpbED4tM="
+      },
+      "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+      "response": {
+        "body": {
+          "issuedAt": "150",
+          "outcomes": [
+            {
+              "actionStatus": "pending",
+              "affectedDecisionIds": [],
+              "outpoint": {
+                "chain": {
+                  "genesisHash": "0000000000000000000000000000000000000000000000000000000000000000",
+                  "network": "mock"
+                },
+                "outputIndex": 2,
+                "txid": "1111111111111111111111111111111111111111111111111111111111111111"
+              },
+              "reasonCode": "fixture-pending",
+              "revision": "1",
+              "service": "ls_ship",
+              "serving": {
+                "blockers": [
+                  {
+                    "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+                    "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+                  }
+                ],
+                "revision": "1",
+                "state": "suppressed"
+              }
+            }
+          ],
+          "policyDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+          "requestDigest": "8138d70d3b920e926bea3e508ffae3dfe9884c56e186a181a4fc89734a93958c",
+          "root": "03e35bc6bb1b05b2130a37c28e771c6cb4be89b397b454c8b59e594fecc13b59df",
+          "version": 1
+        },
+        "signature": "QkIzAQPjW8a7GwWyEwo3wo53HGy0vomzl7RUyLWeWU/swTtZ3wA9dHdHJvGUME7/wpiosKSed0x3dSG1qRyXSqhTNllkVDBFAiEA+41fRlcprfIdFHyC/RGL/rrwSMEM8+/urbKGz86Ps1ICIHQ+CTypHFsamCHTuU2C6gtYjAsSo3TWovvXQTD8XRSU"
+      },
+      "expected": {
+        "requestDigest": "8138d70d3b920e926bea3e508ffae3dfe9884c56e186a181a4fc89734a93958c",
+        "resultDigest": "8e3ecef8f30e84c719f83ff31e49c483892453406456596b1ab28822a1fae40b",
+        "advertisementDigest": "3af352fa84143736c619240650363760432e6fdf06b75c2dc6b6f75213bbfece",
+        "actionRevision": "1",
+        "decisionId": null,
+        "affectedDecisionIds": [],
+        "servingRevision": "1",
+        "blockers": [
+          {
+            "decisionId": "df4032a0d758717c07bf14150a953d80b8a0c043243ee0d4581d3ab7057c8cce",
+            "policyDigest": "5555555555555555555555555555555555555555555555555555555555555555"
+          }
+        ]
+      }
+    }
+  ]
+}

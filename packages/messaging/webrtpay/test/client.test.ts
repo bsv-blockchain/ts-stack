@@ -1958,6 +1958,40 @@ describe('DirectPayClient payments and offers (audit hardening)', () => {
     expect(payee.internalizeAction).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps an offer open when its timer wakes before the encoded expiry', async () => {
+    const createOffer = jest.spyOn(PeerLink, 'createOffer')
+    try {
+      const payee = await makeWallet()
+      const offer = await client(payee).createOfferCode({
+        chain: 'test',
+        expiresInMs: 1500,
+        handlers: accepting(payee)
+      })
+      const { link } = await (createOffer.mock.results[0].value as Promise<{ link: PeerLink }>)
+      const decoded = decodeCode(offer.code, { now: 0 })
+      const expiry = decoded.kind === 'offer' ? decoded.expiresAt! : 0
+      const untilWake = Math.max(0, expiry - Date.now())
+      let now = expiry - 1
+      const clock = jest.spyOn(Date, 'now').mockImplementation(() => now)
+      let closed = false
+      const ended = closeOf(link).then(error => {
+        closed = true
+        return error
+      })
+      try {
+        await sleep(untilWake + 10)
+        expect(closed).toBe(false)
+        now = expiry
+        expect((await ended)?.code).toBe('timeout')
+      } finally {
+        clock.mockRestore()
+        offer.cancel()
+      }
+    } finally {
+      createOffer.mockRestore()
+    }
+  })
+
   it('will not complete an expired offer, and closes its link when it expires', async () => {
     const createOffer = jest.spyOn(PeerLink, 'createOffer')
     // The expiry runs on the fake clock. Node arms a timer on its own millisecond-truncated

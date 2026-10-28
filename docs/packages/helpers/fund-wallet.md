@@ -3,7 +3,7 @@ id: pkg-fund-wallet
 title: '@bsv/fund-wallet'
 kind: package
 domain: helpers
-version: '1.5.4'
+version: '1.5.5'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
@@ -16,7 +16,7 @@ tags: [helpers, testing, faucet, development]
 
 # @bsv/fund-wallet
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -145,3 +145,7 @@ npx fund-metanet
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/fund-wallet/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet)
 - [npm](https://www.npmjs.com/package/@bsv/fund-wallet)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

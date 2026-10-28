@@ -121,7 +121,7 @@ describe('asset resolution with profiles', () => {
     const amount = OneColor.decode(tx.outputs[0].lockingScript).amount
     expect(amount).toBeGreaterThan(0n)
     await expect(balanceOf(module, assetId)).resolves.toEqual({
-      totalOutputs: amount.toString(),
+      totalOutputs: Number(amount),
       outputs: []
     })
   })
@@ -530,7 +530,7 @@ describe('asset resolution with profiles', () => {
     const { assetId } = await deployAsset(new FakeWallet(), provider, 1000n)
     await holdTokens(wallet, provider, assetId, [7n, 8n])
     const balance = (await balanceOf(module, assetId)) as ListOutputsResult
-    expect(balance.totalOutputs).toBe('15')
+    expect(balance.totalOutputs).toBe(15)
     expect(provider.calls.admission).toBe(0)
     expect(await module.providerForTest(assetId)).toBe(provider)
     expect(provider.calls.admission).toBe(0)

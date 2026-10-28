@@ -132,3 +132,32 @@ SQL and Mongo writers at the same logical Overlay authority. Operators should
 run Mongo bootstrap and packed-consumer verification before an explicit future
 adapter activation; that activation will need its own versioned migration and
 recovery plan.
+
+
+## Explicit retained admission history
+
+`retainAdmissionHistory: true` on `MongoOverlayStorage`/`MongoAdmissionStorage`
+enables the persistence contract's optional history reader and retains provenance
+for new admissions. The default is false. The existing binary receipt gains an
+internal `admissionHistory: { version: 1, identity: AdmissionIdentity }` member;
+its original public fields and their exact STEAK string are unchanged. The
+complete UTF-8 record, including this member, must fit the existing 1 MiB bound
+before any claim, guard or transaction body. No validator, index or ledger
+fingerprint changes. Old writers retain the old byte representation; old receipt
+readers ignore this additional member. No backfill or rewriting occurs on retry.
+
+The node-scoped reader performs at most two primary-majority point reads with
+five-second database deadlines. First resolve `(scope, topic, txid)` in retained
+applied history to its `admissionId`, then read that operation's committed receipt.
+Validate the immutable identity's complete semantic digest, original transaction,
+node/chain scope and requested topic/policy/context. Corrupt retained metadata is
+a storage error; a legacy receipt without metadata remains unresolved. A partial
+multi-topic retry must not infer identity membership from duplicate STEAK keys.
+The stored mode is returned unchanged, even when later callers use another mode.
+
+The reader does not modify pending attempts or follow another node's scope.
+Disabling retention removes the advertised companion and restores legacy writes,
+while keeping existing records readable by legacy receipt recovery. Upgrade or
+rollback therefore needs no database migration. Do not expose the full local
+receipt to unauthorized callers or label this provenance as current validity,
+current serving state or a fresh verification assessment.

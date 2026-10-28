@@ -720,6 +720,10 @@ describe('MessageBoxClient', () => {
       sendMessageCallback(receivedMessage)
     }
 
+    // The body is read before any subscriber is called, so delivery is always
+    // a tick later. It used to be synchronous for an unencrypted message only.
+    await new Promise(resolve => setTimeout(resolve, 0))
+
     // Ensure `onMessage` was called with the received message
     expect(onMessageMock).toHaveBeenCalledWith(receivedMessage)
   })

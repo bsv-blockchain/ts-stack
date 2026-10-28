@@ -16,7 +16,7 @@ tags: [templates, scripts, locking, unlocking]
 
 # @bsv/templates
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -265,3 +265,7 @@ on a trusted host before approving it.
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/templates/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates)
 - [npm](https://www.npmjs.com/package/@bsv/templates)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

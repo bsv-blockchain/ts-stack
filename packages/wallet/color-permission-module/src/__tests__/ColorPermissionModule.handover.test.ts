@@ -574,7 +574,7 @@ async function balanceOf(
   module: ColorPermissionModule,
   assetId: string,
   tags?: string[]
-): Promise<string> {
+): Promise<number> {
   const result = (await module.handleRequest(
     {
       method: 'listOutputs',
@@ -585,8 +585,9 @@ async function balanceOf(
       }
     },
     async args => args
-  )) as { totalOutputs: number | string }
-  return String(result.totalOutputs)
+  )) as { totalOutputs: number }
+  expect(typeof result.totalOutputs).toBe('number')
+  return result.totalOutputs as number
 }
 
 /** The issuer-like profile without its send policy: a published (broadcast) asset. */
@@ -780,8 +781,8 @@ describe('signed hand-over', () => {
       options: { noSend: true }
     })
     const change = Transaction.fromAtomicBEEF(result.tx!)
-    expect(await balanceOf(module, assetId)).toBe('400')
-    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe('400')
+    expect(await balanceOf(module, assetId)).toBe(400)
+    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe(400)
     // The host has not submitted the hand-over yet: the overlay does not list the change.
     await expect(
       plan(module, {
@@ -795,7 +796,7 @@ describe('signed hand-over', () => {
     // The host submits, the overlay admits the change, and the host records it settled.
     b.ap.admit(assetId, change, 1)
     await module.markSettled(result.txid!)
-    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe('0')
+    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe(0)
     const next = await send(b, module, {
       labels: planLabels(assetId),
       outputs: [await paymentOutput(assetId, 100n)],
@@ -805,8 +806,8 @@ describe('signed hand-over', () => {
     expect(
       `${spent.sourceTXID ?? spent.sourceTransaction?.id('hex')}.${spent.sourceOutputIndex}`
     ).toBe(`${result.txid!}.1`)
-    expect(await balanceOf(module, assetId)).toBe('300')
-    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe('300')
+    expect(await balanceOf(module, assetId)).toBe(300)
+    expect(await balanceOf(module, assetId, [COLOR_OFFLINE_TAG])).toBe(300)
   })
 
   /** A plain-noSend hand-over of 600 of a held issuer-like asset, up to the module's signAction. */

@@ -6,6 +6,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.1
 
+- Add optional `StorageClientOptions.authFetchOptions` in the existing third
+  constructor argument across Node, browser and mobile. It forwards the
+  installed SDK's options without changing defaults, SDK peer ranges, RPCs,
+  retries or wallet data. The new `responseTimeoutMs` option requires the SDK
+  release containing it; longer authenticated calls should also configure the
+  existing transport `requestTimeoutMs`. No migration is required.
+
 - The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
   what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
   invalid, revoked or expired key, before it reads the transaction. Previously a refused
@@ -14,8 +21,41 @@ attention to changes that materially alter behavior or extend functionality.
   or keeps the transaction queued for retry, and the history note says whether the
   configured key was refused or the endpoint requires one. No configuration or consumer
   migration is required.
+- `createAction` sizes a caller-provided `unlockingScript` by its byte length
+  when it hands the input to storage. It used the hex string's length, twice
+  the bytes, so storage funded and priced the transaction as if that script
+  appeared twice: a 78,369 byte transaction with a 36,401 byte provided unlock
+  paid for 114,780 bytes. Inputs given only an `unlockingScriptLength` are
+  unchanged. No API, wire, or schema migration; `unlockingScriptLength` already
+  meant bytes. Upgrade the signer package; storage is unchanged.
 
-## wallet-toolbox 2.15.0
+## wallet-toolbox 2.15.0 (source candidate)
+
+- Preserve the existing storage `internalizeAction(storage, auth, args, receipt?)`
+  call signature. Local funding recovery uses the separate
+  `internalizeActionWithRecovery` deep import; historical callers need no migration.
+
+- Acquire the local funding route's shared SQL receipt fence inside its atomic
+  ownership/journal transaction. A killed uncommitted writer leaves no pending
+  lease, and independently prepared contenders can reach their coordination
+  boundary. Add an optional transaction-bound backend port without changing
+  ordinary receipt leases, BRC-100 requests or test deadlines.
+
+- Require an exact canonical compressed public-key round trip for opt-in BRC-197 fixed-child recipients before ownership. Add native lifecycle coverage that preserves pre-existing transaction accounting and uses distinct fixture references; ordinary internalization is unchanged.
+
+- Add opt-in local SQLite action recovery for atomic allocation, exact prepared
+  and signed `noSend` transactions, and durable processing reconciliation.
+- Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
+  credit, deferred monitor work and retained receipts. Deep imports require
+  explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Type explicit funding-recovery capacity values as numbers, matching the existing
+  configurable limits. Add retained-record representation and native ownership
+  rejection regressions; runtime validation, defaults and journal formats remain unchanged.
+- Preserve whole wallet databases and keys for these auxiliary journals. Legacy
+  entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
+  not transport or implement them. Reconcile pending operations before rollback.
+- The previously recorded 2.14.5 no-send ownership corrections remain included.
+  This candidate has not been published and does not complete private acquisition.
 
 - `GoChaintracksServiceClient` accepts Go orphan-hash reorg announcements as well
   as the existing TypeScript shape. Orphan headers are resolved sequentially under
@@ -158,7 +198,9 @@ attention to changes that materially alter behavior or extend functionality.
   was encrypted before the permission module ran and again afterwards, so
   `listOutputs` (which decrypts once) returned ciphertext. The after-module
   pass now encrypts only permission-module baskets, matching `createAction`'s
-  once-only rule.- Preserve bounded pre-construction double-spend reviews from remote storage.
+  once-only rule.
+
+- Preserve bounded pre-construction double-spend reviews from remote storage.
   An empty attempted TXID is accepted only with one doubleSpend result, empty
   send results, absent constructed-action fields and nonempty competing evidence.
   Consumers must validate the evidence and synchronize the winning transaction
@@ -1688,3 +1730,7 @@ Implications:
 - These outputs WILL be returned by `listActions` with the includeOutputs option set to true.
 - Your wallet will mark any output you include as inputs in your own transactions as spent at the time of transaction creation.
 - If a created transaction subsequently fails to be broadcast (abandoned or invalid), the outputs are reset to spendable. This may not happen immediately.
+
+## 2.15.1 candidate
+
+- Prepare `2.15.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.

@@ -2,6 +2,7 @@ import http from 'node:http'
 import { WebSocket } from 'ws'
 import { PrivateKey, ProtoWallet } from '@bsv/sdk'
 import { WalletRelayService } from '../src/server/WalletRelayService.js'
+import { parsePairingUri, verifyPairingSignature } from '../src/shared/pairingUri.js'
 import type { RpcResponse, WireEnvelope } from '../src/types.js'
 
 const RPC_ID = '00000000-0000-4000-8000-000000000001'
@@ -93,6 +94,123 @@ describe('WalletRelayService boundary and state enforcement', () => {
           ...options
         })
     ).toThrow(message as string)
+  })
+
+  it.each([
+    [{ origin: 'http://app.example.com' }, 'origin must be HTTPS'],
+    [{ origin: 'http://203.0.113.5:5173' }, 'origin must be HTTPS'],
+    [{ origin: 'http://192.168.1.20.nip.io:5173' }, 'origin must be HTTPS'],
+    [{ relayUrl: 'ws://relay.example.com' }, 'relay URL must be WSS'],
+    [{ relayUrl: 'ws://172.32.0.1:3000' }, 'relay URL must be WSS']
+  ])('rejects plain transport to a public host at construction %#', (options, message) => {
+    expect(() => createService(options)).toThrow(
+      new RegExp(`^${message as string}, except for loopback development$`, 'u')
+    )
+    expect(() => createService({ ...options, allowLocalNetworkHttp: true })).toThrow(
+      `${message as string}, except for loopback or local-network development`
+    )
+  })
+
+  it.each([
+    [{ origin: 'http://192.168.1.20:5173' }, 'origin must be HTTPS'],
+    [{ origin: 'http://[fd00::20]:5173' }, 'origin must be HTTPS'],
+    [{ relayUrl: 'ws://10.0.0.5:3000' }, 'relay URL must be WSS']
+  ])(
+    'rejects private-network plain transport at construction unless allowLocalNetworkHttp is set %#',
+    (options, message) => {
+      expect(() => createService(options)).toThrow(
+        `${message as string}, except for loopback development (set allowLocalNetworkHttp: true to allow private-network IP addresses in development)`
+      )
+      expect(() => createService({ ...options, allowLocalNetworkHttp: false })).toThrow(
+        'allowLocalNetworkHttp'
+      )
+      const { service } = createService({ ...options, allowLocalNetworkHttp: true })
+      service.stop()
+    }
+  )
+
+  it('keeps loopback plain transport available by default', async () => {
+    const { service } = createService({
+      relayUrl: 'ws://127.0.0.1:3000',
+      origin: 'http://wallet.localhost:5173'
+    })
+    try {
+      const parsed = parsePairingUri((await service.createSession()).pairingUri)
+      expect(parsed.error).toBeNull()
+      expect(parsed.params?.origin).toBe('http://wallet.localhost:5173')
+      expect(await verifyPairingSignature(parsed.params!)).toBe(true)
+      expect(service.getSession(parsed.params!.topic)?.relay).toBe('ws://127.0.0.1:3000')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('rejects a non-boolean allowLocalNetworkHttp', () => {
+    expect(() => createService({ allowLocalNetworkHttp: 'true' as unknown as boolean })).toThrow(
+      'allowLocalNetworkHttp must be a boolean'
+    )
+  })
+
+  it('issues signed pairing URIs for plain-HTTP local-network origins when opted in', async () => {
+    const { service } = createService({
+      relayUrl: 'ws://192.168.1.20:3000',
+      origin: 'http://192.168.1.20:3000',
+      allowedOrigins: ['http://192.168.1.20:3000', 'http://[fd00::20]:5173'],
+      allowLocalNetworkHttp: true
+    })
+    const allow = { allowLocalNetworkHttp: true }
+    try {
+      const defaultUri = (await service.createSession()).pairingUri
+      expect(parsePairingUri(defaultUri).error).toBe(
+        'origin must be HTTPS, except for loopback development'
+      )
+      const fromDefault = parsePairingUri(defaultUri, undefined, allow)
+      expect(fromDefault.error).toBeNull()
+      expect(fromDefault.params?.origin).toBe('http://192.168.1.20:3000')
+      expect(await verifyPairingSignature(fromDefault.params!, allow)).toBe(true)
+      expect(service.getSession(fromDefault.params!.topic)?.relay).toBe('ws://192.168.1.20:3000')
+
+      const perSession = parsePairingUri(
+        (await service.createSession({ origin: 'http://[fd00::20]:5173' })).pairingUri,
+        undefined,
+        allow
+      )
+      expect(perSession.error).toBeNull()
+      expect(perSession.params?.origin).toBe('http://[fd00::20]:5173')
+    } finally {
+      service.stop()
+    }
+  })
+
+  it('rejects a per-session plain-HTTP origin on a public host, or a private one without the opt-in', async () => {
+    const { service } = createService()
+    try {
+      await expect(service.createSession({ origin: 'http://app.example.com' })).rejects.toThrow(
+        /^origin must be HTTPS, except for loopback development$/u
+      )
+      await expect(service.createSession({ origin: 'http://172.32.0.1:5173' })).rejects.toThrow(
+        'origin must be HTTPS'
+      )
+      await expect(service.createSession({ origin: 'http://192.168.1.20:5173' })).rejects.toThrow(
+        'allowLocalNetworkHttp'
+      )
+    } finally {
+      service.stop()
+    }
+    const optedIn = createService({
+      allowLocalNetworkHttp: true,
+      allowedOrigins: () => true
+    }).service
+    try {
+      await expect(optedIn.createSession({ origin: 'http://app.example.com' })).rejects.toThrow(
+        'origin must be HTTPS, except for loopback or local-network development'
+      )
+      await expect(
+        optedIn.createSession({ origin: 'http://192.168.1.20:5173' })
+      ).resolves.toMatchObject({ status: 'pending' })
+    } finally {
+      optedIn.stop()
+    }
   })
 
   it('resets the creation window after clock rollback instead of permanently rate-limiting', () => {

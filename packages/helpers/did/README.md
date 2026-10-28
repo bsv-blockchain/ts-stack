@@ -1,5 +1,7 @@
 # @bsv/did
 
+Patch candidate `0.3.2` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 `@bsv/did` supplies the proposed BRC-202 identity-key DID profile and BRC-203
 signature-preserving bridge for existing encrypted BRC-52 certificates. It also
 retains independent SD-JWT VC helpers. The BRC bridge preserves the original
@@ -314,3 +316,10 @@ Open BSV License Version 6. See [LICENSE.txt](./LICENSE.txt).
 See the [coordinated migration map](../../../docs/guides/identity-did-vc-migration.md) for retired serial-DID and copied-proof APIs.
 
 Use `@bsv/did/brc52` for BRC52 envelope, disclosure and status APIs; `@bsv/did` retains the corrected identity-key DID and distinct SD-JWT surface. The optional entry is separately qualified in browser and packed consumers.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

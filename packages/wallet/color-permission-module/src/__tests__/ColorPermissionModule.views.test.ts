@@ -34,13 +34,14 @@ async function balanceOf(
   module: ColorPermissionModule,
   assetId: string,
   extra: Record<string, unknown> = {}
-): Promise<string> {
+): Promise<number> {
   const result = await listing(module, {
     basket: `p color balance ${assetTag(assetId)}`,
     ...extra
   })
   expect(result.outputs).toEqual([])
-  return String(result.totalOutputs)
+  expect(typeof result.totalOutputs).toBe('number')
+  return result.totalOutputs as number
 }
 
 describe('pending (color_offline) views and markSettled', () => {
@@ -111,7 +112,7 @@ describe('pending (color_offline) views and markSettled', () => {
     })
     await expect(
       listing(module, { basket: `p color balance ${assetTag(assetId)}` })
-    ).resolves.toEqual({ totalOutputs: '100', outputs: [] })
+    ).resolves.toEqual({ totalOutputs: 100, outputs: [] })
   })
 
   it('markSettled removes color_offline from views, durably and once', async () => {
@@ -177,7 +178,7 @@ describe('pending (color_offline) views and markSettled', () => {
     expect((await views(module)).get(op(t60))?.tags).not.toContain('color_offline')
     store.clear()
     expect((await views(module)).get(op(t60))?.tags).toContain('color_offline')
-    expect(await balanceOf(module, assetId)).toBe('100')
+    expect(await balanceOf(module, assetId)).toBe(100)
   })
 
   it('a torn settled record keeps the coin offline', async () => {
@@ -190,16 +191,16 @@ describe('pending (color_offline) views and markSettled', () => {
   it('tag filters and balances use the view color_offline tag', async () => {
     const offline = await views(module, { tags: ['color_offline'] })
     expect([...offline.keys()]).toEqual([op(t60)])
-    expect(await balanceOf(module, assetId, { tags: ['color_offline'] })).toBe('60')
+    expect(await balanceOf(module, assetId, { tags: ['color_offline'] })).toBe(60)
     await module.markSettled(t60.id('hex'))
     expect((await views(module, { tags: ['color_offline'] })).size).toBe(0)
-    expect(await balanceOf(module, assetId, { tags: ['color_offline'] })).toBe('0')
+    expect(await balanceOf(module, assetId, { tags: ['color_offline'] })).toBe(0)
     expect(
       await balanceOf(module, assetId, {
         tags: ['color_offline', 'color_state_available'],
         tagQueryMode: 'any'
       })
-    ).toBe('100')
+    ).toBe(100)
   })
 
   it('views are unchanged without profiles', async () => {

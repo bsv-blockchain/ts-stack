@@ -20,7 +20,9 @@ import {
   normalizeRelayUrl,
   parseRpcMessage,
   parseWireEnvelope,
+  plainTransportRejection,
   requireBoundedString,
+  requireOptionalBoolean,
   requireProtocolId,
   requirePublicKey,
   validateSessionInfo
@@ -111,6 +113,17 @@ export interface WalletPairingSessionOptions {
    * release will default it to true.
    */
   requireOriginBoundKey?: boolean
+
+  /**
+   * Accept plain `http://` pairing origins and `ws://` relay URLs on
+   * private-network IP addresses (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16,
+   * fc00::/7) so a phone can pair with a backend on the same LAN. Loopback is
+   * always accepted. Such origins are unauthenticated: an on-path attacker can
+   * rewrite the session lookup and relay URL. Expose it only as a developer
+   * setting; never enable it in a production wallet. Pass the same value to
+   * `parsePairingUri`. Default: false.
+   */
+  allowLocalNetworkHttp?: boolean
 }
 
 /**
@@ -153,6 +166,7 @@ export class WalletPairingSession {
   private readonly implementedMethods: ReadonlySet<string>
   private readonly autoApproveMethods: ReadonlySet<string>
   private readonly walletMeta: Record<string, unknown>
+  private readonly allowLocalNetworkHttp: boolean
   private pairingVerified = false
   private lifecycleEpoch = 0
   private inboundTurn: Promise<void> = Promise.resolve()
@@ -170,6 +184,10 @@ export class WalletPairingSession {
     private readonly options: WalletPairingSessionOptions = {}
   ) {
     this.protocolID = requireProtocolId(params.protocolID) as WalletProtocol
+    this.allowLocalNetworkHttp = requireOptionalBoolean(
+      options.allowLocalNetworkHttp,
+      'allowLocalNetworkHttp'
+    )
     this.implementedMethods = snapshotMethods(
       options.implementedMethods ?? DEFAULT_IMPLEMENTED_METHODS,
       'implementedMethods'
@@ -231,8 +249,12 @@ export class WalletPairingSession {
    * display it to the user for approval before proceeding.
    *
    * The fetch goes to `params.origin` over HTTPS — the origin's TLS certificate
-   * is the trust anchor. Always show `params.origin` to the user before calling
-   * this method so they can confirm they are connecting to the intended service.
+   * is the trust anchor. Plain HTTP is accepted for loopback origins, and for
+   * private-network IP origins only with `allowLocalNetworkHttp`. Over HTTP
+   * nothing authenticates the origin: an on-path attacker can rewrite this
+   * lookup, including the relay URL. Always show `params.origin` to the user
+   * before calling this method so they can confirm they are connecting to the
+   * intended service.
    *
    * The origin's response binds the QR to the origin: when it reports
    * `backendIdentityKey`, that key must equal `params.backendIdentityKey` or this
@@ -256,7 +278,8 @@ export class WalletPairingSession {
     }
     const data = validateSessionInfo(value, {
       expectedId: this.params.topic,
-      canonicalId: false
+      canonicalId: false,
+      allowLocalNetworkHttp: this.allowLocalNetworkHttp
     })
     if (data.relay === undefined) throw new Error('Origin server did not return a relay URL')
     if (data.backendIdentityKey === undefined) {
@@ -268,11 +291,16 @@ export class WalletPairingSession {
     ) {
       throw new Error("Origin server's backend identity key does not match the pairing key")
     }
-    this._resolvedRelay = normalizeRelayUrl(data.relay)
+    this._resolvedRelay = normalizeRelayUrl(data.relay, 'relay URL', {
+      allowLocalNetworkHttp: this.allowLocalNetworkHttp
+    })
     return this._resolvedRelay
   }
 
-  /** Enforces the signed HTTPS pairing boundary before making any network request. */
+  /**
+   * Enforces the signed pairing boundary (HTTPS, or HTTP for loopback and
+   * opted-in local-network development) before making any network request.
+   */
   private async verifyPairingBoundary(): Promise<void> {
     if (this.pairingVerified) return
 
@@ -282,16 +310,13 @@ export class WalletPairingSession {
     } catch {
       throw new Error('Pairing origin is invalid')
     }
-    const isLoopback =
-      origin.hostname === 'localhost' ||
-      origin.hostname === '127.0.0.1' ||
-      origin.hostname === '[::1]'
-    if (origin.protocol !== 'https:' && !(origin.protocol === 'http:' && isLoopback)) {
-      throw new Error(
-        'Pairing origin must use HTTPS (HTTP is allowed only for loopback development)'
-      )
-    }
-    if (!(await verifyPairingSignature(this.params))) {
+    const rejection = plainTransportRejection(origin, 'https:', this.allowLocalNetworkHttp)
+    if (rejection !== null) throw new Error(`Pairing origin must be ${rejection}`)
+    if (
+      !(await verifyPairingSignature(this.params, {
+        allowLocalNetworkHttp: this.allowLocalNetworkHttp
+      }))
+    ) {
       throw new Error('Pairing signature is missing or invalid')
     }
     this.pairingVerified = true
@@ -357,7 +382,11 @@ export class WalletPairingSession {
       counterparty: backendIdentityKey
     }
 
-    const relayUrl = new URL(normalizeRelayUrl(this._resolvedRelay))
+    const relayUrl = new URL(
+      normalizeRelayUrl(this._resolvedRelay, 'relay URL', {
+        allowLocalNetworkHttp: this.allowLocalNetworkHttp
+      })
+    )
     relayUrl.pathname = `${relayUrl.pathname.replace(/\/$/u, '')}/ws`
     relayUrl.searchParams.set('topic', topic)
     relayUrl.searchParams.set('role', 'mobile')

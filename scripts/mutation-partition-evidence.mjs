@@ -9,8 +9,7 @@ import {
   partitionMutationTarget,
   partitionedMutationTargets,
   selectedMutationPartition,
-  mutationExecutionMatrix,
-  longestFirst
+  scheduledMutationExecutionMatrix
 } from './mutation-partitions.mjs'
 import {
   inspectMutationEvidence,
@@ -86,8 +85,9 @@ function addPartitionFiles(files, partitionId, reportBytes) {
       continue
     }
     const existing = files[file]
-    if (existing.source !== value.source || existing.language !== value.language)
-      throw new Error('Partition source files overlap with different content')
+    if (existing.source !== value.source) throw new Error('Repeated partition source bytes differ')
+    if (existing.language !== value.language)
+      throw new Error('Partition source files overlap with different language')
     // Order by partition so the aggregate never depends on packet arrival order;
     // the stable sort keeps each part's own mutant order.
     const partOf = mutant => mutant.id.slice(0, mutant.id.indexOf('/'))
@@ -141,7 +141,14 @@ export function combinePartitionEvidence(
     framework: { name: 'StrykerJS', version: '9.6.1' },
     projectRoot: canonical.projectRoot,
     config: canonical.config,
-    files: Object.fromEntries(Object.entries(files).sort(([left], [right]) => compare(left, right)))
+    files: Object.fromEntries(
+      Object.entries(files)
+        .sort(([left], [right]) => compare(left, right))
+        .map(([file, value]) => [
+          file,
+          { ...value, mutants: value.mutants.sort((left, right) => compare(left.id, right.id)) }
+        ])
+    )
   })
   bindings.sort((left, right) => compare(left.partitionId, right.partitionId))
   const executionBytes = JSON.stringify({
@@ -236,8 +243,11 @@ async function main(argv) {
     const { seconds } = JSON.parse(
       fs.readFileSync(path.join(ROOT, 'governance/mutation-testing/durations.json'), 'utf8')
     )
-    const matrix = mutationExecutionMatrix(JSON.parse(options.selected), targets)
-    console.log(JSON.stringify(longestFirst(matrix, seconds)))
+    console.log(
+      JSON.stringify(
+        scheduledMutationExecutionMatrix(JSON.parse(options.selected), targets, seconds)
+      )
+    )
     return
   }
   if (options.command === 'targets') {
