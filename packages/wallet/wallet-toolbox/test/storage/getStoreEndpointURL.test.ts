@@ -16,24 +16,29 @@ function provider(properties: Record<string, unknown>): ManagedStore['storage'] 
 }
 
 function managedStore(storage: ManagedStore['storage'], storageIdentityKey = 'store-key'): ManagedStore {
+  const now = new Date('2026-08-17T00:00:00.000Z')
   return {
     isAvailable: true,
     isStorageProvider: false,
+    access: undefined,
     settings: {
       storageIdentityKey,
       storageName: 'test_store',
       chain: 'test',
-      dbName: 'test',
-      storageSchemaVersion: 1,
+      dbtype: 'SQLite',
+      created_at: now,
+      updated_at: now,
       maxOutputScript: 0
     },
     user: {
       userId: 1,
       identityKey: '02' + '11'.repeat(32),
-      activeStorage: storageIdentityKey
+      activeStorage: storageIdentityKey,
+      created_at: now,
+      updated_at: now
     },
     storage
-  } as ManagedStore
+  }
 }
 
 describe('WalletStorageManager.getStoreEndpointURL', () => {

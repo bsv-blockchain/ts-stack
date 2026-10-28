@@ -97,7 +97,9 @@ describe('update tests', () => {
             })
           )
           verifyValues(updatedTx, testValues, referenceTime)
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             if (key === primaryKey) {
               continue
             }
@@ -138,7 +140,9 @@ describe('update tests', () => {
                   partial: { [primaryKey]: record[primaryKey] }
                 })
               )
-              expect(new Date(updatedRow[key]).toISOString()).toBe(validDate.toISOString())
+              expect(new Date(updatedRow[key as 'created_at' | 'updated_at']).toISOString()).toBe(
+                validDate.toISOString()
+              )
             }
             if (Array.isArray(value)) {
               const validArray = value.map(v => v + 1)
@@ -193,7 +197,9 @@ describe('update tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -202,6 +208,7 @@ describe('update tests', () => {
               continue
             }
             if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+              if (typeof actualValue !== 'string') throw new Error('Stored JSON fixture field must remain a string')
               expect(JSON.parse(actualValue)).toStrictEqual(JSON.parse(value))
               continue
             }
@@ -209,8 +216,13 @@ describe('update tests', () => {
               expect(actualValue).toBe(value)
               continue
             }
-            if (typeof actualValue === 'object' && actualValue?.type === 'Buffer') {
-              const actualArray = actualValue.data || actualValue
+            if (
+              typeof actualValue === 'object' &&
+              actualValue !== null &&
+              'type' in actualValue &&
+              actualValue.type === 'Buffer'
+            ) {
+              const actualArray = 'data' in actualValue ? actualValue.data || actualValue : actualValue
               const expectedArray =
                 Buffer.isBuffer(value) || Array.isArray(value) ? Array.from(value as ArrayLike<number>) : value
               expect(actualArray).toStrictEqual(expectedArray)
@@ -249,7 +261,9 @@ describe('update tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -296,7 +310,9 @@ describe('update tests', () => {
               partial: { [primaryKey]: record[primaryKey] }
             })
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -305,6 +321,7 @@ describe('update tests', () => {
               continue
             }
             if (typeof value === 'string' && value.startsWith('{') && value.endsWith('}')) {
+              if (typeof actualValue !== 'string') throw new Error('Stored JSON fixture field must remain a string')
               expect(JSON.parse(actualValue)).toStrictEqual(JSON.parse(value))
               continue
             }
@@ -322,8 +339,13 @@ describe('update tests', () => {
               expect(actualValue).toBe(value)
               continue
             }
-            if (typeof actualValue === 'object' && actualValue?.type === 'Buffer') {
-              const actualArray = actualValue.data || actualValue
+            if (
+              typeof actualValue === 'object' &&
+              actualValue !== null &&
+              'type' in actualValue &&
+              actualValue.type === 'Buffer'
+            ) {
+              const actualArray = 'data' in actualValue ? actualValue.data || actualValue : actualValue
               const expectedArray =
                 Buffer.isBuffer(value) || Array.isArray(value) ? Array.from(value as ArrayLike<number>) : value
               expect(actualArray).toStrictEqual(expectedArray)
@@ -375,7 +397,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated CertificateField with certificateId=${record.certificateId}, fieldName=${testValues.fieldName} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -421,7 +445,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated OutputBasket with basketId=${record.basketId}, name=${testValues.name} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             if (typeof actualValue === 'boolean') {
               if (value === 1) {
@@ -482,7 +508,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated Transaction with transactionId=${record.transactionId} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -550,7 +578,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated Commission with commissionId=${record.commissionId} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -632,7 +662,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated Output with outputId=${record.outputId} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -685,7 +717,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated OutputTag with outputTagId=${record.outputTagId} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             if (typeof actualValue === 'boolean') {
               if (value === 1) {
@@ -743,7 +777,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated OutputTagMap with outputTagId=${record.outputTagId} and outputId=${record.outputId} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             if (typeof actualValue === 'boolean') {
               if (value === 1) {
@@ -808,7 +844,9 @@ describe('update tests', () => {
           updatedRecords,
           `Updated TxLabel with txLabelId=${record.txLabelId} was not unique or missing.`
         )
-        for (const [key, value] of Object.entries(testValues)) {
+        for (const [key, value] of Object.entries(testValues) as Array<
+          [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+        >) {
           const actualValue = updatedRow[key]
           if (typeof actualValue === 'boolean') {
             if (value === 1) {
@@ -872,7 +910,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated TxLabelMap with transactionId=${record[primaryKeyTransaction]} and txLabelId=${record[primaryKeyLabel]} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -915,7 +955,9 @@ describe('update tests', () => {
             updatedRecords,
             `Updated MonitorEvent with id=${record.id} was not unique or missing.`
           )
-          for (const [key, value] of Object.entries(testValues)) {
+          for (const [key, value] of Object.entries(testValues) as Array<
+            [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+          >) {
             const actualValue = updatedRow[key]
             const normalizedActual = normalizeDate(actualValue)
             const normalizedExpected = normalizeDate(value)
@@ -968,7 +1010,9 @@ describe('update tests', () => {
           updatedRecords,
           `Updated SyncState with syncStateId=${record.syncStateId} was not unique or missing.`
         )
-        for (const [key, value] of Object.entries(testValues)) {
+        for (const [key, value] of Object.entries(testValues) as Array<
+          [keyof typeof testValues, (typeof testValues)[keyof typeof testValues]]
+        >) {
           const actualValue = updatedRow[key]
           if (typeof actualValue === 'boolean') {
             if (value === 1) {
@@ -982,6 +1026,9 @@ describe('update tests', () => {
           }
           if (actualValue instanceof Date) {
             const actualDate = new Date(actualValue)
+            // updateSyncState normalizes this input in place for the database.
+            if (!(value instanceof Date) && typeof value !== 'number' && typeof value !== 'string')
+              throw new Error('Stored fixture date must match its Date or normalized timestamp input')
             const expectedDate = new Date(value)
             expect(actualDate.getTime()).toBe(expectedDate.getTime())
             continue

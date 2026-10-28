@@ -77,4 +77,5 @@ packageExtensions:
     dependencies:
       picomatch: 2.3.2
 patchedDependencies:
+  'fake-indexeddb@6.2.5': packages/wallet/wallet-toolbox/test/utils/fake-indexeddb-readonly-name.patch
   'metro-file-map@0.87.1': patches/metro-file-map@0.87.1.patch

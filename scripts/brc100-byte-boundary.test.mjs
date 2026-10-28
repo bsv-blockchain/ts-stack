@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
+
 import { readFile } from 'node:fs/promises'
+
 import test from 'node:test'
 
 const walletBoundaryFiles = [
@@ -112,7 +114,8 @@ const dependentPackageSdkRanges = [
   ['packages/wallet/ts-wallet-relay/package.json', '^2.4.1 || ^3.0.0 || ^4.0.1'],
   ['packages/wallet/wallet-toolbox/package.json', '^2.8.0 || ^3.0.0 || ^4.0.1'],
   ['packages/wallet/wallet-toolbox/client/package.json', '^2.8.0 || ^3.0.0 || ^4.0.1'],
-  ['packages/wallet/wallet-toolbox/mobile/package.json', '^2.8.0 || ^3.0.0 || ^4.0.1']
+  ['packages/wallet/wallet-toolbox/mobile/package.json', '^2.8.0 || ^3.0.0 || ^4.0.1'],
+  ['packages/middleware/payment-express-middleware/package.json', '^2.1.6 || ^3.0.0 || ^4.0.1']
 ]
 
 for (const [file, requiredSdkRange] of dependentPackageSdkRanges) {

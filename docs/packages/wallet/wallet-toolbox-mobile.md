@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-mobile
 title: '@bsv/wallet-toolbox-mobile'
 kind: package
 domain: wallet
-version: '2.15.1'
+version: '2.16.0'
 last_updated: '2026-10-13'
 last_verified: '2026-10-13'
 review_cadence_days: 30
@@ -14,6 +14,12 @@ tags: [wallet, react-native, mobile, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-mobile
+
+The candidate now captures immutable journal field artifacts with a distinct metadata/extent encoding and version-four binding. The actual pinned source hashes every field, stores repeated content once, rehashes its replay and captures streamed notification identities in bounded profile-filtered batches. Content-index metadata enters the artifact hash chain, and READY waits for physical source closure. The existing archive quotas, row/version-three APIs and HTTP advertisements remain unchanged. Remote field transport, destination cache/semantic promotion and primary handoff still require integration and full qualification.
+
+The held #569 candidate adds an internal bounded logical journal-field source and verified native content-staging connection. Client/mobile journal artifact capability and packet encoding remain unchanged; remote field transfer/promotion and remote primary handoff still need implementation. Exact leading U+FEFF, NUL and astral SQL text survives the existing journal frame format. This component does not establish complete large-field sync or production readiness.
+
+The unpublished 2.15 candidate exports the portable resumable sync API. Remote destinations retain exclusive execution unless a future capability explicitly guarantees safe concurrency; this package does not acquire a local native database. See the [sync contract and rollout guide](../../guides/wallet-sync-reliability.md).
 
 `@bsv/wallet-toolbox-mobile` is the React Native and mobile-safe Wallet
 Toolbox distribution. It includes wallet, signer, services, monitoring, and

@@ -1,3 +1,4 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
 import { Beef } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
 import { ProvenOrRawTx, StorageGetBeefOptions } from '../../sdk/WalletStorage.interfaces'
@@ -52,10 +53,8 @@ export async function getBeefForTransaction(
 
   while (frontier.length > 0) {
     const current = frontier.filter(item => needsResolution(beef, item.txid, hasKnownTxid))
-    const resolved = await mapWithConcurrency(
-      current,
-      concurrency,
-      async item => await resolveBeefForTransaction(storage, item.txid, options, hasKnownTxid, item.depth)
+    const resolved = await mapWithConcurrency(current, concurrency, item =>
+      awaitFromSync(() => resolveBeefForTransaction(storage, item.txid, options, hasKnownTxid, item.depth))
     )
 
     const next: Array<{ txid: string; depth: number }> = []
@@ -129,19 +128,24 @@ function requiresSingleRootPolicy(options: StorageGetBeefOptions): boolean {
   )
 }
 
-async function mergeSingleRootFragments(
+function mergeSingleRootFragments(
   storage: StorageProvider,
   roots: string[],
   options: StorageGetBeefOptions,
   beef: Beef
 ): Promise<Beef> {
-  const fragments = await mapWithConcurrency(
-    roots.filter(txid => beef.findTxid(txid) == null),
-    normalizeConcurrency(options.maxConcurrency),
-    async txid => await getBeefForTransaction(storage, txid, { ...options, mergeToBeef: undefined })
+  return mapAwaitFromSync(
+    () =>
+      mapWithConcurrency(
+        roots.filter(txid => beef.findTxid(txid) == null),
+        normalizeConcurrency(options.maxConcurrency),
+        txid => awaitFromSync(() => getBeefForTransaction(storage, txid, { ...options, mergeToBeef: undefined }))
+      ),
+    fragments => {
+      for (const fragment of fragments) beef.mergeBeef(fragment)
+      return beef
+    }
   )
-  for (const fragment of fragments) beef.mergeBeef(fragment)
-  return beef
 }
 
 function collectUnresolvedFrontier(
@@ -320,15 +324,14 @@ async function mergeMissingFragments(
   if (options.ignoreServices === true) {
     throw new WERR_INVALID_PARAMETER(`txid ${missing[0].txid}`, `valid transaction on chain ${storage.chain}`)
   }
-  const fragments = await mapWithConcurrency(
-    missing,
-    normalizeConcurrency(options.maxConcurrency),
-    async item =>
-      await getBeefForTransaction(storage, item.txid, {
+  const fragments = await mapWithConcurrency(missing, normalizeConcurrency(options.maxConcurrency), item =>
+    awaitFromSync(() =>
+      getBeefForTransaction(storage, item.txid, {
         ...options,
         ignoreStorage: true,
         mergeToBeef: undefined
       })
+    )
   )
   for (const fragment of fragments) beef.mergeBeef(fragment)
 }

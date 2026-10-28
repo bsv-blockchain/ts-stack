@@ -5,8 +5,8 @@ kind: package
 domain: helpers
 version: '1.5.5'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-08-31'
-last_verified: '2026-08-31'
+last_updated: '2026-09-23'
+last_verified: '2026-09-23'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/fund-wallet'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/fund-wallet'

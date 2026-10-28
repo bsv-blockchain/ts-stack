@@ -1,3 +1,4 @@
+import { awaitVoidFromSync } from '../utility/promiseFromSync'
 import { ChainTracker, MerklePath } from '@bsv/sdk'
 import { WalletError } from '../sdk/WalletError'
 import { GetMerklePathResult, WalletServices } from '../sdk/WalletServices.interfaces'
@@ -64,9 +65,8 @@ export async function getCanonicalMerklePath(
   chaintracker: ChainTracker,
   txid: string
 ): Promise<GetMerklePathResult> {
-  const validate = async (result: GetMerklePathResult): Promise<void> => {
-    await validateCanonicalMerklePathResult(txid, result, chaintracker)
-  }
+  const validate = (result: GetMerklePathResult): Promise<void> =>
+    awaitVoidFromSync(() => validateCanonicalMerklePathResult(txid, result, chaintracker))
 
   let result: GetMerklePathResult
   try {

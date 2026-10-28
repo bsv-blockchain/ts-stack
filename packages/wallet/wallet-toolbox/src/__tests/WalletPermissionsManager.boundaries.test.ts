@@ -37,7 +37,8 @@ function permissionToken(satoshis = 1): PermissionToken {
     outputIndex: 0,
     outputScript: '51',
     satoshis,
-    originator: 'example.com'
+    originator: 'example.com',
+    expiry: 0
   }
 }
 
@@ -480,6 +481,7 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
         outputScript: '51',
         satoshis: 1,
         originator: 'example.com',
+        expiry: 0,
         privileged: true,
         protocol: 'alpha',
         securityLevel: 2,
@@ -492,6 +494,7 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
         outputScript: '51',
         satoshis: 1,
         originator: 'example.com',
+        expiry: 0,
         privileged: false,
         protocol: 'beta',
         securityLevel: 1,
@@ -499,6 +502,7 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
       }
     ]
     jest.spyOn(manager, 'collectProtocolTokens').mockImplementation(async (_result, _origin, _seen, tokens) => {
+      if (!Array.isArray(tokens)) throw new Error('Token collector fixture must receive its actual array')
       tokens.push(...protocolTokens)
     })
     await expect(
@@ -516,6 +520,7 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
       { ...protocolTokens[1], certType: 'type-b', verifier: 'verifier-b' }
     ]
     jest.spyOn(manager, 'collectCertificateTokens').mockImplementation(async (_result, _origin, _seen, tokens) => {
+      if (!Array.isArray(tokens)) throw new Error('Token collector fixture must receive its actual array')
       tokens.push(...certificateTokens)
     })
     await expect(
@@ -524,6 +529,7 @@ describe('WalletPermissionsManager hostile boundary coverage', () => {
     await expect(manager.listCertificateAccess()).resolves.toHaveLength(2)
 
     jest.spyOn(manager, 'collectBasketTokens').mockImplementation(async (_result, _origin, _seen, tokens) => {
+      if (!Array.isArray(tokens)) throw new Error('Token collector fixture must receive its actual array')
       tokens.push({ ...protocolTokens[0], basketName: 'basket-a' })
     })
     await expect(manager.listBasketAccess()).resolves.toEqual([expect.objectContaining({ basketName: 'basket-a' })])

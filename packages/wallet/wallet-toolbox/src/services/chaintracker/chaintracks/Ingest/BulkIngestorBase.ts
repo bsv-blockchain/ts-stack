@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../../../utility/promiseFromSync'
 import { BulkIngestorApi, BulkIngestorBaseOptions, BulkSyncResult } from '../Api/BulkIngestorApi'
 import { ChaintracksStorageApi } from '../Api/ChaintracksStorageApi'
 
@@ -50,15 +51,19 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
 
   private storageEngine: ChaintracksStorageBase | undefined
 
-  async setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
-    if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
-    if (typeof log !== 'function') throw new Error('log must be a function.')
-    this.storageEngine = storage
-    this.log = log
+  setStorage(storage: ChaintracksStorageBase, log: (...args: any[]) => void): Promise<void> {
+    return promiseFromSync(() => {
+      if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
+      if (typeof log !== 'function') throw new Error('log must be a function.')
+      this.storageEngine = storage
+      this.log = log
+    })
   }
 
-  async shutdown(): Promise<void> {
-    /* intentional no-op: subclasses override when needed */
+  shutdown(): Promise<void> {
+    return promiseFromSync(() => {
+      /* intentional no-op: subclasses override when needed */
+    })
   }
 
   storageOrUndefined(): ChaintracksStorageApi | undefined {
@@ -79,8 +84,10 @@ export abstract class BulkIngestorBase implements BulkIngestorApi {
    * At least one derived BulkIngestor must override this method to provide the current height of the active chain tip.
    * @returns undefined unless overridden
    */
-  async getPresentHeight(): Promise<number | undefined> {
-    return undefined
+  getPresentHeight(): Promise<number | undefined> {
+    return promiseFromSync(() => {
+      return undefined
+    })
   }
 
   /**

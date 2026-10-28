@@ -47,6 +47,10 @@ These descriptive registries do not install executable permission modules.
 npm install @bsv/overlay-topics
 ```
 
+The unpublished 1.9.2 candidate refreshes the packed templates range for its
+CommonJS compatibility repair. Topic APIs, schemas and admission behavior are
+unchanged; no API migration is required.
+
 ## Quick start
 
 ```typescript

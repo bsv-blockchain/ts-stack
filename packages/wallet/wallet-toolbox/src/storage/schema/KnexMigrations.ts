@@ -1,5 +1,84 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
+import {
+  SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION,
+  widenSnapshotArchivePacketLabels,
+  refuseSnapshotArchivePacketLabelDowngrade
+} from './snapshotArchivePacketLabels'
+import { addSnapshotJournalMysqlPrimaryControl } from '../snapshot/journal/SnapshotJournalMysqlSourceUpgrade'
+import {
+  PRIMARY_HANDOFF_MIGRATION,
+  addPrimaryHandoffSchema,
+  removePrimaryHandoffSchema
+} from './primaryHandoffMigration'
+import { SNAPSHOT_JOURNAL_FIELD_CACHE_MIGRATION } from './snapshotSqlMigration'
+import {
+  migrateSnapshotJournalSqliteSourceAddition,
+  migrateSnapshotJournalSqliteSignedProvenance
+} from '../snapshot/journal/SnapshotJournalSqliteGeneration'
+import {
+  addSnapshotJournalDataReceiptSchema,
+  removeSnapshotJournalDataReceiptSchema,
+  SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION
+} from './snapshotJournalDataReceiptMigration'
+import {
+  addSnapshotSyncContentReceiptSchema,
+  removeSnapshotSyncContentReceiptSchema,
+  SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION
+} from './snapshotSyncReceiptMigration'
+import { forSnapshotSqlDialect } from './snapshotSqlMigration'
+import {
+  addSnapshotJournalDestinationSchema,
+  SNAPSHOT_JOURNAL_DESTINATION_MIGRATION
+} from '../snapshot/journal/SnapshotJournalDestinationSchema'
+import {
+  migrateSnapshotJournalSource,
+  SNAPSHOT_JOURNAL_SOURCE_MIGRATION
+} from '../snapshot/journal/SnapshotJournalLifecycle'
+import { migrateGeneration, refuseGenerationDowngrade } from './snapshotSqliteIndexMigration'
+import { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './snapshotSqliteIndexState'
+import {
+  addSnapshotGlobalIndexes,
+  removeSnapshotGlobalIndexes,
+  SNAPSHOT_GLOBAL_INDEX_MIGRATION
+} from './snapshotGlobalIndexMigration'
+import {
+  addSnapshotCertificateIndexes,
+  removeSnapshotCertificateIndexes,
+  SNAPSHOT_CERTIFICATE_INDEX_MIGRATION
+} from './snapshotCertificateIndexMigration'
+import {
+  addSnapshotRelationIndexes,
+  removeSnapshotRelationIndexes,
+  SNAPSHOT_RELATION_INDEX_MIGRATION
+} from './snapshotRelationIndexMigration'
+import {
+  addSnapshotProfileIndexes,
+  removeSnapshotProfileIndexes,
+  SNAPSHOT_PROFILE_INDEX_MIGRATION
+} from './snapshotProfileIndexMigration'
+import {
+  addSnapshotArchiveGuardTable,
+  removeSnapshotArchiveGuardTable,
+  SNAPSHOT_ARCHIVE_GUARD_MIGRATION
+} from './snapshotArchiveGuardMigration'
+import {
+  addSnapshotArchiveOwnerTable,
+  removeSnapshotArchiveOwnerTable,
+  SNAPSHOT_ARCHIVE_OWNER_MIGRATION
+} from './snapshotArchiveOwnerMigration'
+import {
+  addSnapshotArchiveRequestTable,
+  removeSnapshotArchiveRequestTable,
+  SNAPSHOT_ARCHIVE_REQUEST_MIGRATION
+} from './snapshotArchiveRequestMigration'
+import {
+  addSnapshotArchiveTables,
+  removeSnapshotArchiveTables,
+  SNAPSHOT_ARCHIVE_MIGRATION
+} from './snapshotArchiveMigration'
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import { Knex } from 'knex'
+import { addSnapshotSyncTables, removeSnapshotSyncTables, SNAPSHOT_SYNC_MIGRATION } from './snapshotSyncMigration'
 import { DBType } from '../StorageReader'
 import { Chain } from '../../sdk/types'
 import { StorageKnex } from '../StorageKnex'
@@ -10,6 +89,22 @@ import {
   DEFAULT_MANAGED_CHANGE_TARGET_UTXOS,
   LEGACY_MANAGED_CHANGE_MINIMUM_SATOSHIS
 } from '../methods/managedChangePolicy'
+
+export { SNAPSHOT_GLOBAL_INDEX_MIGRATION } from './snapshotGlobalIndexMigration'
+export { migration as SNAPSHOT_SQLITE_INDEX_MIGRATION } from './snapshotSqliteIndexState'
+export { SNAPSHOT_CERTIFICATE_INDEX_MIGRATION } from './snapshotCertificateIndexMigration'
+export { SNAPSHOT_RELATION_INDEX_MIGRATION } from './snapshotRelationIndexMigration'
+export { SNAPSHOT_PROFILE_INDEX_MIGRATION } from './snapshotProfileIndexMigration'
+export { SNAPSHOT_ARCHIVE_OWNER_MIGRATION } from './snapshotArchiveOwnerMigration'
+export { SNAPSHOT_ARCHIVE_GUARD_MIGRATION } from './snapshotArchiveGuardMigration'
+export { SNAPSHOT_ARCHIVE_REQUEST_MIGRATION } from './snapshotArchiveRequestMigration'
+export { SNAPSHOT_ARCHIVE_MIGRATION } from './snapshotArchiveMigration'
+export { SNAPSHOT_SYNC_MIGRATION } from './snapshotSyncMigration'
+export { SNAPSHOT_JOURNAL_DESTINATION_MIGRATION } from '../snapshot/journal/SnapshotJournalDestinationSchema'
+export { SNAPSHOT_JOURNAL_SOURCE_MIGRATION } from '../snapshot/journal/SnapshotJournalLifecycle'
+
+export { SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION } from './snapshotSyncReceiptMigration'
+export { SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION } from './snapshotJournalDataReceiptMigration'
 
 export const SYNC_TRANSFER_MIGRATION = '2026-09-09-001 add bounded sync transfers'
 
@@ -84,6 +179,18 @@ export class KnexMigrations implements MigrationSource<string> {
   ): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
 
+    migrations[SNAPSHOT_JOURNAL_DATA_RECEIPT_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotJournalDataReceiptSchema),
+      down: forSnapshotSqlDialect(removeSnapshotJournalDataReceiptSchema)
+    }
+
+    migrations[SNAPSHOT_SYNC_CONTENT_RECEIPT_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotSyncContentReceiptSchema),
+      down: forSnapshotSqlDialect(removeSnapshotSyncContentReceiptSchema)
+    }
+
     migrations[INTERNALIZE_RECEIPT_MIGRATION] = {
       async up(knex) {
         // Historical wallets can contain duplicate transaction identifiers.
@@ -114,6 +221,143 @@ export class KnexMigrations implements MigrationSource<string> {
         table.timestamp('created_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
         table.timestamp('updated_at', { precision: 3 }).defaultTo(knex.fn.now()).notNullable()
       }
+    }
+
+    // DDL may commit independently on MySQL. Bootstrap pages retain their own
+    // durable positions on both backends and resume before journal publication.
+    migrations[SNAPSHOT_SQLITE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(migrateGeneration),
+      down: forSnapshotSqlDialect(refuseGenerationDowngrade)
+    }
+
+    migrations[SNAPSHOT_GLOBAL_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotGlobalIndexes),
+      down: forSnapshotSqlDialect(removeSnapshotGlobalIndexes)
+    }
+
+    migrations[SNAPSHOT_CERTIFICATE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotCertificateIndexes),
+      down: forSnapshotSqlDialect(removeSnapshotCertificateIndexes)
+    }
+
+    migrations[SNAPSHOT_RELATION_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotRelationIndexes),
+      down: forSnapshotSqlDialect(removeSnapshotRelationIndexes)
+    }
+
+    migrations[SNAPSHOT_PROFILE_INDEX_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(addSnapshotProfileIndexes),
+      down: forSnapshotSqlDialect(removeSnapshotProfileIndexes)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_GUARD_MIGRATION] = {
+      config: { transaction: true },
+      up: forSnapshotSqlDialect(addSnapshotArchiveGuardTable),
+      down: forSnapshotSqlDialect(removeSnapshotArchiveGuardTable)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_OWNER_MIGRATION] = {
+      config: { transaction: true },
+      up: forSnapshotSqlDialect(addSnapshotArchiveOwnerTable),
+      down: forSnapshotSqlDialect(removeSnapshotArchiveOwnerTable)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_REQUEST_MIGRATION] = {
+      config: { transaction: true },
+      up: forSnapshotSqlDialect(addSnapshotArchiveRequestTable),
+      down: forSnapshotSqlDialect(removeSnapshotArchiveRequestTable)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_MIGRATION] = {
+      config: { transaction: true },
+      up: forSnapshotSqlDialect(addSnapshotArchiveTables),
+      down: forSnapshotSqlDialect(removeSnapshotArchiveTables)
+    }
+
+    migrations[SNAPSHOT_ARCHIVE_PACKET_LABEL_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(widenSnapshotArchivePacketLabels),
+      down: refuseSnapshotArchivePacketLabelDowngrade
+    }
+
+    migrations[SNAPSHOT_SYNC_MIGRATION] = {
+      config: { transaction: true },
+      up: forSnapshotSqlDialect(addSnapshotSyncTables),
+      down: forSnapshotSqlDialect(removeSnapshotSyncTables)
+    }
+
+    migrations[PRIMARY_HANDOFF_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(async knex => {
+        if (String(knex.client.config.client).includes('mysql'))
+          await addSnapshotJournalMysqlPrimaryControl(knex, async () => await addPrimaryHandoffSchema(knex))
+        else
+          await knex.transaction(
+            async trx =>
+              await migrateSnapshotJournalSqliteSourceAddition(
+                trx,
+                async () => await addPrimaryHandoffSchema(trx),
+                trx.client.config.migrations
+              )
+          )
+      }),
+      down: forSnapshotSqlDialect(removePrimaryHandoffSchema)
+    }
+
+    migrations[SNAPSHOT_JOURNAL_DESTINATION_MIGRATION] = {
+      // MySQL DDL commits implicitly. SQLite still owns one atomic writer below.
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(async knex => {
+        if (String(knex.client.config.client).includes('mysql')) await addSnapshotJournalDestinationSchema(knex)
+        else
+          await knex.transaction(async trx => {
+            await addSnapshotJournalDestinationSchema(trx)
+          })
+      }),
+      down: forSnapshotSqlDialect(() => {
+        return promiseFromSync(() => {
+          throw new WERR_NOT_IMPLEMENTED(
+            'Journal reconciliation schema requires a forward migration; preserve wallet and recovery data'
+          )
+        })
+      })
+    }
+
+    migrations[SNAPSHOT_JOURNAL_FIELD_CACHE_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(async knex => {
+        if (String(knex.client.config.client).includes('mysql')) await addSnapshotJournalDestinationSchema(knex)
+        else if (knex.isTransaction) {
+          await addSnapshotJournalDestinationSchema(knex)
+          await migrateSnapshotJournalSqliteSignedProvenance(knex, knex.client.config.migrations)
+        } else
+          await knex.transaction(async trx => {
+            await addSnapshotJournalDestinationSchema(trx)
+            await migrateSnapshotJournalSqliteSignedProvenance(trx, knex.client.config.migrations)
+          })
+      }),
+      down: forSnapshotSqlDialect(() => {
+        return promiseFromSync(() => {
+          throw new WERR_NOT_IMPLEMENTED('Journal field custody requires forward recovery; preserve provenance bytes')
+        })
+      })
+    }
+
+    migrations[SNAPSHOT_JOURNAL_SOURCE_MIGRATION] = {
+      config: { transaction: false },
+      up: forSnapshotSqlDialect(migrateSnapshotJournalSource),
+      down: forSnapshotSqlDialect(() => {
+        return promiseFromSync(() => {
+          throw new WERR_NOT_IMPLEMENTED(
+            'Native journal downgrade is unsupported; preserve wallet and retained-source data'
+          )
+        })
+      })
     }
 
     migrations[SYNC_TRANSFER_MIGRATION] = {

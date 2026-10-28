@@ -1,3 +1,7 @@
+import { promiseFromSync, awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
+import type { StorageActiveWrite } from '../StorageActiveWrite'
+import { StorageReqWrite } from '../StorageReqWrite'
+import { repairBeefProofs } from './repairBeefProofs'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {
   Beef,
@@ -45,7 +49,7 @@ interface PreparedBeefWriterExtension {
   enqueuePreparedBeef: (preparation: PreparedBeefPreparation) => boolean
 }
 
-function normalizeProcessActionArgs (args: StorageProcessActionArgs): StorageProcessActionArgs {
+function normalizeProcessActionArgs(args: StorageProcessActionArgs): StorageProcessActionArgs {
   for (const property of ['isNewTx', 'isSendWith', 'isNoSend', 'isDelayed'] as const) {
     if (typeof args[property] !== 'boolean') {
       throw new WERR_INVALID_PARAMETER(property, 'a boolean')
@@ -67,13 +71,16 @@ function normalizeProcessActionArgs (args: StorageProcessActionArgs): StoragePro
   return { ...args, sendWith }
 }
 
-export async function processAction (
+export async function processAction(
   storage: StorageProvider,
   auth: AuthId,
   args: StorageProcessActionArgs
 ): Promise<StorageProcessActionResults> {
   args = normalizeProcessActionArgs(args)
-  if (!storage.telemetry.enabled) return await processActionCore(storage, auth, args)
+  const write = await (typeof storage.activeWriteTransaction === 'function'
+    ? storage.activeWriteTransaction(auth)
+    : StorageProvider.prototype.activeWriteTransaction.call(storage, auth))
+  if (!storage.telemetry.enabled) return await processActionCore(storage, auth, args, write)
   return await storage.telemetry.withSpan(
     'wallet.storage.process_action',
     {
@@ -86,18 +93,22 @@ export async function processAction (
         'action.send_with_count': args.sendWith.length
       }
     },
-    async span => {
-      const result = await processActionCore(storage, auth, args, span)
-      span.end({ attributes: { 'action.send_result_count': result.sendWithResults?.length ?? 0 } })
-      return result
-    }
+    span =>
+      mapAwaitFromSync(
+        () => processActionCore(storage, auth, args, write, span),
+        result => {
+          span.end({ attributes: { 'action.send_result_count': result.sendWithResults?.length ?? 0 } })
+          return result
+        }
+      )
   )
 }
 
-async function processActionCore (
+async function processActionCore(
   storage: StorageProvider,
   auth: AuthId,
   args: StorageProcessActionArgs,
+  write: StorageActiveWrite,
   parent?: TelemetrySpan
 ): Promise<StorageProcessActionResults> {
   const logger = args.logger
@@ -113,18 +124,12 @@ async function processActionCore (
   const txidsOfReqsToShareWithWorld: string[] = [...args.sendWith]
 
   if (args.isNewTx) {
-    const vargs = await traceProcessStep(
-      storage,
-      'wallet.storage.process_action.validate',
-      parent,
-      async () => await validateCommitNewTxToStorageArgs(storage, auth, args)
+    const vargs = await traceProcessStep(storage, 'wallet.storage.process_action.validate', parent, () =>
+      awaitFromSync(() => validateCommitNewTxToStorageArgs(storage, auth, args))
     )
     logger?.log('validated new tx updates to storage')
-    ;({ req } = await traceProcessStep(
-      storage,
-      'wallet.storage.process_action.commit',
-      parent,
-      async () => await commitNewTxToStorage(storage, userId, vargs)
+    ;({ req } = await traceProcessStep(storage, 'wallet.storage.process_action.commit', parent, () =>
+      awaitFromSync(() => commitNewTxToStorage(storage, userId, vargs, write))
     ))
     logger?.log('committed new tx updates to storage ')
     if (!req) throw new WERR_INTERNAL()
@@ -133,7 +138,9 @@ async function processActionCore (
       typeof preparedBeef.preparedBeefWritesEnabled === 'function' &&
       preparedBeef.preparedBeefWritesEnabled.call(storage) &&
       vargs.outputOutputs.some(isManagedChangeOutput)
-    ) { prepareRootTxid = req.txid }
+    ) {
+      prepareRootTxid = req.txid
+    }
     // Add the new txid to sendWith unless there are no others to send and the noSend option is set.
     if (args.isNoSend && !args.isSendWith) {
       logger?.log(`noSend txid ${req.txid}`)
@@ -143,12 +150,10 @@ async function processActionCore (
     }
   }
 
-  const { swr, ndr } = await traceProcessStep(
-    storage,
-    'wallet.storage.process_action.share',
-    parent,
-    async () =>
-      await shareReqsWithWorld(storage, userId, txidsOfReqsToShareWithWorld, args.isDelayed, undefined, logger)
+  const { swr, ndr } = await traceProcessStep(storage, 'wallet.storage.process_action.share', parent, () =>
+    awaitFromSync(() =>
+      shareReqsWithWorld(storage, userId, txidsOfReqsToShareWithWorld, args.isDelayed, undefined, logger, write)
+    )
   )
 
   r.sendWithResults = swr
@@ -157,6 +162,7 @@ async function processActionCore (
   // Prepare proof material for future spends only after all foreground
   // processAction work has completed. The bounded coordinator starts later on
   // the event loop and is never awaited by this request.
+  await write.assertCurrent()
   if (prepareRootTxid != null) {
     const extension = storage as unknown as Partial<PreparedBeefWriterExtension>
     if (typeof extension.enqueuePreparedBeef === 'function') {
@@ -169,7 +175,7 @@ async function processActionCore (
   return r
 }
 
-async function traceProcessStep<T> (
+async function traceProcessStep<T>(
   storage: StorageProvider,
   name: string,
   parent: TelemetrySpan | undefined,
@@ -225,7 +231,7 @@ export interface PostBeefResultForTxidApi {
  * @param isDelayed
  * @param r Optional. Ignores txids and allows ProvenTxReqs and merged beef to be passed in.
  */
-function classifyReqDetails (
+function classifyReqDetails(
   details: GetReqsAndBeefDetail[],
   swr: SendWithResult[],
   readyToSendReqs: EntityProvenTxReq[]
@@ -247,22 +253,23 @@ function classifyReqDetails (
   return complete
 }
 
-async function verifyMergedBeef (
+async function verifyMergedBeef(
   storage: StorageProvider,
   r: GetReqsAndBeefResult,
   readyToSendReqs: EntityProvenTxReq[],
   logger?: WalletLoggerInterface
 ): Promise<void> {
   if (readyToSendReqs.length === 0 || r.verified === true) return
+  r.beef = await repairBeefProofs(storage, r.beef)
   const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
   if (!beefIsValid) {
-    logger?.error(`VERIFY FALSE BEEF: ${r.beef.toLogString()}`)
+    logger?.error('Merged transaction proof graph failed validation; no broadcast attempted.')
     throw new WERR_INTERNAL('merged Beef failed validation.')
   }
   logger?.log('beef is valid')
 }
 
-async function getReqDetailsForDelayedShare (storage: StorageProvider, txids: string[]): Promise<GetReqsAndBeefResult> {
+async function getReqDetailsForDelayedShare(storage: StorageProvider, txids: string[]): Promise<GetReqsAndBeefResult> {
   const r: GetReqsAndBeefResult = {
     beef: new Beef(),
     details: []
@@ -298,41 +305,75 @@ async function getReqDetailsForDelayedShare (storage: StorageProvider, txids: st
   return r
 }
 
-export async function shareReqsWithWorld (
+export async function shareReqsWithWorld(
   storage: StorageProvider,
   userId: number,
   txids: string[],
   isDelayed: boolean,
   r?: GetReqsAndBeefResult,
-  logger?: WalletLoggerInterface
-): Promise<{ swr: SendWithResult[], ndr: ReviewActionResult[] | undefined }> {
+  logger?: WalletLoggerInterface,
+  capturedWrite?: StorageActiveWrite
+): Promise<{ swr: SendWithResult[]; ndr: ReviewActionResult[] | undefined }> {
   txids = normalizePostTxids(txids, 'txids', true)
   const swr: SendWithResult[] = []
   const ndr: ReviewActionResult[] | undefined = undefined
 
   if (r == null && txids.length < 1) return { swr, ndr }
 
+  // Older serialized provider adapters have no captured-write entry point.
+  // They retain their original scheduling path; a mode check grants nothing.
+  let writes: StorageReqWrite | undefined
+  if (typeof storage.activeWriteTransaction === 'function') {
+    const user = verifyOne(await storage.findUsers({ partial: { userId } }))
+    const write = capturedWrite ?? (await storage.activeWriteTransaction(user))
+    writes = await StorageReqWrite.capture(storage, txids.length ? txids : r!.details.map(d => d.txid), {
+      userId,
+      write
+    })
+    await writes.assertCurrent()
+  }
+
   r ??= isDelayed
     ? await getReqDetailsForDelayedShare(storage, txids)
     : await storage.getReqsAndBeefToShareWithWorld(txids, [])
 
-  normalizePostTxids(r.details.map(detail => detail.txid), 'details', true)
+  normalizePostTxids(
+    r.details.map(detail => detail.txid),
+    'details',
+    true
+  )
 
   const readyToSendReqs: EntityProvenTxReq[] = []
   if (!classifyReqDetails(r.details, swr, readyToSendReqs)) return { swr, ndr }
 
+  writes?.assertRequests(readyToSendReqs)
   const readyToSendReqIds = readyToSendReqs.map(r => r.id)
-  const transactionIds = readyToSendReqs.flatMap(r => r.notify.transactionIds ?? [])
 
   const batch = txids.length > 1 ? randomBytesBase64(16) : undefined
   if (isDelayed) {
     // Delayed sends rebuild BEEF when the monitor sends the req. Do not fail a committed
     // transaction here because the current aggregate BEEF is only a scheduling artifact.
     if (readyToSendReqIds.length > 0) {
-      await storage.transaction(async trx => {
-        await storage.updateProvenTxReq(readyToSendReqIds, { status: 'unsent', batch }, trx)
-        await storage.updateTransaction(transactionIds, { status: 'sending' }, trx)
-      })
+      if (writes == null) {
+        await storage.transaction(async trx => {
+          await storage.updateProvenTxReq(readyToSendReqIds, { status: 'unsent', batch }, trx)
+          await storage.updateTransaction(
+            readyToSendReqs.flatMap(req => req.notify.transactionIds ?? []),
+            { status: 'sending' },
+            trx
+          )
+        })
+      } else
+        for (const req of readyToSendReqs) {
+          await writes.request(req, current => {
+            return promiseFromSync(() => {
+              if (['completed', 'unmined'].includes(current.status)) return
+              current.status = 'unsent'
+              if (batch != null) current.batch = batch
+            })
+          })
+          await writes.status(req, 'sending')
+        }
     }
     return { swr, ndr }
   }
@@ -342,11 +383,23 @@ export async function shareReqsWithWorld (
   await verifyMergedBeef(storage, r, readyToSendReqs, logger)
 
   if (batch) {
-    for (const req of readyToSendReqs) req.batch = batch
-    await storage.updateProvenTxReq(readyToSendReqIds, { batch })
+    if (writes == null) {
+      for (const req of readyToSendReqs) req.batch = batch
+      await storage.updateProvenTxReq(readyToSendReqIds, { batch })
+    } else
+      for (const req of readyToSendReqs) {
+        await writes.request(req, current => {
+          return promiseFromSync(() => {
+            current.batch = batch
+          })
+        })
+      }
   }
 
-  const prtn = await storage.attemptToPostReqsToNetwork(readyToSendReqs, undefined, logger)
+  const prtn =
+    writes == null
+      ? await storage.attemptToPostReqsToNetwork(readyToSendReqs, undefined, logger)
+      : await storage.attemptToPostReqsToNetwork(readyToSendReqs, undefined, logger, writes)
   const { swr: swrRes, rar } = await aggregateActionResults(storage, swr, prtn)
   return { swr: swrRes, ndr: rar }
 }
@@ -356,12 +409,14 @@ interface ReqTxStatus {
   tx: TransactionStatus
 }
 
-function determineReqTxStatus (params: Pick<StorageProcessActionArgs, 'isNoSend' | 'isSendWith' | 'isDelayed'>): {
+function determineReqTxStatus(params: Pick<StorageProcessActionArgs, 'isNoSend' | 'isSendWith' | 'isDelayed'>): {
   status: ReqTxStatus
   postStatus: ReqTxStatus | undefined
 } {
   if (params.isNoSend && !params.isSendWith) return { status: { req: 'nosend', tx: 'nosend' }, postStatus: undefined }
-  if (!params.isNoSend && params.isDelayed) { return { status: { req: 'unsent', tx: 'unprocessed' }, postStatus: undefined } }
+  if (!params.isNoSend && params.isDelayed) {
+    return { status: { req: 'unsent', tx: 'unprocessed' }, postStatus: undefined }
+  }
   if (!params.isNoSend && !params.isDelayed) {
     return {
       status: { req: 'unprocessed', tx: 'unprocessed' },
@@ -371,7 +426,7 @@ function determineReqTxStatus (params: Pick<StorageProcessActionArgs, 'isNoSend'
   throw new WERR_INTERNAL('logic error')
 }
 
-function buildOutputUpdates (storage: StorageProvider, tx: BsvTransaction, vargs: ValidCommitNewTxToStorageArgs): void {
+function buildOutputUpdates(storage: StorageProvider, tx: BsvTransaction, vargs: ValidCommitNewTxToStorageArgs): void {
   for (const o of vargs.outputOutputs) {
     const vout = verifyInteger(o.vout)
     const offset = vargs.txScriptOffsets.outputs[vout]
@@ -421,12 +476,12 @@ interface ValidCommitNewTxToStorageArgs {
   outputOutputs: TableOutput[]
 
   req: EntityProvenTxReq
-  outputUpdates: Array<{ id: number, update: Partial<TableOutput> }>
+  outputUpdates: Array<{ id: number; update: Partial<TableOutput> }>
   transactionUpdate: Partial<TableTransaction>
   postStatus?: ReqTxStatus
 }
 
-function parseProcessActionTransaction (params: StorageProcessActionArgs): {
+function parseProcessActionTransaction(params: StorageProcessActionArgs): {
   reference: string
   txid: string
   rawTx: number[]
@@ -449,7 +504,7 @@ function parseProcessActionTransaction (params: StorageProcessActionArgs): {
   return { reference, txid, rawTx, tx }
 }
 
-async function validateNoSendExpiryRelease (
+async function validateNoSendExpiryRelease(
   storage: StorageProvider,
   auth: AuthId,
   params: StorageProcessActionArgs,
@@ -473,7 +528,7 @@ async function validateNoSendExpiryRelease (
   if (expired) throw new WERR_INVALID_OPERATION('BRC-177 protected action has expired')
 }
 
-function validatePlannedTransaction (transaction: TableTransaction): void {
+function validatePlannedTransaction(transaction: TableTransaction): void {
   if (!transaction.isOutgoing) throw new WERR_INVALID_OPERATION('isOutgoing is not true')
   if (transaction.inputBEEF == null) throw new WERR_INVALID_OPERATION()
   if (transaction.status !== 'unsigned' && transaction.status !== 'unprocessed') {
@@ -481,7 +536,7 @@ function validatePlannedTransaction (transaction: TableTransaction): void {
   }
 }
 
-function validateCommissionOutput (
+function validateCommissionOutput(
   storage: StorageProvider,
   tx: BsvTransaction,
   commissionRows: TableCommission[]
@@ -498,7 +553,7 @@ function validateCommissionOutput (
   }
 }
 
-async function validateCommitNewTxToStorageArgs (
+async function validateCommitNewTxToStorageArgs(
   storage: StorageProvider,
   auth: AuthId,
   params: StorageProcessActionArgs
@@ -592,10 +647,11 @@ export interface CommitNewTxResults {
   log?: string
 }
 
-async function commitNewTxToStorage (
+async function commitNewTxToStorage(
   storage: StorageProvider,
   userId: number,
-  vargs: ValidCommitNewTxToStorageArgs
+  vargs: ValidCommitNewTxToStorageArgs,
+  write: StorageActiveWrite
 ): Promise<CommitNewTxResults> {
   let log = vargs.log
 
@@ -618,7 +674,7 @@ async function commitNewTxToStorage (
 
   let req: EntityProvenTxReq | undefined
 
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     log = stampLog(log, '... storage commitNewTxToStorage storage transaction start')
 
     if (vargs.transaction.noSendExpiryState != null) {

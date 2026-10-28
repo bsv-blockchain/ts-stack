@@ -1,3 +1,4 @@
+import type { StorageActiveWrite } from '../StorageActiveWrite'
 import type { InternalizeActionArgs } from '@bsv/sdk'
 import type { StorageProvider } from '../StorageProvider'
 import type { AuthId, StorageInternalizeActionResult } from '../../sdk/WalletStorage.interfaces'
@@ -11,7 +12,8 @@ export async function internalizeAction(
   storage: StorageProvider,
   auth: AuthId,
   args: InternalizeActionArgs,
-  receipt?: InternalizeReceiptClaim
+  receipt?: InternalizeReceiptClaim,
+  capturedWrite?: StorageActiveWrite
 ): Promise<StorageInternalizeActionResult> {
-  return await internalizeActionCore(storage, auth, args, null, undefined, receipt)
+  return await internalizeActionCore(storage, auth, args, null, undefined, receipt, capturedWrite)
 }

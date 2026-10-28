@@ -31,14 +31,26 @@ function executionRows(matrix) {
     throw new Error('Execution inventory exceeds bounded batch capacity')
   const seen = new Set()
   return Array.from(matrix.include, row => {
-    closed(row, ['target', 'partition'], 'execution row')
+    closed(
+      row,
+      row.wallet_native === undefined
+        ? ['target', 'partition']
+        : ['target', 'partition', 'wallet_native'],
+      'execution row'
+    )
+    if (row.wallet_native !== undefined && row.wallet_native !== true)
+      throw new Error('Invalid native runner marker')
     for (const name of [row.target, row.partition])
       if (typeof name !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))
         throw new Error('Invalid execution row identity')
     const identity = JSON.stringify([row.target, row.partition])
     if (seen.has(identity)) throw new Error('Duplicate execution row')
     seen.add(identity)
-    return { target: row.target, partition: row.partition }
+    return {
+      target: row.target,
+      partition: row.partition,
+      ...(row.wallet_native === true ? { wallet_native: true } : {})
+    }
   })
 }
 

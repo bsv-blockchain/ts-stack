@@ -19,6 +19,23 @@ describe('Monitor tests', () => {
 
   const env = _tu.getEnv('test')
   const ctxs: TestSetup1Wallet[] = []
+  const offlineContexts = new Set<TestWallet<{}>>()
+  async function offlineLegacyWallet(database: string): Promise<TestWallet<{}>> {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy(database)
+    offlineContexts.add(ctx)
+    const headers = mockGetMerklePathResults.map(result => verifyTruthy(result.header)),
+      tracker = await _tu.installOfflineLegacyChainTracker(ctx, headers)
+    await expect(tracker.isValidRootForHeight('00'.repeat(32), 1)).resolves.toBe(false)
+    for (const header of headers) {
+      await expect(tracker.isValidRootForHeight(header.merkleRoot, header.height)).resolves.toBe(true)
+      await expect(tracker.isValidRootForHeight(header.merkleRoot, 1)).resolves.toBe(false)
+    }
+    return ctx
+  }
+  afterEach(async () => {
+    for (const ctx of offlineContexts) await ctx.wallet.destroy()
+    offlineContexts.clear()
+  })
 
   beforeAll(async () => {
     ctxs.push(
@@ -125,7 +142,7 @@ describe('Monitor tests', () => {
 
   test('3b TaskSendWaiting batches once without reposting members', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest3b'))
+    ctxs.push(await offlineLegacyWallet('monitorTest3b'))
 
     const expectedTxids = [
       'd9ec73b2e0f06e0f482d2d1db9ceccf2f212f0b24afbe10846ac907567be571f',
@@ -175,7 +192,7 @@ describe('Monitor tests', () => {
 
   test('5 TaskCheckForProofs success', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest5'))
+    ctxs.push(await offlineLegacyWallet('monitorTest5'))
     let _txidsPosted: string[] = []
     let mockResultIndex = 0
 
@@ -237,7 +254,7 @@ describe('Monitor tests', () => {
 
   test('6 TaskCheckForProofs fail', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6'))
+    ctxs.push(await offlineLegacyWallet('monitorTest6'))
     let _txidsPosted: string[] = []
     let _mockResultIndex = 0
 
@@ -293,7 +310,7 @@ describe('Monitor tests', () => {
 
   test('6b TaskCheckForProofs rebroadcasts broadcast txs until circuit breaker is exhausted', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6b'))
+    ctxs.push(await offlineLegacyWallet('monitorTest6b'))
 
     // The legacy fixture contains other unmined requests. Keep this unit test
     // deterministic instead of asking live proof services about those records.
@@ -356,7 +373,7 @@ describe('Monitor tests', () => {
 
   test('6c EntityProvenTx.fromReq secondary timeout uses rebroadcast accounting', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest6c'))
+    ctxs.push(await offlineLegacyWallet('monitorTest6c'))
 
     _tu.mockMerklePathServicesAsCallback(ctxs, async () => ({ name: 'mock' }))
 
@@ -575,9 +592,9 @@ describe('Monitor tests', () => {
     }
   ]
 
-  async function runMockedSendWaiting(postBeefMockStatus, database: string) {
+  async function runMockedSendWaiting(postBeefMockStatus: 'success' | 'error', database: string) {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy(database))
+    ctxs.push(await offlineLegacyWallet(database))
     let txidsPosted: string[] = []
     _tu.mockPostServicesAsCallback(ctxs, (beef, txids) => {
       txidsPosted.push(...txids)
@@ -640,7 +657,7 @@ describe('Monitor tests', () => {
 
   test('7 TaskReviewStatus', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest7'))
+    ctxs.push(await offlineLegacyWallet('monitorTest7'))
     //ctxs.push(await _tu.createLegacyWalletMySQLCopy('monitorTest7'))
 
     for (const { activeStorage: storage, monitor } of ctxs) {
@@ -682,7 +699,7 @@ describe('Monitor tests', () => {
 
   test('7b TaskReviewStatus does not restore inputs for live mempool reqs', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest7b'))
+    ctxs.push(await offlineLegacyWallet('monitorTest7b'))
 
     for (const { activeStorage: storage, monitor } of ctxs) {
       if (!monitor) throw new WERR_INTERNAL('test requires setup with monitor')
@@ -716,7 +733,7 @@ describe('Monitor tests', () => {
 
   test('8 ProcessProvenTransaction', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest8'))
+    ctxs.push(await offlineLegacyWallet('monitorTest8'))
     let mockResultIndex = 0
     let updatesReceived = 0
 
@@ -786,7 +803,7 @@ describe('Monitor tests', () => {
 
   test('9 ProcessBroadcastedTransactions', async () => {
     const ctxs: TestWallet<{}>[] = []
-    ctxs.push(await _tu.createLegacyWalletSQLiteCopy('monitorTest8'))
+    ctxs.push(await offlineLegacyWallet('monitorTest8'))
     let updatesReceived = 0
     let txidsPosted: string[] = []
 

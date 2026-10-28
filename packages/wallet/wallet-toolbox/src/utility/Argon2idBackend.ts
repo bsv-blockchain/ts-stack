@@ -60,12 +60,14 @@ export function unregisterArgon2idBackend(backend: AsyncArgon2idBackend): void {
 /**
  * Returns a proven-ready backend. A cold backend is prepared in the background
  * while the current derivation retains the portable implementation path.
+ * Passing false performs no cold preload; strict asynchronous workflows can
+ * refuse before launching background initialization or portable UI-thread work.
  */
-export function readyArgon2idBackend(): AsyncArgon2idBackend | undefined {
+export function readyArgon2idBackend(preloadIfCold = true): AsyncArgon2idBackend | undefined {
   const backend = backendGlobal().__bsvWalletToolboxArgon2idBackendV1
   if (backend === undefined) return undefined
   if (!backend.isReady()) {
-    if (!preloadingBackends.has(backend)) {
+    if (preloadIfCold && !preloadingBackends.has(backend)) {
       preloadingBackends.add(backend)
       void preloadBackend(backend)
     }

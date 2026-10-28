@@ -1,3 +1,4 @@
+import type { DigestVerification, SpendVerifierInterface } from '@bsv/sdk'
 import {
   Beef,
   BigNumber,
@@ -11,12 +12,10 @@ import {
   Signature,
   Transaction
 } from '@bsv/sdk'
-import {
-  verifyUnlockScripts
-} from '../completeSignedTransaction'
+import { verifyUnlockScripts } from '../completeSignedTransaction'
 import { verifyUnlockScriptsBatch } from '../verifyUnlockScripts'
 
-function verificationFixture (
+function verificationFixture(
   includeUnresolvedInput: boolean,
   resolvedInputs = 1
 ): {
@@ -58,7 +57,10 @@ function verificationFixture (
   return { beef, txid: tx.id('hex') }
 }
 
-function scriptShapeFixture (lockingScript: Script, unlockingScript: Script): {
+function scriptShapeFixture(
+  lockingScript: Script,
+  unlockingScript: Script
+): {
   beef: Beef
   txid: string
 } {
@@ -77,7 +79,7 @@ function scriptShapeFixture (lockingScript: Script, unlockingScript: Script): {
   return { beef, txid: tx.id('hex') }
 }
 
-function structurallyMutableBeef (source: Beef, txid: string): { beef: Beef, tx: Transaction } {
+function structurallyMutableBeef(source: Beef, txid: string): { beef: Beef; tx: Transaction } {
   const tx = source.findTxid(txid)?.tx
   if (tx == null) throw new Error('test transaction missing from BEEF')
   const txs = source.txs.map(item => ({ txid: item.txid, tx: item.tx }))
@@ -134,57 +136,60 @@ describe('verifyUnlockScripts', () => {
       verifiedInputs: 1,
       skippedInputs: 1
     })
-    expect(verifier.shouldVerifySpend).toHaveBeenCalledWith(
-      expect.anything(),
-      { consensus: true }
-    )
-    expect(verifier.verifySpend).toHaveBeenCalledWith(
-      expect.anything(),
-      { consensus: true }
-    )
+    expect(verifier.shouldVerifySpend).toHaveBeenCalledWith(expect.anything(), { consensus: true })
+    expect(verifier.verifySpend).toHaveBeenCalledWith(expect.anything(), { consensus: true })
   })
 
   it('does not misreport local resource exhaustion as an invalid script', async () => {
     const { beef, txid } = verificationFixture(false)
     const resourceError = new ScriptResourceLimitError('stack', 1024, 2048)
 
-    await expect(verifyUnlockScripts(txid, beef, {
-      verifySpend: async () => { throw resourceError }
-    })).rejects.toBe(resourceError)
+    await expect(
+      verifyUnlockScripts(txid, beef, {
+        verifySpend: async () => {
+          throw resourceError
+        }
+      })
+    ).rejects.toBe(resourceError)
   })
 
   it('does not misreport verifier integration failures as invalid scripts', async () => {
     const { beef, txid } = verificationFixture(false)
     const failure = new Error('backend initialization failed')
 
-    await expect(verifyUnlockScripts(txid, beef, {
-      verifySpend: async () => { throw failure }
-    })).rejects.toBe(failure)
+    await expect(
+      verifyUnlockScripts(txid, beef, {
+        verifySpend: async () => {
+          throw failure
+        }
+      })
+    ).rejects.toBe(failure)
   })
 
   it('uses one backend batch for all selected inputs and transactions', async () => {
     const { beef, txid } = verificationFixture(false, 2)
-    const verifySpendsBatch = jest.fn(async () => [true, true, true, true])
+    const verifySpendsBatch = jest.fn(
+      async (_items: Parameters<NonNullable<SpendVerifierInterface['verifySpendsBatch']>>[0]) => [
+        true,
+        true,
+        true,
+        true
+      ]
+    )
     const verifier = {
       shouldVerifySpend: jest.fn(() => true),
       verifySpend: jest.fn(async () => true),
       verifySpendsBatch
     }
 
-    await expect(verifyUnlockScriptsBatch(
-      [txid, txid],
-      beef,
-      verifier
-    )).resolves.toEqual([
+    await expect(verifyUnlockScriptsBatch([txid, txid], beef, verifier)).resolves.toEqual([
       { verifiedInputs: 2, skippedInputs: 0 },
       { verifiedInputs: 2, skippedInputs: 0 }
     ])
     expect(verifySpendsBatch).toHaveBeenCalledTimes(1)
     expect(verifySpendsBatch.mock.calls[0][0]).toHaveLength(4)
     expect(verifySpendsBatch.mock.calls[0][0]).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ consensus: true })
-      ])
+      expect.arrayContaining([expect.objectContaining({ consensus: true })])
     )
     expect(verifier.verifySpend).not.toHaveBeenCalled()
   })
@@ -206,11 +211,13 @@ describe('verifyUnlockScripts', () => {
       skippedInputs: 0
     })
     expect(verifyScripts).toHaveBeenCalledTimes(1)
-    expect(verifyScripts).toHaveBeenCalledWith(expect.objectContaining({
-      tx: beef.findTxid(txid)?.tx,
-      blockHeight: 943816,
-      consensus: true
-    }))
+    expect(verifyScripts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tx: beef.findTxid(txid)?.tx,
+        blockHeight: 943816,
+        consensus: true
+      })
+    )
     expect(verifySpendsBatch).not.toHaveBeenCalled()
   })
 
@@ -244,7 +251,9 @@ describe('verifyUnlockScripts', () => {
       altStackMem: 0
     })
     const verifier = {
-      verifyScripts: jest.fn(async () => { throw scriptError }),
+      verifyScripts: jest.fn(async () => {
+        throw scriptError
+      }),
       shouldVerifySpend: jest.fn(() => true),
       verifySpend: jest.fn(async () => true),
       verifySpendsBatch
@@ -272,11 +281,15 @@ describe('verifyUnlockScripts', () => {
 
   it('batch-verifies exact wallet P2PKH signatures without general script serialization', async () => {
     const { beef, txid } = await p2pkhVerificationFixture(2)
-    const verifyDigestBatch = jest.fn(async items => items.map(item => ECDSA.verify(
-      new BigNumber(Array.from(item.digest)),
-      Signature.fromDER(Array.from(item.signature)),
-      PublicKey.fromDER(Array.from(item.publicKey))
-    )))
+    const verifyDigestBatch = jest.fn(async (items: readonly DigestVerification[]) =>
+      items.map(item =>
+        ECDSA.verify(
+          new BigNumber(Array.from(item.digest)),
+          Signature.fromDER(Array.from(item.signature)),
+          PublicKey.fromDER(Array.from(item.publicKey))
+        )
+      )
+    )
     const verifyScripts = jest.fn(async () => true)
     const verifySpendsBatch = jest.fn(async () => [true, true])
     const verifier = {
@@ -324,8 +337,7 @@ describe('verifyUnlockScripts', () => {
       verifySpend: jest.fn(async () => true)
     }
 
-    await expect(verifyUnlockScripts(txid, beef, verifier))
-      .rejects.toThrow('invalid digest batch result count')
+    await expect(verifyUnlockScripts(txid, beef, verifier)).rejects.toThrow('invalid digest batch result count')
   })
 
   it.each([
@@ -336,14 +348,16 @@ describe('verifyUnlockScripts', () => {
     const verifyDigestBatch = jest.fn(async () => [true])
     const verifySpendsBatch = jest.fn(async () => [true])
 
-    await expect(verifyUnlockScripts(txid, beef, {
-      isReady,
-      supportsCrypto,
-      verifyDigestBatch,
-      shouldVerifySpend: () => true,
-      verifySpend: async () => true,
-      verifySpendsBatch
-    })).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
+    await expect(
+      verifyUnlockScripts(txid, beef, {
+        isReady,
+        supportsCrypto,
+        verifyDigestBatch,
+        shouldVerifySpend: () => true,
+        verifySpend: async () => true,
+        verifySpendsBatch
+      })
+    ).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
     expect(verifyDigestBatch).not.toHaveBeenCalled()
     expect(verifySpendsBatch).toHaveBeenCalledTimes(1)
   })
@@ -359,11 +373,11 @@ describe('verifyUnlockScripts', () => {
 
     const lockVariants = [
       lock.slice(0, 24),
-      lock.map((byte, index) => index === 0 ? 0x75 : byte),
-      lock.map((byte, index) => index === 1 ? 0xa8 : byte),
-      lock.map((byte, index) => index === 2 ? 0x15 : byte),
-      lock.map((byte, index) => index === 23 ? 0x89 : byte),
-      lock.map((byte, index) => index === 24 ? 0xad : byte)
+      lock.map((byte, index) => (index === 0 ? 0x75 : byte)),
+      lock.map((byte, index) => (index === 1 ? 0xa8 : byte)),
+      lock.map((byte, index) => (index === 2 ? 0x15 : byte)),
+      lock.map((byte, index) => (index === 23 ? 0x89 : byte)),
+      lock.map((byte, index) => (index === 24 ? 0xad : byte))
     ]
     const signatureLength = unlock[0]
     const publicKeyOffset = 1 + signatureLength + 1
@@ -373,11 +387,11 @@ describe('verifyUnlockScripts', () => {
       [8, ...unlock.slice(1, 9), 33, ...unlock.slice(publicKeyOffset)],
       [74, ...unlock.slice(1)],
       unlock.slice(0, -1),
-      unlock.map((byte, index) => index === 1 + signatureLength ? 32 : byte),
-      unlock.map((byte, index) => index === publicKeyOffset ? 0x04 : byte),
-      unlock.map((byte, index) => index === unlock.length - 1 ? byte ^ 1 : byte),
+      unlock.map((byte, index) => (index === 1 + signatureLength ? 32 : byte)),
+      unlock.map((byte, index) => (index === publicKeyOffset ? 0x04 : byte)),
+      unlock.map((byte, index) => (index === unlock.length - 1 ? byte ^ 1 : byte)),
       malformedSignature,
-      unlock.map((byte, index) => index === signatureLength ? 0x42 : byte)
+      unlock.map((byte, index) => (index === signatureLength ? 0x42 : byte))
     ]
     const variants = [
       ...lockVariants.map(bytes => ({ lock: bytes, unlock })),
@@ -385,20 +399,19 @@ describe('verifyUnlockScripts', () => {
     ]
 
     for (const variant of variants) {
-      const { beef, txid } = scriptShapeFixture(
-        Script.fromBinary(variant.lock),
-        Script.fromBinary(variant.unlock)
-      )
+      const { beef, txid } = scriptShapeFixture(Script.fromBinary(variant.lock), Script.fromBinary(variant.unlock))
       const verifyDigestBatch = jest.fn(async () => [true])
       const verifySpendsBatch = jest.fn(async () => [true])
-      await expect(verifyUnlockScripts(txid, beef, {
-        isReady: () => true,
-        supportsCrypto: () => true,
-        verifyDigestBatch,
-        shouldVerifySpend: () => true,
-        verifySpend: async () => true,
-        verifySpendsBatch
-      })).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
+      await expect(
+        verifyUnlockScripts(txid, beef, {
+          isReady: () => true,
+          supportsCrypto: () => true,
+          verifyDigestBatch,
+          shouldVerifySpend: () => true,
+          verifySpend: async () => true,
+          verifySpendsBatch
+        })
+      ).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
       expect(verifyDigestBatch).not.toHaveBeenCalled()
       expect(verifySpendsBatch).toHaveBeenCalledTimes(1)
     }
@@ -409,26 +422,28 @@ describe('verifyUnlockScripts', () => {
       verifyScripts: jest.fn(async () => true),
       verifySpend: jest.fn(async () => true)
     }
-    await expect(verifyUnlockScripts('ff'.repeat(32), new Beef(), verifier))
-      .rejects.toThrow('contained in beef')
+    await expect(verifyUnlockScripts('ff'.repeat(32), new Beef(), verifier)).rejects.toThrow('contained in beef')
 
     const missingSource = verificationFixture(false)
     const mutableMissingSource = structurallyMutableBeef(missingSource.beef, missingSource.txid)
     mutableMissingSource.tx.inputs[0].sourceTXID = undefined
-    await expect(verifyUnlockScripts(missingSource.txid, mutableMissingSource.beef, verifier))
-      .rejects.toThrow('inputs[0].sourceTXID')
+    await expect(verifyUnlockScripts(missingSource.txid, mutableMissingSource.beef, verifier)).rejects.toThrow(
+      'inputs[0].sourceTXID'
+    )
 
     const missingUnlock = verificationFixture(false)
     const mutableMissingUnlock = structurallyMutableBeef(missingUnlock.beef, missingUnlock.txid)
     mutableMissingUnlock.tx.inputs[0].unlockingScript = undefined
-    await expect(verifyUnlockScripts(missingUnlock.txid, mutableMissingUnlock.beef, verifier))
-      .rejects.toThrow('inputs[0].unlockingScript')
+    await expect(verifyUnlockScripts(missingUnlock.txid, mutableMissingUnlock.beef, verifier)).rejects.toThrow(
+      'inputs[0].unlockingScript'
+    )
 
     const badIndex = verificationFixture(false)
     const mutableBadIndex = structurallyMutableBeef(badIndex.beef, badIndex.txid)
     mutableBadIndex.tx.inputs[0].sourceOutputIndex = 99
-    await expect(verifyUnlockScripts(badIndex.txid, mutableBadIndex.beef, verifier))
-      .rejects.toThrow('reference an output')
+    await expect(verifyUnlockScripts(badIndex.txid, mutableBadIndex.beef, verifier)).rejects.toThrow(
+      'reference an output'
+    )
   })
 
   it('supports whole-transaction batching and rejects malformed backend results', async () => {
@@ -446,8 +461,9 @@ describe('verifyUnlockScripts', () => {
     expect(verifyScriptsBatch).toHaveBeenCalledTimes(1)
 
     verifyScriptsBatch.mockResolvedValueOnce([true])
-    await expect(verifyUnlockScriptsBatch([txid, txid], beef, verifier))
-      .rejects.toThrow('invalid transaction batch result count')
+    await expect(verifyUnlockScriptsBatch([txid, txid], beef, verifier)).rejects.toThrow(
+      'invalid transaction batch result count'
+    )
 
     const failure = new Error('whole backend unavailable')
     verifyScriptsBatch.mockRejectedValueOnce(failure)
@@ -458,23 +474,27 @@ describe('verifyUnlockScripts', () => {
     const { beef, txid } = verificationFixture(false)
     const verifyScripts = jest.fn(async () => true)
     const verifySpendsBatch = jest.fn(async () => [true])
-    await expect(verifyUnlockScripts(txid, beef, {
-      verifyScripts,
-      shouldVerifyScripts: () => false,
-      shouldVerifySpend: () => true,
-      verifySpend: async () => true,
-      verifySpendsBatch
-    })).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
+    await expect(
+      verifyUnlockScripts(txid, beef, {
+        verifyScripts,
+        shouldVerifyScripts: () => false,
+        shouldVerifySpend: () => true,
+        verifySpend: async () => true,
+        verifySpendsBatch
+      })
+    ).resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
     expect(verifyScripts).not.toHaveBeenCalled()
     expect(verifySpendsBatch).toHaveBeenCalledTimes(1)
 
-    await expect(verifyUnlockScriptsBatch([], new Beef(), {
-      isReady: () => true,
-      supportsCrypto: () => true,
-      verifyDigestBatch: async () => [],
-      verifyScripts: async () => true,
-      verifySpend: async () => true
-    })).resolves.toEqual([])
+    await expect(
+      verifyUnlockScriptsBatch([], new Beef(), {
+        isReady: () => true,
+        supportsCrypto: () => true,
+        verifyDigestBatch: async () => [],
+        verifyScripts: async () => true,
+        verifySpend: async () => true
+      })
+    ).resolves.toEqual([])
   })
 
   it('uses consensus defaults when canonical inputs omit optional numeric fields', async () => {
@@ -487,8 +507,10 @@ describe('verifyUnlockScripts', () => {
     const verifyDigestBatch = jest.fn(async () => [true])
     const verifier = { verifySpend: async () => true, verifyDigestBatch }
 
-    await expect(verifyUnlockScripts(fixture.txid, mutable.beef, verifier))
-      .resolves.toEqual({ verifiedInputs: 1, skippedInputs: 0 })
+    await expect(verifyUnlockScripts(fixture.txid, mutable.beef, verifier)).resolves.toEqual({
+      verifiedInputs: 1,
+      skippedInputs: 0
+    })
     expect(verifyDigestBatch).toHaveBeenCalledTimes(1)
   })
 })

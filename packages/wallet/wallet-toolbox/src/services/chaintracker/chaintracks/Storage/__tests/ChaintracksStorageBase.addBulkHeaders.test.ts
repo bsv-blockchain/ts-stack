@@ -14,7 +14,7 @@ function makeHeader(height: number): BlockHeader {
 
 function makeStorage(
   bulkRange: HeightRange,
-  mergeIncrementalBlockHeaders = jest.fn(async () => {})
+  mergeIncrementalBlockHeaders = jest.fn(async (_headers: BlockHeader[], _chainWork?: string) => {})
 ): ChaintracksStorageBase {
   const storage = Object.create(ChaintracksStorageBase.prototype) as ChaintracksStorageBase
   storage.makeAvailable = jest.fn(async () => {})
@@ -41,7 +41,7 @@ describe('ChaintracksStorageBase.addBulkHeaders', () => {
   })
 
   it('selects a validated chain, ignores duplicate tips, and retains live headers', async () => {
-    const mergeIncrementalBlockHeaders = jest.fn(async () => {})
+    const mergeIncrementalBlockHeaders = jest.fn(async (_headers: BlockHeader[], _chainWork?: string) => {})
     const storage = makeStorage(new HeightRange(0, -1), mergeIncrementalBlockHeaders)
     const h0 = makeHeader(0)
     const h1 = makeHeader(1)
@@ -66,7 +66,7 @@ describe('ChaintracksStorageBase.addBulkHeaders', () => {
   })
 
   it('rejects forged and proof-invalid candidates before chain-work selection', async () => {
-    const mergeIncrementalBlockHeaders = jest.fn(async () => {})
+    const mergeIncrementalBlockHeaders = jest.fn(async (_headers: BlockHeader[], _chainWork?: string) => {})
     const storage = makeStorage(new HeightRange(0, -1), mergeIncrementalBlockHeaders)
     const forged = { ...makeHeader(0), hash: '11'.repeat(32) }
     await expect(storage.addBulkHeaders([forged], new HeightRange(0, 0), [])).rejects.toThrow('hash is invalid')

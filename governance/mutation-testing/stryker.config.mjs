@@ -51,7 +51,23 @@ export default {
   timeoutMS: 2_000,
   timeoutFactor: 3,
   cleanTempDir: 'always',
-  ignorePatterns: ['coverage', 'dist', 'reports', 'artifacts', '.stryker-tmp'],
+  // Worker ownership records refer to actual source inodes. A copied record
+  // cannot authorize a sandbox, which must compile and own its own siblings.
+  ignorePatterns: [
+    'coverage',
+    'dist',
+    'reports',
+    'artifacts',
+    '.stryker-tmp',
+    ...(target.packageDirectory === 'packages/wallet/wallet-toolbox'
+      ? [
+          'test/.jest-worker-assets',
+          'src/storage/portable/Brc39Argon2Worker.js',
+          'src/utility/hashWasm.js',
+          'src/utility/Argon2idBackend.js'
+        ]
+      : [])
+  ],
   reporters: ['clear-text', 'json'],
   jsonReporter: {
     fileName: resolve(reportDirectory, 'mutation.json')

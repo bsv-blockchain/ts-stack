@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import type { ChainTracker } from '@bsv/sdk'
 import type { ChaintracksClientApi } from './chaintracks/Api/ChaintracksClientApi'
 
@@ -143,7 +144,7 @@ export class LocalChainTracker implements ChainTracker {
     const sources = this.attemptSources()
     if (sources.length === 0) throw new Error('No canonical ChainTracks source is available')
     await this.ensureEventObservers(sources)
-    const tips = await Promise.all(sources.map(async source => await source.findChainTipHash()))
+    const tips = await Promise.all(sources.map(source => awaitFromSync(() => source.findChainTipHash())))
     this.throwIfAborted(signal)
     this.assertCurrentContext(context, 'canonical token lookup')
     if (!this.sameSources(sources, this.attemptSources())) {
@@ -240,8 +241,8 @@ export class LocalChainTracker implements ChainTracker {
     return this.getStatus()
   }
 
-  async checkConsistency(): Promise<LocalChainTrackerStatus> {
-    return await this.checkConsistencyInternal(true)
+  checkConsistency(): Promise<LocalChainTrackerStatus> {
+    return awaitFromSync(() => this.checkConsistencyInternal(true))
   }
 
   private async checkConsistencyInternal(allowRecovery: boolean): Promise<LocalChainTrackerStatus> {
@@ -343,10 +344,9 @@ export class LocalChainTracker implements ChainTracker {
         expectedHash != null
       ) {
         const reset = this.beginReset()
-        await this.applyReset(
-          reset,
-          async () =>
-            await this.recoverLocal!({
+        await this.applyReset(reset, () =>
+          awaitFromSync(() =>
+            this.recoverLocal!({
               reason: consistency,
               localHeight,
               referenceHeight,
@@ -355,6 +355,7 @@ export class LocalChainTracker implements ChainTracker {
               expectedHash,
               referenceAgreement
             })
+          )
         )
         const recoveredAt = this.now().toISOString()
         const recovered = await this.checkConsistencyInternal(false)
@@ -446,7 +447,8 @@ export class LocalChainTracker implements ChainTracker {
     const events = source as ChaintracksClientApi & {
       subscribeReorgs?: (listener: unknown) => Promise<string>
     }
-    if (typeof events.subscribeReorgs === 'function') return async listener => await events.subscribeReorgs!(listener)
+    if (typeof events.subscribeReorgs === 'function')
+      return listener => awaitFromSync(() => events.subscribeReorgs!(listener))
     if (source.supportsReorgEvents === true) {
       throw new Error('Chaintracks provider promised reorg events but subscribeReorgs is not implemented')
     }

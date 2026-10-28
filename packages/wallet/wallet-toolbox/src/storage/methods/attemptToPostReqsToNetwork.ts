@@ -1,4 +1,7 @@
+import { promiseFromSync, awaitFromSync } from '../../utility/promiseFromSync'
+import { StorageReqWrite } from '../StorageReqWrite'
 import { Beef, Transaction, WalletLoggerInterface } from '@bsv/sdk'
+import { repairBeefProofs } from './repairBeefProofs'
 import { StorageProvider } from '../StorageProvider'
 import { EntityProvenTxReq } from '../schema/entities'
 import type * as sdk from '../../sdk'
@@ -19,25 +22,42 @@ export async function attemptToPostReqsToNetwork(
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
   trx?: sdk.TrxToken,
-  logger?: WalletLoggerInterface
+  logger?: WalletLoggerInterface,
+  capturedWrites?: StorageReqWrite
 ): Promise<PostReqsToNetworkResult> {
+  const writes =
+    capturedWrites ??
+    (trx == null && typeof storage.activeWriteTransaction === 'function'
+      ? await StorageReqWrite.capture(
+          storage,
+          reqs.map(req => req.txid)
+        )
+      : undefined)
+  writes?.assertProvider(storage)
+  writes?.assertRequests(reqs)
+  await writes?.assertCurrent()
   // initialize results, validate reqs ready to post, txids are of the transactions in the beef that we care about.
 
-  const { r, vreqs, txids } = await validateReqsAndMergeBeefs(storage, reqs, trx)
+  const { r, vreqs, txids } = await validateReqsAndMergeBeefs(storage, reqs, trx, writes)
   logger?.log('validated request and merged beefs')
+  if (txids.length === 0) return r
 
   const services = storage.getServices()
 
+  // Rebuilding stored input BEEF may reintroduce an orphaned ancestor even
+  // after an earlier foreground check. This is also the monitor's send path.
+  r.beef = await repairBeefProofs(storage, r.beef, trx)
+  await writes?.assertCurrent()
   const pbrs = await services.postBeef(r.beef, txids, logger)
 
   // post beef results (pbrs) is an array by service provider
   // for each service provider, there's an aggregate result and individual results by txid.
 
-  await transferNotesToReqHistories(txids, vreqs, pbrs, storage, trx)
+  await transferNotesToReqHistories(txids, vreqs, pbrs, storage, trx, writes)
 
   const apbrs = aggregatePostBeefResultsByTxid(txids, vreqs, pbrs)
 
-  await updateReqsFromAggregateResults(txids, r, apbrs, storage, services, trx, logger)
+  await updateReqsFromAggregateResults(txids, r, apbrs, storage, services, trx, logger, writes)
 
   return r
 }
@@ -45,7 +65,8 @@ export async function attemptToPostReqsToNetwork(
 async function validateReqsAndMergeBeefs(
   storage: StorageProvider,
   reqs: EntityProvenTxReq[],
-  trx?: sdk.TrxToken
+  trx?: sdk.TrxToken,
+  writes?: StorageReqWrite
 ): Promise<{ r: PostReqsToNetworkResult; vreqs: PostReqsToNetworkDetails[]; txids: string[] }> {
   const r: PostReqsToNetworkResult = {
     status: 'success',
@@ -63,9 +84,16 @@ async function validateReqsAndMergeBeefs(
       const noInputBEEF = req.inputBEEF == null
       if (noRawTx || noTxIds || noInputBEEF) {
         // This should have happened earlier...
-        req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqFailed', noRawTx, noTxIds, noInputBEEF })
-        req.status = 'invalid'
-        await req.updateStorageDynamicProperties(storage, trx)
+        await mutateRequest(storage, req, trx, writes, current => {
+          current.addHistoryNote({
+            when: new Date().toISOString(),
+            what: 'validateReqFailed',
+            noRawTx,
+            noTxIds,
+            noInputBEEF
+          })
+          if (!['completed', 'unmined'].includes(current.status)) current.status = 'invalid'
+        })
         r.details.push({ txid: req.txid, req, status: 'invalid' })
       } else {
         const vreq: PostReqsToNetworkDetails = { txid: req.txid, req, status: 'unknown' }
@@ -75,13 +103,21 @@ async function validateReqsAndMergeBeefs(
       }
     } catch (error_: unknown) {
       const { code, message } = WalletError.fromUnknown(error_)
-      req.addHistoryNote({ when: new Date().toISOString(), what: 'validateReqError', txid: req.txid, code, message })
-      req.attempts++
-      if (req.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {
-        req.status = 'invalid'
-        r.details.push({ txid: req.txid, req, status: 'invalid' })
-      }
-      await req.updateStorageDynamicProperties(storage, trx)
+      if (code === 'WERR_NOT_ACTIVE') throw error_
+      await mutateRequest(storage, req, trx, writes, current => {
+        current.addHistoryNote({
+          when: new Date().toISOString(),
+          what: 'validateReqError',
+          txid: req.txid,
+          code,
+          message
+        })
+        current.attempts++
+        if (current.attempts > 6 || message.startsWith('The txid parameter must be known to storage')) {
+          if (!['completed', 'unmined'].includes(current.status)) current.status = 'invalid'
+          r.details.push({ txid: req.txid, req, status: 'invalid' })
+        }
+      })
     }
   }
   return { r, vreqs, txids: vreqs.map(r => r.txid) }
@@ -92,7 +128,8 @@ async function transferNotesToReqHistories(
   vreqs: PostReqsToNetworkDetails[],
   pbrs: sdk.PostBeefResult[],
   storage: StorageProvider,
-  trx?: sdk.TrxToken
+  trx?: sdk.TrxToken,
+  writes?: StorageReqWrite
 ): Promise<void> {
   for (const txid of txids) {
     const vreq = vreqs.find(r => r.txid === txid)
@@ -103,10 +140,9 @@ async function transferNotesToReqHistories(
       const r = pbr.txidResults.find(tr => tr.txid === txid)
       if (r != null) notes.push(...(r.notes || []))
     }
-    for (const n of notes) {
-      vreq.req.addHistoryNote(n)
-    }
-    await vreq.req.updateStorageDynamicProperties(storage, trx)
+    await mutateRequest(storage, vreq.req, trx, writes, current => {
+      for (const note of notes) current.addHistoryNote(note)
+    })
   }
 }
 
@@ -249,8 +285,13 @@ export async function updateReqsFromAggregateResults(
   storage: StorageProvider,
   services?: sdk.WalletServices,
   trx?: sdk.TrxToken,
-  logger?: WalletLoggerInterface
+  logger?: WalletLoggerInterface,
+  capturedWrites?: StorageReqWrite
 ): Promise<void> {
+  if (trx == null && typeof storage.activeWriteTransaction === 'function') {
+    const writes = capturedWrites ?? (await StorageReqWrite.capture(storage, txids))
+    return await updateCapturedResults(txids, r, apbrs, storage, writes, services, logger)
+  }
   logger?.group('update storage from aggregate results')
   for (const txid of txids) {
     const ar = apbrs[txid]
@@ -330,6 +371,96 @@ export async function updateReqsFromAggregateResults(
     logger?.log(`updated ${txid}`)
   }
   logger?.group('update storage from aggregate results')
+}
+
+async function mutateRequest(
+  storage: StorageProvider,
+  req: EntityProvenTxReq,
+  trx: sdk.TrxToken | undefined,
+  writes: StorageReqWrite | undefined,
+  apply: (current: EntityProvenTxReq) => void
+): Promise<void> {
+  if (writes != null) {
+    await writes.request(req, current => promiseFromSync(() => apply(current)))
+  } else {
+    apply(req)
+    await req.updateStorageDynamicProperties(storage, trx)
+  }
+}
+
+async function updateCapturedResults(
+  txids: string[],
+  r: PostReqsToNetworkResult,
+  apbrs: Record<string, AggregatePostBeefTxResult>,
+  storage: StorageProvider,
+  writes: StorageReqWrite,
+  services?: sdk.WalletServices,
+  logger?: WalletLoggerInterface
+): Promise<void> {
+  for (const txid of txids) {
+    const ar = apbrs[txid]
+    const req = ar.vreq.req
+    const broadcastStatus = ar.status,
+      broadcastCompetingTxs = ar.competingTxs
+    // Confirmation may perform several external observations. The original
+    // profile captures precede all of them; no SQL writer spans these awaits.
+    // As in the legacy path, an advanced request preserves this broadcast's
+    // actual outcome. Its earlier success cannot turn a negative reply into
+    // permission to credit a new recipient.
+    if (!['completed', 'unmined'].includes(req.status) && ar.status === 'doubleSpend' && services != null)
+      await confirmDoubleSpend(ar, r.beef, storage, services, logger)
+    const observed = req.toApi()
+    let financialStatus: sdk.TransactionStatus | undefined
+    const applied = await writes.request(req, current => {
+      return promiseFromSync(() => {
+        current.mergeHistory(observed, undefined, true)
+        if (current.status === 'completed' || current.status === 'unmined') {
+          // The durable state may advance during confirmation as well.
+          ar.status = broadcastStatus
+          ar.competingTxs = broadcastCompetingTxs
+          if (current.status === 'unmined') financialStatus = 'unproven'
+          return
+        }
+        const note: ReqHistoryNote = {
+          when: new Date().toISOString(),
+          what: 'aggregateResults',
+          reqStatus: current.status,
+          aggStatus: ar.status,
+          attempts: current.attempts,
+          successCount: ar.successCount,
+          doubleSpendCount: ar.doubleSpendCount,
+          statusErrorCount: ar.statusErrorCount,
+          serviceErrorCount: ar.serviceErrorCount
+        }
+        const { newReqStatus, newTxStatus } = applyAggregateStatus(current, ar.status)
+        current.status = newReqStatus
+        financialStatus = newTxStatus
+        current.addHistoryNote({ ...note, newReqStatus, newTxStatus, newAttempts: current.attempts })
+      })
+    })
+    if (applied && financialStatus != null) {
+      await writes.status(req, financialStatus)
+      if (financialStatus === 'failed' && services != null) {
+        const stale = await markConfirmedStaleReqInputs(req, storage, services, undefined, logger, writes)
+        if (stale.checked > 0)
+          await writes.request(req, current => {
+            return promiseFromSync(() => {
+              current.addHistoryNote({
+                when: new Date().toISOString(),
+                what: 'markStaleInputsAsSpent',
+                aggStatus: ar.status,
+                checked: stale.checked,
+                confirmed: stale.staleConfirmed,
+                ...(stale.staleOutpoints.length ? { outpoints: stale.staleOutpoints.join(',') } : {})
+              })
+            })
+          })
+      }
+    }
+    const details = r.details.find(detail => detail.txid === txid)!
+    details.status = ar.status
+    details.competingTxs = ar.competingTxs
+  }
 }
 
 async function gatherCompetingTxids(
@@ -494,14 +625,14 @@ export async function classifyBroadcastInputSpendEvidence(
  * Returns counts for instrumentation and the set of stale outpoints
  * that were actually evicted (added to history note for diagnostics).
  */
-export async function markStaleInputsAsSpent(
+export function markStaleInputsAsSpent(
   ar: AggregatePostBeefTxResult,
   storage: StorageProvider,
   services: sdk.WalletServices,
   trx?: sdk.TrxToken,
   logger?: WalletLoggerInterface
 ): Promise<{ checked: number; staleConfirmed: number; staleOutpoints: string[] }> {
-  return await markConfirmedStaleReqInputs(ar.vreq.req, storage, services, trx, logger)
+  return awaitFromSync(() => markConfirmedStaleReqInputs(ar.vreq.req, storage, services, trx, logger))
 }
 
 type AggregateStatus = 'success' | 'doubleSpend' | 'invalidTx' | 'serviceError'

@@ -51,6 +51,16 @@ const capture = value =>
 test('both batch controls bind the actual final configuration identity alongside all prior inputs', () => {
   const root = mkdtempSync(join(tmpdir(), 'mutation-identity-inputs-'))
   const originalInputs = [
+    'governance/mutation-testing/stop-on-kill-environment.cjs',
+    'governance/mutation-testing/durations.json',
+    'governance/mutation-testing/wallet-component-tests.json',
+    'scripts/provision-wallet-native-browser.mjs',
+    'scripts/wallet-native-browser.json',
+    'scripts/mutation-execution-partitions.mjs',
+    'governance/mutation-testing/execution-partitions.json',
+    'scripts/wallet-journal-ci.mjs',
+    'scripts/wallet-composed-native-ci.mjs',
+    '.github/workflows/ci.yml',
     'governance/mutation-testing/targets.mjs',
     'governance/mutation-testing/policy.json',
     'governance/mutation-testing/stryker.config.mjs',

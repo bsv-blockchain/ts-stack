@@ -172,7 +172,7 @@ describe('StorageClient to tagged revision manual tests', () => {
       }
       let _authNextCalled = 0
       auth(req as any, res as any, () => {
-        authNextCalled++
+        _authNextCalled++
       })
       await wait(1000) // auth is not async, chains via next methods
       const req2 = {
@@ -188,7 +188,7 @@ describe('StorageClient to tagged revision manual tests', () => {
         }
       }
       auth(req2 as any, res as any, () => {
-        authNextCalled++
+        _authNextCalled++
       })
       await wait(1000) // auth is not async, chains via next methods
 

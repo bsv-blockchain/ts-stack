@@ -1,3 +1,5 @@
+import { awaitFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
+import type { StorageActiveWrite } from '../StorageActiveWrite'
 import type { InternalizeReceiptClaim } from './InternalizeReceiptClaim'
 import { type ValidInternalizeActionArgs, validateInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
@@ -22,7 +24,7 @@ import {
 import { TableOutput } from '../schema/tables/TableOutput'
 import { TableOutputBasket } from '../schema/tables/TableOutputBasket'
 import { TableTransaction } from '../schema/tables/TableTransaction'
-import { WERR_INTERNAL, WERR_INVALID_PARAMETER } from '../../sdk/WERR_errors'
+import { WERR_INTERNAL, WERR_INVALID_PARAMETER, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
 import { canonicalizeAtomicBeef } from '../../utility/canonicalizeAtomicBeef'
 import { randomBytesBase64, verifyId, verifyOne, verifyOneOrNone } from '../../utility/utilityHelpers'
 import { TransactionStatus } from '../../sdk/types'
@@ -33,7 +35,6 @@ import {
 } from '../../services/chaintracker/chaintracks/util/blockHeaderUtilities'
 import { TableProvenTx } from '../schema/tables/TableProvenTx'
 import { isManagedChangeOutput } from './managedChange'
-import { requireFunding } from '../fundingRecovery/FundingRecoveryProtocol'
 import type { FundingRecoveryCommit } from '../fundingRecovery/FundingRecoveryCommit'
 import {
   BRC197_INTERNALIZATION_PROFILE,
@@ -42,6 +43,12 @@ import {
   validateBrc197InternalizeActionArgs,
   type Brc197InternalizeActionArgs
 } from '../../sdk/Brc197Internalization'
+
+/** Keep ordinary browser/mobile internalization independent of the optional
+ * Node recovery protocol parser and its newer SDK-only runtime exports. */
+function requireRecovery(condition: unknown, reason: string): asserts condition {
+  if (!condition) throw new WERR_INVALID_OPERATION(reason)
+}
 
 /**
  * Record of a spent-input transition this internalize call performed.
@@ -215,27 +222,34 @@ export async function internalizeActionCore(
   args: InternalizeActionArgs,
   profile: typeof BRC197_INTERNALIZATION_PROFILE | null,
   recovery?: FundingRecoveryCommit,
-  receipt?: InternalizeReceiptClaim
+  receipt?: InternalizeReceiptClaim,
+  capturedWrite?: StorageActiveWrite
 ): Promise<StorageInternalizeActionResult> {
   if (profile !== null && profile !== BRC197_INTERNALIZATION_PROFILE)
     throw new WERR_INVALID_PARAMETER('profile', 'an installed internalization profile')
   if (profile === BRC197_INTERNALIZATION_PROFILE && recovery !== undefined)
     throw new WERR_INVALID_PARAMETER('recovery', 'the installed fixed-profile storage pipeline')
   if (recovery !== undefined)
-    requireFunding(recovery.protocol === 'wallet-funding-recovery-v1', 'Unsupported funding recovery protocol')
-  const ctx = new InternalizeActionContext(storage, auth, args, profile, receipt)
+    requireRecovery(recovery.protocol === 'wallet-funding-recovery-v1', 'Unsupported funding recovery protocol')
+  const write = capturedWrite ?? (await storage.activeWriteTransaction(auth))
+  const ctx = new InternalizeActionContext(storage, auth, args, profile, write, receipt)
   if (recovery !== undefined) {
     // Verification/header I/O occurs before the short ownership transaction.
     // The caller has already retained the operation intent durably.
     await ctx.setupEvidence()
     await ctx.prepareRecoveryProof()
-    return await recovery.commit(async (trx, retryNewReceipt) => await ctx.internalizeAtomically(trx, retryNewReceipt))
+    return await recovery.commit(
+      async (trx, retryNewReceipt) =>
+        await write.transaction(trx => ctx.internalizeAtomically(trx, retryNewReceipt), trx),
+      write
+    )
   }
   await ctx.asyncSetup()
 
   if (ctx.isMerge) await ctx.mergedInternalize()
   else await ctx.newInternalize()
 
+  await write.assertCurrent()
   return ctx.r
 }
 
@@ -289,6 +303,7 @@ class InternalizeActionContext {
     public auth: AuthId,
     public args: InternalizeActionArgs,
     private readonly profile: typeof BRC197_INTERNALIZATION_PROFILE | null,
+    public readonly write: StorageActiveWrite,
     private readonly receipt?: InternalizeReceiptClaim
   ) {
     if (profile === BRC197_INTERNALIZATION_PROFILE)
@@ -342,7 +357,10 @@ class InternalizeActionContext {
     requireInsertionBasket(basketName)
     let b = this.baskets[basketName]
     if (b) return b
-    b = await this.storage.findOrInsertOutputBasket(this.userId, basketName, trx)
+    b = await this.write.transaction(
+      trx => awaitFromSync(() => this.storage.findOrInsertOutputBasket(this.userId, basketName, trx)),
+      trx
+    )
     this.baskets[basketName] = b
     return b
   }
@@ -527,7 +545,7 @@ class InternalizeActionContext {
     const header = await this.storage.getServices().getHeaderForHeight(bump.blockHeight)
     const merkleRoot = bump.computeRoot(this.txid)
     const index = bump.path[0].find(entry => entry.hash === this.txid)?.offset
-    requireFunding(
+    requireRecovery(
       header !== undefined && deserializeBaseBlockHeader(header).merkleRoot === merkleRoot && index !== undefined,
       'Funding recovery header does not match inclusion proof'
     )
@@ -551,12 +569,15 @@ class InternalizeActionContext {
    * SQLite write guard. An unmined transaction is queued for the existing monitor;
    * the receipt proves ownership, not broadcast or mining. No network I/O occurs here.
    */
-  async internalizeAtomically(trx: TrxToken, retryNewReceipt = this.receipt?.retryNew): Promise<StorageInternalizeActionResult> {
+  async internalizeAtomically(
+    trx: TrxToken,
+    retryNewReceipt = this.receipt?.retryNew
+  ): Promise<StorageInternalizeActionResult> {
     await this.receipt?.assertActive(trx)
     await this.setupStorage(trx, retryNewReceipt)
     const existing = this.etx
     const total = (this.retryExistingTransaction ? 0 : (existing?.satoshis ?? 0)) + this.satoshis
-    requireFunding(Number.isSafeInteger(total), 'Funding recovery transaction balance is not a safe integer')
+    requireRecovery(Number.isSafeInteger(total), 'Funding recovery transaction balance is not a safe integer')
     let proven: TableProvenTx | undefined
     if (this.recoveryProven !== undefined)
       proven = (await this.storage.findOrInsertProvenTx(this.recoveryProven, trx)).proven
@@ -600,11 +621,11 @@ class InternalizeActionContext {
         trx
       )
     } else {
-      requireFunding(
+      requireRecovery(
         existing?.status !== 'completed' && known.req?.status !== 'completed',
         'Funding recovery completed state lacks a retained proof'
       )
-      requireFunding(
+      requireRecovery(
         known.req !== undefined && !['invalid', 'doubleSpend', 'unfail'].includes(known.req.status),
         'Funding recovery broadcast record cannot be accepted'
       )
@@ -725,9 +746,13 @@ class InternalizeActionContext {
     }
   }
 
-  private async storeResolvedProvenTx(proven: TableProvenTx, trx?: TrxToken): Promise<TableProvenTx> {
-    const stored = await this.storage.findOrInsertProvenTx(proven, trx)
-    return stored.proven
+  private storeResolvedProvenTx(proven: TableProvenTx, trx?: TrxToken): Promise<TableProvenTx> {
+    return mapAwaitFromSync(
+      () => this.storage.findOrInsertProvenTx(proven, trx),
+      stored => {
+        return stored.proven
+      }
+    )
   }
 
   private async mergeWalletPayments(transactionId: number, trx?: TrxToken): Promise<void> {
@@ -805,7 +830,7 @@ class InternalizeActionContext {
     const wasNoSend = this.etx!.status === 'nosend'
     const preparedProven = wasNoSend ? await this.prepareNoSendProof() : undefined
 
-    await this.storage.transaction(async trx => {
+    await this.write.transaction(async trx => {
       await this.receipt?.assertActive(trx)
       await this.addLabels(transactionId, trx)
 
@@ -871,7 +896,7 @@ class InternalizeActionContext {
 
     let pr: StorageProvenOrReq = { proven: undefined, req: undefined }
 
-    await this.storage.transaction(async trx => {
+    await this.write.transaction(async trx => {
       await this.receipt?.assertActive(trx)
       if (preparedProven != null) {
         pr.proven = await this.storeResolvedProvenTx(preparedProven, trx)
@@ -927,7 +952,8 @@ class InternalizeActionContext {
         beef: this.ab,
         details: [{ txid: this.txid, status: 'readyToSend', req: pr.req }]
       }
-      const { swr, ndr } = await shareReqsWithWorld(this.storage, this.userId, [], false, r)
+      await this.write.assertCurrent()
+      const { swr, ndr } = await shareReqsWithWorld(this.storage, this.userId, [], false, r, undefined, this.write)
       if (ndr![0].status !== 'success') {
         // Roll back the spendable=true → false transitions performed above
         // so the caller can retry with the same UTXOs. Idempotent w.r.t.
@@ -941,7 +967,7 @@ class InternalizeActionContext {
       }
       // Publication remains outside the writer. Store unproven recipient
       // ownership only after it succeeds; proven ownership committed above.
-      await this.storage.transaction(async trx => {
+      await this.write.transaction(async trx => {
         await this.receipt?.assertActive(trx)
         if (this.retryExistingTransaction) {
           await this.storage.updateTransaction(transactionId, { status: 'unproven' }, trx)
@@ -959,14 +985,30 @@ class InternalizeActionContext {
     })
   }
 
-  async markInputsSpent(transactionId: number, trx?: TrxToken): Promise<void> {
-    const transitioned = await markUserInputsSpent(this.storage, this.userId, this.tx, transactionId, trx)
-    this.spentInputs.push(...transitioned)
+  markInputsSpent(transactionId: number, trx?: TrxToken): Promise<void> {
+    return mapAwaitFromSync(
+      () =>
+        this.write.transaction(
+          trx => awaitFromSync(() => markUserInputsSpent(this.storage, this.userId, this.tx, transactionId, trx)),
+          trx
+        ),
+      transitioned => {
+        this.spentInputs.push(...transitioned)
+      }
+    )
   }
 
-  async restoreSpentInputs(trx?: TrxToken): Promise<void> {
-    await restoreInputsToSpendable(this.storage, this.spentInputs, trx)
-    this.spentInputs = []
+  restoreSpentInputs(trx?: TrxToken): Promise<void> {
+    return mapAwaitFromSync(
+      () =>
+        this.write.transaction(
+          trx => awaitFromSync(() => restoreInputsToSpendable(this.storage, this.spentInputs, trx)),
+          trx
+        ),
+      () => {
+        this.spentInputs = []
+      }
+    )
   }
 
   async addBasketTags(basket: BasketInsertionX, outputId: number, trx?: TrxToken) {

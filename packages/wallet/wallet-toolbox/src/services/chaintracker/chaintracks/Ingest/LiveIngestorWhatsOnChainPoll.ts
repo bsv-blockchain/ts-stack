@@ -1,3 +1,4 @@
+import { promiseFromSync, mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { BlockHeader, Chain } from '../../../../sdk'
 import { wait } from '../../../../utility/utilityHelpers'
 import { LiveIngestorBase, LiveIngestorBaseOptions } from './LiveIngestorBase'
@@ -90,9 +91,13 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     this.woc = new WhatsOnChainServices(options)
   }
 
-  async getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
-    const header = await this.woc.getHeaderByHash(hash)
-    return header
+  getHeaderByHash(hash: string): Promise<BlockHeader | undefined> {
+    return mapAwaitFromSync(
+      () => this.woc.getHeaderByHash(hash),
+      header => {
+        return header
+      }
+    )
   }
 
   async startListening(liveHeaders: BlockHeader[]): Promise<void> {
@@ -172,7 +177,9 @@ export class LiveIngestorWhatsOnChainPoll extends LiveIngestorBase {
     this.done = true
   }
 
-  override async shutdown(): Promise<void> {
-    this.stopListening()
+  override shutdown(): Promise<void> {
+    return promiseFromSync(() => {
+      this.stopListening()
+    })
   }
 }

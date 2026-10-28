@@ -1,4 +1,6 @@
-import { AuthId } from '../../sdk/WalletStorage.interfaces'
+import { awaitFromSync } from '../../utility/promiseFromSync'
+import type { StorageActiveWrite, StorageWriterAdmission } from '../StorageActiveWrite'
+import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UTXO_REVIEW_INCONCLUSIVE } from '../../sdk/WERR_errors'
 import {
   classifyOutputUtxo,
@@ -129,47 +131,46 @@ function auditDetails(
   })
 }
 
-async function classifyCandidates(
-  storage: StorageProvider,
-  outputs: TableOutput[]
-): Promise<UtxoReviewClassification[]> {
-  const services = storage.getServices()
-  const candidates = outputs.filter(output => output.basketId != null)
-  return await mapWithConcurrency(candidates, UTXO_PROVIDER_MAX_CONCURRENCY, async output => {
-    try {
-      await storage.validateOutputScript(output)
-    } catch (error: unknown) {
-      return {
-        output,
-        status: {
-          verdict: 'unknown' as const,
-          provider: '<script-validation-error>',
-          error
+function classifyCandidates(storage: StorageProvider, outputs: TableOutput[]): Promise<UtxoReviewClassification[]> {
+  return awaitFromSync(() => {
+    const services = storage.getServices()
+    const candidates = outputs.filter(output => output.basketId != null)
+    return mapWithConcurrency(candidates, UTXO_PROVIDER_MAX_CONCURRENCY, async output => {
+      try {
+        await storage.validateOutputScript(output)
+      } catch (error: unknown) {
+        return {
+          output,
+          status: {
+            verdict: 'unknown' as const,
+            provider: '<script-validation-error>',
+            error
+          }
         }
       }
-    }
-    let timeout: ReturnType<typeof setTimeout> | undefined
-    const providerCall = classifyOutputUtxo(services, output)
-    const timedClassification = new Promise<OutputUtxoClassification>(resolve => {
-      timeout = setTimeout(
-        () =>
-          resolve({
-            verdict: 'unknown',
-            provider: '<review-timeout>',
-            error: new Error(`UTXO classification exceeded ${UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS}ms`)
-          }),
-        UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS
-      )
-    })
-    try {
-      return {
-        output,
-        status: await Promise.race([providerCall, timedClassification])
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      const providerCall = classifyOutputUtxo(services, output)
+      const timedClassification = new Promise<OutputUtxoClassification>(resolve => {
+        timeout = setTimeout(
+          () =>
+            resolve({
+              verdict: 'unknown',
+              provider: '<review-timeout>',
+              error: new Error(`UTXO classification exceeded ${UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS}ms`)
+            }),
+          UTXO_REVIEW_PROVIDER_TIMEOUT_MSECS
+        )
+      })
+      try {
+        return {
+          output,
+          status: await Promise.race([providerCall, timedClassification])
+        }
+      } finally {
+        if (timeout != null) clearTimeout(timeout)
+        void providerCall.catch(() => undefined)
       }
-    } finally {
-      if (timeout != null) clearTimeout(timeout)
-      void providerCall.catch(() => undefined)
-    }
+    })
   })
 }
 
@@ -177,11 +178,13 @@ async function releaseConfirmedSpent(
   storage: StorageProvider,
   auth: AuthId,
   classifications: UtxoReviewClassification[],
-  releaseMode: Exclude<UtxoReviewReleaseMode, 'none'>
+  releaseMode: Exclude<UtxoReviewReleaseMode, 'none'>,
+  write?: StorageActiveWrite,
+  admission?: StorageWriterAdmission
 ): Promise<Set<number>> {
   const confirmedSpent = classifications.filter(result => result.status.verdict === 'spent')
   const releasedOutputIds = new Set<number>()
-  await storage.transaction(async trx => {
+  const release = async (trx: TrxToken): Promise<void> => {
     for (const { output } of confirmedSpent) {
       const current = await storage.findOutputById(output.outputId, trx, true)
       if (current == null || current.userId !== auth.userId) {
@@ -221,7 +224,10 @@ async function releaseConfirmedSpent(
       },
       trx
     )
-  })
+  }
+  const commit = () => awaitFromSync(() => (write == null ? storage.transaction(release) : write.transaction(release)))
+  if (admission != null && write?.prepareOutsideManager === true) await admission(commit)
+  else await commit()
   return releasedOutputIds
 }
 
@@ -236,9 +242,16 @@ export async function reviewUtxoOutputs(
   storage: StorageProvider,
   auth: AuthId,
   outputs: TableOutput[],
-  releaseMode: UtxoReviewReleaseMode = 'none'
+  releaseMode: UtxoReviewReleaseMode = 'none',
+  admission?: StorageWriterAdmission
 ): Promise<ReviewUtxoOutputsResult> {
   validateCandidates(auth, outputs)
+  // Capture the actual role before script validation or external UTXO work.
+  // Read-only reviews need no primary; old duck adapters retain their path.
+  const write =
+    releaseMode !== 'none' && typeof storage.activeWriteTransaction === 'function'
+      ? await storage.activeWriteTransaction(auth)
+      : undefined
   const classifications = await classifyCandidates(storage, outputs)
   const confirmedSpentOutputs = classifications
     .filter(result => result.status.verdict === 'spent')
@@ -263,7 +276,7 @@ export async function reviewUtxoOutputs(
   const releasedOutputIds =
     releaseMode === 'none'
       ? new Set<number>()
-      : await releaseConfirmedSpent(storage, auth, classifications, releaseMode)
+      : await releaseConfirmedSpent(storage, auth, classifications, releaseMode, write, admission)
   for (const output of confirmedSpentOutputs) {
     if (releasedOutputIds.has(output.outputId)) output.spendable = false
   }

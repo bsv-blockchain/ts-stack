@@ -1,3 +1,4 @@
+import { mapAwaitFromSync } from '../../../../utility/promiseFromSync'
 import { HeightRange } from './HeightRange'
 import { deserializeBaseBlockHeader, validateBufferOfHeaders, validateGenesisHeader } from './blockHeaderUtilities'
 import { BaseBlockHeader } from '../../../../sdk/WalletServices.interfaces'
@@ -131,20 +132,32 @@ export class BulkFilesReader {
     return buffer
   }
 
-  async readBufferForHeight(height: number): Promise<Uint8Array> {
-    const header = await this.readBufferForHeightOrUndefined(height)
-    if (header == null) throw new Error(`Failed to read bulk header buffer at height=${height}`)
-    return header
+  readBufferForHeight(height: number): Promise<Uint8Array> {
+    return mapAwaitFromSync(
+      () => this.readBufferForHeightOrUndefined(height),
+      header => {
+        if (header == null) throw new Error(`Failed to read bulk header buffer at height=${height}`)
+        return header
+      }
+    )
   }
 
-  async readHeaderForHeight(height: number): Promise<BaseBlockHeader> {
-    const buffer = await this.readBufferForHeight(height)
-    return deserializeBaseBlockHeader(buffer, 0)
+  readHeaderForHeight(height: number): Promise<BaseBlockHeader> {
+    return mapAwaitFromSync(
+      () => this.readBufferForHeight(height),
+      buffer => {
+        return deserializeBaseBlockHeader(buffer, 0)
+      }
+    )
   }
 
-  async readHeaderForHeightOrUndefined(height: number): Promise<BaseBlockHeader | undefined> {
-    const buffer = await this.readBufferForHeightOrUndefined(height)
-    return buffer != null ? deserializeBaseBlockHeader(buffer, 0) : undefined
+  readHeaderForHeightOrUndefined(height: number): Promise<BaseBlockHeader | undefined> {
+    return mapAwaitFromSync(
+      () => this.readBufferForHeightOrUndefined(height),
+      buffer => {
+        return buffer != null ? deserializeBaseBlockHeader(buffer, 0) : undefined
+      }
+    )
   }
 
   /**
@@ -422,14 +435,18 @@ export class BulkFilesReaderStorage extends BulkFilesReader {
     super(files, range, maxBufferSize)
   }
 
-  static async fromStorage(
+  static fromStorage(
     storage: ChaintracksStorageBase,
     fetch?: ChaintracksFetchApi,
     range?: HeightRange,
     maxBufferSize?: number
   ): Promise<BulkFilesReaderStorage> {
-    const files = await storage.bulkManager.getBulkFiles(true)
-    const readerFiles = files.map(file => new BulkHeaderFileStorage(file, storage, fetch))
-    return new BulkFilesReaderStorage(storage, readerFiles, range, maxBufferSize)
+    return mapAwaitFromSync(
+      () => storage.bulkManager.getBulkFiles(true),
+      files => {
+        const readerFiles = files.map(file => new BulkHeaderFileStorage(file, storage, fetch))
+        return new BulkFilesReaderStorage(storage, readerFiles, range, maxBufferSize)
+      }
+    )
   }
 }

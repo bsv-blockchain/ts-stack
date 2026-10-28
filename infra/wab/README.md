@@ -5,6 +5,13 @@ Welcome to the **Wallet Authentication Backend (WAB)** project! This README prov
 See [Service Resource Profiles](../../docs/reference/service-resource-profiles.md)
 for bounded defaults, database sizing, and HPA prerequisites.
 
+Both Docker stages use the canonical `node` registry reference and the immutable
+digest recorded in [the container inventory](../../governance/container-images.json).
+This aligns WAB builds with the other runtime images when public ECR rate-limits
+base-image metadata requests. The governed Node version, image contents and
+runtime package pins stay the same; mirror references retain their independent
+verification requirements.
+
 ---
 
 ## What Is the WAB?
@@ -670,3 +677,17 @@ and keeps any existing inspector configuration. Production startup, database
 migrations, public routes and data formats are unchanged. Install the committed
 lock with `npm ci` before using the updated development command. This removes
 the unpatched `braces` path without an advisory exclusion or dependency override.
+
+## Standalone test dependency security maintenance
+
+The standalone lock selects Handlebars 4.7.10 within the existing ts-jest
+transitive range, addressing the published
+[GHSA-p8wg-vrv2-v86f](https://github.com/advisories/GHSA-p8wg-vrv2-v86f)
+critical advisory. The target is a development/test dependency; package
+manifests, first-party versions and other lock entries are unchanged. Install
+the frozen lock with lifecycle scripts disabled and rebuild only the existing
+allowlisted native modules. No service API, authentication policy, resource
+limit or database migration changes. Existing deployed images receive updated
+build dependencies only through a separately authorized protected container
+release and immutable image promotion. Existing moderate audit findings remain
+recorded; the high/critical gate is not waived.

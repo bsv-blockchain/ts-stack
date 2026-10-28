@@ -3,9 +3,10 @@ import { verifyId, verifyOneOrNone } from '../../../utility/utilityHelpers'
 import { EntityBase, EntityStorage, SyncMap } from './EntityBase'
 import { TableTxLabelMap } from '../tables/TableTxLabelMap'
 import { WERR_INVALID_OPERATION } from '../../../sdk/WERR_errors'
+import { mergeSimpleMetadata } from './mergeSimpleMetadata'
 
 export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
-  constructor (api?: TableTxLabelMap) {
+  constructor(api?: TableTxLabelMap) {
     const now = new Date()
     super(
       api || {
@@ -18,79 +19,80 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
     )
   }
 
-  override updateApi (): void {
+  override updateApi(): void {
     /* nothing needed yet... */
   }
 
-  get txLabelId () {
+  get txLabelId() {
     return this.api.txLabelId
   }
 
-  set txLabelId (v: number) {
+  set txLabelId(v: number) {
     this.api.txLabelId = v
   }
 
-  get transactionId () {
+  get transactionId() {
     return this.api.transactionId
   }
 
-  set transactionId (v: number) {
+  set transactionId(v: number) {
     this.api.transactionId = v
   }
 
-  get created_at () {
+  get created_at() {
     return this.api.created_at
   }
 
-  set created_at (v: Date) {
+  set created_at(v: Date) {
     this.api.created_at = v
   }
 
-  get updated_at () {
+  get updated_at() {
     return this.api.updated_at
   }
 
-  set updated_at (v: Date) {
+  set updated_at(v: Date) {
     this.api.updated_at = v
   }
 
-  get isDeleted () {
+  get isDeleted() {
     return this.api.isDeleted
   }
 
-  set isDeleted (v: boolean) {
+  set isDeleted(v: boolean) {
     this.api.isDeleted = v
   }
 
-  override get id (): number {
+  override get id(): number {
     throw new WERR_INVALID_OPERATION('entity has no "id" value')
   } // entity does not have its own id.
 
-  override get entityName (): string {
+  override get entityName(): string {
     return 'txLabelMap'
   }
 
-  override get entityTable (): string {
+  override get entityTable(): string {
     return 'tx_labels_map'
   }
 
-  override equals (ei: TableTxLabelMap, syncMap?: SyncMap | undefined): boolean {
+  override equals(ei: TableTxLabelMap, syncMap?: SyncMap | undefined): boolean {
     const eo = this.toApi()
 
     return (
-      eo.transactionId === ((syncMap != null) ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
-      eo.txLabelId === ((syncMap != null) ? syncMap.txLabel.idMap[verifyId(ei.txLabelId)] : ei.txLabelId) &&
+      eo.transactionId ===
+        (syncMap != null ? syncMap.transaction.idMap[verifyId(ei.transactionId)] : ei.transactionId) &&
+      eo.txLabelId === (syncMap != null ? syncMap.txLabel.idMap[verifyId(ei.txLabelId)] : ei.txLabelId) &&
       eo.isDeleted === ei.isDeleted
     )
   }
 
-  static async mergeFind (
+  static async mergeFind(
     storage: EntityStorage,
     userId: number,
     ei: TableTxLabelMap,
     syncMap: SyncMap,
     trx?: TrxToken
-  ): Promise<{ found: boolean, eo: EntityTxLabelMap, eiId: number }> {
+  ): Promise<{ found: boolean; eo: EntityTxLabelMap; eiId: number }> {
     const transactionId = syncMap.transaction.idMap[ei.transactionId]
     const txLabelId = syncMap.txLabel.idMap[ei.txLabelId]
     const ef = verifyOneOrNone(
@@ -106,13 +108,13 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
     }
   }
 
-  override async mergeNew (storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
+  override async mergeNew(storage: EntityStorage, userId: number, syncMap: SyncMap, trx?: TrxToken): Promise<void> {
     this.transactionId = syncMap.transaction.idMap[this.transactionId]
     this.txLabelId = syncMap.txLabel.idMap[this.txLabelId]
     await storage.insertTxLabelMap(this.toApi(), trx)
   }
 
-  override async mergeExisting (
+  override async mergeExisting(
     storage: EntityStorage,
     since: Date | undefined,
     ei: TableTxLabelMap,
@@ -120,9 +122,9 @@ export class EntityTxLabelMap extends EntityBase<TableTxLabelMap> {
     trx?: TrxToken
   ): Promise<boolean> {
     let wasMerged = false
-    if (ei.updated_at > this.updated_at) {
-      this.isDeleted = ei.isDeleted
-      this.updated_at = new Date(Math.max(ei.updated_at.getTime(), this.updated_at.getTime()))
+    const selected = mergeSimpleMetadata(this.api, ei)
+    if (selected !== undefined) {
+      Object.assign(this.api, selected)
       await storage.updateTxLabelMap(this.transactionId, this.txLabelId, this.toApi(), trx)
       wasMerged = true
     }

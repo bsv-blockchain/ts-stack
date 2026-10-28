@@ -1,0 +1,1880 @@
+{
+  "schemaVersion": 1,
+  "engine": "9.6.1",
+  "canonicalTargets": 216,
+  "executionRows": 1678,
+  "units": [
+    {
+      "target": "wallet-snapshot-remote-reader",
+      "existingPartition": "lease",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/archive/RemoteSnapshotLease.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/archive/RemoteSnapshotLease.ts": "fd5b622507cab5a2907de9044bf6185306ab1d6639b9abbf042527f9db7fa883"
+      },
+      "canonicalCount": 119,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:12-21",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:44-60",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:62-64",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:66-73",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:75-79",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:81-85",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:88-92",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:94-98",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:100-132",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:135-146"
+          ],
+          "count": 92,
+          "id": "lease-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:148-170",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:172-188",
+            "src/storage/snapshot/archive/RemoteSnapshotLease.ts:193-195"
+          ],
+          "count": 27,
+          "id": "lease-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-snapshot-remote-reader",
+      "existingPartition": "admission",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts",
+        "src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts",
+        "src/storage/snapshot/archive/SnapshotArchiveAdmission.ts",
+        "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts",
+        "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts",
+        "src/storage/snapshot/SnapshotCancelledError.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/SnapshotCancelledError.ts": "a23bab9a57973e31e43724fe3e03341348de314a4b656c92214bca2761810f84",
+        "src/storage/snapshot/archive/SnapshotArchiveAdmission.ts": "88be154f6ecb4541e20092b6413f1ea3e5ae98ab2915e49157852531fab2e264",
+        "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts": "a0c5ef3f84840f7932401f4d4bc37569d9bf33e7b29a142de035ddbb7855c596",
+        "src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts": "fee54ef7a2dcf7c8e1b81e2c4ff7e8a676809f49f79aa2318d4b4352da299ba1",
+        "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts": "d6c92ab76de37964f06aa70341667c6ec7b540d2826e1a11313089d116075e79",
+        "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts": "2a4b8afc58f84aa9b0279b13093ec47195bc4869958d1b6ec61df9b46f28e5e5"
+      },
+      "canonicalCount": 525,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/SnapshotArchiveAdmission.ts:17-19",
+            "src/storage/snapshot/archive/SnapshotArchiveAdmission.ts:25-60",
+            "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts:7-9",
+            "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts:19-30",
+            "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts:33-33",
+            "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts:35-46",
+            "src/storage/snapshot/archive/SnapshotArchiveCleanup.ts:49-84",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts:21-23",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts:25-35",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderOffer.ts:42-57",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:13-15",
+            "src/storage/snapshot/SnapshotCancelledError.ts"
+          ],
+          "count": 247,
+          "id": "admission-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:22-37",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:39-54",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:56-68",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:71-104",
+            "src/storage/snapshot/archive/SnapshotArchiveReaderRequest.ts:109-119",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:4-8",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:15-15",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:18-25",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:26-32",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:33-47"
+          ],
+          "count": 243,
+          "id": "admission-002"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:50-65",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:68-73",
+            "src/storage/snapshot/archive/SnapshotArchiveTransportFailure.ts:76-83"
+          ],
+          "count": 35,
+          "id": "admission-003"
+        }
+      ]
+    },
+    {
+      "target": "wallet-snapshot-remote-reader",
+      "existingPartition": "page",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts",
+        "src/storage/snapshot/archive/openRemoteSnapshot.ts",
+        "src/storage/snapshot/SnapshotCursor.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/SnapshotCursor.ts": "5dba5fe0f82fb393173144d170c8779897516b64b252de68f76ba5939caf0bbf",
+        "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts": "ea3c2447a87919dec8c66af657d58eac6c49f78a1e2e021c930af8f84256449b",
+        "src/storage/snapshot/archive/openRemoteSnapshot.ts": "8fe256f184ded5b463c712a50511f339b33b95f71fe27397b9680b144a339606"
+      },
+      "canonicalCount": 435,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/SnapshotCursor.ts:4-6",
+            "src/storage/snapshot/SnapshotCursor.ts:9-42",
+            "src/storage/snapshot/SnapshotCursor.ts:46-55",
+            "src/storage/snapshot/SnapshotCursor.ts:60-68",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:32-34",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:35-50",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:55-101"
+          ],
+          "count": 248,
+          "id": "page-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:103-108",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:110-115",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:122-226",
+            "src/storage/snapshot/archive/openRemoteSnapshot.ts:24-24",
+            "src/storage/snapshot/archive/openRemoteSnapshot.ts:25-25",
+            "src/storage/snapshot/archive/openRemoteSnapshot.ts:33-40",
+            "src/storage/snapshot/archive/openRemoteSnapshot.ts:47-60",
+            "src/storage/snapshot/archive/openRemoteSnapshot.ts:66-139"
+          ],
+          "count": 187,
+          "id": "page-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-snapshot-remote-reader",
+      "existingPartition": "rows",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/archive/RemoteSnapshotRows.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/archive/RemoteSnapshotRows.ts": "ce1659a8149e3a7304606170d3dae9e7b34ea33a9ed274b5174a65869619eb1d"
+      },
+      "canonicalCount": 372,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:19-217",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:219-221",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:223-226",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:228-235",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:237-242"
+          ],
+          "count": 236,
+          "id": "rows-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:244-267",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:269-273",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:275-286",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:294-297",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:304-308",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:315-331",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:333-337",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:340-342"
+          ],
+          "count": 136,
+          "id": "rows-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-portable-packed-row",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38PackedRow.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38PackedRow.ts": "022a81619d740dafc3ebc96399d92968af9c1e0ba3d9b1c79d7850d3e0973555"
+      },
+      "canonicalCount": 452,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PackedRow.ts:27-33",
+            "src/storage/portable/Brc38PackedRow.ts:34-37",
+            "src/storage/portable/Brc38PackedRow.ts:38-51",
+            "src/storage/portable/Brc38PackedRow.ts:52-54",
+            "src/storage/portable/Brc38PackedRow.ts:55-59",
+            "src/storage/portable/Brc38PackedRow.ts:60-69",
+            "src/storage/portable/Brc38PackedRow.ts:70-74",
+            "src/storage/portable/Brc38PackedRow.ts:75-78",
+            "src/storage/portable/Brc38PackedRow.ts:80-89",
+            "src/storage/portable/Brc38PackedRow.ts:90-102",
+            "src/storage/portable/Brc38PackedRow.ts:103-110",
+            "src/storage/portable/Brc38PackedRow.ts:117-134"
+          ],
+          "count": 231,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PackedRow.ts:138-156",
+            "src/storage/portable/Brc38PackedRow.ts:157-170",
+            "src/storage/portable/Brc38PackedRow.ts:171-187",
+            "src/storage/portable/Brc38PackedRow.ts:188-195",
+            "src/storage/portable/Brc38PackedRow.ts:196-216",
+            "src/storage/portable/Brc38PackedRow.ts:225-243"
+          ],
+          "count": 221,
+          "id": "range-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-portable-source-stream",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38Stream.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38Stream.ts": "a2aab3a44913aafa94f86b9c4aca54d7d248d9201c19af7bc399f6c8dfc37142"
+      },
+      "canonicalCount": 246,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38Stream.ts:66-80",
+            "src/storage/portable/Brc38Stream.ts:81-86",
+            "src/storage/portable/Brc38Stream.ts:87-91",
+            "src/storage/portable/Brc38Stream.ts:94-97",
+            "src/storage/portable/Brc38Stream.ts:98-101",
+            "src/storage/portable/Brc38Stream.ts:102-142"
+          ],
+          "count": 79,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38Stream.ts:150-309"
+          ],
+          "count": 167,
+          "id": "range-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-portable-json-stream",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38JsonStream.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38JsonStream.ts": "942bb6f3fd3fdbdfd11c35bd2bf753f88a0a87a66f6cbc26aa1c9279760ab2aa"
+      },
+      "canonicalCount": 700,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38JsonStream.ts:71-85",
+            "src/storage/portable/Brc38JsonStream.ts:86-86",
+            "src/storage/portable/Brc38JsonStream.ts:88-88",
+            "src/storage/portable/Brc38JsonStream.ts:89-89",
+            "src/storage/portable/Brc38JsonStream.ts:91-91",
+            "src/storage/portable/Brc38JsonStream.ts:93-94",
+            "src/storage/portable/Brc38JsonStream.ts:95-97",
+            "src/storage/portable/Brc38JsonStream.ts:98-105",
+            "src/storage/portable/Brc38JsonStream.ts:106-110",
+            "src/storage/portable/Brc38JsonStream.ts:111-113",
+            "src/storage/portable/Brc38JsonStream.ts:114-120",
+            "src/storage/portable/Brc38JsonStream.ts:121-135",
+            "src/storage/portable/Brc38JsonStream.ts:136-142",
+            "src/storage/portable/Brc38JsonStream.ts:149-151",
+            "src/storage/portable/Brc38JsonStream.ts:155-155",
+            "src/storage/portable/Brc38JsonStream.ts:156-156",
+            "src/storage/portable/Brc38JsonStream.ts:157-157",
+            "src/storage/portable/Brc38JsonStream.ts:160-160",
+            "src/storage/portable/Brc38JsonStream.ts:161-161",
+            "src/storage/portable/Brc38JsonStream.ts:165-168",
+            "src/storage/portable/Brc38JsonStream.ts:169-173",
+            "src/storage/portable/Brc38JsonStream.ts:174-176",
+            "src/storage/portable/Brc38JsonStream.ts:177-181",
+            "src/storage/portable/Brc38JsonStream.ts:182-199"
+          ],
+          "count": 239,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38JsonStream.ts:200-210",
+            "src/storage/portable/Brc38JsonStream.ts:211-217",
+            "src/storage/portable/Brc38JsonStream.ts:221-221",
+            "src/storage/portable/Brc38JsonStream.ts:222-222",
+            "src/storage/portable/Brc38JsonStream.ts:224-224",
+            "src/storage/portable/Brc38JsonStream.ts:232-234",
+            "src/storage/portable/Brc38JsonStream.ts:235-243",
+            "src/storage/portable/Brc38JsonStream.ts:244-247",
+            "src/storage/portable/Brc38JsonStream.ts:248-256",
+            "src/storage/portable/Brc38JsonStream.ts:257-279",
+            "src/storage/portable/Brc38JsonStream.ts:280-282",
+            "src/storage/portable/Brc38JsonStream.ts:283-297",
+            "src/storage/portable/Brc38JsonStream.ts:298-307",
+            "src/storage/portable/Brc38JsonStream.ts:308-312",
+            "src/storage/portable/Brc38JsonStream.ts:313-318",
+            "src/storage/portable/Brc38JsonStream.ts:321-350",
+            "src/storage/portable/Brc38JsonStream.ts:362-376",
+            "src/storage/portable/Brc38JsonStream.ts:385-387",
+            "src/storage/portable/Brc38JsonStream.ts:388-396",
+            "src/storage/portable/Brc38JsonStream.ts:397-403",
+            "src/storage/portable/Brc38JsonStream.ts:404-412"
+          ],
+          "count": 197,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38JsonStream.ts:413-493",
+            "src/storage/portable/Brc38JsonStream.ts:494-516",
+            "src/storage/portable/Brc38JsonStream.ts:517-530",
+            "src/storage/portable/Brc38JsonStream.ts:531-548",
+            "src/storage/portable/Brc38JsonStream.ts:550-565"
+          ],
+          "count": 169,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38JsonStream.ts:577-663"
+          ],
+          "count": 95,
+          "id": "range-004"
+        }
+      ]
+    },
+    {
+      "target": "wallet-portable-knex-source",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38KnexSource.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38KnexSource.ts": "fc93982d4893340905aeed452b401ae46f278ac88cbc63fbe0654eb99ed90afb"
+      },
+      "canonicalCount": 1329,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:66-82",
+            "src/storage/portable/Brc38KnexSource.ts:104-110",
+            "src/storage/portable/Brc38KnexSource.ts:111-114",
+            "src/storage/portable/Brc38KnexSource.ts:115-119",
+            "src/storage/portable/Brc38KnexSource.ts:120-123",
+            "src/storage/portable/Brc38KnexSource.ts:124-127",
+            "src/storage/portable/Brc38KnexSource.ts:128-138",
+            "src/storage/portable/Brc38KnexSource.ts:139-146",
+            "src/storage/portable/Brc38KnexSource.ts:147-156",
+            "src/storage/portable/Brc38KnexSource.ts:157-166",
+            "src/storage/portable/Brc38KnexSource.ts:167-169",
+            "src/storage/portable/Brc38KnexSource.ts:170-184"
+          ],
+          "count": 220,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:185-199"
+          ],
+          "count": 36,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:205-437"
+          ],
+          "count": 384,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:438-449",
+            "src/storage/portable/Brc38KnexSource.ts:450-454",
+            "src/storage/portable/Brc38KnexSource.ts:455-461",
+            "src/storage/portable/Brc38KnexSource.ts:466-497",
+            "src/storage/portable/Brc38KnexSource.ts:502-504",
+            "src/storage/portable/Brc38KnexSource.ts:505-540"
+          ],
+          "count": 171,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:548-599",
+            "src/storage/portable/Brc38KnexSource.ts:610-636"
+          ],
+          "count": 161,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:648-1052"
+          ],
+          "count": 357,
+          "id": "range-006"
+        }
+      ]
+    },
+    {
+      "target": "wallet-portable-brc39-frame",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc39Frame.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc39Frame.ts": "4fb653c41e8c8d734cd13ba845300c2d03d08c9627ca691c51a096092dbbefc6"
+      },
+      "canonicalCount": 226,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc39Frame.ts:19-23",
+            "src/storage/portable/Brc39Frame.ts:26-26",
+            "src/storage/portable/Brc39Frame.ts:27-27",
+            "src/storage/portable/Brc39Frame.ts:29-32",
+            "src/storage/portable/Brc39Frame.ts:33-41",
+            "src/storage/portable/Brc39Frame.ts:42-52",
+            "src/storage/portable/Brc39Frame.ts:53-64"
+          ],
+          "count": 74,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc39Frame.ts:75-97",
+            "src/storage/portable/Brc39Frame.ts:115-115",
+            "src/storage/portable/Brc39Frame.ts:117-119",
+            "src/storage/portable/Brc39Frame.ts:120-122",
+            "src/storage/portable/Brc39Frame.ts:123-138",
+            "src/storage/portable/Brc39Frame.ts:139-152"
+          ],
+          "count": 93,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc39Frame.ts:153-169",
+            "src/storage/portable/Brc39Frame.ts:171-180",
+            "src/storage/portable/Brc39Frame.ts:181-192"
+          ],
+          "count": 59,
+          "id": "range-003"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-import-existing-rows",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportExistingRows.ts",
+        "src/storage/portable/Brc38ImportEntityMergeNode.ts",
+        "src/storage/portable/Brc38ImportEntityTargets.ts",
+        "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts",
+        "src/storage/snapshot/SnapshotSyncFieldRows.ts",
+        "src/storage/snapshot/SnapshotSyncRows.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38ImportEntityMergeNode.ts": "7654badd239fff978bdeb13c541fa2c3a718a02b8016206d6946f44bd1dbbc8c",
+        "src/storage/portable/Brc38ImportEntityTargets.ts": "6ca77be875aec4e05ea643c8123d8dda852ff3e442186c251f0719907792e0de",
+        "src/storage/portable/Brc38ImportExistingRows.ts": "b74a3f46d717826f08d0f6017909bb21ad5863ea1ac7b3417c5b01c1a194d76e",
+        "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts": "2c39039e068ff778efa9cc5cc0731da5cbe856b5223ed206a423aa691ab5a836",
+        "src/storage/snapshot/SnapshotSyncFieldRows.ts": "2588b136f57318b4d50ffb331ee49680632d570ae8d8feb332bcc267394818c3",
+        "src/storage/snapshot/SnapshotSyncRows.ts": "40c21cb8d65310554b6423df2324cdebcb57e1dbb2e0241427fba2335efa680b"
+      },
+      "canonicalCount": 2598,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:45-95",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:102-104",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:107-110",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:111-116",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:117-126",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:135-139",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:148-279",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:287-314",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:318-339",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:350-356",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:362-375",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:385-385",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:397-403",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:404-406"
+          ],
+          "count": 223,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:407-438",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:444-450",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:451-459",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:460-481",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:487-494",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:497-497",
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:505-516"
+          ],
+          "count": 138,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:529-664"
+          ],
+          "count": 160,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityTargets.ts:23-85",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:103-105",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:106-109",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:110-113",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:114-119",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:125-130",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:131-142",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:143-150",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:156-179",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:186-199",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:205-228"
+          ],
+          "count": 244,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityTargets.ts:234-241",
+            "src/storage/portable/Brc38ImportEntityTargets.ts:261-293",
+            "src/storage/portable/Brc38ImportExistingRows.ts:41-55",
+            "src/storage/portable/Brc38ImportExistingRows.ts:56-58",
+            "src/storage/portable/Brc38ImportExistingRows.ts:59-61",
+            "src/storage/portable/Brc38ImportExistingRows.ts:62-74",
+            "src/storage/portable/Brc38ImportExistingRows.ts:75-82",
+            "src/storage/portable/Brc38ImportExistingRows.ts:85-87",
+            "src/storage/portable/Brc38ImportExistingRows.ts:93-114",
+            "src/storage/portable/Brc38ImportExistingRows.ts:120-134"
+          ],
+          "count": 238,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportExistingRows.ts:135-149",
+            "src/storage/portable/Brc38ImportExistingRows.ts:156-208",
+            "src/storage/portable/Brc38ImportExistingRows.ts:214-222",
+            "src/storage/portable/Brc38ImportExistingRows.ts:229-249",
+            "src/storage/portable/Brc38ImportExistingRows.ts:262-278",
+            "src/storage/portable/Brc38ImportExistingRows.ts:284-294"
+          ],
+          "count": 221,
+          "id": "range-006"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportExistingRows.ts:304-340",
+            "src/storage/portable/Brc38ImportExistingRows.ts:368-373",
+            "src/storage/portable/Brc38ImportExistingRows.ts:382-484",
+            "src/storage/portable/Brc38ImportExistingRows.ts:498-516"
+          ],
+          "count": 222,
+          "id": "range-007"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportExistingRows.ts:531-552",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:70-72",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:73-76",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:77-81",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:82-86",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:87-90",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:98-111",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:116-133"
+          ],
+          "count": 138,
+          "id": "range-008"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:139-253"
+          ],
+          "count": 155,
+          "id": "range-009"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:263-323",
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:329-382"
+          ],
+          "count": 185,
+          "id": "range-010"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:390-434",
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:13-26",
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:27-29",
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:30-56",
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:61-98"
+          ],
+          "count": 238,
+          "id": "range-011"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:117-231"
+          ],
+          "count": 257,
+          "id": "range-012"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/SnapshotSyncRows.ts:27-29",
+            "src/storage/snapshot/SnapshotSyncRows.ts:38-40",
+            "src/storage/snapshot/SnapshotSyncRows.ts:52-57",
+            "src/storage/snapshot/SnapshotSyncRows.ts:59-67",
+            "src/storage/snapshot/SnapshotSyncRows.ts:73-90",
+            "src/storage/snapshot/SnapshotSyncRows.ts:96-162"
+          ],
+          "count": 179,
+          "id": "range-013"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-import-history",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportHistory.ts",
+        "src/storage/portable/Brc38IdbOccupiedHistory.ts",
+        "src/storage/portable/Brc38IdbRestoreHistory.ts",
+        "src/storage/portable/Brc38IdbStructuredHistory.ts",
+        "src/storage/portable/Brc38PrivateOccupiedHistoryNode.ts",
+        "src/storage/portable/Brc38PrivateOccupiedHistoryTextNode.ts",
+        "src/storage/portable/Brc38StreamedHistoryProjection.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38IdbOccupiedHistory.ts": "3c1dcab29583dc7abae9b050b0d3397ee8b877edd9f28f8e6c1ed3192b592ec7",
+        "src/storage/portable/Brc38IdbRestoreHistory.ts": "7f83cd0db9d8bff4d2ee67df36886facb46562490a8c951016163c8836367227",
+        "src/storage/portable/Brc38IdbStructuredHistory.ts": "12df19a34d7d9ffd54c72e24e54167f307a6a1902f5c5c1206133db1efae5c2f",
+        "src/storage/portable/Brc38ImportHistory.ts": "4e87ef429fcab1362107541bb6bb3d9bf377617efd7e32ca620337490e52499b",
+        "src/storage/portable/Brc38PrivateOccupiedHistoryNode.ts": "c31e31d7d01cde19399ded59277284a17fb18d794b6a3d8a85774b18b1eafabd",
+        "src/storage/portable/Brc38PrivateOccupiedHistoryTextNode.ts": "c195b546769c279aedb756bef9f50dc537e76a199ce7830944987e995e1c4cd5",
+        "src/storage/portable/Brc38StreamedHistoryProjection.ts": "4599046eef4b48e11133b0601d230baa856e4375456b0c2ddb1039f9aaac989a"
+      },
+      "canonicalCount": 1807,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38IdbOccupiedHistory.ts:46-379"
+          ],
+          "count": 274,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38IdbRestoreHistory.ts:19-32",
+            "src/storage/portable/Brc38IdbRestoreHistory.ts:33-35",
+            "src/storage/portable/Brc38IdbRestoreHistory.ts:36-38",
+            "src/storage/portable/Brc38IdbRestoreHistory.ts:39-49",
+            "src/storage/portable/Brc38IdbRestoreHistory.ts:65-189"
+          ],
+          "count": 197,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38IdbStructuredHistory.ts:44-241",
+            "src/storage/portable/Brc38ImportHistory.ts:22-24",
+            "src/storage/portable/Brc38ImportHistory.ts:25-32",
+            "src/storage/portable/Brc38ImportHistory.ts:33-48",
+            "src/storage/portable/Brc38ImportHistory.ts:49-59",
+            "src/storage/portable/Brc38ImportHistory.ts:68-86"
+          ],
+          "count": 235,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportHistory.ts:87-96",
+            "src/storage/portable/Brc38ImportHistory.ts:102-113",
+            "src/storage/portable/Brc38ImportHistory.ts:114-125",
+            "src/storage/portable/Brc38ImportHistory.ts:126-136",
+            "src/storage/portable/Brc38ImportHistory.ts:137-139",
+            "src/storage/portable/Brc38ImportHistory.ts:145-163",
+            "src/storage/portable/Brc38ImportHistory.ts:173-189",
+            "src/storage/portable/Brc38PrivateOccupiedHistoryNode.ts:37-101",
+            "src/storage/portable/Brc38PrivateOccupiedHistoryTextNode.ts:48-68",
+            "src/storage/portable/Brc38PrivateOccupiedHistoryTextNode.ts:93-121",
+            "src/storage/portable/Brc38PrivateOccupiedHistoryTextNode.ts:138-247",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:43-45",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:46-47",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:54-54",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:55-55",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:56-56",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:57-57"
+          ],
+          "count": 248,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:80-445"
+          ],
+          "count": 563,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:462-597",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:603-611",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:616-644",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:645-650",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:651-661",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:665-672",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:673-677"
+          ],
+          "count": 236,
+          "id": "range-006"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:678-739",
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:740-771"
+          ],
+          "count": 54,
+          "id": "range-007"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-import-merge-checkpoint-node",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportMergeCheckpointNode.ts",
+        "src/storage/idbPackedMergeLookup.ts",
+        "src/storage/portable/Brc38CheckpointSyncMap.ts",
+        "src/storage/portable/Brc38ImportActionMergeNode.ts",
+        "src/storage/portable/Brc38ImportProofMergeNode.ts",
+        "src/storage/portable/Brc38ImportRequestMergeNode.ts",
+        "src/storage/portable/Brc38ImportScalarMergeNode.ts",
+        "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts",
+        "src/storage/portable/Brc38PrivateCheckpointTextNode.ts",
+        "src/storage/portable/Brc38PrivateMergePagesNode.ts",
+        "src/storage/portable/Brc38PrivateMergeProgramNode.ts",
+        "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts",
+        "src/storage/portable/Brc38PrivateMergeTargetsNode.ts",
+        "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts",
+        "src/storage/portable/Brc38PrivateReconstructedCheckpointTextNode.ts",
+        "src/storage/schema/entities/mergeSimpleMetadata.ts",
+        "src/storage/schema/entities/mergeSyncChunkEntities.ts",
+        "src/storage/sync/syncCheckpoint.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/idbPackedMergeLookup.ts": "648e60f57c12f8ce67a176e9b1c9c9d330aacce8d0c657e3fa5d638689ffef75",
+        "src/storage/portable/Brc38CheckpointSyncMap.ts": "1c5fa83b57961afbdf188b88dad30f8b71a378f6068840f1e4707c38497dfe04",
+        "src/storage/portable/Brc38ImportActionMergeNode.ts": "0a56d6f4866bc10e3a5be7a42776619d0d49d2fa968ed9d1a08a39a4301323d2",
+        "src/storage/portable/Brc38ImportMergeCheckpointNode.ts": "62af4774b7ab687aee6d0b16a6922d3c573b68753efd32b267287d18e90e9a2c",
+        "src/storage/portable/Brc38ImportProofMergeNode.ts": "76b5e84c39f6f3d9826b16dcee4c568149927e0056e5bbe5222ffffc22fa07dd",
+        "src/storage/portable/Brc38ImportRequestMergeNode.ts": "9c007db75eef863b3951685d146a71fb5564b118761e087ce425bb9e53c6d20f",
+        "src/storage/portable/Brc38ImportScalarMergeNode.ts": "e8bcce67a54d60a57fe9d9566387a5cd7954b3906c3833e97730518c52f1b3ca",
+        "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts": "2e2f8ff9bf83e2692180bbd6ee83fd3b7e66f24789018d3342374ca6076c78fe",
+        "src/storage/portable/Brc38PrivateCheckpointTextNode.ts": "12b4b015b4dafdc641eab3bbcd7bea92967b66cea270816580ba98e79bf29147",
+        "src/storage/portable/Brc38PrivateMergePagesNode.ts": "52147f1349b7fd28bc60854467a5527b9861bc32a031914c12cffae10c850f8d",
+        "src/storage/portable/Brc38PrivateMergeProgramNode.ts": "dd9f40d39c865c0f5a1804f47c352928db49e58492950a94ec3fc4049896ace7",
+        "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts": "b4e08048885f8b16b6ed17187e12d8a1a6c92e9777e842ad083b37d58713baa9",
+        "src/storage/portable/Brc38PrivateMergeTargetsNode.ts": "39bc300e913942f1b82598fa6b5dbde7226aaa8d201f3953ece606cfd8178e0c",
+        "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts": "4e923ec38bb2a79353f8224d68d60fd8a5e793b0f33111ecf12f8d4847ad045a",
+        "src/storage/portable/Brc38PrivateReconstructedCheckpointTextNode.ts": "f5164ecebf570d584651f69ac91f44744daecb17b77d22ca9e256f54db4eb62d",
+        "src/storage/schema/entities/mergeSimpleMetadata.ts": "e108f331d76132d15bc8c888a0b740efbea3170a981c7d936e9d110a5a8f220c",
+        "src/storage/schema/entities/mergeSyncChunkEntities.ts": "a5e541d2b153e024f12ca94bf71c5ceb4b8bf3cf2f1aa0e6834f087fc2168a66",
+        "src/storage/sync/syncCheckpoint.ts": "7c46735beec975a9d52d149985dd9edfc28307522a112e676a69edcfac94856f"
+      },
+      "canonicalCount": 6524,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/idbPackedMergeLookup.ts:24-26",
+            "src/storage/idbPackedMergeLookup.ts:27-70",
+            "src/storage/idbPackedMergeLookup.ts:71-74",
+            "src/storage/idbPackedMergeLookup.ts:79-84",
+            "src/storage/idbPackedMergeLookup.ts:95-160"
+          ],
+          "count": 162,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/idbPackedMergeLookup.ts:174-340",
+            "src/storage/portable/Brc38CheckpointSyncMap.ts:36-38"
+          ],
+          "count": 244,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38CheckpointSyncMap.ts:49-239"
+          ],
+          "count": 415,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:49-51",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:52-55",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:56-58",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:68-91",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:97-131",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:138-138",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:139-139",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:145-147",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:162-171",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:172-189"
+          ],
+          "count": 170,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:190-386",
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:387-393"
+          ],
+          "count": 184,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportActionMergeNode.ts:405-584",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:35-37",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:38-40",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:41-51",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:57-84",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:91-112"
+          ],
+          "count": 243,
+          "id": "range-006"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:118-141",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:157-157",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:170-183",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:184-198",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:199-221",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:222-236",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:237-260",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:265-284",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:290-310",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:311-322"
+          ],
+          "count": 244,
+          "id": "range-007"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:329-338",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:343-352",
+            "src/storage/portable/Brc38ImportMergeCheckpointNode.ts:363-394",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:54-56",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:57-60",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:61-68",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:69-77",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:85-85",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:86-86",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:109-118",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:119-136"
+          ],
+          "count": 181,
+          "id": "range-008"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:137-250",
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:251-253"
+          ],
+          "count": 91,
+          "id": "range-009"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:269-523"
+          ],
+          "count": 294,
+          "id": "range-010"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:68-70",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:71-74",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:83-83",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:84-84",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:106-114",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:115-133",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:134-138",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:139-159",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:160-162",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:163-308",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:309-312"
+          ],
+          "count": 250,
+          "id": "range-011"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:313-319",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:335-367",
+            "src/storage/portable/Brc38ImportRequestMergeNode.ts:383-646",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:44-46",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:47-50"
+          ],
+          "count": 248,
+          "id": "range-012"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:51-61",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:69-87",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:100-113",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:115-115",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:130-133",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:134-148",
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:149-242"
+          ],
+          "count": 174,
+          "id": "range-013"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportScalarMergeNode.ts:254-381",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:55-57",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:58-61",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:62-65",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:66-70",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:76-85",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:89-89",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:90-90",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:106-109",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:110-126"
+          ],
+          "count": 210,
+          "id": "range-014"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:127-300",
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:301-307"
+          ],
+          "count": 175,
+          "id": "range-015"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportSimpleFieldMergeNode.ts:323-477",
+            "src/storage/portable/Brc38PrivateCheckpointTextNode.ts:46-48",
+            "src/storage/portable/Brc38PrivateCheckpointTextNode.ts:49-49"
+          ],
+          "count": 152,
+          "id": "range-016"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateCheckpointTextNode.ts:71-453"
+          ],
+          "count": 541,
+          "id": "range-017"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:27-27",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:28-28",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:32-32",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:33-43",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:44-46",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:47-54",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:55-55",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:56-81",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:82-86",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:90-96",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:97-119",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:120-141",
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:151-165"
+          ],
+          "count": 157,
+          "id": "range-018"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:178-259"
+          ],
+          "count": 152,
+          "id": "range-019"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:290-591"
+          ],
+          "count": 506,
+          "id": "range-020"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:18-18",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:19-24",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:25-27",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:28-35",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:43-64",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:65-85",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:89-114"
+          ],
+          "count": 131,
+          "id": "range-021"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:121-215",
+            "src/storage/portable/Brc38PrivateMergeProgramNode.ts:223-265",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:4-4",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:6-6",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:7-12",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:13-20"
+          ],
+          "count": 244,
+          "id": "range-022"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:30-52",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:53-58",
+            "src/storage/portable/Brc38PrivateMergeRecoverySchemaNode.ts:61-77",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:18-18",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:19-19",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:20-20",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:21-21",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:30-30",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:33-33",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:34-52",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:53-55",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:56-63",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:64-67",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:68-93",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:94-98",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:102-110",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:113-134",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:140-183"
+          ],
+          "count": 239,
+          "id": "range-023"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:193-245",
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:255-305"
+          ],
+          "count": 204,
+          "id": "range-024"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergeTargetsNode.ts:315-351",
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:49-53",
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:54-57",
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:58-60",
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:67-106",
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:107-129"
+          ],
+          "count": 148,
+          "id": "range-025"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:148-494"
+          ],
+          "count": 486,
+          "id": "range-026"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivateReconstructedCheckpointTextNode.ts:20-22",
+            "src/storage/portable/Brc38PrivateReconstructedCheckpointTextNode.ts:35-123",
+            "src/storage/portable/Brc38PrivateReconstructedCheckpointTextNode.ts:131-163",
+            "src/storage/schema/entities/mergeSimpleMetadata.ts:13-19",
+            "src/storage/schema/entities/mergeSyncChunkEntities.ts:30-92",
+            "src/storage/sync/syncCheckpoint.ts:3-16",
+            "src/storage/sync/syncCheckpoint.ts:18-20",
+            "src/storage/sync/syncCheckpoint.ts:26-26"
+          ],
+          "count": 169,
+          "id": "range-027"
+        },
+        {
+          "mutate": [
+            "src/storage/sync/syncCheckpoint.ts:27-62"
+          ],
+          "count": 110,
+          "id": "range-028"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-import-page",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportPage.ts",
+        "src/storage/portable/Brc38PrivatePageIdsNode.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38ImportPage.ts": "d3bf8a3a13af382257cf14cd7b06312ba6ef54b0369945ee5f68ab7f5c499240",
+        "src/storage/portable/Brc38PrivatePageIdsNode.ts": "2bdbd5254e7930d609ff6c54620112c8ef72678969ed87183c9307a16c4724c5"
+      },
+      "canonicalCount": 891,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportPage.ts:70-72",
+            "src/storage/portable/Brc38ImportPage.ts:73-75",
+            "src/storage/portable/Brc38ImportPage.ts:76-87",
+            "src/storage/portable/Brc38ImportPage.ts:93-104",
+            "src/storage/portable/Brc38ImportPage.ts:109-116",
+            "src/storage/portable/Brc38ImportPage.ts:117-122",
+            "src/storage/portable/Brc38ImportPage.ts:127-127",
+            "src/storage/portable/Brc38ImportPage.ts:135-140",
+            "src/storage/portable/Brc38ImportPage.ts:141-145",
+            "src/storage/portable/Brc38ImportPage.ts:156-180",
+            "src/storage/portable/Brc38ImportPage.ts:185-198",
+            "src/storage/portable/Brc38ImportPage.ts:199-205",
+            "src/storage/portable/Brc38ImportPage.ts:217-235",
+            "src/storage/portable/Brc38ImportPage.ts:239-247",
+            "src/storage/portable/Brc38ImportPage.ts:258-295",
+            "src/storage/portable/Brc38ImportPage.ts:303-340",
+            "src/storage/portable/Brc38ImportPage.ts:368-370",
+            "src/storage/portable/Brc38ImportPage.ts:382-384"
+          ],
+          "count": 235,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportPage.ts:393-540",
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:55-57"
+          ],
+          "count": 240,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:58-70",
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:71-96",
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:104-179"
+          ],
+          "count": 200,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:191-260",
+            "src/storage/portable/Brc38PrivatePageIdsNode.ts:269-315"
+          ],
+          "count": 216,
+          "id": "range-004"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-import-target-indexes",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportTargetIndexes.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38ImportTargetIndexes.ts": "16dc42f5f1922276593381c1d3dffb848d900ee7019ca07fca1e29eeeb7475cf"
+      },
+      "canonicalCount": 239,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:30-37",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:39-56",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:57-61",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:62-65",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:66-68"
+          ],
+          "count": 99,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:69-111",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:112-129",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:133-149"
+          ],
+          "count": 92,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:150-171",
+            "src/storage/portable/Brc38ImportTargetIndexes.ts:172-178"
+          ],
+          "count": 48,
+          "id": "range-003"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-portable-rows",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38PortableRows.ts",
+        "src/storage/snapshot/archive/RemoteSnapshotRows.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38PortableRows.ts": "a6dbf42498dcfcb46dd8899f3928ec237b68100b9e2de47f649505b62710c296",
+        "src/storage/snapshot/archive/RemoteSnapshotRows.ts": "ce1659a8149e3a7304606170d3dae9e7b34ea33a9ed274b5174a65869619eb1d"
+      },
+      "canonicalCount": 559,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38PortableRows.ts:8-14",
+            "src/storage/portable/Brc38PortableRows.ts:16-19",
+            "src/storage/portable/Brc38PortableRows.ts:21-37",
+            "src/storage/portable/Brc38PortableRows.ts:39-46",
+            "src/storage/portable/Brc38PortableRows.ts:54-65",
+            "src/storage/portable/Brc38PortableRows.ts:67-70",
+            "src/storage/portable/Brc38PortableRows.ts:72-75",
+            "src/storage/portable/Brc38PortableRows.ts:77-83",
+            "src/storage/portable/Brc38PortableRows.ts:85-89",
+            "src/storage/portable/Brc38PortableRows.ts:91-93",
+            "src/storage/portable/Brc38PortableRows.ts:95-107"
+          ],
+          "count": 187,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:19-217",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:219-221",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:223-226",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:228-235",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:237-242"
+          ],
+          "count": 236,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:244-267",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:269-273",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:275-286",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:294-297",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:304-308",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:315-331",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:333-337",
+            "src/storage/snapshot/archive/RemoteSnapshotRows.ts:340-342"
+          ],
+          "count": 136,
+          "id": "range-003"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-brc38-profile-physical-identity-node",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts": "cfef7ef737d90a188c6a4022204e0bd7b6b5f3af3fa1e086ab8fda3008c9446d"
+      },
+      "canonicalCount": 140,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:17-26",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:30-39",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:40-43",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:47-47",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:48-55",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:60-70"
+          ],
+          "count": 87,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:77-100",
+            "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts:107-113"
+          ],
+          "count": 53,
+          "id": "range-002"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-knex-database-system",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/schema/knexDatabaseSystem.ts",
+        "src/storage/remoting/KnexSessionManager.ts",
+        "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts",
+        "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts",
+        "src/storage/snapshot/archive/captureKnexSnapshotArchive.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/remoting/KnexSessionManager.ts": "09f6feb977a8b600fb2a81d0180989150e8026c685aafa4c5c59c1954ecf9c7a",
+        "src/storage/schema/knexDatabaseSystem.ts": "a66fabb85785ccae40eb335af08eb72bee795c017054a9632a354c7592a7ffe8",
+        "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts": "f6eef20829842037e605b460e90af30fe0561fb954f9548f9e7aa2e5d4501659",
+        "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts": "58e0179dba97a229d48a00dc92d0a2774aaf3dc857c9017fa0ef43b6259a6314",
+        "src/storage/snapshot/archive/captureKnexSnapshotArchive.ts": "5ebbac6c61d9eedcfc8ad251e18b25fcfb71453c6280b3bfaccbadd23e251100"
+      },
+      "canonicalCount": 1254,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/remoting/KnexSessionManager.ts:5-5",
+            "src/storage/remoting/KnexSessionManager.ts:6-6",
+            "src/storage/remoting/KnexSessionManager.ts:7-7",
+            "src/storage/remoting/KnexSessionManager.ts:8-8",
+            "src/storage/remoting/KnexSessionManager.ts:59-88",
+            "src/storage/remoting/KnexSessionManager.ts:90-92",
+            "src/storage/remoting/KnexSessionManager.ts:94-96",
+            "src/storage/remoting/KnexSessionManager.ts:98-118",
+            "src/storage/remoting/KnexSessionManager.ts:120-143",
+            "src/storage/remoting/KnexSessionManager.ts:145-151",
+            "src/storage/remoting/KnexSessionManager.ts:154-190",
+            "src/storage/remoting/KnexSessionManager.ts:193-250"
+          ],
+          "count": 248,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/remoting/KnexSessionManager.ts:253-275",
+            "src/storage/remoting/KnexSessionManager.ts:277-279",
+            "src/storage/remoting/KnexSessionManager.ts:285-312",
+            "src/storage/remoting/KnexSessionManager.ts:314-353",
+            "src/storage/remoting/KnexSessionManager.ts:355-362",
+            "src/storage/remoting/KnexSessionManager.ts:371-387",
+            "src/storage/remoting/KnexSessionManager.ts:389-393",
+            "src/storage/remoting/KnexSessionManager.ts:395-415",
+            "src/storage/remoting/KnexSessionManager.ts:417-423",
+            "src/storage/remoting/KnexSessionManager.ts:425-441",
+            "src/storage/remoting/KnexSessionManager.ts:443-449",
+            "src/storage/remoting/KnexSessionManager.ts:452-460",
+            "src/storage/remoting/KnexSessionManager.ts:462-464",
+            "src/storage/remoting/KnexSessionManager.ts:469-472"
+          ],
+          "count": 243,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/remoting/KnexSessionManager.ts:474-484",
+            "src/storage/remoting/KnexSessionManager.ts:486-490",
+            "src/storage/schema/knexDatabaseSystem.ts:6-13",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:35-39",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:47-47",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:49-52",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:54-87",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:89-97",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:99-107",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:109-111",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:113-134"
+          ],
+          "count": 176,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:140-209",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:215-270"
+          ],
+          "count": 144,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:276-376",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveRpc.ts:378-381",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:55-55",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:59-63",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:65-69",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:71-75",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:82-84",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:87-89",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:92-100",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:103-107",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:113-121",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:127-135",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:140-152",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:154-166",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:168-180",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:182-194",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:199-199",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:200-200",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:201-201"
+          ],
+          "count": 227,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:202-256",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:261-347",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:349-352",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:354-357",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:359-362",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:364-367",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:369-372",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:374-377",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:379-387",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:389-392",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:394-397",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:399-402",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:404-409",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:411-419",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:421-426",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:429-439",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:441-449",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:451-457",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:460-468",
+            "src/storage/snapshot/archive/KnexSnapshotArchiveService.ts:470-473",
+            "src/storage/snapshot/archive/captureKnexSnapshotArchive.ts:27-44"
+          ],
+          "count": 216,
+          "id": "range-006"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-snapshot-journal-delta-frame",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts": "a64f782986d1122a1de2ccf86555cefa8492099d94ee60ea9a08ec12a5bb65a0"
+      },
+      "canonicalCount": 945,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:18-32",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:36-39",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:41-44",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:46-48",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:50-53",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:55-60",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:66-66",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:67-81",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:83-94",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:96-102"
+          ],
+          "count": 214,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:104-113",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:115-122",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:124-131",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:133-148",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:150-159",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:161-165",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:167-172"
+          ],
+          "count": 174,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:180-291"
+          ],
+          "count": 213,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:298-393",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:402-414"
+          ],
+          "count": 162,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:422-479",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:486-550"
+          ],
+          "count": 182,
+          "id": "range-005"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-snapshot-journal-delta-page",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts",
+        "src/storage/idbPackedPage.ts",
+        "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts",
+        "src/storage/snapshot/journal/SnapshotJournalCapturedPage.ts",
+        "src/storage/snapshot/journal/SnapshotJournalPage.ts",
+        "src/storage/sync/snapshotSyncPage.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/idbPackedPage.ts": "136806dcb77f61e445475e10947edf8432f0b88730591c1589afa536e23346f8",
+        "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts": "ea3c2447a87919dec8c66af657d58eac6c49f78a1e2e021c930af8f84256449b",
+        "src/storage/snapshot/journal/SnapshotJournalCapturedPage.ts": "07b341ca6d62dfa9e759484f60eaf21acae5fe9933059154ea0dc7b3c8156eb4",
+        "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts": "f2c917fc59b40af419e71da0b97115fcf510dbf562b3ba21a83416ce279f51bc",
+        "src/storage/snapshot/journal/SnapshotJournalPage.ts": "cae3bc5312ff973b54ced85a39cb10f61698cdc29cc5a32c7345c8be7fb00391",
+        "src/storage/sync/snapshotSyncPage.ts": "005e062426111a18574c4f5a2e08cac0b87b02989e2d43af130eaac8c97e7ba0"
+      },
+      "canonicalCount": 1967,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/idbPackedPage.ts:43-62",
+            "src/storage/idbPackedPage.ts:63-65",
+            "src/storage/idbPackedPage.ts:66-71",
+            "src/storage/idbPackedPage.ts:72-82",
+            "src/storage/idbPackedPage.ts:83-100",
+            "src/storage/idbPackedPage.ts:101-124"
+          ],
+          "count": 226,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/idbPackedPage.ts:139-337"
+          ],
+          "count": 403,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:32-34",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:35-50",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:55-101",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:103-108",
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:110-115"
+          ],
+          "count": 163,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:122-226",
+            "src/storage/snapshot/journal/SnapshotJournalCapturedPage.ts:51-97",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:53-55",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:57-59",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:61-68"
+          ],
+          "count": 195,
+          "id": "range-004"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:78-99",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:108-146",
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:154-171"
+          ],
+          "count": 125,
+          "id": "range-005"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:184-261"
+          ],
+          "count": 138,
+          "id": "range-006"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:272-380"
+          ],
+          "count": 172,
+          "id": "range-007"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:394-484",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:29-31",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:33-36",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:39-46"
+          ],
+          "count": 238,
+          "id": "range-008"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:48-53",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:55-62",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:64-92",
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:95-144"
+          ],
+          "count": 181,
+          "id": "range-009"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalPage.ts:155-207",
+            "src/storage/sync/snapshotSyncPage.ts:5-24",
+            "src/storage/sync/snapshotSyncPage.ts:29-44"
+          ],
+          "count": 126,
+          "id": "range-010"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-snapshot-journal-destination-stage",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts",
+        "src/storage/snapshot/stageIdbSnapshotSyncText.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts": "e7041bee53253c7d789174eee8abf59a9ee5d43dcb0582df4b2d1323fae7fd26",
+        "src/storage/snapshot/stageIdbSnapshotSyncText.ts": "46b89a43329f0f9794556ea707973feebc02c7627ced95d4ea10ec8232d60bf4"
+      },
+      "canonicalCount": 807,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:46-46",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:47-47",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:48-48",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:50-52",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:54-57",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:59-62",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:64-71",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:73-80",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:82-88",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:92-116",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:124-132",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:134-140",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:145-157",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:159-166",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:180-183",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:194-197"
+          ],
+          "count": 160,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:209-383",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:392-395",
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:401-404"
+          ],
+          "count": 204,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:411-568"
+          ],
+          "count": 281,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/stageIdbSnapshotSyncText.ts:22-32",
+            "src/storage/snapshot/stageIdbSnapshotSyncText.ts:43-66",
+            "src/storage/snapshot/stageIdbSnapshotSyncText.ts:75-189"
+          ],
+          "count": 162,
+          "id": "range-004"
+        }
+      ]
+    },
+    {
+      "target": "wallet-current-snapshot-journal-identity-retirements",
+      "existingPartition": "whole",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts",
+        "src/storage/schema/snapshotSqliteIdentity.ts",
+        "src/storage/schema/snapshotSqliteIdentityObservations.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/schema/snapshotSqliteIdentity.ts": "adbb19bcdc8b6222a7a2a24db17e55b72db081698809eb16249453579a80a1e3",
+        "src/storage/schema/snapshotSqliteIdentityObservations.ts": "897cabe449e6d7e5d503d2fbeeaef9926c28536eafe4ea738c5f6d2e60ceaafb",
+        "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts": "8b1909332b616a1553fcfd84405e2907720343a96e495032eab32f175f01de6f"
+      },
+      "canonicalCount": 797,
+      "packingHint": 250,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIdentity.ts:34-34",
+            "src/storage/schema/snapshotSqliteIdentity.ts:35-37",
+            "src/storage/schema/snapshotSqliteIdentity.ts:41-86",
+            "src/storage/schema/snapshotSqliteIdentity.ts:93-152",
+            "src/storage/schema/snapshotSqliteIdentity.ts:153-165",
+            "src/storage/schema/snapshotSqliteIdentity.ts:166-166"
+          ],
+          "count": 217,
+          "id": "range-001"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIdentity.ts:172-224",
+            "src/storage/schema/snapshotSqliteIdentity.ts:225-231",
+            "src/storage/schema/snapshotSqliteIdentity.ts:232-234",
+            "src/storage/schema/snapshotSqliteIdentity.ts:235-237",
+            "src/storage/schema/snapshotSqliteIdentity.ts:239-251",
+            "src/storage/schema/snapshotSqliteIdentity.ts:252-275",
+            "src/storage/schema/snapshotSqliteIdentity.ts:278-281",
+            "src/storage/schema/snapshotSqliteIdentity.ts:283-285",
+            "src/storage/schema/snapshotSqliteIdentity.ts:293-298",
+            "src/storage/schema/snapshotSqliteIdentity.ts:302-306",
+            "src/storage/schema/snapshotSqliteIdentity.ts:307-322",
+            "src/storage/schema/snapshotSqliteIdentity.ts:326-333"
+          ],
+          "count": 234,
+          "id": "range-002"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIdentity.ts:334-346",
+            "src/storage/schema/snapshotSqliteIdentity.ts:349-361",
+            "src/storage/schema/snapshotSqliteIdentity.ts:364-373",
+            "src/storage/schema/snapshotSqliteIdentityObservations.ts:26-53",
+            "src/storage/schema/snapshotSqliteIdentityObservations.ts:71-89",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:20-20",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:21-21",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:23-25",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:27-31",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:33-39",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:41-48",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:50-59",
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:63-80"
+          ],
+          "count": 235,
+          "id": "range-003"
+        },
+        {
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:104-193"
+          ],
+          "count": 111,
+          "id": "range-004"
+        }
+      ]
+    },
+    {
+      "target": "wallet-retained-snapshot",
+      "existingPartition": "sqlite-bootstrap",
+      "packageDirectory": "packages/wallet/wallet-toolbox",
+      "originalMutate": [
+        "src/storage/schema/snapshotSqliteIndexBootstrap.ts",
+        "src/storage/schema/snapshotSqliteIndexState.ts"
+      ],
+      "sourceHashes": {
+        "src/storage/schema/snapshotSqliteIndexBootstrap.ts": "89e21d1952fe89f678e6b4f22e687137c94c86def0d946ad1517c4a423ff87a6",
+        "src/storage/schema/snapshotSqliteIndexState.ts": "db758c4ab0c000641016237cd410961adfe64a1230b8e061d938b53fe251dff8"
+      },
+      "canonicalCount": 499,
+      "packingHint": 100,
+      "parts": [
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:13-13",
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:14-14",
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:15-31"
+          ],
+          "count": 100,
+          "id": "sqlite-bootstrap-001"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:32-54",
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:55-96"
+          ],
+          "count": 95,
+          "id": "sqlite-bootstrap-002"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:97-149"
+          ],
+          "count": 74,
+          "id": "sqlite-bootstrap-003"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:150-209"
+          ],
+          "count": 108,
+          "id": "sqlite-bootstrap-004"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:210-215",
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:225-243",
+            "src/storage/schema/snapshotSqliteIndexState.ts:6-6"
+          ],
+          "count": 51,
+          "id": "sqlite-bootstrap-005"
+        },
+        {
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexState.ts:12-41"
+          ],
+          "count": 71,
+          "id": "sqlite-bootstrap-006"
+        }
+      ]
+    }
+  ]
+}

@@ -64,7 +64,7 @@ describe('identity overlay certificate verification', () => {
       fields: { name: 'ciphertext' },
       keyring: { name: 'key' },
       decryptedFields: { name: 'Alice' }
-    } as never
+    } as unknown as VerifiableCertificate
     const trustSettings = {
       trustLevel: 2,
       trustedCertifiers: [
@@ -96,7 +96,7 @@ describe('identity overlay certificate verification', () => {
       fields: { name: 'ciphertext' },
       keyring: { name: 'key' },
       decryptedFields: { name: 'Alice' }
-    } as never
+    } as unknown as VerifiableCertificate
     const settings = {
       trustLevel: 1,
       trustedCertifiers: [{ name: 'One', description: 'First certifier', identityKey: certifier, trust: 1 }]
@@ -118,11 +118,11 @@ describe('identity overlay certificate verification', () => {
     const expected = {
       subject,
       decryptedFields: { name: 'Alice', city: 'London' }
-    } as VerifiableCertificate
+    } as unknown as VerifiableCertificate
     const substituted = {
       subject: otherSubject,
       decryptedFields: { name: 'Alice', city: 'London' }
-    } as VerifiableCertificate
+    } as unknown as VerifiableCertificate
 
     expect(filterCertificatesByIdentityKey([substituted, expected], subject)).toEqual([expected])
   })
@@ -131,11 +131,11 @@ describe('identity overlay certificate verification', () => {
     const expected = {
       subject,
       decryptedFields: { name: 'Alice', city: 'London' }
-    } as VerifiableCertificate
+    } as unknown as VerifiableCertificate
     const substituted = {
       subject,
       decryptedFields: { name: 'Mallory', city: 'London' }
-    } as VerifiableCertificate
+    } as unknown as VerifiableCertificate
 
     expect(
       filterCertificatesByAttributes([substituted, expected], {
@@ -525,7 +525,7 @@ describe('identity overlay certificate verification', () => {
     }
     const selected = filterCertificatesByAttributes(
       [certificate as unknown as VerifiableCertificate],
-      attributes as Record<string, string>
+      attributes as unknown as Record<string, string>
     )
     expect(selected).toEqual(accepted ? [certificate] : [])
     const validate = (): unknown =>
@@ -539,7 +539,7 @@ describe('identity overlay certificate verification', () => {
   })
 
   test('ignores inherited attributes and rejects invalid requested values without coercion', () => {
-    const certificate = { subject, decryptedFields: { name: 'Alice' } } as VerifiableCertificate
+    const certificate = { subject, decryptedFields: { name: 'Alice' } } as unknown as VerifiableCertificate
     const inherited = Object.create({ any: 'bob' }) as Record<string, string>
     inherited.name = 'alice'
     expect(filterCertificatesByAttributes([certificate], inherited)).toEqual([certificate])
@@ -549,9 +549,12 @@ describe('identity overlay certificate verification', () => {
     expect(filterCertificatesByAttributes([certificate], [] as never)).toEqual([])
     const inheritedFields = Object.create({ name: 'Alice' }) as Record<string, string>
     expect(
-      filterCertificatesByAttributes([{ subject, decryptedFields: inheritedFields } as VerifiableCertificate], {
-        name: 'alice'
-      })
+      filterCertificatesByAttributes(
+        [{ subject, decryptedFields: inheritedFields } as unknown as VerifiableCertificate],
+        {
+          name: 'alice'
+        }
+      )
     ).toEqual([])
   })
 
@@ -585,7 +588,11 @@ describe('identity overlay certificate verification', () => {
     })
 
     test.each([
-      ['over 50 bytes', 'Certifies social media handles, phone numbers and emails', 'Certifies social media handles, phone numbers and'],
+      [
+        'over 50 bytes',
+        'Certifies social media handles, phone numbers and emails',
+        'Certifies social media handles, phone numbers and'
+      ],
       ['multibyte at the cut', `${'a'.repeat(48)}\u00e9\u00e9`, `${'a'.repeat(48)}\u00e9`],
       ['trailing space at the cut', `${'a'.repeat(49)} bcd`, 'a'.repeat(49)],
       ['under 5 bytes', 'ID', 'Trusted certifier'],

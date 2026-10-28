@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../utility/promiseFromSync'
 import type * as sdk from '../sdk/index'
 import { WERR_UNAUTHORIZED } from '../sdk/WERR_errors'
 import { TableSettings } from '../storage/schema/tables/TableSettings'
@@ -25,8 +26,8 @@ export class StorageSyncReader implements sdk.WalletStorageSyncReader {
     return this.storage.getSettings()
   }
 
-  async destroy(): Promise<void> {
-    return await this.storage.destroy()
+  destroy(): Promise<void> {
+    return awaitFromSync(() => this.storage.destroy())
   }
 
   async getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {

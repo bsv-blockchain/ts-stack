@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 
@@ -18,10 +19,12 @@ export class TaskClock extends WalletMonitorTask {
     return { run }
   }
 
-  async runTask(): Promise<string> {
-    const log = `${new Date(this.nextMinute).toISOString()}`
-    this.nextMinute = this.getNextMinute()
-    return log
+  runTask(): Promise<string> {
+    return promiseFromSync(() => {
+      const log = `${new Date(this.nextMinute).toISOString()}`
+      this.nextMinute = this.getNextMinute()
+      return log
+    })
   }
 
   getNextMinute(): number {

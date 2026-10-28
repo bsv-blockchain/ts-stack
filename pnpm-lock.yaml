@@ -19,6 +19,9 @@ overrides:
 packageExtensionsChecksum: sha256-j1ipTIriuh1r8NrHzy5rLoGNr081FjMxVoEY/IdY3mE=
 
 patchedDependencies:
+  fake-indexeddb@6.2.5:
+    hash: 6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2
+    path: packages/wallet/wallet-toolbox/test/utils/fake-indexeddb-readonly-name.patch
   metro-file-map@0.87.1:
     hash: 28741c2833798bbfda1432bd62f13f338d31f12a6161f4268a6cc6f01022018b
     path: patches/metro-file-map@0.87.1.patch
@@ -315,7 +318,7 @@ importers:
         version: typescript@7.0.2
       fake-indexeddb:
         specifier: ^6.2.5
-        version: 6.2.5
+        version: 6.2.5(patch_hash=6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -801,7 +804,7 @@ importers:
         version: 4.1.11(vitest@4.1.11)
       fake-indexeddb:
         specifier: ^6.2.5
-        version: 6.2.5
+        version: 6.2.5(patch_hash=6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -1146,9 +1149,15 @@ importers:
       '@typescript/native':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       express:
         specifier: ^5.2.1
         version: 5.3.0
+      express-rate-limit:
+        specifier: 8.6.1
+        version: 8.6.1(express@5.3.0)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -1158,6 +1167,9 @@ importers:
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
       ts-jest:
         specifier: ^29.4.12
         version: 29.4.12(@babel/core@7.29.7)(@jest/transform@30.5.1)(@jest/types@30.5.1)(@typescript/typescript6@6.0.2)(babel-jest@30.5.1(@babel/core@7.29.7))(esbuild@0.28.2)(jest-util@30.5.1)(jest@30.5.1(@types/node@26.6.1)(ts-node@10.9.2(@types/node@26.6.1)(@typescript/typescript6@6.0.2)))
@@ -2082,7 +2094,7 @@ importers:
         version: 2.8.6
       fake-indexeddb:
         specifier: ^6.2.5
-        version: 6.2.5
+        version: 6.2.5(patch_hash=6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2)
       fast-check:
         specifier: ^4.9.0
         version: 4.10.1
@@ -2146,7 +2158,7 @@ importers:
         version: 17.4.2
       fake-indexeddb:
         specifier: ^6.2.5
-        version: 6.2.5
+        version: 6.2.5(patch_hash=6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2)
       fs-extra:
         specifier: ^11.4.0
         version: 11.4.0
@@ -2208,6 +2220,9 @@ importers:
       oxlint:
         specifier: ^1.83.0
         version: 1.83.0
+      puppeteer-core:
+        specifier: ^25.4.0
+        version: 25.11.0(yauzl@3.4.0)
       tsdown:
         specifier: 0.23.0
         version: 0.23.0(@arethetypeswrong/core@0.18.5)(@typescript/typescript6@6.0.2)(publint@0.3.24)(tsx@4.23.13)
@@ -13952,7 +13967,7 @@ snapshots:
 
   extend@3.0.2: {}
 
-  fake-indexeddb@6.2.5: {}
+  fake-indexeddb@6.2.5(patch_hash=6001226caa9a6153556166d7557d58cfba189fbcd26f56fdb2e05dc65d26aae2): {}
 
   fast-check@4.10.1:
     dependencies:

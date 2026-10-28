@@ -36,7 +36,11 @@ describe('local recoverable funding allocation', () => {
   }
 
   function args() {
-    const validated = Validation.validateCreateActionArgs({ ...request, outputs: request.outputs!.map(output => ({ ...output })), options: { ...request.options } })
+    const validated = Validation.validateCreateActionArgs({
+      ...request,
+      outputs: request.outputs!.map(output => ({ ...output })),
+      options: { ...request.options }
+    })
     validated.includeAllSourceTransactions = true
     return validated
   }
@@ -51,7 +55,9 @@ describe('local recoverable funding allocation', () => {
     Object.defineProperty(operation, 'protocol', { value: 'wallet-action-recovery-unknown' })
     const read = jest.spyOn(operation, 'read')
     const allocate = jest.spyOn(context.activeStorage, 'insertTransaction')
-    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow('Unsupported action recovery construction')
+    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow(
+      'Unsupported action recovery construction'
+    )
     expect(read).not.toHaveBeenCalled()
     expect(allocate).not.toHaveBeenCalled()
   })
@@ -60,22 +66,32 @@ describe('local recoverable funding allocation', () => {
     const validated = args()
     validated.logger = new WalletLogger()
     const before = await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
-    jest.spyOn(context.activeStorage, 'insertOutputs').mockRejectedValueOnce(new Error('ordinary output write interrupted'))
-    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toThrow('ordinary output write interrupted')
+    jest
+      .spyOn(context.activeStorage, 'insertOutputs')
+      .mockRejectedValueOnce(new Error('ordinary output write interrupted'))
+    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toThrow(
+      'ordinary output write interrupted'
+    )
     const after = await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
     const added = after.filter(row => !before.some(old => old.transactionId === row.transactionId))
     expect(added).toHaveLength(1)
     expect(added[0]).toMatchObject({ status: 'failed', description: request.description })
-    expect(validated.logger.logs.some(entry => entry.log.includes('recorded failed createAction transaction'))).toBe(true)
+    expect(validated.logger.logs.some(entry => entry.log.includes('recorded failed createAction transaction'))).toBe(
+      true
+    )
   })
 
   test('preserves legacy failed status when ordinary assembly fails after allocation commit', async () => {
     const validated = args()
     validated.logger = new WalletLogger()
     const update = jest.spyOn(context.activeStorage, 'updateTransactionStatus')
-    jest.spyOn(context.activeStorage, 'getRawTxOfKnownValidTransaction').mockRejectedValueOnce(new Error('ordinary source read interrupted'))
-    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toThrow('ordinary source read interrupted')
-    expect(update).toHaveBeenCalledWith('failed', expect.any(Number))
+    jest
+      .spyOn(context.activeStorage, 'getRawTxOfKnownValidTransaction')
+      .mockRejectedValueOnce(new Error('ordinary source read interrupted'))
+    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toThrow(
+      'ordinary source read interrupted'
+    )
+    expect(update).toHaveBeenCalledWith('failed', expect.any(Number), undefined, undefined, expect.any(Function))
     const transactionId = update.mock.calls.find(call => call[0] === 'failed')![1]
     const rows = await context.activeStorage.findTransactions({ partial: { userId: context.userId, transactionId } })
     expect(rows).toHaveLength(1)
@@ -83,28 +99,58 @@ describe('local recoverable funding allocation', () => {
     expect(validated.logger.logs.some(entry => entry.log.includes('marked failed createAction transaction'))).toBe(true)
   })
 
+  test('recoverable construction cannot allocate after an away-and-back primary change during retained-state I/O', async () => {
+    const store = await SQLiteActionRecoveryStore.install(context.activeStorage)
+    const operation = await store.operation(binding())
+    const storage = context.activeStorage
+    const identity = storage.getSettings().storageIdentityKey
+    const before = await storage.findTransactions({ partial: { userId: context.userId } })
+    const outputs = await storage.findOutputs({ partial: { userId: context.userId } })
+    jest.spyOn(operation, 'read').mockImplementationOnce(async () => {
+      await storage.updateUser(context.userId, { activeStorage: 'different-primary' })
+      await storage.updateUser(context.userId, { activeStorage: identity })
+      return undefined
+    })
+    await expect(createAction(storage, auth(), args(), undefined, operation)).rejects.toMatchObject({
+      code: 'WERR_NOT_ACTIVE'
+    })
+    expect(await storage.findTransactions({ partial: { userId: context.userId } })).toEqual(before)
+    expect(await storage.findOutputs({ partial: { userId: context.userId } })).toEqual(outputs)
+  })
+
   test('requires explicit installation and preserves immutable configured capacity', async () => {
     await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).rejects.toThrow()
     await SQLiteActionRecoveryStore.install(context.activeStorage, { records: 2, bytes: 1048576 })
-    await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).resolves.toBeInstanceOf(SQLiteActionRecoveryStore)
+    await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).resolves.toBeInstanceOf(
+      SQLiteActionRecoveryStore
+    )
     await expect(SQLiteActionRecoveryStore.install(context.activeStorage)).rejects.toThrow('differs')
   })
 
-  test.each([true, false])('preserves the construction error when ordinary cleanup also fails (logger=%s)', async withLogger => {
-    const validated = args()
-    if (withLogger) validated.logger = new WalletLogger()
-    const constructionError = new Error('source read remains the authoritative failure')
-    const cleanupError = new Error('failed-status write interrupted')
-    jest.spyOn(context.activeStorage, 'getRawTxOfKnownValidTransaction').mockRejectedValueOnce(constructionError)
-    const update = jest.spyOn(context.activeStorage, 'updateTransactionStatus').mockRejectedValueOnce(cleanupError)
-    await expect(createAction(context.activeStorage, auth(), validated)).rejects.toBe(constructionError)
-    expect(update).toHaveBeenCalledWith('failed', expect.any(Number))
-    const transactionId = update.mock.calls.find(call => call[0] === 'failed')![1]
-    const rows = await context.activeStorage.findTransactions({ partial: { userId: context.userId, transactionId } })
-    expect(rows).toHaveLength(1)
-    expect(rows[0].status).toBe('unsigned')
-    if (withLogger) expect(validated.logger!.logs.some(entry => entry.log === `failed to clean up createAction transaction ${transactionId}: ${String(cleanupError)}`)).toBe(true)
-  })
+  test.each([true, false])(
+    'preserves the construction error when ordinary cleanup also fails (logger=%s)',
+    async withLogger => {
+      const validated = args()
+      if (withLogger) validated.logger = new WalletLogger()
+      const constructionError = new Error('source read remains the authoritative failure')
+      const cleanupError = new Error('failed-status write interrupted')
+      jest.spyOn(context.activeStorage, 'getRawTxOfKnownValidTransaction').mockRejectedValueOnce(constructionError)
+      const update = jest.spyOn(context.activeStorage, 'updateTransactionStatus').mockRejectedValueOnce(cleanupError)
+      await expect(createAction(context.activeStorage, auth(), validated)).rejects.toBe(constructionError)
+      expect(update).toHaveBeenCalledWith('failed', expect.any(Number), undefined, undefined, expect.any(Function))
+      const transactionId = update.mock.calls.find(call => call[0] === 'failed')![1]
+      const rows = await context.activeStorage.findTransactions({ partial: { userId: context.userId, transactionId } })
+      expect(rows).toHaveLength(1)
+      expect(rows[0].status).toBe('unsigned')
+      if (withLogger)
+        expect(
+          validated.logger!.logs.some(
+            entry =>
+              entry.log === `failed to clean up createAction transaction ${transactionId}: ${String(cleanupError)}`
+          )
+        ).toBe(true)
+    }
+  )
 
   test('returns the original completed funding result across new store instances without another allocation', async () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage)
@@ -113,7 +159,13 @@ describe('local recoverable funding allocation', () => {
     const allocate = jest.spyOn(context.activeStorage, 'insertTransaction')
     const reopened = await SQLiteActionRecoveryStore.open(context.activeStorage)
     const writeTransaction = jest.spyOn(context.activeStorage, 'transaction')
-    const second = await createAction(context.activeStorage, auth(), args(), undefined, await reopened.operation(binding()))
+    const second = await createAction(
+      context.activeStorage,
+      auth(),
+      args(),
+      undefined,
+      await reopened.operation(binding())
+    )
     expect(encodeActionRecoveryResult(second)).toBe(encodeActionRecoveryResult(first))
     expect(allocate).not.toHaveBeenCalled()
     expect(writeTransaction).not.toHaveBeenCalled()
@@ -126,16 +178,30 @@ describe('local recoverable funding allocation', () => {
     const validated = args()
     validated.logger = new WalletLogger()
     jest.spyOn(operation, 'complete').mockRejectedValueOnce(new Error('completion interrupted'))
-    await expect(createAction(context.activeStorage, auth(), validated, undefined, operation)).rejects.toThrow('completion interrupted')
-    expect(validated.logger.logs.some(entry => entry.log === 'retained recoverable allocation after evidence completion error')).toBe(true)
+    await expect(createAction(context.activeStorage, auth(), validated, undefined, operation)).rejects.toThrow(
+      'completion interrupted'
+    )
+    expect(
+      validated.logger.logs.some(
+        entry => entry.log === 'retained recoverable allocation after evidence completion error'
+      )
+    ).toBe(true)
     const retained = await operation.read()
     expect(retained?.completed).toBeUndefined()
     expect(retained?.plan.result.reference).toBeTruthy()
-    const transactions = await context.activeStorage.findTransactions({ partial: { userId: context.userId, reference: retained!.plan.result.reference } })
+    const transactions = await context.activeStorage.findTransactions({
+      partial: { userId: context.userId, reference: retained!.plan.result.reference }
+    })
     expect(transactions).toHaveLength(1)
     expect(transactions[0].status).toBe('unsigned')
     const allocate = jest.spyOn(context.activeStorage, 'insertTransaction')
-    const resumed = await createAction(context.activeStorage, auth(), args(), undefined, await store.operation(binding()))
+    const resumed = await createAction(
+      context.activeStorage,
+      auth(),
+      args(),
+      undefined,
+      await store.operation(binding())
+    )
     expect(resumed.reference).toBe(retained!.plan.result.reference)
     expect(allocate).not.toHaveBeenCalled()
   })
@@ -149,7 +215,9 @@ describe('local recoverable funding allocation', () => {
       throw new Error('before allocation commit')
     })
     const before = await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
-    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow('before allocation commit')
+    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow(
+      'before allocation commit'
+    )
     expect(await operation.read()).toBeUndefined()
     const after = await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
     expect(after).toEqual(before)
@@ -159,14 +227,17 @@ describe('local recoverable funding allocation', () => {
 
   test('joins concurrent callers at one operation and rejects a different request under that ID', async () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage)
-    const one = await store.operation(binding()), two = await store.operation(binding())
+    const one = await store.operation(binding()),
+      two = await store.operation(binding())
     const [first, second] = await Promise.all([
       createAction(context.activeStorage, auth(), args(), undefined, one),
       createAction(context.activeStorage, auth(), args(), undefined, two)
     ])
     expect(encodeActionRecoveryResult(first)).toBe(encodeActionRecoveryResult(second))
     expect((await store.metadata()).usedRecords).toBe(1)
-    const changed = await store.operation(binding('operation-one', { ...request, description: 'Different operation request' }))
+    const changed = await store.operation(
+      binding('operation-one', { ...request, description: 'Different operation request' })
+    )
     await expect(createAction(context.activeStorage, auth(), args(), undefined, changed)).rejects.toThrow('conflicts')
   })
 
@@ -183,7 +254,9 @@ describe('local recoverable funding allocation', () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage, { records: 1, bytes: 1048576 })
     await createAction(context.activeStorage, auth(), args(), undefined, await store.operation(binding()))
     const allocate = jest.spyOn(context.activeStorage, 'insertTransaction')
-    await expect(createAction(context.activeStorage, auth(), args(), undefined, await store.operation(binding('operation-two')))).rejects.toThrow('capacity exhausted')
+    await expect(
+      createAction(context.activeStorage, auth(), args(), undefined, await store.operation(binding('operation-two')))
+    ).rejects.toThrow('capacity exhausted')
     expect(allocate).not.toHaveBeenCalled()
   })
 
@@ -193,7 +266,8 @@ describe('local recoverable funding allocation', () => {
       { ...binding(), walletIdentity: 'wrong' },
       { ...binding(), storageIdentity: 'wrong' },
       { ...binding(), chain: 'wrong' }
-    ]) await expect(store.operation(changed)).rejects.toThrow('binding mismatch')
+    ])
+      await expect(store.operation(changed)).rejects.toThrow('binding mismatch')
     const operation = await store.operation(binding())
     await expect(operation.claim(undefined)).rejects.toThrow('active allocation transaction')
   })
@@ -201,7 +275,9 @@ describe('local recoverable funding allocation', () => {
   test('reopens only when aggregate accounting agrees with the retained records', async () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage)
     await createAction(context.activeStorage, auth(), args(), undefined, await store.operation(binding()))
-    await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).resolves.toBeInstanceOf(SQLiteActionRecoveryStore)
+    await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).resolves.toBeInstanceOf(
+      SQLiteActionRecoveryStore
+    )
     await context.activeStorage.knex('wallet_action_recovery_metadata_v1').where({ id: 1 }).increment('usedRecords', 1)
     await expect(SQLiteActionRecoveryStore.open(context.activeStorage)).rejects.toThrow('accounting does not match')
   })
@@ -213,13 +289,18 @@ describe('local recoverable funding allocation', () => {
     const db = context.activeStorage.knex
     const original = await db('wallet_action_recovery_v1').first()
     for (const change of [
-      { processed: 1 }, { processed: 2 }, { byteLength: original.byteLength + 1 },
-      { plan: null }, { preparedBeef: 'AA==', completed: null },
+      { processed: 1 },
+      { processed: 2 },
+      { byteLength: original.byteLength + 1 },
+      { plan: null },
+      { preparedBeef: 'AA==', completed: null },
       { finalBeef: 'AA==', finalRequestDigest: null },
       { finalBeef: 'AA==', finalRequestDigest: 'a'.repeat(64) },
       { finalRequestDigest: 'invalid', finalBeef: 'AA==', preparedBeef: 'AA==' }
     ]) {
-      await db('wallet_action_recovery_v1').where({ operationKey: original.operationKey }).update({ ...original, ...change })
+      await db('wallet_action_recovery_v1')
+        .where({ operationKey: original.operationKey })
+        .update({ ...original, ...change })
       await expect(operation.read()).rejects.toThrow()
       await expect(operation.signingState()).rejects.toThrow()
     }
@@ -240,16 +321,22 @@ describe('local recoverable funding allocation', () => {
     const result = await createAction(context.activeStorage, auth(), args(), undefined, operation)
     expect((await (await store.operation(binding())).read())!.completed!.reference).toBe(result.reference)
     expect(await (await store.operation(mutable)).read()).toBeUndefined()
-    await expect(store.operation({ ...binding(), extra: true } as ReturnType<typeof binding>)).rejects.toThrow('Invalid action recovery binding')
+    await expect(store.operation({ ...binding(), extra: true } as ReturnType<typeof binding>)).rejects.toThrow(
+      'Invalid action recovery binding'
+    )
   })
 
   test('rolls back a byte-capacity failure after funding and retains capacity for recovery', async () => {
     const store = await SQLiteActionRecoveryStore.install(context.activeStorage, { records: 2, bytes: 1000 })
     const operation = await store.operation(binding())
     const before = await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
-    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow('capacity exhausted')
+    await expect(createAction(context.activeStorage, auth(), args(), undefined, operation)).rejects.toThrow(
+      'capacity exhausted'
+    )
     expect(await operation.read()).toBeUndefined()
-    expect(await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })).toEqual(before)
+    expect(
+      await context.activeStorage.findTransactions({ partial: { userId: context.userId }, noRawTx: true })
+    ).toEqual(before)
     expect(await store.metadata()).toMatchObject({ usedBytes: 0, usedRecords: 0 })
   })
 
@@ -273,7 +360,8 @@ describe('local recoverable funding allocation', () => {
     beef.mergeTransaction(alternative)
     const differentBytes = beef.toBinaryAtomic(alternative.id('hex'))
     const results = await Promise.all([
-      operation.retainFinal(digest, differentBytes), reopened.retainFinal(digest, bytes)
+      operation.retainFinal(digest, differentBytes),
+      reopened.retainFinal(digest, bytes)
     ])
     expect(results).toEqual([bytes, bytes])
     await expect(reopened.retainFinal('22'.repeat(32), bytes)).rejects.toThrow('signing request conflicts')

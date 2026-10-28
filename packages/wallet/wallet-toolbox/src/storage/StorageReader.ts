@@ -1,3 +1,4 @@
+import { awaitFromSync, promiseFromSync } from '../utility/promiseFromSync'
 import {
   TableCertificateField,
   TableCertificateX,
@@ -112,16 +113,18 @@ export abstract class StorageReader implements sdk.WalletStorageSyncReader {
    * Providers without a native count implementation omit the metadata rather
    * than loading every matching record merely to count it.
    */
-  async getSyncChunkTotals(_args: sdk.RequestSyncChunkArgs, _userId: number): Promise<sdk.SyncChunkTotals | undefined> {
-    return undefined
+  getSyncChunkTotals(_args: sdk.RequestSyncChunkArgs, _userId: number): Promise<sdk.SyncChunkTotals | undefined> {
+    return promiseFromSync(() => {
+      return undefined
+    })
   }
 
-  async findUserByIdentityKey(key: string): Promise<TableUser | undefined> {
-    return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key } }))
+  async findUserByIdentityKey(key: string, trx?: sdk.TrxToken): Promise<TableUser | undefined> {
+    return verifyOneOrNone(await this.findUsers({ partial: { identityKey: key }, trx }))
   }
 
-  async getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {
-    return await getSyncChunk(this, args)
+  getSyncChunk(args: sdk.RequestSyncChunkArgs): Promise<sdk.SyncChunk> {
+    return awaitFromSync(() => getSyncChunk(this, args))
   }
 
   /**

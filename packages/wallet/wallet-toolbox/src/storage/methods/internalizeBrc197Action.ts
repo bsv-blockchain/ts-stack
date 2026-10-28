@@ -1,3 +1,4 @@
+import type { StorageActiveWrite } from '../StorageActiveWrite'
 import type { StorageProvider } from '../StorageProvider'
 import type { AuthId, StorageInternalizeActionResult } from '../../sdk/WalletStorage.interfaces'
 import {
@@ -14,11 +15,20 @@ export async function internalizeBrc197Action(
   storage: StorageProvider,
   auth: AuthId,
   args: Brc197InternalizeActionArgs,
-  receipt?: InternalizeReceiptClaim
+  receipt?: InternalizeReceiptClaim,
+  capturedWrite?: StorageActiveWrite
 ): Promise<StorageInternalizeActionResult> {
   const owned = ownBrc197InternalizeActionArgs(args)
   const owner = await authorizeBrc197StorageUser(storage, auth)
-  return await internalizeActionCore(storage, owner, owned, BRC197_INTERNALIZATION_PROFILE, undefined, receipt)
+  return await internalizeActionCore(
+    storage,
+    owner,
+    owned,
+    BRC197_INTERNALIZATION_PROFILE,
+    undefined,
+    receipt,
+    capturedWrite
+  )
 }
 
 /** Retain the existing profile's authorization/error boundary before any SQL claim. */

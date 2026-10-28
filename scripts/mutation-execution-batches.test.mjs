@@ -27,6 +27,17 @@ test('real complete planner output verifies every immutable batch and binds the 
   const root = mkdtempSync(join(tmpdir(), 'mutation-build-runtime-'))
   const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
   const identityInputs = [
+    'governance/mutation-testing/wallet-component-tests.json',
+    'governance/mutation-testing/stop-on-kill-environment.cjs',
+    'governance/mutation-testing/execution-partitions.json',
+    'scripts/mutation-execution-partitions.mjs',
+    'scripts/provision-wallet-native-browser.mjs',
+    'scripts/wallet-native-browser.json',
+    'scripts/wallet-journal-ci.mjs',
+    'scripts/wallet-composed-native-ci.mjs',
+    '.github/workflows/ci.yml',
+    'packages/overlays/overlay/jest-projects.config.mjs',
+    'packages/overlays/overlay-express/jest-projects.config.mjs',
     'governance/mutation-testing/targets.mjs',
     'governance/mutation-testing/policy.json',
     'governance/mutation-testing/durations.json',
@@ -49,7 +60,7 @@ test('real complete planner output verifies every immutable batch and binds the 
       encoding: 'utf8'
     })
       .split('\0')
-      .filter(file => file.endsWith('.ts'))
+      .filter(file => file.endsWith('.ts') || file.endsWith('.json') || file.endsWith('.mjs'))
     for (const file of [...identityInputs, ...sources]) {
       mkdirSync(dirname(join(root, file)), { recursive: true })
       copyFileSync(join(REPOSITORY_ROOT, file), join(root, file))
@@ -237,6 +248,12 @@ test('missing, repeated, unexpected and reordered batches cannot satisfy the ori
 test('the real complete flat inventory crosses a scheduling boundary without changing any part configuration', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT),
     matrix = mutationExecutionMatrix(Object.keys(targets), targets)
+  const originalParts = new Map(
+    matrix.include.map(row => [
+      JSON.stringify(row),
+      structuredClone(selectedMutationPartition(row.target, targets[row.target], row.partition))
+    ])
+  )
   const before = structuredClone(matrix),
     batches = mutationExecutionBatches(matrix, 128)
   assert.ok(batches.include.length > 1)
@@ -247,7 +264,11 @@ test('the real complete flat inventory crosses a scheduling boundary without cha
   assert.deepEqual(matrix, before)
   for (const row of batches.include.flatMap(batch => batch.executionMatrix.include)) {
     const part = selectedMutationPartition(row.target, targets[row.target], row.partition)
-    assert.deepEqual({ ...part, mutate: targets[row.target].mutate }, targets[row.target])
+    const original = originalParts.get(JSON.stringify(row))
+    assert.deepEqual(part, original)
+    // The original reviewed component selection and full canonical union are
+    // independently checked by mutation-partitions/engine regressions.
+    assert.deepEqual(part.runnerOptions, original.runnerOptions)
   }
 })
 

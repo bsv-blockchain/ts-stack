@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
 import { BlockHeader } from '../../sdk/WalletServices.interfaces'
 import { Monitor } from '../Monitor'
 import { copyValidatedMonitorHeader, MAX_MONITOR_INTERVAL_MSECS, requireMonitorInteger } from '../monitorValidation'
@@ -59,8 +60,10 @@ export class TaskNewHeader extends WalletMonitorTask {
    * and sometimes which block. In the case of coinbase transactions, a transaction may
    * also fail after a reorg.
    */
-  override async asyncSetup(): Promise<void> {
-    // No async setup required for this task
+  override asyncSetup(): Promise<void> {
+    return promiseFromSync(() => {
+      // No async setup required for this task
+    })
   }
 
   trigger(_nowMsecsSinceEpoch: number): { run: boolean } {

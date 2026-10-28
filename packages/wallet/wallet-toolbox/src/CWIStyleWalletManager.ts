@@ -1,3 +1,4 @@
+import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import {
   Random,
   SymmetricKey,
@@ -674,18 +675,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the presentation key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByPresentationKeyHash(
-    hash: number[],
-    options?: UMPTokenLookupOptions
-  ): Promise<UMPToken | undefined> {
-    return this.findToken(
-      {
-        service: 'ls_users',
-        query: { presentationHash: toHex(hash) }
-      },
-      'presentation',
-      options
-    )
+  public findByPresentationKeyHash(hash: number[], options?: UMPTokenLookupOptions): Promise<UMPToken | undefined> {
+    return promiseFromSync(() => {
+      return this.findToken(
+        {
+          service: 'ls_users',
+          query: { presentationHash: toHex(hash) }
+        },
+        'presentation',
+        options
+      )
+    })
   }
 
   /**
@@ -695,15 +695,17 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
    * @param hash The 32-byte SHA-256 hash of the recovery key.
    * @returns A UMPToken object (including currentOutpoint) if found, otherwise undefined.
    */
-  public async findByRecoveryKeyHash(hash: number[], options?: UMPTokenLookupOptions): Promise<UMPToken | undefined> {
-    return this.findToken(
-      {
-        service: 'ls_users',
-        query: { recoveryHash: toHex(hash) }
-      },
-      'recovery',
-      options
-    )
+  public findByRecoveryKeyHash(hash: number[], options?: UMPTokenLookupOptions): Promise<UMPToken | undefined> {
+    return promiseFromSync(() => {
+      return this.findToken(
+        {
+          service: 'ls_users',
+          query: { recoveryHash: toHex(hash) }
+        },
+        'recovery',
+        options
+      )
+    })
   }
 
   private async findToken(
@@ -1216,8 +1218,8 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
     >
     if (resolvedOldToken?.currentOutpoint != null) {
       const unlocker = new PushDrop(wallet, adminOriginator).unlock([2, 'admin user management token'], '1', 'self')
-      inputSigners[resolvedOldToken.currentOutpoint] = async (transaction, inputIndex) =>
-        await unlocker.sign(transaction, inputIndex)
+      inputSigners[resolvedOldToken.currentOutpoint] = (transaction, inputIndex) =>
+        awaitFromSync(() => unlocker.sign(transaction, inputIndex))
     }
 
     const operation = resolvedOldToken == null ? 'create' : 'renew'
@@ -1314,13 +1316,13 @@ export class OverlayUMPTokenInteractor implements UMPTokenInteractor {
   }
 
   /** Completes an action only after exact request, input, output, and final-transaction binding. */
-  private async completeUMPAction(
+  private completeUMPAction(
     wallet: WalletInterface,
     createArgs: CreateActionArgs,
     inputSigners: NonNullable<Parameters<typeof completeBoundAction>[2]>['inputSigners'],
     adminOriginator: OriginatorDomainNameStringUnder250Bytes
   ): Promise<Transaction> {
-    return await completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator)
+    return awaitFromSync(() => completeBoundAction(wallet, createArgs, { inputSigners }, adminOriginator))
   }
 
   /** Broadcasts a bound UMP transaction and returns the exact, uniquely matching token output. */
@@ -1995,7 +1997,9 @@ export class CWIStyleWalletManager implements WalletInterface {
     const recoveryPassword = new SymmetricKey(this.XOR(recoveryKey, passwordKey))
     const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey))
 
-    const tempPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
+    const tempPrivilegedKeyManager = new PrivilegedKeyManager(() =>
+      promiseFromSync(() => new PrivateKey(rootPrivilegedKey))
+    )
     const wrapKey = async (plaintext: number[]): Promise<number[]> =>
       (await tempPrivilegedKeyManager.encrypt({ plaintext, protocolID: [2, 'admin key wrapping'], keyID: '1' }))
         .ciphertext
@@ -2457,17 +2461,20 @@ export class CWIStyleWalletManager implements WalletInterface {
 
     // Create a *profile-specific* PrivilegedKeyManager.
     // It uses the ROOT manager internally but applies the profile's pad.
-    const profilePrivilegedKeyManager = new PrivilegedKeyManager(async (reason: string) => {
-      // Request the ROOT privileged key using the root manager
-      const rootPrivileged: PrivateKey = await (this.rootPrivilegedKeyManager as any).getPrivilegedKey(reason)
-      const rootPrivilegedBytes = rootPrivileged.toArray()
+    const profilePrivilegedKeyManager = new PrivilegedKeyManager((reason: string) =>
+      mapAwaitFromSync(
+        () => (this.rootPrivilegedKeyManager as any).getPrivilegedKey(reason),
+        rootPrivileged => {
+          const rootPrivilegedBytes = rootPrivileged.toArray()
 
-      // Apply the profile's pad if applicable
-      const profilePrivilegedBytes =
-        profilePrivilegedPad == null ? rootPrivilegedBytes : this.XOR(rootPrivilegedBytes, profilePrivilegedPad)
+          // Apply the profile's pad if applicable
+          const profilePrivilegedBytes =
+            profilePrivilegedPad == null ? rootPrivilegedBytes : this.XOR(rootPrivilegedBytes, profilePrivilegedPad)
 
-      return new PrivateKey(profilePrivilegedBytes)
-    })
+          return new PrivateKey(profilePrivilegedBytes)
+        }
+      )
+    )
 
     // Build the underlying wallet for the specific profile
     this.underlying = await this.walletBuilder(
@@ -2520,11 +2527,13 @@ export class CWIStyleWalletManager implements WalletInterface {
   /**
    * Retrieves the current recovery key. Requires privileged access.
    */
-  async getRecoveryKey(): Promise<number[]> {
-    if (!this.authenticated || this.currentUMPToken == null || this.rootPrivilegedKeyManager == null) {
-      throw new Error('Not authenticated or missing required data.')
-    }
-    return this.getFactor('recoveryKey')
+  getRecoveryKey(): Promise<number[]> {
+    return promiseFromSync(() => {
+      if (!this.authenticated || this.currentUMPToken == null || this.rootPrivilegedKeyManager == null) {
+        throw new Error('Not authenticated or missing required data.')
+      }
+      return this.getFactor('recoveryKey')
+    })
   }
 
   /**
@@ -2708,7 +2717,9 @@ export class CWIStyleWalletManager implements WalletInterface {
     const primaryPassword = new SymmetricKey(this.XOR(rootPrimaryKey, passwordKey)) // Use rootPrimaryKey
 
     // Build a temporary privileged key manager using the explicit ROOT privileged key
-    const tempRootPrivilegedKeyManager = new PrivilegedKeyManager(async () => new PrivateKey(rootPrivilegedKey))
+    const tempRootPrivilegedKeyManager = new PrivilegedKeyManager(() =>
+      promiseFromSync(() => new PrivateKey(rootPrivilegedKey))
+    )
 
     // Encrypt profiles if provided
     let profilesEncrypted: number[] | undefined
@@ -3086,190 +3097,212 @@ export class CWIStyleWalletManager implements WalletInterface {
   }
 
   // Example proxy method (repeat pattern for all others)
-  async getPublicKey(
+  getPublicKey(
     args: GetPublicKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetPublicKeyResult> {
-    this.assertReady(originator)
-    return this.underlying!.getPublicKey(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.getPublicKey(args, originator)
+    })
   }
 
-  async revealCounterpartyKeyLinkage(
+  revealCounterpartyKeyLinkage(
     args: RevealCounterpartyKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealCounterpartyKeyLinkageResult> {
-    this.assertReady(originator)
-    return this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.revealCounterpartyKeyLinkage(args, originator)
+    })
   }
 
-  async revealSpecificKeyLinkage(
+  revealSpecificKeyLinkage(
     args: RevealSpecificKeyLinkageArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RevealSpecificKeyLinkageResult> {
-    this.assertReady(originator)
-    return this.underlying!.revealSpecificKeyLinkage(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.revealSpecificKeyLinkage(args, originator)
+    })
   }
 
-  async encrypt(
-    args: WalletEncryptArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<WalletEncryptResult> {
-    this.assertReady(originator)
-    return this.underlying!.encrypt(args, originator)
+  encrypt(args: WalletEncryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletEncryptResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.encrypt(args, originator)
+    })
   }
 
-  async decrypt(
-    args: WalletDecryptArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<WalletDecryptResult> {
-    this.assertReady(originator)
-    return this.underlying!.decrypt(args, originator)
+  decrypt(args: WalletDecryptArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<WalletDecryptResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.decrypt(args, originator)
+    })
   }
 
-  async createHmac(
-    args: CreateHmacArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<CreateHmacResult> {
-    this.assertReady(originator)
-    return this.underlying!.createHmac(args, originator)
+  createHmac(args: CreateHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<CreateHmacResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.createHmac(args, originator)
+    })
   }
 
-  async verifyHmac(
-    args: VerifyHmacArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<VerifyHmacResult> {
-    this.assertReady(originator)
-    return this.underlying!.verifyHmac(args, originator)
+  verifyHmac(args: VerifyHmacArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<VerifyHmacResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.verifyHmac(args, originator)
+    })
   }
 
-  async createSignature(
+  createSignature(
     args: CreateSignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateSignatureResult> {
-    this.assertReady(originator)
-    return this.underlying!.createSignature(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.createSignature(args, originator)
+    })
   }
 
-  async verifySignature(
+  verifySignature(
     args: VerifySignatureArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<VerifySignatureResult> {
-    this.assertReady(originator)
-    return this.underlying!.verifySignature(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.verifySignature(args, originator)
+    })
   }
 
-  async createAction(
+  createAction(
     args: CreateActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<CreateActionResult> {
-    this.assertReady(originator)
-    return this.underlying!.createAction(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.createAction(args, originator)
+    })
   }
 
-  async signAction(
-    args: SignActionArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<SignActionResult> {
-    this.assertReady(originator)
-    return this.underlying!.signAction(args, originator)
+  signAction(args: SignActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<SignActionResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.signAction(args, originator)
+    })
   }
 
-  async abortAction(
-    args: AbortActionArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<AbortActionResult> {
-    this.assertReady(originator)
-    return this.underlying!.abortAction(args, originator)
+  abortAction(args: AbortActionArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AbortActionResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.abortAction(args, originator)
+    })
   }
 
-  async listActions(
-    args: ListActionsArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<ListActionsResult> {
-    this.assertReady(originator)
-    return this.underlying!.listActions(args, originator)
+  listActions(args: ListActionsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListActionsResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.listActions(args, originator)
+    })
   }
 
-  async internalizeAction(
+  internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<InternalizeActionResult> {
-    this.assertReady(originator)
-    return this.underlying!.internalizeAction(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.internalizeAction(args, originator)
+    })
   }
 
-  async listOutputs(
-    args: ListOutputsArgs,
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<ListOutputsResult> {
-    this.assertReady(originator)
-    return this.underlying!.listOutputs(args, originator)
+  listOutputs(args: ListOutputsArgs, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<ListOutputsResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.listOutputs(args, originator)
+    })
   }
 
-  async relinquishOutput(
+  relinquishOutput(
     args: RelinquishOutputArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishOutputResult> {
-    this.assertReady(originator)
-    return this.underlying!.relinquishOutput(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.relinquishOutput(args, originator)
+    })
   }
 
-  async acquireCertificate(
+  acquireCertificate(
     args: AcquireCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<AcquireCertificateResult> {
-    this.assertReady(originator)
-    return this.underlying!.acquireCertificate(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.acquireCertificate(args, originator)
+    })
   }
 
-  async listCertificates(
+  listCertificates(
     args: ListCertificatesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ListCertificatesResult> {
-    this.assertReady(originator)
-    return this.underlying!.listCertificates(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.listCertificates(args, originator)
+    })
   }
 
-  async proveCertificate(
+  proveCertificate(
     args: ProveCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<ProveCertificateResult> {
-    this.assertReady(originator)
-    return this.underlying!.proveCertificate(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.proveCertificate(args, originator)
+    })
   }
 
-  async relinquishCertificate(
+  relinquishCertificate(
     args: RelinquishCertificateArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<RelinquishCertificateResult> {
-    this.assertReady(originator)
-    return this.underlying!.relinquishCertificate(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.relinquishCertificate(args, originator)
+    })
   }
 
-  async discoverByIdentityKey(
+  discoverByIdentityKey(
     args: DiscoverByIdentityKeyArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.assertReady(originator)
-    return this.underlying!.discoverByIdentityKey(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.discoverByIdentityKey(args, originator)
+    })
   }
 
-  async discoverByAttributes(
+  discoverByAttributes(
     args: DiscoverByAttributesArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<DiscoverCertificatesResult> {
-    this.assertReady(originator)
-    return this.underlying!.discoverByAttributes(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.discoverByAttributes(args, originator)
+    })
   }
 
-  async isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
-    if (!this.authenticated) {
-      throw new Error('User is not authenticated.')
-    }
-    if (originator === this.adminOriginator) {
-      throw new Error('External applications are not allowed to use the admin originator.')
-    }
-    return { authenticated: true }
+  isAuthenticated(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      if (!this.authenticated) {
+        throw new Error('User is not authenticated.')
+      }
+      if (originator === this.adminOriginator) {
+        throw new Error('External applications are not allowed to use the admin originator.')
+      }
+      return { authenticated: true }
+    })
   }
 
   async waitForAuthentication(
@@ -3285,26 +3318,34 @@ export class CWIStyleWalletManager implements WalletInterface {
     return this.underlying.waitForAuthentication({}, originator)
   }
 
-  async getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
-    this.assertReady(originator)
-    return this.underlying!.getHeight({}, originator)
+  getHeight(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.getHeight({}, originator)
+    })
   }
 
-  async getHeaderForHeight(
+  getHeaderForHeight(
     args: GetHeaderArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
   ): Promise<GetHeaderResult> {
-    this.assertReady(originator)
-    return this.underlying!.getHeaderForHeight(args, originator)
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.getHeaderForHeight(args, originator)
+    })
   }
 
-  async getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    this.assertReady(originator)
-    return this.underlying!.getNetwork({}, originator)
+  getNetwork(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.getNetwork({}, originator)
+    })
   }
 
-  async getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    this.assertReady(originator)
-    return this.underlying!.getVersion({}, originator)
+  getVersion(_: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+    return promiseFromSync(() => {
+      this.assertReady(originator)
+      return this.underlying!.getVersion({}, originator)
+    })
   }
 }

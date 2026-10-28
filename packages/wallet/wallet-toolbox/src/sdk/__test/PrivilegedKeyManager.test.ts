@@ -492,7 +492,7 @@ describe('PrivilegedKeyManager', () => {
       const sharedSecret = proverKey.deriveSharedSecret(counterpartyKey.toPublicKey()).encode(true)
 
       // Function to compute the invoice number
-      const computeInvoiceNumber = function (protocolID, keyID) {
+      const computeInvoiceNumber = function (protocolID: [number, string], keyID: string) {
         const securityLevel = protocolID[0]
         if (!Number.isInteger(securityLevel) || securityLevel < 0 || securityLevel > 2) {
           throw new Error('Protocol security level must be 0, 1, or 2')

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import test from 'node:test'
 
 import {
@@ -616,4 +617,30 @@ test('source CI still rejects malformed exception dates and missing evidence', (
   assert.ok(errors.some(item => item.includes('reviewBy must be a real')))
   assert.ok(errors.some(item => item.includes('evidence references')))
   assert.ok(!errors.some(item => item.includes('monthly review is overdue')))
+})
+
+test('workspace discovery ignores disposable mutation copies while retaining authored manifests', () => {
+  const root = fs.mkdtempSync(path.join(tmpdir(), 'ts-stack-health-mutation-'))
+  try {
+    const files = [
+      'package.json',
+      'packages/example/package.json',
+      'packages/example/.stryker-tmp/sandbox/package.json',
+      'packages/example/.stryker-tmp/sandbox/client/package.json'
+    ]
+    for (const file of files) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true })
+      fs.writeFileSync(path.join(root, file), JSON.stringify({ name: file }))
+    }
+    assert.deepEqual(
+      discoverWorkspaceProjects(root).map(p => p.path),
+      ['.', 'packages/example']
+    )
+    assert.deepEqual(
+      discoverPackageManifests(root).map(p => p.path),
+      ['package.json', 'packages/example/package.json']
+    )
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true })
+  }
 })

@@ -48,6 +48,10 @@ iterator must remain cancellable. A custom sink is still a local authority: it
 decides where verified bytes are persisted and must provide its own durability
 and access-control policy.
 
+Hash updates use bounded 64 KiB typed-byte views directly, avoiding an extra
+expanded number array. Content hashes, object identifiers, and the existing
+SDK 2 and SDK 3 peer ranges remain unchanged. No hashing migration is required.
+
 ## Publish to complete hosts
 
 `CHIRPUploader` uses the same BRC-103/104 `WalletInterface` and `AuthFetch`

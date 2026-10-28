@@ -284,6 +284,77 @@ describe('AuthFetch pending-request boundary', () => {
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)
   })
 
+  test.each([
+    ['serialization', false],
+    ['serialization', true],
+    ['certificate wait', false],
+    ['certificate wait', true]
+  ] as const)(
+    'cancellation during %s drains state and preserves existing payment context (%s)',
+    async (phase, paid) => {
+      const controller = new AbortController()
+      const remove = jest.spyOn(controller.signal, 'removeEventListener')
+      const peer = {
+        listenForGeneralMessages: jest.fn(() => 52),
+        stopListeningForGeneralMessages: jest.fn(),
+        toPeer: jest.fn()
+      }
+      const authFetch = new AuthFetch({} as never)
+      ;(authFetch as any).peers['https://service.example'] = {
+        peer,
+        identityKey: 'server-identity-key',
+        supportsMutualAuth: true,
+        pendingCertificateRequests: phase === 'certificate wait' ? [true] : []
+      }
+      let entered!: () => void
+      let release!: () => void
+      const started = new Promise<void>(resolve => {
+        entered = resolve
+      })
+      const gate = new Promise<void>(resolve => {
+        release = resolve
+      })
+      if (phase === 'serialization') {
+        const serialize = (authFetch as any).serializeRequest.bind(authFetch)
+        jest
+          .spyOn(authFetch as any, 'serializeRequest')
+          .mockImplementation(async (...args: unknown[]) => {
+            const result = await serialize(...args)
+            entered()
+            await gate
+            return result
+          })
+      } else {
+        jest
+          .spyOn(authFetch as any, 'waitForPendingCertificateRequests')
+          .mockImplementation(async () => {
+            entered()
+            await gate
+          })
+      }
+      const payment = paid ? { txid: 'ab'.repeat(32), state: 'submitted' } : undefined
+      const request = authFetch.fetch('https://service.example/resource', {
+        signal: controller.signal,
+        paymentContext: payment as any
+      })
+      const rejected = expect(request).rejects.toMatchObject({
+        code: 'ERR_PAYMENT_CANCELLED',
+        message: 'Paid request cancelled.',
+        payment
+      })
+      await started
+      controller.abort()
+      release()
+      await rejected
+      expect(peer.toPeer).not.toHaveBeenCalled()
+      expect(peer.stopListeningForGeneralMessages).toHaveBeenCalledTimes(
+        phase === 'serialization' ? 0 : 1
+      )
+      expect(remove).toHaveBeenCalledWith('abort', expect.any(Function))
+      expect((authFetch as any).pendingRequestNonces.size).toBe(0)
+    }
+  )
+
   test('times out and cleans an authenticated request with no response', async () => {
     jest.useFakeTimers()
     try {
@@ -502,7 +573,8 @@ describe('AuthFetch pending-request boundary', () => {
       recursiveResponse
     )
     expect(fetchSpy).toHaveBeenCalledTimes(2)
-    expect(config.retryCounter).toBe(3)
+    expect(fetchSpy.mock.calls[1][1]?.retryCounter).toBe(3)
+    expect(config.retryCounter).toBeUndefined()
     expect(authFetch.peers['https://service.example']).toBeUndefined()
     expect(stopListeningForGeneralMessages).toHaveBeenCalledWith(46)
     expect((authFetch as any).pendingRequestNonces.size).toBe(0)

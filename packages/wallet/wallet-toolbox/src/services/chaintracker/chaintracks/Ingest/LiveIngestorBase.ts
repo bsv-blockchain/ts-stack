@@ -1,3 +1,4 @@
+import { promiseFromSync } from '../../../../utility/promiseFromSync'
 /* eslint-disable @typescript-eslint/no-empty-function */
 import { Chain } from '../../../../sdk/types'
 import { LiveIngestorApi } from '../Api/LiveIngestorApi'
@@ -43,7 +44,9 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Release resources.
    * Override if required.
    */
-  async shutdown(): Promise<void> {}
+  shutdown(): Promise<void> {
+    return promiseFromSync(() => {})
+  }
 
   private storageEngine?: ChaintracksStorageApi
 
@@ -51,11 +54,13 @@ export abstract class LiveIngestorBase implements LiveIngestorApi {
    * Allocate resources.
    * @param storage coordinating storage engine.
    */
-  async setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
-    if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
-    if (typeof log !== 'function') throw new Error('log must be a function.')
-    this.storageEngine = storage
-    this.log = log
+  setStorage(storage: ChaintracksStorageApi, log: (...args: any[]) => void): Promise<void> {
+    return promiseFromSync(() => {
+      if (storage == null || typeof storage !== 'object') throw new Error('storage must be an object.')
+      if (typeof log !== 'function') throw new Error('log must be a function.')
+      this.storageEngine = storage
+      this.log = log
+    })
   }
 
   /**

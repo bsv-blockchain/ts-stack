@@ -1,7 +1,9 @@
+import { promiseFromSync } from '../../utility/promiseFromSync'
+import type { StorageWriterAdmission } from '../StorageActiveWrite'
 import { type ValidListOutputsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, ListOutputsResult, WalletOutput } from '@bsv/sdk'
 import { StorageProvider } from '../StorageProvider'
-import { AuthId } from '../../sdk/WalletStorage.interfaces'
+import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { TableOutput } from '../schema/tables/TableOutput'
 import {
   specOpBasketPrefixOutputs,
@@ -134,7 +136,8 @@ export interface ListOutputsSpecOp {
     s: StorageProvider,
     auth: AuthId,
     vargs: ValidListOutputsArgs,
-    specOpTags: string[]
+    specOpTags: string[],
+    admission?: StorageWriterAdmission
   ) => Promise<ListOutputsResult>
   resultFromOutputs?: (
     s: StorageProvider,
@@ -148,7 +151,8 @@ export interface ListOutputsSpecOp {
     auth: AuthId,
     vargs: ValidListOutputsArgs,
     specOpTags: string[],
-    outputs: TableOutput[]
+    outputs: TableOutput[],
+    admission?: StorageWriterAdmission
   ) => Promise<TableOutput[]>
   /**
    * undefined to intercept no tags from vargs,
@@ -170,17 +174,18 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
       ignoreLimit: true,
       totalOutputsIsSumOfSatoshis: true,
       managedChangeOnly: true,
-      resultFromOutputs: async (
+      resultFromOutputs: (
         s: StorageProvider,
         auth: AuthId,
         vargs: ValidListOutputsArgs,
         specOpTags: string[],
         outputs: TableOutput[]
-      ): Promise<ListOutputsResult> => {
-        let totalOutputs = 0
-        for (const o of outputs) totalOutputs += o.satoshis
-        return { totalOutputs, outputs: [] }
-      }
+      ): Promise<ListOutputsResult> =>
+        promiseFromSync(() => {
+          let totalOutputs = 0
+          for (const o of outputs) totalOutputs += o.satoshis
+          return { totalOutputs, outputs: [] }
+        })
     },
     [specOpWalletManagedUtxos]: {
       name: 'walletManagedUtxos',
@@ -200,10 +205,11 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         auth: AuthId,
         vargs: ValidListOutputsArgs,
         specOpTags: string[],
-        outputs: TableOutput[]
+        outputs: TableOutput[],
+        admission?: StorageWriterAdmission
       ): Promise<TableOutput[]> => {
         const release = specOpTags.includes('release')
-        const review = await reviewUtxoOutputs(s, auth, outputs, release ? 'atomic' : 'none')
+        const review = await reviewUtxoOutputs(s, auth, outputs, release ? 'atomic' : 'none', admission)
         return review.confirmedSpentOutputs
       }
     },
@@ -214,22 +220,24 @@ const getBasketToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
         s: StorageProvider,
         auth: AuthId,
         vargs: ValidListOutputsArgs,
-        specOpTags: string[]
+        specOpTags: string[],
+        admission?: StorageWriterAdmission
       ): Promise<ListOutputsResult> => {
         if (specOpTags.length !== 2) {
           throw new WERR_INVALID_PARAMETER('numberOfDesiredUTXOs and minimumDesiredUTXOValue', 'valid')
         }
         const numberOfDesiredUTXOs: number = verifyInteger(Number(specOpTags[0]))
         const minimumDesiredUTXOValue: number = verifyInteger(Number(specOpTags[1]))
-        const basket = verifyOne(
-          await s.findOutputBaskets({
-            partial: { userId: verifyId(auth.userId), name: 'default' }
-          })
-        )
-        await s.updateOutputBasket(basket.basketId, {
-          numberOfDesiredUTXOs,
-          minimumDesiredUTXOValue
-        })
+        const write = typeof s.activeWriteTransaction === 'function' ? await s.activeWriteTransaction(auth) : undefined
+        const update = async (trx?: TrxToken) => {
+          const basket = verifyOne(
+            await s.findOutputBaskets({ partial: { userId: verifyId(auth.userId), name: 'default' }, trx })
+          )
+          await s.updateOutputBasket(basket.basketId, { numberOfDesiredUTXOs, minimumDesiredUTXOValue }, trx)
+        }
+        const commit = async () => (write == null ? await update() : await write.transaction(update))
+        if (admission != null && write?.prepareOutsideManager === true) await admission(commit)
+        else await commit()
         return { totalOutputs: 0, outputs: [] }
       }
     },
@@ -248,17 +256,18 @@ const getTagToSpecOp: () => Record<string, ListOutputsSpecOp> = () => {
       useBasket: 'default',
       ignoreLimit: true,
       totalOutputsIsSumOfSatoshis: true,
-      resultFromOutputs: async (
+      resultFromOutputs: (
         s: StorageProvider,
         auth: AuthId,
         vargs: ValidListOutputsArgs,
         specOpTags: string[],
         outputs: TableOutput[]
-      ): Promise<ListOutputsResult> => {
-        let totalOutputs = 0
-        for (const o of outputs) totalOutputs += o.satoshis
-        return { totalOutputs, outputs: [] }
-      }
+      ): Promise<ListOutputsResult> =>
+        promiseFromSync(() => {
+          let totalOutputs = 0
+          for (const o of outputs) totalOutputs += o.satoshis
+          return { totalOutputs, outputs: [] }
+        })
     }
   }
 }

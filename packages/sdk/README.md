@@ -64,6 +64,16 @@ See [identity integration](../../docs/guides/identity-did-vc.md) and
 [migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
 This is a source candidate; publication and deployment are separate actions.
 
+## 4.1.0 source candidate
+
+The additive payment transport helpers, typed recovery outcomes and AuthFetch
+multipart support in this source are included with the SDK4 major release after immutable
+published 3.2.1. This candidate is built from this branch; changing its version
+does not publish it or replace any registry artifact. Existing non-multipart
+wire behavior and security limits remain. The complete dependency and supported
+peer matrix must qualify before release; an unavailable SDK2 version is not a
+compatibility implementation.
+
 ## Numeric results and wallet wire compatibility (4.0.1 hotfix)
 
 `ListOutputsResult.totalOutputs` is a number. Ordinary listings return counts;
@@ -111,6 +121,25 @@ the most recent 1,000 entries. Simplified authenticated HTTP frames, bodies,
 headers, signatures, request IDs, and certificate-request headers have fixed
 size/count limits and redirects are rejected.
 
+Ordinary HTTP fallback preserves native fetch body semantics: text, URLSearchParams,
+typed Blob and FormData retain their generated media types and serialization.
+Mutable inputs are snapshotted before discovery; authenticated payment retries
+continue to use owned bytes. Explicit caller Content-Type headers take precedence.
+
+The next release adds negotiated BRC-118 multipart payments. AuthFetch prepares
+with `noSend`, validates the actual final payment/request size, then submits that
+same payment with `sendWith`. The wallet must support prepare/submit and
+`abortAction`. Oversized header-only requests and multipart GET/HEAD requests
+fail before broadcast; uncertain submission or delivery requires reconciliation
+instead of another automatic spend. See the [BRC-118 guide](../../docs/guides/brc118-payments.md)
+for receiver-first rollout, limits, cancellation, raw-byte payloads and typed
+`PaymentTransportError` outcomes. Nonempty non-multipart authentication remains compatible; empty byte bodies use
+the BRC-104 `-1` sentinel and require the matching auth middleware 2.3.0 receiver.
+
+BRC-29 receipt derives the recipient's own child key (`forSelf: true`). Independent
+sender/recipient wallet tests protect this distinction; the payer's sibling
+output is not a valid payment to the recipient.
+
 SDK 2.8.10 accepts full WhatsOnChain block headers with up to 64 own data
 properties, matching the existing header-list response bound. Normal provider
 metadata no longer causes valid mainnet Merkle proofs to fail a 16-property
@@ -124,6 +153,12 @@ generic authentication envelope's JSON expansion budget before HTTP dispatch.
 Request framing remains capped at 16 MiB, configured response body limits remain
 enforced, and handshake, certificate, signature, nonce and redirect checks are
 unchanged. No API, wire or wallet-data migration is required.
+
+The unpublished 4.0.0 candidate captures byte-array descriptor values once
+while validating and owning authenticated payloads. It avoids repeated copy
+validation and retaining a descriptor object for every byte of a large request.
+Dense-byte checks, payload capacities, signature bytes and response deadlines
+remain unchanged; no API, wire or wallet-data migration is required.
 
 For signature payloads of at least 64 KiB, `ProtoWallet` uses asynchronous
 platform SHA-256 when Web Crypto is available, avoiding long synchronous
@@ -153,8 +188,7 @@ output values remain unsigned and bounded.
 Applications affected by these client defects can update their bundled SDK
 without changing calls. Wallet upgrades continue to support the existing BRC100
 contract; an ecosystem-wide application migration is not required. No API, wire
-or account-data migration is required. Source 2.8.3 is not published until the
-protected npm release workflow completes.
+or account-data migration is required. These compatibility fixes are also included in the unpublished 3.0.0 candidate.
 
 ### Action history compatibility
 
@@ -383,8 +417,8 @@ than that the script is invalid.
   `x-bsv-payment-known-txids` response header on its 402 challenge. The value is
   a comma-separated list of 64-character hexadecimal transaction IDs the
   recipient already possesses and has validated. `AuthFetch` passes at most
-  256 unique lowercase IDs to the wallet's `createAction` options, including
-  when payment requirements change and a new transaction is created. This
+  256 unique lowercase IDs to the wallet's prepared `createAction` options.
+  Changed payment requirements stop retries and require reconciliation. This
   lets compatible wallets omit known ancestors from payment BEEF. Whitespace,
   duplicates, and malformed entries are ignored; an absent or invalid-only
   header preserves existing payment behavior. Browser services must expose
@@ -1117,7 +1151,7 @@ performance improvement.
 
 ## Pre-construction wallet reviews
 
-The 3.3.0 candidate accepts a storage pre-construction double-spend review through
+The SDK accepts a storage pre-construction double-spend review through
 `HTTPWalletJSON` only for `createAction` with explicit inputs. It requires one
 empty attempted-TXID result, no constructed-action fields, and complete competing
 transactions that spend those requested outpoints. Malformed, unrelated and

@@ -132,11 +132,12 @@ export async function prepareActionBatchCommit(
   auth: AuthId,
   manifest: ActionBatchManifest
 ): Promise<PrepareActionBatchCommitResult> {
+  const write = await storage.activeWriteTransaction(auth)
   validateActionBatchInlinePayload(manifest)
   if (!verifyActionBatchManifestDigest(manifest)) throw new WERR_INVALID_PARAMETER('manifest.digest', 'valid')
   validateCompactManifest(manifest, true)
   const userId = verifyId(auth.userId)
-  return await storage.transaction(async trx => {
+  return await write.transaction(async trx => {
     const batch = requireUploadableBatch(await storage.findActionBatchForUpdate(userId, manifest.batchId, trx))
     if (batch.manifestDigest != null && batch.manifestDigest !== manifest.digest) {
       throw new WERR_INVALID_OPERATION('action batch was already prepared with a different manifest')
@@ -169,6 +170,7 @@ export async function putActionBatchPack(
   auth: AuthId,
   args: PutActionBatchPackArgs
 ): Promise<void> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   if (
     args.items.length === 0 ||
@@ -186,7 +188,7 @@ export async function putActionBatchPack(
       throw new WERR_INVALID_PARAMETER('digest', 'match bytes')
     }
   }
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     const batch = requireUploadableBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx))
     const uploadDigests = batch.uploadDigests == null ? [] : (JSON.parse(batch.uploadDigests) as string[])
     const allowedDigests = new Set(uploadDigests)
@@ -213,13 +215,14 @@ export async function putActionBatchBlob(
   auth: AuthId,
   args: PutActionBatchBlobArgs
 ): Promise<void> {
+  const write = await storage.activeWriteTransaction(auth)
   const userId = verifyId(auth.userId)
   const bytes = asUint8Array(args.bytes)
   if (bytes.length > ACTION_BATCH_MAX_BLOB_BYTES) {
     throw new WERR_INVALID_PARAMETER('bytes', 'within provider blob limit')
   }
   if (actionBatchBlobDigest(bytes) !== args.digest) throw new WERR_INVALID_PARAMETER('digest', 'match bytes')
-  await storage.transaction(async trx => {
+  await write.transaction(async trx => {
     const batch = requireUploadableBatch(await storage.findActionBatchForUpdate(userId, args.batchId, trx))
     const uploadDigests = batch.uploadDigests == null ? [] : (JSON.parse(batch.uploadDigests) as string[])
     if (batch.manifestDigest == null || !uploadDigests.includes(args.digest)) {

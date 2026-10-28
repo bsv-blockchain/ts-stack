@@ -1,3 +1,5 @@
+import { promiseFromSync } from './utility/promiseFromSync'
+export type { WalletScriptVerifier, WalletDigestBatchVerifier } from './sdk/WalletScriptVerifier'
 import { internalizeBrc197Action } from './signer/methods/internalizeBrc197Action'
 import {
   BRC197_INTERNALIZATION_PROFILE,
@@ -53,7 +55,6 @@ import {
   GetPublicKeyResult,
   GetVersionResult,
   InternalizeActionArgs,
-  InternalizeActionResult,
   ListActionsArgs,
   ListActionsResult,
   ListCertificatesArgs,
@@ -103,7 +104,7 @@ import {
   TelemetryConfig,
   createPublicHTTPSFetch
 } from '@bsv/sdk'
-import type { SpendVerifierInterface } from '@bsv/sdk'
+import type { WalletScriptVerifier } from './sdk/WalletScriptVerifier'
 import { fromBase58, toArray, toHex } from '@bsv/sdk/primitives/utils'
 import { acquireDirectCertificate } from './signer/methods/acquireDirectCertificate'
 import { proveCertificate } from './signer/methods/proveCertificate'
@@ -316,7 +317,7 @@ export interface WalletArgs {
    * internal transaction checks. This is an implementation extension and does
    * not change the BRC-100 wallet interface.
    */
-  scriptVerifier?: SpendVerifierInterface
+  scriptVerifier?: WalletScriptVerifier
   /**
    * Optional provider-neutral tracing shared by wallet, lookup, storage, and
    * permission layers. Disabled unless an enabled sink is supplied.
@@ -374,7 +375,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
 
   pendingSignActions: Record<string, PendingSignAction>
   readonly actionBatch: ActionBatchController
-  readonly scriptVerifier?: SpendVerifierInterface
+  readonly scriptVerifier?: WalletScriptVerifier
   readonly telemetry: Telemetry
 
   /**
@@ -1251,7 +1252,7 @@ export class Wallet implements WalletInterface, ProtoWallet {
   async internalizeAction(
     args: InternalizeActionArgs,
     originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<InternalizeActionResult> {
+  ): Promise<StorageInternalizeActionResult> {
     validateOriginator(originator)
     const { auth, vargs } = this.validateAuthAndArgs(args, validateInternalizeActionArgs)
 
@@ -1338,20 +1339,21 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { relinquished: true }
   }
 
-  async isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    const r: { authenticated: true } = {
-      authenticated: true
-    }
-    return r
+  isAuthenticated(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      const r: { authenticated: true } = {
+        authenticated: true
+      }
+      return r
+    })
   }
 
-  async waitForAuthentication(
-    args: {},
-    originator?: OriginatorDomainNameStringUnder250Bytes
-  ): Promise<AuthenticatedResult> {
-    validateOriginator(originator)
-    return { authenticated: true }
+  waitForAuthentication(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<AuthenticatedResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { authenticated: true }
+    })
   }
 
   async getHeight(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetHeightResult> {
@@ -1369,14 +1371,18 @@ export class Wallet implements WalletInterface, ProtoWallet {
     return { header: toHex(serializedHeader) }
   }
 
-  async getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
-    validateOriginator(originator)
-    return { network: toWalletNetwork(this.chain) }
+  getNetwork(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetNetworkResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { network: toWalletNetwork(this.chain) }
+    })
   }
 
-  async getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
-    validateOriginator(originator)
-    return { version: 'wallet-brc100-1.0.0' }
+  getVersion(args: {}, originator?: OriginatorDomainNameStringUnder250Bytes): Promise<GetVersionResult> {
+    return promiseFromSync(() => {
+      validateOriginator(originator)
+      return { version: 'wallet-brc100-1.0.0' }
+    })
   }
 
   /**
