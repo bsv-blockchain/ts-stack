@@ -1417,6 +1417,30 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
     return q
   }
 
+  /**
+   * MySQL ignores the (userId, primary key) paging indexes for
+   * `order by <key> limit ? offset ?` and sorts every matching row, rawTx and
+   * lockingScript included, so each sync page costs as much as the whole user.
+   * Page over keys alone, then read only that page's rows. Same filters, order,
+   * limit and offset, so the rows returned are unchanged.
+   */
+  private pageByKeyFirstOnMySQL(
+    q: Knex.QueryBuilder,
+    table: 'transactions' | 'outputs',
+    args: FindPartialSincePagedArgs<object>
+  ): Knex.QueryBuilder {
+    if (this.dbtype !== 'MySQL' || args.paged == null || args.orderDescending === true) return q
+    const k = this.toDb(args.trx)
+    const key = `${table}.${pagingKey(table)[0]}`
+    const pageKeys = q.clone().clearSelect().select(key)
+    return q
+      .clone()
+      .clearWhere()
+      .clear('limit')
+      .clear('offset')
+      .whereIn(key, k.select(pagingKey(table)[0]).from(pageKeys.as('page')))
+  }
+
   findCertificateFieldsQuery(args: FindCertificateFieldsArgs): Knex.QueryBuilder {
     return this.setupQuery('certificate_fields', args)
   }
@@ -1477,7 +1501,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       const columns = outputColumnsWithoutLockingScript.map(c => `outputs.${c}`)
       void q.select(columns)
     }
-    return q
+    return count === true ? q : this.pageByKeyFirstOnMySQL(q, 'outputs', args)
   }
 
   findOutputTagMapsQuery(args: FindOutputTagMapsArgs): Knex.QueryBuilder {
@@ -1558,7 +1582,7 @@ export class StorageKnex extends StorageProvider implements WalletStorageProvide
       const columns = transactionColumnsWithoutRawTx.map(c => `transactions.${c}`)
       void q.select(columns)
     }
-    return q
+    return count === true ? q : this.pageByKeyFirstOnMySQL(q, 'transactions', args)
   }
 
   findTxLabelMapsQuery(args: FindTxLabelMapsArgs): Knex.QueryBuilder {

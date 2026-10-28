@@ -4,6 +4,23 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.2 (source candidate)
+
+- Wallet sync (backup, restore, `setActive`, StorageServer sync) no longer
+  slows down quadratically with wallet size. Each sync page of transactions and
+  outputs used to sort all of the user's rows, raw transactions and locking
+  scripts included, before skipping to its offset. A migration adds
+  `idx_transactions_user_transactionid` on `transactions (userId,
+  transactionId)` and `idx_outputs_user_outputid` on `outputs (userId,
+  outputId)`, which SQLite uses directly. MySQL does not choose them for an
+  offset page, so on MySQL paged, ascending `findTransactions` and `findOutputs`
+  now select the page's keys first and then read only those rows. Backing up a 10x copy of
+  the test wallet (1,910 transactions, 5,230 outputs): SQLite 49.5 s to 20.5 s,
+  MySQL 62.0 s to 12.0 s. Postgres already avoided the sort and is unchanged.
+  Rows, their order and sync chunk contents are identical on all three
+  databases. No consumer migration is required; the index migration runs with
+  the other storage migrations.
+
 ## wallet-toolbox 2.15.1
 
 - Add optional `StorageClientOptions.authFetchOptions` in the existing third

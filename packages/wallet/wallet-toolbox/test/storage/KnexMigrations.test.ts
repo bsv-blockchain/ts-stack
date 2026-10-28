@@ -7,6 +7,7 @@ import {
   MANAGED_CHANGE_POLICY_MIGRATION,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
   StorageKnex,
+  WALLET_SYNC_PAGING_INDEX_MIGRATION,
   WALLET_SYNC_SOURCE_INDEX_MIGRATION,
   wait
 } from '../../src/index.all'
@@ -285,6 +286,111 @@ describe('KnexMigrations tests', () => {
       [1, '00'.repeat(32)]
     )) as [Array<{ key: string | null }>, unknown]
     expect(txidPlan.some(step => step.key === 'idx_transactions_user_txid')).toBe(true)
+  })
+
+  test('5ab creates the wallet sync paging indexes, survives a retry, and rolls back', async () => {
+    const localSQLiteFile = await _tu.newTmpFile('migratesyncpaging.sqlite', false, false, false)
+    const knex = _tu.createLocalSQLite(localSQLiteFile)
+    const names = ['idx_outputs_user_outputid', 'idx_transactions_user_transactionid']
+    const indexNames = async (): Promise<string[]> =>
+      (await knex('sqlite_master').where({ type: 'index' }).whereIn('name', names).pluck('name')).sort()
+
+    try {
+      await knex.schema.createTable('transactions', table => {
+        table.increments('transactionId')
+        table.integer('userId').notNullable()
+      })
+      await knex.schema.createTable('outputs', table => {
+        table.increments('outputId')
+        table.integer('userId').notNullable()
+      })
+      const source = new KnexMigrations('test', 'wallet sync paging test', '1'.repeat(64), 1000)
+      const migration = await source.getMigration(WALLET_SYNC_PAGING_INDEX_MIGRATION)
+
+      await migration.up(knex)
+      expect(await indexNames()).toEqual(names)
+      // MySQL commits each CREATE INDEX separately, so a retry must skip existing indexes.
+      await knex.schema.alterTable('outputs', table => {
+        table.dropIndex(['userId', 'outputId'], 'idx_outputs_user_outputid')
+      })
+      await migration.up(knex)
+      await migration.up(knex)
+      expect(await indexNames()).toEqual(names)
+
+      await migration.down?.(knex)
+      expect(await indexNames()).toEqual([])
+    } finally {
+      await knex.destroy()
+    }
+  })
+
+  test('5aba retries and rolls back the sync paging indexes on every migrated database', async () => {
+    await waitFor1()
+    const pagingIndexes = async (knex: Knex): Promise<string[]> => {
+      const names = ['idx_outputs_user_outputid', 'idx_transactions_user_transactionid']
+      const client = knex.client.config.client
+      if (client === 'mysql2') {
+        const [rows] = (await knex.raw(
+          'SELECT DISTINCT INDEX_NAME AS name FROM information_schema.STATISTICS ' +
+            'WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME IN (?, ?)',
+          names
+        )) as [Array<{ name: string }>, unknown]
+        return rows.map(row => row.name).sort()
+      }
+      if (client === 'pg') {
+        const r = await knex.raw(
+          'SELECT indexname AS name FROM pg_indexes WHERE schemaname = current_schema() AND indexname IN (?, ?)',
+          names
+        )
+        return (r.rows as Array<{ name: string }>).map(row => row.name).sort()
+      }
+      return (await knex('sqlite_master').where({ type: 'index' }).whereIn('name', names).pluck('name')).sort()
+    }
+    const source = new KnexMigrations('test', 'wallet sync paging retry test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(WALLET_SYNC_PAGING_INDEX_MIGRATION)
+
+    for (const knex of knexs) {
+      // A partial earlier run: one index committed, the other missing.
+      await knex.schema.alterTable('outputs', table => {
+        table.dropIndex(['userId', 'outputId'], 'idx_outputs_user_outputid')
+      })
+      await migration.up(knex)
+      expect(await pagingIndexes(knex)).toEqual(['idx_outputs_user_outputid', 'idx_transactions_user_transactionid'])
+
+      // The full schema keeps its userId foreign keys, so MySQL must still
+      // have a support index for them after both of ours are dropped.
+      await migration.down?.(knex)
+      expect(await pagingIndexes(knex)).toEqual([])
+      await migration.up(knex)
+      expect(await pagingIndexes(knex)).toEqual(['idx_outputs_user_outputid', 'idx_transactions_user_transactionid'])
+    }
+  })
+
+  test('5ac sync reader pages read the paging indexes without sorting the user rows', async () => {
+    await waitFor1()
+    const knex = knexs[0]
+    const storage = new StorageKnex({
+      chain: 'test',
+      knex,
+      commissionSatoshis: 0,
+      commissionPubKeyHex: undefined,
+      feeModel: { model: 'sat/kb', value: 1 }
+    })
+    await storage.makeAvailable()
+    const since = new Date('2026-01-01T00:00:00.000Z')
+    const cases = [
+      { index: 'idx_transactions_user_transactionid', query: storage.findTransactionsQuery({ partial: { userId: 1 }, paged: { limit: 80, offset: 160 } }) },
+      { index: 'idx_transactions_user_transactionid', query: storage.findTransactionsQuery({ partial: { userId: 1 }, since, paged: { limit: 80, offset: 160 }, noRawTx: true }) },
+      { index: 'idx_outputs_user_outputid', query: storage.findOutputsQuery({ partial: { userId: 1 }, paged: { limit: 80, offset: 160 } }) },
+      { index: 'idx_outputs_user_outputid', query: storage.findOutputsQuery({ partial: { userId: 1 }, since, paged: { limit: 80, offset: 160 }, noScript: true }) }
+    ]
+    for (const { index, query } of cases) {
+      const { sql, bindings } = query.toSQL()
+      const plan = await knex.raw(`EXPLAIN QUERY PLAN ${sql}`, bindings) as Array<{ detail: string }>
+      const details = plan.map(step => step.detail).join(' / ')
+      expect(details).toContain(index)
+      expect(details).not.toContain('TEMP B-TREE')
+    }
   })
 
   test('5b upgrades only exact untouched managed-change defaults', async () => {
