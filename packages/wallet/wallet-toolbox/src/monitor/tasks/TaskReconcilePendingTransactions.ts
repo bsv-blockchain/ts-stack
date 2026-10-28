@@ -7,6 +7,8 @@ import { EntityProvenTxReq } from '../../storage/schema/entities'
 import { TableProvenTxReq } from '../../storage/schema/tables'
 import {
   applyCapturedTerminalFailure,
+  failPendingDescendants,
+  failCapturedPendingDescendants,
   quarantineReqInputs,
   quarantineReqInputsFromFailedParents
 } from '../../storage/methods/reconcileFailedTransactionInputs'
@@ -39,6 +41,7 @@ interface ReconcilePendingCheckpoint {
 
 interface AppliedTerminalVerdict {
   result: StatusForTxidResult
+  descendants: string[]
 }
 
 /**
@@ -119,7 +122,7 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
     const inactive = new Set<number>()
     for (const req of eligible) {
       try {
-        const writes = await captureMonitorReqWrite(this, [req.txid])
+        const writes = await captureMonitorReqWrite(this, [req.txid], true)
         await writes?.assertCurrent()
         captures.set(req.provenTxReqId, writes)
       } catch (error) {
@@ -254,7 +257,7 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
           await sp.updateTransactionsStatus(req.notify.transactionIds, 'failed', trx)
         }
         if (result.inputConflict === true) {
-          const quarantined = await quarantineReqInputs(req, sp, trx)
+          const quarantined = await quarantineReqInputs(req, sp, trx, undefined, { extraInfo: result.description })
           req.addHistoryNote({
             when: new Date().toISOString(),
             what: 'proactiveInputQuarantine',
@@ -275,11 +278,12 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
           })
           await req.updateStorageDynamicProperties(sp, trx)
         }
-        applied = { result }
+        applied = { result, descendants: await failPendingDescendants([req.txid], sp, trx) }
       })
     })
     if (applied) {
       this.monitor.callOnTransactionStatusChanged(reqApi.txid, applied.result.providerStatus ?? 'REJECTED')
+      for (const txid of applied.descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
     }
     return applied
   }
@@ -330,7 +334,8 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
       provider,
       writes,
       result.inputConflict === true,
-      parents
+      parents,
+      { extraInfo: result.description }
     )
     if (result.inputConflict === true || parents.length)
       await writes.request(req, current => {
@@ -346,7 +351,9 @@ export class TaskReconcilePendingTransactions extends WalletMonitorTask {
         })
       })
     this.monitor.callOnTransactionStatusChanged(reqApi.txid, result.providerStatus ?? 'REJECTED')
-    return { result }
+    const descendants = await failCapturedPendingDescendants([req.txid], provider, writes)
+    for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
+    return { result, descendants }
   }
 
   private async findFailedLocalParentTxids(

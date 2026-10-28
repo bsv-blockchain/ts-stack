@@ -7,7 +7,11 @@ import { TaskFailAbandoned } from '../../monitor/tasks/TaskFailAbandoned'
 import { cleanupExpiredActionBatches } from '../methods/actionBatch'
 import { captureMonitorReqWrite } from '../../monitor/tasks/WalletMonitorTask'
 import { TaskReconcilePendingTransactions } from '../../monitor/tasks/TaskReconcilePendingTransactions'
-import { applyCapturedTerminalFailure } from '../methods/reconcileFailedTransactionInputs'
+import {
+  applyCapturedTerminalFailure,
+  failCapturedPendingDescendants,
+  pendingDescendantTxids
+} from '../methods/reconcileFailedTransactionInputs'
 import { getProofs, TaskCheckForProofs } from '../../monitor/tasks/TaskCheckForProofs'
 import { TaskSendWaiting } from '../../monitor/tasks/TaskSendWaiting'
 import { TaskUnFail } from '../../monitor/tasks/TaskUnFail'
@@ -18,7 +22,7 @@ import { knex } from 'knex'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Validation } from '@bsv/sdk'
+import { Validation, Utils, Transaction } from '@bsv/sdk'
 import { StorageKnex } from '../StorageKnex'
 import { StorageProvider } from '../StorageProvider'
 import { snapshotSyncPrimaryChangeSqlite } from '../schema/snapshotSyncMigration'
@@ -1594,5 +1598,60 @@ test('manager generation changes reject a prepared wallet write even when its SQ
     await ctx.wallet.destroy()
     await backup.destroy()
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('main descendant reconciliation preserves original profile epochs and excludes children first seen after capture', async () => {
+  const { ctx, req, second, rows } = await sharedRequestFixture('captured-main-descendant-reconciliation')
+  const storage = ctx.activeStorage
+  const addChild = async (parent: string) => {
+    const source = Utils.toHex(Utils.toArray(parent, 'hex').reverse())
+    const rawTx = Utils.toArray(`0100000001${source}0000000000ffffffff0101000000000000000000000000`, 'hex')
+    const txid = Transaction.fromBinary(rawTx).id('hex')
+    const api = {
+      ...req.toApi(),
+      provenTxReqId: 0,
+      txid,
+      rawTx,
+      status: 'unmined' as const,
+      history: '{}',
+      notify: '{}',
+      notified: false
+    }
+    api.provenTxReqId = await storage.insertProvenTxReq(api)
+    const child = new EntityProvenTxReq(api)
+    for (const row of rows) {
+      const transactionId = await storage.insertTransaction({
+        ...row,
+        transactionId: 0,
+        txid,
+        reference: Utils.toBase64([...Utils.toArray(txid, 'hex'), row.userId])
+      })
+      child.addNotifyTransactionId(transactionId)
+    }
+    await child.updateStorageDynamicProperties(storage)
+    return child
+  }
+  try {
+    const child = await addChild(req.txid)
+    const declared = await pendingDescendantTxids([req.txid], storage)
+    expect(declared).toContain(child.txid)
+    const writes = await StorageReqWrite.capture(storage, [req.txid, ...declared])
+    const late = await addChild(child.txid)
+    const identity = storage.getSettings().storageIdentityKey
+    await storage.updateUser(ctx.userId, { activeStorage: 'away' })
+    await storage.updateUser(ctx.userId, { activeStorage: identity })
+    expect(await failCapturedPendingDescendants([req.txid], storage, writes)).toEqual([child.txid])
+    const actual = await storage.findTransactions({ partial: { txid: child.txid }, noRawTx: true })
+    expect(actual.find(row => row.userId === ctx.userId)?.status).not.toBe('failed')
+    expect(actual.find(row => row.userId === second.userId)?.status).toBe('failed')
+    expect((await EntityProvenTxReq.fromStorageId(storage, late.id)).status).toBe('unmined')
+    expect(
+      (await storage.findTransactions({ partial: { txid: late.txid }, noRawTx: true })).every(
+        row => row.status !== 'failed'
+      )
+    ).toBe(true)
+  } finally {
+    await ctx.wallet.destroy()
   }
 })

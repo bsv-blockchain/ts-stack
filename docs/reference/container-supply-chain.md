@@ -3,14 +3,26 @@ id: container-supply-chain
 title: 'Container Supply Chain'
 kind: reference
 version: '1.3.0'
-last_updated: '2026-10-02'
-last_verified: '2026-10-02'
+last_updated: '2026-10-19'
+last_verified: '2026-10-19'
 review_cadence_days: 30
 status: stable
 tags: [reference, infrastructure, containers, security, releases]
 ---
 
 # Container Supply Chain
+
+CI obtains its database fixtures from their canonical registry references with
+the same immutable digests. Its Node builds use
+`scripts/ci-container-base-contexts.mjs` to select the registered discovery
+reference for each governed alias. Both sides retain the identical digest.
+Dockerfile defaults and release builds keep their existing references. This
+separates CI transport from image identity when a mirror refuses anonymous pulls.
+It does not change versions, platform, vulnerability gates or runtime assertions.
+The helper emits BuildKit named contexts for the shell, or an Actions output with
+`--github-output`. [Docker documents this override mechanism](https://docs.docker.com/reference/cli/docker/buildx/build/#build-context).
+Base updates still require resolving every governed reference to the same
+multi-platform digest before merge.
 
 The infrastructure images are deployable artifacts, so their build inputs,
 review gates, provenance, and rollback identity are part of the public release
@@ -43,13 +55,46 @@ releases while its digest lets Scorecard verify pinning. The inventory's
 registry mirrors remain in `references` and must be resolved and compared
 during review. This avoids making routine dependency discovery depend on public
 ECR's unauthenticated rate limits without weakening multi-registry verification.
+Runtime Dockerfile defaults use Docker's official
+`public.ecr.aws/docker/library/node` mirror at the identical governed digest;
+CI selects the canonical discovery reference through the named contexts above.
+CI's Postgres, MySQL and Mongo service images use canonical Docker Hub references
+at their existing immutable digests. Review
+must verify the index bytes and selected Linux/amd64 manifest and configuration
+against those identities; a registry route change does not authorize an image
+upgrade. Docker Hub remains the dependency-discovery source. Registry transport
+and availability must be assessed separately from image identity, without adding
+credentials or changing service health checks, budgets, platforms or
+release/deployment behavior.
 
-Runtime Dockerfiles also use the canonical `node` reference at the governed
-immutable digest. WAB follows the same build source as the other components after
-repeated public ECR metadata HTTP 429 responses blocked its image build. This
-changes the registry used to fetch the existing image; its version, multi-platform
-index digest and runtime package pins remain unchanged. Equivalent mirrors stay
-registered for cross-registry verification.
+MongoDB-dependent qualification jobs use `ubuntu-22.04` with their governed
+image/binary pins and all Linux/amd64 checks. Main PR #1259 changes only the
+container-runtime service fixture to MongoDB 7.0.45; native package fixtures
+retain their original pinned binaries. These are the container runtime
+contract, package artifacts (including optional native diagnostics), ordinary and
+dependent tests, browser packages, other-package coverage and mutation execution.
+The October 18, 2026
+Ubuntu 24.04 [runner image](https://github.com/actions/runner-images/blob/ubuntu24/20261018.339/images/ubuntu/Ubuntu2404-Readme.md)
+moved to kernel `7.0.0-1017-azure`, where the pinned MongoDB 8.0 native
+build refuses startup. MongoDB tracks the allocator incompatibility in
+[SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912) and the required
+Ubuntu-specific kernel recognition in
+[SERVER-131779](https://jira.mongodb.org/browse/SERVER-131779), fixed in 8.0.35.
+The current Ubuntu 22.04 [runner image](https://github.com/actions/runner-images/blob/ubuntu22/20261012.322/images/ubuntu/Ubuntu2204-Readme.md)
+uses kernel `6.8.0-1064-azure`, outside the affected
+range. Return these jobs to Ubuntu 24.04 after reviewed, pinned MongoDB updates
+with that fix pass their complete native/runtime contracts on the actual kernel.
+This selects a compatible CI host; it changes no deployed database, image,
+health check, case, timeout or availability gate.
+
+The package-artifact lane allows 25 minutes for its complete existing workload.
+On October 19, 2026, [the 20-minute attempt](https://github.com/bsv-blockchain/ts-stack/actions/runs/39306050557/job/118245360631)
+completed all three optional native/property diagnostics (14m01), compiled
+examples, packed consumers (5m08), and the npm artifact dry run, then exceeded the
+outer limit during cleanup at 20m41. The extra five minutes cover orchestration
+and normal variance; every test, seed, assertion, intrinsic deadline, mutation
+threshold, CPU/heap/concurrency setting and required merge-gate dependency is retained.
+
 Repository health requires the discovery tag and digest, the registry's
 expected version and digest, and every digest-only release `FROM` instruction
 to reconcile in one change. Runtime Dockerfiles deliberately omit the tag
@@ -106,8 +151,9 @@ one without an upstream fix, blocks the merge. A finding must be fixed or
 entered in the repository's time-bounded exception registry with an owner,
 evidence, review date, and objective removal condition.
 
-All base-image and deployment references use a readable version tag plus a
-content digest. Dependabot proposes reviewed Docker refreshes alongside the
+Dependency-discovery references and deployment examples use a readable version
+tag plus a content digest; runtime Dockerfile bases use the digest tied to the
+registry's expected version. Dependabot proposes reviewed Docker refreshes alongside the
 monthly stack-maintenance change. OpenSSF Scorecard runs on `main`, weekly, and
 when repository rules change; its SARIF is retained for 90 days and uploaded to
 GitHub code scanning.

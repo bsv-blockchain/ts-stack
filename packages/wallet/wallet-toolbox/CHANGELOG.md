@@ -1,3 +1,7 @@
+# 2.16.0 unpublished integration candidate
+
+Combines current main (including SDK 4.0.1 hotfix compatibility) with PR #569. Retains the published numeric wallet wire format, additive payment transport and archive/primary-handoff APIs. Publication is a separate release action.
+
 ## Held #569 implementation candidate — unreleased
 
 TTN now supports authenticated snapshot archives, row/field journal archives and the dependent remote primary handoff. Producers, stored-artifact readers and full/mobile clients preserve the literal `ttn` binding; cross-network artifacts still refuse. Existing main/test bytes, protocol versions and resource bounds are unchanged. MySQL receives the forward-only32-to64 archive packet-label migration, with capability admission checking the physical width; existing rows/charset/collation and SQLite/native DDL are preserved. No consumer migration is required; every archive/handoff participant must advertise compatible support.
@@ -179,6 +183,13 @@ attention to changes that materially alter behavior or extend functionality.
 
 ## wallet-toolbox 2.15.1
 
+- Add optional `StorageClientOptions.authFetchOptions` in the existing third
+  constructor argument across Node, browser and mobile. It forwards the
+  installed SDK's options without changing defaults, SDK peer ranges, RPCs,
+  retries or wallet data. The new `responseTimeoutMs` option requires the SDK
+  release containing it; longer authenticated calls should also configure the
+  existing transport `requestTimeoutMs`. No migration is required.
+
 - The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
   what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
   invalid, revoked or expired key, before it reads the transaction. Previously a refused
@@ -187,8 +198,41 @@ attention to changes that materially alter behavior or extend functionality.
   or keeps the transaction queued for retry, and the history note says whether the
   configured key was refused or the endpoint requires one. No configuration or consumer
   migration is required.
+- `createAction` sizes a caller-provided `unlockingScript` by its byte length
+  when it hands the input to storage. It used the hex string's length, twice
+  the bytes, so storage funded and priced the transaction as if that script
+  appeared twice: a 78,369 byte transaction with a 36,401 byte provided unlock
+  paid for 114,780 bytes. Inputs given only an `unlockingScriptLength` are
+  unchanged. No API, wire, or schema migration; `unlockingScriptLength` already
+  meant bytes. Upgrade the signer package; storage is unchanged.
 
-## wallet-toolbox 2.15.0
+## wallet-toolbox 2.15.0 (source candidate)
+
+- Preserve the existing storage `internalizeAction(storage, auth, args, receipt?)`
+  call signature. Local funding recovery uses the separate
+  `internalizeActionWithRecovery` deep import; historical callers need no migration.
+
+- Acquire the local funding route's shared SQL receipt fence inside its atomic
+  ownership/journal transaction. A killed uncommitted writer leaves no pending
+  lease, and independently prepared contenders can reach their coordination
+  boundary. Add an optional transaction-bound backend port without changing
+  ordinary receipt leases, BRC-100 requests or test deadlines.
+
+- Require an exact canonical compressed public-key round trip for opt-in BRC-197 fixed-child recipients before ownership. Add native lifecycle coverage that preserves pre-existing transaction accounting and uses distinct fixture references; ordinary internalization is unchanged.
+
+- Add opt-in local SQLite action recovery for atomic allocation, exact prepared
+  and signed `noSend` transactions, and durable processing reconciliation.
+- Add local BRC-29 funding recovery with unique outpoint ownership, atomic wallet
+  credit, deferred monitor work and retained receipts. Deep imports require
+  explicit installation; ordinary calls, root exports and BRC-100 RPCs are unchanged.
+- Type explicit funding-recovery capacity values as numbers, matching the existing
+  configurable limits. Add retained-record representation and native ownership
+  rejection regressions; runtime validation, defaults and journal formats remain unchanged.
+- Preserve whole wallet databases and keys for these auxiliary journals. Legacy
+  entity backup/sync, browser/mobile wrappers, IndexedDB and remote providers do
+  not transport or implement them. Reconcile pending operations before rollback.
+- The previously recorded 2.14.5 no-send ownership corrections remain included.
+  This candidate has not been published and does not complete private acquisition.
 
 ## 2.15.0 candidate — bounded sync and portable recovery
 
@@ -439,7 +483,9 @@ require their operational authorization after complete artifact validation.
   was encrypted before the permission module ran and again afterwards, so
   `listOutputs` (which decrypts once) returned ciphertext. The after-module
   pass now encrypts only permission-module baskets, matching `createAction`'s
-  once-only rule.- Preserve bounded pre-construction double-spend reviews from remote storage.
+  once-only rule.
+
+- Preserve bounded pre-construction double-spend reviews from remote storage.
   An empty attempted TXID is accepted only with one doubleSpend result, empty
   send results, absent constructed-action fields and nonempty competing evidence.
   Consumers must validate the evidence and synchronize the winning transaction
@@ -2008,3 +2054,7 @@ Qualification filesystem readers bind metadata and bytes to the same opened desc
 Packed IndexedDB operational synchronization accepts all supported wallet chains, including regtest, and retains exact source/destination network binding before user registration. Persisted operational checkpoints use that same chain set across reopen; this does not expand the BRC-38 archive main/test format. Authenticated remote destination admission uses the same operational chain validation; real Node/mobile HTTP regtest copies retain committed progress across server replacement. BRC-38 archive negotiation remains main/test. Regression cases cover actual packed manager push/pull and committed reopen on every supported chain, plus regtest atomic rollback, lost-ack progress, namespace isolation and stale-primary refusal. Native migration qualification compares completed source schemas with the current registered migration version while separately proving the required journal stamp; historical process-loss fixtures retain an exact pre-migration cutoff. No public API, archive format, production default or resource limit changes. Full-system and exact-head CI qualification remain required.
 
 Signed sync-state provenance now follows the same admitted key domain through fresh bootstrap, bounded metadata/cursor/frame reads and durable source-provenance storage. The provenance reader starts at the first actual key when no cursor is supplied; an explicit zero cursor still means keys greater than zero. Other entity identifiers stay positive, MySQL source bootstrap stays unsigned, and provenance never writes destination sync-state rows or primary selection. Schema, field encodings, quotas and native ABI are unchanged.
+
+## 2.15.1 candidate
+
+- Prepare `2.15.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.

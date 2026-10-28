@@ -11,7 +11,9 @@ import { WalletMonitorTask, captureMonitorReqWrite } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
 import {
   quarantineReqInputs,
-  applyCapturedTerminalFailure
+  applyCapturedTerminalFailure,
+  failPendingDescendants,
+  failCapturedPendingDescendants
 } from '../../storage/methods/reconcileFailedTransactionInputs'
 import { classifyArcadeRejection, type ArcadeRejectionClassification } from '../../services/providers/arcadeStatus'
 import { safeDiagnostic } from '../../services/chaintracker/chaintracks/util/safeDiagnostic'
@@ -186,7 +188,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       }
 
       try {
-        const writes = await captureMonitorReqWrite(this, [req.txid])
+        const writes = await captureMonitorReqWrite(this, [req.txid], true)
         await writes?.assertCurrent()
         log += await this.applyStatusEvent(req, event, note, writes)
       } catch (error) {
@@ -348,7 +350,9 @@ export class TaskArcadeSSE extends WalletMonitorTask {
       })
       if (!terminal) return `  req ${req.id} retained advanced proof state\n`
       const provider = await this.storage.runAsStorageProvider(sp => promiseFromSync(() => sp))
-      const quarantined = await applyCapturedTerminalFailure(req, provider, writes, classification.inputConflict)
+      const quarantined = await applyCapturedTerminalFailure(req, provider, writes, classification.inputConflict, [], {
+        extraInfo: note.extraInfo
+      })
       if (classification.inputConflict)
         await this.record(req, writes, current => {
           current.addHistoryNote({
@@ -359,10 +363,13 @@ export class TaskArcadeSSE extends WalletMonitorTask {
             ...(quarantined.staleOutpoints.length ? { outpoints: quarantined.staleOutpoints.join(',') } : {})
           })
         })
+      const descendants = await failCapturedPendingDescendants([req.txid], provider, writes)
+      for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
       return `  req ${req.id} => ${req.status}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n`
     }
 
     let quarantined = { checked: 0, staleConfirmed: 0, staleOutpoints: [] as string[] }
+    let descendants: string[] = []
     await this.storage.runAsStorageProvider(async sp => {
       await sp.transaction(async trx => {
         req.status = classification.reqStatus
@@ -376,7 +383,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         const ids = req.notify.transactionIds
         if (ids != null) await sp.updateTransactionsStatus(ids, 'failed', trx)
         if (classification.inputConflict) {
-          quarantined = await quarantineReqInputs(req, sp, trx)
+          quarantined = await quarantineReqInputs(req, sp, trx, undefined, { extraInfo: note.extraInfo })
           req.addHistoryNote({
             when: new Date().toISOString(),
             what: 'arcSSEInputQuarantine',
@@ -386,9 +393,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           })
           await req.updateStorageDynamicProperties(sp, trx)
         }
+        descendants = await failPendingDescendants([req.txid], sp, trx)
       })
     })
-    return `  req ${req.id} => ${classification.reqStatus}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n`
+    for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
+    return (
+      `  req ${req.id} => ${classification.reqStatus}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n` +
+      (descendants.length > 0 ? `  failed ${descendants.length} pending descendant(s): ${descendants.join(',')}\n` : '')
+    )
   }
 
   /**

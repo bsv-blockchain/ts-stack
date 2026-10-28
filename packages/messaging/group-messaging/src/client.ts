@@ -1,7 +1,7 @@
 import { decodeEnvelope, encodeEnvelope, type Envelope } from './bootstrap/index.js'
 import { bytesEqual, fromHex, randomId } from './bytes.js'
 import { decodeContent, type MessageContent } from './content/index.js'
-import { GroupMessagingError, PermanentProcessingError } from './errors.js'
+import { GroupMessagingError, PermanentProcessingError, WelcomeDeliveryError } from './errors.js'
 import { Emitter } from './events.js'
 import { Group } from './group.js'
 import { eachInOrder } from './inOrder.js'
@@ -9,7 +9,7 @@ import { IdentityService, type IdentityInput } from './identity/index.js'
 import { InviteService } from './invites/index.js'
 import { MlsEngine, type MlsProcessResult } from './mls/index.js'
 import { StorageProvider, type StorageInput } from './storage/index.js'
-import { TransportService, type TransportInput } from './transport/index.js'
+import { BroadcastError, TransportService, type TransportInput } from './transport/index.js'
 import {
   DEFAULT_CIPHERSUITE,
   type CiphersuiteChoice,
@@ -128,7 +128,19 @@ export interface ClientEvents {
   deliveryFailed: {
     chatId: string
     mlsGroupId: MlsGroupId
+    /** Every member this delivery was attempted to. */
     recipients: IdentityKey[]
+    /**
+     * Which of them it did not reach.
+     *
+     * Absent when the transport did not say: a backend supplying its own
+     * `broadcast` throws whatever it throws, and the partition is then
+     * genuinely unknown. An empty array would read as "nothing failed" and the
+     * full roster as "nothing arrived", and neither is known in that case.
+     * The two are kept apart because a send that reached 7 of 8 members is a
+     * different situation from one that reached none.
+     */
+    failed?: IdentityKey[]
     error: Error
   }
   /**
@@ -159,6 +171,11 @@ export interface ClientEvents {
     /** The identity the KeyPackage's own credential claims. Equals `peer`. */
     keyPackageIdentity: IdentityKey
     keyPackage: KeyPackageBytes
+    /**
+     * The `chatName` the invitation was sent with. The invitation row is gone
+     * by now, so this is the only place a host can recover which chat it was for.
+     */
+    chatName?: string
   }
   /**
    * A peer answered our request with a KeyPackage that is not theirs, or that
@@ -168,8 +185,8 @@ export interface ClientEvents {
    * because a field can be ignored: Bob answering Alice's invitation with
    * Carol's KeyPackage would otherwise build a group Alice's UI labels "Bob"
    * and Carol is actually in. The KeyPackage is deliberately not carried here —
-   * there is no safe use for it — and the invitation has been consumed either
-   * way, so the exchange must be restarted.
+   * there is no safe use for it. The invitation is consumed either way, so a
+   * peer can be invited again straight away.
    */
   keyPackageRejected: {
     inviteId: string
@@ -178,6 +195,8 @@ export interface ClientEvents {
     /** Who the credential claims, when the KeyPackage could be read at all. */
     claimed?: IdentityKey
     error: Error
+    /** The `chatName` the invitation was sent with; the row is already gone. */
+    chatName?: string
   }
   inviteDeclined: { inviteId: string; peer: IdentityKey }
   /**
@@ -198,13 +217,14 @@ export interface ClientEvents {
   /**
    * A peer added us to a group. Nothing is joined until `joinFromWelcome`.
    * `ref` names the KeyPackage the Welcome was encrypted to, so the caller
-   * knows which private half to hand back; it is absent when none of this
-   * device's stored KeyPackages match.
+   * knows which private half to hand back. A Welcome that matches none of this
+   * device's stored KeyPackages is refused as `bootstrapRefused` and never
+   * reaches this event.
    */
   welcomeReceived: {
     inviteId: string
     peer: IdentityKey
-    ref?: KeyPackageRef
+    ref: KeyPackageRef
     /** The inviter's name for the chat, if they sent one. */
     chatName?: string
     welcome: Uint8Array
@@ -343,6 +363,80 @@ export class GroupMessagingClient {
       stopMessages()
       stopErrors()
     }
+  }
+
+  /**
+   * Re-send exactly the bytes that failed, to exactly the members that missed
+   * them.
+   *
+   * Not a new message. The envelope on the error is the one that was already
+   * encrypted for this epoch, so nothing here moves the ratchet, burns a
+   * generation or reaches a member that already holds it. Sending the text
+   * again instead would be a different message on all three counts.
+   *
+   * A member that does receive it twice is safe but not silent. MLS consumes
+   * a generation on first use and never returns it, so the engine rejects the
+   * duplicate, and the client's `#processOne` turns that into a
+   * {@link PermanentProcessingError} — "Message for
+   * epoch N cannot be processed at epoch N" — and surfaces as
+   * `processingFailed`, not as a second `message`. Nothing is double-delivered
+   * and nothing is re-polled, but a host that shows `processingFailed` to a
+   * person will show it for a retry that worked. That is the cost of retrying
+   * a send the transport wrongly reported as failed, and it is the reason this
+   * re-sends only to `error.failed` rather than to the whole roster.
+   *
+   * When the transport's fan-out does the work, rejects with a fresh
+   * {@link BroadcastError} naming whoever is still unreachable, so a caller can
+   * loop on its own schedule. A backend that supplies its own `broadcast`
+   * rejects with whatever it throws, which need not be a `BroadcastError`; the
+   * same caveat as {@link ClientEvents.deliveryFailed}'s `failed`.
+   *
+   * Unlike the first attempt, a failed retry emits no `deliveryFailed`: the
+   * rejection is the only report, so a host listening for that event sees the
+   * first failure and nothing after it. There is
+   * deliberately no schedule here: the library has no budget, no backoff the
+   * host agreed to and no clock, and the relay that answered 502 once is the
+   * relay a tight loop would finish off.
+   */
+  async retryDelivery(error: BroadcastError | WelcomeDeliveryError): Promise<void> {
+    if (error instanceof WelcomeDeliveryError) {
+      await this.#resendWelcome(error)
+      return
+    }
+    await this.transport.broadcast(error.groupId, error.failed, error.payload)
+  }
+
+  /**
+   * Resend the Welcome the error carries to whoever it failed. The group is not
+   * touched: the Add already happened, and a Welcome belongs to the Commit
+   * that produced it, so it cannot be regenerated. Rejects with a fresh error naming whoever
+   * is still unreachable, carrying the same bytes.
+   */
+  async #resendWelcome(error: WelcomeDeliveryError): Promise<void> {
+    const results = await Promise.allSettled(
+      error.failed.map(async recipient =>
+        this.transport.send(
+          recipient,
+          encodeEnvelope({
+            kind: 'bootstrap',
+            message: {
+              type: 'welcome',
+              requestId: randomId(),
+              welcome: error.welcome,
+              ...(error.chatName === undefined ? {} : { chatName: error.chatName })
+            }
+          })
+        )
+      )
+    )
+    const stillFailed = error.failed.filter((_, index) => results[index]?.status === 'rejected')
+    if (stillFailed.length === 0) return
+    throw new WelcomeDeliveryError(
+      `Could not deliver the Welcome to ${stillFailed.length} of ${error.failed.length} members`,
+      error.welcome,
+      stillFailed,
+      error.chatName
+    )
   }
 
   /**
@@ -688,14 +782,18 @@ export class GroupMessagingClient {
     const failed = recipients.filter((_, index) => results[index]?.status === 'rejected')
     if (failed.length === 0) return
 
-    const error = new GroupMessagingError(
+    const error = new WelcomeDeliveryError(
       `Could not deliver the Welcome for ${group.mlsGroupId} to ${failed.length} of ` +
-        `${recipients.length} new members`
+        `${recipients.length} new members`,
+      welcome,
+      failed,
+      chatName
     )
     this.#events.emit('deliveryFailed', {
       chatId: group.chatId,
       mlsGroupId: group.mlsGroupId,
-      recipients: failed,
+      recipients,
+      failed,
       error
     })
     throw error
@@ -1085,7 +1183,12 @@ export class GroupMessagingClient {
         return
       case 'keyPackageReceived':
         await this.#onKeyPackageReceived(
-          payload as { inviteId: string; peer: IdentityKey; keyPackage: KeyPackageBytes }
+          payload as {
+            inviteId: string
+            peer: IdentityKey
+            keyPackage: KeyPackageBytes
+            chatName?: string
+          }
         )
         return
       case 'inviteDeclined':
@@ -1098,14 +1201,14 @@ export class GroupMessagingClient {
         const { inviteId, peer, ref, welcome, chatName } = payload as {
           inviteId: string
           peer: IdentityKey
-          ref?: KeyPackageRef
+          ref: KeyPackageRef
           welcome: Uint8Array
           chatName?: string
         }
         this.#events.emit('welcomeReceived', {
           inviteId,
           peer,
-          ...(ref === undefined ? {} : { ref }),
+          ref,
           ...(chatName === undefined ? {} : { chatName }),
           welcome
         })
@@ -1130,63 +1233,76 @@ export class GroupMessagingClient {
    * reported as an MLS failure rather than as a bad answer to an invitation.
    * Both are surfaced here, on the event a consumer already handles.
    */
+  /**
+   * Whether `keyPackage` really belongs to `peer`: its credential names them,
+   * binds to its MLS key, and both signatures verify. The one place these
+   * conditions live, used before a peer's answer is announced.
+   */
+  async #checkKeyPackage(
+    peer: IdentityKey,
+    keyPackage: KeyPackageBytes
+  ): Promise<{ claimed: IdentityKey } | { error: Error; claimed?: IdentityKey }> {
+    let claimed: IdentityKey
+    try {
+      claimed = this.engine.identityForKeyPackage(keyPackage)
+    } catch (cause) {
+      return { error: toError(cause) }
+    }
+    if (claimed !== peer) {
+      return {
+        error: new GroupMessagingError(
+          `${peer} answered with a KeyPackage whose credential names ${claimed}`
+        ),
+        claimed
+      }
+    }
+    const verified = await this.engine.verifyKeyPackage(keyPackage)
+    if (!verified.credentialBinding) {
+      return {
+        error: new GroupMessagingError(
+          `${peer} answered with a KeyPackage whose credential does not attest to its MLS key` +
+            (verified.error === undefined ? '' : `: ${verified.error}`)
+        ),
+        claimed
+      }
+    }
+    if (!verified.leafSignature || !verified.keyPackageSignature) {
+      return {
+        error: new GroupMessagingError(
+          `${peer} answered with a KeyPackage whose own signature does not verify`
+        ),
+        claimed
+      }
+    }
+    return { claimed }
+  }
+
   async #onKeyPackageReceived(payload: {
     inviteId: string
     peer: IdentityKey
     keyPackage: KeyPackageBytes
+    chatName?: string
   }): Promise<void> {
-    const reject = (error: Error, claimed?: IdentityKey): void => {
+    const chatName = payload.chatName === undefined ? {} : { chatName: payload.chatName }
+    const checked = await this.#checkKeyPackage(payload.peer, payload.keyPackage)
+    if ('error' in checked) {
       this.#events.emit('keyPackageRejected', {
         inviteId: payload.inviteId,
         peer: payload.peer,
-        ...(claimed === undefined ? {} : { claimed }),
-        error
+        ...(checked.claimed === undefined ? {} : { claimed: checked.claimed }),
+        error: checked.error,
+        ...chatName
       })
-    }
-
-    let claimed: IdentityKey
-    try {
-      claimed = this.engine.identityForKeyPackage(payload.keyPackage)
-    } catch (cause) {
-      reject(toError(cause))
       return
     }
-    if (claimed !== payload.peer) {
-      reject(
-        new GroupMessagingError(
-          `${payload.peer} answered with a KeyPackage whose credential names ${claimed}`
-        ),
-        claimed
-      )
-      return
-    }
-
-    const verified = await this.engine.verifyKeyPackage(payload.keyPackage)
-    if (!verified.credentialBinding) {
-      reject(
-        new GroupMessagingError(
-          `${payload.peer} answered with a KeyPackage whose credential does not attest to its MLS key` +
-            (verified.error === undefined ? '' : `: ${verified.error}`)
-        ),
-        claimed
-      )
-      return
-    }
-    if (!verified.leafSignature || !verified.keyPackageSignature) {
-      reject(
-        new GroupMessagingError(
-          `${payload.peer} answered with a KeyPackage whose own signature does not verify`
-        ),
-        claimed
-      )
-      return
-    }
+    const claimed = checked.claimed
 
     this.#events.emit('keyPackageReceived', {
       inviteId: payload.inviteId,
       peer: payload.peer,
       keyPackageIdentity: claimed,
-      keyPackage: payload.keyPackage
+      keyPackage: payload.keyPackage,
+      ...chatName
     })
   }
 }

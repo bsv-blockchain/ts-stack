@@ -50,3 +50,9 @@ export {
   type ChaintracksHeader,
   type ChaintracksProviderConfig
 } from './src/ChaintracksProvider.js'
+export type {
+  OutputLookupCompanion,
+  OutputLookupCaller,
+  OutputLookupHTTPResponse,
+  OutputLookupRouteOptions
+} from './src/OutputLookupRoutes.js'

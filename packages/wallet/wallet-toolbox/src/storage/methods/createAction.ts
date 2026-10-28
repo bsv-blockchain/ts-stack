@@ -1,4 +1,4 @@
-import { awaitFromSync, promiseFromSync, mapAwaitFromSync } from '../../utility/promiseFromSync'
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import type { StorageActiveWrite } from '../StorageActiveWrite'
 import {
   type ValidCreateActionArgs,
@@ -7,7 +7,6 @@ import {
   validateSatoshis
 } from '@bsv/sdk/wallet/validationHelpers'
 import { Beef, OriginatorDomainNameStringUnder250Bytes, Random, Script, TelemetrySpan } from '@bsv/sdk'
-import { repairBeefProofs } from './repairBeefProofs'
 import { toBase64 } from '@bsv/sdk/primitives/utils'
 import {
   generateChangeSdk,
@@ -60,6 +59,12 @@ import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
 import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
 import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
+import {
+  resumeActionRecoveryPlan,
+  validateRecoveryConstruction,
+  type ActionRecoveryConstruction,
+  type ActionRecoveryPlan
+} from '../actionRecovery/ActionRecoveryPlan'
 
 let disableDoubleSpendCheckForTest = true
 export function setDisableDoubleSpendCheckForTest(v: boolean) {
@@ -71,10 +76,18 @@ export async function createAction(
   auth: AuthId,
   vargs: ValidCreateActionArgs,
   _originator?: OriginatorDomainNameStringUnder250Bytes,
+  recovery?: ActionRecoveryConstruction,
   capturedWrite?: StorageActiveWrite
 ): Promise<StorageCreateActionResult> {
   const write = capturedWrite ?? (await storage.activeWriteTransaction(auth))
-  if (!storage.telemetry.enabled) return await createActionCore(storage, auth, vargs, write)
+  if (recovery != null) {
+    if (recovery.protocol !== 'wallet-action-recovery-v1')
+      throw new WERR_INVALID_OPERATION('Unsupported action recovery construction')
+    validateRecoveryConstruction(vargs)
+    const retained = await recovery.read()
+    if (retained != null) return await resumeActionRecoveryPlan(storage, recovery, retained)
+  }
+  if (!storage.telemetry.enabled) return await createActionCore(storage, auth, vargs, write, undefined, recovery)
   return await storage.telemetry.withSpan(
     'wallet.storage.create_action',
     {
@@ -88,20 +101,17 @@ export async function createAction(
         'action.is_no_send': vargs.isNoSend
       }
     },
-    span =>
-      mapAwaitFromSync(
-        () => createActionCore(storage, auth, vargs, write, span),
-        result => {
-          span.end({
-            attributes: {
-              'action.result_input_count': result.inputs.length,
-              'action.result_output_count': result.outputs.length,
-              'action.input_beef_bytes': result.inputBeef?.length ?? 0
-            }
-          })
-          return result
+    async span => {
+      const result = await createActionCore(storage, auth, vargs, write, span, recovery)
+      span.end({
+        attributes: {
+          'action.result_input_count': result.inputs.length,
+          'action.result_output_count': result.outputs.length,
+          'action.input_beef_bytes': result.inputBeef?.length ?? 0
         }
-      )
+      })
+      return result
+    }
   )
 }
 
@@ -110,7 +120,8 @@ async function createActionCore(
   auth: AuthId,
   vargs: ValidCreateActionArgs,
   write: StorageActiveWrite,
-  parent?: TelemetrySpan
+  parent?: TelemetrySpan,
+  recovery?: ActionRecoveryConstruction
 ): Promise<StorageCreateActionResult> {
   const logger = vargs.logger
   logger?.group('storage createAction')
@@ -212,6 +223,8 @@ async function createActionCore(
   let newTxCommitted = false
   try {
     const persisted = await write.transaction(async trx => {
+      const recovered = await recovery?.claim(trx)
+      if (recovered != null) return { recovered }
       const initialSatoshis = fundingPlanSatoshis(initialFundingPlan)
       newTx = await traceStorageStep(
         storage,
@@ -221,14 +234,11 @@ async function createActionCore(
           'action.label_count': vargs.labels.length,
           'action.storage_beef_bytes': storageBeefBytes.length
         },
-        span =>
-          mapAwaitFromSync(
-            () => createNewTxRecord(storage, userId, vargs, storageBeefBytes, initialSatoshis, trx),
-            transaction => {
-              span?.end({ attributes: { 'action.transaction_record_created': true } })
-              return transaction
-            }
-          )
+        async span => {
+          const transaction = await createNewTxRecord(storage, userId, vargs, storageBeefBytes, initialSatoshis, trx)
+          span?.end({ attributes: { 'action.transaction_record_created': true } })
+          return transaction
+        }
       )
       logger?.log('created new transaction record')
 
@@ -270,18 +280,42 @@ async function createActionCore(
           'action.fixed_output_count': ctx.xoutputs.length,
           'action.change_output_count': funded.changeOutputs.length
         },
-        span =>
-          mapAwaitFromSync(
-            () => createNewOutputs(storage, userId, vargs, ctx, funded.changeOutputs, trx),
-            result => {
-              span?.end({ attributes: { 'action.persisted_output_count': result.outputs.length } })
-              return result
-            }
-          )
+        async span => {
+          const result = await createNewOutputs(storage, userId, vargs, ctx, funded.changeOutputs, trx)
+          span?.end({ attributes: { 'action.persisted_output_count': result.outputs.length } })
+          return result
+        }
       )
-      return { ...funded, ...storedOutputs, ctx }
+      let recoveryPlan: ActionRecoveryPlan | undefined
+      if (recovery != null) {
+        const inputs = await createNewInputs(storage, userId, vargs, ctx, funded.allocatedChange, write, trx)
+        recoveryPlan = {
+          fundingTxids: [...new Set(funded.allocatedChange.map(output => verifyTruthy(output.txid)))],
+          result: {
+            reference: newTx.reference,
+            version: newTx.version!,
+            lockTime: newTx.lockTime!,
+            inputs,
+            outputs: storedOutputs.outputs,
+            derivationPrefix: funded.derivationPrefix,
+            inputBeef: Uint8Array.from(beef.toBinary()),
+            noSendChangeOutputVouts: storedOutputs.changeVouts
+          }
+        }
+        await recovery.retain(recoveryPlan, trx)
+      }
+      return { ...funded, ...storedOutputs, ctx, recoveryPlan }
     })
     newTxCommitted = true
+    if ('recovered' in persisted || persisted.recoveryPlan != null) {
+      // Let the original read settle, then complete only the retained allocation.
+      // A failed completion must not release those inputs or choose another plan.
+      await allocatedBeefPrefetch
+      const retained = 'recovered' in persisted ? verifyTruthy(persisted.recovered) : { plan: persisted.recoveryPlan! }
+      const result = await resumeActionRecoveryPlan(storage, recovery!, retained)
+      logger?.groupEnd()
+      return result
+    }
     const committedTx = verifyTruthy(newTx)
     const { allocatedChange, derivationPrefix, outputs, changeVouts, ctx } = persisted
     logger?.log('created new output records')
@@ -306,14 +340,11 @@ async function createActionCore(
         'action.funding_input_count': allocatedChange.length,
         'action.include_source_transactions': vargs.includeAllSourceTransactions
       },
-      span =>
-        mapAwaitFromSync(
-          () => createNewInputs(storage, userId, vargs, ctx, allocatedChange, write),
-          assembled => {
-            span?.end({ attributes: { 'action.result_input_count': assembled.length } })
-            return assembled
-          }
-        )
+      async span => {
+        const assembled = await createNewInputs(storage, userId, vargs, ctx, allocatedChange, write)
+        span?.end({ attributes: { 'action.result_input_count': assembled.length } })
+        return assembled
+      }
     )
     logger?.log('created new inputs')
 
@@ -331,7 +362,6 @@ async function createActionCore(
     // This is intentionally the last foreground operation. The coordinator
     // starts on a timer, so the createAction promise and HTTP response can
     // resolve before any COOK verification or persistence begins.
-    await write.assertCurrent()
     enqueuePreparedBeefs(storage, preparedInputBeef.preparations)
 
     logger?.groupEnd()
@@ -341,27 +371,40 @@ async function createActionCore(
     // reuses the provider. Its error is surfaced on the success path above;
     // here the construction error remains authoritative.
     await allocatedBeefPrefetch
-    if (newTx?.transactionId != null) {
-      try {
-        if (newTxCommitted) {
-          await write.transaction(trx =>
-            awaitFromSync(() =>
-              storage.updateTransactionStatus('failed', newTx!.transactionId, undefined, undefined, trx)
-            )
-          )
-          logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
-        } else {
-          const failed = await write.transaction(trx =>
-            awaitFromSync(() => createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, trx, 'failed'))
-          )
-          logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
-        }
-      } catch (cleanupError) {
-        logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
-      }
-    }
+    await recordCreateActionFailure(storage, userId, vargs, storageBeefBytes, newTx, newTxCommitted, recovery, write)
     logger?.groupEnd()
     throw error
+  }
+}
+
+async function recordCreateActionFailure(
+  storage: StorageProvider,
+  userId: number,
+  vargs: ValidCreateActionArgs,
+  storageBeefBytes: number[],
+  newTx: TableTransaction | undefined,
+  committed: boolean,
+  recovery: ActionRecoveryConstruction | undefined,
+  write: StorageActiveWrite
+): Promise<void> {
+  if (newTx?.transactionId == null) return
+  const logger = vargs.logger
+  try {
+    if (committed && recovery != null) {
+      logger?.log('retained recoverable allocation after evidence completion error')
+    } else if (committed) {
+      await write.transaction(trx =>
+        awaitFromSync(() => storage.updateTransactionStatus('failed', newTx!.transactionId, undefined, undefined, trx))
+      )
+      logger?.log(`marked failed createAction transaction ${newTx.transactionId} after construction error`)
+    } else if (recovery == null) {
+      const failed = await write.transaction(trx =>
+        awaitFromSync(() => createNewTxRecord(storage, userId, vargs, storageBeefBytes, 0, trx, 'failed'))
+      )
+      logger?.log(`recorded failed createAction transaction ${failed.transactionId} after rollback`)
+    }
+  } catch (cleanupError) {
+    logger?.log(`failed to clean up createAction transaction ${newTx.transactionId}: ${String(cleanupError)}`)
   }
 }
 
@@ -425,7 +468,8 @@ export async function markKnownInputsSpent(
   storage: StorageProvider,
   knownInputRows: Array<{ i: XValidCreateActionInput; o: TableOutput }>,
   transactionId: number,
-  write: StorageActiveWrite
+  write: StorageActiveWrite,
+  transaction?: TrxToken
 ): Promise<string | undefined> {
   let doubleSpendTxid: string | undefined
   await write.transaction(async trx => {
@@ -462,7 +506,7 @@ export async function markKnownInputsSpent(
       o.spentBy = transactionId
       o.spendingDescription = i.inputDescription
     }
-  })
+  }, transaction)
   return doubleSpendTxid
 }
 
@@ -473,12 +517,13 @@ async function buildSdkInputFromOutput(
   vin: number,
   i: XValidCreateActionInput | undefined,
   o: TableOutput,
-  unlockLen: number | undefined
+  unlockLen: number | undefined,
+  trx?: TrxToken
 ): Promise<StorageCreateTransactionSdkInput> {
   if (i == null && !unlockLen) throw new WERR_INTERNAL(`vin ${vin} non-fixedInput without unlockLen`)
   const sourceRawTx =
     vargs.includeAllSourceTransactions && vargs.isSignAction
-      ? await storage.getRawTxOfKnownValidTransaction(o.txid)
+      ? await storage.getRawTxOfKnownValidTransaction(o.txid, undefined, undefined, trx)
       : undefined
   const sourceTransaction = sourceRawTx == null ? undefined : Uint8Array.from(sourceRawTx)
   return {
@@ -522,7 +567,8 @@ async function createNewInputs(
   vargs: ValidCreateActionArgs,
   ctx: CreateTransactionSdkContext,
   allocatedChange: TableOutput[],
-  write: StorageActiveWrite
+  write: StorageActiveWrite,
+  trx?: TrxToken
 ): Promise<StorageCreateTransactionSdkInput[]> {
   const r: StorageCreateTransactionSdkInput[] = []
 
@@ -533,8 +579,9 @@ async function createNewInputs(
     (ni): ni is { i: XValidCreateActionInput; o: TableOutput } => ni.i != null && ni.o != null
   )
   if (knownInputRows.length > 0) {
-    const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId, write)
+    const doubleSpendTxid = await markKnownInputsSpent(storage, knownInputRows, ctx.transactionId, write, trx)
     if (doubleSpendTxid) {
+      if (trx != null) throw new WERR_INVALID_OPERATION('Recoverable action input is already spent')
       const beef = await getCompetingBeefForReview(storage, doubleSpendTxid)
       throw new WERR_REVIEW_ACTIONS(
         [{ txid: '', status: 'doubleSpend', competingTxs: [doubleSpendTxid], competingBeef: beef.toBinary() }],
@@ -545,16 +592,15 @@ async function createNewInputs(
 
   for (const o of allocatedChange) newInputs.push({ o, unlockLen: 107 })
 
-  let vin = -1
-  for (const { i, o, unlockLen } of newInputs) {
-    vin++
+  await newInputs.reduce<Promise<void>>(async (previous, { i, o, unlockLen }, vin) => {
+    await previous
     if (o != null) {
-      r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen))
+      r.push(await buildSdkInputFromOutput(storage, vargs, vin, i, o, unlockLen, trx))
     } else {
       if (i == null) throw new WERR_INTERNAL(`vin ${vin} without output or xinput`)
       r.push(buildSdkInputFromXInput(vin, i))
     }
-  }
+  }, Promise.resolve())
   return r
 }
 
@@ -1175,7 +1221,7 @@ async function traceStorageStep<T>(
   return await storage.telemetry.withSpan(
     name,
     { component: 'wallet-storage', parent: parent?.context, attributes },
-    span => awaitFromSync(() => callback(span))
+    async span => await callback(span)
   )
 }
 
@@ -1286,26 +1332,24 @@ async function buildFundingPlan(
       const availableSelector = new CanonicalChangeSelector(available)
       const noSend = [...plannedNoSend]
       const noSendById = new Map(plannedNoSend.map(output => [output.outputId, output]))
-      const allocate = (
+      const allocate = async (
         targetSatoshis: number,
         exactSatoshis?: number
-      ): Promise<GenerateChangeSdkChangeInput | undefined> =>
-        promiseFromSync(() => {
-          let output: ResolvedManagedChangeInputCandidate | undefined = noSend.pop()
-          output ??= availableSelector.take(targetSatoshis, exactSatoshis)
-          if (output == null) return undefined
-          allocated.set(output.outputId, output)
-          return { outputId: output.outputId, satoshis: output.satoshis }
-        })
-      const release = (outputId: number): Promise<void> =>
-        promiseFromSync(() => {
-          const output = allocated.get(outputId)
-          if (output == null) return
-          allocated.delete(outputId)
-          availableSelector.release(outputId)
-          const noSendOutput = noSendById.get(outputId)
-          if (noSendOutput != null) noSend.push(noSendOutput)
-        })
+      ): Promise<GenerateChangeSdkChangeInput | undefined> => {
+        let output: ResolvedManagedChangeInputCandidate | undefined = noSend.pop()
+        output ??= availableSelector.take(targetSatoshis, exactSatoshis)
+        if (output == null) return undefined
+        allocated.set(output.outputId, output)
+        return { outputId: output.outputId, satoshis: output.satoshis }
+      }
+      const release = async (outputId: number): Promise<void> => {
+        const output = allocated.get(outputId)
+        if (output == null) return
+        allocated.delete(outputId)
+        availableSelector.release(outputId)
+        const noSendOutput = noSendById.get(outputId)
+        if (noSendOutput != null) noSend.push(noSendOutput)
+      }
       const result = await generateChangeSdk(params, allocate, release, vargs.logger, storage.telemetry)
       const selected = result.allocatedChangeInputs.map(input => verifyTruthy(allocated.get(input.outputId)))
       span?.end({
@@ -1372,24 +1416,20 @@ async function resolveFundingCandidates(
     'wallet.storage.create_action.funding_candidates',
     parent,
     { 'funding.include_pending': true },
-    span =>
-      mapAwaitFromSync(
-        () => storage.findAvailableManagedChangeInputCandidates(userId, basketId, false, trx),
-        outputs => {
-          span?.end({
-            attributes: {
-              'funding.candidate_count': outputs.length,
-              'funding.candidate_satoshis': outputs.reduce((sum, output) => sum + output.satoshis, 0),
-              'funding.completed_candidate_count': outputs.filter(output => output.transactionStatus === 'completed')
-                .length,
-              'funding.unproven_candidate_count': outputs.filter(output => output.transactionStatus === 'unproven')
-                .length,
-              'funding.sending_candidate_count': outputs.filter(output => output.transactionStatus === 'sending').length
-            }
-          })
-          return outputs
+    async span => {
+      const outputs = await storage.findAvailableManagedChangeInputCandidates(userId, basketId, false, trx)
+      span?.end({
+        attributes: {
+          'funding.candidate_count': outputs.length,
+          'funding.candidate_satoshis': outputs.reduce((sum, output) => sum + output.satoshis, 0),
+          'funding.completed_candidate_count': outputs.filter(output => output.transactionStatus === 'completed')
+            .length,
+          'funding.unproven_candidate_count': outputs.filter(output => output.transactionStatus === 'unproven').length,
+          'funding.sending_candidate_count': outputs.filter(output => output.transactionStatus === 'sending').length
         }
-      )
+      })
+      return outputs
+    }
   )
   const missingStatusIds = rawCandidates
     .filter(output => output.transactionStatus == null)
@@ -1932,21 +1972,18 @@ function startAllocatedChangeBeefPrefetch(
       'beef.missing_source_count': missing.length,
       'beef.storage_batch_count': missing.length === 0 ? 0 : 1
     },
-    span =>
-      mapAwaitFromSync(
-        () => loadAllocatedChangeBeef(storage, userId, missing, options, parent),
-        fetched => {
-          span?.end({
-            attributes: {
-              'beef.fetched_tx_count': fetched.beef.txs.length,
-              'beef.fetched_bump_count': fetched.beef.bumps.length,
-              'beef.prepared_hit_count': fetched.preparedHitCount,
-              'beef.canonical_fetch_count': fetched.canonicalFetchCount
-            }
-          })
-          return fetched
+    async span => {
+      const fetched = await loadAllocatedChangeBeef(storage, userId, missing, options, parent)
+      span?.end({
+        attributes: {
+          'beef.fetched_tx_count': fetched.beef.txs.length,
+          'beef.fetched_bump_count': fetched.beef.bumps.length,
+          'beef.prepared_hit_count': fetched.preparedHitCount,
+          'beef.canonical_fetch_count': fetched.canonicalFetchCount
         }
-      )
+      })
+      return fetched
+    }
   ).then(
     prefetched => ({
       beef: prefetched.beef,
@@ -1990,14 +2027,11 @@ async function mergeAllocatedChangeBeefs(
     'wallet.storage.create_action.beef_prefetch_join',
     parent,
     { 'beef.prefetch_source_count': 0 },
-    span =>
-      mapAwaitFromSync(
-        () => prefetch,
-        result => {
-          span?.end({ attributes: { 'beef.prefetch_source_count': result.sourceCount } })
-          return result
-        }
-      )
+    async span => {
+      const result = await prefetch
+      span?.end({ attributes: { 'beef.prefetch_source_count': result.sourceCount } })
+      return result
+    }
   )
   // A claim retry may replace only part of the initial funding plan. Never
   // merge proofs for outputs the final transaction does not spend: apart from
@@ -2043,22 +2077,16 @@ async function mergeAllocatedChangeBeefs(
     'wallet.storage.create_action.beef_merge',
     parent,
     { 'beef.fragment_count': (usePrefetch && prefetched.beef != null ? 1 : 0) + (fetched == null ? 0 : 1) },
-    span =>
-      promiseFromSync(() => {
-        if (fetched != null) beef.mergeBeef(fetched)
-        span?.end({
-          attributes: {
-            'beef.merged_tx_count': beef.txs.length,
-            'beef.merged_bump_count': beef.bumps.length
-          }
-        })
+    async span => {
+      if (fetched != null) beef.mergeBeef(fetched)
+      span?.end({
+        attributes: {
+          'beef.merged_tx_count': beef.txs.length,
+          'beef.merged_bump_count': beef.bumps.length
+        }
       })
+    }
   )
-  // Standalone offline storage historically permits construction without
-  // services. Configured wallets validate even prepared/embedded ancestry
-  // before returning proofs to their signer; offline callers retain their
-  // existing responsibility to validate before signing or broadcasting.
-  if (storage._services != null) beef = await repairBeefProofs(storage, beef)
   const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',
@@ -2068,12 +2096,11 @@ async function mergeAllocatedChangeBeefs(
       'beef.bump_count': beef.bumps.length,
       'beef.known_txid_count': knownTxids.length
     },
-    span =>
-      promiseFromSync(() => {
-        const result = trimInputBeef(beef, vargs)
-        span?.end({ attributes: { 'beef.result_bytes': result?.length ?? 0 } })
-        return result
-      })
+    async span => {
+      const result = trimInputBeef(beef, vargs)
+      span?.end({ attributes: { 'beef.result_bytes': result?.length ?? 0 } })
+      return result
+    }
   )
   return { inputBeef, preparations }
 }

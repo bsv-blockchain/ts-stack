@@ -1,6 +1,6 @@
 {
   "name": "@bsv/verifast",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
@@ -105,7 +105,7 @@
     "vite": "^8.3.4"
   },
   "peerDependencies": {
-    "@bsv/sdk": "^2.1.8 || ^3.0.0 || ^4.0.0"
+    "@bsv/sdk": "^2.1.8 || ^3.0.0 || ^4.0.1"
   },
   "peerDependenciesMeta": {
     "@bsv/sdk": {

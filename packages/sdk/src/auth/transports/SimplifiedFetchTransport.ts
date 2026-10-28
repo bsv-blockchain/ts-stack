@@ -458,7 +458,10 @@ export class SimplifiedFetchTransport implements Transport {
       ;(error as any).cause = originalError
       return error
     }
-    return new Error(`${baseMessage}: ${toSafeString(originalError)}`)
+    // Fetch may reject with an Error from another runtime realm, or any other
+    // thrown value. Keep its identity without changing the legacy diagnostic
+    // string, wrapper stack or transport replay behavior.
+    return new Error(`${baseMessage}: ${toSafeString(originalError)}`, { cause: originalError })
   }
 
   #createUnauthenticatedResponseError(

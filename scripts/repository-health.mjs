@@ -17,6 +17,7 @@ const IGNORED_DIRECTORIES = new Set([
   '.git',
   '.next',
   '.pagefind',
+  // Stryker copies package manifests here; these gitignored workspaces are not projects.
   '.stryker-tmp',
   'coverage',
   'dist',

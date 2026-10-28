@@ -32,6 +32,10 @@ describe('wallet-login', () => {
     expect(hook?.content).toContain('apiFetch')
     expect(hook?.content).toContain('readIdentityKeyResponse')
   })
+  test('login callback re-binds when the connected identity changes', () => {
+    const hook = (walletLogin.files(ctx).client ?? []).find(f => f.path === 'useWalletLogin.tsx')
+    expect(hook?.content).toMatch(/\}, \[wallet, identityKey, [^\]]*\]\)/)
+  })
   test('counterparty is auto-resolved (no hard-coded SERVER_IDENTITY_KEY placeholder)', () => {
     const client = walletLogin.files(ctx).client ?? []
     const page = client.find(f => f.path === 'WalletLogin.tsx')

@@ -4,7 +4,7 @@ title: '@bsv/btms-permission-module'
 kind: package
 domain: wallet
 npm: '@bsv/btms-permission-module'
-version: '1.2.3'
+version: '1.2.4'
 last_updated: '2026-08-31'
 last_verified: '2026-08-31'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/btms
 
 # @bsv/btms-permission-module
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -182,3 +182,7 @@ const permissionsManager = new WalletPermissionsManager(wallet, appOrigin, {
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/btms-permission-module/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack)
 - [npm](https://www.npmjs.com/package/@bsv/btms-permission-module)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

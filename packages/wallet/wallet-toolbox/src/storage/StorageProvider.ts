@@ -8,6 +8,8 @@ import type { RetainedReadSnapshot, RetainedReadSnapshotOptions } from './snapsh
 import { runInSeries } from '../utility/runInSeries'
 import { findProofRecords, mapProofWork } from './methods/proofWork'
 import { snapshotSyncPage } from './sync/snapshotSyncPage'
+import { internalizeBrc197Action } from './methods/internalizeBrc197Action'
+import type { Brc197InternalizeActionArgs } from '../sdk/Brc197Internalization'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
@@ -1126,6 +1128,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
     return awaitFromSync(() => internalizeAction(this, auth, args))
+  }
+
+  /** Explicit local profile; ordinary provider and remote methods are unchanged. */
+  async internalizeBrc197Action(
+    auth: AuthId,
+    args: Brc197InternalizeActionArgs
+  ): Promise<StorageInternalizeActionResult> {
+    return await internalizeBrc197Action(this, auth, args)
   }
 
   /**

@@ -176,7 +176,7 @@ export async function prepareNoSendExpiry(
     : { reclaimFee: 0, reclaimSatoshis: 0 }
   const fundingArgs = makeNoSendExpiryFundingArgs(anchorSatoshis, target.labels)
   fundingArgs.includeAllSourceTransactions = target.includeAllSourceTransactions
-  const funding = await createAction(storage, auth, fundingArgs, undefined, write)
+  const funding = await createAction(storage, auth, fundingArgs, undefined, undefined, write)
   const anchor = selectNoSendExpiryFundingAnchor(funding.outputs, anchorSatoshis)
   return {
     funding,
@@ -266,7 +266,7 @@ export async function activateNoSendExpiry(
     anchorTxid: args.fundingTxid,
     anchorVout: args.anchorVout
   }
-  const action = await createAction(storage, auth, target, undefined, write)
+  const action = await createAction(storage, auth, target, undefined, undefined, write)
   return {
     action,
     expiry,

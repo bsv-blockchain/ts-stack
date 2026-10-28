@@ -1,15 +1,23 @@
-#!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+
 import { createHash } from 'node:crypto'
+
 import fs from 'node:fs'
+
 import { createRequire } from 'node:module'
+
 import { isDeepStrictEqual } from 'node:util'
+
 import path from 'node:path'
+
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+
 import { calculateMutationMetrics, evaluateMutationReport } from './mutation-testing.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
+
 const INPUTS = [
   'governance/mutation-testing/targets.mjs',
   'governance/mutation-testing/stop-on-kill-environment.cjs',
@@ -25,6 +33,8 @@ const INPUTS = [
   'scripts/mutation-execution-partitions.mjs',
   'governance/mutation-testing/execution-partitions.json',
   'scripts/mutation-partition-evidence.mjs',
+  'scripts/mutation-execution-batches.mjs',
+  '.github/workflows/mutation-execution.yml',
   'scripts/wallet-journal-ci.mjs',
   'scripts/wallet-composed-native-ci.mjs',
   '.github/workflows/ci.yml',
@@ -34,15 +44,21 @@ const INPUTS = [
   'pnpm-workspace.yaml',
   'tsconfig.base.json'
 ]
+
 const digest = bytes => createHash('sha256').update(bytes).digest('hex')
+
 function compare(left, right) {
   if (left < right) return -1
   if (left > right) return 1
   return 0
 }
+
 const ordered = values => [...values].sort(compare)
+
 const PINNED_ENGINE = '9.6.1'
+
 const quietLogger = { debug() {}, info() {}, warn() {}, isDebugEnabled: () => false }
+
 let enginePromise
 
 async function pinnedEngine() {
@@ -67,8 +83,6 @@ async function pinnedEngine() {
   return enginePromise
 }
 
-// Reuse the pinned engine's actual range/glob union and instrumenter, without
-// executing tests. Files with no possible mutants legitimately omit reports.
 export async function canonicalInventory(directory, sources, mutate) {
   const { Instrumenter, ProjectReader, defaultOptions } = await pinnedEngine()
   const reader = new ProjectReader({}, quietLogger, {

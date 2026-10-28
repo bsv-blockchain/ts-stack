@@ -3,7 +3,7 @@ id: pkg-wallet-helper
 title: '@bsv/wallet-helper'
 kind: package
 domain: helpers
-version: '0.1.10'
+version: '0.1.11'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -16,11 +16,7 @@ tags: [helpers, wallet, transaction-builder]
 
 # @bsv/wallet-helper
 
-The unpublished 0.1.10 candidate refreshes the packed first-party dependency
-ranges for the next wallet interoperability release; no independent API or wire
-format changes are introduced. Adopt after the dependency graph is published.
-
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -180,3 +176,7 @@ const ordResult = await new TransactionBuilder(wallet, 'Mint ordinal')
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/wallet-helper/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/bsv-wallet-helper)
 - [npm](https://www.npmjs.com/package/@bsv/wallet-helper)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

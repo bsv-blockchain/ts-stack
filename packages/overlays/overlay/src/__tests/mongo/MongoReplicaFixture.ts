@@ -3,8 +3,41 @@ import { once } from 'node:events'
 import { performance } from 'node:perf_hooks'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MongoClient, type Db, type Document, type MongoClientOptions } from 'mongodb'
-import { MongoInstance, MongoMemoryReplSet, MongoMemoryServer } from 'mongodb-memory-server'
+import {
+  MongoBinary,
+  MongoInstance,
+  MongoMemoryReplSet,
+  MongoMemoryServer
+} from 'mongodb-memory-server'
 import type { StorageScope } from '../../storage/AdmissionStorage.js'
+
+/** Obtain the fixed test binary once, before isolated suite workers start. */
+export default async function prepareMongoReplicaFixture(): Promise<void> {
+  await MongoBinary.getPath({ version: '8.2.6' })
+}
+
+/** Serial startup for this fixture's unauthenticated, isolated replica members. */
+export class SequentialMongoFixtureReplicaSet extends MongoMemoryReplSet {
+  protected override async initAllServers(): Promise<void> {
+    if (this.servers.length !== 0) {
+      return this.servers.reduce(
+        (pending, server) => pending.then(() => server.start(true)),
+        Promise.resolve()
+      )
+    }
+    const count = Math.max(this.instanceOpts.length, this.replSetOpts.count ?? 1)
+    // Each original start must settle before the next probe or replica cleanup.
+    return Array.from({ length: count }, (_, index) => index).reduce(
+      (pending, index) =>
+        pending.then(() => {
+          const server = this._initServer(this.getInstanceOpts(this.instanceOpts[index]))
+          this.servers.push(server)
+          return server.start()
+        }),
+      Promise.resolve()
+    )
+  }
+}
 
 /** Owns only randomly named databases, ports and temporary mongod files. */
 export interface MongoReplicaFixture {
@@ -42,7 +75,7 @@ class FixtureMemoryServer extends MongoMemoryServer {
 
 // A failed member can reject the replica-set startup before its siblings finish
 // starting. Drain those real starts before stopping the owned set or retrying.
-class FixtureReplicaSet extends MongoMemoryReplSet {
+class FixtureReplicaSet extends SequentialMongoFixtureReplicaSet {
   private readonly memberStarts: Promise<void>[] = []
 
   protected override _initServer(options: Parameters<MongoMemoryReplSet['_initServer']>[0]) {

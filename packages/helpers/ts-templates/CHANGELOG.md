@@ -10,7 +10,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.1.0 candidate
+- Prepare `2.1.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+### 2.1.1 candidate
 
 ### Added
 
@@ -47,6 +49,8 @@ outside 0..255`. The 4096-byte ceiling (`STRICT_CBOR_MAX_BYTES`) and the
   depth-4 cap are gone: the spec sets neither; `STRICT_CBOR_MAX_DEPTH` (1024)
   remains as an anti-DoS bound on nesting. `test/vectors/brc162.json` is
   regenerated.
+
+- The pending 2.0.1 dependency-manifest correction is included in this 2.1.0 candidate; retain the migration requirements above.
 
 ### 2.0.0 candidate — BRC-162 (breaking)
 

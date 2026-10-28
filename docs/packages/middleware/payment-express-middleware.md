@@ -18,7 +18,7 @@ tags: [middleware, express, payment, '402', brc-29]
 
 The unpublished 2.2 candidate adds opt-in BRC-118 multipart payments behind verified raw authentication. It preserves the existing payment validation, replay and internalization path. See the [BRC-118 deployment guide](../../guides/brc118-payments.md), including CORS and receiver-first rollout.
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -212,3 +212,7 @@ Types:
 
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware)
 - [npm](https://www.npmjs.com/package/@bsv/payment-express-middleware)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

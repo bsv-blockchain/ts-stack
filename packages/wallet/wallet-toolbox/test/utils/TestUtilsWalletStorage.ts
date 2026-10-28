@@ -1068,10 +1068,9 @@ export abstract class TestUtilsWalletStorage {
       return fNames
     }
 
-    const notifyPerformance = (
-      fn: (details: Parameters<typeof logger>[0]) => void,
-      performanceDetails: Parameters<typeof logger>[0]
-    ) => {
+    type ProfilingCall = { functionName: string; args: unknown[]; startTime: number; endTime: number }
+    type ProfiledFunction = (...args: unknown[]) => unknown
+    const notifyPerformance = (fn: (details: ProfilingCall) => void, performanceDetails: ProfilingCall) => {
       setTimeout(() => {
         let { functionName, args, startTime, endTime } = performanceDetails
         let _args = args
@@ -1105,11 +1104,15 @@ export abstract class TestUtilsWalletStorage {
       s.totalMsecs += args.endTime - args.startTime
     }
 
-    const performanceWrapper = (obj: object, objectName: string, performanceNotificationCallback: any) => {
+    const performanceWrapper = (
+      obj: Record<string, ProfiledFunction>,
+      objectName: string,
+      performanceNotificationCallback: (details: ProfilingCall) => void
+    ) => {
       let _notifyPerformance = notifyPerformance.bind(null, performanceNotificationCallback)
       let fNames = getFunctionsNames(obj)
       for (let fName of fNames) {
-        let originalFunction = (obj as Record<string, unknown>)[fName] as (...args: unknown[]) => unknown
+        let originalFunction = obj[fName]
         let wrapperFunction = (...args: unknown[]) => {
           let callbackFnIndex = -1
           let startTime = Date.now()
@@ -1136,11 +1139,11 @@ export abstract class TestUtilsWalletStorage {
           let originalReturnObject = originalFunction.apply(obj, args)
           let isPromiseType =
             originalReturnObject &&
-            typeof (originalReturnObject as Promise<unknown>).then === 'function' &&
-            typeof (originalReturnObject as Promise<unknown>).catch === 'function'
+            typeof (originalReturnObject as Partial<Promise<unknown>>).then === 'function' &&
+            typeof (originalReturnObject as Partial<Promise<unknown>>).catch === 'function'
           if (isPromiseType) {
             return (originalReturnObject as Promise<unknown>)
-              .then(resolveArgs => {
+              .then((resolveArgs: unknown) => {
                 let endTime = Date.now()
                 _notifyPerformance({
                   functionName: `${objectName}.${fName}`,
@@ -1150,7 +1153,7 @@ export abstract class TestUtilsWalletStorage {
                 })
                 return resolveArgs
               })
-              .catch(error => {
+              .catch((error: unknown) => {
                 let endTime = Date.now()
                 _notifyPerformance({
                   functionName: `${objectName}.${fName}`,
@@ -1175,7 +1178,7 @@ export abstract class TestUtilsWalletStorage {
 
     const _functionNames = getFunctionsNames(o)
 
-    performanceWrapper(o, name, logger)
+    performanceWrapper(o as Record<string, ProfiledFunction>, name, logger)
 
     return stats
   }
@@ -2241,10 +2244,10 @@ export const logger = (message: string, ...optionalParams: any[]): void => {
  * @param {string | number} id - The ID or unique identifier of the record to update.
  * @param {Object} testValues - An object containing key-value pairs to update.
  */
-export const updateTable = async <TId extends string | number>(
-  updateFunction: (id: TId, values: Record<string, unknown>) => Promise<unknown>,
-  id: TId,
-  testValues: object
+export const updateTable = async <Id, Value extends object>(
+  updateFunction: (id: Id, values: Record<string, unknown>) => Promise<unknown>,
+  id: Id,
+  testValues: Partial<Value>
 ) => {
   for (const [key, value] of Object.entries(testValues)) {
     logger('id=', id, '[key]=', [key], 'value=', value)

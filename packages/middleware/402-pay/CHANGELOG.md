@@ -2,10 +2,9 @@
 
 ## [Unreleased]
 
-### 0.3.3 candidate — protocol selection documentation
+- Prepare `0.3.5` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
-- Clarify that BRC-118 extends the separate SDK AuthFetch/BRC-105 middleware path.
-  This package's BRC-121 runtime, headers and replay behavior remain unchanged.
+- Prepare `0.3.4` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
 
 ### 0.3.2 candidate — replay-safe Atomic BEEF payments
 

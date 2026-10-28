@@ -4,7 +4,7 @@ title: '@bsv/wallet-toolbox'
 kind: package
 domain: wallet
 npm: '@bsv/wallet-toolbox'
-version: '2.15.1'
+version: '2.16.0'
 last_updated: '2026-10-13'
 last_verified: '2026-10-13'
 review_cadence_days: 30
@@ -25,29 +25,21 @@ The unpublished 2.15 candidate adds `syncFromReaderResumable`, fair foreground s
 
 Use this package when you are building a wallet product, a wallet-like service, or another implementation that must match BRC-100 behavior.
 
-BEEF requests and schema-declared storage response bytes use the existing
-negotiated compact binary JSON codec. Legacy peers retain numeric-array JSON
-and identical transaction/proof bytes. Authentication and payload ceilings
-remain unchanged; upgrade both clients and active storage for the savings.
+## Optional local transaction recovery
 
-IndexedDB treats empty certificate certifier/type, transaction status and
-output-tag ID arrays like omitted optional filters, matching Knex. Nonempty
-arrays, partial predicates and user ownership remain enforced. No API, wire
-or database migration is required.
+The 2.15.0 source candidate adds separate deep-import SQLite action and funding
+recovery controllers. They retain exact noSend preparation/signing state or
+atomically reconcile BRC-29 wallet ownership with a durable receipt. Ordinary
+BRC-100 APIs and SDK peer compatibility remain unchanged; the optional funding
+capability requires SDK 3.3.0 and explicit same-wallet schema installation.
 
-Internalizing an unproven transaction new to a user attempts broadcast before
-storing recipient outputs, including a sender's no-send transaction already
-known to shared storage. Rejected broadcasts return a review-actions error
-and store no recipient outputs. Transactions backed by a mining proof are
-not rebroadcast. Upgrade active storage; no API, wire or schema migration is required.
-
-Confirmed internalization resolves and checks the block header before the
-storage writer opens. IndexedDB commits a transaction when the event loop
-turns during an asynchronous header lookup, so the proven transaction,
-transaction, and requested outputs are stored together only after that lookup
-finishes. A missing or malformed header, or an invalid proof, still rejects
-and leaves none of those records. Upgrade the active storage implementation,
-including the browser client.
+Read [local action recovery](../../guides/local-action-recovery.md) and
+[local funding recovery](../../guides/local-funding-recovery.md) before adopting
+them. Retain a consistent whole database plus keys and reopen existing auxiliary
+state after restart. Legacy entity sync/export, IndexedDB, remote providers and
+browser/mobile wrappers do not carry this state. Stop new use and reconcile
+outstanding operations before rollback. These local receipts do not establish
+settlement, quote-time service capacity or protected delivery.
 
 Broadcast result completion in the 2.14.9 source candidate preserves an already
 `unmined` or `completed` request while returning the actual provider outcome.

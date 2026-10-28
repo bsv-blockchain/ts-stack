@@ -147,33 +147,6 @@ compatibility, lockfile deduplication, audit and CodeQL results, package and
 consumer tests, bundle/performance impact, and affected public versions. Missing
 fields produce a warning; they do not waive any security or merge gate.
 
-## Temporary CDP browser tooling repair
-
-VeriFast's private browser qualification uses Chrome DevTools Protocol (CDP).
-Puppeteer 25.11.0 dynamically loads its Chromium-BiDi adapter only for WebDriver
-BiDi, which this harness does not exercise. Its unused adapter retains Zod 3,
-affected by [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
-The available Puppeteer upgrade selects an adapter without the provenance
-required by the existing no-downgrade policy.
-
-An exact-parent removal excludes only `puppeteer-core@25.11.0>chromium-bidi`;
-the unchanged harness retains Chrome's existing CDP default and its full browser, WASM, worker,
-CSP and streaming-fallback assertions. Public package APIs, application-wallet
-transports, audit thresholds and provenance protections are unchanged. The
-remaining Zod 4 mutation-tooling path has a narrow patched-version floor
-(`zod@>=4.0.0 <4.6.6` to 4.6.7), within its upstream API range. This avoids
-refreshing unrelated Babel, Inquirer and Node-type dependencies. Its separate
-owned exception is `zod4-mutation-protocol-security-floor`. body-parser's compatible patch closes
-[GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828).
-
-The owned exception `verifast-cdp-only-browser-tooling` records the evidence,
-review deadline and retirement checks. Restore an explicitly supported,
-provenance-verified adapter before adding BiDi tests. This removal makes no
-claim to qualify BiDi. Retire it once the compatible official dependency graph
-passes provenance, the full audit and the unchanged browser contract.
-
-## Temporary Metro watcher repair
-
 The docs-site Mermaid graph selects DOMPurify 3.4.16 instead of 3.4.13 for
 [GHSA-p98j-92pf-mc4p](https://github.com/advisories/GHSA-p98j-92pf-mc4p).
 The reviewed [3.4.16 release](https://github.com/cure53/DOMPurify/releases/tag/3.4.16)
@@ -185,6 +158,13 @@ expression and license-file hash unchanged. This private documentation dependenc
 public APIs or candidate versions. Frozen installation, root checks, docs tests
 and a built-site browser check qualify the ordinary Mermaid consumer. No service
 or package is deployed by this source change.
+
+The October 3 independent qualification on the application-runtime branch passed the frozen
+installation and high-severity audit with no known vulnerabilities, all seven docs
+unit tests, 140 source-page frontmatter/link checks and 145 built-page link checks.
+Actual Chrome renders all 14 Mermaid diagrams across the wallet lifecycle and LCH
+production guides without page errors. The existing license inventory and root
+health checks pass; no public runtime package or version changes with this update.
 
 ## October 6 compatible audit remediation
 
@@ -217,6 +197,31 @@ Lockfile remediation does not publish a package or deploy a service. Protected
 publication and normal source-owned availability, provenance and rollback
 checks remain separate requirements for any later service rollout.
 
+## Temporary CDP browser tooling repair
+
+VeriFast's private browser qualification uses Chrome DevTools Protocol (CDP).
+Puppeteer 25.11.0 dynamically loads its Chromium-BiDi adapter only for WebDriver
+BiDi, which this harness does not exercise. Its unused adapter retains Zod 3,
+affected by [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5).
+The available Puppeteer upgrade selects an adapter without the provenance
+required by the existing no-downgrade policy.
+
+An exact-parent removal excludes only `puppeteer-core@25.11.0>chromium-bidi`;
+the unchanged harness retains Chrome's existing CDP default and its full browser, WASM, worker,
+CSP and streaming-fallback assertions. Public package APIs, application-wallet
+transports, audit thresholds and provenance protections are unchanged. The
+remaining Zod 4 mutation-tooling path has a narrow patched-version floor
+(`zod@>=4.0.0 <4.6.6` to 4.6.7), within its upstream API range. This avoids
+refreshing unrelated Babel, Inquirer and Node-type dependencies. Its separate
+owned exception is `zod4-mutation-protocol-security-floor`. body-parser's compatible patch closes
+[GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828).
+
+The owned exception `verifast-cdp-only-browser-tooling` records the evidence,
+review deadline and retirement checks. Restore an explicitly supported,
+provenance-verified adapter before adding BiDi tests. This removal makes no
+claim to qualify BiDi. Retire it once the compatible official dependency graph
+passes provenance, the full audit and the unchanged browser contract.
+
 ## Temporary Metro watcher dependency repair
 
 Metro-file-map 0.87.1 uses only micromatch.some(), whose matcher is already
@@ -235,6 +240,25 @@ owns the patch, exact package extension and scoped removal as one repair. Remove
 all three together when an official compatible release removes the affected
 path and the full compatibility, frozen graph, audit and platform checks pass.
 This build-tool repair does not change published wallet APIs or package versions.
+
+## Temporary standalone service watcher repair
+
+The basic and cloud UHRP services and WAB use Nodemon 3.1.14 with a parent-scoped
+Chokidar 4.0.3 substitution, removing the same affected braces closure without
+an advisory exclusion. Nodemon already resolves watched globs to literal
+directories; the source-owned adapter retains the old anymatch 3 ignore
+semantics, including recursive literal directories, custom cwd, dotfiles,
+regex and function options. WAB replaces ts-node-dev with this same CLI.
+The existing Node/ts-node/telemetry execution paths remain intact, with explicit
+TypeScript and env extensions, manual `rs` and graceful shutdown regressions
+run before each service's ordinary tests. The service-copy policy keeps both
+adapter and native regression identical across all three service contexts.
+
+The three new registered substitutions bring the combined retained count to 30. Remove them and the adapter together after a compatible official Nodemon
+release resolves the dependency path natively and all watcher, frozen audit,
+service and protected Linux image gates pass. These standalone development
+tools change no public npm candidate version, service HTTP API, production
+startup or persisted schema; deployed images require separate promotion.
 
 ## Supply-chain controls
 
@@ -268,12 +292,15 @@ unresolvable public declarations.
 The September 30 audit refresh also selects compatible transitive releases within
 existing ranges: `engine.io` 6.6.10 in the workspace and Message Box server;
 `ip-address` 10.7.1 in Message Box, both UHRP servers and WAB; `fast-uri` 3.1.8 in
-Message Box; and `undici` 6.28.1 in WAB. These generated lock changes add no
+Message Box; and `undici` 6.28.1 in WAB. The workspace additionally selects
+`ip-address` 10.7.2, whose reviewed change since 10.7.1 only accepts the ARPA
+suffix case-insensitively and without the root dot. Wallet rate-limit and CHIRP
+consumer tests pass with that resolution. These generated lock changes add no
 manifest ranges or overrides. All selected versions exceed the seven-day release
 age. Upstream releases preserve their module and Node contracts; service suites,
 AuthSocket coverage and frozen-install audits qualify the affected consumers.
 The relevant upstream releases are [Engine.IO](https://github.com/socketio/socket.io/releases/tag/engine.io%406.6.10),
-[ip-address](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.1),
+[ip-address](https://github.com/beaugunderson/ip-address/compare/v10.3.1...v10.7.2),
 [fast-uri](https://github.com/fastify/fast-uri/releases/tag/v3.1.8) and
 [Undici](https://github.com/nodejs/undici/releases/tag/v6.28.1).
 Source reconciliation does not release packages or deploy service images.
@@ -295,14 +322,14 @@ Linux image and exact-head analysis gates remain required before promotion;
 these local results do not establish deployed behavior.
 
 The subsequent gRPC correction selects `@grpc/grpc-js` 1.14.5 in all seven
-standalone service locks for the September 30 audit correction, addressing
+standalone service locks, addressing two advisories found by the September 30 audit:
 [GHSA-m9gg-hp2v-232j](https://github.com/advisories/GHSA-m9gg-hp2v-232j) and
 [GHSA-f596-whhp-79r4](https://github.com/advisories/GHSA-f596-whhp-79r4).
 The reviewed [1.14.5 release](https://github.com/grpc/grpc-node/releases/tag/%40grpc/grpc-js%401.14.5)
 preserves the Node engine and dependency ranges; its fixes also cover stale call
 retention, status fields and completed HTTP/2 streams. Chaintracks Server and
 Wallet Infra additionally adopt the already-reviewed `ip-address` 10.7.2 within
-their existing ranges; the [10.7.2 release](https://github.com/beaugunderson/ip-address/releases/tag/v10.7.2) accepts case-insensitive ARPA suffixes. Package-manager regeneration changes only these nine
+their existing ranges. Package-manager regeneration changes only these nine
 resolved nodes; manifests, lock formats, all other dependencies, the workspace
 lock and the earlier Axios correction are unchanged.
 
@@ -317,9 +344,18 @@ compatibility checks, not a throughput or memory benchmark. No public npm
 version or consumer migration changes; protected Linux image and exact-head
 analysis gates still qualify the eventual service artifacts before promotion.
 
-The combined workspace and standalone registries carry 27 audited dependency overrides, including:
+The Overlay Express authenticated root-response test fixture declares
+`express-rate-limit` 8.6.1 as a development dependency, reusing the existing
+workspace resolution. Its limiter runs before JSON parsing and authentication,
+and teardown shuts down its per-fixture memory store. The reviewed
+[8.6.1 changelog](https://github.com/express-rate-limit/express-rate-limit/blob/v8.6.1/docs/reference/changelog.mdx)
+retains the middleware API used here; Node and Express peer requirements fit the
+existing toolchain. Only that importer reference is added to the generated lock.
+No package resolution, production route, runtime dependency or wallet graph changes.
 
-- Jest 30.5.1 and Stryker still constrain parts of their reporting and coverage graphs to
+The combined workspace and standalone registries carry 30 audited dependency overrides, including:
+
+- Jest 30.4.2 still constrains parts of its reporting and coverage graph to
   minimatch releases with older `brace-expansion` ranges. The follow-up
   advisories GHSA-qhr7-859c-m2p7, GHSA-6j4f-fj2g-mc7p and
   GHSA-q2hr-2g5m-vwhr require `brace-expansion` 5.0.12, so the workspace
@@ -327,9 +363,9 @@ The combined workspace and standalone registries carry 27 audited dependency ove
   path resolves it natively. The release preserves the existing module exports,
   types and Node engine range.
 - `socket.io` in `@bsv/authsocket` still admits `engine.io` releases below
-  6.6.10. GHSA-2gc4-cqfq-p2gv is a protocol-revision mismatch that can crash
-  the Node process during a transport upgrade, so the workspace selects
-  6.6.10, the first patched release, without changing the public Engine.IO API.
+  6.6.10. The workspace now retains upstream's explicit first-patched-release
+  substitution, matching this branch's already-selected 6.6.10 resolution.
+  Its existing public API and tested consumer behavior remain unchanged.
 - Express/body-parser, Superagent, and Stryker's `typed-rest-client@2.3.1` can
   retain vulnerable `qs` releases. A version-bounded substitution selects
   6.16.0, the first release that also fixes the bracket/comma array-limit bypass

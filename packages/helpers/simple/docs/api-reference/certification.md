@@ -68,7 +68,7 @@ New issuance uses its 32-byte SHA-256 digest. Passing a short historical
 canonical issuance type from its decoded bytes; it never issues a new short
 type.
 
-The SDK 4.0.0 compatibility candidate permits bounded historical types in
+The SDK 4.0.1 compatibility candidate permits bounded historical types in
 existing listing, proof and relinquishment calls, while signing/acquisition and
 remote issuance metadata remain strictly 32 bytes. Legacy binary use requires
 upgraded app and wallet adapters; storage servers must upgrade their SDK for

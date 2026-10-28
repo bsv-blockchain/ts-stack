@@ -9,6 +9,7 @@ import {
   type RemoteAttachment
 } from './content/index.js'
 import { GroupMessagingError, UnknownGroupError } from './errors.js'
+import { BroadcastError } from './transport/index.js'
 import type { ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from './types.js'
 
 /**
@@ -107,7 +108,20 @@ export class Group {
     return this.send(encodeContent(content))
   }
 
-  /** Encrypt arbitrary bytes to the current epoch and deliver them. */
+  /**
+   * Encrypt arbitrary bytes to the current epoch and deliver them.
+   *
+   * A rejection is not the same as "nothing happened". Fan-out runs every send
+   * to completion, so a `BroadcastError` means the group has already advanced
+   * and the message was handed to the transport for every member not listed in
+   * `failed`. `delivered` counts sends the transport accepted, which over a
+   * relay is not the same as the member holding it; `delivered === 0` says
+   * nothing was accepted at all. A caller that writes its own copy of what it sent must not
+   * condition that write on this promise resolving, or the one member
+   * guaranteed to lose the message is its author: MLS never hands a sender its
+   * own message back. Pass the error to `client.retryDelivery` to re-send those
+   * exact bytes to the members that missed them.
+   */
   async send(plaintext: Uint8Array): Promise<void> {
     const { state, message } = await this.#advance(async current =>
       this.client.engine.encrypt({ state: current, plaintext })
@@ -225,10 +239,12 @@ export class Group {
       await this.client.transport.broadcast(this.mlsGroupId, recipients, payload)
     } catch (error) {
       // The group has advanced locally regardless; the caller decides on retry.
+      // `failed` only when the transport counted — see the event's own doc.
       this.client.emit('deliveryFailed', {
         chatId: this.chatId,
         mlsGroupId: this.mlsGroupId,
         recipients,
+        ...(error instanceof BroadcastError ? { failed: error.failed } : {}),
         error: error as Error
       })
       throw error

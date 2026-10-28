@@ -3,7 +3,7 @@ id: pkg-simple
 title: '@bsv/simple'
 kind: package
 domain: helpers
-version: '0.7.1'
+version: '0.7.2'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-30'
 last_verified: '2026-09-30'
@@ -196,3 +196,7 @@ See the [package migration notes](https://github.com/bsv-blockchain/ts-stack/blo
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/simple/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/simple)
 - [npm](https://www.npmjs.com/package/@bsv/simple)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

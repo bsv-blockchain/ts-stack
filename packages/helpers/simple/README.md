@@ -1,5 +1,7 @@
 # @bsv/simple
 
+Patch candidate `0.7.2` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 A high-level TypeScript library that makes BSV blockchain development simple. Build wallets, send payments, create tokens, issue credentials, and more — in just a few lines of code.
 
 ## Install
@@ -143,9 +145,9 @@ TS Stack first-party changes are under the [Open BSV License Version 6](./LICENS
 The identified pre-monorepo source remains MIT-licensed; see
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 
-## Next dependency release candidate
+## SDK4 hotfix peer requirement
 
-This candidate refreshes the packed first-party dependency ranges for the next
-wallet interoperability release. It adds no independent API or wire-format
-change. Adopt after the new dependency graph is published; current wallet
-releases retain their existing published pins.
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

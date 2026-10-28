@@ -154,6 +154,11 @@ export class StorageReqWrite {
     }
   }
 
+  /** Only requests declared before observation may receive captured financial writes. */
+  hasRequest(txid: string): boolean {
+    return this.transactions.has(txid)
+  }
+
   assertProvider(storage: StorageProvider): void {
     if (storage !== this.storage) throw new WERR_INVALID_OPERATION('Request preparation belongs to another provider')
   }

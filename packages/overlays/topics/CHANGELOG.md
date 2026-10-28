@@ -9,10 +9,11 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### Dependency update (2.0.0 candidate)
+- Prepare `2.0.3` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
-- Refresh the packed templates range to include its CommonJS interoperability
-  repair. This dependency repair is independent of the API removals below.
+- Prepare `2.0.2` as a dependency-manifest patch candidate; retain existing APIs, peer ranges, defaults and migration requirements.
+
+- Advance the packed Overlay dependency for opt-in retained admission history; this package does not enable retention or change existing defaults.
 
 ### Removed (2.0.0 candidate)
 

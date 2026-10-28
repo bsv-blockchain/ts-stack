@@ -1,14 +1,16 @@
 {
   "schemaVersion": 1,
   "engine": "9.6.1",
-  "canonicalTargets": 102,
-  "executionRows": 256,
+  "canonicalTargets": 216,
+  "executionRows": 1678,
   "units": [
     {
       "target": "wallet-snapshot-remote-reader",
       "existingPartition": "lease",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/snapshot/archive/RemoteSnapshotLease.ts"],
+      "originalMutate": [
+        "src/storage/snapshot/archive/RemoteSnapshotLease.ts"
+      ],
       "sourceHashes": {
         "src/storage/snapshot/archive/RemoteSnapshotLease.ts": "fd5b622507cab5a2907de9044bf6185306ab1d6639b9abbf042527f9db7fa883"
       },
@@ -160,7 +162,9 @@
       "target": "wallet-snapshot-remote-reader",
       "existingPartition": "rows",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/snapshot/archive/RemoteSnapshotRows.ts"],
+      "originalMutate": [
+        "src/storage/snapshot/archive/RemoteSnapshotRows.ts"
+      ],
       "sourceHashes": {
         "src/storage/snapshot/archive/RemoteSnapshotRows.ts": "ce1659a8149e3a7304606170d3dae9e7b34ea33a9ed274b5174a65869619eb1d"
       },
@@ -198,7 +202,9 @@
       "target": "wallet-portable-packed-row",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38PackedRow.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38PackedRow.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38PackedRow.ts": "022a81619d740dafc3ebc96399d92968af9c1e0ba3d9b1c79d7850d3e0973555"
       },
@@ -241,7 +247,9 @@
       "target": "wallet-portable-source-stream",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38Stream.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38Stream.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38Stream.ts": "a2aab3a44913aafa94f86b9c4aca54d7d248d9201c19af7bc399f6c8dfc37142"
       },
@@ -261,7 +269,9 @@
           "id": "range-001"
         },
         {
-          "mutate": ["src/storage/portable/Brc38Stream.ts:150-309"],
+          "mutate": [
+            "src/storage/portable/Brc38Stream.ts:150-309"
+          ],
           "count": 167,
           "id": "range-002"
         }
@@ -271,7 +281,9 @@
       "target": "wallet-portable-json-stream",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38JsonStream.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38JsonStream.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38JsonStream.ts": "942bb6f3fd3fdbdfd11c35bd2bf753f88a0a87a66f6cbc26aa1c9279760ab2aa"
       },
@@ -347,7 +359,9 @@
           "id": "range-003"
         },
         {
-          "mutate": ["src/storage/portable/Brc38JsonStream.ts:577-663"],
+          "mutate": [
+            "src/storage/portable/Brc38JsonStream.ts:577-663"
+          ],
           "count": 95,
           "id": "range-004"
         }
@@ -357,7 +371,9 @@
       "target": "wallet-portable-knex-source",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38KnexSource.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38KnexSource.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38KnexSource.ts": "fc93982d4893340905aeed452b401ae46f278ac88cbc63fbe0654eb99ed90afb"
       },
@@ -383,12 +399,16 @@
           "id": "range-001"
         },
         {
-          "mutate": ["src/storage/portable/Brc38KnexSource.ts:185-199"],
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:185-199"
+          ],
           "count": 36,
           "id": "range-002"
         },
         {
-          "mutate": ["src/storage/portable/Brc38KnexSource.ts:205-437"],
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:205-437"
+          ],
           "count": 384,
           "id": "range-003"
         },
@@ -413,7 +433,9 @@
           "id": "range-005"
         },
         {
-          "mutate": ["src/storage/portable/Brc38KnexSource.ts:648-1052"],
+          "mutate": [
+            "src/storage/portable/Brc38KnexSource.ts:648-1052"
+          ],
           "count": 357,
           "id": "range-006"
         }
@@ -423,7 +445,9 @@
       "target": "wallet-portable-brc39-frame",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc39Frame.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc39Frame.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc39Frame.ts": "4fb653c41e8c8d734cd13ba845300c2d03d08c9627ca691c51a096092dbbefc6"
       },
@@ -523,7 +547,9 @@
           "id": "range-002"
         },
         {
-          "mutate": ["src/storage/portable/Brc38ImportEntityMergeNode.ts:529-664"],
+          "mutate": [
+            "src/storage/portable/Brc38ImportEntityMergeNode.ts:529-664"
+          ],
           "count": 160,
           "id": "range-003"
         },
@@ -597,7 +623,9 @@
           "id": "range-008"
         },
         {
-          "mutate": ["src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:139-253"],
+          "mutate": [
+            "src/storage/portable/Brc38ImportFieldPolicyRowsNode.ts:139-253"
+          ],
           "count": 155,
           "id": "range-009"
         },
@@ -621,7 +649,9 @@
           "id": "range-011"
         },
         {
-          "mutate": ["src/storage/snapshot/SnapshotSyncFieldRows.ts:117-231"],
+          "mutate": [
+            "src/storage/snapshot/SnapshotSyncFieldRows.ts:117-231"
+          ],
           "count": 257,
           "id": "range-012"
         },
@@ -665,7 +695,9 @@
       "packingHint": 250,
       "parts": [
         {
-          "mutate": ["src/storage/portable/Brc38IdbOccupiedHistory.ts:46-379"],
+          "mutate": [
+            "src/storage/portable/Brc38IdbOccupiedHistory.ts:46-379"
+          ],
           "count": 274,
           "id": "range-001"
         },
@@ -716,7 +748,9 @@
           "id": "range-004"
         },
         {
-          "mutate": ["src/storage/portable/Brc38StreamedHistoryProjection.ts:80-445"],
+          "mutate": [
+            "src/storage/portable/Brc38StreamedHistoryProjection.ts:80-445"
+          ],
           "count": 563,
           "id": "range-005"
         },
@@ -810,7 +844,9 @@
           "id": "range-002"
         },
         {
-          "mutate": ["src/storage/portable/Brc38CheckpointSyncMap.ts:49-239"],
+          "mutate": [
+            "src/storage/portable/Brc38CheckpointSyncMap.ts:49-239"
+          ],
           "count": 415,
           "id": "range-003"
         },
@@ -892,7 +928,9 @@
           "id": "range-009"
         },
         {
-          "mutate": ["src/storage/portable/Brc38ImportProofMergeNode.ts:269-523"],
+          "mutate": [
+            "src/storage/portable/Brc38ImportProofMergeNode.ts:269-523"
+          ],
           "count": 294,
           "id": "range-010"
         },
@@ -971,7 +1009,9 @@
           "id": "range-016"
         },
         {
-          "mutate": ["src/storage/portable/Brc38PrivateCheckpointTextNode.ts:71-453"],
+          "mutate": [
+            "src/storage/portable/Brc38PrivateCheckpointTextNode.ts:71-453"
+          ],
           "count": 541,
           "id": "range-017"
         },
@@ -995,12 +1035,16 @@
           "id": "range-018"
         },
         {
-          "mutate": ["src/storage/portable/Brc38PrivateMergePagesNode.ts:178-259"],
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:178-259"
+          ],
           "count": 152,
           "id": "range-019"
         },
         {
-          "mutate": ["src/storage/portable/Brc38PrivateMergePagesNode.ts:290-591"],
+          "mutate": [
+            "src/storage/portable/Brc38PrivateMergePagesNode.ts:290-591"
+          ],
           "count": 506,
           "id": "range-020"
         },
@@ -1074,7 +1118,9 @@
           "id": "range-025"
         },
         {
-          "mutate": ["src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:148-494"],
+          "mutate": [
+            "src/storage/portable/Brc38PrivateOperationalCheckpointNode.ts:148-494"
+          ],
           "count": 486,
           "id": "range-026"
         },
@@ -1092,7 +1138,13 @@
           "count": 169,
           "id": "range-027"
         },
-        { "mutate": ["src/storage/sync/syncCheckpoint.ts:27-62"], "count": 110, "id": "range-028" }
+        {
+          "mutate": [
+            "src/storage/sync/syncCheckpoint.ts:27-62"
+          ],
+          "count": 110,
+          "id": "range-028"
+        }
       ]
     },
     {
@@ -1165,7 +1217,9 @@
       "target": "wallet-current-brc38-import-target-indexes",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38ImportTargetIndexes.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38ImportTargetIndexes.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38ImportTargetIndexes.ts": "16dc42f5f1922276593381c1d3dffb848d900ee7019ca07fca1e29eeeb7475cf"
       },
@@ -1265,7 +1319,9 @@
       "target": "wallet-current-brc38-profile-physical-identity-node",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts"],
+      "originalMutate": [
+        "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts"
+      ],
       "sourceHashes": {
         "src/storage/portable/Brc38ProfilePhysicalIdentityNode.ts": "cfef7ef737d90a188c6a4022204e0bd7b6b5f3af3fa1e086ab8fda3008c9446d"
       },
@@ -1436,7 +1492,9 @@
       "target": "wallet-current-snapshot-journal-delta-frame",
       "existingPartition": "whole",
       "packageDirectory": "packages/wallet/wallet-toolbox",
-      "originalMutate": ["src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts"],
+      "originalMutate": [
+        "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts"
+      ],
       "sourceHashes": {
         "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts": "a64f782986d1122a1de2ccf86555cefa8492099d94ee60ea9a08ec12a5bb65a0"
       },
@@ -1473,7 +1531,9 @@
           "id": "range-002"
         },
         {
-          "mutate": ["src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:180-291"],
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaFrame.ts:180-291"
+          ],
           "count": 213,
           "id": "range-003"
         },
@@ -1530,7 +1590,13 @@
           "count": 226,
           "id": "range-001"
         },
-        { "mutate": ["src/storage/idbPackedPage.ts:139-337"], "count": 403, "id": "range-002" },
+        {
+          "mutate": [
+            "src/storage/idbPackedPage.ts:139-337"
+          ],
+          "count": 403,
+          "id": "range-002"
+        },
         {
           "mutate": [
             "src/storage/snapshot/archive/RemoteSnapshotPageReader.ts:32-34",
@@ -1563,12 +1629,16 @@
           "id": "range-005"
         },
         {
-          "mutate": ["src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:184-261"],
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:184-261"
+          ],
           "count": 138,
           "id": "range-006"
         },
         {
-          "mutate": ["src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:272-380"],
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDeltaPage.ts:272-380"
+          ],
           "count": 172,
           "id": "range-007"
         },
@@ -1650,7 +1720,9 @@
           "id": "range-002"
         },
         {
-          "mutate": ["src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:411-568"],
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalDestinationStage.ts:411-568"
+          ],
           "count": 281,
           "id": "range-003"
         },
@@ -1732,7 +1804,9 @@
           "id": "range-003"
         },
         {
-          "mutate": ["src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:104-193"],
+          "mutate": [
+            "src/storage/snapshot/journal/SnapshotJournalIdentityRetirements.ts:104-193"
+          ],
           "count": 111,
           "id": "range-004"
         }
@@ -1771,12 +1845,16 @@
           "id": "sqlite-bootstrap-002"
         },
         {
-          "mutate": ["src/storage/schema/snapshotSqliteIndexBootstrap.ts:97-149"],
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:97-149"
+          ],
           "count": 74,
           "id": "sqlite-bootstrap-003"
         },
         {
-          "mutate": ["src/storage/schema/snapshotSqliteIndexBootstrap.ts:150-209"],
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexBootstrap.ts:150-209"
+          ],
           "count": 108,
           "id": "sqlite-bootstrap-004"
         },
@@ -1790,7 +1868,9 @@
           "id": "sqlite-bootstrap-005"
         },
         {
-          "mutate": ["src/storage/schema/snapshotSqliteIndexState.ts:12-41"],
+          "mutate": [
+            "src/storage/schema/snapshotSqliteIndexState.ts:12-41"
+          ],
           "count": 71,
           "id": "sqlite-bootstrap-006"
         }

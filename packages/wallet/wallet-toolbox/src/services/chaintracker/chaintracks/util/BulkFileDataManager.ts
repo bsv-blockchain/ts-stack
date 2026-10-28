@@ -363,7 +363,10 @@ export class BulkFileDataManager {
       throw new WERR_INVALID_PARAMETER('downloadBudget', 'an object with a consume function when defined')
     }
 
-    this.deleteBulkFilesNoLock()
+    for (const file of this.knownSourceFiles()) {
+      this.validateBfdForAdd(file)
+      this.appendBfd(file)
+    }
   }
 
   getStats(): BulkFileDataManagerStats {
@@ -378,17 +381,21 @@ export class BulkFileDataManager {
     return awaitFromSync(() => this.lock.withWriteLock(() => promiseFromSync(() => this.deleteBulkFilesNoLock())))
   }
 
-  private deleteBulkFilesNoLock(): void {
+  private async deleteBulkFilesNoLock(): Promise<void> {
     this.setBulkFilesState([])
+    // Each insert and its in-memory continuity validation must finish in order.
+    await this.knownSourceFiles().reduce(async (previous, file) => {
+      await previous
+      await this.add(file)
+    }, Promise.resolve())
+  }
 
-    if (this.fromKnownSourceUrl) {
-      const vbhfs = validBulkHeaderFiles
-      const filtered = vbhfs.filter(f => f.sourceUrl === this.fromKnownSourceUrl)
-      const files = selectBulkHeaderFiles(filtered, this.chain, this.maxPerFile)
-      for (const file of files) {
-        this.add({ ...file, fileHash: file.fileHash!, validated: false, mru: Date.now() })
-      }
-    }
+  private knownSourceFiles(): BulkFileData[] {
+    if (!this.fromKnownSourceUrl) return []
+    const filtered = validBulkHeaderFiles.filter(file => file.sourceUrl === this.fromKnownSourceUrl)
+    return selectBulkHeaderFiles(filtered, this.chain, this.maxPerFile).map(file => ({
+      ...file, fileHash: file.fileHash!, validated: false, mru: Date.now()
+    }))
   }
 
   /**
@@ -1005,11 +1012,15 @@ export class BulkFileDataManager {
     if (this.storage != null) {
       info.fileId = bfd.fileId = await this.storage.insertBulkFile(info)
     }
+    this.appendBfd(bfd)
+    return info
+  }
+
+  private appendBfd(bfd: BulkFileData): void {
     const index = this.bfds.length
     this.bfds.push(bfd)
     this.fileHashToIndex[bfd.fileHash] = index
     this.ensureMaxRetained()
-    return info
   }
 
   private replaceBfdAtIndex(index: number, update: BulkFileData): void {

@@ -18,7 +18,7 @@ tags: [messaging, message-box, brc-103, brc-29]
 
 The unpublished 2.6 candidate accepts strict bounded base64 transaction bytes at the PeerPay receive boundary, alongside deployed array/byte representations. Outgoing encoding stays unchanged. This does not remove encrypted relay message limits or provide a durable settlement journal.
 
-This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.8.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -41,7 +41,7 @@ npm install @bsv/message-box-client @bsv/sdk
 ```
 
 `@bsv/sdk` is a required peer. Node.js 22 or newer is supported.
-The current candidate requires `^2.8.6 || ^3.0.0 || ^4.0.0`; use SDK2.8.6 or newer within
+The current candidate requires `^2.8.6 || ^3.0.0 || ^4.0.1`; use SDK2.8.6 or newer within
 the SDK2 family, or the proposed SDK3 candidate after the linked qualification. The package imports SDK validation modules first
 shipped in 2.8.0, and SDK 2.8.6 fixes BRC-29 payment acceptance. BRC-29 sends accept both historical `number[]` and
 binary Wallet Wire `Uint8Array` transaction results. Payment receipt also

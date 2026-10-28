@@ -8,7 +8,8 @@
 // `required` runs now, `deferred` holds unselected high-risk targets, and
 // `outside` holds unselected critical targets. Deferred and outside both mean
 // not executed, never passed.
-import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 
@@ -51,11 +52,10 @@ export function parseArguments(argv) {
 function main(argv) {
   const options = parseArguments(argv)
   const targets = buildMutationTargets(ROOT)
+  // Executable targets and risk policy must describe the same source bytes,
+  // including a completed local batch awaiting its first commit.
   const policy = JSON.parse(
-    execFileSync('/usr/bin/git', ['show', 'HEAD:governance/mutation-testing/policy.json'], {
-      cwd: ROOT,
-      encoding: 'utf8'
-    })
+    readFileSync(join(ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
   )
   console.log(JSON.stringify(classifyMutationScope({ targets, policy, all: options.all })))
 }

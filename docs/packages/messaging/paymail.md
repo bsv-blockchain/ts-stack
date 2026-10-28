@@ -3,7 +3,7 @@ id: pkg-paymail
 title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: '2.4.11'
+version: '2.4.12'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-23'
 last_verified: '2026-09-23'
@@ -16,7 +16,7 @@ tags: [paymail, messaging, brc-29, identity]
 
 # @bsv/paymail
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -180,3 +180,7 @@ const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/paymail/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail)
 - [npm](https://www.npmjs.com/package/@bsv/paymail)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

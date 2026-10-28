@@ -1,3 +1,4 @@
+import type { Brc197InternalizeActionArgs, Brc197InternalizationCapabilities } from './Brc197Internalization'
 import type {
   AbortActionArgs,
   AbortActionResult,
@@ -102,6 +103,8 @@ export interface WalletStorage {
   commitActionBatchByDigest?: (args: CommitActionBatchByDigestArgs) => Promise<CommitActionBatchResult>
   abortActionBatch: (batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (args: InternalizeActionArgs) => Promise<InternalizeActionResult>
+  internalizeBrc197Action?: (args: Brc197InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
+  getBrc197InternalizationCapabilities?: () => Promise<Brc197InternalizationCapabilities>
 
   findCertificates: (args: FindCertificatesArgs) => Promise<TableCertificateX[]>
   findOutputBaskets: (args: FindOutputBasketsArgs) => Promise<TableOutputBasket[]>
@@ -218,6 +221,7 @@ export interface WalletStorageWriter extends WalletStorageReader {
   commitActionBatchByDigest?: (auth: AuthId, args: CommitActionBatchByDigestArgs) => Promise<CommitActionBatchResult>
   abortActionBatch: (auth: AuthId, batchId: string) => Promise<AbortActionBatchResult>
   internalizeAction: (auth: AuthId, args: InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
+  internalizeBrc197Action?: (auth: AuthId, args: Brc197InternalizeActionArgs) => Promise<StorageInternalizeActionResult>
 
   insertCertificateAuth: (auth: AuthId, certificate: TableCertificateX) => Promise<number>
 

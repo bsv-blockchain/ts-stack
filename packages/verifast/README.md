@@ -1,5 +1,7 @@
 # @bsv/verifast
 
+Patch candidate `0.3.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Real BSV BDK script verification in WebAssembly for `@bsv/sdk`. One package
 supports Node ESM, CommonJS, browser/worker ESM, and classic-script/UMD clients.
 
@@ -287,3 +289,10 @@ The bundled BDK, bitcoin-sv, libsecp256k1, Emscripten, musl, LLVM, and Boost
 material remains under the separate terms in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 Keep those files with every JavaScript and WebAssembly distribution.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

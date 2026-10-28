@@ -1,11 +1,15 @@
 # @bsv/overlay-topics
 
+Patch candidate `2.0.3` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-topics)](https://www.npmjs.com/package/@bsv/overlay-topics)
 
 Canonical topic managers and lookup services for the BSV overlay network. Bundles the reference implementations that overlay nodes mount to host first-class on-chain protocols — identity certificates, key/value storage, message boxes, app catalogs, and more — without having to write a `TopicManager` / `LookupService` for each one from scratch.
 
 UHRP lookup accepts `limit` from 1 through 200 (default 50) and orders pages by transaction ID and output index. This supports the SDK StorageDownloader 200-row query without changing signature or selector validation.
+
+The release candidate advances the packed Overlay dependency to support optional retained admission history. This dependency addition does not enable history retention automatically or migrate data. The separately approved DID retirement below has its own migration requirements.
 
 UMP lookup requests the full retained token-update lineage for presentation,
 recovery and outpoint queries. The engine owns traversal and byte limits.
@@ -366,3 +370,10 @@ older readers may have admitted inputs that the format does not permit.
 Repository fixtures establish format compatibility; they do not establish an
 inventory of every deployed or historical anchor. Other topics, lookup query
 shapes and persisted schemas are unchanged.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

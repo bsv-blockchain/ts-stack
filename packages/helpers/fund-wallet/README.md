@@ -1,5 +1,7 @@
 # fund-wallet
 
+Patch candidate `1.5.5` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 A command-line tool to fund a Metanet wallet with Bitcoin SV (BSV).
 
 ## Installation
@@ -162,9 +164,9 @@ The recovered pre-monorepo ISC notice is retained in
 - [@bsv/wallet-toolbox](https://www.npmjs.com/package/@bsv/wallet-toolbox) - Wallet management tools
 - [Metanet Desktop](https://metanet.bsvb.tech) - Local BSV wallet application
 
-## Next dependency release candidate
+## SDK4 hotfix peer requirement
 
-This candidate refreshes the packed first-party dependency ranges for the next
-wallet interoperability release. It adds no independent API or wire-format
-change. Adopt after the new dependency graph is published; current wallet
-releases retain their existing published pins.
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

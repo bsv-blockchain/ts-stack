@@ -1,5 +1,7 @@
 # @bsv/message-box-client
 
+Patch candidate `2.6.1` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 Authenticated, optionally encrypted store-and-forward messaging for BSV
 applications. The package supports browser and Node.js consumers, HTTP polling,
 live authenticated WebSockets, overlay-based host discovery, peer payments,
@@ -564,3 +566,10 @@ a different request and reject a different transaction ID for a request whose
 outcome has not been reconciled. Apply the same durable correlation in every
 service process; in-memory serialization is not cross-process replay
 protection.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

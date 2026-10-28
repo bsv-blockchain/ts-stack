@@ -75,7 +75,11 @@
       "storage.chirp-v1"
     ],
     "BRC-62": [
-      "overlay.submit"
+      "overlay.submit",
+      "sdk.transactions.atomic-beef"
+    ],
+    "BRC-95": [
+      "sdk.transactions.atomic-beef"
     ],
     "BRC-22": [
       "overlay.lookup",
@@ -122,9 +126,9 @@
     ]
   },
   "stats": {
-    "total_files": 78,
-    "total_vectors": 6712,
-    "last_updated": "2026-10-07"
+    "total_files": 79,
+    "total_vectors": 6724,
+    "last_updated": "2026-10-28"
   },
   "regression_index": {
     "beef-v2-txid-panic": "go-sdk#306",

@@ -1,5 +1,7 @@
 # @bsv/402-pay
 
+Patch candidate `0.3.5` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+
 [BRC-121](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) Simple 402 Payments -- server middleware and client for BSV micropayments over HTTP.
 
 ## Protocol boundary
@@ -16,7 +18,7 @@ integration. Existing 402-pay wire behavior is unchanged.
 npm install @bsv/402-pay
 ```
 
-Peer dependency: `@bsv/sdk ^2.1.6 || ^3.0.0 || ^4.0.0`. The package supports Node.js 22+ and browser
+Peer dependency: `@bsv/sdk ^2.1.6 || ^3.0.0 || ^4.0.1`. The package supports Node.js 22+ and browser
 consumers, with matching ESM and CommonJS entry points and declarations for the
 package root, `/server`, and `/client`.
 
@@ -165,3 +167,10 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under its package-specific Open BSV License Version 4 grant. Redistributors
 must preserve [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
 applicable text in [`LICENSES/`](./LICENSES/).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

@@ -168,6 +168,62 @@ Populated private-native journal initialization now completes the existing 1,000
 
 The original eight Linux root-copy fixtures run separately under the installer identity. CI requires their complete report and includes their coverage; ordinary wallet fixtures retain their normal actor. The validator consumes the generated report through stdin within its existing 64 MiB byte ceiling and accepts no filesystem path argument; invalid, interrupted or oversized input fails closed. The inventory and authentication restore fixtures explicitly reserve 8 MiB and an 11 MiB profile catalogue total (the unchanged 3 MiB catalogue reservation plus one 8 MiB profile). Smaller-budget refusal controls and production defaults remain unchanged.
 
+## Remote storage timeouts
+
+`StorageClient` accepts optional `authFetchOptions` in its existing third
+constructor argument. This applies to the Node, browser and mobile packages.
+Omitting it preserves the installed SDK's defaults.
+
+```ts
+import { type WalletInterface } from '@bsv/sdk'
+import { StorageClient } from '@bsv/wallet-toolbox'
+
+declare const wallet: WalletInterface
+const storage = new StorageClient(wallet, 'https://storage.example/rpc', {
+  authFetchOptions: {
+    requestTimeoutMs: 60_000,
+    responseTimeoutMs: 60_000
+  }
+})
+```
+
+`requestTimeoutMs` bounds transport fetch and body consumption;
+`responseTimeoutMs` independently bounds the authenticated response waiter.
+Both default to 30 seconds. The response-wait option requires an SDK release
+containing `AuthFetchOptions.responseTimeoutMs`; older supported SDKs retain
+their existing behavior and option types. The declared SDK peer ranges remain
+unchanged. Other certificate/session deadlines and caller operation deadlines
+are independent. A local timeout does not undo a server-side financial write;
+reconcile its outcome before deciding whether to resubmit it.
+
+## Optional local transaction recovery
+
+The 2.15.0 source candidate adds explicit local SQLite recovery controllers as
+separate deep imports. Action recovery retains one fixed-layout, two-phase
+`noSend` allocation, prepared transaction and final signed bytes. Funding recovery
+binds one BRC-29 payment to its acquisition and atomically retains wallet ownership,
+monitor work and a durable receipt. Ordinary BRC-100 calls and defaults are unchanged.
+The new funding capability requires SDK 3.3.0; legacy root and existing deep
+consumers retain the declared older SDK peer compatibility.
+
+Install the auxiliary schemas explicitly in the active local wallet database.
+Reopen them after restart, and preserve a consistent whole database plus wallet
+keys. These journals are not included in ordinary entity backup/sync or BRC-38/39
+exports. Browser, mobile, IndexedDB and remote provider wrappers do not acquire
+these capabilities by upgrading. During rollback, stop new operations, reconcile
+outstanding work and retain the original journals; deleting them loses recovery.
+
+See [local action recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-action-recovery/)
+and [local funding recovery](https://bsv-blockchain.github.io/ts-stack/guides/local-funding-recovery/)
+for construction limits, deep imports, verification and unresolved service obligations.
+A local receipt does not prove settlement, a content license or protected delivery.
+
+Internal recovery JSON ownership uses a fresh call-local context for scalar,
+array and record checks. It retains the same deterministic stored bytes, error
+identities, descriptor/prototype/cycle checks and fixed resource bounds; the
+refactor requires no caller or stored-format migration. It never retains
+ownership state or authority between calls.
+
 ## Receiving already-broadcast payments
 
 The 2.14.9 source candidate completes broadcast results even when storage
@@ -1432,6 +1488,14 @@ Wire transports also support `Uint8Array`.
 that contain unrelated BEEF branches. The wallet restricts either form to the
 declared transaction and its recursive dependencies before independently
 validating every transaction, proof, and BRC-29 payment output.
+
+The experimental local `getBrc197InternalizationCapabilities()` and
+`internalizeBrc197Action()` extension accepts the literal fixed-child remittance
+for the optional BRC-197 exemplar through the complete wallet ownership pipeline.
+Ordinary BRC-29 validation and remote BRC-100 methods remain unchanged.
+Read the [fixed-child intake guide](../../../docs/guides/brc197-fixed-child-wallet.md)
+for explicit capability selection and the outstanding native, recipient spending
+and activation-before-funding qualification gates.
 
 ## Documentation
 
@@ -6433,6 +6497,39 @@ Qualification filesystem readers bind metadata and bytes to the same opened desc
 ## Pre-construction conflict recovery
 
 The held 2.15.0 candidate preserves remote storage's empty attempted-TXID sentinel
+
+## Internalization refusal and rollback boundaries
+
+Signer and storage boundaries independently validate the AtomicBEEF subject,
+proof verdict and requested ownership before admitting outputs. Early basket
+classification and final basket admission share the same pure policy: the
+wallet's default basket cannot be a custom insertion destination. Both checks
+retain the existing error identity and occur before a basket lookup or write.
+
+Synthetic port-fault regressions cover inconsistent verifier and validator
+results, missing inclusion information, transaction races, degenerate child
+keys and failed publication. They verify the retained storage state as well
+as the error. Failed publication restores only inputs transitioned by that
+attempt and does not admit requested outputs, labels, baskets or tags;
+bookkeeping preserves a different recorded spender even when a legacy row
+still says spendable. These checks do not replace chain verification or prove
+real-network broadcast. Public methods, remittances, schemas and defaults
+require no migration.
+
+The failed-publication fixture supplies the optional new-request signal through
+a disclosed synthetic storage port and uses real SQLite ownership writes and
+rollback. The ordinary concrete provider path retains its existing behavior.
+Additional mined recovery and tag-free insertion cases check retained balances,
+proof identities, transaction lifecycle and empty metadata without network I/O.
+
+The failed-publication regression binds both stored inputs to the transaction
+actually consumed. At the publication boundary it observes committed SQLite
+spend transitions for own and foreign rows, then checks restoration of the
+complete original rows apart from their update timestamps.
+
+## Pre-construction conflict recovery
+
+The 2.15.0 candidate preserves remote storage's empty attempted-TXID sentinel
 only for a bounded double-spend review before transaction construction. It does
 not authorize a retry. Applications must verify complete competing transactions
 against the requested explicit inputs, synchronize the accepted winner, then
@@ -6585,3 +6682,10 @@ Read-only native merge-target alias lookup now uses the exact borrowed transacti
 Read-only original proof-field comparison now uses the actual bounded operation owner, including a frozen recovery copy after the immutable import deadline. Complete original byte/hash comparison, genuine source and borrowed-read ownership, cancellation, working charges and financial expiry remain enforced. No public API, wire, schema, native ABI or resource-limit migration; complete composed recovery qualification remains required.
 
 Proof inventory drains complete page-history reconstruction before reserving its separate proof scratch frame. Both phases retain the same actual borrowed native transaction, shared working owner, fresh source/schema and complete byte/cache checks. The fixed original allocation ceiling and all financial and operation deadlines remain unchanged. No API, wire, persisted schema, native ABI or consumer migration; complete expired-recovery qualification remains required.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

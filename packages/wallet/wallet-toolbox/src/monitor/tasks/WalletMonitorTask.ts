@@ -1,3 +1,4 @@
+import { pendingDescendantTxids } from '../../storage/methods/reconcileFailedTransactionInputs'
 import { promiseFromSync, awaitFromSync } from '../../utility/promiseFromSync'
 import { StorageReqWrite } from '../../storage/StorageReqWrite'
 import { WERR_NOT_ACTIVE, WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
@@ -57,7 +58,8 @@ export abstract class WalletMonitorTask {
  * preparation keeps its actual provider reference and original epoch fences. */
 export async function captureMonitorReqWrite(
   task: Pick<WalletMonitorTask, 'storage'>,
-  txids: string[]
+  txids: string[],
+  includeDescendants = false
 ): Promise<StorageReqWrite | undefined> {
   if (typeof task.storage.runAsStorageProvider !== 'function') return undefined
   const provider = await task.storage.runAsStorageProvider(
@@ -68,9 +70,10 @@ export async function captureMonitorReqWrite(
     true
   )
   if (provider == null) return undefined
+  const declared = includeDescendants ? [...txids, ...(await pendingDescendantTxids(txids, provider))] : txids
   const captured = await StorageReqWrite.capture(
     provider,
-    txids,
+    declared,
     undefined,
     async operation =>
       await task.storage.runAsStorageProvider(
