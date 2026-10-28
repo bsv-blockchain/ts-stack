@@ -131,3 +131,20 @@ The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
 wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
 lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
 application-wallet wire or data migration is required.
+
+### Delegating consent lifetime to a trusted host
+
+Set `authorizationTTL: 0` when the wallet's permission manager owns session or
+remembered grants. This explicit mode calls `authorize` for every operation,
+including `seekPermission: false`, so revoking host access takes effect on the
+next call. The callback must honor no-prompt probes without joining a pending
+user decision. No private module grant cache is used in this mode. The default
+five-minute cache remains unchanged for existing hosts.
+
+Authorize the isolated canonical `[securityLevel,"p ecpm <logicalProtocolID>"]`
+feature scope, including its counterparty and protected-key policy. This scope
+is not the callable operation/point envelope and is not an ordinary derivation
+grant for `<logicalProtocolID>`. Forward the operation, point and key ID only as
+technical presentation details. Session consent covers the reviewed feature's
+points and key IDs; protected keys still follow the host's separate unlock and
+per-request consent policy. Registry metadata does not authorize a request.
