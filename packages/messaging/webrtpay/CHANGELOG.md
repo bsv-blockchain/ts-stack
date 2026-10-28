@@ -107,3 +107,9 @@ MessageBox.
 First release (source only, unpublished): direct wallet-to-wallet BSV payments over WebRTC data
 channels, authenticated with BRC-100 identity keys, with signaling by offer and answer codes,
 MessageBox, or the package's relay.
+
+## 0.2.3 candidate
+
+- Align the exported `VERSION` with package `0.2.3`.
+
+- Prepare `0.2.3` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.

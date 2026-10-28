@@ -9,7 +9,7 @@ import {
   type WalletResultBEEF,
   type WalletResultTransaction
 } from './WalletResultBEEF.js'
-import { isCanonicalDecimal, isModuleBalanceQuery } from './moduleBalanceQuery.js'
+import { isBalanceQuery } from './moduleBalanceQuery.js'
 import { isCanonicalDERSignature, isValidCompressedPublicKey } from './Secp256k1Validation.js'
 import {
   base64ToBytes,
@@ -2092,14 +2092,16 @@ function validateListActions(result: UnknownRecord, call: string, request?: unkn
 
 function validateListOutputs(result: UnknownRecord, call: string, request?: unknown): void {
   const requestArgs = requestRecord(request)
-  if (isModuleBalanceQuery(requestArgs?.basket)) {
-    if (!isCanonicalDecimal(result.totalOutputs)) {
-      invalid(call, 'totalOutputs', 'canonical decimal text for a module balance query')
+  if (isBalanceQuery(requestArgs?.basket)) {
+    const balance = result.totalOutputs
+    // Any magnitude: JSON carries the Number. The binary writer alone refuses 2^64 or more.
+    if (typeof balance !== 'number' || !intrinsicNumberIsInteger(balance) || balance < 0) {
+      invalid(call, 'totalOutputs', 'a nonnegative integer balance for a balance query')
     }
     if (!arrayIsArray(result.outputs) || result.outputs.length !== 0) {
-      invalid(call, 'outputs', 'an empty array for a module balance query')
+      invalid(call, 'outputs', 'an empty array for a balance query')
     }
-    if (result.BEEF !== undefined) invalid(call, 'BEEF', 'absent for a module balance query')
+    if (result.BEEF !== undefined) invalid(call, 'BEEF', 'absent for a balance query')
     return
   }
   const outputs = validateListResult(result, call, 'totalOutputs', 'outputs', request)

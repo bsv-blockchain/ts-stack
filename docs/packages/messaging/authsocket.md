@@ -3,7 +3,7 @@ id: pkg-authsocket
 title: '@bsv/authsocket'
 kind: package
 domain: messaging
-version: '2.1.10'
+version: '2.1.11'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-27'
 last_verified: '2026-08-27'
@@ -16,7 +16,7 @@ tags: [messaging, websocket, brc-31, auth]
 
 # @bsv/authsocket
 
-This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.4.1 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -198,3 +198,7 @@ io.on('connection', async socket => {
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/authsocket/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/authsocket)
 - [npm](https://www.npmjs.com/package/@bsv/authsocket)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

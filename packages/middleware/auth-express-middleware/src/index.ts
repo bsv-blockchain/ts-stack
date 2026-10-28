@@ -1642,21 +1642,21 @@ export class ExpressTransport implements Transport {
         wrapper.set('content-type', 'application/json')
       }
       wrapper.send(val)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
     ;(res as any).__json = res.json
     ;(res as any).json = (obj: any) => {
       wrapper.json(obj)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
     ;(res as any).__text = (res as any).text
     ;(res as any).text = (str: string) => {
       wrapper.text(str)
-      buildAndSendResponse()
+      buildAndSendResponse().catch(next)
       return res
     }
 
@@ -1885,7 +1885,7 @@ export class ExpressTransport implements Transport {
           code: 'CERTIFICATE_TIMEOUT',
           message: 'Certificate request timed out'
         })
-        buildAndSendResponse()
+        buildAndSendResponse().catch(next)
       }
     }, this.limits.requestTimeoutMs)
     timeoutHandle.unref?.()

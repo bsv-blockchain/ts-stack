@@ -572,3 +572,10 @@ The application owns original protected custody, full domain/release validation
 and stopping/draining the coordinator before closing its native domain. See
 [purchase custody](../../../docs/guides/private-purchase-custody.md) for the
 component boundaries and remaining end-to-end qualification requirements.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

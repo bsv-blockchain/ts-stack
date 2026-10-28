@@ -1413,6 +1413,29 @@ export function automaticPlan(targetId, target, measured = measuredTargetSeconds
   return planFromGroups(byFile.keys(), units, groupUnits(units, count))
 }
 
+// Pinned-engine inventory finds no mutation sites in these declaration/import
+// companions. Execute every original range with a related nonempty partition;
+// an empty report must never satisfy the immutable evidence verifier.
+const executionCompanions = new Map([
+  ['private-purchase-disclosure', ['auto-2', 'auto-3']],
+  ['root-eviction-coordination', ['auto-2', 'auto-1']],
+  ['private-purchase-buyer', ['auto-8', 'auto-1']]
+])
+
+function withExecutionCompanions(targetId, parts) {
+  const companion = executionCompanions.get(targetId)
+  if (!companion) return parts
+  const [from, into] = companion
+  if (!parts.some(part => part.id === from) || !parts.some(part => part.id === into))
+    throw new Error(`Missing canonical execution companion ${targetId}`)
+  const mutate = parts
+    .filter(part => part.id === from || part.id === into)
+    .flatMap(part => part.target.mutate)
+  return parts
+    .filter(part => part.id !== from)
+    .map(part => (part.id === into ? { ...part, target: { ...part.target, mutate } } : part))
+}
+
 export function partitionMutationTarget(targetId, target) {
   const ranges = rangePlans.get(targetId)
   if (ranges) return semanticPartitions(target, ranges, rangeCompanions.get(targetId))
@@ -1445,11 +1468,12 @@ export function partitionMutationTarget(targetId, target) {
   }
   if (groups.size === 0) throw new Error('Empty canonical mutation source union')
   const refinements = refinedFileParts.get(targetId)
-  return [...groups].flatMap(([id, mutate]) => {
+  const parts = [...groups].flatMap(([id, mutate]) => {
     const original = { id, target: { ...target, mutate } },
       refinement = refinements?.get(id)
     return refinement ? semanticPartitions(original.target, refinement) : [original]
   })
+  return withExecutionCompanions(targetId, parts)
 }
 
 export function partitionedMutationTargets(selected, targets) {
@@ -1509,4 +1533,9 @@ export function longestFirst(matrix, seconds) {
       .sort((left, right) => cost(right.row) - cost(left.row) || left.index - right.index)
       .map(({ row }) => row)
   }
+}
+
+/** One complete ordered inventory for both scheduling and immutable verification. */
+export function scheduledMutationExecutionMatrix(selected, targets, seconds) {
+  return longestFirst(mutationExecutionMatrix(selected, targets), seconds)
 }

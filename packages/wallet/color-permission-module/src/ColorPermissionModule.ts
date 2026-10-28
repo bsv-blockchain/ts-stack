@@ -2305,7 +2305,10 @@ export class ColorPermissionModule implements PermissionsModule {
     throw new Error('BRC-207: unknown p color basket selector')
   }
 
-  /** `p color balance`: exact sum of available token units, or count of available authorities. */
+  /**
+   * `p color balance`: sum of available token units, or count of available authorities.
+   * Summed exactly; answered as a number, exact to 2^53 and rounded above.
+   */
   protected async balance(
     assetId: string,
     role: TokenRole,
@@ -2321,7 +2324,7 @@ export class ColorPermissionModule implements PermissionsModule {
       })
       .filter(token => token?.assetId === assetId && token.role === role)
     const total = held.reduce((sum, token) => sum + (role === 'value' ? token!.amount : 1n), 0n)
-    return { totalOutputs: total.toString(), outputs: [] }
+    return { totalOutputs: Number(total), outputs: [] }
   }
 
   /** `p color assets`: every held token output across all per-asset baskets, with its state. */

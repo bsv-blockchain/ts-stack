@@ -2117,6 +2117,14 @@
       "reviewBy": "2026-10-12"
     },
     {
+      "path": "conformance/vectors/sdk/transactions/atomic-beef.json",
+      "classification": "upstream-parity",
+      "expectedSkips": 2,
+      "owner": "ts-stack-maintainers",
+      "removeWhen": "BRCs#350 settles the BRC-95 graph rule: either @bsv/sdk follows raw entries past proven transactions, or both vectors flip to valid: false and become required.",
+      "reviewBy": "2026-11-30"
+    },
+    {
       "path": "conformance/vectors/sync/brc40-user-state.json",
       "classification": "stateful-harness",
       "expectedSkips": 24,

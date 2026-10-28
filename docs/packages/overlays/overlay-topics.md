@@ -4,7 +4,7 @@ title: '@bsv/overlay-topics'
 kind: package
 domain: overlays
 npm: '@bsv/overlay-topics'
-version: '2.0.2'
+version: '2.0.3'
 last_updated: '2026-10-02'
 last_verified: '2026-10-02'
 review_cadence_days: 30
@@ -15,7 +15,7 @@ tags: ['overlay', 'topics', 'uhrp']
 
 # @bsv/overlay-topics
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -326,3 +326,7 @@ changes (`mandalaOwners` and `mandalaAuthorities` are new; `mandalaTokens`,
 and key by `tokenId`), so a 2.0.0 Mandala topic starts on a new database with new
 deploys. Use one `MandalaStorageManager` for admission and lookup. The package
 `CHANGELOG.md` lists the replaced API.
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

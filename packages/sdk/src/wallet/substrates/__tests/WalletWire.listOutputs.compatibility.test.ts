@@ -85,8 +85,8 @@ describe('explicit listOutputs spendability extension', () => {
     expect(transport).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves exact module balance text on an explicitly extended connection', async () => {
-    const balance = { totalOutputs: '18446744073709551616', outputs: [] }
+  it('preserves numeric module balances on an explicitly extended connection', async () => {
+    const balance = { totalOutputs: 2 ** 53 + 2, outputs: [] }
     const caller = new WalletWireTransceiver(
       new WalletWireProcessor({ listOutputs: async () => balance } as unknown as WalletInterface),
       { listOutputsEncoding: 'spendable' }

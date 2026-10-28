@@ -181,6 +181,26 @@ describe('TransportService', () => {
     expect(broadcastError.delivered).toBe(1)
   })
 
+  it('carries the payload it was asked to send, so a retry can re-send those bytes', async () => {
+    // Without this the only re-send available to a caller is a fresh message,
+    // which moves the ratchet, burns a generation and duplicates the line for
+    // everyone who did receive it. The bytes are the whole point of a retry.
+    const backend: TransportBackend = {
+      send: async (recipient: IdentityKey) => {
+        if (recipient === CAROL) throw new Error('unreachable')
+      },
+      onMessage: () => () => undefined
+    }
+    const service = await TransportService.open(backend)
+    const payload = mls(7)
+
+    const error = await service
+      .broadcast('g1', [BOB, CAROL], payload)
+      .catch((cause: unknown) => cause)
+
+    expect((error as BroadcastError).payload).toBe(payload)
+  })
+
   it('stops delivering once closed', async () => {
     const hub = new InProcessTransportHub()
     const bob = await TransportService.open(hub.endpoint(BOB))
@@ -391,5 +411,79 @@ describe('TransportService construction and unheard faults', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+/**
+ * The transport is the one input with options worth setting, and live delivery
+ * is the one worth setting most. Taking the client alone means a host that
+ * wants a socket has to stop using `create()` and build the backend itself,
+ * which is how every app in this repository ended up bypassing the documented
+ * path.
+ */
+describe('a MessageBox client with its options', () => {
+  const fakeBox = () => ({
+    calls: [] as string[],
+    listed: [] as unknown[],
+    sent: [] as unknown[],
+    async sendMessage(args: unknown) {
+      this.sent.push(args)
+      return {}
+    },
+    async listMessages(args: unknown) {
+      this.listed.push(args)
+      return []
+    },
+    async acknowledgeMessage() {
+      return {}
+    },
+    async initializeConnection() {
+      this.calls.push('initializeConnection')
+    },
+    async listenForLiveMessages(args: { messageBox: string; onMessage: unknown }) {
+      this.calls.push(`listen:${args.messageBox}`)
+    },
+    async leaveRoom() {
+      this.calls.push('leaveRoom')
+    },
+    async disconnectWebSocket() {
+      this.calls.push('disconnectWebSocket')
+    }
+  })
+
+  it('opens a live socket when the options ask for one', async () => {
+    const client = fakeBox()
+    const service = await TransportService.open({ client, live: true })
+
+    expect(client.calls).toContain('initializeConnection')
+    expect(client.calls.some(call => call.startsWith('listen:'))).toBe(true)
+
+    await service.close()
+  })
+
+  it('leaves the socket alone when they do not', async () => {
+    const client = fakeBox()
+    const service = await TransportService.open({ client })
+
+    expect(client.calls).toEqual([])
+
+    await service.close()
+  })
+
+  it('passes the rest of the options through', async () => {
+    const client = fakeBox()
+    const service = await TransportService.open({ client, messageBox: 'somewhere_else' })
+
+    await service.send(BOB, mls(1))
+
+    expect(client.sent).toContainEqual(expect.objectContaining({ messageBox: 'somewhere_else' }))
+
+    await service.close()
+  })
+
+  it('still refuses something that is neither', async () => {
+    await expect(TransportService.open({ client: { nope: true } } as never)).rejects.toThrow(
+      /Unrecognized transport/
+    )
   })
 })

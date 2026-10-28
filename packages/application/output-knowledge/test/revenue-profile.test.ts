@@ -44,6 +44,17 @@ it('owns the exact immutable descriptor and signed reserve-stage genesis', () =>
   ).toThrow()
 })
 
+it('independent fixture construction preserves canonical transactions and atomic BEEF bytes', () => {
+  const prepared = fixture.acquisitions[0].lineage
+  const canonical = assembleLineage(prepared, lineageLimits({}))
+  for (const txid of [prepared.genesis.body.genesis.txid, prepared.target.txid])
+    expect(canonical.transactions.get(txid)!.toHex()).toBe(fixture.transactions[txid].raw)
+  const txid = prepared.genesis.body.genesis.txid
+  expect(atGenesis().transactions).toEqual([
+    { txid, beef: Utils.toBase64(canonical.beef.toBinaryAtomic(txid)) }
+  ])
+})
+
 it('verifies reserve genesis, activation and both successive buyer histories with actual input Scripts', async () => {
   const verifier = new RevenueListingProfileLineageVerifier(profile, chains)
   for (const [packet, stage] of [

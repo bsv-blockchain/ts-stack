@@ -44,7 +44,7 @@ New issuance always uses a canonical 32-byte type. For migration tooling,
 `certifier.getCertificateTypeMigration()` returns the exact canonical/legacy
 mapping for this instance.
 
-The SDK 4.0.0 compatibility candidate permits bounded historical types in
+The SDK 4.0.1 compatibility candidate permits bounded historical types in
 existing listing, proof and relinquishment calls, while signing/acquisition and
 remote issuance metadata remain strictly 32 bytes. Legacy binary use requires
 upgraded app and wallet adapters; storage servers must upgrade their SDK for

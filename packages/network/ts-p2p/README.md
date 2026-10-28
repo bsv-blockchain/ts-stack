@@ -1,6 +1,6 @@
 # @bsv/teranode-listener
 
-Patch candidate `1.1.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Patch candidate `1.1.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
 
 BSV BLOCKCHAIN | A TypeScript library for subscribing to Teranode P2P topics over libp2p
 
@@ -534,3 +534,10 @@ The recovered pre-monorepo MIT notice is retained in
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and [LICENSES/](./LICENSES/).
 
 Thank you for being a part of the BSV Blockchain ecosystem. Let's build the future of BSV Blockchain together!
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

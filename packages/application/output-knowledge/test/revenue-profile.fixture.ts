@@ -23,7 +23,6 @@ import {
 } from '@bsv/sdk/script/templates/RevenueListingProfile'
 import { RevenueListingProfileSpend } from '@bsv/sdk/script/templates/RevenueListingProfileSpend'
 import type { RevenueListingProfileAction } from '@bsv/sdk/script/templates/RevenueListingProfilePlan'
-import { assembleLineage, lineageLimits } from '../src/revenue-listing/LineagePackage.js'
 import type { RevenueListingProfileLineagePackage } from '../src/revenue-listing/ProfileLineagePackage.js'
 import type { ChainViewResolver } from '../src/SDKEvidenceVerifier.js'
 import type { VerificationContext } from '../src/ports.js'
@@ -47,9 +46,13 @@ export const fixture: {
 } = JSON.parse(raw.toString('utf8'))
 export const fixtureDigest = createHash('sha256').update(raw).digest('hex')
 const prepared = fixture.acquisitions[0].lineage
-const assembly = assembleLineage(prepared, lineageLimits({}))
-const stage = assembly.transactions.get(prepared.genesis.body.genesis.txid)!
-const active = assembly.transactions.get(prepared.target.txid)!
+// Build trusted fixture bytes independently of the validators under test.
+// Mutated validation must fail a test, not abort test-module discovery.
+const fixtureBeef = new Beef()
+for (const entry of prepared.transactions)
+  fixtureBeef.mergeBeef(Utils.toArray(entry.beef, 'base64'))
+const stage = Transaction.fromHex(fixture.transactions[prepared.genesis.body.genesis.txid].raw)
+const active = Transaction.fromHex(fixture.transactions[prepared.target.txid].raw)
 export const profile = new RevenueListingProfile(
   stage.outputs[0].lockingScript.toBinary().slice(721),
   active.outputs[0].lockingScript.toBinary().slice(721)
@@ -188,7 +191,7 @@ export function atGenesis(): RevenueListingProfileLineagePackage {
   return {
     ...structuredClone(prepared),
     target: structuredClone(prepared.genesis.body.genesis),
-    transactions: [{ txid, beef: Utils.toBase64(assembly.beef.toBinaryAtomic(txid)) }]
+    transactions: [{ txid, beef: Utils.toBase64(fixtureBeef.toBinaryAtomic(txid)) }]
   }
 }
 export function purchased(index = 0): RevenueListingProfileLineagePackage {

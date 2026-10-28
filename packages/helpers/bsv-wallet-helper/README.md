@@ -1,6 +1,6 @@
 # BSV Wallet Helper
 
-Patch candidate `0.1.10` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Patch candidate `0.1.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
 
 Wallet-compatible utilities and script templates for Bitcoin SV (BSV) that support BRC-100 wallet interfaces instead of requiring direct private key access.
 
@@ -367,3 +367,10 @@ Contributions are welcome! Please open an issue or submit a pull request.
 
 This project is a work in progress and may change at any time.
 It is provided as-is, without any guarantees. Use at your own risk.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

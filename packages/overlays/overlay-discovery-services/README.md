@@ -1,6 +1,6 @@
 # @bsv/overlay-discovery-services
 
-Patch candidate `2.2.8` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Patch candidate `2.2.9` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
 
 [![npm version](https://img.shields.io/npm/v/@bsv/overlay-discovery-services)](https://www.npmjs.com/package/@bsv/overlay-discovery-services)
 [![npm downloads](https://img.shields.io/npm/dm/@bsv/overlay-discovery-services)](https://www.npmjs.com/package/@bsv/overlay-discovery-services)
@@ -180,3 +180,10 @@ Current TS Stack changes are licensed under the Open BSV License Version 6; see
 under the Open BSV License Version 4. Redistributors must preserve
 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the applicable text in
 [`LICENSES/`](./LICENSES/).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

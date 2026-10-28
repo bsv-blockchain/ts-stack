@@ -313,10 +313,10 @@ local-policy approval or permission to serve. `SDKRootEvictionEvidence` retains
 its existing request-signature and withdrawal/consumption checks using the same
 underlying verifier.
 
-`WalletOutputSource` consumes ordinary BRC-100 output-count pages. SDK 4.0's
-BRC-112 module balance queries return exact decimal text, not output counts;
-the adapter refuses those results before emitting observations or an empty-scan
-completion. Use the wallet module balance API separately; balances must not be
+`WalletOutputSource` consumes ordinary BRC-100 output-count pages. BRC-112
+balance queries return numeric summaries, not output counts; the adapter rejects
+ordinary and module balance queries before calling the wallet, emitting
+observations or reporting an empty-scan completion. Use the wallet module balance API separately; balances must not be
 coerced into pagination counts or interpreted as output withdrawal evidence.
 
 ## Getting started
@@ -1602,3 +1602,10 @@ Portable `WithInlineStrings` schema companions retain the general text/byte pars
 The additive `canonicalOutputJSONWithDirectRecords` emits canonical text directly from freshly inspected records and arrays. It validates the complete input on every call, observes each descriptor in canonical key order, and preserves ordinary canonical bytes, safe integers, Unicode rules, prototype and symbol refusals, cycle detection, and exact resource limits. It returns text only and retains no input graph, encoding, shape, secret or authority verdict. Native private-state serializers explicitly select it through import aliases; portable browser and wallet entry points retain their existing selections. Representation validation supplies no schema, signature, custody, authorization or currentness decision. Existing serializers remain available with their previous behavior. The new SDK property and refusal tests compare the selected emitter with those existing paths; hosted runtime and complete mutation qualification remain required before acceptance.
 
 Native protected-envelope framing checks each canonical six-field ASCII record against an exact closed lexical grammar before constructing fresh null-prototype own data. Other key orders, whitespace, escapes, malformed fields and refusals retain the original duplicate-aware bounded JSON parser. Exact UTF-8 capacity, ordinary reader dispatch, scalar framing, current custody resolution, HKDF and GCM authentication still apply independently to every operation. A native Base64 companion validates each complete canonical representation before its bounded Buffer allocation; malformed forms retain the original native decoder and refusal precedence. No graph, encoded input, secret, custody or authority verdict is cached, and the original native decoder remains available. The three ledger engines, their operation order and persistence formats, existing public declarations and all original tests are unchanged. Five appended regressions cover independent byte oracle parity, all final padding sextets, boundary/refusal order, changed ciphertext and custody, duplicate/escaped text, fresh graphs and current reader dispatch. Hosted runtime and full exact-source mutation qualification are required; this source change makes no speedup or checkpoint acceptance claim.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

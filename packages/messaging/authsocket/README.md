@@ -1,6 +1,6 @@
 # AuthSocket (server-side)
 
-Patch candidate `2.1.10` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
+Patch candidate `2.1.11` updates packed first-party runtime or development dependency ranges. This metadata-only patch preserves public APIs, peer ranges, wire formats and defaults. No additional consumer or data migration is required; earlier migration guidance still applies.
 
 ## Overview
 
@@ -229,3 +229,10 @@ pnpm pack:check
 CommonJS type resolution, and clean consumer installations. The package uses
 the Open BSV License Version 6; the repository license controls ensure the
 manifest, included license, and packed artifact remain in sync.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

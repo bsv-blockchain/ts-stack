@@ -55,6 +55,50 @@ async function* serialResults(values, read) {
   for (const value of values) yield read(value)
 }
 
+test('declaration companions preserve the complete pinned-engine inventory without empty executions', async () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  const targetsToCheck = serialResults(
+    ['private-purchase-disclosure', 'root-eviction-coordination', 'private-purchase-buyer'],
+    async id => {
+      const original = targets[id],
+        directory = path.join(REPOSITORY_ROOT, original.packageDirectory)
+      return {
+        id,
+        original,
+        directory,
+        canonical: await canonicalInventory(
+          directory,
+          targetSources(REPOSITORY_ROOT, original),
+          original.mutate
+        )
+      }
+    }
+  )
+  for await (const { id, original, directory, canonical } of targetsToCheck) {
+    const observed = []
+    const parts = serialResults(partitionMutationTarget(id, original), async part => {
+      assert.deepEqual({ ...part.target, mutate: original.mutate }, original)
+      return {
+        part,
+        inventory: await canonicalInventory(
+          directory,
+          targetSources(REPOSITORY_ROOT, part.target),
+          part.target.mutate
+        )
+      }
+    })
+    for await (const { part, inventory } of parts) {
+      assert.ok(inventory.length > 0, `${id}/${part.id} cannot produce empty evidence`)
+      observed.push(...inventory)
+    }
+    assert.deepEqual(
+      observed.map(mutantIdentity).toSorted(compare),
+      canonical.map(mutantIdentity).toSorted(compare)
+    )
+    assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
+  }
+})
+
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
@@ -113,7 +157,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 156)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 607)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 604)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {

@@ -97,16 +97,43 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 156)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 607)
+  assert.equal(matrix.include.length, 604)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 256, 95]
+    [256, 256, 92]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
     matrix.include
   )
+})
+
+test('declaration companions retain every original source line and setting in nonempty executions', () => {
+  const targets = buildMutationTargets(REPOSITORY_ROOT)
+  for (const [id, expected] of [
+    ['private-purchase-disclosure', ['auto-1', 'auto-3']],
+    ['root-eviction-coordination', ['auto-1']],
+    ['private-purchase-buyer', Array.from({ length: 7 }, (_, index) => `auto-${index + 1}`)]
+  ]) {
+    const original = targets[id],
+      parts = partitionMutationTarget(id, original)
+    assert.deepEqual(
+      parts.map(part => part.id),
+      expected
+    )
+    assert.deepEqual(
+      sourceLines(
+        original,
+        parts.flatMap(part => part.target.mutate)
+      ),
+      sourceLines(original, original.mutate)
+    )
+    for (const part of parts) {
+      assert.deepEqual({ ...part.target, mutate: original.mutate }, original)
+      assert.equal(part.target.runnerOptions, original.runnerOptions)
+    }
+  }
 })
 
 test('standing covenant terms retain their seven semantic partitions and complete historical and current companions', () => {

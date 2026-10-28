@@ -402,3 +402,10 @@ Guarded responses and replacements own their byte snapshots, including Node
 `Buffer` inputs. Subsequent caller mutation does not change the bytes selected for
 signing or enqueue. Durable guard callbacks still must check current application
 authorization and enqueue synchronously; owned bytes do not supply that authority.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

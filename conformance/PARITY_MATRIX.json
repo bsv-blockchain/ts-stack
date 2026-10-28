@@ -1,17 +1,17 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-10-21",
+  "generated_at": "2026-10-27",
   "source": "ts-stack conformance corpus",
   "description": "Machine-readable parity status for cross-language SDK implementations (Go, Rust, Python). Use this to track and drive conformance.",
   "summary": {
-    "total_files": 77,
-    "total_vectors": 6710,
+    "total_files": 78,
+    "total_vectors": 6718,
     "fully_required_files": 58,
-    "files_with_intended": 17,
-    "files_with_mixed_status": 15,
+    "files_with_intended": 18,
+    "files_with_mixed_status": 16,
     "vectors_by_status": {
-      "required": 6506,
-      "intended": 204,
+      "required": 6512,
+      "intended": 206,
       "skipped": 7
     },
     "by_reason_category": {
@@ -19,7 +19,7 @@
       "governed_vector_skip": 50,
       "historical_regression": 36,
       "partial_ts_behavioral_difference": 5122,
-      "intended_parity_work": 24,
+      "intended_parity_work": 32,
       "wallet_stateful_harness_required": 191
     }
   },
@@ -481,6 +481,19 @@
       "skipped_count": 2,
       "reason_category": "partial_ts_behavioral_difference",
       "justification": "35 tx_invalid / MINIMALDATA / OP_VER edge cases intentionally differ from reference test vectors",
+      "categories": []
+    },
+    {
+      "path": "sdk/transactions/atomic-beef.json",
+      "id": "sdk.transactions.atomic-beef",
+      "total_vectors": 8,
+      "file_level_parity": "required",
+      "effective_status": "mixed",
+      "required_count": 6,
+      "intended_count": 2,
+      "skipped_count": 0,
+      "reason_category": "intended_parity_work",
+      "justification": "2 vector(s) are classified as intended rather than required",
       "categories": []
     },
     {

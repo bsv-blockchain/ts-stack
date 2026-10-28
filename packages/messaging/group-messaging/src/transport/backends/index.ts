@@ -8,8 +8,8 @@ export {
   DEFAULT_MAX_ATTEMPTS,
   MAX_REMEMBERED_MESSAGES,
   LIVE_BACKSTOP_INTERVAL_MS,
-  LIVE_DEAF_STRIKES,
-  LIVE_MAX_RESUBSCRIBES,
+  type ClientLiveState,
+  type ClientLiveStatus,
   type LiveStatus,
   type MessageBoxClientLike,
   type MessageBoxTransportOptions
