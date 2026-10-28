@@ -468,6 +468,29 @@ describe('KnexMigrations tests', () => {
     }
   })
 
+  test('5ad MySQL sync paging migration creates only the missing index', async () => {
+    const index = jest.fn()
+    const raw = jest.fn()
+      .mockResolvedValueOnce([[{ database_type: 'MySQL' }]])
+      .mockResolvedValueOnce([[{ Key_name: 'idx_transactions_user_transactionid' }], []])
+      .mockResolvedValueOnce([[], []])
+    const alterTable = jest.fn(async (
+      tableName: string,
+      callback: (tableBuilder: { index: typeof index }) => void
+    ) => { callback({ index: (...args: unknown[]) => index(tableName, ...args) }) })
+    const knex = { raw, schema: { alterTable } } as unknown as Knex
+    const source = new KnexMigrations('test', 'MySQL sync paging test', '1'.repeat(64), 1000)
+    const migration = await source.getMigration(WALLET_SYNC_PAGING_INDEX_MIGRATION)
+
+    await migration.up(knex)
+
+    expect(raw.mock.calls.slice(1)).toEqual([
+      ['SHOW INDEX FROM ?? WHERE Key_name = ?', ['transactions', 'idx_transactions_user_transactionid']],
+      ['SHOW INDEX FROM ?? WHERE Key_name = ?', ['outputs', 'idx_outputs_user_outputid']]
+    ])
+    expect(index.mock.calls).toEqual([['outputs', ['userId', 'outputId'], 'idx_outputs_user_outputid']])
+  })
+
   test.each([
     {
       migrationName: WALLET_SYNC_SOURCE_INDEX_MIGRATION,

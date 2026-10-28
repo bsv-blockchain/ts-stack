@@ -99,21 +99,23 @@ export class KnexMigrations implements MigrationSource<string> {
         // MySQL commits each CREATE INDEX on its own, so a retry after a
         // partial run must skip the index that already exists.
         const dbtype = await determineDBType(knex)
-        for (const { tableName, columns, indexName } of WALLET_SYNC_PAGING_INDEXES) {
-          if (await hasIndex(knex, dbtype, tableName, indexName)) continue
+        await WALLET_SYNC_PAGING_INDEXES.reduce(async (previous, { tableName, columns, indexName }) => {
+          await previous
+          if (await hasIndex(knex, dbtype, tableName, indexName)) return
           await knex.schema.alterTable(tableName, table => {
             table.index(columns, indexName)
           })
-        }
+        }, Promise.resolve())
       },
       async down(knex) {
         // Earlier migrations keep a userId-leading index on both tables, so
         // MySQL still has a foreign-key support index after these are dropped.
-        for (const { tableName, columns, indexName } of WALLET_SYNC_PAGING_INDEXES) {
+        await WALLET_SYNC_PAGING_INDEXES.reduce(async (previous, { tableName, columns, indexName }) => {
+          await previous
           await knex.schema.alterTable(tableName, table => {
             table.dropIndex(columns, indexName)
           })
-        }
+        }, Promise.resolve())
       }
     }
 
@@ -947,8 +949,7 @@ export class KnexMigrations implements MigrationSource<string> {
 }
 
 /**
- * @param knex
- * @returns {DBType} connected database engine variant
+ * @returns true when `tableName` already has an index named `indexName`.
  */
 async function hasIndex(knex: Knex, dbtype: DBType, tableName: string, indexName: string): Promise<boolean> {
   if (dbtype === 'MySQL') {
