@@ -21,6 +21,41 @@ const openClient = async (
     transport: hub.endpoint(wallet.identityKey)
   })
 
+describe('GroupMessagingClient.create with a MessageBox client and its options', () => {
+  it('opens the live socket the options ask for, without building the backend by hand', async () => {
+    const calls: string[] = []
+    const client = {
+      async sendMessage() {
+        return {}
+      },
+      async listMessages() {
+        return []
+      },
+      async acknowledgeMessage() {
+        return {}
+      },
+      async initializeConnection() {
+        calls.push('initializeConnection')
+      },
+      async listenForLiveMessages() {
+        calls.push('listenForLiveMessages')
+      },
+      async leaveRoom() {},
+      async disconnectWebSocket() {}
+    }
+
+    const created = await GroupMessagingClient.create({
+      wallet: new KeyDeriver(PrivateKey.fromRandom()),
+      storage: 'memory',
+      transport: { client, live: true, pollIntervalMs: 60_000 }
+    })
+
+    expect(calls).toEqual(['initializeConnection', 'listenForLiveMessages'])
+
+    await created.close()
+  })
+})
+
 describe('GroupMessagingClient.create', () => {
   it('wires every layer from one call', async () => {
     const wallet = new KeyDeriver(PrivateKey.fromRandom())

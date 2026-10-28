@@ -1033,14 +1033,16 @@ import type { FundingRecoveryCommit } from '../../src/storage/fundingRecovery/Fu
 
 describe('fixed-child ownership refusal ordering', () => {
   let ctx: TestWalletNoSetup
-  beforeAll(async () => {
-    ctx = await _tu.createLegacyWalletSQLiteCopy('fixed-child-refusal-ordering', 'legacy')
+  beforeEach(async () => {
+    // Keep one owned fixture, but do not initialize an otherwise skipped suite
+    // after the mutation runner has already observed a killing assertion.
+    if (ctx === undefined) ctx = await _tu.createLegacyWalletSQLiteCopy('fixed-child-refusal-ordering', 'legacy')
   })
   afterEach(() => {
     jest.restoreAllMocks()
   })
   afterAll(async () => {
-    await ctx.wallet.destroy()
+    if (ctx !== undefined) await ctx.wallet.destroy()
   })
   function payment() {
     const f = fundingFixture(ctx)

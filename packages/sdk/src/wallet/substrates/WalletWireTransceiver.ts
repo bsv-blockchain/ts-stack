@@ -68,9 +68,10 @@ import { WalletError, walletErrors } from '../WalletError.js'
 import PublicKey from '../../primitives/PublicKey.js'
 import { validateOriginator } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
-import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
+import { isBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
+import { readVarIntBnStrict } from '../../primitives/readVarIntNumStrict.js'
 
 const MAX_WIRE_RESPONSE_COLLECTION_ITEMS = 100_000
 
@@ -721,21 +722,15 @@ export default class WalletWireTransceiver implements WalletInterface {
     this.#writeOptionalBool(paramWriter, args.seekPermission)
 
     const resultReader = await this.#transmitListOutputs(paramWriter, originator)
-    if (isModuleBalanceQuery(args.basket)) {
-      const balance = toUTF8Strict(resultReader.read(resultReader.readVarIntNumStrict(false)))
-      if (!resultReader.eof()) throw new Error('Invalid listOutputs module balance response')
-      return validateWalletResult(
-        'listOutputs',
-        { totalOutputs: balance, outputs: [] },
-        bindingRequest
-      )
-    }
-    const totalOutputs = this.#requireInteger(
-      resultReader.readVarIntNumStrict(false),
-      'listOutputs totalOutputs',
-      0,
-      0xffffffff
-    )
+    // A BRC-112 balance is not an output count: read the full canonical varint, rounded above 2^53.
+    const totalOutputs = isBalanceQuery(args.basket)
+      ? Number(readVarIntBnStrict(resultReader).toString(10))
+      : this.#requireInteger(
+          resultReader.readVarIntNumStrict(false),
+          'listOutputs totalOutputs',
+          0,
+          0xffffffff
+        )
     const beefLength = resultReader.readVarIntNumStrict()
     const BEEF = beefLength >= 0 ? resultReader.readView(beefLength) : undefined
     const outputs: ListOutputsResult['outputs'] = []

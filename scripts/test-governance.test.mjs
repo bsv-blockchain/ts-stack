@@ -41,8 +41,8 @@ test('current required, manual, live, resource, and conformance tests are govern
   assert.equal(result.summary.mutationTargets, 156)
   assert.equal(result.summary.manualAndLiveFiles, 33)
   assert.equal(result.summary.walletManualSuites, 31)
-  assert.equal(result.summary.conformanceSkipFiles, 19)
-  assert.equal(result.summary.conformanceSkips, 211)
+  assert.equal(result.summary.conformanceSkipFiles, 20)
+  assert.equal(result.summary.conformanceSkips, 213)
 })
 
 test('mutation workflow governance follows only the exact local executor and retains every caller gate', () => {

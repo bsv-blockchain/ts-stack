@@ -3,7 +3,7 @@ id: pkg-payment-express-middleware
 title: '@bsv/payment-express-middleware'
 kind: package
 domain: middleware
-version: '2.1.10'
+version: '2.1.11'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-09-24'
 last_verified: '2026-09-24'
@@ -16,7 +16,7 @@ tags: [middleware, express, payment, '402', brc-29]
 
 # @bsv/payment-express-middleware
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -210,3 +210,7 @@ Types:
 
 - [Package README](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/middleware/payment-express-middleware)
 - [npm](https://www.npmjs.com/package/@bsv/payment-express-middleware)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

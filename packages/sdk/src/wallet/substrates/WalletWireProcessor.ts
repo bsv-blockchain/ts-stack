@@ -26,7 +26,7 @@ import {
   validateOriginator
 } from '../validationHelpers.js'
 import { validateWalletArgs } from '../WalletArgumentValidation.js'
-import { isModuleBalanceQuery } from '../moduleBalanceQuery.js'
+import { isBalanceQuery } from '../moduleBalanceQuery.js'
 import { snapshotWalletResultRequest, validateWalletResult } from '../WalletResultValidation.js'
 import { isUnsafeRecordKey } from '../../primitives/SafeRecord.js'
 
@@ -1292,24 +1292,27 @@ export default class WalletWireProcessor implements WalletWire {
               args,
               async () => await this.wallet.listOutputs(args, originator)
             )
-            if (isModuleBalanceQuery(args.basket)) {
-              const balanceWriter = new WriterUint8Array()
-              balanceWriter.writeUInt8(0) // errorByte = 0
-              if (includeSpendable) balanceWriter.writeVarIntNum(-1)
-              // totalOutputs: the exact BRC-112 module balance as UTF-8 decimal text, and nothing else
-              const balance = listOutputsResult.totalOutputs
-              if (typeof balance !== 'string')
-                throw new Error('listOutputs module balance must be text')
-              const balanceBytes = UtilsToUint8Array(balance, 'utf8')
-              balanceWriter.writeVarIntNum(balanceBytes.length)
-              balanceWriter.write(balanceBytes)
-              return balanceWriter.toUint8ArrayZeroCopy()
+            let outputsPage: { total: number; records: typeof listOutputsResult.outputs }
+            if (isBalanceQuery(args.basket)) {
+              // A BRC-112 balance (validated above) is not an output count: no 2^32 - 1 bound.
+              // JSON carries any magnitude; the varint cannot carry 2^64 or more.
+              if (listOutputsResult.totalOutputs >= 2 ** 64) {
+                throw new Error(
+                  'listOutputs balance totalOutputs must be below 2^64 (unsigned 64-bit wire representation)'
+                )
+              }
+              outputsPage = {
+                total: listOutputsResult.totalOutputs,
+                records: listOutputsResult.outputs
+              }
+            } else {
+              outputsPage = this.#requirePageTotal(
+                listOutputsResult.totalOutputs,
+                listOutputsResult.outputs,
+                'listOutputs result'
+              )
             }
-            const outputsPage = this.#requirePageTotal(
-              listOutputsResult.totalOutputs,
-              listOutputsResult.outputs,
-              'listOutputs result'
-            )
+
             if (!includeSpendable && listOutputsResult.outputs.some(output => !output.spendable)) {
               throw new Error(
                 'Non-spendable listOutputs records require the spendable encoding extension or JSON'
@@ -1352,7 +1355,7 @@ export default class WalletWireProcessor implements WalletWire {
                   resultWriter.write(lockingScriptBytes)
                 }
 
-                // Only an explicitly extended request carries this extra byte.
+                // Spendability is explicit only on negotiated connections.
                 if (includeSpendable) resultWriter.writeInt8(output.spendable ? 1 : 0)
 
                 // customInstructions

@@ -498,6 +498,7 @@ export interface LookupResolverConfig {
     networkPreset?: LookupNetworkPreset;
     facilitator?: OverlayLookupFacilitator;
     slapTrackers?: string[];
+    trackerTimeoutMs?: number;
     hostOverrides?: Record<string, string[]>;
     additionalHosts?: Record<string, string[]>;
     cache?: CacheOptions;
@@ -598,6 +599,16 @@ Optional privacy-bounded telemetry sink. Query payloads are never emitted.
 
 ```ts
 telemetry?: TelemetryConfig
+```
+
+#### Property trackerTimeoutMs
+
+Per-tracker discovery timeout in milliseconds. Defaults to 5000.
+Must be a positive integer no greater than 60000. The query's independent
+deadlineMs still bounds the whole attempt, including discovery.
+
+```ts
+trackerTimeoutMs?: number
 ```
 
 Links: [API](#api), [Interfaces](#interfaces), [Classes](#classes), [Functions](#functions), [Types](#types), [Enums](#enums), [Variables](#variables)

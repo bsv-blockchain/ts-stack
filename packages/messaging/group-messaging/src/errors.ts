@@ -61,6 +61,29 @@ export class DeliveryFailed extends GroupMessagingError {
 }
 
 /**
+ * A Welcome that some new members never received.
+ *
+ * The group has already changed by the time this throws: the Commit is
+ * committed and the member's leaf is in the tree, so re-adding them is not a
+ * retry; it would add a second leaf for the same identity. The bytes are
+ * carried here because they are otherwise lost with the stack frame, and they
+ * are the only thing that can still finish the join — a Welcome belongs to the
+ * Commit that produced it and cannot be regenerated.
+ */
+export class WelcomeDeliveryError extends GroupMessagingError {
+  override name = 'WelcomeDeliveryError'
+  constructor(
+    message: string,
+    readonly welcome: Uint8Array,
+    readonly failed: IdentityKey[],
+    /** Sent with the Welcome, so a resend names the chat the way the first send did. */
+    readonly chatName?: string
+  ) {
+    super(message)
+  }
+}
+
+/**
  * A failure that no retry can fix.
  *
  * The transport's retry cap exists for transient trouble — a storage write that

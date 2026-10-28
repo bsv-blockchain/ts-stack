@@ -30,6 +30,16 @@ import { Writer } from '../../primitives/utils.js'
 import { getVerifiableCertificates } from '../utils/getVerifiableCertificates.js'
 import { assertAuthIdentityKey, copyAuthByteArray } from '../AuthMessageValidation.js'
 
+/** AuthFetch configuration in its existing transport-options constructor position. */
+export interface AuthFetchOptions extends SimplifiedFetchTransportOptions {
+  /**
+   * Authenticated response-wait deadline in milliseconds. Defaults to 30000.
+   * Must be a positive integer no greater than 2147483647. This is independent
+   * of requestTimeoutMs, which bounds transport fetch and response-body reads.
+   */
+  responseTimeoutMs?: number
+}
+
 interface SimplifiedFetchRequestOptions {
   method?: string
   headers?: Record<string, string>
@@ -199,6 +209,7 @@ export class AuthFetch {
   private readonly requestedCertificates?: RequestedCertificateSet
   private readonly originator?: OriginatorDomainNameStringUnder250Bytes
   readonly #transportOptions: SimplifiedFetchTransportOptions
+  readonly #responseTimeoutMs: number
   private readonly maxResponseBytes: number
   private readonly fetchClient?: typeof fetch
   peers: Record<string, AuthPeer> = {}
@@ -213,7 +224,7 @@ export class AuthFetch {
     requestedCertificates?: RequestedCertificateSet,
     sessionManager?: SessionManager | AsyncSessionManager,
     originator?: OriginatorDomainNameStringUnder250Bytes,
-    transportOptions: SimplifiedFetchTransportOptions = {},
+    transportOptions: AuthFetchOptions = {},
     fetchClient?: typeof fetch
   ) {
     this.wallet = wallet
@@ -224,6 +235,15 @@ export class AuthFetch {
     this.sessionManager = (sessionManager ?? new SessionManager()) as SessionManager
     this.originator = originator
     this.#transportOptions = { ...transportOptions }
+    const { responseTimeoutMs = AUTH_RESPONSE_TIMEOUT_MS } = transportOptions
+    if (
+      !Number.isSafeInteger(responseTimeoutMs) ||
+      responseTimeoutMs <= 0 ||
+      responseTimeoutMs > 2_147_483_647
+    ) {
+      throw new RangeError('responseTimeoutMs must be an integer between 1 and 2147483647')
+    }
+    this.#responseTimeoutMs = responseTimeoutMs
     this.fetchClient = fetchClient
     this.maxResponseBytes = positiveResponseLimit(
       transportOptions.maxResponseBytes,
@@ -343,7 +363,7 @@ export class AuthFetch {
           )
           responseTimeout = setTimeout(() => {
             rejectRequest(new Error('Timed out waiting for authenticated response.'))
-          }, AUTH_RESPONSE_TIMEOUT_MS)
+          }, this.#responseTimeoutMs)
 
           // Before sending general messages to the peer, ensure that no certificate requests are pending.
           // This way, the user would need to choose to either allow or reject the certificate request first.

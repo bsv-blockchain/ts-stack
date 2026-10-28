@@ -8,6 +8,42 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## Optional client timeouts (4.0.1 patch candidate)
+
+`LookupResolverConfig.trackerTimeoutMs` controls each SLAP discovery request;
+its default remains 5,000 ms. The per-host query timeout and whole-query
+`deadlineMs` remain independent. Increase the whole-query deadline as well when
+discovery may exceed its existing 10,000 ms default:
+
+```ts
+import { AuthFetch, LookupResolver, type WalletInterface } from '@bsv/sdk'
+
+declare const wallet: WalletInterface
+
+const resolver = new LookupResolver({ trackerTimeoutMs: 20_000 })
+await resolver.query({ service: 'ls_example', query: {} }, 20_000, { deadlineMs: 25_000 })
+
+const auth = new AuthFetch(wallet, undefined, undefined, undefined, {
+  requestTimeoutMs: 60_000,
+  responseTimeoutMs: 60_000
+})
+```
+
+`AuthFetchOptions.responseTimeoutMs` uses the existing fifth constructor
+argument and defaults to 30,000 ms. It controls the authenticated response
+waiter independently of the existing transport `requestTimeoutMs` (also
+30,000 ms by default), which bounds fetch and response-body reads. Set both
+when extending a request. Existing calls and other certificate, session and
+operation deadlines retain their behavior.
+
+Both new options require positive integer milliseconds: `trackerTimeoutMs`
+accepts 1–60,000, matching the existing lookup timeout bound, and
+`responseTimeoutMs` accepts 1–2,147,483,647, the portable timer bound. Invalid
+explicit values throw `RangeError` at construction. Omission preserves all
+previous defaults; no API, wire or wallet-data migration is required.
+A timeout does not undo a request already dispatched to a server. Reconcile
+an ambiguous financial operation before submitting it again.
+
 ## DID serial-token API retirement (3.0 candidate)
 
 The proposed SDK 3.0 release removes `CanonicalDIDToken`, `DID_TOKEN_PROTOCOL`,
@@ -28,40 +64,24 @@ See [identity integration](../../docs/guides/identity-did-vc.md) and
 [migration guidance](../../docs/guides/identity-did-vc-migration.md) before upgrading.
 This is a source candidate; publication and deployment are separate actions.
 
-## Module balances and listOutputs spendability (4.0 candidate)
+## Numeric results and wallet wire compatibility (4.0.1 hotfix)
 
-`ListOutputsResult.totalOutputs` is `PositiveIntegerOrZero | DecimalString`. A
-BRC-112 module balance query (`p <module> balance <basket>`) returns the exact
-balance as decimal text, with no outputs and no BEEF. Every other query still
-returns a count. Ordinary binary `listOutputs` requests and responses retain
-the SDK 2/3 encoding, with implicit `spendable: true`; existing applications
-and wallets can upgrade independently. Module balance text is selected only
-by the new balance query.
+`ListOutputsResult.totalOutputs` is a number. Ordinary listings return counts;
+BRC-112 `balance <basket>` and `p <module> balance <basket>` return nonnegative
+integer summaries with empty outputs and no BEEF. Sums are computed exactly
+before Number conversion. Values above 2^53 may round; enumerate outputs for
+exact accounting or value movement. JSON can carry a larger finite summary;
+the numeric binary serializer rejects values at or above 2^64.
 
-Module inventory can include non-spendable records. To carry those over binary,
-explicitly construct `new WalletWireTransceiver(wire, { listOutputsEncoding:
-'spendable' })` against a processor supporting that extension. The request
-appends one version byte (`1`) after `seekPermission`; the response acknowledges
-it with signed VarInt `-1` immediately after the success byte, then carries a
-byte (`0` or `1`) after each output's locking script. Default
-`WalletClient` connections do not request this extension. Unknown extensions
-and trailing bytes are rejected before calling the wallet. A legacy request
-whose result contains `spendable: false` fails rather than reporting it as true.
-JSON also preserves those records. There is no format guessing or automatic
-retry against an older processor.
+Default binary requests retain deployed SDK2/3 bytes and imply spendable:true.
+The #674 extension is preserved: `new WalletWireTransceiver(wire,
+{ listOutputsEncoding: 'spendable' })` explicitly requests and requires an
+acknowledged spendability byte. JSON and this extension preserve reserved or
+pending module inventory records. No format guessing or automatic retry occurs.
 
-Code that uses `totalOutputs` as a number narrows it first:
-
-```ts
-// 3.x
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-const pages = Math.ceil(totalOutputs / 100)
-
-// 4.0
-const { totalOutputs } = await wallet.listOutputs({ basket: 'default' })
-if (typeof totalOutputs !== 'number') throw new Error('Expected an output count')
-const pages = Math.ceil(totalOutputs / 100)
-```
+`DecimalString` and the previous module-balance helpers remain exported for
+source compatibility. Existing applications retain numeric results without
+selecting a separate compatibility profile.
 
 ## Wallet integration
 
@@ -1116,3 +1136,14 @@ signing and acquisition still require exactly 32 type bytes. Legacy binary
 operations require upgraded adapters at both endpoints, including registration
 of the internal HTTP transport endpoint when using `HTTPWalletWire`; ordinary
 encodings are unchanged. See [the protocol and rollout contract](../../specs/wallet/legacy-certificate-wire.md).
+
+### HMAC key encoding
+
+`createHmac` and `verifyHmac` use the ECDH shared point's X coordinate as a
+minimal-length unsigned big-endian byte array, matching published SDK2/3.
+Leading zero octets are omitted; zero is encoded as one zero octet. No
+additional hash is applied. HMAC-SHA256's own block padding is unchanged.
+There is one encoding for generation and verification. Existing tags and
+persisted HMAC-derived identifiers remain reproducible. The fixed-width
+encoding change from #1370 is backed out; no alternate mode or relaxed verifier
+is provided. BRC-2 AES-GCM encryption retains its existing 32-byte key encoding.

@@ -250,7 +250,7 @@
     {
       "id": "conformance-intended-skips",
       "category": "skipped-test",
-      "target": "211 individually reasoned conformance cases across 19 governed vector files",
+      "target": "213 individually reasoned conformance cases across 20 governed vector files",
       "owner": "ts-stack-maintainers",
       "reason": "Every current non-run vector has a stable ID and inherited or local reason, and every affected file has an exact count, classification, owner, review date, and removal condition. The remaining gaps require stateful/funded/overlay fixtures, upstream parity decisions, or runner work before enforcement can require zero skips.",
       "evidence": [

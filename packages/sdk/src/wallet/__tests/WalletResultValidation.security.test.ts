@@ -2284,33 +2284,74 @@ describe('wallet result trust boundary', () => {
   })
 })
 
-describe('BRC-112 module balance results', () => {
+describe('BRC-112 balance results', () => {
   const request = { basket: 'p color balance aa' }
 
-  it('require decimal text with an empty outputs array and no BEEF', () => {
-    expect(
-      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [] }, request)
-    ).toEqual({
-      totalOutputs: '5',
+  it('require a nonnegative integer with an empty outputs array and no BEEF', () => {
+    expect(validateWalletResult('listOutputs', { totalOutputs: 5, outputs: [] }, request)).toEqual({
+      totalOutputs: 5,
       outputs: []
     })
     const output = { outpoint: `${'ab'.repeat(32)}.0`, satoshis: 1, spendable: true }
     expect(() =>
-      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [output] }, request)
+      validateWalletResult('listOutputs', { totalOutputs: 5, outputs: [output] }, request)
     ).toThrow('outputs')
-    expect(() => validateWalletResult('listOutputs', { totalOutputs: '5' }, request)).toThrow(
+    expect(() => validateWalletResult('listOutputs', { totalOutputs: 5 }, request)).toThrow(
       'outputs'
     )
     expect(() =>
-      validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [], BEEF: [1] }, request)
+      validateWalletResult('listOutputs', { totalOutputs: 5, outputs: [], BEEF: [1] }, request)
     ).toThrow('BEEF')
+    for (const totalOutputs of ['5', -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        validateWalletResult('listOutputs', { totalOutputs, outputs: [] }, request)
+      ).toThrow('totalOutputs')
+    }
   })
 
-  it('apply only to p <module> balance <basket> queries', () => {
-    for (const basket of ['p color assets', 'p color balances aa', 'balance savings']) {
+  it('accept balances above 2^32 - 1 and above 2^53 for both balance forms', () => {
+    for (const basket of ['balance default', 'p color balance aa']) {
+      for (const totalOutputs of [2 ** 32, 2 ** 53 + 2, 2 ** 64 - 2048]) {
+        expect(
+          validateWalletResult('listOutputs', { totalOutputs, outputs: [] }, { basket })
+        ).toEqual({ totalOutputs, outputs: [] })
+      }
+    }
+  })
+
+  it('accept balances at or above 2^64: JSON carries the Number, only the binary wire is bounded', () => {
+    for (const basket of ['balance default', 'p color balance aa']) {
+      for (const totalOutputs of [2 ** 64, 2 ** 65, 2 ** 70, Number.MAX_VALUE]) {
+        expect(
+          validateWalletResult('listOutputs', { totalOutputs, outputs: [] }, { basket })
+        ).toEqual({ totalOutputs, outputs: [] })
+      }
+      const output = { outpoint: `${'ab'.repeat(32)}.0`, satoshis: 1, spendable: true }
       expect(() =>
-        validateWalletResult('listOutputs', { totalOutputs: '5', outputs: [] }, { basket })
-      ).toThrow('totalOutputs')
+        validateWalletResult('listOutputs', { totalOutputs: 2 ** 64, outputs: [output] }, { basket })
+      ).toThrow('outputs')
+      expect(() =>
+        validateWalletResult(
+          'listOutputs',
+          { totalOutputs: 2 ** 64, outputs: [], BEEF: [1] },
+          { basket }
+        )
+      ).toThrow('BEEF')
+      for (const totalOutputs of [-1, 1.5, -0.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        expect(() =>
+          validateWalletResult('listOutputs', { totalOutputs, outputs: [] }, { basket })
+        ).toThrow('totalOutputs')
+      }
+    }
+  })
+
+  it('reject text and counts above the safe range outside a balance query', () => {
+    for (const basket of ['p color assets', 'p color balances aa', 'savings']) {
+      for (const totalOutputs of ['5', 2 ** 53 + 2]) {
+        expect(() =>
+          validateWalletResult('listOutputs', { totalOutputs, outputs: [] }, { basket })
+        ).toThrow('totalOutputs')
+      }
     }
   })
 })

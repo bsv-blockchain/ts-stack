@@ -29,8 +29,21 @@ const requireEnvelope = (payload: WirePayload): void => {
   }
 }
 
+/**
+ * A MessageBox client together with the options its backend takes.
+ *
+ * The shape a host reaches for when it wants anything other than the defaults —
+ * live socket delivery, most of all. Without it the only way to set them is to
+ * build {@link MessageBoxTransport} by hand, which means not using
+ * `GroupMessagingClient.create` at all.
+ */
+export type MessageBoxTransportInput = MessageBoxTransportOptions & {
+  client: MessageBoxClientLike
+}
+
 /** Anything {@link TransportService.open} knows how to turn into delivery. */
-export type TransportInput = TransportService | TransportBackend | MessageBoxClientLike
+export type TransportInput =
+  TransportService | TransportBackend | MessageBoxClientLike | MessageBoxTransportInput
 
 /**
  * Delivery, as the rest of the library sees it.
@@ -179,7 +192,7 @@ export class TransportService {
     )
     const failed = recipients.filter((_, index) => results[index]?.status === 'rejected')
     if (failed.length > 0) {
-      throw new BroadcastError(groupId, failed, recipients.length - failed.length)
+      throw new BroadcastError(groupId, failed, recipients.length - failed.length, payload)
     }
   }
 }
@@ -189,7 +202,20 @@ export class BroadcastError extends GroupMessagingError {
   constructor(
     readonly groupId: MlsGroupId,
     readonly failed: IdentityKey[],
-    readonly delivered: number
+    readonly delivered: number,
+    /**
+     * The exact envelope that was sent — what a retry re-sends, byte for byte.
+     *
+     * Carried as data rather than as a bound `retry()` closure so the error
+     * stays a value: it survives a log line, a spell in a queue and a look in a
+     * debugger, none of which a closure does. It does not survive
+     * `structuredClone`, which keeps an Error's name, message, stack and cause
+     * and drops every other property, so a host crossing a worker boundary has
+     * to copy the fields out itself.
+     * A closure would also capture a transport whose lifetime it does not own,
+     * so a retry fired after `close()` would reach through a dead socket.
+     */
+    readonly payload: WirePayload
   ) {
     super(
       `Delivered to ${delivered} of ${delivered + failed.length} members of ${groupId}; ` +
@@ -198,7 +224,19 @@ export class BroadcastError extends GroupMessagingError {
   }
 }
 
-const resolve = (input: TransportBackend | MessageBoxClientLike): TransportService => {
+const resolve = (
+  input: TransportBackend | MessageBoxClientLike | MessageBoxTransportInput
+): TransportService => {
+  // Checked first: the wrapper carries neither `send` nor `sendMessage`, so it
+  // would fall through every other branch to the refusal below.
+  const wrapped = (input as MessageBoxTransportInput).client
+  if (wrapped !== undefined) {
+    const { client, ...options } = input as MessageBoxTransportInput
+    if (typeof client.sendMessage !== 'function') {
+      throw new GroupMessagingError('Unrecognized transport. `client` must be a MessageBoxClient.')
+    }
+    return TransportService.messageBox(client, options)
+  }
   if (
     typeof (input as TransportBackend).send === 'function' &&
     typeof (input as TransportBackend).onMessage === 'function'

@@ -33,7 +33,11 @@ export {
 export type { SqlDriver, SqlBindValue, SqlRunResult, SqlStorageOptions } from './storage/index.js'
 
 export { TransportService, BroadcastError, DeliveryFailed } from './transport/index.js'
-export type { TransportInput, TransportBackend } from './transport/index.js'
+export type {
+  MessageBoxTransportInput,
+  TransportInput,
+  TransportBackend
+} from './transport/index.js'
 export {
   InProcessTransportHub,
   MessageBoxTransport,
@@ -49,6 +53,8 @@ export {
   UnparsableBodyError
 } from './transport/index.js'
 export type {
+  ClientLiveState,
+  ClientLiveStatus,
   LiveStatus,
   MessageBoxClientLike,
   MessageBoxTransportOptions
@@ -102,6 +108,7 @@ export {
   CredentialBindingError,
   EpochMismatchError,
   PermanentProcessingError,
+  WelcomeDeliveryError,
   isPermanent
 } from './errors.js'
 export { IndexedDbUnavailableError } from './storage/index.js'

@@ -23,12 +23,13 @@ const matrixFor = count => ({
   }))
 })
 
-test('actual build capture and execution bind runtime while accepting original six-field callers', async () => {
+test('real complete planner output verifies every immutable batch and binds the original runtime', async () => {
   const root = mkdtempSync(join(tmpdir(), 'mutation-build-runtime-'))
   const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
   const identityInputs = [
     'governance/mutation-testing/targets.mjs',
     'governance/mutation-testing/policy.json',
+    'governance/mutation-testing/durations.json',
     'governance/mutation-testing/stryker.config.mjs',
     'scripts/mutation-testing.mjs',
     'scripts/mutation-final-qualification.mjs',
@@ -77,20 +78,53 @@ test('actual build capture and execution bind runtime while accepting original s
     const identity = await mutationBuildIdentity(root, environment)
     assert.equal(identity.nodeVersion, process.version)
     assert.equal(Object.keys(identity).length, 7)
-    const matrix = mutationExecutionMatrix(['sdk-paid-lookup-funding'], buildMutationTargets(root))
-    const verify = value =>
+    const selected = Object.keys(buildMutationTargets(root))
+    const cli = (script, args, extraEnvironment = {}) =>
+      execFileSync(process.execPath, [join(REPOSITORY_ROOT, 'scripts', script), ...args], {
+        cwd: REPOSITORY_ROOT,
+        env: { ...process.env, ...extraEnvironment },
+        encoding: 'utf8'
+      }).trim()
+    const matrix = JSON.parse(
+      cli('mutation-partition-evidence.mjs', ['matrix', '--selected', JSON.stringify(selected)])
+    )
+    const plannerEnvironment = { MUTATION_MATRIX: JSON.stringify(matrix) }
+    const batches = JSON.parse(cli('mutation-execution-batches.mjs', ['plan'], plannerEnvironment))
+    const matrixDigest = cli('mutation-execution-batches.mjs', ['digest'], plannerEnvironment)
+    const unscheduled = mutationExecutionMatrix(selected, buildMutationTargets(root))
+    assert.ok(batches.include.length > 1)
+    assert.notDeepEqual(matrix, unscheduled)
+    assert.notEqual(matrixDigest, mutationExecutionDigest(unscheduled))
+    assert.deepEqual(
+      batches.include.flatMap(batch => batch.executionMatrix.include),
+      matrix.include
+    )
+    const verify = (value, batch = batches.include[0], overrides = {}) =>
       verifySelectedExecution(root, {
         ...environment,
         EXECUTION_IDENTITY: JSON.stringify(value),
-        SELECTED_TARGETS: JSON.stringify(['sdk-paid-lookup-funding']),
-        MUTATION_MATRIX_DIGEST: mutationExecutionDigest(matrix),
-        EXECUTION_BATCH: '1',
-        EXECUTION_MATRIX: JSON.stringify(matrix)
+        SELECTED_TARGETS: JSON.stringify(selected),
+        MUTATION_MATRIX_DIGEST: matrixDigest,
+        EXECUTION_BATCH: String(batch.batch),
+        EXECUTION_MATRIX: JSON.stringify(batch.executionMatrix),
+        ...overrides
       })
-    await verify(identity)
     const legacy = { ...identity }
     delete legacy.nodeVersion
-    await verify(legacy)
+    await Promise.all(
+      batches.include.flatMap(batch => [verify(identity, batch), verify(legacy, batch)])
+    )
+    await assert.rejects(
+      verify(identity, undefined, { MUTATION_MATRIX_DIGEST: mutationExecutionDigest(unscheduled) }),
+      /Stale or malformed execution matrixDigest/
+    )
+    const reordered = structuredClone(batches.include[0])
+    reordered.executionMatrix.include.reverse()
+    await assert.rejects(verify(identity, reordered), /differs from the original complete matrix/)
+    await assert.rejects(
+      verify(identity, undefined, { SELECTED_TARGETS: JSON.stringify(selected.slice(1)) }),
+      /Stale or malformed execution matrixDigest/
+    )
     const otherRuntime = process.version === 'v24.18.0' ? 'v24.19.0' : 'v24.18.0'
     await assert.rejects(
       verify({ ...identity, nodeVersion: otherRuntime }),

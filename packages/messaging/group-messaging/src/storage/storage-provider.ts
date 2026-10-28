@@ -24,6 +24,9 @@ export interface ChatRecord {
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
 
+const OWNER_SUFFIX = '#peer'
+const ownerKey = (ref: KeyPackageRef): string => `${ref}${OWNER_SUFFIX}`
+
 const toJson = (value: unknown): Uint8Array => encoder.encode(JSON.stringify(value))
 const fromJson = <T>(bytes: Uint8Array): T => JSON.parse(decoder.decode(bytes)) as T
 
@@ -236,10 +239,27 @@ export class StorageProvider {
 
   async deleteKeyPackage(ref: KeyPackageRef): Promise<void> {
     await this.#delete('keyPackages', ref)
+    await this.#delete('keyPackages', ownerKey(ref))
   }
 
   async listKeyPackageRefs(): Promise<KeyPackageRef[]> {
-    return this.#keys('keyPackages')
+    return (await this.#keys('keyPackages')).filter(
+      key => !key.endsWith(OWNER_SUFFIX)
+    ) as KeyPackageRef[]
+  }
+
+  /**
+   * Record the one peer a KeyPackage was handed to. It lives beside the bytes
+   * and goes with them, so a retired KeyPackage leaves no claim behind.
+   */
+  async bindKeyPackage(ref: KeyPackageRef, peer: IdentityKey): Promise<void> {
+    await this.#set('keyPackages', ownerKey(ref), encoder.encode(peer))
+  }
+
+  /** The peer a KeyPackage was answered to, if it was bound. */
+  async keyPackageOwner(ref: KeyPackageRef): Promise<IdentityKey | undefined> {
+    const bytes = await this.#get('keyPackages', ownerKey(ref))
+    return bytes === undefined ? undefined : decoder.decode(bytes)
   }
 
   // ── Invites ──────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ id: pkg-amountinator
 title: '@bsv/amountinator'
 kind: package
 domain: helpers
-version: '2.1.8'
+version: '2.1.9'
 source_repo: 'bsv-blockchain/ts-stack'
 last_updated: '2026-08-26'
 last_verified: '2026-08-26'
@@ -16,7 +16,7 @@ tags: [helpers, amounts, satoshis]
 
 # @bsv/amountinator
 
-This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.0`. SDK3 remains
+This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remains
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
@@ -158,3 +158,7 @@ const amount = await staticConverter.convertAmount('100')
 - [API reference (TypeDoc)](https://bsv-blockchain.github.io/ts-stack/api/amountinator/)
 - [Source on GitHub](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/amountinator)
 - [npm](https://www.npmjs.com/package/@bsv/amountinator)
+
+The SDK4 peer alternative now requires `@bsv/sdk ^4.0.1` for the numeric wallet
+result and legacy wire hotfix. Existing SDK2/3 alternatives and lower bounds
+remain unchanged. No wire or data migration is required.

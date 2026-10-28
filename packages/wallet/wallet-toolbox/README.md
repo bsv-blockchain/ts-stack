@@ -6,6 +6,34 @@
 
 A [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) conforming wallet implementation for the BSV blockchain, built on the [BSV SDK](https://bsv-blockchain.github.io/ts-stack/packages/sdk/). Provides persistent storage, protocol-based key derivation, transaction monitoring, chain tracking, and signing — everything needed to build wallet-powered applications on BSV.
 
+## Remote storage timeouts
+
+`StorageClient` accepts optional `authFetchOptions` in its existing third
+constructor argument. This applies to the Node, browser and mobile packages.
+Omitting it preserves the installed SDK's defaults.
+
+```ts
+import { type WalletInterface } from '@bsv/sdk'
+import { StorageClient } from '@bsv/wallet-toolbox'
+
+declare const wallet: WalletInterface
+const storage = new StorageClient(wallet, 'https://storage.example/rpc', {
+  authFetchOptions: {
+    requestTimeoutMs: 60_000,
+    responseTimeoutMs: 60_000
+  }
+})
+```
+
+`requestTimeoutMs` bounds transport fetch and body consumption;
+`responseTimeoutMs` independently bounds the authenticated response waiter.
+Both default to 30 seconds. The response-wait option requires an SDK release
+containing `AuthFetchOptions.responseTimeoutMs`; older supported SDKs retain
+their existing behavior and option types. The declared SDK peer ranges remain
+unchanged. Other certificate/session deadlines and caller operation deadlines
+are independent. A local timeout does not undo a server-side financial write;
+reconcile its outcome before deciding whether to resubmit it.
+
 ## Optional local transaction recovery
 
 The 2.15.0 source candidate adds explicit local SQLite recovery controllers as
@@ -1343,3 +1371,10 @@ historical certificates without rewriting them. Listing and proof use unchanged
 storage RPCs. For relinquishment, upgrade the storage server SDK as well: its
 existing reference validator must accept the historical type. New signing and
 acquisition remain strictly 32 bytes. See [the compatibility contract](../../../specs/wallet/legacy-certificate-wire.md).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

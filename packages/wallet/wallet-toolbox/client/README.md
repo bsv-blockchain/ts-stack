@@ -5,6 +5,13 @@
 
 Browser build of [`@bsv/wallet-toolbox`](https://www.npmjs.com/package/@bsv/wallet-toolbox) — the reference [BRC-100](https://github.com/bitcoin-sv/BRCs/blob/master/wallet/0100.md) wallet implementation. It provides browser-safe wallet, signer, services, monitor, local IndexedDB, and remote storage APIs without the full package's Node-only storage adapters.
 
+Remote `StorageClient` calls accept `authFetchOptions` in the existing third
+constructor argument. For a longer authenticated request, configure both
+`requestTimeoutMs` and `responseTimeoutMs` with an SDK that supports the latter.
+Omission preserves the installed SDK defaults; existing SDK peer ranges and
+consumer calls are unchanged. See the
+[remote storage timeout guide](https://github.com/bsv-blockchain/ts-stack/tree/main/packages/wallet/wallet-toolbox#remote-storage-timeouts).
+
 Use this package in:
 
 - Web apps that talk to a remote `StorageServer`
@@ -259,3 +266,10 @@ against the requested explicit inputs, synchronize the accepted winner, then
 read fresh state before rebuilding. Upgrade the application SDK alongside the
 wallet parser. Use the existing JSON wallet API for structured review errors;
 the binary wire format is unchanged. No database or call migration is required.
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

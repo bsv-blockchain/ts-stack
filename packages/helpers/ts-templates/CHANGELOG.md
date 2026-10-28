@@ -10,7 +10,9 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-### 2.1.0 candidate
+- Prepare `2.1.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+### 2.1.1 candidate
 
 ### Added
 

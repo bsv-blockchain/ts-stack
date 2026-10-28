@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { decodeEnvelope, type BootstrapMessage } from '../../bootstrap/index.js'
+import { decodeEnvelope, encodeEnvelope, type BootstrapMessage } from '../../bootstrap/index.js'
 import { GroupMessagingError } from '../../errors.js'
 import { StorageProvider } from '../../storage/index.js'
 import { TransportService } from '../../transport/index.js'
@@ -12,16 +12,24 @@ import {
 } from '../invite-service.js'
 import { PermanentProcessingError } from '../../errors.js'
 import type { KeyPackageRef } from '../../types.js'
+import { PrivateKey } from '@bsv/sdk'
+import { openClient, pair } from './helpers.js'
+import type { GroupMessagingClient } from '../../client.js'
 
 const ALICE = `02${'aa'.repeat(32)}`
 const BOB = `02${'bb'.repeat(32)}`
 const CAROL = `02${'cc'.repeat(32)}`
 
-const build = async (overrides: Partial<Pick<InviteServiceDeps, 'resolveWelcome'>> = {}) => {
+const build = async (
+  overrides: Partial<Pick<InviteServiceDeps, 'resolveWelcome'>> = {},
+  /** Runs as each message leaves, before it counts as sent. */
+  onSend: () => Promise<void> = async () => undefined
+) => {
   const hub = new InProcessTransportHub()
   const sent: Array<{ to: string; payload: Uint8Array }> = []
   const aliceTransport = await TransportService.open({
     send: async (to, payload) => {
+      await onSend()
       sent.push({ to, payload })
     },
     onMessage: () => () => undefined
@@ -100,6 +108,21 @@ describe('InviteService.handle', () => {
     expect(emit).toHaveBeenCalledWith(
       'keyPackageReceived',
       expect.objectContaining({ peer: BOB, keyPackage })
+    )
+    expect(await service.list('outbound')).toHaveLength(0)
+  })
+
+  it('carries the chatName of the invitation on keyPackageReceived, since the row is gone by then', async () => {
+    const { service, emit } = await build()
+    await service.send(BOB, { chatName: 'Project' })
+    const requestId = (await service.list('outbound'))[0]!.requestId
+    const keyPackage = new Uint8Array([1]) as KeyPackageBytes
+
+    await service.handle(BOB, { type: 'keyPackageResponse', requestId, keyPackage })
+
+    expect(emit).toHaveBeenCalledWith(
+      'keyPackageReceived',
+      expect.objectContaining({ peer: BOB, chatName: 'Project' })
     )
     expect(await service.list('outbound')).toHaveLength(0)
   })
@@ -358,28 +381,160 @@ describe('InviteService.handle welcome', () => {
   })
 })
 
-describe('InviteService.handle welcome is one-per-ref', () => {
+describe('InviteService.handle welcome is one-per-ref-and-sender', () => {
   const WELCOME = new Uint8Array([1, 2, 3, 4])
   const message = { type: 'welcome', requestId: 'r1', welcome: WELCOME } as const
 
   /**
-   * A KeyPackage is single-use, so at most one Welcome can legitimately consume
-   * one. The ref a Welcome names is cleartext and unauthenticated, so without
-   * this a peer holding our published KeyPackage can mint a row per forgery.
+   * The ref a Welcome names is cleartext and unauthenticated, so without this a
+   * peer holding our published KeyPackage can mint a row per forgery. The bound
+   * is per sender: one row each, however many times it repeats.
    */
-  it('refuses a second Welcome naming a ref an invite already holds', async () => {
+  it('refuses a second Welcome from the same sender naming a ref an invite already holds', async () => {
     const ref = 'deadbeef' as KeyPackageRef
     const { service, emit } = await build({ resolveWelcome: async () => ref })
     await service.handle(BOB, message)
     emit.mockClear()
 
-    await service.handle(CAROL, { type: 'welcome', requestId: 'r2', welcome: WELCOME })
+    await service.handle(BOB, { type: 'welcome', requestId: 'r2', welcome: WELCOME })
 
     expect(await service.list('inbound')).toHaveLength(1)
     expect(emit).toHaveBeenCalledWith(
       'bootstrapRefused',
+      expect.objectContaining({ peer: BOB, kind: 'welcome' })
+    )
+  })
+
+  /**
+   * One row per ref would let whoever names the ref first shadow the genuine
+   * Welcome. Keyed by sender, the host sees both and decides by who sent each.
+   */
+  it('keeps a Welcome from another sender naming the same ref, so a forger cannot shadow it', async () => {
+    const ref = 'deadbeef' as KeyPackageRef
+    const { service } = await build({ resolveWelcome: async () => ref })
+    await service.handle(CAROL, message)
+
+    await service.handle(BOB, { type: 'welcome', requestId: 'r2', welcome: WELCOME })
+
+    const peers = (await service.list('inbound')).map(invite => invite.peer)
+    expect(peers.sort()).toEqual([BOB, CAROL].sort())
+  })
+})
+
+describe('InviteService.accept binds the KeyPackage to the peer it answered', () => {
+  const WELCOME = new Uint8Array([1, 2, 3, 4])
+  const ref = 'deadbeef' as KeyPackageRef
+  const keyPackage = new Uint8Array([7, 7]) as KeyPackageBytes
+
+  /** Bob asked, and this device answered with a KeyPackage it had stored under `ref`. */
+  const answered = async () => {
+    const built = await build({ resolveWelcome: async () => ref })
+    await built.storage.putKeyPackage(ref, keyPackage)
+    await built.service.handle(BOB, {
+      type: 'keyPackageRequest',
+      requestId: 'q1',
+      ciphersuites: [DEFAULT_CIPHERSUITE]
+    })
+    await built.service.accept((await built.service.list('inbound'))[0]!.inviteId, keyPackage)
+    built.emit.mockClear()
+    return built
+  }
+
+  it('refuses a Welcome for that KeyPackage from anyone else, before writing a row', async () => {
+    const { service, emit } = await answered()
+
+    await service.handle(CAROL, { type: 'welcome', requestId: 'r1', welcome: WELCOME })
+
+    expect(await service.list('inbound')).toHaveLength(0)
+    expect(emit).toHaveBeenCalledWith(
+      'bootstrapRefused',
       expect.objectContaining({ peer: CAROL, kind: 'welcome' })
     )
+    expect(emit).not.toHaveBeenCalledWith('welcomeReceived', expect.anything())
+  })
+
+  it('still takes the Welcome from the peer it answered, once', async () => {
+    const { service } = await answered()
+
+    await service.handle(BOB, { type: 'welcome', requestId: 'r1', welcome: WELCOME })
+    await service.handle(BOB, { type: 'welcome', requestId: 'r2', welcome: WELCOME })
+
+    expect(await service.list('inbound')).toHaveLength(1)
+  })
+
+  /**
+   * The whole protection depends on the binding existing before the KeyPackage
+   * is on the wire: a Welcome can follow the answer immediately.
+   */
+  it('has the binding in place by the time the answer is sent', async () => {
+    let owner: unknown = 'unread'
+    let storage: StorageProvider | undefined
+    const built = await build({ resolveWelcome: async () => ref }, async () => {
+      owner = await storage?.keyPackageOwner(ref)
+    })
+    storage = built.storage
+    await storage.putKeyPackage(ref, keyPackage)
+    await built.service.handle(BOB, {
+      type: 'keyPackageRequest',
+      requestId: 'q1',
+      ciphersuites: [DEFAULT_CIPHERSUITE]
+    })
+
+    await built.service.accept((await built.service.list('inbound'))[0]!.inviteId, keyPackage)
+
+    expect(owner).toBe(BOB)
+  })
+
+  /**
+   * Rebinding would silently retarget the ref and the first peer's genuine
+   * Welcome would then be refused, so the second answer is the one refused.
+   */
+  it('refuses to answer a second peer with a KeyPackage already handed to the first', async () => {
+    const { service, storage, sent } = await answered()
+    await service.handle(CAROL, {
+      type: 'keyPackageRequest',
+      requestId: 'q2',
+      ciphersuites: [DEFAULT_CIPHERSUITE]
+    })
+    const second = (await service.list('inbound')).find(invite => invite.peer === CAROL)!
+    sent.length = 0
+
+    await expect(service.accept(second.inviteId, keyPackage)).rejects.toThrow(GroupMessagingError)
+
+    expect(sent).toHaveLength(0)
+    expect(await storage.keyPackageOwner(ref)).toBe(BOB)
+    expect(await service.list('inbound')).toHaveLength(1)
+  })
+
+  it('lets the same peer be answered again with the same KeyPackage', async () => {
+    const { service, storage, sent } = await answered()
+    await service.handle(BOB, {
+      type: 'keyPackageRequest',
+      requestId: 'q2',
+      ciphersuites: [DEFAULT_CIPHERSUITE]
+    })
+    const again = (await service.list('inbound'))[0]!
+    sent.length = 0
+
+    await service.accept(again.inviteId, keyPackage)
+
+    expect(sent).toHaveLength(1)
+    expect(await storage.keyPackageOwner(ref)).toBe(BOB)
+  })
+
+  it('forgets the binding when the KeyPackage is deleted', async () => {
+    const { service, storage } = await answered()
+
+    await storage.deleteKeyPackage(ref)
+    await storage.putKeyPackage(ref, keyPackage)
+    await service.handle(CAROL, { type: 'welcome', requestId: 'r1', welcome: WELCOME })
+
+    expect(await service.list('inbound')).toHaveLength(1)
+  })
+
+  it('keeps the binding out of the list of KeyPackage refs', async () => {
+    const { storage } = await answered()
+    expect(await storage.listKeyPackageRefs()).toEqual([ref])
   })
 })
 
@@ -525,5 +680,104 @@ describe('InviteService.handle refuses an unserveable request', () => {
       'bootstrapRefused',
       expect.objectContaining({ peer: BOB, kind: 'keyPackageRequest' })
     )
+  })
+})
+
+const invitedInto = async (
+  alice: GroupMessagingClient,
+  bob: GroupMessagingClient
+): Promise<string> => {
+  const invited = new Promise<string>(resolve => {
+    const stop = bob.on('inviteReceived', ({ inviteId }) => {
+      stop()
+      resolve(inviteId)
+    })
+  })
+  await alice.invites.send(bob.identityKey, { chatName: 'Project' })
+  return invited
+}
+
+describe('InviteService, driven by hand', () => {
+  it('carries the chatName of the invitation on keyPackageRejected, since the row is gone by then', async () => {
+    // Mallory answers Alice's invitation with Bob's KeyPackage.
+    const { hub, alice, bob } = await pair()
+    const mallory = await openClient(hub, PrivateKey.fromRandom(), new Map())
+    const bobKp = (await bob.keyPackages.create()).keyPackage
+    const rejected: Array<{ chatName?: string }> = []
+    alice.on('keyPackageRejected', payload => void rejected.push(payload))
+    await alice.invites.send(mallory.identityKey, { chatName: 'Project' })
+    const requestId = (await alice.invites.list('outbound'))[0]!.requestId
+
+    await hub.endpoint(mallory.identityKey).send(
+      alice.identityKey,
+      encodeEnvelope({
+        kind: 'bootstrap',
+        message: { type: 'keyPackageResponse', requestId, keyPackage: bobKp }
+      })
+    )
+
+    await vi.waitFor(() => expect(rejected).toHaveLength(1))
+    expect(rejected[0]!.chatName).toBe('Project')
+    expect(await alice.invites.list('outbound')).toHaveLength(0)
+  })
+
+  it('leaves the Welcome for the host, which joins it with the half it kept', async () => {
+    const { alice, bob } = await pair()
+    const welcomes: Array<{ inviteId: string }> = []
+    const errors: Error[] = []
+    bob.on('welcomeReceived', payload => void welcomes.push(payload))
+    bob.on('processingFailed', ({ error }) => void errors.push(error))
+    alice.on('keyPackageReceived', async ({ keyPackage }) => {
+      const own = await alice.keyPackages.create()
+      await alice.createGroup({
+        chatId: 'project',
+        members: [keyPackage],
+        privateKeyPackage: own.privateKeyPackage
+      })
+    })
+    const inviteId = await invitedInto(alice, bob)
+    const own = await bob.keyPackages.create()
+
+    await bob.invites.accept(inviteId, own.keyPackage)
+
+    await vi.waitFor(() => expect(welcomes).toHaveLength(1))
+    expect(await bob.getGroup('project')).toBeUndefined()
+    expect(errors).toHaveLength(0)
+
+    await bob.joinFromWelcome({
+      inviteId: welcomes[0]!.inviteId,
+      chatId: 'project',
+      privateKeyPackage: own.privateKeyPackage
+    })
+    expect(await bob.getGroup('project')).toBeDefined()
+  })
+})
+
+describe('InviteService.abandon', () => {
+  const ref = 'deadbeef' as KeyPackageRef
+
+  it('drops an inbound Welcome and the stored KeyPackage it named', async () => {
+    const { service, storage } = await build({ resolveWelcome: async () => ref })
+    await storage.putKeyPackage(ref, new Uint8Array([1]) as KeyPackageBytes)
+    await service.handle(BOB, { type: 'welcome', requestId: 'r1', welcome: new Uint8Array([1]) })
+    const inviteId = (await service.list('inbound'))[0]!.inviteId
+
+    await service.abandon(inviteId)
+
+    expect(await service.list('inbound')).toHaveLength(0)
+    expect(await storage.getKeyPackage(ref)).toBeUndefined()
+  })
+
+  it('drops an inbound request that has no ref to release', async () => {
+    const { service } = await build()
+    await service.handle(BOB, {
+      type: 'keyPackageRequest',
+      requestId: 'r1',
+      ciphersuites: [DEFAULT_CIPHERSUITE]
+    })
+
+    await service.abandon((await service.list('inbound'))[0]!.inviteId)
+
+    expect(await service.list('inbound')).toHaveLength(0)
   })
 })

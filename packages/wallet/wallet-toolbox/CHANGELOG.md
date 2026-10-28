@@ -4,23 +4,7 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
-## wallet-toolbox 2.15.1
-
-- The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
-  what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
-  invalid, revoked or expired key, before it reads the transaction. Previously a refused
-  key was recorded as a transaction rejection, so a mistyped or revoked `arcadeApiKey`
-  marked broadcasts `invalid` and failed their transactions. The wallet now fails over
-  or keeps the transaction queued for retry, and the history note says whether the
-  configured key was refused or the endpoint requires one. No configuration or consumer
-  migration is required.
-- `createAction` sizes a caller-provided `unlockingScript` by its byte length
-  when it hands the input to storage. It used the hex string's length, twice
-  the bytes, so storage funded and priced the transaction as if that script
-  appeared twice: a 78,369 byte transaction with a 36,401 byte provided unlock
-  paid for 114,780 bytes. Inputs given only an `unlockingScriptLength` are
-  unchanged. No API, wire, or schema migration; `unlockingScriptLength` already
-  meant bytes. Upgrade the signer package; storage is unchanged.
+## wallet-toolbox 2.15.2 (source candidate)
 
 - Knex storage `listActions` loads labels, outputs, output tags and baskets,
   inputs and the spending transactions for the whole page in a fixed number of
@@ -40,6 +24,31 @@ attention to changes that materially alter behavior or extend functionality.
   made inside a transaction, where SQLite ignores it (syncing the test wallet:
   1,994 of 6,801 statements). No consumer migration is required; the index
   migration runs with the other storage migrations.
+
+## wallet-toolbox 2.15.1
+
+- Add optional `StorageClientOptions.authFetchOptions` in the existing third
+  constructor argument across Node, browser and mobile. It forwards the
+  installed SDK's options without changing defaults, SDK peer ranges, RPCs,
+  retries or wallet data. The new `responseTimeoutMs` option requires the SDK
+  release containing it; longer authenticated calls should also configure the
+  existing transport `requestTimeoutMs`. No migration is required.
+
+- The `Arcade` broadcaster treats HTTP 401 and 403 as service errors. These are
+  what bsv-blockchain/arcade's API-key authorization returns for a missing-but-required,
+  invalid, revoked or expired key, before it reads the transaction. Previously a refused
+  key was recorded as a transaction rejection, so a mistyped or revoked `arcadeApiKey`
+  marked broadcasts `invalid` and failed their transactions. The wallet now fails over
+  or keeps the transaction queued for retry, and the history note says whether the
+  configured key was refused or the endpoint requires one. No configuration or consumer
+  migration is required.
+- `createAction` sizes a caller-provided `unlockingScript` by its byte length
+  when it hands the input to storage. It used the hex string's length, twice
+  the bytes, so storage funded and priced the transaction as if that script
+  appeared twice: a 78,369 byte transaction with a 36,401 byte provided unlock
+  paid for 114,780 bytes. Inputs given only an `unlockingScriptLength` are
+  unchanged. No API, wire, or schema migration; `unlockingScriptLength` already
+  meant bytes. Upgrade the signer package; storage is unchanged.
 
 ## wallet-toolbox 2.15.0 (source candidate)
 
@@ -1742,3 +1751,7 @@ Implications:
 - These outputs WILL be returned by `listActions` with the includeOutputs option set to true.
 - Your wallet will mark any output you include as inputs in your own transactions as spent at the time of transaction creation.
 - If a created transaction subsequently fails to be broadcast (abandoned or invalid), the outputs are reset to spendable. This may not happen immediately.
+
+## 2.15.1 candidate
+
+- Prepare `2.15.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.

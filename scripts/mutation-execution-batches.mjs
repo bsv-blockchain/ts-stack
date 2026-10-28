@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
-import { mutationExecutionMatrix } from './mutation-partitions.mjs'
+import { scheduledMutationExecutionMatrix } from './mutation-partitions.mjs'
 import { qualificationIdentity } from './mutation-final-qualification.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
@@ -175,7 +175,10 @@ export async function verifySelectedExecution(root, environment) {
   const requestIdentity = checkedBuildIdentity(JSON.parse(environment.EXECUTION_IDENTITY))
   const targets = buildMutationTargets(root)
   const selected = selectedTargets(JSON.parse(environment.SELECTED_TARGETS), targets)
-  const executionMatrix = mutationExecutionMatrix(selected, targets)
+  const { seconds } = JSON.parse(
+    readFileSync(resolve(root, 'governance/mutation-testing/durations.json'), 'utf8')
+  )
+  const executionMatrix = scheduledMutationExecutionMatrix(selected, targets, seconds)
   const identity = qualificationIdentity(root, environment, targets)
   if (
     Object.hasOwn(requestIdentity, 'nodeVersion') &&

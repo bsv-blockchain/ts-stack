@@ -86,6 +86,65 @@ Storage is scoped to the client's identity: one host database serves however
 many accounts the wallet manages, because the client narrows the provider with
 `StorageProvider.scopeTo(identityKey)` before using it.
 
+## Live delivery
+
+Delivery polls the box. That is the guarantee, and it is on whatever the host
+asked for. A live socket is an optimisation laid over it: `joinRoom` replays no
+backlog, so anything stored while the socket was away is reachable only by
+listing, and the poll is what lists it.
+
+Pass the client with its options to turn the socket on:
+
+```ts
+const client = await GroupMessagingClient.create({
+  wallet: new WalletClient(),
+  storage: sqlDriver,
+  transport: { client: messageBoxClient, live: true, pollIntervalMs: 5000 }
+})
+```
+
+While the socket carries this box's room the poll relaxes to
+`LIVE_BACKSTOP_INTERVAL_MS` (30s). The moment it does not — reconnecting,
+closed, or live but no longer joined to the room — the poll returns to
+`pollIntervalMs`. The transport decides that from what the client reports and
+never from guesswork, so nothing here tears a socket down or counts strikes
+against it; `@bsv/message-box-client` 2.7.0 and newer reconnect and rejoin their
+own rooms, and a client too old to report one leaves the poll at
+`pollIntervalMs` throughout.
+
+**The socket needs a relay that serves WebSockets.** Not every MessageBox host
+does, and `DEFAULT_MESSAGE_BOX_HOST` is not a promise that this one will:
+against a relay without them the socket never connects, delivery falls to the
+poll, and `onLiveStatus` says so. Point `MessageBoxClient` at a host you know
+serves them before setting `live: true`.
+
+The transport owns the socket's lifetime while this is set — it connects on
+`start` and disconnects on `close` — so a host sharing one `MessageBoxClient`
+with other consumers should know that before turning it on.
+
+To watch what the socket is doing, build the transport yourself and subscribe:
+
+```ts
+import { MessageBoxTransport, TransportService } from '@bsv/group-messaging'
+
+const transport = new MessageBoxTransport(messageBoxClient, { live: true })
+transport.onLiveStatus(({ phase, source, detail }) => {
+  console.log(phase, source ?? '', detail ?? '')
+})
+
+const client = await GroupMessagingClient.create({
+  wallet: new WalletClient(),
+  storage: sqlDriver,
+  transport: new TransportService(transport)
+})
+```
+
+`phase` is `connecting`, `subscribed`, `delivered`, `reconnecting` or `closed`.
+Only transitions are reported. `subscribed` means the socket is live _and_
+holding this box's room, which is the only state in which anything will be
+pushed here; `delivered` carries `source` so a host can tell which producer
+carried a message.
+
 ## The invitation handshake
 
 A group cannot be built until the inviter holds the invitee's KeyPackage, so
@@ -299,3 +358,10 @@ npm run doc
 ## License
 
 Licensed under the Open BSV License Version 6; see [LICENSE.txt](./LICENSE.txt).
+
+## SDK4 hotfix peer requirement
+
+The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
+wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
+lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
+application-wallet wire or data migration is required.

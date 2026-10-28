@@ -9,8 +9,7 @@ import {
   partitionMutationTarget,
   partitionedMutationTargets,
   selectedMutationPartition,
-  mutationExecutionMatrix,
-  longestFirst
+  scheduledMutationExecutionMatrix
 } from './mutation-partitions.mjs'
 import {
   inspectMutationEvidence,
@@ -244,8 +243,11 @@ async function main(argv) {
     const { seconds } = JSON.parse(
       fs.readFileSync(path.join(ROOT, 'governance/mutation-testing/durations.json'), 'utf8')
     )
-    const matrix = mutationExecutionMatrix(JSON.parse(options.selected), targets)
-    console.log(JSON.stringify(longestFirst(matrix, seconds)))
+    console.log(
+      JSON.stringify(
+        scheduledMutationExecutionMatrix(JSON.parse(options.selected), targets, seconds)
+      )
+    )
     return
   }
   if (options.command === 'targets') {

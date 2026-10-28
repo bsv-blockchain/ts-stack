@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
 ### 2.7.0 candidate — live socket reconnection, room restoration and reported status
 
 - **New: `onLiveStatus(listener)`.** Reports what the live socket is doing:
