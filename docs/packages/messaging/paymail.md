@@ -3,10 +3,10 @@ id: pkg-paymail
 title: '@bsv/paymail'
 kind: package
 domain: messaging
-version: '2.4.12'
+version: '2.5.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-23'
-last_verified: '2026-09-23'
+last_updated: '2026-10-29'
+last_verified: '2026-10-29'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/paymail'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/ts-paymail'
@@ -20,9 +20,9 @@ This source candidate declares SDK peer `^2.1.6 || ^3.0.0 || ^4.0.1`. SDK3 remai
 a coordinated proposal; see the [qualification and migration limits](../../guides/identity-did-vc-migration.md)
 before adopting it.
 
-> TypeScript SDK for BSV Paymail (BRC-121 capability discovery and routing). Provides both client-side capability discovery and server-side router with built-in support for PKI, P2P destinations, and public profiles.
+> TypeScript library for BSV Paymail ([BRC-28](https://github.com/bsv-blockchain/BRCs/blob/master/payments/0028.md) capability discovery and routing). Provides a client and an Express router with built-in support for PKI, P2P destinations, transaction receipt, public profiles and [BRC-235](https://github.com/bsv-blockchain/BRCs/blob/master/payments/0235.md) profile lookup.
 
-The 2.4.10 source candidate fixes the CommonJS build of the P2P signature and `PaymailClient` key helpers, which failed with `.default is not a constructor` under `require()`. No API migration is required.
+The 2.5.0 source candidate adds BRC-235 public profile lookup and reverse lookup. Earlier candidates fixed the CommonJS build of the P2P signature and `PaymailClient` key helpers. No API migration is required.
 
 ## Install
 
@@ -52,12 +52,13 @@ console.log(pkiResult.pubkey) // user's identity key
 
 ## What it provides
 
-- **PaymailClient** — Discover capabilities, retrieve profiles, get PKI, request payment destinations
-- **PaymailRouter** — Express router for `/.well-known/bsvalias/*` endpoints
-- **PublicProfileRoute** — Respond to profile requests with name, avatar, avatar_hash
+- **PaymailClient** — Discover capabilities, retrieve profiles, get PKI, request payment destinations, look up BRC-235 profiles
+- **PaymailRouter** — Express router serving `/.well-known/bsvalias` and the configured capability routes
+- **PublicProfileRoute** — Respond to profile requests with name and avatar
 - **PublicKeyInfrastructureRoute** — Respond to PKI requests with user public key
-- **ReceiveRawTransactionRoute** — Accept raw transactions for receiving payments
-- **P2PDestinationsRoute** — Return payment derivation instructions per BRC-29
+- **ReceiveTransactionRoute / ReceiveBeefTransactionRoute** — Accept raw or BEEF transactions for receiving payments
+- **ProfileLookupRoute / ProfileReverseLookupRoute** — BRC-235 handle-to-identity-key lookup and reverse lookup with self-signed profile certificates; hostable without any legacy capability
+- **P2pPaymentDestinationRoute** — Return payment output scripts for a requested amount
 - **Capability negotiation** — Client discovers what a domain supports before making requests
 - **Domain logic delegates** — Routes delegate user lookup to your `domainLogicHandler` callback
 
@@ -131,13 +132,14 @@ const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000
 
 ## Key concepts
 
-- **BRC-121 capabilities** — Discovery of Paymail services (PKI, P2P destinations, receive transaction, public profile)
-- **Well-known endpoints** — All Paymail services exposed via `/.well-known/bsvalias/*` paths
+- **Capabilities** — BRFC-identified Paymail services (PKI, P2P destinations, receive transaction, public profile, BRC-235 profile lookup)
+- **Well-known document** — `/.well-known/bsvalias` lists each capability's URL template; the routes themselves live wherever the host puts them
 - **Capability negotiation** — Client discovers what a domain supports before making requests
-- **PKI (Public Key Infrastructure)** — Maps paymail to public key via BRC-121
-- **P2P Destinations** — Returns payment output derivation per BRC-29
+- **PKI (Public Key Infrastructure)** — Maps paymail to public key
+- **P2P Destinations** — Returns payment output scripts (BRC-28)
+- **Profile certificates** — BRC-235 lookups return self-signed BRC-52 certificates that the client verifies; the verified identity key is the BRC-29 recipient
 - **Domain logic** — Routes delegate user lookup to your `domainLogicHandler` callback
-- **Paymail format** — `name@domain` validated per BRC-121 spec
+- **Paymail format** — `name@domain`, validated before any request
 
 ## When to use this
 
@@ -157,9 +159,10 @@ const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000
 
 ## Spec conformance
 
-- **BRC-121** (Paymail Service Discovery): Full capability discovery, service routing, profile/PKI/P2P capability exposure
-- **BRC-29** (Payment Derivation): P2P payment destination uses BRC-29 key derivation
-- **BRC-100** (Wallet interface): Public key infrastructure integrates with wallet identity keys
+- **BRC-28** (Paymail): Capability discovery, service routing, profile/PKI/P2P capability exposure
+- **BRC-235** (Paymail Public Profile Lookup): `0ace65da5987` and `43dcf83ddc5f` routes, client methods with full certificate verification
+- **BRC-70** (Paymail BEEF Transaction): `ReceiveBeefTransactionRoute` and `sendBeefTransactionP2P`
+- **BRC-100** (Wallet interface): `createProfileCertificate` signs with a wallet's identity key
 
 ## Common pitfalls
 
@@ -167,7 +170,8 @@ const p2pDest = await client.getP2pPaymentDestination('alice@example.com', 10000
 2. **Paymail format validation** — library validates `name@domain` format; invalid paymail raises error
 3. **BaseUrl must match DNS** — PaymailRouter's baseUrl should match the domain's actual DNS (e.g., 'https://myDomain.com')
 4. **No trailing slashes** — baseUrl should not have trailing slash
-5. **HTTP-only discovery** — Paymail service discovery happens via standard HTTP DNS lookup + well-known paths
+5. **Discovery** — The host comes from the `_bsvalias._tcp` SRV record (DNSSEC required when it names another host), then the well-known document over HTTPS
+6. **Profile lookups are suggestions** — show each result's full paymail and let the user choose; never pick `lookupProfiles()[0]`
 
 ## Related packages
 

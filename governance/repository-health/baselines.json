@@ -310,7 +310,7 @@
     "@bsv/authsocket": "2.1.11",
     "@bsv/authsocket-client": "2.1.10",
     "@bsv/message-box-client": "2.7.0",
-    "@bsv/paymail": "2.4.12",
+    "@bsv/paymail": "2.5.0",
     "@bsv/webrtpay": "0.2.3",
     "@bsv/402-pay": "0.3.5",
     "@bsv/auth": "0.1.8",

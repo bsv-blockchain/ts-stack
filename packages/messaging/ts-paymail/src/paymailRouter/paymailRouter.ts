@@ -2,7 +2,14 @@ import express from 'express'
 import type { ErrorRequestHandler, NextFunction, Request, Response, Router } from 'express'
 import PaymailRoute from './paymailRoutes/paymailRoute.js'
 import RequestSenderValidationCapability from '../capability/requestSenderValidationCapability.js'
+import ProfileLookupCapability from '../capability/profileLookupCapability.js'
+import ProfileReverseLookupCapability from '../capability/profileReverseLookupCapability.js'
 import { PaymailBadRequestError } from '../errors/index.js'
+
+const PROFILE_LOOKUP_CODES: ReadonlySet<string> = new Set([
+  ProfileLookupCapability.getCode(),
+  ProfileReverseLookupCapability.getCode()
+])
 
 interface PaymailRouterConfig {
   baseUrl: string
@@ -30,6 +37,7 @@ export default class PaymailRouter {
   private readonly advertisedBaseUrl: string
   private readonly registeredBasePath: string
   private readonly advertisedRequestSenderValidation: boolean
+  private readonly advertisesSenderValidation: boolean
   public baseUrl: string
   public basePath: string
   public routes: PaymailRoute[]
@@ -87,6 +95,13 @@ export default class PaymailRouter {
       )
     }
     this.advertisedRequestSenderValidation = configuredSenderValidation ?? derivedSenderValidation
+    // A host serving only BRC-235 profile lookups receives no transactions and
+    // has no sender validation to advertise. Every other configuration keeps
+    // the flag it has always advertised.
+    this.advertisesSenderValidation =
+      configuredSenderValidation != null ||
+      this.registeredRoutes.length === 0 ||
+      !this.registeredRoutes.every(route => PROFILE_LOOKUP_CODES.has(route.code))
     this.requestSenderValidation = this.advertisedRequestSenderValidation
 
     this.registeredRoutes.forEach(route => {
@@ -139,13 +154,16 @@ export default class PaymailRouter {
           const endpoint = route.endpoint
             .replaceAll(':paymail', '{alias}@{domain.tld}')
             .replaceAll(':pubkey', '{pubkey}')
+            .replaceAll(':query', '{query}')
           map[route.code] = this.joinUrl(this.advertisedBaseUrl, this.getBasePath(), endpoint)
           return map
         },
         Object.create(null) as Record<string, string | boolean>
       )
-      capabilities[RequestSenderValidationCapability.getCode()] =
-        this.advertisedRequestSenderValidation
+      if (this.advertisesSenderValidation) {
+        capabilities[RequestSenderValidationCapability.getCode()] =
+          this.advertisedRequestSenderValidation
+      }
       res.type('application/json')
       res.send({
         bsvalias: '1.0',

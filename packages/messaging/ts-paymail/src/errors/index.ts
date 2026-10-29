@@ -14,8 +14,12 @@ class PaymailBadRequestError extends PaymailError {
 }
 
 class PaymailServerResponseError extends PaymailError {
-  constructor(message: string) {
+  /** The HTTP status the remote host answered with, when the error is a non-2xx response. */
+  responseStatus?: number
+
+  constructor(message: string, responseStatus?: number) {
     super(message, 503)
+    if (responseStatus !== undefined) this.responseStatus = responseStatus
   }
 }
 

@@ -12,13 +12,19 @@
     "PaymailClient",
     "PaymailError",
     "PaymailServerResponseError",
+    "ProfileLookupCapability",
+    "ProfileReverseLookupCapability",
     "PublicProfileCapability",
     "SimpleP2pOrdinalDestinationsCapability",
-    "SimpleP2pOrdinalReceiveCapability"
+    "SimpleP2pOrdinalReceiveCapability",
+    "createProfileCertificate",
+    "verifyProfileCertificate"
   ],
   "prohibitedExports": [
     "PaymailRoute",
     "PaymailRouter",
+    "ProfileLookupRoute",
+    "ProfileReverseLookupRoute",
     "ReceiveTransactionRoute",
     "SimpleP2pOrdinalReceiveRoute"
   ],
