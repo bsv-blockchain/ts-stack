@@ -380,16 +380,8 @@ export default class PaymailClient {
         if (!Array.isArray(body)) {
             throw new PaymailServerResponseError("Validation error: profile lookup must return an array");
         }
-        const profiles: VerifiedProfile[] = [];
-        for (const certificate of body.slice(0, PROFILE_LOOKUP_MAX_RESULTS)) {
-            const profile = await verifyProfileCertificate(certificate, {
-                domain: validatedDomain,
-                paymail: exact
-            });
-            if (profile !== undefined)
-                profiles.push(profile);
-        }
-        return profiles;
+        const verified = await Promise.all(body.slice(0, PROFILE_LOOKUP_MAX_RESULTS).map(async (certificate) => await verifyProfileCertificate(certificate, { domain: validatedDomain, paymail: exact })));
+        return verified.filter((profile): profile is VerifiedProfile => profile !== undefined);
     };
     public resolveProfile = async (paymail: string): Promise<VerifiedProfile | undefined> => {
         const parsed = parsePaymail(paymail.trim().toLowerCase());
@@ -836,16 +828,8 @@ public lookupProfiles = async (domain: string, query: string): Promise<VerifiedP
     if (!Array.isArray(body)) {
         throw new PaymailServerResponseError("Validation error: profile lookup must return an array");
     }
-    const profiles: VerifiedProfile[] = [];
-    for (const certificate of body.slice(0, PROFILE_LOOKUP_MAX_RESULTS)) {
-        const profile = await verifyProfileCertificate(certificate, {
-            domain: validatedDomain,
-            paymail: exact
-        });
-        if (profile !== undefined)
-            profiles.push(profile);
-    }
-    return profiles;
+    const verified = await Promise.all(body.slice(0, PROFILE_LOOKUP_MAX_RESULTS).map(async (certificate) => await verifyProfileCertificate(certificate, { domain: validatedDomain, paymail: exact })));
+    return verified.filter((profile): profile is VerifiedProfile => profile !== undefined);
 }
 ```
 

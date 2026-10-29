@@ -5,9 +5,9 @@ import { checkProfileCertificate, isProfileIdentityKey } from '../../profileCert
 
 /**
  * Answers the current profile certificate of an identity key at this host, or
- * null/undefined when the key holds no handle here.
+ * null/undefined when the key holds no handle here. It may return a promise.
  */
-export type ProfileReverseLookupHandler = (identityKey: string) => unknown | Promise<unknown>
+export type ProfileReverseLookupHandler = (identityKey: string) => unknown
 
 interface ProfileReverseLookupRouteConfig {
   /** The paymail domain this host serves, e.g. `example.com`. */
@@ -74,7 +74,7 @@ export default class ProfileReverseLookupRoute extends PaymailRoute {
         return
       }
       const certificate = checkProfileCertificate(result, this.domain)
-      if (certificate === undefined || certificate.subject.toLowerCase() !== identityKey) {
+      if (certificate?.subject.toLowerCase() !== identityKey) {
         throw new Error('Profile reverse lookup handler returned an unservable certificate')
       }
       this.sendSuccessResponse(res, JSON.stringify(certificate))
