@@ -11,3 +11,5 @@ export { default as TransactionNegotiationCapability } from './transactionNegoti
 export type { TransactionNegotiationBody } from './transactionNegotiationCapability.js'
 export { default as SimpleP2pOrdinalDestinationsCapability } from './simpleP2pOrdinalDestinationsCapability.js'
 export { default as SimpleP2pOrdinalReceiveCapability } from './simpleP2pOrdinalReceiveCapability.js'
+export { default as ProfileLookupCapability } from './profileLookupCapability.js'
+export { default as ProfileReverseLookupCapability } from './profileReverseLookupCapability.js'
