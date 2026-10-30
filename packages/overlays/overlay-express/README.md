@@ -270,6 +270,28 @@ overlay state unless at least one provider accepts it or returns an already-know
 success. Set it to `false` only for deliberate offline/dev workflows where local
 overlay admission may proceed without current network propagation.
 
+### Faster Script Verification
+
+By default the engine verifies submitted and GASP-synced transactions with the
+SDK's JavaScript script interpreter. To verify input scripts with the BSV BDK
+engine compiled to WebAssembly instead (about 11x less CPU per input), install
+`@bsv/verifast` and configure a preloaded verifier before `configureEngine()`:
+
+```typescript
+import { BdkVerifier } from '@bsv/verifast'
+
+const verifier = new BdkVerifier()
+await verifier.preload()
+server.configureScriptVerifier(verifier)
+```
+
+Preload it before serving traffic: in its default adaptive mode the verifier
+keeps using the JavaScript interpreter until the WebAssembly module has loaded,
+and `configureScriptVerifier()` logs a warning when given a verifier that is not
+ready. Transactions are admitted or rejected the same way with either engine;
+only the rejection message differs (`Script verification failed for
+transaction …` instead of `Unable to verify SPV information.`).
+
 ### Transaction Propagation Providers
 
 Overlay Express can compose multiple transaction propagation and proof sources:

@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Add `configureScriptVerifier(verifier)` and `EngineConfig.scriptVerifier` to pass a script backend, such as a preloaded `BdkVerifier` from `@bsv/verifast`, to the engine's SPV verification. Off by default; `@bsv/verifast` is not a dependency. Additive; no migration.
+
 - Prepare `2.8.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 - Added `registerRouter(path, factory)`. Registered routers mount during `start()` after the BRC-103 authentication middleware and before the admin routes and 404 handler, inheriting CORS, body parsing, response limits, and `req.auth`. Additive; no consumer migration is required.
