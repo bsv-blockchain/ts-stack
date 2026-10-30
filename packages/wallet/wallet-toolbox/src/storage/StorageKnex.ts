@@ -99,7 +99,7 @@ export interface StorageKnexOptions extends StorageProviderOptions {
 }
 
 // Keep bulk statements below conservative SQLite/MySQL bind-parameter
-// ceilings. The surrounding transaction still makes a complete pack atomic.
+// ceilings. The surrounding transaction still makes a complete pack atomic. (proof)
 const ACTION_BATCH_BLOB_SQL_CHUNK = 500
 const OUTPUT_INSERT_SQL_CHUNK = 500
 
