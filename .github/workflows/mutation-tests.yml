@@ -2,10 +2,19 @@ name: Mutation quality
 
 on:
   workflow_call:
+    inputs:
+      packages:
+        description: JSON array of package directories for a single-package release; blank qualifies every canonical target
+        required: false
+        type: string
+        default: ''
     outputs:
       qualified-sha:
-        description: Exact source qualified by every canonical target; absent for diagnostics
+        description: Exact source qualified by every selected canonical target; absent for diagnostics
         value: ${{ jobs.mutation-quality.outputs.qualified-sha }}
+      qualified-packages:
+        description: JSON package directories of a package-scoped qualification; blank for every canonical target
+        value: ${{ jobs.mutation-quality.outputs.qualified-packages }}
   schedule:
     - cron: '17 8 * * 0'
   workflow_dispatch:
@@ -31,6 +40,7 @@ jobs:
     outputs:
       targets: ${{ steps.targets.outputs.targets }}
       mode: ${{ steps.targets.outputs.mode }}
+      packages: ${{ steps.targets.outputs.packages }}
       mutation-matrix: ${{ steps.targets.outputs.mutation-matrix }}
       partition-targets: ${{ steps.targets.outputs.partition-targets }}
       mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
@@ -50,22 +60,31 @@ jobs:
       - name: Rebuild the audited workspace build tool
         run: pnpm rebuild esbuild
 
-      - name: Select the full campaign or one exact target
+      - name: Select the full campaign, one release's packages or one exact target
         id: targets
         env:
           REQUESTED_TARGET: ${{ github.workflow == 'Mutation quality' && github.event_name == 'workflow_dispatch' && inputs.target || '' }}
+          REQUESTED_PACKAGES: ${{ github.workflow != 'Mutation quality' && inputs.packages || '' }}
         run: |
           GOVERNED_TARGETS=$(node scripts/mutation-testing.mjs --list)
+          PACKAGES=""
           if [ -n "$REQUESTED_TARGET" ]; then
             if ! grep -Fxq "$REQUESTED_TARGET" <<<"$GOVERNED_TARGETS"; then
               echo "::error::Unknown mutation target: $REQUESTED_TARGET"
               exit 1
             fi
             TARGETS=$(jq -cn --arg target "$REQUESTED_TARGET" '[$target]')
+          elif [ -n "$REQUESTED_PACKAGES" ]; then
+            # A package with no governed target falls back to every canonical target.
+            SCOPE=$(node scripts/mutation-final-qualification.mjs scope --packages "$REQUESTED_PACKAGES")
+            TARGETS=$(jq -c '.targetIds' <<<"$SCOPE")
+            PACKAGES=$(jq -c '.packages // empty' <<<"$SCOPE")
+            echo "Release package scope: ${PACKAGES:-<none governed; every canonical target>}" >> "$GITHUB_STEP_SUMMARY"
           else
             TARGETS=$(jq -R -s -c 'split("\n") | map(select(length > 0))' <<<"$GOVERNED_TARGETS")
           fi
           echo "targets=$TARGETS" >> "$GITHUB_OUTPUT"
+          echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
           MUTATION_MATRIX=$(node scripts/mutation-partition-evidence.mjs matrix --selected "$TARGETS")
           PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$TARGETS")
           echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
@@ -191,6 +210,7 @@ jobs:
       contents: read
     outputs:
       qualified-sha: ${{ steps.qualification.outputs.qualified-sha }}
+      qualified-packages: ${{ steps.qualification.outputs.qualified-packages }}
     steps:
       - name: Verify the campaign
         env:
@@ -245,6 +265,11 @@ jobs:
         id: qualification
         env:
           CAMPAIGN_MODE: ${{ needs.prepare.outputs.mode }}
+          SCOPED_PACKAGES: ${{ needs.prepare.outputs.packages }}
         run: |
+          scope=()
+          if [[ -n "$SCOPED_PACKAGES" ]]; then
+            scope=(--packages "$SCOPED_PACKAGES")
+          fi
           node scripts/mutation-final-qualification.mjs verify \
-            --mode "$CAMPAIGN_MODE" --directory .mutation-receipts
+            --mode "$CAMPAIGN_MODE" --directory .mutation-receipts "${scope[@]}"

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { REPOSITORY_ROOT } from '../repository-health.mjs'
 import { mutationExecutionBatches } from '../mutation-execution-batches.mjs'
@@ -53,7 +54,14 @@ test('every publisher requires complete exact-source qualification before publis
     const gate = file === 'infra-release.yaml' ? 'qualification' : 'full-mutation'
     assert.equal(campaign.uses, './.github/workflows/mutation-tests.yml')
     assert.deepEqual(campaign.permissions, { contents: 'read' })
-    assert.equal(campaign.with, undefined)
+    // Only release.yaml may narrow a campaign, and only from the same plan
+    // output that selects the staged npm package set.
+    assert.deepEqual(
+      campaign.with,
+      file === 'release.yaml'
+        ? { packages: '${{ needs.plan.outputs.mutation-packages }}' }
+        : undefined
+    )
     assert.ok(publisher.needs.includes(gate))
     assert.ok(publisher.permissions['id-token'] === 'write')
     for (const result of ['success', 'failure', 'cancelled', 'skipped', undefined]) {
@@ -93,10 +101,26 @@ test('every publisher requires complete exact-source qualification before publis
       }
       assert.equal(conjunctionPasses(publisher.if, context), false)
       if (file === 'release.yaml') {
-        // The npm campaign starts at t=0 beside prepare; it also qualifies the
-        // infrastructure images, so an empty npm set does not skip it.
-        assert.equal(campaign.needs, undefined)
+        // The npm campaign starts after the seconds-long plan, beside prepare;
+        // it also qualifies the infrastructure images, so an empty npm set
+        // does not skip it.
+        assert.equal(campaign.needs, 'plan')
         assert.equal(campaign.if, undefined)
+        const { plan, prepare, infra } = workflow.jobs
+        assert.equal(prepare.needs, 'plan')
+        assert.equal(prepare.outputs.filter, '${{ needs.plan.outputs.filter }}')
+        assert.equal(prepare.outputs.mode, '${{ needs.plan.outputs.mode }}')
+        assert.equal(
+          prepare.steps.find(step => step.id === 'artifacts').env.PNPM_FILTER,
+          '${{ needs.plan.outputs.filter }}'
+        )
+        assert.equal(plan.steps.length, 2)
+        assert.equal(
+          prepare.steps.find(step => step.id === 'plan'),
+          undefined
+        )
+        // Infrastructure images need every canonical target, never a package scope.
+        assert.match(infra.if, / && needs\.full-mutation\.outputs\.qualified-packages == '' && /)
       } else {
         assert.equal(conjunctionPasses(campaign.if, context), false)
         // A release.yaml call reuses the caller's qualification of github.sha.
@@ -107,15 +131,62 @@ test('every publisher requires complete exact-source qualification before publis
   }
 })
 
+test('a release plan scopes mutation only for one single-release package directory', async () => {
+  const release = (await releaseWorkflows()).find(({ file }) => file === 'release.yaml').workflow
+  const script = release.jobs.plan.steps.find(step => step.id === 'plan').run
+  const directory = mkdtempSync(join(tmpdir(), 'release-plan-'))
+  try {
+    const plan = environment => {
+      const output = join(directory, `output-${Math.random()}`)
+      const run = spawnSync('/bin/bash', ['-e', '-c', script], {
+        cwd: REPOSITORY_ROOT,
+        env: { GITHUB_OUTPUT: output, PATH: process.env.PATH, ...environment },
+        encoding: 'utf8'
+      })
+      assert.equal(run.status, 0, run.stderr)
+      return Object.fromEntries(
+        readFileSync(output, 'utf8')
+          .trim()
+          .split('\n')
+          .map(line => line.split(/=(.*)/s).slice(0, 2))
+      )
+    }
+    const dispatch = (mode, filter) =>
+      plan({ EVENT_NAME: 'workflow_dispatch', DISPATCH_MODE: mode, DISPATCH_FILTER: filter })
+    const tag = name => plan({ EVENT_NAME: 'push', GITHUB_REF_NAME: name })
+    assert.deepEqual(dispatch('single', './packages/helpers/ts-templates'), {
+      mode: 'single',
+      filter: './packages/helpers/ts-templates',
+      'mutation-packages': '["packages/helpers/ts-templates"]'
+    })
+    assert.equal(
+      tag('packages/wallet/color-permission-module/v0.2.0')['mutation-packages'],
+      '["packages/wallet/color-permission-module"]'
+    )
+    // Name filters, unknown directories and cascades keep every canonical target.
+    assert.equal(dispatch('single', '@bsv/templates')['mutation-packages'], '')
+    assert.equal(dispatch('single', './packages/does-not-exist')['mutation-packages'], '')
+    assert.equal(dispatch('cascade', '')['mutation-packages'], '')
+    assert.equal(tag('release/v2026-10-30')['mutation-packages'], '')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('full campaign receipts cannot borrow another attempt or a partial manual target', async () => {
   const { parse } = await import('yaml')
   const workflow = parse(
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
   )
-  assert.equal(workflow.on.workflow_call.inputs, undefined)
+  assert.deepEqual(Object.keys(workflow.on.workflow_call.inputs), ['packages'])
+  assert.equal(workflow.on.workflow_call.inputs.packages.default, '')
   assert.match(
     workflow.on.workflow_call.outputs['qualified-sha'].value,
     /jobs\.mutation-quality\.outputs\.qualified-sha/
+  )
+  assert.match(
+    workflow.on.workflow_call.outputs['qualified-packages'].value,
+    /jobs\.mutation-quality\.outputs\.qualified-packages/
   )
   assert.match(
     workflow.jobs.prepare.steps.find(step => step.id === 'targets').run,

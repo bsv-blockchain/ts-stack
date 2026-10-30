@@ -285,9 +285,10 @@ See [npm Package Supply Chain](./npm-package-supply-chain.md),
 ## Complete mutation qualification before publication
 
 The publication candidate must complete the reusable `mutation-tests.yml`
-campaign at its exact `github.sha`. In `release.yaml` the campaign starts at
-t=0 in parallel with preparation and runs every target concurrently, so the
-slowest single target bounds its wall time. The npm publisher waits for the
+campaign at its exact `github.sha`. In `release.yaml` a seconds-long `plan` job
+resolves the release mode and package filter once; preparation and the campaign
+then start in parallel from that same output, and the campaign runs its targets
+concurrently, so the slowest single target bounds its wall time. The npm publisher waits for the
 up-front approval, preparation, and full qualification. The OCI publisher
 waits for discovery and full qualification, which a `release.yaml` call
 satisfies with that same-run campaign;
@@ -303,6 +304,18 @@ canonical source ranges and mutant inventory with pinned Stryker 9.6.1 and reche
 all existing target gates. A partial manual target is diagnostic only. Earlier
 weekly passes, previous attempts and reports from another source cannot satisfy
 the gate; rerun the complete workflow when a full attempt needs replacement.
+
+A single-package release (`packages/<path>/vX.Y.Z`, or a manual `single`
+dispatch whose filter is a `./packages/<path>` directory) publishes only that
+package's own bytes. Its workspace dependencies ship as npm version ranges that
+resolve to versions qualified by their own releases. The campaign is therefore
+scoped to every canonical target whose source lies in that package directory,
+with all the same exact-source, property-run and receipt checks. The final
+verifier requires exactly that target set and reports the scope as
+`qualified-packages`. A package directory with no governed target, a package
+name filter, and every cascade run the complete campaign. Infrastructure image
+publication accepts only a complete-campaign qualification. Defects in other
+packages are then found by their own releases or the weekly complete campaign.
 
 Preparation and execution verification use the same duration-scheduled complete
 matrix. Every batch binds the digest of that full ordered matrix and its exact

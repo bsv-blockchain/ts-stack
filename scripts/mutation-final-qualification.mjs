@@ -381,12 +381,54 @@ function verifyIdentity(actual, expected) {
     throw new Error('Stale or different campaign identity')
 }
 
-export function verifyFullCampaign(identity, evidence, policy, sourcesForTarget) {
+function packageDirectoryFor(value) {
+  const directory = typeof value === 'string' ? value.replace(/^\.\//, '').replace(/\/+$/, '') : ''
+  if (!/^packages\/[A-Za-z0-9._/-]+$/.test(directory) || directory.split('/').includes('..'))
+    throw new Error(`Invalid package directory for scoped qualification: ${value}`)
+  return directory
+}
+
+// A single-package release publishes only that package's own bytes, so it is
+// qualified by every canonical target whose source lies in that directory.
+// Workspace dependencies ship as npm ranges, qualified by their own releases.
+// A directory with no governed target falls back to the complete campaign.
+export function packageScopedTargets(targets, packages) {
+  if (!Array.isArray(packages) || packages.length === 0)
+    throw new Error('Scoped qualification requires a nonempty package directory list')
+  const directories = ordered(new Set(packages.map(packageDirectoryFor)))
+  const targetIds = ordered(
+    Object.entries(targets)
+      .filter(([, target]) =>
+        directories.some(
+          directory =>
+            target.packageDirectory === directory ||
+            target.packageDirectory.startsWith(`${directory}/`)
+        )
+      )
+      .map(([targetId]) => targetId)
+  )
+  if (targetIds.length === 0) return { packages: null, targetIds: ordered(Object.keys(targets)) }
+  return { packages: directories, targetIds }
+}
+
+export function verifyFullCampaign(identity, evidence, policy, sourcesForTarget, scope = null) {
+  const required = scope ? scope.targetIds : identity.targetIds
+  if (
+    scope &&
+    (!Array.isArray(scope.packages) ||
+      scope.packages.length === 0 ||
+      !Array.isArray(required) ||
+      required.length === 0 ||
+      required.some(targetId => !identity.targetIds.includes(targetId)))
+  )
+    throw new Error('Scoped qualification requires canonical targets for named packages')
   const seen = new Set()
   for (const { receipt, reportBytes, executionBytes } of evidence) {
     if (receipt.schemaVersion !== 1 || receipt.mode !== 'full')
       throw new Error('Diagnostic or unknown receipt cannot qualify a full campaign')
     verifyIdentity(receipt.identity, identity)
+    if (!required.includes(receipt.targetId))
+      throw new Error('Receipt target is outside the qualification scope')
     if (seen.has(receipt.targetId)) throw new Error('Duplicate target receipt')
     seen.add(receipt.targetId)
     const current = makeTargetReceipt(
@@ -401,10 +443,28 @@ export function verifyFullCampaign(identity, evidence, policy, sourcesForTarget)
     if (JSON.stringify(current) !== JSON.stringify(receipt))
       throw new Error('Mutation report or receipt changed')
   }
-  if (JSON.stringify(ordered(seen)) !== JSON.stringify(identity.targetIds) || seen.size === 0) {
-    throw new Error('Full qualification requires exactly every canonical target')
+  if (JSON.stringify(ordered(seen)) !== JSON.stringify(ordered(required)) || seen.size === 0) {
+    throw new Error(
+      scope
+        ? 'Scoped qualification requires exactly every canonical target of its packages'
+        : 'Full qualification requires exactly every canonical target'
+    )
   }
-  return { schemaVersion: 1, kind: 'full-mutation-qualification', identity, targetCount: seen.size }
+  if (!scope)
+    return {
+      schemaVersion: 1,
+      kind: 'full-mutation-qualification',
+      identity,
+      targetCount: seen.size
+    }
+  return {
+    schemaVersion: 1,
+    kind: 'package-scoped-mutation-qualification',
+    identity,
+    packages: scope.packages,
+    targetIds: ordered(seen),
+    targetCount: seen.size
+  }
 }
 
 function findReceipts(directory) {
@@ -418,15 +478,26 @@ function findReceipts(directory) {
 
 function argumentsFor(argv) {
   const [command, ...rest] = argv
-  if (!['capture', 'verify'].includes(command)) throw new Error('Use capture or verify')
+  if (!['capture', 'verify', 'scope'].includes(command))
+    throw new Error('Use capture, verify or scope')
   const result = { command }
+  const keys = {
+    capture: ['--directory', '--target', '--mode'],
+    verify: ['--directory', '--mode', '--packages'],
+    scope: ['--packages']
+  }[command]
   for (let index = 0; index < rest.length; index += 2) {
     const key = rest[index]
-    if (!['--directory', '--target', '--mode'].includes(key) || !rest[index + 1])
-      throw new Error('Invalid qualification arguments')
+    if (!keys.includes(key) || !rest[index + 1]) throw new Error('Invalid qualification arguments')
     if (result[key.slice(2)] !== undefined) throw new Error('Duplicate qualification argument')
     result[key.slice(2)] = rest[index + 1]
   }
+  if (command === 'scope') {
+    if (!result.packages) throw new Error('Scope requires package directories')
+    return result
+  }
+  if (result.packages !== undefined && result.mode !== 'full')
+    throw new Error('Package scope applies only to full qualification')
   if (!result.directory || !['full', 'diagnostic'].includes(result.mode))
     throw new Error('Directory and explicit mode required')
   if (command === 'capture' && !result.target) throw new Error('Capture requires an exact target')
@@ -449,6 +520,10 @@ export async function loadCanonicalEvidence(targetIds, load) {
 async function main(argv) {
   const options = argumentsFor(argv)
   const targets = buildMutationTargets(ROOT)
+  if (options.command === 'scope') {
+    console.log(JSON.stringify(packageScopedTargets(targets, JSON.parse(options.packages))))
+    return
+  }
   const identity = qualificationIdentity(ROOT, process.env, targets)
   const policy = JSON.parse(
     fs.readFileSync(path.join(ROOT, 'governance/mutation-testing/policy.json'), 'utf8')
@@ -479,20 +554,36 @@ async function main(argv) {
     reportBytes: fs.readFileSync(path.join(path.dirname(file), 'mutation.json'), 'utf8'),
     executionBytes: fs.readFileSync(path.join(path.dirname(file), 'execution.json'), 'utf8')
   }))
-  const canonical = await loadCanonicalEvidence(identity.targetIds, targetId =>
+  let scope = null
+  if (options.packages !== undefined) {
+    scope = packageScopedTargets(targets, JSON.parse(options.packages))
+    if (!scope.packages)
+      throw new Error('Package scope has no canonical target; run the full campaign')
+  }
+  const canonical = await loadCanonicalEvidence(scope?.targetIds ?? identity.targetIds, targetId =>
     targetEvidence(ROOT, targets[targetId], targetId)
   )
-  const qualified = verifyFullCampaign(identity, evidence, policy, targetId =>
-    canonical.get(targetId)
+  const qualified = verifyFullCampaign(
+    identity,
+    evidence,
+    policy,
+    targetId => canonical.get(targetId),
+    scope
   )
   fs.writeFileSync(
     path.join(options.directory, 'full-qualification.json'),
     `${JSON.stringify(qualified, null, 2)}\n`
   )
+  const qualifiedPackages = scope ? JSON.stringify(scope.packages) : ''
   if (process.env.GITHUB_OUTPUT)
-    fs.appendFileSync(process.env.GITHUB_OUTPUT, `qualified-sha=${identity.sourceSha}\n`)
+    fs.appendFileSync(
+      process.env.GITHUB_OUTPUT,
+      `qualified-sha=${identity.sourceSha}\nqualified-packages=${qualifiedPackages}\n`
+    )
   console.log(
-    `Full mutation qualification: ${identity.sourceSha}, ${qualified.targetCount} targets`
+    scope
+      ? `Package-scoped mutation qualification: ${identity.sourceSha}, ${qualified.targetCount} targets for ${scope.packages.join(', ')}`
+      : `Full mutation qualification: ${identity.sourceSha}, ${qualified.targetCount} targets`
   )
 }
 

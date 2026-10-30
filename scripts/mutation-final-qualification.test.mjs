@@ -8,7 +8,8 @@ import {
   qualificationIdentity,
   makeTargetReceipt,
   verifyFullCampaign,
-  loadCanonicalEvidence
+  loadCanonicalEvidence,
+  packageScopedTargets
 } from './mutation-final-qualification.mjs'
 
 import {
@@ -131,6 +132,49 @@ test('missing, duplicate, extra and diagnostic targets never qualify a full camp
   assert.throws(() => qualify([entry('one'), entry('one'), entry('two')]), /Duplicate/)
   assert.throws(() => entry('extra'), /outside canonical/)
   assert.throws(() => qualify([entry('one'), entry('two', undefined, 'diagnostic')]), /Diagnostic/)
+})
+
+test('package scope selects every target in its directories or falls back to the full campaign', () => {
+  const targets = {
+    templates: { packageDirectory: 'packages/helpers/ts-templates' },
+    nested: { packageDirectory: 'packages/helpers/ts-templates/sub' },
+    prefix: { packageDirectory: 'packages/helpers/ts-templates-extra' },
+    sdk: { packageDirectory: 'packages/sdk' }
+  }
+  assert.deepEqual(packageScopedTargets(targets, ['./packages/helpers/ts-templates/']), {
+    packages: ['packages/helpers/ts-templates'],
+    targetIds: ['nested', 'templates']
+  })
+  assert.deepEqual(packageScopedTargets(targets, ['packages/none']), {
+    packages: null,
+    targetIds: ['nested', 'prefix', 'sdk', 'templates']
+  })
+  for (const invalid of [[], 'packages/sdk', ['../sdk'], ['packages/../sdk'], ['lib/x'], [7]])
+    assert.throws(() => packageScopedTargets(targets, invalid), /package directory/)
+})
+
+test('a package-scoped campaign needs exactly every target of its packages', () => {
+  const scope = { packages: ['packages/one'], targetIds: ['one'] }
+  const scoped = entries => verifyFullCampaign(identity, entries, policy, () => evidence, scope)
+  const qualified = scoped([entry('one')])
+  assert.equal(qualified.kind, 'package-scoped-mutation-qualification')
+  assert.deepEqual(qualified.packages, ['packages/one'])
+  assert.deepEqual(qualified.targetIds, ['one'])
+  assert.throws(() => scoped([]), /every canonical target of its packages/)
+  assert.throws(() => scoped([entry('one'), entry('two')]), /outside the qualification scope/)
+  assert.throws(() => scoped([entry('one'), entry('one')]), /Duplicate/)
+  assert.throws(() => scoped([entry('one', undefined, 'diagnostic')]), /Diagnostic/)
+  for (const invalid of [
+    { packages: [], targetIds: ['one'] },
+    { packages: null, targetIds: ['one'] },
+    { packages: ['packages/one'], targetIds: [] },
+    { packages: ['packages/one'], targetIds: ['extra'] }
+  ])
+    assert.throws(
+      () => verifyFullCampaign(identity, [entry('one')], policy, () => evidence, invalid),
+      /canonical targets for named packages/
+    )
+  assert.equal(qualify([entry('one'), entry('two')]).kind, 'full-mutation-qualification')
 })
 
 test('head, attempt, runtime, control inputs and modified receipts fail closed', () => {
