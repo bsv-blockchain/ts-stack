@@ -40,6 +40,7 @@ import {
   SessionManager,
   AsyncSessionManager
 } from '@bsv/sdk'
+import type { BdkVerifierInterface } from '@bsv/sdk'
 import Knex from 'knex'
 import { MongoClient, Db } from 'mongodb'
 import makeUserInterface, { type UIConfig } from './makeUserInterface.js'
@@ -188,6 +189,11 @@ export interface EngineConfig {
   unprovenMaintenanceIntervalMs?: number
   /** Maximum lookup formulas hydrated by the engine. Use -1 to opt out. */
   maxLookupResults?: number
+  /**
+   * Optional script backend for SPV verification of submitted and GASP-synced
+   * transactions. See {@link OverlayExpress.configureScriptVerifier}.
+   */
+  scriptVerifier?: BdkVerifierInterface
 }
 
 export type HealthStatus = 'ok' | 'degraded' | 'error'
@@ -351,6 +357,16 @@ function assertSharedSecret(value: unknown, label: string): asserts value is str
     })
   ) {
     throw new TypeError(`${label} must not contain control characters`)
+  }
+}
+
+function assertScriptVerifier(verifier: unknown): asserts verifier is BdkVerifierInterface {
+  if (
+    typeof verifier !== 'object' ||
+    verifier === null ||
+    typeof (verifier as BdkVerifierInterface).verifyScripts !== 'function'
+  ) {
+    throw new TypeError('Engine scriptVerifier must provide verifyScripts()')
   }
 }
 
@@ -1579,6 +1595,7 @@ export default class OverlayExpress {
         true
       )
     }
+    if (params.scriptVerifier !== undefined) assertScriptVerifier(params.scriptVerifier)
     if (params.reorgStreamUrl !== undefined) {
       assertSingleLineString(params.reorgStreamUrl, 'Engine reorgStreamUrl', 2048, false)
       secureServiceFetch(
@@ -1606,6 +1623,32 @@ export default class OverlayExpress {
           : [...params.slapTrackers]
     }
     this.logger.log(chalk.blue('Advanced Engine configuration params have been updated.'))
+  }
+
+  /**
+   * Configures a script backend for the engine's SPV verification of submitted
+   * and GASP-synced transactions, such as `BdkVerifier` from `@bsv/verifast`.
+   * Without one, the SDK's JavaScript interpreter verifies scripts.
+   *
+   * Preload the verifier before serving traffic. Its default adaptive mode
+   * keeps using the JavaScript interpreter until the WASM module has loaded:
+   *
+   *   const verifier = new BdkVerifier()
+   *   await verifier.preload()
+   *   server.configureScriptVerifier(verifier)
+   */
+  configureScriptVerifier(verifier: BdkVerifierInterface): void {
+    assertScriptVerifier(verifier)
+    this.engineConfig = { ...this.engineConfig, scriptVerifier: verifier }
+    this.logger.log(chalk.blue('Script verifier has been configured.'))
+    const { isReady } = verifier as { isReady?: () => boolean }
+    if (typeof isReady === 'function' && !isReady.call(verifier)) {
+      this.logger.warn(
+        chalk.yellow(
+          'Script verifier is not ready; call preload() first or scripts keep using the JavaScript interpreter.'
+        )
+      )
+    }
   }
 
   /**
@@ -1698,7 +1741,8 @@ export default class OverlayExpress {
       this.buildTopicAnchorHeaderResolver(),
       this.engineConfig.enableBASMSync ?? this.enableBASMSync,
       this.engineConfig.unprovenEvictionBlocks ?? this.unprovenEvictionBlocks,
-      maxLookupResults
+      maxLookupResults,
+      this.engineConfig.scriptVerifier
     )
 
     this.initServerWallet()

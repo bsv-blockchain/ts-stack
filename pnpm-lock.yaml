@@ -1441,6 +1441,9 @@ importers:
       '@bsv/sdk':
         specifier: workspace:^
         version: link:../../sdk
+      '@bsv/verifast':
+        specifier: workspace:^
+        version: link:../../verifast
       '@types/jest':
         specifier: ^30.0.0
         version: 30.0.0
