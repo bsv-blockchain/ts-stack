@@ -75,6 +75,7 @@ import { WERR_INTERNAL, WERR_INVALID_OPERATION, WERR_INVALID_PARAMETER, WERR_UNA
 import { EntityTimeStamp, TransactionStatus } from '../sdk/types'
 import { isAutoSpendableChangeOutput, managedChangeOutputFields } from './methods/managedChange'
 import { selectCanonicalChange } from './methods/actionPlanning'
+import { restoreOutputScript } from './methods/restoreOutputScript'
 import {
   DEFAULT_MANAGED_CHANGE_MINIMUM_SATOSHIS,
   isLegacyManagedChangeBasketDefault
@@ -349,10 +350,9 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
       if (output != null) {
         // mark output as spent by transactionId
         await this.updateOutput(output.outputId, { spendable: false, spentBy: transactionId }, dbTrx)
-        // Hydrate the locking script for the chosen output. Identical to Knex canon at
-        // StorageKnex.allocateChangeInput: required when the script was offloaded into
-        // rawTx storage due to exceeding maxOutputScript.
-        await this.validateOutputScript(output, dbTrx)
+        // The candidate scan cleared every script; restore the chosen one, whether
+        // it was offloaded into rawTx storage or stored inline on the row.
+        await restoreOutputScript(this, output, dbTrx)
       }
       return output
     } finally {

@@ -55,6 +55,7 @@ import {
   validateCompactManifest
 } from './actionBatchBlobs'
 import { validateManifestActions } from './actionBatchValidation'
+import { restoreOutputScript } from './restoreOutputScript'
 import type { ValidatedBatchAction } from './actionBatchValidation'
 
 export const ACTION_BATCH_LEASE_MS = 15 * 60 * 1000
@@ -369,8 +370,9 @@ async function makeFundingResult(
 ): Promise<{ outputs: ActionBatchFundingOutput[]; beef?: Uint8Array }> {
   const beef = new Beef()
   const result: ActionBatchFundingOutput[] = []
+  // Funding candidates come from a `noScript` scan.
+  await Promise.all(outputs.map(async output => await restoreOutputScript(storage, output)))
   for (const output of outputs) {
-    await storage.validateOutputScript(output)
     const copy: ActionBatchFundingOutput = { ...output }
     if (args.isSignAction && args.includeAllSourceTransactions) {
       copy.sourceTransaction = await storage.getRawTxOfKnownValidTransaction(output.txid)
