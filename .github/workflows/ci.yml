@@ -217,7 +217,8 @@ jobs:
             --mode test)
           echo "dependent-test-packages=$DEPENDENT_TEST_PACKAGES" >> "$GITHUB_OUTPUT"
           # The application package's serial suite outlasts one shard's
-          # timeout, so it runs as four Jest shards beside the planned ones.
+          # timeout, so it runs as six duration-balanced Jest shards beside
+          # the planned ones.
           DEPENDENT_TEST_ORDINARY=$(jq -c 'map(select(. != "@bsv/output-knowledge"))' <<<"$DEPENDENT_TEST_PACKAGES")
           DEPENDENT_TEST_MATRIX=$(node scripts/ci-shard-plan.mjs \
             --packages-json "$DEPENDENT_TEST_ORDINARY" \
@@ -227,7 +228,7 @@ jobs:
             {include: ((if ($all | map(select(. != "@bsv/output-knowledge")) | length) > 0 then
               [.include[] | . + {application:0}]
               else [] end) + (if $all | index("@bsv/output-knowledge") then
-              [range(1;5) as $shard | {shard:$shard,total:4,application:$shard,packages:["@bsv/output-knowledge"]}]
+              [range(1;7) as $shard | {shard:$shard,total:6,application:$shard,packages:["@bsv/output-knowledge"]}]
               else [] end))}' <<<"$DEPENDENT_TEST_MATRIX")
           echo "dependent-test-matrix=$DEPENDENT_TEST_MATRIX" >> "$GITHUB_OUTPUT"
 
@@ -947,10 +948,14 @@ jobs:
         if: matrix.application != 0
         env:
           PREBUILT_PACKAGE_OUTPUTS: '1'
+          # Shards follow measured per-file durations, longest first.
+          JEST_SHARD_DURATIONS: ${{ github.workspace }}/governance/ci-lane-durations.json
+          JEST_SHARD_LANE: output-knowledge-tests
         run: >-
           pnpm --filter @bsv/output-knowledge exec node
           "$GITHUB_WORKSPACE/scripts/run-prebuilt-package-script.mjs"
           --script test --jest-shard "${{ matrix.application }}/${{ matrix.total }}"
+          --jest-sequencer "$GITHUB_WORKSPACE/scripts/jest-duration-sequencer.cjs"
 
   browser-packages:
     name: Platform / browser packages (${{ matrix.shard }}/${{ matrix.total }})

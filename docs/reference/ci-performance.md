@@ -297,6 +297,16 @@ their Istanbul maps with the library Jest uses and enforces the SDK's configured
 global thresholds, so the result matches one unsharded run. The packed SDK
 browser and UMD contract checks run beside the coverage shards.
 
+The affected-application regression lane runs the output-knowledge suite as six
+Jest shards with the same sequencer and the `output-knowledge-tests` lane, so a
+library pull request that only depends on the application no longer waits on
+whichever path-hash shard drew the slowest property files. On PR runs from
+2026-10-28 the four path-hash shards took 280–600 seconds of Jest time each,
+except shard four, which drew the three slowest files and took 1,054–1,257
+seconds. Planned from the median per-file times, each of six shards carries
+about 475 seconds. Every file still runs once, serially, with its property
+cases, seeds and deadlines unchanged.
+
 The shared build restores each package's outputs from a cache keyed on the git
 blob ids of the package's own files, of every workspace package it depends on,
 and of the root toolchain inputs (`scripts/build-output-cache.mjs`); only
