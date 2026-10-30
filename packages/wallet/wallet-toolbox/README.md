@@ -1378,3 +1378,50 @@ The SDK4 peer alternative starts at `@bsv/sdk ^4.0.1`, which restores numeric
 wallet results and legacy wire compatibility. Existing SDK2/3 alternatives and
 lower bounds remain unchanged. SDK4 users should install the 4.0.1 hotfix; no
 application-wallet wire or data migration is required.
+
+### Explicit session consent and Action Label presentation
+
+Hosts can opt into `differentiateActionLabelOperations` and
+`preferAppPermissionGroups`. Both default to `false`, preserving existing
+permission behavior and manifest ordering. Explicit complete app groups may
+contain self and anyone scopes together; an unchecked triggering capability is
+denied instead of immediately re-prompting individually.
+
+`grantPermission({requestID, sessionDurationMs: 1_800_000})` and
+`grantGroupedPermission({requestID, granted, sessionDurationMs: 1_800_000})`
+authorize only the reviewed protocol, basket and certificate scopes in memory.
+The duration must be an integer from 1 millisecond through 30 minutes. Spending
+and privileged keys require separate consent. `ephemeral: true` still allows
+only the pending request; omitting a lifetime retains the on-chain token flow.
+Hosts must distinguish these choices and disclose token transaction/service fees.
+
+Display `listSessionPermissions()` in app access settings and call
+`revokeSessionPermissions(originator?)` on revocation, lock, logout, profile or
+network change. Revocation rejects matching pending requests and clears lookup
+caches. Remembered on-chain grants remain independently valid until revoked.
+Never use the token lookup cache or a module's private cache as session consent.
+
+Action Labels use DPACP internally. With operation differentiation enabled,
+applying and listing a label have separate wallet-internal scopes. Existing
+`[1,"action label <label>"]` records remain broad grants for both operations.
+The display helper `utility/actionLabelPermission` recognizes all three forms;
+its output is presentation metadata, never authorization. Show the exact label,
+operation and originator in requests, grant inventories, details and revocation.
+A history grant can reveal matching transactions from other applications. Keep
+every distinct grant outpoint when grouping records; one counterparty can have
+multiple label grants. Internal `admin label` scopes are not callable key
+protocols and must not be advertised as ordinary app derivation namespaces.
+
+ECPM hosts can forward `moduleDetails` to the prompt while authorizing the
+canonical `[level,"p ecpm <logical protocol>"]` scope. Keep points and key IDs
+in technical details; make clear that a session/remembered grant covers all of
+them in that exact protocol/counterparty scope. Module parsing and cryptographic
+validation still belong to the installed semantic module. Registry descriptions
+and manifest purposes are optional attributed display data, never grant authority.
+
+For consumers pinned to older storage/database bundles,
+`scripts/backport-permission-sessions.mjs /absolute/unpacked/package` derives
+only the owning permission methods and declarations from this source. It checks
+preimages before writing, rejects already-patched packages and removes stale
+source maps for changed artifacts. Repack and lock the resulting bytes; test
+the real wallet host before use. This does not constitute an npm release.
