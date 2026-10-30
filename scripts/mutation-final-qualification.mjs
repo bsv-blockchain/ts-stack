@@ -382,7 +382,9 @@ function verifyIdentity(actual, expected) {
 }
 
 function packageDirectoryFor(value) {
-  const directory = typeof value === 'string' ? value.replace(/^\.\//, '').replace(/\/+$/, '') : ''
+  let directory = typeof value === 'string' ? value : ''
+  if (directory.startsWith('./')) directory = directory.slice(2)
+  while (directory.endsWith('/')) directory = directory.slice(0, -1)
   if (!/^packages\/[A-Za-z0-9._/-]+$/.test(directory) || directory.split('/').includes('..'))
     throw new Error(`Invalid package directory for scoped qualification: ${value}`)
   return directory
@@ -411,17 +413,22 @@ export function packageScopedTargets(targets, packages) {
   return { packages: directories, targetIds }
 }
 
-export function verifyFullCampaign(identity, evidence, policy, sourcesForTarget, scope = null) {
-  const required = scope ? scope.targetIds : identity.targetIds
+function requiredTargetIds(identity, scope) {
+  if (!scope) return identity.targetIds
+  const { packages, targetIds } = scope
   if (
-    scope &&
-    (!Array.isArray(scope.packages) ||
-      scope.packages.length === 0 ||
-      !Array.isArray(required) ||
-      required.length === 0 ||
-      required.some(targetId => !identity.targetIds.includes(targetId)))
+    !Array.isArray(packages) ||
+    packages.length === 0 ||
+    !Array.isArray(targetIds) ||
+    targetIds.length === 0 ||
+    targetIds.some(targetId => !identity.targetIds.includes(targetId))
   )
     throw new Error('Scoped qualification requires canonical targets for named packages')
+  return targetIds
+}
+
+export function verifyFullCampaign(identity, evidence, policy, sourcesForTarget, scope = null) {
+  const required = requiredTargetIds(identity, scope)
   const seen = new Set()
   for (const { receipt, reportBytes, executionBytes } of evidence) {
     if (receipt.schemaVersion !== 1 || receipt.mode !== 'full')
