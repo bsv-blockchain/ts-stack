@@ -106,7 +106,7 @@
   "scripts": {
     "test": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false",
     "test:watch": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "pnpm build && node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --runInBand --watchman=false",
+    "test:coverage": "pnpm build && node ../../../scripts/jest-project-coverage.mjs",
     "test:property": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --watchman=false --runTestsByPath src/__tests/BASM.property.test.ts src/__tests/ProposalAdmission.property.test.ts src/__tests/PrivatePublicationAdmission.property.test.ts src/__tests/PurchaseAdmission.property.test.ts src/__tests/RetainedTransactionBEEF.property.test.ts",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/overlays/overlay/{README.md,jest.config.js,mod.ts,package.json,tsconfig*.json}\"",
     "lint": "oxlint mod.ts src jest.config.js --deny-warnings",
@@ -138,6 +138,7 @@
   "homepage": "https://github.com/bsv-blockchain/ts-stack/tree/main/packages/overlays/overlay#readme",
   "devDependencies": {
     "@bsv/sdk": "workspace:^",
+    "@bsv/verifast": "workspace:^",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.6.1",
     "@typescript/native": "npm:typescript@7.0.2",

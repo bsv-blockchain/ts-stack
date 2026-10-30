@@ -322,6 +322,19 @@ The wallet-toolbox synced-header test restores a cached mainnet header store,
 keyed on the chaintracks storage code that writes it, instead of downloading
 about 75 MB from the header CDN into a fresh store on every run.
 
+## Coverage for packages with several Jest projects
+
+`@bsv/overlay` and `@bsv/overlay-express` run their tests as two Jest projects
+each (CommonJS and ES modules) that compile the same source files differently.
+A single `jest --coverage` run merges each file's raw coverage before applying
+source maps and maps the result with one project's map, so the other project's
+counts land on the wrong source lines and the patch-coverage gate reports
+covered changes as missed. Their `test:coverage` scripts therefore run
+`scripts/jest-project-coverage.mjs`, which reads the projects from the
+package's Jest config, runs each one alone with JSON coverage, merges the
+source-coordinate maps by location, and writes the usual
+`coverage/lcov.info`. Every test still runs once.
+
 ## Execution ledger across outcomes and attempts
 
 The weekly trend also writes `ci-execution-ledger.json`. This separate ledger

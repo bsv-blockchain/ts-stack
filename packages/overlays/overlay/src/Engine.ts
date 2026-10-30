@@ -25,6 +25,7 @@ import {
   BroadcastResponse,
   BroadcastFailure
 } from '@bsv/sdk'
+import type { BdkVerifierInterface } from '@bsv/sdk'
 import { AdvertisementData, Advertiser } from './Advertiser.js'
 import type { Advertisement } from './Advertisement.js'
 import { GASP, GASPInitialRequest, GASPInitialResponse, GASPNode } from '@bsv/gasp'
@@ -415,6 +416,7 @@ export class Engine {
    * @param {boolean} basmSyncEnabled - Whether BASM sync should run automatically.
    * @param {number} unprovenEvictionBlocks - Default block age for opt-in unproven state eviction.
    * @param {number} maxLookupResults - Maximum lookup formulas hydrated per request. Use -1 to opt out.
+   * @param {BdkVerifierInterface} [scriptVerifier] - Optional script backend for SPV verification of submitted and GASP-synced transactions, for example a preloaded `BdkVerifier` from `@bsv/verifast`. When omitted, the SDK's JavaScript interpreter verifies scripts.
    */
   constructor(
     public managers: { [key: string]: TopicManager },
@@ -436,7 +438,8 @@ export class Engine {
     public topicAnchorHeaderResolver?: TopicAnchorHeaderResolver,
     public basmSyncEnabled = false,
     public unprovenEvictionBlocks = 144,
-    public maxLookupResults = 1000
+    public maxLookupResults = 1000,
+    public scriptVerifier?: BdkVerifierInterface
   ) {
     if (
       maxLookupResults !== -1 &&
@@ -1759,7 +1762,7 @@ export class Engine {
     // public submission mode, so it keeps the full SPV check.
     if (mode !== 'historical-tx-no-spv') {
       this.startTime(`chainTracker_${txid.substring(0, 10)}`)
-      const txValid = await tx.verify(this.chainTracker)
+      const txValid = await tx.verify(this.chainTracker, undefined, undefined, this.scriptVerifier)
       if (!txValid) throw new Error('Unable to verify SPV information.')
       this.endTime(`chainTracker_${txid.substring(0, 10)}`)
     }

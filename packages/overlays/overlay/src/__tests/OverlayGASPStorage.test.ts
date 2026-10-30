@@ -605,6 +605,31 @@ describe('OverlayGASPStorage', () => {
       jest.restoreAllMocks()
     })
 
+    it('verifies the graph anchor with the engine script verifier', async () => {
+      overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
+      const verify = jest.fn().mockResolvedValue(true)
+      const rootTx = { inputs: [], outputs: [{}], id: jest.fn().mockReturnValue('root-txid') }
+      jest
+        .spyOn(Transaction, 'fromBEEF')
+        .mockReturnValueOnce({ verify } as unknown as Transaction)
+        .mockReturnValueOnce(rootTx as unknown as Transaction)
+      jest.spyOn(overlayStorage as any, 'getBEEFForNode').mockReturnValue([9])
+      jest.spyOn(overlayStorage as any, 'computeOrderedBEEFsForGraph').mockReturnValue([[2]])
+      mockEngine.managers['test-topic'] = {
+        identifyAdmissibleOutputs: jest.fn().mockResolvedValue({ outputsToAdmit: [0], coinsToRetain: [] })
+      }
+      mockEngine.chainTracker = { name: 'test-chain-tracker' }
+      const scriptVerifier = { verifyScripts: jest.fn() }
+      mockEngine.scriptVerifier = scriptVerifier
+      try {
+        await expect(overlayStorage.validateGraphAnchor(rootGraphID)).resolves.toBeUndefined()
+      } finally {
+        delete mockEngine.scriptVerifier
+      }
+
+      expect(verify).toHaveBeenCalledWith(mockEngine.chainTracker, undefined, undefined, scriptVerifier)
+    })
+
     it('submits historical transactions in order with admitted previous-coin indexes', async () => {
       overlayStorage.temporaryGraphNodeRefs[rootGraphID] = rootNode
       const anchorBEEF = [9]
@@ -639,7 +664,7 @@ describe('OverlayGASPStorage', () => {
 
       await expect(overlayStorage.validateGraphAnchor(rootGraphID)).resolves.toBeUndefined()
 
-      expect(verify).toHaveBeenCalledWith(mockEngine.chainTracker)
+      expect(verify).toHaveBeenCalledWith(mockEngine.chainTracker, undefined, undefined, undefined)
       expect(identifyAdmissibleOutputs).toHaveBeenNthCalledWith(
         1,
         parentBEEF,
