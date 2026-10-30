@@ -12,12 +12,10 @@
 
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, readFileSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import coverageLibrary from 'istanbul-lib-coverage'
-import reportLibrary from 'istanbul-lib-report'
-import reports from 'istanbul-reports'
 
 const PROJECT_NAME = /^[A-Za-z0-9][\w.-]*$/
 
@@ -54,14 +52,30 @@ export function jestArguments(project, coverageDirectory) {
   ]
 }
 
+// The istanbul copies Jest itself uses for this package, resolved at run time
+// so the dependency-free script tests can import this module.
+function istanbul(packageDirectory) {
+  const requireFromPackage = createRequire(path.join(packageDirectory, 'package.json'))
+  const requireFromReporters = createRequire(
+    requireFromPackage.resolve('@jest/reporters', {
+      paths: [path.dirname(requireFromPackage.resolve('jest/package.json'))]
+    })
+  )
+  return {
+    coverage: requireFromReporters('istanbul-lib-coverage'),
+    report: requireFromReporters('istanbul-lib-report'),
+    reports: requireFromReporters('istanbul-reports')
+  }
+}
+
 /** Merges per-project istanbul JSON maps that are already in source coordinates. */
-export function mergeCoverage(projectMaps) {
+function mergeCoverage(coverageLibrary, projectMaps) {
   const merged = coverageLibrary.createCoverageMap({})
   for (const map of projectMaps) merged.merge(map)
   return merged
 }
 
-export function writeReports(coverageMap, directory) {
+function writeReports({ report: reportLibrary, reports }, coverageMap, directory) {
   const context = reportLibrary.createContext({ dir: directory, coverageMap })
   for (const [name, options] of [
     ['json', { file: 'coverage-final.json' }],
@@ -92,7 +106,8 @@ async function main(arguments_) {
       throw new Error(`Jest project ${project} exited with ${run.status ?? run.signal}`)
     maps.push(JSON.parse(readFileSync(path.join(projectDirectory, 'coverage-final.json'), 'utf8')))
   }
-  writeReports(mergeCoverage(maps), coverageDirectory)
+  const libraries = istanbul(process.cwd())
+  writeReports(libraries, mergeCoverage(libraries.coverage, maps), coverageDirectory)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
