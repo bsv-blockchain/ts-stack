@@ -2664,6 +2664,16 @@ export function buildMutationTargets(repositoryRoot) {
         ],
         [
           'src/auth/AuthMessageValidation.ts',
+          '/** Copies a byte array the caller owns;',
+          'function visitAuthArray('
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
+          'if (!Array.isArray(candidate)) return visitAuthObject(',
+          'function walkAuthData<T>('
+        ],
+        [
+          'src/auth/AuthMessageValidation.ts',
           'if (!separatePayload) bytes +=',
           'if (snapshot) retain('
         ],
@@ -2683,7 +2693,8 @@ export function buildMutationTargets(repositoryRoot) {
           'this.#wallet = wallet'
         ],
         ['src/auth/Peer.ts', 'message = copyAuthByteArray(', 'if (identityKey !== undefined)'],
-        ['src/auth/Peer.ts', 'const outbound =', '} catch (error: unknown)'],
+        ['src/auth/Peer.ts', 'function sameBytes(', '/**'],
+        ['src/auth/Peer.ts', 'const unchanged = sameBytes(', '} catch (error: unknown)'],
         [
           'src/auth/Peer.ts',
           'message = snapshotAuthMessage(message,',
@@ -2757,6 +2768,8 @@ export function buildMutationTargets(repositoryRoot) {
         [
           '<rootDir>/src/auth/__tests/Peer.boundary.test.ts',
           '<rootDir>/src/auth/__tests/Peer.messageValidation.security.test.ts',
+          '<rootDir>/src/auth/__tests/Peer.outboundSnapshot.test.ts',
+          '<rootDir>/src/auth/__tests/AuthMessageValidation.outbound.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.boundary.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.property.test.ts',
           '<rootDir>/src/auth/clients/__tests__/AuthFetch.certificateWait.test.ts',

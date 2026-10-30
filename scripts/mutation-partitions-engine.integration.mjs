@@ -116,9 +116,11 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     const parts = partitionMutationTarget(id, original),
       observed = []
     // Preserve all twenty original golden totals and explicitly include every
-    // new protected-envelope framing site in the same complete partitions.
-    const addedFramingSites = id === 'protected-ledger' ? 29 : 0
-    assert.equal(canonical.length, expectedCounts[index] + addedFramingSites)
+    // new protected-envelope framing site and every outbound auth snapshot
+    // site in the same complete partitions. sdk-auth-http's figure is net: one
+    // original site was removed with the code it mutated.
+    const addedSites = { 'protected-ledger': 29, 'sdk-auth-http': 43 }[id] ?? 0
+    assert.equal(canonical.length, expectedCounts[index] + addedSites)
     assert.ok(parts.length > 1)
     assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
     const partInventories = serialResults(parts, async part => {

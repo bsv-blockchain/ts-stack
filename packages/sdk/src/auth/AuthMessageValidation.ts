@@ -191,17 +191,21 @@ interface AuthDataWalk {
   maxGeneralPayloadBytes?: number | null
   seen: WeakSet<object>
   pending: AuthDataFrame[]
+  /** Dense byte arrays the caller created and has not shared; their bytes need no per-element check. */
+  ownedByteArrays?: ReadonlySet<unknown>
+  /** Snapshot arrays already verified as dense bytes during this walk. */
+  verifiedByteArrays: WeakSet<object>
 }
 
 type RetainAuthData = (value: unknown) => void
 
-function visitAuthArray(
+/** Reads an array's length and checks it against the array's byte limit. */
+function authArrayLength(
   candidate: unknown[],
   current: AuthDataFrame,
-  context: AuthDataWalk,
-  retain: RetainAuthData
-): number {
-  const { snapshot, maxGeneralPayloadBytes, pending } = context
+  context: AuthDataWalk
+): { length: number; separatePayload: boolean } {
+  const { maxGeneralPayloadBytes } = context
   const separatePayload =
     maxGeneralPayloadBytes !== undefined && current.depth === 1 && current.key === 'payload'
   const maxArrayBytes = separatePayload
@@ -212,6 +216,33 @@ function visitAuthArray(
   if (!Number.isSafeInteger(length) || length < 0 || length > maxArrayBytes) {
     throw new Error('Authentication message array exceeds its limit.')
   }
+  return { length, separatePayload }
+}
+
+/** Copies a byte array the caller owns; see {@link snapshotOutboundAuthMessage}. */
+function visitOwnedByteArray(
+  candidate: unknown[],
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const { length, separatePayload } = authArrayLength(candidate, current, context)
+  if (context.snapshot) {
+    const copy = candidate.slice()
+    context.verifiedByteArrays.add(copy)
+    retain(copy)
+  }
+  return separatePayload ? 0 : length * 4 + 2
+}
+
+function visitAuthArray(
+  candidate: unknown[],
+  current: AuthDataFrame,
+  context: AuthDataWalk,
+  retain: RetainAuthData
+): number {
+  const { snapshot, pending } = context
+  const { length, separatePayload } = authArrayLength(candidate, current, context)
   // Capture each descriptor value once without retaining one descriptor object
   // per byte. The captured values supply both validation and the owned snapshot.
   const values: unknown[] = []
@@ -229,6 +260,7 @@ function visitAuthArray(
     // JSON uses at most three digits and a comma for each byte.
     let bytes = 0
     if (!separatePayload) bytes += length * 4 + 2
+    context.verifiedByteArrays.add(values)
     if (snapshot) retain(values)
     return bytes
   }
@@ -301,17 +333,27 @@ function visitAuthValue(
   if (context.seen.has(candidate))
     throw new Error('Authentication messages must not contain cycles.')
   context.seen.add(candidate)
-  return Array.isArray(candidate)
-    ? visitAuthArray(candidate, current, context, retain)
-    : visitAuthObject(candidate, current, context, retain)
+  if (!Array.isArray(candidate)) return visitAuthObject(candidate, current, context, retain)
+  if (context.ownedByteArrays?.has(candidate) === true) {
+    return visitOwnedByteArray(candidate, current, context, retain)
+  }
+  return visitAuthArray(candidate, current, context, retain)
 }
 
-function walkAuthData<T>(value: T, snapshot: boolean, maxGeneralPayloadBytes?: number | null): T {
+function walkAuthData<T>(
+  value: T,
+  snapshot: boolean,
+  maxGeneralPayloadBytes?: number | null,
+  ownedByteArrays?: ReadonlySet<unknown>,
+  verifiedByteArrays = new WeakSet<object>()
+): T {
   const context: AuthDataWalk = {
     snapshot,
     maxGeneralPayloadBytes,
     seen: new WeakSet<object>(),
-    pending: [{ value, depth: 0 }]
+    pending: [{ value, depth: 0 }],
+    ownedByteArrays,
+    verifiedByteArrays
   }
   let result: unknown = value
   let bytes = 0
@@ -351,13 +393,15 @@ function assertOwnedAuthByteArray(
   value: unknown,
   name: string,
   maxBytes: number,
-  allowEmpty = false
+  allowEmpty: boolean,
+  verifiedByteArrays?: WeakSet<object>
 ): asserts value is number[] {
   if (
     !Array.isArray(value) ||
     (!allowEmpty && value.length === 0) ||
     value.length > maxBytes ||
-    value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)
+    (verifiedByteArrays?.has(value) !== true &&
+      value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255))
   ) {
     throw new Error(`${name} must be a dense byte array of at most ${maxBytes} bytes.`)
   }
@@ -365,7 +409,8 @@ function assertOwnedAuthByteArray(
 
 function assertValidAuthMessageShape(
   value: unknown,
-  maxGeneralPayloadBytes?: number | null
+  maxGeneralPayloadBytes?: number | null,
+  verifiedByteArrays?: WeakSet<object>
 ): asserts value is AuthMessage {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('Invalid authentication message.')
@@ -396,7 +441,9 @@ function assertValidAuthMessageShape(
       assertOwnedAuthByteArray(
         message.signature,
         'initialResponse.signature',
-        MAX_AUTH_SIGNATURE_BYTES
+        MAX_AUTH_SIGNATURE_BYTES,
+        false,
+        verifiedByteArrays
       )
       break
     case 'certificateRequest':
@@ -407,7 +454,9 @@ function assertValidAuthMessageShape(
       assertOwnedAuthByteArray(
         message.signature,
         'certificateRequest.signature',
-        MAX_AUTH_SIGNATURE_BYTES
+        MAX_AUTH_SIGNATURE_BYTES,
+        false,
+        verifiedByteArrays
       )
       break
     case 'certificateResponse':
@@ -420,7 +469,9 @@ function assertValidAuthMessageShape(
       assertOwnedAuthByteArray(
         message.signature,
         'certificateResponse.signature',
-        MAX_AUTH_SIGNATURE_BYTES
+        MAX_AUTH_SIGNATURE_BYTES,
+        false,
+        verifiedByteArrays
       )
       break
     case 'general':
@@ -432,9 +483,16 @@ function assertValidAuthMessageShape(
         maxGeneralPayloadBytes === null
           ? Number.MAX_SAFE_INTEGER
           : (maxGeneralPayloadBytes ?? MAX_AUTH_MESSAGE_BYTES),
-        true
+        true,
+        verifiedByteArrays
       )
-      assertOwnedAuthByteArray(message.signature, 'general.signature', MAX_AUTH_SIGNATURE_BYTES)
+      assertOwnedAuthByteArray(
+        message.signature,
+        'general.signature',
+        MAX_AUTH_SIGNATURE_BYTES,
+        false,
+        verifiedByteArrays
+      )
       break
     default:
       throw new Error(`Unknown authentication message type: ${String(message.messageType)}`)
@@ -456,6 +514,33 @@ export function assertGeneralPayloadByteLimit(value: number | null | undefined):
 export function snapshotAuthMessage(
   value: unknown,
   options: AuthMessageValidationOptions = {}
+): AuthMessage {
+  return ownAuthMessage(value, options)
+}
+
+/**
+ * @internal Snapshot a message built locally. `ownedByteArrays` must be dense
+ * byte arrays returned by {@link copyAuthByteArray} that nothing else can
+ * reach; they are copied without a per-element check, so any other array in
+ * the set is trusted unchecked. Under that contract the result and every error
+ * are the same as {@link snapshotBoundedAuthData} (when `maxGeneralPayloadBytes`
+ * is undefined) or {@link snapshotAuthMessage}.
+ */
+export function snapshotOutboundAuthMessage<T>(
+  value: T,
+  ownedByteArrays: ReadonlySet<unknown>,
+  maxGeneralPayloadBytes?: number | null
+): T {
+  if (maxGeneralPayloadBytes === undefined) {
+    return walkAuthData(value, true, undefined, ownedByteArrays)
+  }
+  return ownAuthMessage(value, { maxGeneralPayloadBytes }, ownedByteArrays) as T
+}
+
+function ownAuthMessage(
+  value: unknown,
+  options: AuthMessageValidationOptions,
+  ownedByteArrays?: ReadonlySet<unknown>
 ): AuthMessage {
   const maxGeneralPayloadBytes = options.maxGeneralPayloadBytes
   assertGeneralPayloadByteLimit(maxGeneralPayloadBytes)
@@ -479,7 +564,8 @@ export function snapshotAuthMessage(
     typeof candidate === 'object' &&
     Object.getOwnPropertyDescriptor(candidate, 'messageType')?.value === 'general'
   const payloadBudget = isGeneral ? maxGeneralPayloadBytes : undefined
-  const snapshot = walkAuthData(candidate, true, payloadBudget)
-  assertValidAuthMessageShape(snapshot, payloadBudget)
+  const verifiedByteArrays = new WeakSet<object>()
+  const snapshot = walkAuthData(candidate, true, payloadBudget, ownedByteArrays, verifiedByteArrays)
+  assertValidAuthMessageShape(snapshot, payloadBudget, verifiedByteArrays)
   return snapshot
 }

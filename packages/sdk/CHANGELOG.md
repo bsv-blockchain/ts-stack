@@ -277,6 +277,21 @@ replay, payment authorization, wire change or consumer migration is introduced.
 
 ## [Unreleased]
 
+### Auth message checks and reputation tracker (4.0.2 patch candidate)
+
+- `Peer.toPeer` checks a general message payload once instead of twice, and
+  the receiver no longer re-reads payload and signature bytes its snapshot has
+  just checked (1 MiB round trip 212 → 159 ms). Accepted and rejected inputs,
+  errors, limits and the message sent are unchanged, including when a wallet
+  changes the `data` array it was asked to sign. The exception is a wallet that
+  installs a getter on that array: `toPeer` now reads the getter once instead
+  of rejecting the array, so a getter returning the original byte lets the
+  checked bytes be sent, and a getter that throws surfaces its own error.
+- The global overlay host reputation tracker is created on first use, so
+  importing the SDK no longer reads `localStorage`. Node's `ExperimentalWarning`
+  about `localStorage` now appears only when a `LookupResolver` is first used.
+- Adds `benchmarks/auth-peer-bench.js`.
+
 ### Optional client timeout configuration (4.0.1 patch candidate)
 
 - Add `LookupResolverConfig.trackerTimeoutMs` for SLAP discovery, retaining the

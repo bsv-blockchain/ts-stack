@@ -385,6 +385,10 @@ export class HostReputationTracker {
   }
 }
 
-const globalTracker = new HostReputationTracker()
+// Created on first use, so importing the SDK does not read localStorage.
+let globalTracker: HostReputationTracker | undefined
 
-export const getOverlayHostReputationTracker = (): HostReputationTracker => globalTracker
+export const getOverlayHostReputationTracker = (): HostReputationTracker => {
+  globalTracker ??= new HostReputationTracker()
+  return globalTracker
+}
