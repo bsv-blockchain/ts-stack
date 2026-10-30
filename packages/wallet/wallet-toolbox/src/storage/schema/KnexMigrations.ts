@@ -24,6 +24,12 @@ export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend
 
 export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
 export const INTERNALIZE_RECEIPT_MIGRATION = '2026-10-13-001 coordinate wallet receipt ownership'
+export const WALLET_SYNC_PAGING_INDEX_MIGRATION = '2026-10-28-001 add wallet sync paging indexes'
+
+const WALLET_SYNC_PAGING_INDEXES = [
+  { tableName: 'transactions', columns: ['userId', 'transactionId'], indexName: 'idx_transactions_user_transactionid' },
+  { tableName: 'outputs', columns: ['userId', 'outputId'], indexName: 'idx_outputs_user_outputid' }
+]
 
 interface Migration {
   up: (knex: Knex) => Promise<void>
@@ -83,6 +89,35 @@ export class KnexMigrations implements MigrationSource<string> {
     maxOutputScriptLength: number
   ): Record<string, Migration> {
     const migrations: Record<string, Migration> = {}
+
+    migrations[WALLET_SYNC_PAGING_INDEX_MIGRATION] = {
+      async up(knex) {
+        // Sync readers page each user's rows with
+        // `where userId = ? order by <primary key> limit ? offset ?`. Without
+        // an index in that order every page sorts all of the user's rows,
+        // rawTx and lockingScript included, so a full sync is quadratic.
+        // MySQL commits each CREATE INDEX on its own, so a retry after a
+        // partial run must skip the index that already exists.
+        const dbtype = await determineDBType(knex)
+        await WALLET_SYNC_PAGING_INDEXES.reduce(async (previous, { tableName, columns, indexName }) => {
+          await previous
+          if (await hasIndex(knex, dbtype, tableName, indexName)) return
+          await knex.schema.alterTable(tableName, table => {
+            table.index(columns, indexName)
+          })
+        }, Promise.resolve())
+      },
+      async down(knex) {
+        // Earlier migrations keep a userId-leading index on both tables, so
+        // MySQL still has a foreign-key support index after these are dropped.
+        await WALLET_SYNC_PAGING_INDEXES.reduce(async (previous, { tableName, columns, indexName }) => {
+          await previous
+          await knex.schema.alterTable(tableName, table => {
+            table.dropIndex(columns, indexName)
+          })
+        }, Promise.resolve())
+      }
+    }
 
     migrations[INTERNALIZE_RECEIPT_MIGRATION] = {
       async up(knex) {
@@ -914,9 +949,21 @@ export class KnexMigrations implements MigrationSource<string> {
 }
 
 /**
- * @param knex
- * @returns {DBType} connected database engine variant
+ * @returns true when `tableName` already has an index named `indexName`.
  */
+async function hasIndex(knex: Knex, dbtype: DBType, tableName: string, indexName: string): Promise<boolean> {
+  if (dbtype === 'MySQL') {
+    const [rows] = (await knex.raw('SHOW INDEX FROM ?? WHERE Key_name = ?', [tableName, indexName])) as [unknown[]]
+    return rows.length > 0
+  }
+  if (dbtype === 'Postgres') {
+    const r = await knex.raw('SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ? AND indexname = ?', [tableName, indexName])
+    return (r.rows as unknown[]).length > 0
+  }
+  const rows = await knex('sqlite_master').where({ type: 'index', tbl_name: tableName, name: indexName })
+  return rows.length > 0
+}
+
 export async function determineDBType(knex: Knex<any, any[]>): Promise<DBType> {
   // The MySQL probe below is not valid Postgres SQL, and a failed statement
   // would abort the surrounding migration transaction.
