@@ -17,7 +17,7 @@ import type {
   RequestWire,
   WireMessage
 } from '../payments/wire.js'
-import type { AuthenticatedPeer } from '../session/AuthenticatedPeer.js'
+import type { AuthenticatedPeer, SessionCodec } from '../session/AuthenticatedPeer.js'
 import { PRE_AUTH_MAX_MESSAGE_BYTES, authenticate } from '../session/handshake.js'
 import { ReplayCache, isSignalChain, openSignal, sealSignal } from '../signaling/envelope.js'
 import type { SignalEnvelope, SignalKind, SignalPlaintext, Signaler } from '../signaling/types.js'
@@ -203,7 +203,7 @@ const MAX_TIMER_MS = 2 ** 31 - 1
 const SID_BYTES = 16
 
 /** Options for {@link DirectPayClient.connect}. */
-export interface DialOptions {
+export interface DialOptions<M = WireMessage> {
   /**
    * Cap on the whole dial; defaults to the client's `connectMs` (30 s). Running out before
    * the recipient replied is `peer_unreachable`, after it `timeout`.
@@ -221,10 +221,24 @@ export interface DialOptions {
   dialTimeoutMs?: number
   /** Cancels this dial (it rejects `closed`, `Dial cancelled`); nothing else is touched. */
   signal?: AbortSignal
+  /**
+   * `false` skips the knock: for a caller that already knows the recipient is there (from a
+   * relay's presence, say), the offer is sent as soon as it is gathered, with no knock and no
+   * ring. The presence clock does not run; `dialTimeoutMs` runs from the carrier taking the
+   * offer; `timeoutMs` still caps the whole dial and a reject is `rejected` as with a knock.
+   * The recipient answers a bare offer as it always has. Defaults to `true`.
+   */
+  knock?: boolean
+  /**
+   * How the session reads the recipient's messages once authenticated (`authenticate`'s
+   * `codec`); defaults to the payments wire. A session with another codec carries the
+   * consumer's own messages, so {@link sendPayment} is not for it.
+   */
+  codec?: SessionCodec<M>
 }
 
 /** One dial in progress, as {@link DirectPayClient.connect} runs it. */
-interface DialRun {
+interface DialRun<M> {
   sid: string
   recipient: PubKeyHex
   signaler: Signaler
@@ -238,6 +252,12 @@ interface DialRun {
   fail(e: WebRTPayError): void
   /** The carrier took the knock: presence starts. */
   posted(): void
+  /** Send a knock before the offer (`DialOptions.knock`). */
+  knock: boolean
+  /** The carrier took a knockless dial's offer: the dial clock starts. */
+  offerTaken(): void
+  /** The session's codec (`DialOptions.codec`). */
+  codec: SessionCodec<M> | undefined
 }
 
 /** An admitted inbound offer's session, as a later offer from the same sender sees it. */
@@ -423,6 +443,10 @@ export class DirectPayClient {
    * `dialTimeoutMs` (6 s) from its reply to finish. 0.1.0 peers do not answer knocks, so they
    * look offline.
    *
+   * With `o.knock` false the knock is skipped, for a caller that already knows the recipient
+   * is there: the offer goes out once gathered, no presence clock runs, and `dialTimeoutMs`
+   * runs from the carrier taking the offer; a recipient that does not answer is `timeout`.
+   *
    * The payee then waits for the first message only for its `firstMessageTimeoutMs` (60 s
    * by default) before it closes the session: create the transaction right after this
    * resolves, check `peer.isOpen` before broadcasting it, and send it at once (see
@@ -448,7 +472,10 @@ export class DirectPayClient {
    * first. `TypeError` for a recipient that is not an identity key, `RangeError` for an
    * invalid timeout.
    */
-  connect(recipient: PubKeyHex, o: DialOptions = {}): Promise<AuthenticatedPeer> {
+  connect<M = WireMessage>(
+    recipient: PubKeyHex,
+    o: DialOptions<M> = {}
+  ): Promise<AuthenticatedPeer<M>> {
     if (this.closing !== undefined) return Promise.reject(closedError())
     const signaler = this.signaler
     if (signaler === undefined) {
@@ -476,16 +503,22 @@ export class DirectPayClient {
         failure: undefined,
         link: undefined,
         fail: noop,
-        posted: noop
+        posted: noop,
+        knock: o.knock ?? true,
+        offerTaken: noop,
+        codec: o.codec
       },
       o.signal
     )
   }
 
   /** Run dial `d` under its clocks until it settles; `signal` cancels it. */
-  private startDial(d: DialRun, signal: AbortSignal | undefined): Promise<AuthenticatedPeer> {
-    return new Promise<AuthenticatedPeer>((resolve, reject) => {
-      const settler = new DialSettler<AuthenticatedPeer>(resolve, reject, () => {
+  private startDial<M>(
+    d: DialRun<M>,
+    signal: AbortSignal | undefined
+  ): Promise<AuthenticatedPeer<M>> {
+    return new Promise<AuthenticatedPeer<M>>((resolve, reject) => {
+      const settler = new DialSettler<AuthenticatedPeer<M>>(resolve, reject, () => {
         clock.stop()
         signal?.removeEventListener('abort', onAbort)
         this.dials.delete(d.sid)
@@ -502,6 +535,7 @@ export class DirectPayClient {
       const clock = new DialClock(d.timeouts, fail)
       d.fail = fail
       d.posted = () => clock.posted()
+      d.offerTaken = () => clock.offerTaken()
       this.dials.set(d.sid, {
         recipient: d.recipient,
         reply: p => {
@@ -800,7 +834,7 @@ export class DirectPayClient {
   }
 
   /** The clocks of a dial: per-call options, else the client's, else the defaults. */
-  private dialTimeouts(o: DialOptions): DialTimeouts {
+  private dialTimeouts(o: DialOptions<unknown>): DialTimeouts {
     return {
       presenceMs: timerMs(o.presenceTimeoutMs, this.presenceMs, 'presenceTimeoutMs'),
       dialMs: timerMs(o.dialTimeoutMs, this.dialMs, 'dialTimeoutMs'),
@@ -811,9 +845,11 @@ export class DirectPayClient {
   /**
    * One dial: knock while the offer is gathered (for at most `dialGatherTimeoutMs`), send
    * the offer once the recipient rings, then apply its answer and authenticate it. A reject
-   * or an answer that arrives instead of the ring is acted on at once.
+   * or an answer that arrives instead of the ring is acted on at once. Without a knock
+   * (`DialOptions.knock` false) the offer goes out once gathered and its answer or reject is
+   * the only reply.
    */
-  private async runDial(d: DialRun): Promise<AuthenticatedPeer> {
+  private async runDial<M>(d: DialRun<M>): Promise<AuthenticatedPeer<M>> {
     await this.syncListening()
     const me = await this.getIdentityKey()
     throwIfFailed(d)
@@ -822,12 +858,22 @@ export class DirectPayClient {
     prepared.catch((e: unknown) => {
       if (e instanceof WebRTPayError) d.fail(e)
     })
-    const knock = await this.seal('knock', d.sid, me, d.recipient, { chain: this.chain })
-    throwIfFailed(d)
-    await d.signaler.send(d.recipient, knock)
-    d.posted()
-    let p = await d.replies.next()
-    if (p.kind === 'ring') {
+    let p: SignalPlaintext
+    if (!d.knock) {
+      const { sdp } = await prepared
+      const offer = await this.seal('offer', d.sid, me, d.recipient, { sdp, chain: this.chain })
+      throwIfFailed(d)
+      await d.signaler.send(d.recipient, offer)
+      d.offerTaken()
+      p = await d.replies.next()
+    } else {
+      const knock = await this.seal('knock', d.sid, me, d.recipient, { chain: this.chain })
+      throwIfFailed(d)
+      await d.signaler.send(d.recipient, knock)
+      d.posted()
+      p = await d.replies.next()
+    }
+    if (d.knock && p.kind === 'ring') {
       const { sdp } = await prepared
       const offer = await this.seal('offer', d.sid, me, d.recipient, { sdp, chain: this.chain })
       throwIfFailed(d)
@@ -847,7 +893,8 @@ export class DirectPayClient {
       originator: this.originator,
       expectedPeer: d.recipient,
       timeoutMs: d.timeouts.dialMs,
-      maxMessageBytes: this.maxMessageBytes
+      maxMessageBytes: this.maxMessageBytes,
+      codec: d.codec
     })
     session.catch(noop)
     await link.acceptAnswer(p.sdp)
@@ -855,7 +902,7 @@ export class DirectPayClient {
   }
 
   /** The dial's offer and link; a link that arrives after the dial ended is closed. */
-  private async prepareDialLink(d: DialRun): Promise<{ link: PeerLink; sdp: string }> {
+  private async prepareDialLink(d: DialRun<unknown>): Promise<{ link: PeerLink; sdp: string }> {
     const options = await this.linkOptions(DEFAULTS.dialGatherTimeoutMs)
     // a dial that has already failed spends no TURN credentials
     throwIfFailed(d)
@@ -1382,7 +1429,7 @@ function cancelledError(): WebRTPayError {
 }
 
 /** Stop a dial's run once the dial has ended. */
-function throwIfFailed(d: DialRun): void {
+function throwIfFailed(d: DialRun<unknown>): void {
   if (d.failure !== undefined) throw d.failure
 }
 
