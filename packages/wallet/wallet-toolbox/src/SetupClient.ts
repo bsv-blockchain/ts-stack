@@ -256,7 +256,8 @@ export abstract class SetupClient {
   /**
    * Adds `indexedDB` based storage to a `Wallet` configured by `SetupClient.createWalletOnly`
    *
-   * @param args.databaseName Name for this storage. For MySQL, the schema name within the MySQL instance.
+   * @param args.databaseName Storage name passed to `migrate`. It is not the IndexedDB database name.
+   * @param args.dbName Optional IndexedDB database name; defaults to `wallet-toolbox-${chain}net`.
    * @param args.chain Which chain this wallet is on: 'main' or 'test'. Defaults to 'test'.
    * @param args.rootKeyHex
    *
@@ -286,7 +287,8 @@ export abstract class SetupClient {
       commissionPubKeyHex: undefined,
       feeModel: { model: 'sat/kb', value: 100 },
       managedChangePolicy: args.managedChangePolicy,
-      scriptVerifier: args.scriptVerifier
+      scriptVerifier: args.scriptVerifier,
+      dbName: args.dbName
     })
     await storage.migrate(args.databaseName, randomBytesHex(33))
     await storage.makeAvailable()
@@ -298,7 +300,14 @@ export abstract class SetupClient {
  *
  */
 export interface SetupWalletIdbArgs extends SetupClientWalletArgs {
+  /** Storage name passed to `migrate`. It does not name the IndexedDB database; see `dbName`. */
   databaseName: string
+  /**
+   * Optional IndexedDB database name. Defaults to `wallet-toolbox-${chain}net`,
+   * shared by every wallet in the origin. Changing it for an existing install
+   * opens an empty wallet unless its data is migrated first.
+   */
+  dbName?: string
   /** Optional operator tuning for wallet-managed liquidity shaping. */
   managedChangePolicy?: ManagedChangePolicyOptions
 }

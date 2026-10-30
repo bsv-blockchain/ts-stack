@@ -81,7 +81,15 @@ import {
 } from './methods/managedChangePolicy'
 import type { Brc177NoSendExpiryState } from '../utility/brc177NoSendExpiry'
 
-export interface StorageIdbOptions extends StorageProviderOptions {}
+export interface StorageIdbOptions extends StorageProviderOptions {
+  /**
+   * Optional IndexedDB database name. Defaults to `wallet-toolbox-${chain}net`,
+   * which every `StorageIdb` in an origin shares. Existing wallets live in the
+   * default database, so changing the name for an existing install opens an
+   * empty wallet; migrate its data first.
+   */
+  dbName?: string
+}
 
 /**
  * Shared cursor-scan loop used by all `filterXxx` methods of StorageIdb.
@@ -132,7 +140,8 @@ export class StorageIdb extends StorageProvider implements WalletStorageProvider
 
   constructor(options: StorageIdbOptions) {
     super(options)
-    this.dbName = `wallet-toolbox-${this.chain}net`
+    if (options.dbName?.trim() === '') throw new WERR_INVALID_PARAMETER('dbName', 'a non-empty IndexedDB database name')
+    this.dbName = options.dbName ?? `wallet-toolbox-${this.chain}net`
   }
 
   protected override supportsActionBatchPersistence(): boolean {
