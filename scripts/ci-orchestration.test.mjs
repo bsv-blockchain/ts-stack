@@ -183,6 +183,7 @@ test('CI contributes mobile and type-only wallet surfaces to aggregate patch cov
 })
 
 const APPLICATION_PACKAGE = '@bsv/output-knowledge'
+const APPLICATION_TEST_SHARDS = 6
 
 // Run a prepare-step jq that appends the application's shard rows to a planned
 // matrix, and check every selection keeps each other package exactly once.
@@ -190,7 +191,7 @@ function assertApplicationMatrix(
   scope,
   variable,
   packagesVariable,
-  { applicationPackages, emptySelection, uniqueIds }
+  { applicationPackages, emptySelection, uniqueIds, shards }
 ) {
   const command = scope.match(
     new RegExp(
@@ -216,13 +217,13 @@ function assertApplicationMatrix(
     assert.deepEqual(
       application.map(row => row.application),
       selected.includes(APPLICATION_PACKAGE)
-        ? Array.from({ length: APPLICATION_COVERAGE_SHARDS }, (_, index) => index + 1)
+        ? Array.from({ length: shards }, (_, index) => index + 1)
         : []
     )
     assert.ok(
       application.every(
         row =>
-          row.total === APPLICATION_COVERAGE_SHARDS &&
+          row.total === shards &&
           row.shard === row.application &&
           isDeepStrictEqual(row.packages, applicationPackages)
       )
@@ -244,14 +245,20 @@ test('application dependent-test shards run the complete suite beside the planne
   assertApplicationMatrix(jobs.scope, 'DEPENDENT_TEST_MATRIX', 'DEPENDENT_TEST_PACKAGES', {
     applicationPackages: [APPLICATION_PACKAGE],
     emptySelection: false,
-    uniqueIds: false
+    uniqueIds: false,
+    shards: APPLICATION_TEST_SHARDS
   })
   assert.match(jobs['dependent-tests'], /^    timeout-minutes: 30$/m)
   assert.match(jobs['dependent-tests'], /^        if: matrix\.application == 0$/m)
   assert.match(jobs['dependent-tests'], /^        if: matrix\.application != 0$/m)
   assert.match(
     jobs['dependent-tests'],
-    /--script test --jest-shard "\$\{\{ matrix\.application \}\}\/\$\{\{ matrix\.total \}\}"/
+    /--script test --jest-shard "\$\{\{ matrix\.application \}\}\/\$\{\{ matrix\.total \}\}"\n {10}--jest-sequencer "\$GITHUB_WORKSPACE\/scripts\/jest-duration-sequencer\.cjs"/
+  )
+  assert.match(jobs['dependent-tests'], /^ {10}JEST_SHARD_LANE: output-knowledge-tests$/m)
+  assert.match(
+    jobs['dependent-tests'],
+    /^ {10}JEST_SHARD_DURATIONS: \$\{\{ github\.workspace \}\}\/governance\/ci-lane-durations\.json$/m
   )
 })
 
@@ -261,7 +268,8 @@ test('application coverage shards retain the complete selection and a required m
   assertApplicationMatrix(jobs.scope, 'COVERAGE_OTHER_MATRIX', 'COVERAGE_OTHER_PACKAGES', {
     applicationPackages: [],
     emptySelection: true,
-    uniqueIds: true
+    uniqueIds: true,
+    shards: APPLICATION_COVERAGE_SHARDS
   })
   assert.match(jobs['coverage-other'], /^    timeout-minutes: 35$/m)
   assert.match(jobs['coverage-other'], /node scripts\/output-knowledge-coverage.mjs collect/)
