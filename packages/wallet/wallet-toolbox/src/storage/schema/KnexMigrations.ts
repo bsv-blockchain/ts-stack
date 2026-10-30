@@ -23,6 +23,7 @@ export const PREPARED_BEEF_MIGRATION = '2026-08-31-001 add prepared beef artifac
 export const BRC177_NO_SEND_EXPIRY_MIGRATION = '2026-08-30-001 add brc177 nosend expiry state'
 
 export const WALLET_SYNC_SOURCE_INDEX_MIGRATION = '2026-08-17-001 add wallet sync source indexes'
+export const OUTPUT_OUTPOINT_INDEX_MIGRATION = '2026-10-27-001 add outputs outpoint index'
 export const INTERNALIZE_RECEIPT_MIGRATION = '2026-10-13-001 coordinate wallet receipt ownership'
 
 interface Migration {
@@ -262,6 +263,22 @@ export class KnexMigrations implements MigrationSource<string> {
       async down() {
         // Intentionally irreversible. Restoring 32-satoshi liquidity units on
         // rollback would actively re-fragment wallets that already migrated.
+      }
+    }
+
+    migrations[OUTPUT_OUTPOINT_INDEX_MIGRATION] = {
+      async up(knex) {
+        // Outpoint lookups (createAction, internalizeAction, action batches)
+        // otherwise scan every output. txid is nearly unique, so one index
+        // serves both the per-user and the cross-user lookups.
+        await knex.schema.alterTable('outputs', table => {
+          table.index(['txid', 'vout', 'userId'], 'idx_outputs_txid_vout_user')
+        })
+      },
+      async down(knex) {
+        await knex.schema.alterTable('outputs', table => {
+          table.dropIndex(['txid', 'vout', 'userId'], 'idx_outputs_txid_vout_user')
+        })
       }
     }
 

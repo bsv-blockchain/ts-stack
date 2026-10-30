@@ -6,6 +6,7 @@ import {
   KnexMigrations,
   MANAGED_CHANGE_POLICY_MIGRATION,
   MONITOR_CREATED_AT_INDEX_MIGRATION,
+  OUTPUT_OUTPOINT_INDEX_MIGRATION,
   StorageKnex,
   WALLET_SYNC_SOURCE_INDEX_MIGRATION,
   wait
@@ -209,6 +210,36 @@ describe('KnexMigrations tests', () => {
         .first()).resolves.toBeUndefined()
     } finally {
       await knex.destroy()
+    }
+  })
+
+  test('4b outpoint lookups use the outputs outpoint index', async () => {
+    const ctx = await _tu.createLegacyWalletSQLiteCopy('migrateoutpointindex')
+    const knex = ctx.activeStorage.knex
+    try {
+      const txid = '00'.repeat(32)
+      const plans = [
+        ['userId = ? AND txid IN (?, ?) AND vout IN (?, ?)', [ctx.userId, txid, 'ff'.repeat(32), 0, 1]],
+        ['txid = ? AND vout = ?', [txid, 0]]
+      ] as const
+      for (const [where, bindings] of plans) {
+        const plan = (await knex.raw(`EXPLAIN QUERY PLAN SELECT * FROM outputs WHERE ${where}`, [...bindings])) as Array<{
+          detail: string
+        }>
+        expect(plan.map(step => step.detail).join('\n')).toContain('idx_outputs_txid_vout_user')
+      }
+
+      const migration = await new KnexMigrations('test', 'outpoint index test', '1'.repeat(64), 1000).getMigration(
+        OUTPUT_OUTPOINT_INDEX_MIGRATION
+      )
+      await migration.down?.(knex)
+      await expect(knex('sqlite_master').where({ type: 'index', name: 'idx_outputs_txid_vout_user' }).first()).resolves
+        .toBeUndefined()
+      await migration.up(knex)
+      await expect(knex('sqlite_master').where({ type: 'index', name: 'idx_outputs_txid_vout_user' }).first()).resolves
+        .toBeDefined()
+    } finally {
+      await ctx.storage.destroy()
     }
   })
 

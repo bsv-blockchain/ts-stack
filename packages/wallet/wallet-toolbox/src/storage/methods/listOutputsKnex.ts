@@ -7,9 +7,11 @@ import { AuthId, TrxToken } from '../../sdk/WalletStorage.interfaces'
 import { verifyId, verifyOne } from '../../utility/utilityHelpers'
 import { TableOutputTag } from '../schema/tables/TableOutputTag'
 import { TableOutput } from '../schema/tables/TableOutput'
+import { TableProvenTx } from '../schema/tables/TableProvenTx'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { managedChangeOutputFields } from './managedChange'
 import { WERR_INVALID_OPERATION } from '../../sdk/WERR_errors'
+import { EntityProvenTx } from '../schema/entities/EntityProvenTx'
 
 interface ResolvedKnexListTags {
   tags: string[]
@@ -209,15 +211,23 @@ async function loadKnexOutputAssociations(
   return { labelsByTransactionId, tagsByOutputId }
 }
 
+/** What every output on the page shares while it is hydrated. */
+interface KnexOutputPage {
+  labelsByTransactionId: Record<number, string[]>
+  tagsByOutputId: Record<number, string[]>
+  beef: Beef
+  /** The outputs' proven transactions, by txid. */
+  provenTxs: Map<string, TableProvenTx>
+}
+
 async function hydrateKnexWalletOutput(
   storage: StorageKnex,
   output: TableOutput,
   vargs: ValidListOutputsArgs,
-  labelsByTransactionId: Record<number, string[]>,
-  tagsByOutputId: Record<number, string[]>,
-  beef: Beef,
+  page: KnexOutputPage,
   trx?: TrxToken
 ): Promise<WalletOutput> {
+  const { labelsByTransactionId, tagsByOutputId, beef, provenTxs } = page
   const walletOutput: WalletOutput = {
     satoshis: Number(output.satoshis),
     spendable: !!output.spendable,
@@ -239,7 +249,16 @@ async function hydrateKnexWalletOutput(
     }
   }
   if (vargs.includeTransactions && output.txid != null && beef.findTxid(output.txid) == null) {
-    await storage.getValidBeefForKnownTxid(output.txid, beef, undefined, vargs.knownTxids, trx)
+    const proven = provenTxs.get(output.txid)
+    if (proven != null) {
+      // What getValidBeefForKnownTxid does for a proven transaction when no
+      // trustSelf, proof level or chain tracker applies.
+      const merklePath = new EntityProvenTx(proven).getMerklePath()
+      beef.mergeRawTx(proven.rawTx)
+      beef.mergeBump(merklePath)
+    } else {
+      await storage.getValidBeefForKnownTxid(output.txid, beef, undefined, vargs.knownTxids, trx)
+    }
   }
   return walletOutput
 }
@@ -329,11 +348,18 @@ export async function listOutputs(
     vargs.includeTags
   )
   const beef = new Beef()
-  for (const output of outputs) {
-    result.outputs.push(
-      await hydrateKnexWalletOutput(dsk, output, vargs, labelsByTransactionId, tagsByOutputId, beef, trx)
-    )
+  // Load the outputs' proven transactions in one query instead of one per output.
+  const provenTxs = new Map<string, TableProvenTx>()
+  const txids = [...new Set(outputs.map(o => o.txid).filter((txid): txid is string => txid != null && txid !== ''))]
+  if (vargs.includeTransactions && txids.length > 0) {
+    for (const proven of await dsk.findProvenTxs({ partial: {}, txids, trx })) provenTxs.set(proven.txid, proven)
   }
+  const page: KnexOutputPage = { labelsByTransactionId, tagsByOutputId, beef, provenTxs }
+  // One output at a time, in order: each may add to the shared BEEF.
+  await outputs.reduce(async (previous, output) => {
+    await previous
+    result.outputs.push(await hydrateKnexWalletOutput(dsk, output, vargs, page, trx))
+  }, Promise.resolve())
   if (vargs.includeTransactions) result.BEEF = beef.toUint8Array()
   return result
 }
