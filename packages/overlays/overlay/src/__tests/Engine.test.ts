@@ -2100,6 +2100,35 @@ describe('BSV Overlay Services Engine', () => {
         814435
       )
     })
+    it('Passes the configured script verifier to SPV verification', async () => {
+      const scriptVerifier = { verifyScripts: jest.fn(async () => true) }
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine(
+          { Hello: mockTopicManager },
+          {},
+          mockStorageEngine,
+          mockChainTracker,
+          ...Array(16).fill(undefined),
+          scriptVerifier
+        )
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, scriptVerifier)
+      } finally {
+        verify.mockRestore()
+      }
+    })
+    it('Verifies with the SDK interpreter when no script verifier is configured', async () => {
+      const verify = jest.spyOn(Transaction.prototype, 'verify')
+      try {
+        const engine = new Engine({ Hello: mockTopicManager }, {}, mockStorageEngine, mockChainTracker)
+        expect(engine.scriptVerifier).toBeUndefined()
+        await engine.submit({ beef: exampleBeef, topics: ['Hello'] })
+        expect(verify).toHaveBeenCalledWith(mockChainTracker, undefined, undefined, undefined)
+      } finally {
+        verify.mockRestore()
+      }
+    })
     it('Throws an error if an invalid envelope is provided', async () => {
       const engine = new Engine(
         {
