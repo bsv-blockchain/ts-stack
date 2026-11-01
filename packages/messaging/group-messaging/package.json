@@ -63,8 +63,8 @@
   "author": "BSV Association",
   "license": "SEE LICENSE IN LICENSE.txt",
   "dependencies": {
-    "@noble/ciphers": "2.1.1",
-    "@noble/curves": "2.0.1",
+    "@noble/ciphers": "2.4.0",
+    "@noble/curves": "2.4.0",
     "ts-mls": "1.6.4"
   },
   "peerDependencies": {
@@ -78,16 +78,16 @@
   "devDependencies": {
     "@bsv/message-box-client": "workspace:^",
     "@bsv/sdk": "workspace:^",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.5",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "4.1.11",
-    "fake-indexeddb": "^6.2.5",
-    "fast-check": "^4.9.0",
-    "oxlint": "^1.83.0",
+    "@vitest/coverage-v8": "5.0.5",
+    "fake-indexeddb": "^6.2.6",
+    "fast-check": "^4.10.2",
+    "oxlint": "^1.89.0",
     "ts2md": "^0.2.8",
-    "tsdown": "0.23.0",
+    "tsdown": "0.23.2",
     "typescript": "npm:@typescript/typescript6@6.0.2",
-    "vitest": "4.1.11"
+    "vitest": "5.0.5"
   },
   "bugs": {
     "url": "https://github.com/bsv-blockchain/ts-stack/issues"
