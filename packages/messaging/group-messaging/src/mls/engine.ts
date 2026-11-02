@@ -56,6 +56,21 @@ import { decodeState, encodeState } from './state.js'
 
 const DEFAULT_LIFETIME_SECONDS = 90 * 24 * 60 * 60
 
+/**
+ * How far a KeyPackage's validity reaches back before the moment it was minted.
+ *
+ * The clocks of two phones are never equal. An admitter checks every added
+ * KeyPackage's lifetime against its own clock, and `ts-mls` runs that check
+ * unconditionally for a commit the caller is sending — `sentByClient ||
+ * config.validateLifetimeOnReceive` — so no configuration can relax it on the
+ * side that fails. Minting is the only place the skew can be absorbed, and a
+ * KeyPackage that is not yet valid is rejected outright rather than retried,
+ * which is why this is not left to the caller.
+ *
+ * Five minutes is the allowance X.509 and JWT settled on for the same problem.
+ */
+const CLOCK_SKEW_SECONDS = 5 * 60
+
 const GROUP_ID_BYTES = 32
 
 /**
@@ -334,10 +349,10 @@ export class MlsEngine {
       mlsSignaturePublicKey: signatureKeyPair.publicKey
     })
 
-    const notBefore = BigInt(Math.floor(Date.now() / 1000))
+    const now = BigInt(Math.floor(Date.now() / 1000))
     const lifetime = {
-      notBefore,
-      notAfter: notBefore + BigInt(options.lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS)
+      notBefore: now - BigInt(CLOCK_SKEW_SECONDS),
+      notAfter: now + BigInt(options.lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS)
     }
 
     const { publicPackage, privatePackage } = await generateKeyPackageWithKey(

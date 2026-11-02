@@ -87,6 +87,11 @@ export interface MintedKeyPackage {
 
 export interface KeyPackageOptions {
   ciphersuite?: MlsCiphersuiteName
+  /**
+   * How long from now the KeyPackage stays usable. `notBefore` is set a little
+   * earlier than now so a peer whose clock runs ahead can still admit it, so
+   * the window is wider than this by that allowance.
+   */
   lifetimeSeconds?: number
 }
 

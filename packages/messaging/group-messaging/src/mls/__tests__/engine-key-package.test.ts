@@ -58,12 +58,18 @@ describe('MlsEngine.createKeyPackage', () => {
 
   it('honours an explicit ciphersuite and lifetime', async () => {
     const engine = await engineFor()
+    const before = BigInt(Math.floor(Date.now() / 1000))
     const minted = await engine.createKeyPackage({
       ciphersuite: 'MLS_128_DHKEMP256_AES128GCM_SHA256_P256',
       lifetimeSeconds: 60
     })
+    const after = BigInt(Math.floor(Date.now() / 1000))
 
     expect(minted.ciphersuite).toBe('MLS_128_DHKEMP256_AES128GCM_SHA256_P256')
-    expect(minted.lifetime.notAfter - minted.lifetime.notBefore).toBe(60n)
+    // `lifetimeSeconds` is how far forward the package is good for; the window
+    // reaches further back than now so a peer ahead of us can still admit it.
+    expect(minted.lifetime.notAfter).toBeGreaterThanOrEqual(before + 60n)
+    expect(minted.lifetime.notAfter).toBeLessThanOrEqual(after + 60n)
+    expect(minted.lifetime.notBefore).toBeLessThan(before)
   })
 })
