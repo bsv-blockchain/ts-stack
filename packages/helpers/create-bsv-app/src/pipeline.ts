@@ -9,7 +9,7 @@ import {
   MANIFEST_FILE
 } from './config/project-manifest.js'
 import { scaffoldNewProject } from './scaffold/new-project.js'
-import { applyCapabilityDeps } from './scaffold/package-json.js'
+import { applyCapabilityDeps, type DependencyChange } from './scaffold/package-json.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import { defaultRunCommand } from './scaffold/run-command.js'
 import { installProject } from './scaffold/install.js'
@@ -19,6 +19,7 @@ export interface RunResult {
   deps: Record<TargetKey, Record<string, string>>
   written: string[]
   skipped: string[]
+  dependencyChanges: DependencyChange[]
   installed?: boolean
   packageManager?: ProjectConfig['packageManager']
   starter?: string
@@ -28,7 +29,10 @@ export function addCapabilities(
   config: ProjectConfig,
   targetDir: string,
   opts: { force: boolean; runCommand?: RunCommand }
-): { deps: Record<TargetKey, Record<string, string>> } & WriteResult {
+): {
+  deps: Record<TargetKey, Record<string, string>>
+  dependencyChanges: DependencyChange[]
+} & WriteResult {
   const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
@@ -39,10 +43,11 @@ export function addCapabilities(
     { force: true }
   )
   writeProjectManifest(targetDir, manifestFromConfig(config))
-  applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  const dependencyChanges = applyCapabilityDeps(targetDir, config.targets, placement.deps)
   installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return {
     deps: placement.deps,
+    dependencyChanges,
     written: [...util.written, ...glue.written, ...agents.written, MANIFEST_FILE],
     skipped: util.skipped
   }
@@ -60,6 +65,7 @@ export function applyConfig(
       deps: r.deps,
       written: r.written,
       skipped: [],
+      dependencyChanges: r.dependencyChanges,
       installed: config.install,
       packageManager: config.packageManager,
       starter: config.starter
@@ -74,8 +80,22 @@ export function applyConfig(
     deps: r.deps,
     written: r.written,
     skipped: r.skipped,
+    dependencyChanges: r.dependencyChanges,
     installed: config.install,
     packageManager: config.packageManager,
     starter: config.starter
   }
+}
+
+/** One human-readable line per dependency change, for the CLI. */
+export function formatDependencyChanges(changes: DependencyChange[]): string[] {
+  return changes.map(c =>
+    c.action === 'raised'
+      ? `${c.target}: ${c.name} ${c.from} → ${c.to}`
+      : `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${
+          c.reason === 'devDependency'
+            ? 'it is a devDependency, move it to dependencies manually'
+            : 'check it manually'
+        }`
+  )
 }

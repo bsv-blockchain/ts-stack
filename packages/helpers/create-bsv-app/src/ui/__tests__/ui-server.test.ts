@@ -701,7 +701,8 @@ async function uiFromCli(argv: string[]): Promise<UiServer> {
         targetDir: o.targetDir,
         deps: { root: {}, client: {}, server: {} },
         written: [],
-        skipped: []
+        skipped: [],
+        dependencyChanges: []
       }
     }
   })

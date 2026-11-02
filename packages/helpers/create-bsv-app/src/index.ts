@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { CLI_HELP, run } from './cli.js'
+import { formatDependencyChanges } from './pipeline.js'
 import { interactiveConfigPrompt } from './prompts.js'
 import { formatConfigError } from './config/validate.js'
 import { getStarter } from './starters.js'
@@ -14,6 +15,10 @@ try {
   const res = await run(argv, interactiveConfigPrompt)
   const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
   console.log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
+  if (res.dependencyChanges.length > 0) {
+    console.log('\nDependency ranges:')
+    for (const line of formatDependencyChanges(res.dependencyChanges)) console.log(`  ${line}`)
+  }
   if (res.installed === false) {
     console.log(
       '\nDependencies were not installed. Run your package manager install command before starting.'

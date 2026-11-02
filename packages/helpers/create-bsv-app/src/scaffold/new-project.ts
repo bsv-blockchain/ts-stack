@@ -13,7 +13,7 @@ import {
 } from '../config/project-manifest.js'
 import { scaffolderFor, type RunCommand } from './base-scaffolder.js'
 import { defaultRunCommand } from './run-command.js'
-import { applyCapabilityDeps } from './package-json.js'
+import { applyCapabilityDeps, type DependencyChange } from './package-json.js'
 import type { Capability, CapabilityContext } from '../types.js'
 import { assembleAndWrite } from './base-app.js'
 import { getStarter } from '../starters.js'
@@ -120,7 +120,11 @@ export function scaffoldNewProject(
   config: ProjectConfig,
   targetDir: string,
   deps: { runCommand?: RunCommand } = {}
-): { written: string[]; deps: Record<TargetKey, Record<string, string>> } {
+): {
+  written: string[]
+  deps: Record<TargetKey, Record<string, string>>
+  dependencyChanges: DependencyChange[]
+} {
   const runCommand = deps.runCommand ?? defaultRunCommand
   const layout = layoutOf(config.stack)
   const starter = getStarter(config.starter)
@@ -133,7 +137,11 @@ export function scaffoldNewProject(
     const manifest = manifestFromConfig(config, source)
     writeProjectManifest(targetDir, manifest)
     installProject(config, targetDir, runCommand)
-    return { written: [MANIFEST_FILE], deps: { root: {}, client: {}, server: {} } }
+    return {
+      written: [MANIFEST_FILE],
+      deps: { root: {}, client: {}, server: {} },
+      dependencyChanges: []
+    }
   }
 
   scaffoldFrameworks(
@@ -170,8 +178,8 @@ export function scaffoldNewProject(
     capabilities: caps.map(c => c.id)
   })
   written.push(MANIFEST_FILE)
-  applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  const dependencyChanges = applyCapabilityDeps(targetDir, config.targets, placement.deps)
   installProject(config, targetDir, runCommand)
 
-  return { written, deps: placement.deps }
+  return { written, deps: placement.deps, dependencyChanges }
 }

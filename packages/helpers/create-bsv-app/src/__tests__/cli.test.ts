@@ -528,7 +528,8 @@ describe('run --ui', () => {
         targetDir: o.targetDir,
         deps: { root: {}, client: {}, server: {} },
         written: ['src/bsv/auth.ts'],
-        skipped: []
+        skipped: [],
+        dependencyChanges: []
       }
     }
     const res = await run(['--dir', dir, '--ui'], undefined, { startUi: stub })
@@ -544,7 +545,8 @@ describe('run --ui', () => {
         targetDir: o.targetDir,
         deps: { root: {}, client: {}, server: {} },
         written: [],
-        skipped: []
+        skipped: [],
+        dependencyChanges: []
       }
     }
     await run(['--dir', dir, '--ui', '--bsv-dir', 'lib/bsv', '--network', 'main'], undefined, {
@@ -562,7 +564,8 @@ describe('run --ui', () => {
         targetDir: o.targetDir,
         deps: { root: {}, client: {}, server: {} },
         written: [],
-        skipped: []
+        skipped: [],
+        dependencyChanges: []
       }
     }
     const yes = ['--dir', dir, '--frontend', 'react', '--yes']

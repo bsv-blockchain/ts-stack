@@ -89,3 +89,33 @@ test('applyConfig add-mode written includes AGENTS.md and manifest', () => {
   expect(res.written).toContain('AGENTS.md')
   expect(res.written).toContain('bsv-scaffold.json')
 })
+
+test('raises an old sdk floor in add mode', () => {
+  for (const t of ['client', 'server']) {
+    mkdirSync(join(dir, t), { recursive: true })
+    writeFileSync(
+      join(dir, t, 'package.json'),
+      JSON.stringify({ dependencies: { '@bsv/sdk': '^2.4.1' } }),
+      'utf8'
+    )
+  }
+  const addConfig: ProjectConfig = {
+    ...newConfig,
+    mode: 'add',
+    stack: {
+      frontend: { framework: 'react', variant: 'react-ts' },
+      backend: { framework: 'express' }
+    },
+    targets: { client: 'client', server: 'server' },
+    capabilities: ['wallet-connect']
+  }
+  const res = applyConfig(addConfig, dir, { runCommand: () => {}, force: false })
+  for (const t of ['client', 'server']) {
+    const pkg = JSON.parse(readFileSync(join(dir, t, 'package.json'), 'utf8'))
+    expect(pkg.dependencies['@bsv/sdk']).toBe('^4.0.1')
+  }
+  expect(res.dependencyChanges).toEqual([
+    { target: 'client', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' },
+    { target: 'server', name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' }
+  ])
+})
