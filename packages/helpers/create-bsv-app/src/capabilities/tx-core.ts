@@ -589,7 +589,7 @@ export const txCore: Capability = {
   id: 'tx-core',
   title: 'Transactions (build, send, read)',
   description:
-    'TransactionBuilder and script support, data-output scripts, own-address payments, and transaction/BEEF parsing, plus a demo page. Builds on wallet-connect.',
+    'TransactionBuilder and script support, data-output scripts, own-address payments, and transaction/BEEF parsing, plus a demo page.',
   requires: ['wallet-connect'],
   roles: ['shared', 'client'],
   defaultSelected: true,

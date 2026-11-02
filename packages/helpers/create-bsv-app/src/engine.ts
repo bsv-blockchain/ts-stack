@@ -32,6 +32,12 @@ function roleTargetsFor(layout: Layout): Record<Role, TargetKey[]> {
   }
 }
 
+/** True when at least one of the capability's roles has a target in `layout`. */
+export function fitsLayout(cap: Capability, layout: Layout): boolean {
+  const roleTargets = roleTargetsFor(layout)
+  return cap.roles.some(role => roleTargets[role].length > 0)
+}
+
 const joinRel = (...parts: string[]): string => parts.filter(p => p.length > 0).join('/')
 
 type AddFile = (map: Map<string, FileSpec>, path: string, content: string) => void

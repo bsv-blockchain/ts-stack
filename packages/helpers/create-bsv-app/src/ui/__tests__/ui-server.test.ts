@@ -702,7 +702,8 @@ async function uiFromCli(argv: string[]): Promise<UiServer> {
         deps: { root: {}, client: {}, server: {} },
         written: [],
         skipped: [],
-        dependencyChanges: []
+        dependencyChanges: [],
+        pulled: []
       }
     }
   })
@@ -713,7 +714,8 @@ async function uiFromCli(argv: string[]): Promise<UiServer> {
 test('--ui defaults the name to the target directory, as --yes does, so add mode works without a project', async () => {
   const target = join(dir, 'my-app')
   mkdirSync(target)
-  const srv = await uiFromCli(['--ui', '--dir', target])
+  // the frontend flag gives the untracked project a layout the capabilities fit
+  const srv = await uiFromCli(['--ui', '--dir', target, '--frontend', 'react'])
   try {
     const html = await (await fetch(srv.url)).text()
     expect(pagePayload(html).name).toBe('my-app')
@@ -760,5 +762,48 @@ test('--ui on a manifest project keeps its name in add mode and uses the directo
   } finally {
     srv.close()
     applySpy.mockRestore()
+  }
+})
+
+test('POST /plan in add mode closes over requires and reports what it pulls', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const res = await fetch(`${srv.url}/plan`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify({ capabilities: ['tx-core'] })
+    })
+    const plan = await res.json()
+    const paths = (plan.files as Array<{ path: string }>).map(f => f.path)
+    expect(paths).toContain('src/bsv/auth.ts') // wallet-connect's file
+    expect(paths).toContain('src/bsv/txUtils.ts')
+    expect(plan.pulled).toEqual([{ id: 'wallet-connect', requiredBy: ['tx-core'] }])
+    expect(plan.notice).toEqual(['Also adding wallet-connect (required by tx-core).'])
+  } finally {
+    srv.close()
+  }
+})
+
+test('/plan reports a capability that has nowhere to go in a project with no frontend or backend', async () => {
+  const target = join(dir, 'empty')
+  mkdirSync(target)
+  const srv = await uiFromCli(['--ui', '--dir', target])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    const body = JSON.stringify(pagePayload(html, { mode: 'add', capabilities: ['wallet-login'] }))
+    const plan = await (
+      await fetch(`${srv.url}/plan`, { method: 'POST', headers: await uiHeaders(srv.url), body })
+    ).json()
+    expect(plan).toEqual({
+      files: [],
+      error:
+        'Invalid config: add mode found no frontend or backend in this directory; pass --frontend react or --backend express, or set a stack in the --file config'
+    })
+  } finally {
+    srv.close()
   }
 })

@@ -1,6 +1,8 @@
 import fc from 'fast-check'
 
 import { ConfigError, resolveConfig, validBsvDir } from '../validate'
+import { capabilityClosure } from '../requires'
+import { getCapability, listCapabilities } from '../../registry'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -99,6 +101,25 @@ describe('project configuration properties', () => {
         starter: 'not-registered'
       })
     ).toThrow('unknown starter: not-registered')
+  })
+
+  test('closes capabilities over requires, in registry order, stably, in both modes', () => {
+    const ids = listCapabilities().map(c => c.id)
+    fc.assert(
+      fc.property(fc.shuffledSubarray(ids), fc.constantFrom('new', 'add'), (requested, mode) => {
+        const { capabilities } = resolveConfig({
+          mode,
+          name: 'app',
+          stack: { frontend: { framework: 'react' }, backend: { framework: 'express' } },
+          capabilities: requested
+        })
+        expect(capabilities).toEqual(expect.arrayContaining(requested))
+        for (const id of capabilities)
+          for (const dep of getCapability(id)?.requires ?? []) expect(capabilities).toContain(dep)
+        expect(capabilities).toEqual(ids.filter(id => capabilities.includes(id)))
+        expect(capabilityClosure(capabilities)).toEqual(capabilities)
+      })
+    )
   })
 
   test('handles arbitrary structured configuration as a resolved config or a governed error', () => {

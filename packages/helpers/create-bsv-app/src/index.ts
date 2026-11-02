@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CLI_HELP, run } from './cli.js'
+import { CLI_HELP, run, summaryNotice } from './cli.js'
 import { formatDependencyChanges } from './pipeline.js'
 import { interactiveConfigPrompt } from './prompts.js'
 import { formatConfigError } from './config/validate.js'
@@ -15,6 +15,7 @@ try {
   const res = await run(argv, interactiveConfigPrompt)
   const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
   console.log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
+  for (const line of summaryNotice(argv, res)) console.log(line)
   if (res.dependencyChanges.length > 0) {
     console.log('\nDependency ranges:')
     for (const line of formatDependencyChanges(res.dependencyChanges)) console.log(`  ${line}`)

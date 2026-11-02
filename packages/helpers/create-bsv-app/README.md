@@ -126,7 +126,7 @@ Every input method resolves the same `ProjectConfig` and runs the same pipeline.
 npx create-bsv-app
 ```
 
-New projects default to the full custom stack: React frontend, Express backend, and every capability selected. Deselect what you do not need. The `--ui` form starts from the same defaults. These defaults apply to the interactive terminal and `--ui` flows only; `--yes` resolves from flags alone, so it still needs `--frontend` or `--backend`. In add mode, no new capabilities are pre-selected.
+New projects default to the full custom stack: React frontend, Express backend, and every capability selected. Deselect what you do not need. The `--ui` form starts from the same defaults. These defaults apply to the interactive terminal and `--ui` flows only; `--yes` resolves from flags alone, so it still needs `--frontend` or `--backend`. In add mode, no new capabilities are pre-selected; a capability you select brings the capabilities it requires (for example `tx-core` brings `wallet-connect`), and the CLI says which it added.
 
 ### Non-interactive flags
 

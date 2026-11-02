@@ -138,6 +138,25 @@ test('formatDependencyChanges names target, package and ranges', () => {
   expect(lines[1]).toContain('^4.0.1')
 })
 
+test('formatDependencyChanges text for each left reason', () => {
+  const left = {
+    target: 'client',
+    name: '@bsv/sdk',
+    from: '^2.0.0',
+    to: '^4.0.1',
+    action: 'left'
+  } as const
+  expect(
+    formatDependencyChanges([
+      { ...left, reason: 'devDependency' },
+      { ...left, reason: 'unparseable' }
+    ])
+  ).toEqual([
+    'client: @bsv/sdk is "^2.0.0" — needs ^4.0.1, it is a devDependency, move it to dependencies manually',
+    'client: @bsv/sdk is "^2.0.0" — needs ^4.0.1, check it manually'
+  ])
+})
+
 describe('applyCapabilityDeps integration', () => {
   test('merges deps into root, client, and server dirs', () => {
     const clientDir = join(dir, 'client')

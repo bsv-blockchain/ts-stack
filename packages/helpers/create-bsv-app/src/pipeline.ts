@@ -1,4 +1,4 @@
-import type { ProjectConfig } from './config/model.js'
+import type { ProjectConfig, PulledCapability } from './config/model.js'
 import type { TargetKey, WriteResult } from './engine.js'
 import { writeFiles, planPlacement } from './engine.js'
 import { resolveCapabilities } from './registry.js'
@@ -20,6 +20,8 @@ export interface RunResult {
   written: string[]
   skipped: string[]
   dependencyChanges: DependencyChange[]
+  /** Capabilities added because a selected one requires them. */
+  pulled: PulledCapability[]
   installed?: boolean
   packageManager?: ProjectConfig['packageManager']
   starter?: string
@@ -33,7 +35,7 @@ export function addCapabilities(
   deps: Record<TargetKey, Record<string, string>>
   dependencyChanges: DependencyChange[]
 } & WriteResult {
-  const caps = resolveCapabilities(config.capabilities, { expandRequires: false })
+  const caps = resolveCapabilities(config.capabilities)
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
@@ -42,7 +44,10 @@ export function addCapabilities(
     targetDir,
     { force: true }
   )
-  writeProjectManifest(targetDir, manifestFromConfig(config))
+  writeProjectManifest(targetDir, {
+    ...manifestFromConfig(config),
+    capabilities: caps.map(c => c.id)
+  })
   const dependencyChanges = applyCapabilityDeps(targetDir, config.targets, placement.deps)
   installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return {
@@ -66,6 +71,7 @@ export function applyConfig(
       written: r.written,
       skipped: [],
       dependencyChanges: r.dependencyChanges,
+      pulled: config.pulled ?? [],
       installed: config.install,
       packageManager: config.packageManager,
       starter: config.starter
@@ -81,10 +87,17 @@ export function applyConfig(
     written: r.written,
     skipped: r.skipped,
     dependencyChanges: r.dependencyChanges,
+    pulled: config.pulled ?? [],
     installed: config.install,
     packageManager: config.packageManager,
     starter: config.starter
   }
+}
+
+function manualFix(change: DependencyChange): string {
+  return change.reason === 'devDependency'
+    ? 'it is a devDependency, move it to dependencies manually'
+    : 'check it manually'
 }
 
 /** One human-readable line per dependency change, for the CLI. */
@@ -92,10 +105,6 @@ export function formatDependencyChanges(changes: DependencyChange[]): string[] {
   return changes.map(c =>
     c.action === 'raised'
       ? `${c.target}: ${c.name} ${c.from} → ${c.to}`
-      : `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${
-          c.reason === 'devDependency'
-            ? 'it is a devDependency, move it to dependencies manually'
-            : 'check it manually'
-        }`
+      : `${c.target}: ${c.name} is "${c.from}" — needs ${c.to}, ${manualFix(c)}`
   )
 }

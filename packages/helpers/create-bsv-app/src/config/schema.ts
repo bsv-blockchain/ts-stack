@@ -7,6 +7,8 @@ export interface FieldOption {
   value: string
   label: string
   hint?: string
+  /** Capability options only: ids it requires (added with it). */
+  requires?: string[]
 }
 /** Object map of field → required value; all entries are AND'd. */
 export type When = Record<string, string | string[]>
@@ -28,7 +30,12 @@ export interface ConfigSection {
 export type ConfigSchema = ConfigSection[]
 
 function capabilityOptions(): FieldOption[] {
-  return listCapabilities().map(c => ({ value: c.id, label: c.title, hint: c.description }))
+  return listCapabilities().map(c => ({
+    value: c.id,
+    label: c.title,
+    hint: c.description,
+    ...(c.requires === undefined ? {} : { requires: c.requires })
+  }))
 }
 
 function starterOptions(): FieldOption[] {

@@ -22,6 +22,13 @@ export interface TargetPaths {
   server?: string
 }
 
+/** A capability added because a selected one requires it. */
+export interface PulledCapability {
+  id: string
+  /** Members of the closed list that require it, in registry order. */
+  requiredBy: string[]
+}
+
 export interface ProjectConfig {
   mode: Mode
   name: string
@@ -30,7 +37,10 @@ export interface ProjectConfig {
   stack: Stack
   targets: TargetPaths
   bsvDir: string
+  /** Closed over `requires`, in registry order. */
   capabilities: string[]
+  /** What the closure added beyond the request; set by `resolveConfig`. */
+  pulled?: PulledCapability[]
   glue: boolean
   install: boolean
   packageManager: PackageManager

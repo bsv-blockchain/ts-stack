@@ -138,8 +138,7 @@ res.cookie('session', token, { httpOnly: true, secure: true, sameSite: 'lax' }) 
 export const walletLogin: Capability = {
   id: 'wallet-login',
   title: 'Wallet login (passwordless, BRC-103 proof)',
-  description:
-    'Prove identity with the connected wallet; server verifies the proof. Builds on wallet-connect.',
+  description: 'Prove identity with the connected wallet; server verifies the proof.',
   requires: ['wallet-connect'],
   roles: ['client', 'server'],
   files: () => ({

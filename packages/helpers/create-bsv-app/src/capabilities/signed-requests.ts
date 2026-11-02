@@ -123,8 +123,7 @@ Authenticate individual API calls: sign a proof bound to a route (\`action\`) + 
 export const signedRequests: Capability = {
   id: 'signed-requests',
   title: 'Signed requests (per-call BRC-103 auth)',
-  description:
-    'Sign API calls bound to a route + body; verify with a framework-agnostic function. Builds on wallet-connect.',
+  description: 'Sign API calls bound to a route + body; verify with a framework-agnostic function.',
   requires: ['wallet-connect'],
   roles: ['client', 'server'],
   files: () => ({

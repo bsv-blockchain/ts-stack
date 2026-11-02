@@ -1,13 +1,23 @@
 import { basename, resolve } from 'node:path'
 import type { ProjectConfig, PackageManager } from './config/model.js'
-import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
+import {
+  mergeCapabilityIds,
+  readValidManifest,
+  type ProjectManifest
+} from './config/project-manifest.js'
 import { detectExistingProject } from './config/detect.js'
-import { resolveConfigFromFile } from './config/file.js'
+import { readConfigFile } from './config/file.js'
 import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
 import { applyConfig, type RunResult } from './pipeline.js'
-import { ConfigError, requestedCapabilityIds, resolveBsvDir } from './config/validate.js'
+import {
+  ConfigError,
+  requestedCapabilityIds,
+  resolveBsvDir,
+  resolveConfig
+} from './config/validate.js'
+import { formatPulledNotice } from './config/requires.js'
 import { getStarter } from './starters.js'
 
 export type StartUi = (opts: {
@@ -184,20 +194,42 @@ function flagsWithDefaultName(
   return mode === 'new' ? withDefaultName(args.draft, targetDir) : { ...args.draft }
 }
 
+/**
+ * The `--file` door. In add mode it keeps the capabilities the project's manifest records, as
+ * `seedDraft` does for the other doors; only a manifest counts, since `--file` is the way round
+ * a layout that detection cannot infer.
+ */
+function resolveFileConfig(file: string, args: CliArgs): ProjectConfig {
+  const input = readConfigFile(file)
+  const overrideMode = args.draft.mode
+  const config = resolveConfig(input, { overrideMode })
+  if (config.mode !== 'add') return config
+  const installed = readValidManifest(args.dir ?? config.dir)?.capabilities ?? []
+  if (installed.length === 0) return config
+  const raw = input as Record<string, unknown> // an object: resolveConfig accepted it
+  const capabilities = mergeCapabilityIds(installed, requestedCapabilityIds(raw))
+  return resolveConfig({ ...raw, capabilities }, { overrideMode })
+}
+
 async function resolveCliConfig(
   args: CliArgs,
   targetDir: string,
   provider?: ConfigProvider
 ): Promise<ProjectConfig> {
-  if (args.file !== undefined) {
-    return resolveConfigFromFile(args.file, { overrideMode: args.draft.mode })
-  }
+  if (args.file !== undefined) return resolveFileConfig(args.file, args)
 
   const existing = existingProject(targetDir)
   if (args.yes)
     return resolveDraft(seedDraft(existing, flagsWithDefaultName(args, existing, targetDir)))
   if (provider === undefined) throw new Error('interactive run requires a config provider')
   return await provider({ existing, flags: args.draft })
+}
+
+/** Pulled-notice lines for the run summary; prompts and `--ui` show them before generating. */
+export function summaryNotice(argv: string[], result: RunResult): string[] {
+  const args = parseArgs(argv)
+  const prompted = !args.yes && args.file === undefined
+  return args.ui || prompted ? [] : formatPulledNotice(result.pulled)
 }
 
 export async function run(
