@@ -189,8 +189,11 @@ describe('runPrompts', () => {
       }
     )
     const txCore = offered.find(o => o.value === 'tx-core')
-    expect(txCore?.requires).toEqual(['wallet-connect'])
-    expect(txCore?.hint).toMatch(/ Requires wallet-connect\.$/)
+    expect(txCore?.requires).toEqual([{ id: 'wallet-connect', role: 'client' }])
+    // a role-scoped requirement names its role, so the hint holds in every layout
+    expect(txCore?.hint).toMatch(/ Requires wallet-connect \(client\)\.$/)
+    const walletLogin = offered.find(o => o.value === 'wallet-login')
+    expect(walletLogin?.hint).toMatch(/ Requires wallet-connect\.$/)
     // the derived hint replaces the descriptions' own "Builds on wallet-connect."
     for (const option of offered) expect(option.hint).not.toMatch(/Builds on/)
     const walletConnect = offered.find(o => o.value === 'wallet-connect')

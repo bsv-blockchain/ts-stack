@@ -467,16 +467,23 @@ const CLIENT_USAGE = `- \`config.ts\` (client) — \`API_BASE_URL\` (from \`VITE
 - \`ConnectWallet.tsx\` (client) — the connect button + desktop-fail modal.
 - New projects (glue on): the client's \`src/main.tsx\` wraps \`<App/>\` in \`<WalletProviders>\`, and a generated \`Home.tsx\` hub links to each installed capability's page once a wallet connects. With \`--no-glue\` / add mode: wrap your root in \`<WalletProviders>\` and build your own home.`
 // Relay setup and SERVER_ORIGIN live in the server entry, so they are described only with a server.
-const SERVER_RELAY = `- The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin: SERVER_ORIGIN, relayUrl: RELAY_URL, allowLocalNetworkHttp: process.env.NODE_ENV !== 'production' })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session/:id\`, \`POST /api/request/:id\`, \`DELETE /api/session/:id\` and a \`/ws\` WebSocket upgrade on the raw HTTP server; the app's own \`GET /api/session\` (registered first) puts \`SERVER_ORIGIN\` in the QR. The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates a session and shows its QR; the phone pairs over \`/ws\`.`
-const SERVER_PAIRING = `- To pair a phone on the same network, set \`SERVER_ORIGIN=http://<your LAN IP>:<your server port>\` in the server env (the browser keeps using localhost). HTTP works only for \`localhost\` / \`*.localhost\` names and loopback or private-network IP addresses, and LAN HTTP only in development (the server and \`useWalletRelayClient\` pass \`allowLocalNetworkHttp\` only outside production / in \`import.meta.env.DEV\`). The phone wallet must also enable local-network HTTP (e.g. a developer setting) or it rejects the QR. Public hosts need HTTPS.`
+const SERVER_RELAY = `- The **mobile/relay path needs a server**: the base server entry runs \`new WalletRelayService({ app, server, wallet: serverWallet, origin: SERVER_ORIGIN, relayUrl: RELAY_URL, allowLocalNetworkHttp: process.env.NODE_ENV !== 'production' })\` from \`@bsv/wallet-relay\`, which registers \`GET /api/session/:id\`, \`POST /api/request/:id\`, \`DELETE /api/session/:id\` and a \`/ws\` WebSocket upgrade on the raw HTTP server; the app's own \`GET /api/session\` (registered first) puts \`SERVER_ORIGIN\` in the QR, and the phone pairs over \`/ws\`.`
+// The client half of the relay, described only when the layout writes the client.
+const CLIENT_RELAY = `- The client (\`useWalletRelayClient\`, pointed at \`API_BASE_URL\`) creates that session and shows its QR.`
+const SERVER_PAIRING = `- To pair a phone on the same network, set \`SERVER_ORIGIN=http://<your LAN IP>:<your server port>\` in the server env. HTTP works only for \`localhost\` / \`*.localhost\` names and loopback or private-network IP addresses, and LAN HTTP only in development (the server passes \`allowLocalNetworkHttp\` only outside production). The phone wallet must also enable local-network HTTP (e.g. a developer setting) or it rejects the QR. Public hosts need HTTPS.`
+const CLIENT_PAIRING = `- While a phone pairs over the LAN, the browser keeps using localhost; \`useWalletRelayClient\` passes \`allowLocalNetworkHttp\` only in \`import.meta.env.DEV\`.`
 const SERVER_ORIGIN_SHOWN = `- \`SERVER_ORIGIN\` is also the origin the wallet shows the user when they approve the connection, so in production set it to the app's public HTTPS origin users recognise; with separate app and API hosts the wallet shows the API host.`
 // Without a server the client's relay pairing still targets API_BASE_URL, so the user's backend must serve it.
 const BACKEND_RELAY = `- The **mobile/relay path needs your backend**: it must run \`new WalletRelayService({ app, server, wallet, origin, relayUrl })\` from \`@bsv/wallet-relay\` at \`API_BASE_URL\`, which registers \`GET /api/session/:id\`, \`POST /api/request/:id\`, \`DELETE /api/session/:id\` and a \`/ws\` WebSocket upgrade, plus its own \`GET /api/session\` (registered first) that puts the backend's public origin in the QR; the wallet shows that origin when the user approves. \`useWalletRelayClient\` (pointed at \`API_BASE_URL\`) creates a session and shows its QR; the phone pairs over \`/ws\`.`
-// Relay, proof and identity notes for every layout.
+// The client's relay poll notices a phone disconnect, so this is described only with a client.
 const RELAY_DISCONNECT = `- When the phone disconnects, the app drops the relay wallet on the next relay poll, so it can lag by up to the connected poll interval (10 s by default; \`connectedPollInterval\` on \`useWalletRelayClient\` shortens it). A desktop wallet is unaffected.`
+// Proof notes for every layout.
 const PROOF_HOW = `- The proof primitive (\`auth.ts\`) uses the wallet to sign a message bound to \`{ counterparty, action, body? }\` and verifies it server-side (BRC-103). That's identity (and request auth) without passwords or shared secrets.`
-function identityHow(host: string): string {
-  return `- ${host} its own identity key at \`GET /api/identity\`; \`getServerIdentity()\` accepts that key under the configured API origin's HTTPS/local-development authority. This is convenient endpoint trust, not an independent identity proof. Pin the expected key through the login/signed-request hooks when continuity must survive DNS, certificate, proxy, or deployment changes.`
+// How the client accepts the published key, described only when the layout writes the client.
+const CLIENT_IDENTITY = `\`getServerIdentity()\` accepts that key under the configured API origin's HTTPS/local-development authority. This is convenient endpoint trust, not an independent identity proof. Pin the expected key through the login/signed-request hooks when continuity must survive DNS, certificate, proxy, or deployment changes.`
+function identityHow(host: string, client: boolean): string {
+  const published = `- ${host} its own identity key at \`GET /api/identity\``
+  return client ? `${published}; ${CLIENT_IDENTITY}` : `${published}.`
 }
 const SHARED_USAGE = `- \`auth.ts\` (shared) — \`createAuthProof(wallet, { counterparty, action, body? })\` and \`verifyAuthProof(serverWallet, proof, { action, body? }, consumeNonce)\`.`
 
@@ -486,12 +493,14 @@ function agentsSection(ctx: CapabilityContext): string {
   const how = sectionLines(
     client && CLIENT_HOW,
     server && SERVER_RELAY,
+    server && client && CLIENT_RELAY,
     !server && BACKEND_RELAY,
     server && SERVER_PAIRING,
-    RELAY_DISCONNECT,
+    server && client && CLIENT_PAIRING,
+    client && RELAY_DISCONNECT,
     server && SERVER_ORIGIN_SHOWN,
     PROOF_HOW,
-    identityHow(server ? 'The server publishes' : 'Your backend publishes'),
+    identityHow(server ? 'The server publishes' : 'Your backend publishes', client),
     client && CLIENT_API
   )
   return `## wallet-connect (base)

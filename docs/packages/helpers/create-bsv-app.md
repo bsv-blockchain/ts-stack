@@ -40,8 +40,11 @@ BRC-29 self-addresses and payment internalization), helpers that parse and
 summarize transactions and BEEF, and a Transactions demo page. Adding a
 capability to an existing project raises an outdated dependency range it needs,
 leaves `devDependencies` and unrecognized ranges unchanged, and prints both.
-It also adds any capability the selected one requires (for example
-`wallet-connect` for `tx-core`), records it in `bsv-scaffold.json`, and says so.
+Only the `@bsv/*` packages it pins are raised across a major version; any other
+package that would need a major upgrade is left and reported for manual review.
+It also adds any capability the selected one requires where the layout uses it
+(for example `wallet-connect` for `tx-core` when the project has a frontend),
+records it in `bsv-scaffold.json`, and says so.
 Select TerraTestNet with `--network ttn` or the browser configurator; the
 choice is preserved in generated configuration and `bsv-scaffold.json`.
 

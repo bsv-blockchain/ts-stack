@@ -159,7 +159,7 @@ async function handlePlan(
   try {
     const draft = JSON.parse(await readBody(req)) as ConfigDraft
     const config = resolveDraft(seedDraft(existing, { ...flags, ...draft }))
-    const caps = resolveCapabilities(config.capabilities)
+    const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
     const files = planPaths(config, caps).map(p => ({
       path: p,
       status: existsSync(join(targetDir, p)) ? ('edit' as const) : ('new' as const)

@@ -141,7 +141,7 @@ export function scaffoldNewProject(
   const rootRunner =
     layout === 'monorepo' ? writeRootRunner(config.name, targetDir, config.packageManager) : []
 
-  const caps = resolveCapabilities(config.capabilities)
+  const caps = resolveCapabilities(config.capabilities, { layout })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: false })
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })

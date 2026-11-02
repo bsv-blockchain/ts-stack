@@ -56,10 +56,10 @@ const caps = [walletConnect, txCore]
 const paths = (c: ProjectConfig): string[] => planPlacement(c, caps).utilFiles.map(f => f.path)
 
 describe('tx-core registry and placement', () => {
-  test('is registered, selected by default and builds on wallet-connect', () => {
+  test('is registered, selected by default and builds on wallet-connect for its client page', () => {
     expect(getCapability('tx-core')).toBe(txCore)
     expect(txCore.defaultSelected).toBe(true)
-    expect(txCore.requires).toEqual(['wallet-connect'])
+    expect(txCore.requires).toEqual([{ id: 'wallet-connect', role: 'client' }])
     expect(txCore.title).toBe('Transactions (build, send, read)')
   })
   test('monorepo: shared helpers on both sides, demo on the client only', () => {
@@ -1069,5 +1069,10 @@ describe('tx-core AGENTS section without a client', () => {
     for (const term of ['transactions.ts', 'txUtils.ts', 'deriveOwnAddress', 'parseTransaction'])
       expect(section).toContain(term)
     expect(section).not.toMatch(/\n{3,}/)
+  })
+  test('describes the wallet the server passes in, not a connected or paired one', () => {
+    for (const term of ['connected wallet', 'paired phone wallet', 'wallet-relay'])
+      expect(section).not.toContain(term)
+    expect(section).toContain('`WalletInterface`')
   })
 })

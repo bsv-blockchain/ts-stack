@@ -2,6 +2,8 @@ import { describe, expect, test } from '@jest/globals'
 import { registry, resolveCapabilities } from '../registry'
 import type { Role } from '../types'
 import { EXPLICIT_ANY } from './helpers/explicit-any'
+import * as versions from '../capabilities/versions'
+import { OWNED_PACKAGES } from '../capabilities/versions'
 
 const ctx = {
   name: 'd',
@@ -22,10 +24,31 @@ describe('registry consistency', () => {
   test('every requires resolves', () => {
     for (const c of registry) {
       for (const r of c.requires ?? []) {
-        expect(registry.some(x => x.id === r)).toBe(true)
+        const id = typeof r === 'string' ? r : r.id
+        expect(registry.some(x => x.id === id)).toBe(true)
+        // a requirement scoped to a role the capability never emits would never apply
+        if (typeof r !== 'string') expect(c.roles).toContain(r.role)
       }
     }
-    expect(() => resolveCapabilities(registry.map(c => c.id))).not.toThrow()
+    for (const layout of ['frontend-only', 'backend-only', 'monorepo'] as const)
+      expect(() =>
+        resolveCapabilities(
+          registry.map(c => c.id),
+          { layout }
+        )
+      ).not.toThrow()
+  })
+  test('every @bsv package a capability depends on is owned, with its range from versions.ts', () => {
+    const ranges = new Set<unknown>(Object.values(versions).filter(v => typeof v === 'string'))
+    for (const c of registry) {
+      for (const deps of Object.values(c.npmDependencies(ctx))) {
+        for (const [name, range] of Object.entries(deps ?? {})) {
+          if (!name.startsWith('@bsv/')) continue
+          expect(OWNED_PACKAGES.has(name)).toBe(true)
+          expect(ranges.has(range)).toBe(true)
+        }
+      }
+    }
   })
   test('roles cover the keys each capability emits', () => {
     for (const c of registry) {

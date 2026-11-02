@@ -1,4 +1,5 @@
 import type { ProjectConfig, PulledCapability } from './config/model.js'
+import { layoutOf } from './config/model.js'
 import type { TargetKey, WriteResult } from './engine.js'
 import { writeFiles, planPlacement } from './engine.js'
 import { resolveCapabilities } from './registry.js'
@@ -35,7 +36,7 @@ export function addCapabilities(
   deps: Record<TargetKey, Record<string, string>>
   dependencyChanges: DependencyChange[]
 } & WriteResult {
-  const caps = resolveCapabilities(config.capabilities)
+  const caps = resolveCapabilities(config.capabilities, { layout: layoutOf(config.stack) })
   const placement = planPlacement(config, caps)
   const util = writeFiles(placement.utilFiles, targetDir, { force: opts.force })
   const glue = writeFiles(placement.glueFiles, targetDir, { force: true })
@@ -94,10 +95,14 @@ export function applyConfig(
   }
 }
 
+const MANUAL_FIX: Record<NonNullable<DependencyChange['reason']>, string> = {
+  devDependency: 'it is a devDependency, move it to dependencies manually',
+  unparseable: 'check it manually',
+  majorUpgrade: 'check it manually (major upgrade)'
+}
+
 function manualFix(change: DependencyChange): string {
-  return change.reason === 'devDependency'
-    ? 'it is a devDependency, move it to dependencies manually'
-    : 'check it manually'
+  return MANUAL_FIX[change.reason ?? 'unparseable']
 }
 
 /** One human-readable line per dependency change, for the CLI. */

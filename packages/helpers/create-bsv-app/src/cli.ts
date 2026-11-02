@@ -1,10 +1,6 @@
 import { basename, resolve } from 'node:path'
 import type { ProjectConfig, PackageManager } from './config/model.js'
-import {
-  mergeCapabilityIds,
-  readValidManifest,
-  type ProjectManifest
-} from './config/project-manifest.js'
+import { readValidManifest, type ProjectManifest } from './config/project-manifest.js'
 import { detectExistingProject } from './config/detect.js'
 import { readConfigFile } from './config/file.js'
 import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
@@ -15,7 +11,9 @@ import {
   ConfigError,
   requestedCapabilityIds,
   resolveBsvDir,
-  resolveConfig
+  resolveConfig,
+  resolveDir,
+  resolveMode
 } from './config/validate.js'
 import { formatPulledNotice } from './config/requires.js'
 import { getStarter } from './starters.js'
@@ -195,20 +193,29 @@ function flagsWithDefaultName(
 }
 
 /**
- * The `--file` door. In add mode it keeps the capabilities the project's manifest records, as
- * `seedDraft` does for the other doors; only a manifest counts, since `--file` is the way round
- * a layout that detection cannot infer.
+ * The `--file` door. In add mode, every key the file leaves unset comes from the project's
+ * manifest, through `seedDraft` as for the other doors, and its capabilities are merged into the
+ * recorded ones; keys the file sets win. Only a manifest counts, since `--file` is the way round a
+ * layout that detection cannot infer.
  */
 function resolveFileConfig(file: string, args: CliArgs): ProjectConfig {
   const input = readConfigFile(file)
-  const overrideMode = args.draft.mode
-  const config = resolveConfig(input, { overrideMode })
-  if (config.mode !== 'add') return config
-  const installed = readValidManifest(args.dir ?? config.dir)?.capabilities ?? []
-  if (installed.length === 0) return config
-  const raw = input as Record<string, unknown> // an object: resolveConfig accepted it
-  const capabilities = mergeCapabilityIds(installed, requestedCapabilityIds(raw))
-  return resolveConfig({ ...raw, capabilities }, { overrideMode })
+  const opts = { overrideMode: args.draft.mode }
+  if (input === null || typeof input !== 'object' || Array.isArray(input))
+    return resolveConfig(input, opts) // throws the governed error
+  const raw = input as Record<string, unknown>
+  const manifest =
+    resolveMode(raw, opts.overrideMode) === 'add'
+      ? readValidManifest(args.dir ?? resolveDir(raw))
+      : null
+  if (manifest === null) return resolveConfig(raw, opts)
+  const seeded = draftToConfigInput(
+    seedDraft(manifest, { mode: 'add', capabilities: requestedCapabilityIds(raw) })
+  )
+  const fromManifest = Object.fromEntries(
+    Object.entries(seeded).filter(([key, value]) => value !== undefined && !(key in raw))
+  )
+  return resolveConfig({ ...raw, ...fromManifest, capabilities: seeded.capabilities }, opts)
 }
 
 async function resolveCliConfig(

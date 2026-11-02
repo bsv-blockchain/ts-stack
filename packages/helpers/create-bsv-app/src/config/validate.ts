@@ -149,16 +149,26 @@ function resolvePackageManager(raw: Record<string, unknown>): PackageManager {
     : 'npm'
 }
 
+/**
+ * The effective mode: an explicit caller override (e.g. the --mode flag on the --file door)
+ * wins over the config's own "mode" field.
+ */
+export function resolveMode(raw: Record<string, unknown>, overrideMode?: Mode): Mode {
+  return overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
+}
+
+export function resolveDir(raw: Record<string, unknown>): string {
+  return typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
+}
+
 export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}): ProjectConfig {
   const raw = asObject(input, 'config')
 
-  // An explicit caller override (e.g. the --mode flag on the --file door) wins over the
-  // config's own "mode" field. Resolved here so the new-mode floor + validation below
-  // run against the effective mode.
-  const mode: Mode = opts.overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
+  // Resolved first so the new-mode floor + validation below run against the effective mode.
+  const mode = resolveMode(raw, opts.overrideMode)
 
   const name = resolveName(raw)
-  const dir = typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
+  const dir = resolveDir(raw)
 
   const starterId =
     typeof raw.starter === 'string' && raw.starter.length > 0 ? raw.starter : 'custom'
@@ -179,13 +189,14 @@ export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}
   const bsvDir = resolveBsvDir(raw)
   // every entry point resolves here, so all of them get the same closed list and notice
   const requested = resolveCapabilityIds(raw, mode, starterId)
-  const capabilities = capabilityClosure(requested)
+  const layout = layoutOf(stack)
+  const capabilities = capabilityClosure(requested, layout)
   if (mode === 'new' && !starter.supportsCapabilities && capabilities.length > 0) {
     throw new ConfigError(
       `starter ${starter.id} is a complete example and does not accept generated capabilities`
     )
   }
-  const pulled = pulledCapabilities(requested)
+  const pulled = pulledCapabilities(requested, layout)
   assertCapabilitiesFit(capabilities, pulled, stack)
   const glue = raw.glue !== false
   const install = raw.install !== false

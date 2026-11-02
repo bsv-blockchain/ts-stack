@@ -1,5 +1,6 @@
 // src/config/schema.ts
 import { listCapabilities } from '../registry.js'
+import type { CapabilityRequirement } from '../types.js'
 import { capabilityStarterIds, listStarters } from '../starters.js'
 
 export type FieldType = 'text' | 'select' | 'multiselect' | 'toggle'
@@ -7,8 +8,8 @@ export interface FieldOption {
   value: string
   label: string
   hint?: string
-  /** Capability options only: ids it requires (added with it). */
-  requires?: string[]
+  /** Capability options only: what it requires (added with it where the layout applies). */
+  requires?: CapabilityRequirement[]
 }
 /** Object map of field → required value; all entries are AND'd. */
 export type When = Record<string, string | string[]>

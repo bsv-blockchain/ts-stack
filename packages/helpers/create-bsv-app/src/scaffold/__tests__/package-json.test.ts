@@ -51,6 +51,57 @@ test('raises a lower floor in dependencies', () => {
   expect(changes).toEqual([{ name: '@bsv/sdk', from: '^2.4.1', to: '^4.0.1', action: 'raised' }])
 })
 
+describe('a raise across a major version', () => {
+  test('is left and reported for a package create-bsv-app does not own', () => {
+    writePkg(dir, { dependencies: { express: '^4.18.0' } })
+    const changes = mergePackageJsonDeps(dir, { express: '^5.0.0' })
+    expect(readPkg(dir).dependencies.express).toBe('^4.18.0')
+    expect(changes).toEqual([
+      { name: 'express', from: '^4.18.0', to: '^5.0.0', action: 'left', reason: 'majorUpgrade' }
+    ])
+  })
+
+  test('a same-major higher floor is still raised', () => {
+    writePkg(dir, { dependencies: { express: '^5.0.0' } })
+    const changes = mergePackageJsonDeps(dir, { express: '^5.1.0' })
+    expect(readPkg(dir).dependencies.express).toBe('^5.1.0')
+    expect(changes).toEqual([{ name: 'express', from: '^5.0.0', to: '^5.1.0', action: 'raised' }])
+  })
+
+  test('is raised for every @bsv package whose range create-bsv-app owns', () => {
+    writePkg(dir, {
+      dependencies: {
+        '@bsv/sdk': '^2.4.1',
+        '@bsv/auth': '^0.0.9',
+        '@bsv/wallet-relay': '^0.6.0',
+        '@bsv/wallet-helper': '^0.0.1'
+      }
+    })
+    const wanted = {
+      '@bsv/sdk': '^4.0.1',
+      '@bsv/auth': '^0.1.8',
+      '@bsv/wallet-relay': '^0.7.0',
+      '@bsv/wallet-helper': '^0.1.11'
+    }
+    const changes = mergePackageJsonDeps(dir, wanted)
+    expect(readPkg(dir).dependencies).toEqual(wanted)
+    expect(changes.every(c => c.action === 'raised')).toBe(true)
+    expect(changes).toHaveLength(4)
+  })
+
+  test.each([
+    ['^0.1.0', '^0.2.0', 'left'], // 0.x: a minor change is a major one
+    ['^0.1.0', '^0.1.5', 'raised'],
+    ['^0.0.3', '^0.0.4', 'left'], // 0.0.x: a patch change is a major one, as with a caret
+    ['^0.9.0', '^1.0.0', 'left']
+  ])('0.x: %s against %s is %s', (from, to, action) => {
+    writePkg(dir, { dependencies: { left_pad: from } })
+    const [change] = mergePackageJsonDeps(dir, { left_pad: to })
+    expect(change.action).toBe(action)
+    expect(readPkg(dir).dependencies.left_pad).toBe(action === 'raised' ? to : from)
+  })
+})
+
 test('keeps an equal or higher floor silently', () => {
   writePkg(dir, { dependencies: { react: '^19.0.0', a: '^1.2.3' } })
   const changes = mergePackageJsonDeps(dir, { react: '>=18', a: '^1.2.3' })
@@ -117,18 +168,34 @@ describe('rangeFloor', () => {
   })
 })
 
-test('property: merged floor is never below either input floor', () => {
-  const version = fc
-    .tuple(fc.constantFrom('^', '~', '>=', ''), fc.nat(30), fc.nat(30), fc.nat(30))
-    .map(([prefix, a, b, c]) => `${prefix}${a}.${b}.${c}`)
-  const cmp = (x: number[], y: number[]): number => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]
+const version = fc
+  .tuple(fc.constantFrom('^', '~', '>=', ''), fc.nat(30), fc.nat(30), fc.nat(30))
+  .map(([prefix, a, b, c]) => `${prefix}${a}.${b}.${c}`)
+const cmp = (x: number[], y: number[]): number => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]
+
+test('property: the merged floor of an owned package is never below either input floor', () => {
+  fc.assert(
+    fc.property(version, version, (a, b) => {
+      writePkg(dir, { dependencies: { '@bsv/sdk': a } })
+      mergePackageJsonDeps(dir, { '@bsv/sdk': b })
+      const merged = rangeFloor(readPkg(dir).dependencies['@bsv/sdk'])!
+      expect(cmp(merged, rangeFloor(a)!)).toBeGreaterThanOrEqual(0)
+      expect(cmp(merged, rangeFloor(b)!)).toBeGreaterThanOrEqual(0)
+    })
+  )
+})
+
+test('property: any other package is never lowered, and a lower floor is raised or reported', () => {
   fc.assert(
     fc.property(version, version, (a, b) => {
       writePkg(dir, { dependencies: { p: a } })
-      mergePackageJsonDeps(dir, { p: b })
+      const changes = mergePackageJsonDeps(dir, { p: b })
       const merged = rangeFloor(readPkg(dir).dependencies.p)!
       expect(cmp(merged, rangeFloor(a)!)).toBeGreaterThanOrEqual(0)
-      expect(cmp(merged, rangeFloor(b)!)).toBeGreaterThanOrEqual(0)
+      if (cmp(merged, rangeFloor(b)!) < 0)
+        expect(changes).toEqual([
+          { name: 'p', from: a, to: b, action: 'left', reason: 'majorUpgrade' }
+        ])
     })
   )
 })
@@ -163,11 +230,13 @@ test('formatDependencyChanges text for each left reason', () => {
   expect(
     formatDependencyChanges([
       { ...left, reason: 'devDependency' },
-      { ...left, reason: 'unparseable' }
+      { ...left, reason: 'unparseable' },
+      { ...left, name: 'express', from: '^4.18.0', to: '^5.0.0', reason: 'majorUpgrade' }
     ])
   ).toEqual([
     'client: @bsv/sdk is "^2.0.0" — needs ^4.0.1, it is a devDependency, move it to dependencies manually',
-    'client: @bsv/sdk is "^2.0.0" — needs ^4.0.1, check it manually'
+    'client: @bsv/sdk is "^2.0.0" — needs ^4.0.1, check it manually',
+    'client: express is "^4.18.0" — needs ^5.0.0, check it manually (major upgrade)'
   ])
 })
 
@@ -198,19 +267,20 @@ describe('applyCapabilityDeps integration', () => {
     expect(readPkg(serverDir).dependencies['@bsv/auth']).toBe('^0.1.0')
   })
 
+  // an owned package, so the cross-major raises go through
   test('tags each change with its target', () => {
     mkdirSync(join(dir, 'client'), { recursive: true })
     mkdirSync(join(dir, 'server'), { recursive: true })
-    writePkg(join(dir, 'client'), { dependencies: { s: '^1.0.0' } })
-    writePkg(join(dir, 'server'), { dependencies: { s: '^1.0.0' } })
+    writePkg(join(dir, 'client'), { dependencies: { '@bsv/sdk': '^1.0.0' } })
+    writePkg(join(dir, 'server'), { dependencies: { '@bsv/sdk': '^1.0.0' } })
     const changes = applyCapabilityDeps(
       dir,
       { stack: MONOREPO_STACK, targets: { client: 'client', server: 'server' } },
-      { root: {}, client: { s: '^2.0.0' }, server: { s: '^3.0.0' } }
+      { root: {}, client: { '@bsv/sdk': '^2.0.0' }, server: { '@bsv/sdk': '^3.0.0' } }
     )
     expect(changes).toEqual([
-      { target: 'client', name: 's', from: '^1.0.0', to: '^2.0.0', action: 'raised' },
-      { target: 'server', name: 's', from: '^1.0.0', to: '^3.0.0', action: 'raised' }
+      { target: 'client', name: '@bsv/sdk', from: '^1.0.0', to: '^2.0.0', action: 'raised' },
+      { target: 'server', name: '@bsv/sdk', from: '^1.0.0', to: '^3.0.0', action: 'raised' }
     ])
   })
 })

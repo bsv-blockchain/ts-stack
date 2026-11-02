@@ -25,14 +25,16 @@ describe('capability registry', () => {
 describe('resolveCapabilities expandRequires', () => {
   // Item 8: expandRequires:false — no auto-pull of wallet-connect
   test('expandRequires:false returns only the named id (wallet-login, no wallet-connect pulled)', () => {
-    expect(resolveCapabilities(['wallet-login'], { expandRequires: false }).map(c => c.id)).toEqual(
-      ['wallet-login']
-    )
+    expect(
+      resolveCapabilities(['wallet-login'], { layout: 'monorepo', expandRequires: false }).map(
+        c => c.id
+      )
+    ).toEqual(['wallet-login'])
   })
 
   // Item 8: default (expand) pulls wallet-connect first, then wallet-login
   test('default expand: resolveCapabilities wallet-login includes wallet-connect (base before variant)', () => {
-    const ids = resolveCapabilities(['wallet-login']).map(c => c.id)
+    const ids = resolveCapabilities(['wallet-login'], { layout: 'monorepo' }).map(c => c.id)
     expect(ids).toContain('wallet-connect')
     expect(ids).toContain('wallet-login')
     // wallet-connect (base) must appear before wallet-login (variant)

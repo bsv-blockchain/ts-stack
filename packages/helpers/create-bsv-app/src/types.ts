@@ -40,12 +40,18 @@ export interface BaseBuilder {
   }
 }
 
+/**
+ * A capability another one needs: a plain id always applies; `{ id, role }` applies only when the
+ * layout places `role` (e.g. a dependency only the client files import).
+ */
+export type CapabilityRequirement = string | { id: string; role: Role }
+
 export interface Capability {
   id: string
   title: string
   description: string
-  /** ids of other capabilities that must also be installed */
-  requires?: string[]
+  /** Other capabilities that must also be installed, per layout. */
+  requires?: CapabilityRequirement[]
   roles: Role[]
   /** Pre-selected in NEW-project mode (not auto-selected in add mode). */
   defaultSelected?: boolean

@@ -1,6 +1,7 @@
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport } from '../scaffold/base-app.js'
 import { layoutHasRole } from '../engine.js'
+import { sectionLines } from './section-lines.js'
 import { BSV_SDK_RANGE, WALLET_HELPER_RANGE, WALLET_RELAY_RANGE } from './versions.js'
 
 export const TX_UTILS_SOURCE = `// Read and handle transactions: parse BEEF / AtomicBEEF / raw bytes, summarize, find outputs, pass outpoints and BEEF around.
@@ -555,14 +556,22 @@ Demo (\`TransactionsDemo.tsx\`, client page at \`/transactions\`), three example
 - \`sendToSelf(wallet, satoshis)\` — \`deriveOwnAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
 - The page has a confirm step before any send, shows each txid as a WhatsOnChain link (new tab) with a "Try with the tx reader" button, and reads a pasted transaction.`
 
+const CUSTOM_SPEND = `- Spend your own script outputs with \`TransactionBuilder.addCustomInput\`; carry the source output's BEEF with \`carryOutput\`.`
+// The relay's phone wallet is reachable only through the client's wallet-connect.
+const PHONE_WALLET_ABORT = `- A paired phone wallet (wallet-relay ${WALLET_RELAY_RANGE}) cannot abort a failed custom spend, so its inputs stay unavailable until the phone wallet expires the action.`
+
 function agentsSection(ctx: CapabilityContext): string {
   const demo = layoutHasRole(ctx.layout, 'client')
+  // without a client there is no connected wallet: server code passes its own
+  const wallet = demo
+    ? 'the connected wallet'
+    : 'the wallet your server code passes in (any `WalletInterface`, such as a server wallet)'
   return `## tx-core
 
-Build, send and read BSV transactions. Wraps \`@bsv/wallet-helper\`'s \`TransactionBuilder\` and the \`@bsv/sdk\` \`Transaction\` / BEEF types, so the connected wallet funds, signs and broadcasts for you.
+Build, send and read BSV transactions. Wraps \`@bsv/wallet-helper\`'s \`TransactionBuilder\` and the \`@bsv/sdk\` \`Transaction\` / BEEF types, so ${wallet} funds, signs and broadcasts for you.
 
 ### How it works
-- \`transactions.ts\` holds the building blocks: \`TransactionBuilder\` and script support, plus three small helpers. A \`TransactionBuilder\` hands your outputs to the connected wallet, which selects inputs, adds change, signs and returns the transaction as AtomicBEEF.
+- \`transactions.ts\` holds the building blocks: \`TransactionBuilder\` and script support, plus three small helpers. A \`TransactionBuilder\` hands your outputs to ${wallet}, which selects inputs, adds change, signs and returns the transaction as AtomicBEEF.
 - \`txUtils.ts\` reads what comes back (and anything you paste): BEEF, AtomicBEEF or a raw transaction, as bytes, hex or base64.
 - Both files are plain functions with no React in them, so they are copied to every side of your app that gets \`src/bsv\` (client, server, or both).${demo ? TX_DEMO_HOW : ''}
 
@@ -590,8 +599,7 @@ Helpers (\`txUtils.ts\`):
 - \`internalizePayment\` needs the wallet to have processed the transaction, so create it with \`acceptDelayedBroadcast: false\`. Elsewhere the wallet's own behaviour decides whether it broadcasts now or later.
 
 ### Advanced
-- Spend your own script outputs with \`TransactionBuilder.addCustomInput\`; carry the source output's BEEF with \`carryOutput\`.
-- A paired phone wallet (wallet-relay ${WALLET_RELAY_RANGE}) cannot abort a failed custom spend, so its inputs stay unavailable until the phone wallet expires the action.
+${sectionLines(CUSTOM_SPEND, demo && PHONE_WALLET_ABORT)}
 
 ### Future integrations
 - Payments: take payment for an API call or a purchase with \`TransactionBuilder.pay\` and inspect the transaction with \`parseTransaction\`. Verifying a payment (SPV \`tx.verify\`) is a separate step the payments capability will own.
@@ -604,7 +612,8 @@ export const txCore: Capability = {
   title: 'Transactions (build, send, read)',
   description:
     'TransactionBuilder and script support, data-output scripts, own-address payments, and transaction/BEEF parsing, plus a demo page.',
-  requires: ['wallet-connect'],
+  // only the client demo page imports wallet-connect; the shared helpers need just the SDK
+  requires: [{ id: 'wallet-connect', role: 'client' }],
   roles: ['shared', 'client'],
   defaultSelected: true,
   files: () => ({

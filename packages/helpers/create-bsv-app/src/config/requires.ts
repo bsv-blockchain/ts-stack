@@ -1,14 +1,19 @@
 // src/config/requires.ts
-import type { PulledCapability } from './model.js'
-import { getCapability, listCapabilities } from '../registry.js'
+import type { Layout, PulledCapability } from './model.js'
+import { getCapability, listCapabilities, requiredIds } from '../registry.js'
 
-/** `ids` plus everything they require, transitively, in registry order. */
-export function capabilityClosure(ids: string[]): string[] {
+const requiredIn = (id: string, layout: Layout): string[] => {
+  const capability = getCapability(id)
+  return capability === undefined ? [] : requiredIds(capability, layout)
+}
+
+/** `ids` plus everything they require in `layout`, transitively, in registry order. */
+export function capabilityClosure(ids: string[], layout: Layout): string[] {
   const closed = new Set<string>()
   const visit = (id: string): void => {
     if (closed.has(id)) return
     closed.add(id)
-    for (const dep of getCapability(id)?.requires ?? []) visit(dep)
+    for (const dep of requiredIn(id, layout)) visit(dep)
   }
   for (const id of ids) visit(id)
   return listCapabilities()
@@ -19,14 +24,15 @@ export function capabilityClosure(ids: string[]): string[] {
 /** What closing `requested` adds that was neither requested nor already installed. */
 export function pulledCapabilities(
   requested: string[],
+  layout: Layout,
   installed: string[] = []
 ): PulledCapability[] {
-  const closure = capabilityClosure(requested)
+  const closure = capabilityClosure(requested, layout)
   return closure
     .filter(id => !requested.includes(id) && !installed.includes(id))
     .map(id => ({
       id,
-      requiredBy: closure.filter(member => getCapability(member)?.requires?.includes(id) === true)
+      requiredBy: closure.filter(member => requiredIn(member, layout).includes(id))
     }))
 }
 

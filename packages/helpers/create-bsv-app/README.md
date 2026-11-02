@@ -81,7 +81,7 @@ Generated starters can include these composable capabilities:
 
 New generated projects include `wallet-connect` and `tx-core` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
 
-Generated projects use `@bsv/sdk` ^4.0.1 and `@bsv/auth` ^0.1.8. In add mode, the CLI raises an existing project's outdated `dependencies` ranges for the packages a capability needs (including non-BSV ranges a capability declares, such as `react-router-dom` ^7 and `react` >=18) and reports what it changed or could not change; `devDependencies` and unrecognised ranges are never changed and are listed for manual review.
+Generated projects use `@bsv/sdk` ^4.0.1 and `@bsv/auth` ^0.1.8. In add mode, the CLI raises an existing project's outdated `dependencies` ranges for the packages a capability needs and reports what it changed or could not change. A raise within the same major version applies to any package (for example `qrcode` ^1.4.0 to ^1.5.0). A raise across a major version (for a `0.x` range, across a minor version) applies only to the `@bsv/*` packages whose ranges create-bsv-app pins; any other package, such as `express` ^4 where a capability needs ^5 or `react-router-dom` ^6 where it needs ^7, is left and reported as a major upgrade to check manually. `devDependencies` and unrecognised ranges are never changed and are listed for manual review.
 
 The generated development server uses a bounded, expiring, single-use nonce store for replay protection. Replace it with an atomic Redis or database implementation before running multiple server processes. Generated API calls reject redirects, remain on the configured origin, enforce a whole-response deadline and byte ceilings, and strictly decode JSON. Automatic server-key discovery trusts that configured HTTPS origin; pass an independently validated key to the generated hooks when the application needs identity pinning.
 
@@ -126,7 +126,7 @@ Every input method resolves the same `ProjectConfig` and runs the same pipeline.
 npx create-bsv-app
 ```
 
-New projects default to the full custom stack: React frontend, Express backend, and every capability selected. Deselect what you do not need. The `--ui` form starts from the same defaults. These defaults apply to the interactive terminal and `--ui` flows only; `--yes` resolves from flags alone, so it still needs `--frontend` or `--backend`. In add mode, no new capabilities are pre-selected; a capability you select brings the capabilities it requires (for example `tx-core` brings `wallet-connect`), and the CLI says which it added.
+New projects default to the full custom stack: React frontend, Express backend, and every capability selected. Deselect what you do not need. The `--ui` form starts from the same defaults. These defaults apply to the interactive terminal and `--ui` flows only; `--yes` resolves from flags alone, so it still needs `--frontend` or `--backend`. In add mode, no new capabilities are pre-selected; a capability you select brings the capabilities it requires (for example `tx-core` brings `wallet-connect` when the project has a frontend, since only its demo page uses it; a backend-only project gets `tx-core` alone), and the CLI says which it added.
 
 ### Non-interactive flags
 
@@ -164,7 +164,7 @@ npx create-bsv-app new my-app \
 npx create-bsv-app --dir my-app --file config.json
 ```
 
-The file is authoritative except that an explicit `--mode` flag overrides its mode.
+The file is authoritative except that an explicit `--mode` flag overrides its mode. In add mode, keys the file leaves out (such as `network`, `bsvDir`, `stack` or `targets`) come from the project's `bsv-scaffold.json`, and the file's capabilities are added to the recorded ones. A new single-target project with an explicit non-root target folder (for example `"targets": { "client": "web" }` for a frontend-only project) scaffolds the framework into that folder, next to its capability files.
 
 ### Local browser UI
 

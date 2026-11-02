@@ -102,7 +102,7 @@ describe('AGENTS.md only mentions files the layout has', () => {
         `${layout}, ${label}: %s`,
         (_name, ids) => {
           const config = configFor(layout, mode, glue, ids as string[])
-          const caps = resolveCapabilities(ids as string[])
+          const caps = resolveCapabilities(ids as string[], { layout })
           const md = renderAgentsMd(config, caps)
           expect(missingMentions(md, config, caps)).toEqual([])
           expect(md).not.toMatch(/\n{3,}/) // dropped layout lines leave no blank-line runs
@@ -117,7 +117,10 @@ const heading = (path: string): string => `### \`${path}\``
 describe('manual wiring follows the layout', () => {
   const all = registry.map(c => c.id)
   const md = (layout: Shape, targets?: TargetPaths): string =>
-    renderAgentsMd(configFor(layout, 'add', false, all, targets), resolveCapabilities(all))
+    renderAgentsMd(
+      configFor(layout, 'add', false, all, targets),
+      resolveCapabilities(all, { layout })
+    )
 
   test('backend-only: server wiring at src/index.ts, no React wiring', () => {
     const out = md('backend-only')
@@ -165,7 +168,7 @@ describe('manual wiring follows the layout', () => {
     ['frontend-only', 'src/main.tsx', ['index.ts', 'server']]
   ] as const)('%s new + glue: names only its own base files', (layout, has, hasNot) => {
     const config = configFor(layout, 'new', true, all)
-    const out = renderAgentsMd(config, resolveCapabilities(all))
+    const out = renderAgentsMd(config, resolveCapabilities(all, { layout }))
     const wiring = out.slice(out.indexOf('## Wiring'), out.indexOf('## wallet-connect'))
     expect(wiring).toContain('wired automatically')
     expect(wiring).toContain(has)
@@ -177,7 +180,7 @@ describe('install section lists the deps placed in each target', () => {
   test.each(LAYOUTS)('%s', layout => {
     const all = registry.map(c => c.id)
     const config = configFor(layout, 'add', false, all)
-    const caps = resolveCapabilities(all)
+    const caps = resolveCapabilities(all, { layout })
     const out = renderAgentsMd(config, caps)
     const install = out.slice(out.indexOf('## Install dependencies'), out.indexOf('## Wiring'))
     const { deps } = planPlacement(config, caps)
@@ -198,7 +201,7 @@ describe('dependencies follow role targets', () => {
   }
   test.each(LAYOUTS)('%s: each target gets only the deps of roles placed there', layout => {
     const all = registry.map(c => c.id)
-    const caps = resolveCapabilities(all)
+    const caps = resolveCapabilities(all, { layout })
     const { deps } = planPlacement(configFor(layout, 'add', false, all), caps)
     for (const key of ['root', 'client', 'server'] as TargetKey[]) {
       const allowed = new Set<string>()
@@ -237,7 +240,7 @@ describe('regression: tx-core added to an existing backend-only Express project'
       JSON.stringify({ name: 'api', dependencies: { express: '^5.1.0' } }),
       'utf8'
     )
-    // Only tx-core is requested; real config resolution pulls in the wallet-connect it requires.
+    // Only tx-core is requested; it needs wallet-connect only for its client page, so nothing is pulled.
     const config = resolveConfig({
       mode: 'add',
       name: 'api',
@@ -246,7 +249,8 @@ describe('regression: tx-core added to an existing backend-only Express project'
       glue: false,
       install: false
     })
-    expect(config.pulled).toEqual([{ id: 'wallet-connect', requiredBy: ['tx-core'] }])
+    expect(config.pulled).toEqual([])
+    expect(config.capabilities).toEqual(['tx-core'])
     applyConfig(config, dir, { runCommand: () => {}, force: false })
 
     const md = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
@@ -255,15 +259,17 @@ describe('regression: tx-core added to an existing backend-only Express project'
     expect(md).not.toContain('App.tsx')
     expect(md).not.toContain('<Route')
     expect(md).not.toContain('server/src/index.ts')
-    expect(md).toContain(heading('src/index.ts'))
+    // no relay, so no server wiring at all
+    expect(md).not.toContain(heading('src/index.ts'))
+    expect(md).not.toContain('WalletRelayService')
     expect(md).toContain('@bsv/wallet-helper@')
 
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
     const names = Object.keys(pkg.dependencies)
     for (const clientOnly of ['react', 'react-router-dom']) expect(names).not.toContain(clientOnly)
-    expect(names).toEqual(
-      expect.arrayContaining(['@bsv/sdk', '@bsv/wallet-helper', '@bsv/wallet-relay', 'qrcode'])
-    )
+    expect(names).toEqual(expect.arrayContaining(['@bsv/sdk', '@bsv/wallet-helper']))
+    for (const relay of ['@bsv/wallet-relay', 'qrcode', '@bsv/auth'])
+      expect(names).not.toContain(relay)
   })
 })
 
@@ -275,7 +281,7 @@ function sectionOf(md: string, id: string): string {
 }
 
 describe('wallet-connect relay text follows the layout', () => {
-  const caps = resolveCapabilities(['wallet-connect'])
+  const caps = resolveCapabilities(['wallet-connect'], { layout: 'monorepo' })
   const render = (layout: Shape, mode: 'new' | 'add' = 'add'): string =>
     sectionOf(
       renderAgentsMd(configFor(layout, mode, mode === 'new', ['wallet-connect']), caps),
@@ -311,13 +317,34 @@ describe('wallet-connect relay text follows the layout', () => {
     }
   )
 
+  const CLIENT_TERMS = [
+    'useWalletRelayClient',
+    'the browser keeps using localhost',
+    'import.meta.env.DEV',
+    'getServerIdentity()'
+  ]
+
+  test('backend-only: only server-side text, nothing about the client', () => {
+    const section = render('backend-only')
+    for (const term of CLIENT_TERMS) expect(section).not.toContain(term)
+    expect(section).toContain('The server publishes its own identity key at `GET /api/identity`')
+    expect(section).toContain('the phone pairs over `/ws`')
+    expect(section).toContain('SERVER_ORIGIN=http://<your LAN IP>:<your server port>')
+  })
+
+  test('monorepo: the client side of the relay is still described', () => {
+    const section = render('monorepo')
+    for (const term of CLIENT_TERMS) expect(section).toContain(term)
+    expect(section).toContain('creates that session and shows its QR')
+  })
+
   test("monorepo: the glue note names the client's main.tsx", () => {
     expect(render('monorepo', 'new')).toContain("the client's `src/main.tsx`")
   })
 })
 
 describe('wallet-login environment heading', () => {
-  const caps = resolveCapabilities(['wallet-login'])
+  const caps = resolveCapabilities(['wallet-login'], { layout: 'monorepo' })
   const envBlock = (config: ProjectConfig): string => {
     const section = sectionOf(renderAgentsMd(config, caps), 'wallet-login')
     return section.slice(section.indexOf('### Environment'), section.indexOf('### Future'))

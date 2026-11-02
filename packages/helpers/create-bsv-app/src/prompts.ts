@@ -25,10 +25,12 @@ export type ConfigProvider = (ctx: {
 /** Prints one notice line; the terminal uses `p.log.info`. */
 export type Info = (message: string) => void
 
-// the hint names what the option brings along, from the schema's requires
+// the hint names what the option brings along, from the schema's requires; a role-scoped one names
+// its role, so the hint holds whatever the layout
 function withRequiresHint(option: FieldOption): FieldOption {
   if (option.requires === undefined || option.requires.length === 0) return option
-  const requires = `Requires ${option.requires.join(', ')}.`
+  const names = option.requires.map(r => (typeof r === 'string' ? r : `${r.id} (${r.role})`))
+  const requires = `Requires ${names.join(', ')}.`
   return { ...option, hint: option.hint === undefined ? requires : `${option.hint} ${requires}` }
 }
 

@@ -104,6 +104,8 @@ export async function verifySignedRequest (
 const CLIENT_USAGE = `- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-discovery trusts the configured API origin; pass \`useSignedRequest(serverIdentityKey)\` to pin an independently validated key.
 - \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`: connect, send a signed echo to \`/api/echo\`, watch the steps + JSON result.`
 const SERVER_USAGE = `- \`verifySignedRequest.ts\` (server) — \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.`
+// Without a server, nothing generated answers the demo's signed calls.
+const CLIENT_ONLY_VERIFY = `- Your backend must provide \`POST /api/echo\` (or your own route) and verify the proof there before trusting \`identityKey\`: \`verifyAuthProof\` from \`auth.ts\`, which the generated server's \`verifySignedRequest\` wraps.`
 
 function agentsSection(ctx: CapabilityContext): string {
   const client = layoutHasRole(ctx.layout, 'client')
@@ -118,7 +120,7 @@ Authenticate individual API calls: sign a proof bound to a route (\`action\`) + 
 - It's stateless — there's no session; every request carries its own authentication.${client ? " The demo page narrates the steps and shows the server's JSON reply." : ''}
 
 ### How it's used
-${sectionLines(client && CLIENT_USAGE, server && SERVER_USAGE)}
+${sectionLines(client && CLIENT_USAGE, server && SERVER_USAGE, !server && CLIENT_ONLY_VERIFY)}
 
 ### Future integrations
 - Back the \`consumeNonce\` callback with Redis/DB so replay protection holds across processes and restarts.

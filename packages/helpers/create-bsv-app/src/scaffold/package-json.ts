@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import type { TargetKey } from '../engine.js'
 import { targetFolder, type ProjectConfig } from '../config/model.js'
 import { readUtf8FileIfExists, writeUtf8FileAtomic } from '../file-system.js'
+import { OWNED_PACKAGES } from '../capabilities/versions.js'
 
 /** A dependency range the merge raised, or could not raise, in an existing project. */
 export interface DependencyChange {
@@ -15,7 +16,7 @@ export interface DependencyChange {
   to: string
   action: 'raised' | 'left'
   /** Why the range was left alone; only set when `action` is `left`. */
-  reason?: 'unparseable' | 'devDependency'
+  reason?: 'unparseable' | 'devDependency' | 'majorUpgrade'
 }
 
 const FLOOR_RE = /^(?:\^|~|>=)?(\d+)(?:\.(\d+))?(?:\.(\d+))?$/
@@ -31,9 +32,35 @@ function compareFloors(a: [number, number, number], b: [number, number, number])
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
 }
 
+/** The caret-compatible line of a floor: its major, or for `0.x` its minor, or for `0.0.x` its patch. */
+function caretLine([major, minor, patch]: [number, number, number]): string {
+  if (major > 0) return `${major}`
+  if (minor > 0) return `0.${minor}`
+  return `0.0.${patch}`
+}
+
 /**
- * Adds missing names to `dependencies` and raises lower floors there. Never edits
- * `devDependencies`. Returns what was raised or could not be raised.
+ * What merging `to` over an existing `from` in `dependencies` does, or undefined to keep `from`
+ * silently. A raise onto another caret line is a breaking upgrade, so only packages this tool owns
+ * get one; any other package is left and reported.
+ */
+function dependencyChange(
+  name: string,
+  from: string,
+  to: string,
+  wanted: [number, number, number]
+): Omit<DependencyChange, 'target'> | undefined {
+  const found = rangeFloor(from)
+  if (found === undefined) return { name, from, to, action: 'left', reason: 'unparseable' }
+  if (compareFloors(wanted, found) <= 0) return undefined
+  if (!OWNED_PACKAGES.has(name) && caretLine(wanted) !== caretLine(found))
+    return { name, from, to, action: 'left', reason: 'majorUpgrade' }
+  return { name, from, to, action: 'raised' }
+}
+
+/**
+ * Adds missing names to `dependencies` and raises lower floors there, across a major only for
+ * owned packages. Never edits `devDependencies`. Returns what was raised or could not be raised.
  */
 export function mergePackageJsonDeps(
   dir: string,
@@ -56,14 +83,9 @@ export function mergePackageJsonDeps(
       throw new Error(`capability range for ${name} is not a plain version floor: ${to}`)
     }
     if (dependencies[name] !== undefined) {
-      const from = dependencies[name]
-      const found = rangeFloor(from)
-      if (found === undefined) {
-        changes.push({ name, from, to, action: 'left', reason: 'unparseable' })
-      } else if (compareFloors(wanted, found) > 0) {
-        dependencies[name] = to
-        changes.push({ name, from, to, action: 'raised' })
-      }
+      const change = dependencyChange(name, dependencies[name], to, wanted)
+      if (change?.action === 'raised') dependencies[name] = to
+      if (change !== undefined) changes.push(change)
     } else if (devDependencies[name] !== undefined) {
       const from = devDependencies[name]
       const found = rangeFloor(from)

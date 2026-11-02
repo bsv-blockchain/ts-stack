@@ -536,6 +536,80 @@ describe('run --file add mode with an existing manifest', () => {
     expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
     expect(res.pulled).toEqual([])
   })
+
+  const recorded = {
+    version: 2,
+    name: 'chain-app',
+    network: 'main',
+    stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+    targets: { client: 'web' },
+    bsvDir: 'src/chain',
+    capabilities: ['wallet-connect'],
+    starter: { id: 'react', kind: 'generated' }
+  }
+  let result: RunResult
+  const addWith = async (cfg: Record<string, unknown>): Promise<Record<string, unknown>> => {
+    writeFileSync(join(dir, 'bsv-scaffold.json'), JSON.stringify(recorded), 'utf8')
+    const cfgPath = join(dir, 'add.json')
+    writeFileSync(cfgPath, JSON.stringify({ install: false, ...cfg }), 'utf8')
+    result = await run(['--dir', dir, '--file', cfgPath, '--mode', 'add'])
+    return JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+  }
+
+  test.each([
+    ['name', 'chain-app'],
+    ['network', 'main'],
+    ['bsvDir', 'src/chain'],
+    ['stack', recorded.stack],
+    ['targets', recorded.targets]
+  ])('seeds %s from the manifest when the file leaves it unset', async (key, value) => {
+    // every other key is set, so only `key` can come from the manifest
+    const full: Record<string, unknown> = {
+      name: 'chain-app',
+      network: 'main',
+      bsvDir: 'src/chain',
+      stack: recorded.stack,
+      targets: recorded.targets
+    }
+    delete full[key]
+    const manifest = await addWith({ ...full, capabilities: ['tx-core'] })
+    expect(manifest[key]).toEqual(value)
+  })
+
+  test('seeds the starter from the manifest when the file leaves it unset', async () => {
+    await addWith({ name: 'chain-app', stack: recorded.stack, capabilities: [] })
+    expect(result.starter).toBe('react')
+  })
+
+  test('keys the file sets win over the manifest', async () => {
+    const manifest = await addWith({
+      name: 'renamed',
+      network: 'ttn',
+      stack: recorded.stack,
+      capabilities: []
+    })
+    expect(manifest.name).toBe('renamed')
+    expect(manifest.network).toBe('ttn')
+    expect(manifest.bsvDir).toBe('src/chain')
+  })
+
+  test('a custom network and bsvDir survive, and new files go under the recorded bsvDir', async () => {
+    const manifest = await addWith({
+      name: 'chain-app',
+      stack: recorded.stack,
+      capabilities: ['tx-core']
+    })
+    expect(manifest.network).toBe('main')
+    expect(manifest.bsvDir).toBe('src/chain')
+    expect(existsSync(join(dir, 'web', 'src', 'chain', 'transactions.ts'))).toBe(true)
+    expect(existsSync(join(dir, 'web', 'src', 'bsv'))).toBe(false)
+    expect(existsSync(join(dir, 'src', 'bsv'))).toBe(false)
+  })
+
+  test('a stackless file adds to a project whose manifest records a stack', async () => {
+    const manifest = await addWith({ capabilities: ['tx-core'] })
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
+  })
 })
 
 describe('run interactive (no --yes)', () => {
@@ -660,5 +734,46 @@ describe('summaryNotice', () => {
     expect(summaryNotice(['--capabilities', 'tx-core'], result)).toEqual([])
     expect(summaryNotice(['--ui', '--yes'], result)).toEqual([])
     expect(summaryNotice(['--yes'], { ...result, pulled: [] })).toEqual([])
+  })
+})
+
+describe('tx-core in a backend-only project', () => {
+  test('add pulls nothing and writes no relay deps, files or wiring', async () => {
+    writeFileSync(
+      join(dir, 'bsv-scaffold.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'api',
+        network: 'test',
+        stack: { backend: { framework: 'express' } },
+        targets: { server: '' },
+        bsvDir: 'src/bsv',
+        capabilities: []
+      }),
+      'utf8'
+    )
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'api' }), 'utf8')
+    const res = await run(['--dir', dir, '--capabilities', 'tx-core', '--skip-install', '--yes'])
+    expect(res.pulled).toEqual([])
+    const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.capabilities).toEqual(['tx-core'])
+    const deps = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies
+    expect(Object.keys(deps).sort()).toEqual(['@bsv/sdk', '@bsv/wallet-helper'])
+    expect(res.written).toContain('src/bsv/transactions.ts')
+    expect(existsSync(join(dir, 'src', 'bsv', 'auth.ts'))).toBe(false)
+    expect(existsSync(join(dir, 'src', 'bsv', 'nonceStore.ts'))).toBe(false)
+    const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
+    expect(agents).not.toContain('## wallet-connect')
+    expect(agents).not.toContain('WalletRelayService')
+  })
+
+  test('new pulls nothing: wallet-connect comes only from the default baseline', async () => {
+    const target = join(dir, 'api')
+    const res = await run(
+      ['--dir', target, '--backend', 'express', '--frontend', 'none', '--skip-install', '--yes'],
+      undefined,
+      { runCommand: () => {} }
+    )
+    expect(res.pulled).toEqual([])
   })
 })

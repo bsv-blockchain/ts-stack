@@ -2,7 +2,8 @@ import fc from 'fast-check'
 
 import { ConfigError, resolveConfig, validBsvDir } from '../validate'
 import { capabilityClosure } from '../requires'
-import { getCapability, listCapabilities } from '../../registry'
+import { getCapability, listCapabilities, requiredIds } from '../../registry'
+import { layoutOf } from '../model'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -105,20 +106,28 @@ describe('project configuration properties', () => {
 
   test('closes capabilities over requires, in registry order, stably, in both modes', () => {
     const ids = listCapabilities().map(c => c.id)
+    const stacks = [
+      { frontend: { framework: 'react' } },
+      { backend: { framework: 'express' } },
+      { frontend: { framework: 'react' }, backend: { framework: 'express' } }
+    ]
     fc.assert(
-      fc.property(fc.shuffledSubarray(ids), fc.constantFrom('new', 'add'), (requested, mode) => {
-        const { capabilities } = resolveConfig({
-          mode,
-          name: 'app',
-          stack: { frontend: { framework: 'react' }, backend: { framework: 'express' } },
-          capabilities: requested
-        })
-        expect(capabilities).toEqual(expect.arrayContaining(requested))
-        for (const id of capabilities)
-          for (const dep of getCapability(id)?.requires ?? []) expect(capabilities).toContain(dep)
-        expect(capabilities).toEqual(ids.filter(id => capabilities.includes(id)))
-        expect(capabilityClosure(capabilities)).toEqual(capabilities)
-      })
+      fc.property(
+        fc.shuffledSubarray(ids),
+        fc.constantFrom('new', 'add'),
+        fc.constantFrom(...stacks),
+        (requested, mode, stack) => {
+          const config = resolveConfig({ mode, name: 'app', stack, capabilities: requested })
+          const { capabilities } = config
+          const layout = layoutOf(config.stack)
+          expect(capabilities).toEqual(expect.arrayContaining(requested))
+          for (const id of capabilities)
+            for (const dep of requiredIds(getCapability(id)!, layout))
+              expect(capabilities).toContain(dep)
+          expect(capabilities).toEqual(ids.filter(id => capabilities.includes(id)))
+          expect(capabilityClosure(capabilities, layout)).toEqual(capabilities)
+        }
+      )
     )
   })
 
