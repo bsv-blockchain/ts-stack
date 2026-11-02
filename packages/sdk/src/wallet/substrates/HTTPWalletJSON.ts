@@ -351,6 +351,52 @@ function deserializeWalletError(
   }
 }
 
+const MAX_PLAIN_WALLET_ERROR_MESSAGE_BYTES = 4096
+const MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH = 128
+
+function plainWalletErrorMessage(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) return undefined
+  if (toArray(value, 'utf8').length > MAX_PLAIN_WALLET_ERROR_MESSAGE_BYTES) return undefined
+  return value
+}
+
+function plainWalletErrorLabel(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH
+  ) {
+    return undefined
+  }
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index)
+    if (code < 32 || code === 127) return undefined
+  }
+  return value
+}
+
+/**
+ * BSV Desktop returns HTTP 400 objects with string message/name/code and no
+ * isError property. Typed isError envelopes stay on the integer-code path.
+ * A missing, blank, or oversized message keeps the generic status error.
+ */
+function plainHttpWalletError(
+  data: Record<string, unknown>,
+  call: CallType,
+  status: number
+): Error | undefined {
+  const message = plainWalletErrorMessage(data.message)
+  if (message === undefined) return undefined
+  const error = new Error(`HTTPWalletJSON ${call} failed with HTTP status ${status}: ${message}`)
+  const name = plainWalletErrorLabel(data.name)
+  if (name !== undefined) error.name = name
+  const code = plainWalletErrorLabel(data.code)
+  if (code !== undefined) {
+    ;(error as Error & { code?: string }).code = code
+  }
+  return error
+}
+
 export default class HTTPWalletJSON implements WalletInterface {
   baseUrl: string
   httpClient: typeof fetch
@@ -421,6 +467,9 @@ export default class HTTPWalletJSON implements WalletInterface {
         if (res.status === 400 && Object.prototype.hasOwnProperty.call(data, 'isError')) {
           const walletError = deserializeWalletError(data, call, bindingRequest)
           if (walletError !== undefined) throw walletError
+        } else if (res.status === 400) {
+          const plainError = plainHttpWalletError(data, call, res.status)
+          if (plainError !== undefined) throw plainError
         }
         throw new Error(`HTTPWalletJSON ${call} failed with HTTP status ${res.status}`)
       }
