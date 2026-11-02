@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
 import { registry, resolveCapabilities } from '../registry'
 import type { Role } from '../types'
+import { EXPLICIT_ANY } from './helpers/explicit-any'
 
 const ctx = {
   name: 'd',
@@ -61,9 +62,23 @@ describe('registry consistency', () => {
       }
     }
   })
+  test.each([
+    'const x: any[] = []',
+    'Array<any>',
+    'Promise<any>',
+    'Record<string, any>',
+    'v as any',
+    'type X = any',
+    'function f<T extends any>() {}'
+  ])('the explicit-any check catches %j', code => {
+    expect(EXPLICIT_ANY.test(code)).toBe(true)
+  })
   test('generated files contain no explicit any', () => {
     for (const f of generatedFiles()) {
-      expect({ file: f.path, any: /:\s*any\b|<any>|as any\b/.test(f.content) }).toEqual({
+      expect({
+        file: f.path,
+        any: EXPLICIT_ANY.test(f.content)
+      }).toEqual({
         file: f.path,
         any: false
       })

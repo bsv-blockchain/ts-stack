@@ -3,6 +3,7 @@ import { LockingScript, P2PKH, PrivateKey, PublicKey, Transaction, Validation } 
 import type { InternalizeActionArgs } from '@bsv/sdk'
 import { TRANSACTIONS_SOURCE, TX_UTILS_SOURCE } from '../tx-core'
 import { loadGenerated } from '../../__tests__/helpers/generated-module'
+import { EXPLICIT_ANY } from '../../__tests__/helpers/explicit-any'
 
 // Runs the emitted transactions.ts against the real @bsv/sdk and @bsv/wallet-helper and a validating stub wallet.
 
@@ -248,6 +249,6 @@ describe('emitted source', () => {
   test('avoids completeBoundAction, outputs[0] and explicit any', () => {
     expect(TRANSACTIONS_SOURCE).not.toContain('completeBoundAction')
     expect(TRANSACTIONS_SOURCE).not.toContain('outputs[0]')
-    expect(TRANSACTIONS_SOURCE).not.toMatch(/: any\b|<any>|as any\b/)
+    expect(TRANSACTIONS_SOURCE).not.toMatch(EXPLICIT_ANY)
   })
 })

@@ -298,6 +298,12 @@ function mountDemo(connected: boolean, hold = false, fail = false, options: Moun
         effects[slot] = { deps, cleanup: fn() ?? undefined }
       })
     },
+    // A ref is one stable object per slot, so it survives re-renders like React's.
+    useRef: (init: unknown) => {
+      const slot = cursor++
+      if (!(slot in states)) states[slot] = { current: init }
+      return states[slot]
+    },
     useState: (init: unknown) => {
       const slot = cursor++
       if (!(slot in states)) states[slot] = init
@@ -476,13 +482,16 @@ describe('TransactionsDemo', () => {
     typeInto(dest, DEST)
     typeInto(amt, '10')
     await click(m.button(m.render(), 'Send'))
-    const confirm = m.button(m.render(), 'Confirm')
-    void (confirm.props.onClick as () => unknown)()
+    const confirmClick = m.button(m.render(), 'Confirm').props.onClick as () => unknown
+    void confirmClick()
     await new Promise(resolve => setTimeout(resolve, 0))
     const tree = m.render()
     expect(m.button(tree, 'Send').props.disabled).toBe(true)
     expect(m.button(tree, 'Publish').props.disabled).toBe(true)
     expect(m.buttons(tree).some(b => m.texts(b) === 'Confirm')).toBe(false)
+    expect(m.calls.actions).toHaveLength(1)
+    // The first render's Confirm handler is still around: calling it again must not send twice.
+    await confirmClick()
     expect(m.calls.actions).toHaveLength(1)
     m.release()
     await new Promise(resolve => setTimeout(resolve, 0))

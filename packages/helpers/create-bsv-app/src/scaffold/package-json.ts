@@ -51,10 +51,14 @@ export function mergePackageJsonDeps(
   for (const name of names) {
     const to = deps[name]
     const wanted = rangeFloor(to)
+    // Capability ranges are constants in this package, so a bad one is our bug, not the project's.
+    if (wanted === undefined) {
+      throw new Error(`capability range for ${name} is not a plain version floor: ${to}`)
+    }
     if (dependencies[name] !== undefined) {
       const from = dependencies[name]
       const found = rangeFloor(from)
-      if (found === undefined || wanted === undefined) {
+      if (found === undefined) {
         changes.push({ name, from, to, action: 'left', reason: 'unparseable' })
       } else if (compareFloors(wanted, found) > 0) {
         dependencies[name] = to
@@ -63,7 +67,7 @@ export function mergePackageJsonDeps(
     } else if (devDependencies[name] !== undefined) {
       const from = devDependencies[name]
       const found = rangeFloor(from)
-      if (found === undefined || wanted === undefined || compareFloors(wanted, found) > 0) {
+      if (found === undefined || compareFloors(wanted, found) > 0) {
         changes.push({ name, from, to, action: 'left', reason: 'devDependency' })
       }
     } else {

@@ -147,6 +147,33 @@ describe('summarizeTransaction', () => {
   })
 })
 
+describe('summarizeTransaction edge cases', () => {
+  test('an OP_0 push shows up as an empty string in data', async () => {
+    const lockingScript = new LockingScript([
+      { op: OP.OP_FALSE },
+      { op: OP.OP_RETURN },
+      { op: OP.OP_0 },
+      { op: 2, data: [0x68, 0x69] }
+    ])
+    const { tx } = await build(funding, [{ lockingScript, satoshis: 0 }])
+    expect(u.summarizeTransaction(tx).outputs[0].data).toEqual(['', 'hi'])
+  })
+
+  test('an input without a source transaction id names the input', async () => {
+    const { tx } = await build(funding)
+    const txid = tx.id('hex')
+    // Strip the source after the txid is known: serialisation needs it, summarising should not.
+    tx.inputs[0].sourceTransaction = undefined
+    tx.inputs[0].sourceTXID = undefined
+    const stub = {
+      id: () => txid,
+      inputs: tx.inputs,
+      outputs: tx.outputs
+    } as unknown as Transaction
+    expect(() => u.summarizeTransaction(stub)).toThrow('input 0 has no source transaction id')
+  })
+})
+
 describe('findOutputByScript', () => {
   test('returns the index of the single match, case-insensitively', async () => {
     const { tx } = await build(funding, [
@@ -195,6 +222,12 @@ describe('outpoints', () => {
     `${txid}.1.5`
   ])('parseOutpoint rejects %j', input => {
     expect(() => u.parseOutpoint(input)).toThrow(`invalid outpoint: ${input}`)
+  })
+
+  test('uppercase txids are normalised to lowercase', () => {
+    const upper = txid.toUpperCase()
+    expect(u.formatOutpoint(upper, 2)).toBe(`${txid}.2`)
+    expect(u.parseOutpoint(`${upper}.2`)).toEqual({ txid, vout: 2 })
   })
 
   test('formatOutpoint rejects bad parts', () => {
@@ -246,7 +279,7 @@ describe('carryOutput', () => {
 
   test('rejects a missing output', async () => {
     const { tx } = await build(funding, [{ lockingScript: p2pkh, satoshis: 1 }])
-    expect(() => u.carryOutput(tx, 5)).toThrow()
+    expect(() => u.carryOutput(tx, 5)).toThrow(`output 5 does not exist in ${tx.id('hex')}`)
   })
 })
 
@@ -337,6 +370,9 @@ describe('explorerTxUrl', () => {
   test('main and test link to whatsonchain', () => {
     expect(u.explorerTxUrl(txid, 'main')).toBe(`https://whatsonchain.com/tx/${txid}`)
     expect(u.explorerTxUrl(txid, 'test')).toBe(`https://test.whatsonchain.com/tx/${txid}`)
+  })
+  test('an uppercase txid links to the lowercase one', () => {
+    expect(u.explorerTxUrl(txid.toUpperCase(), 'main')).toBe(`https://whatsonchain.com/tx/${txid}`)
   })
   test('ttn has no explorer', () => {
     expect(u.explorerTxUrl(txid, 'ttn')).toBeUndefined()

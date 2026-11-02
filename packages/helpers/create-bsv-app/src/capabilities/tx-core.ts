@@ -49,7 +49,7 @@ export interface TransactionSummary {
   outputs: OutputSummary[]
 }
 
-// The pushes after OP_RETURN, read from the raw script bytes.
+// The pushes after OP_RETURN, read from the raw script bytes. An OP_0 push is an empty string ''.
 function opReturnPushes (script: number[], start: number): string[] {
   const pushes: string[] = []
   let i = start
@@ -61,6 +61,8 @@ function opReturnPushes (script: number[], start: number): string[] {
     else if (op === 0x4d) { length = script[i] | (script[i + 1] << 8); i += 2 }
     else if (op === 0x4e) { length = (script[i] | (script[i + 1] << 8) | (script[i + 2] << 16) | (script[i + 3] << 24)) >>> 0; i += 4 }
     else break
+    // A cut-off script leaves a missing length (NaN), which fails this check and stops the loop.
+    // PUSHDATA4's length is read unsigned (>>> 0) so a huge value cannot go negative and pass.
     if (!(i + length <= script.length)) break
     pushes.push(Utils.toUTF8(script.slice(i, i + length)))
     i += length
@@ -72,9 +74,11 @@ function opReturnPushes (script: number[], start: number): string[] {
 export function summarizeTransaction (tx: Transaction): TransactionSummary {
   return {
     txid: tx.id('hex'),
-    inputs: tx.inputs.map(input => ({
-      outpoint: formatOutpoint(input.sourceTXID ?? input.sourceTransaction?.id('hex') ?? '', input.sourceOutputIndex)
-    })),
+    inputs: tx.inputs.map((input, index) => {
+      const sourceTxid = input.sourceTXID ?? input.sourceTransaction?.id('hex')
+      if (sourceTxid === undefined) throw new Error(\`input \${index} has no source transaction id\`)
+      return { outpoint: formatOutpoint(sourceTxid, input.sourceOutputIndex) }
+    }),
     outputs: tx.outputs.map((output, vout) => {
       const hex = output.lockingScript.toHex()
       const satoshis = output.satoshis ?? 0
@@ -108,7 +112,7 @@ export function findOutputByScript (tx: Transaction, lockingScriptHex: string, s
 /** WhatsOnChain page for a transaction. undefined for ttn (no public explorer) or a txid that is not 64 hex characters. */
 export function explorerTxUrl (txid: string, network: 'main' | 'test' | 'ttn'): string | undefined {
   if (!/^[0-9a-fA-F]{64}$/.test(txid) || network === 'ttn') return undefined
-  return (network === 'main' ? 'https://whatsonchain.com/tx/' : 'https://test.whatsonchain.com/tx/') + txid
+  return (network === 'main' ? 'https://whatsonchain.com/tx/' : 'https://test.whatsonchain.com/tx/') + txid.toLowerCase()
 }
 
 /** "<txid>.<vout>", the outpoint form wallets use. */
@@ -116,14 +120,14 @@ export function formatOutpoint (txid: string, vout: number): string {
   if (!/^[0-9a-fA-F]{64}$/.test(txid) || !Number.isInteger(vout) || vout < 0 || vout > 0xffffffff) {
     throw new Error(\`invalid outpoint: \${txid}.\${vout}\`)
   }
-  return \`\${txid}.\${vout}\`
+  return \`\${txid.toLowerCase()}.\${vout}\`
 }
 
 export function parseOutpoint (outpoint: string): { txid: string, vout: number } {
   const match = /^([0-9a-fA-F]{64})\\.(0|[1-9][0-9]*)$/.exec(outpoint)
   const vout = match === null ? NaN : Number(match[2])
   if (match === null || vout > 0xffffffff) throw new Error(\`invalid outpoint: \${outpoint}\`)
-  return { txid: match[1], vout }
+  return { txid: match[1].toLowerCase(), vout }
 }
 
 // BEEF helpers. BEEF travels over JSON as base64, never as a number[] array.
@@ -265,7 +269,7 @@ export async function internalizePayment (wallet: WalletInterface, args: Interna
 }
 `
 
-const TRANSACTIONS_DEMO_SOURCE = `import { useEffect, useState } from 'react'
+const TRANSACTIONS_DEMO_SOURCE = `import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Utils } from '@bsv/sdk'
 import type { Transaction, WalletInterface } from '@bsv/sdk'
@@ -407,6 +411,8 @@ export function TransactionsDemo () {
 
   // True while a wallet call is in flight: Publish, Send and Confirm are disabled until it settles.
   const [busy, setBusy] = useState(false)
+  // Also a ref: a second click can arrive before the re-render that disables the button.
+  const inFlight = useRef(false)
 
   // The wallet's own network, asked once per connected wallet. It never blocks a result: until it
   // arrives (or if it never does) links use the configured network.
@@ -426,19 +432,21 @@ export function TransactionsDemo () {
   const canSend = to.trim() !== '' && amount !== null
 
   const publish = async () => {
-    if (wallet === null || busy) return
+    if (wallet === null || inFlight.current) return
     setNoteError(null); setNoteResult(null)
+    inFlight.current = true
     setBusy(true)
     try {
       const result = await publishNote(wallet, note)
       setNoteResult({ txid: result.txid, tx: result.tx })
-    } catch (e) { setNoteError(errorText(e)) } finally { setBusy(false) }
+    } catch (e) { setNoteError(errorText(e)) } finally { inFlight.current = false; setBusy(false) }
   }
 
   const send = async () => {
     setConfirming(false)
-    if (wallet === null || amount === null || busy) return
+    if (wallet === null || amount === null || inFlight.current) return
     setSendError(null); setSendResult(null)
+    inFlight.current = true
     setBusy(true)
     try {
       if (toSelf) {
@@ -448,7 +456,7 @@ export function TransactionsDemo () {
         const result = await sendSats(wallet, to.trim(), amount)
         setSendResult({ txid: result.txid, tx: result.tx })
       }
-    } catch (e) { setSendError(errorText(e)) } finally { setBusy(false) }
+    } catch (e) { setSendError(errorText(e)) } finally { inFlight.current = false; setBusy(false) }
   }
 
   // Reading is local: it never touches the wallet.

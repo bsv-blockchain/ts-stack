@@ -62,6 +62,13 @@ test('leaves and reports an unparseable range', () => {
   ])
 })
 
+test('throws a clear error when the capability range is unparseable', () => {
+  writePkg(dir, { dependencies: { '@bsv/sdk': '^4.0.1' } })
+  expect(() => mergePackageJsonDeps(dir, { '@bsv/sdk': 'latest' })).toThrow(
+    'capability range for @bsv/sdk is not a plain version floor: latest'
+  )
+})
+
 test('reports an unparseable devDependency as left/devDependency', () => {
   writePkg(dir, { devDependencies: { '@bsv/sdk': 'latest' } })
   expect(mergePackageJsonDeps(dir, { '@bsv/sdk': '^4.0.1' })).toEqual([
@@ -106,7 +113,9 @@ describe('rangeFloor', () => {
 })
 
 test('property: merged floor is never below either input floor', () => {
-  const version = fc.tuple(fc.nat(30), fc.nat(30), fc.nat(30)).map(([a, b, c]) => `^${a}.${b}.${c}`)
+  const version = fc
+    .tuple(fc.constantFrom('^', '~', '>=', ''), fc.nat(30), fc.nat(30), fc.nat(30))
+    .map(([prefix, a, b, c]) => `${prefix}${a}.${b}.${c}`)
   const cmp = (x: number[], y: number[]): number => x[0] - y[0] || x[1] - y[1] || x[2] - y[2]
   fc.assert(
     fc.property(version, version, (a, b) => {
