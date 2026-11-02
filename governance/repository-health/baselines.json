@@ -324,7 +324,7 @@
     "@bsv/overlay-discovery-services": "2.2.9",
     "@bsv/overlay-express": "2.8.0",
     "@bsv/overlay-topics": "2.0.3",
-    "@bsv/sdk": "4.0.1",
+    "@bsv/sdk": "4.0.2",
     "@bsv/verifast": "0.3.9",
     "@bsv/btms": "1.2.6",
     "@bsv/btms-permission-module": "1.2.4",

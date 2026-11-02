@@ -8,6 +8,14 @@ BSV BLOCKCHAIN | Software Development Kit for JavaScript and TypeScript
 
 Welcome to the BSV Blockchain Libraries Project, the comprehensive TypeScript SDK designed to provide an updated and unified layer for developing scalable applications on the BSV Blockchain. This SDK addresses the limitations of previous tools by offering a fresh, peer-to-peer approach, adhering to SPV, and ensuring privacy and scalability.
 
+## createAction unlockingScriptLength (4.0.2 patch)
+
+`createAction` inputs type `unlockingScriptLength` as a positive integer.
+Omitting `unlockingScript` and sending `unlockingScriptLength: 0` is refused
+with `WERR_INVALID_PARAMETER`. Send a length of at least 1 when the script will
+arrive later through `signAction`, or supply the script itself. An empty
+`unlockingScript` is still refused as a hexadecimal string.
+
 ## Optional client timeouts (4.0.1 patch candidate)
 
 `LookupResolverConfig.trackerTimeoutMs` controls each SLAP discovery request;
