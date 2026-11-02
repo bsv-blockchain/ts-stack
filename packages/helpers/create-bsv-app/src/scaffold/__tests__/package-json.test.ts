@@ -6,6 +6,11 @@ import fc from 'fast-check'
 import { mergePackageJsonDeps, applyCapabilityDeps, rangeFloor } from '../package-json'
 import { formatDependencyChanges } from '../../pipeline'
 
+const MONOREPO_STACK = {
+  frontend: { framework: 'react' as const, variant: 'react-ts' },
+  backend: { framework: 'express' as const }
+}
+
 let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cba-pkg-'))
@@ -175,7 +180,7 @@ describe('applyCapabilityDeps integration', () => {
     writePkg(clientDir, { dependencies: { react: '^19.0.0' } })
     applyCapabilityDeps(
       dir,
-      { client: 'client', server: 'server' },
+      { stack: MONOREPO_STACK, targets: { client: 'client', server: 'server' } },
       {
         root: {},
         client: { '@bsv/sdk': '^1.0.0', react: '>=18' },
@@ -200,7 +205,7 @@ describe('applyCapabilityDeps integration', () => {
     writePkg(join(dir, 'server'), { dependencies: { s: '^1.0.0' } })
     const changes = applyCapabilityDeps(
       dir,
-      { client: 'client', server: 'server' },
+      { stack: MONOREPO_STACK, targets: { client: 'client', server: 'server' } },
       { root: {}, client: { s: '^2.0.0' }, server: { s: '^3.0.0' } }
     )
     expect(changes).toEqual([

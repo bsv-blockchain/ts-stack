@@ -1,5 +1,6 @@
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport } from '../scaffold/base-app.js'
+import { layoutHasRole } from '../engine.js'
 import { BSV_SDK_RANGE, WALLET_HELPER_RANGE, WALLET_RELAY_RANGE } from './versions.js'
 
 export const TX_UTILS_SOURCE = `// Read and handle transactions: parse BEEF / AtomicBEEF / raw bytes, summarize, find outputs, pass outpoints and BEEF around.
@@ -543,7 +544,19 @@ export function TransactionsDemo () {
 }
 `
 
-function agentsSection(_ctx: CapabilityContext): string {
+// Client-only: a layout without a client gets no TransactionsDemo.tsx, so its section omits the demo.
+const TX_DEMO_HOW = ` The demo page is client-only.
+- \`TransactionsDemo.tsx\` is the worked example: it builds three flows out of these blocks as local functions you can copy.`
+const TX_DEMO_SECTION = `
+
+Demo (\`TransactionsDemo.tsx\`, client page at \`/transactions\`), three example flows built from the core:
+- \`publishNote(wallet, text)\` — \`dataScript([text])\` as a 0-satoshi \`addCustomOutput\`, \`build\`, then \`findOutputByScript\` to locate the data output; resolves \`{ txid, vout, tx }\`.
+- \`sendSats(wallet, to, satoshis)\` — \`TransactionBuilder.pay\` to a base58 address or 66-hex public key. Plain P2PKH payments to an address or identity key are not detected by BRC-100 wallets unless the recipient internalizes them.
+- \`sendToSelf(wallet, satoshis)\` — \`deriveOwnAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
+- The page has a confirm step before any send, shows each txid as a WhatsOnChain link (new tab) with a "Try with the tx reader" button, and reads a pasted transaction.`
+
+function agentsSection(ctx: CapabilityContext): string {
+  const demo = layoutHasRole(ctx.layout, 'client')
   return `## tx-core
 
 Build, send and read BSV transactions. Wraps \`@bsv/wallet-helper\`'s \`TransactionBuilder\` and the \`@bsv/sdk\` \`Transaction\` / BEEF types, so the connected wallet funds, signs and broadcasts for you.
@@ -551,8 +564,7 @@ Build, send and read BSV transactions. Wraps \`@bsv/wallet-helper\`'s \`Transact
 ### How it works
 - \`transactions.ts\` holds the building blocks: \`TransactionBuilder\` and script support, plus three small helpers. A \`TransactionBuilder\` hands your outputs to the connected wallet, which selects inputs, adds change, signs and returns the transaction as AtomicBEEF.
 - \`txUtils.ts\` reads what comes back (and anything you paste): BEEF, AtomicBEEF or a raw transaction, as bytes, hex or base64.
-- Both files are plain functions with no React in them, so they are copied to every side of your app that gets \`src/bsv\` (client, server, or both). The demo page is client-only.
-- \`TransactionsDemo.tsx\` is the worked example: it builds three flows out of these blocks as local functions you can copy.
+- Both files are plain functions with no React in them, so they are copied to every side of your app that gets \`src/bsv\` (client, server, or both).${demo ? TX_DEMO_HOW : ''}
 
 ### How it's used
 Core (\`transactions.ts\`):
@@ -569,13 +581,7 @@ Helpers (\`txUtils.ts\`):
 - \`formatOutpoint\` / \`parseOutpoint\` — \`txid.vout\` strings.
 - \`encodeBeef\` / \`decodeBeef\` / \`mergeBeefs\` — BEEF as base64 for transport; merge several into one.
 - \`carryOutput(tx, vout)\` — an output plus the BEEF needed to spend it elsewhere.
-- \`listAllOutputs(wallet, args)\` — every page of \`listOutputs\`.
-
-Demo (\`TransactionsDemo.tsx\`, client page at \`/transactions\`), three example flows built from the core:
-- \`publishNote(wallet, text)\` — \`dataScript([text])\` as a 0-satoshi \`addCustomOutput\`, \`build\`, then \`findOutputByScript\` to locate the data output; resolves \`{ txid, vout, tx }\`.
-- \`sendSats(wallet, to, satoshis)\` — \`TransactionBuilder.pay\` to a base58 address or 66-hex public key. Plain P2PKH payments to an address or identity key are not detected by BRC-100 wallets unless the recipient internalizes them.
-- \`sendToSelf(wallet, satoshis)\` — \`deriveOwnAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
-- The page has a confirm step before any send, shows each txid as a WhatsOnChain link (new tab) with a "Try with the tx reader" button, and reads a pasted transaction.
+- \`listAllOutputs(wallet, args)\` — every page of \`listOutputs\`.${demo ? TX_DEMO_SECTION : ''}
 
 ### Transaction rules
 - Never assume a vout. Wallets may reorder outputs and add change; find yours with \`findOutputByScript\`.

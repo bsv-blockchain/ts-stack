@@ -48,7 +48,7 @@ export function addCapabilities(
     ...manifestFromConfig(config),
     capabilities: caps.map(c => c.id)
   })
-  const dependencyChanges = applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  const dependencyChanges = applyCapabilityDeps(targetDir, config, placement.deps)
   installProject(config, targetDir, opts.runCommand ?? defaultRunCommand)
   return {
     deps: placement.deps,

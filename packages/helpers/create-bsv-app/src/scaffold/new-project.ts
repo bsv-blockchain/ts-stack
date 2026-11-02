@@ -1,8 +1,8 @@
 // src/scaffold/new-project.ts
 import { existsSync, readdirSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ProjectConfig, Layout, PackageManager, Stack } from '../config/model.js'
-import { layoutOf } from '../config/model.js'
+import type { ProjectConfig, Layout } from '../config/model.js'
+import { layoutOf, targetFolder } from '../config/model.js'
 import { planPlacement, writeFiles, type TargetKey } from '../engine.js'
 import { resolveCapabilities } from '../registry.js'
 import { renderAgentsMd } from '../agents-md.js'
@@ -41,55 +41,50 @@ function ensureEmpty(dir: string): void {
 // Client and server stay independently installable/deployable. A tiny root
 // runner is added for generated full-stack projects so one command can run both.
 function scaffoldFrameworks(
-  layout: Layout,
-  stack: Stack,
+  config: ProjectConfig,
   targetDir: string,
-  targets: ProjectConfig['targets'],
-  packageManager: PackageManager,
   runCommand: RunCommand
 ): void {
-  const opts = { packageManager, runCommand }
-  const { frontend: fe, backend: be } = stack
-  if (layout === 'monorepo') {
-    if (fe != null)
-      scaffolderFor('react').scaffold(
-        { kind: 'frontend', target: fe },
-        join(targetDir, targets.client ?? 'client'),
-        opts
-      )
-    if (be != null)
-      scaffolderFor('express').scaffold(
-        { kind: 'backend', target: be },
-        join(targetDir, targets.server ?? 'server'),
-        opts
-      )
-    return
-  }
-  if (fe != null) {
-    scaffolderFor('react').scaffold({ kind: 'frontend', target: fe }, targetDir, opts)
-  } else if (be != null) {
-    scaffolderFor('express').scaffold({ kind: 'backend', target: be }, targetDir, opts)
-  }
+  const opts = { packageManager: config.packageManager, runCommand }
+  const { frontend: fe, backend: be } = config.stack
+  if (fe != null)
+    scaffolderFor('react').scaffold(
+      { kind: 'frontend', target: fe },
+      join(targetDir, targetFolder(config, 'client')),
+      opts
+    )
+  if (be != null)
+    scaffolderFor('express').scaffold(
+      { kind: 'backend', target: be },
+      join(targetDir, targetFolder(config, 'server')),
+      opts
+    )
 }
 
 function resolveClientDir(
   layout: Layout,
   targetDir: string,
-  targets: ProjectConfig['targets']
+  config: ProjectConfig
 ): string | undefined {
   if (layout === 'monorepo' || layout === 'frontend-only')
-    return join(targetDir, targets.client ?? (layout === 'monorepo' ? 'client' : ''))
+    return join(targetDir, targetFolder(config, 'client'))
   return undefined
 }
 
 function resolveServerDir(
   layout: Layout,
   targetDir: string,
-  targets: ProjectConfig['targets']
+  config: ProjectConfig
 ): string | undefined {
   if (layout === 'monorepo' || layout === 'backend-only')
-    return join(targetDir, targets.server ?? (layout === 'monorepo' ? 'server' : ''))
+    return join(targetDir, targetFolder(config, 'server'))
   return undefined
+}
+
+// Prefix for a target's written paths: '' at the root, else '<folder>/'.
+function targetPrefix(config: ProjectConfig, t: 'client' | 'server'): string {
+  const folder = targetFolder(config, t)
+  return folder === '' ? '' : `${folder}/`
 }
 
 function writeBaseAppGlue(
@@ -106,13 +101,11 @@ function writeBaseAppGlue(
     stack: config.stack,
     layout
   }
-  const clientDir = resolveClientDir(layout, targetDir, config.targets)
-  const serverDir = resolveServerDir(layout, targetDir, config.targets)
+  const clientDir = resolveClientDir(layout, targetDir, config)
+  const serverDir = resolveServerDir(layout, targetDir, config)
   const r = assembleAndWrite(caps, ctx, { clientDir, serverDir })
-  const cp =
-    config.targets.client == null || config.targets.client === '' ? '' : `${config.targets.client}/`
-  const sp =
-    config.targets.server == null || config.targets.server === '' ? '' : `${config.targets.server}/`
+  const cp = targetPrefix(config, 'client')
+  const sp = targetPrefix(config, 'server')
   return [...r.client.map(p => cp + p), ...r.server.map(p => sp + p)]
 }
 
@@ -144,14 +137,7 @@ export function scaffoldNewProject(
     }
   }
 
-  scaffoldFrameworks(
-    layout,
-    config.stack,
-    targetDir,
-    config.targets,
-    config.packageManager,
-    runCommand
-  )
+  scaffoldFrameworks(config, targetDir, runCommand)
   const rootRunner =
     layout === 'monorepo' ? writeRootRunner(config.name, targetDir, config.packageManager) : []
 
@@ -178,7 +164,7 @@ export function scaffoldNewProject(
     capabilities: caps.map(c => c.id)
   })
   written.push(MANIFEST_FILE)
-  const dependencyChanges = applyCapabilityDeps(targetDir, config.targets, placement.deps)
+  const dependencyChanges = applyCapabilityDeps(targetDir, config, placement.deps)
   installProject(config, targetDir, runCommand)
 
   return { written, deps: placement.deps, dependencyChanges }

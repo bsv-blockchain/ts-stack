@@ -1,5 +1,7 @@
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport } from '../scaffold/base-app.js'
+import { layoutHasRole } from '../engine.js'
+import { sectionLines } from './section-lines.js'
 
 const SIGNED_REQUEST = `// Create a signed request: an @bsv/auth proof bound to a route (action) + body.
 import type { WalletInterface } from '@bsv/sdk'
@@ -98,7 +100,14 @@ export async function verifySignedRequest (
 }
 `
 
-function agentsSection(_ctx: CapabilityContext): string {
+// Each side's files are listed only when the layout writes that side.
+const CLIENT_USAGE = `- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-discovery trusts the configured API origin; pass \`useSignedRequest(serverIdentityKey)\` to pin an independently validated key.
+- \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`: connect, send a signed echo to \`/api/echo\`, watch the steps + JSON result.`
+const SERVER_USAGE = `- \`verifySignedRequest.ts\` (server) — \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.`
+
+function agentsSection(ctx: CapabilityContext): string {
+  const client = layoutHasRole(ctx.layout, 'client')
+  const server = layoutHasRole(ctx.layout, 'server')
   return `## signed-requests
 
 Authenticate individual API calls: sign a proof bound to a route (\`action\`) + request \`body\`, send it with the request, verify it server-side. Same proof primitive as login, plus a body — one round-trip, no handshake, framework-agnostic.
@@ -106,12 +115,10 @@ Authenticate individual API calls: sign a proof bound to a route (\`action\`) + 
 ### How it works
 - For each call the client signs a proof over \`{ counterparty: serverIdentity, action, body }\` and sends \`{ proof, body }\` to the route.
 - The server re-derives the same binding and verifies the signature (and a single-use nonce) before trusting the caller's \`identityKey\`. Because the proof is bound to the exact action + body, it can't be replayed against another route or with a tampered payload.
-- It's stateless — there's no session; every request carries its own authentication. The demo page narrates the steps and shows the server's JSON reply.
+- It's stateless — there's no session; every request carries its own authentication.${client ? " The demo page narrates the steps and shows the server's JSON reply." : ''}
 
 ### How it's used
-- \`signedRequest.ts\` / \`useSignedRequest.ts\` (client) — \`const { signedFetch } = useSignedRequest()\`; \`signedFetch('/api/thing', { action: 'thing', body })\`. Counterparty auto-discovery trusts the configured API origin; pass \`useSignedRequest(serverIdentityKey)\` to pin an independently validated key.
-- \`SignedRequestDemo.tsx\` (client page) — interactive demo at \`/signed-demo\`: connect, send a signed echo to \`/api/echo\`, watch the steps + JSON result.
-- \`verifySignedRequest.ts\` (server) — \`verifySignedRequest(serverWallet, proof, { action, body }, consumeNonce)\`; call it from any backend (Express/Next/Fastify) before trusting \`identityKey\`.
+${sectionLines(client && CLIENT_USAGE, server && SERVER_USAGE)}
 
 ### Future integrations
 - Back the \`consumeNonce\` callback with Redis/DB so replay protection holds across processes and restarts.

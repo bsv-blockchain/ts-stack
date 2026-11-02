@@ -1052,3 +1052,22 @@ describe('tx-core AGENTS section', () => {
     expect(section).toContain('wallet-relay ' + WALLET_RELAY_RANGE)
   })
 })
+
+describe('tx-core AGENTS section without a client', () => {
+  const section = txCore.agentsSection({
+    name: 'demo',
+    network: 'test',
+    bsvDir: 'src/bsv',
+    stack: { backend: { framework: 'express' } },
+    layout: 'backend-only'
+  })
+  test('omits the demo page, which backend-only does not write', () => {
+    for (const term of ['TransactionsDemo', '/transactions', 'publishNote', 'demo page'])
+      expect(section).not.toContain(term)
+  })
+  test('keeps the core and helper docs', () => {
+    for (const term of ['transactions.ts', 'txUtils.ts', 'deriveOwnAddress', 'parseTransaction'])
+      expect(section).toContain(term)
+    expect(section).not.toMatch(/\n{3,}/)
+  })
+})

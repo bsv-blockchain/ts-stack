@@ -67,3 +67,15 @@ export function defaultTargetPaths(stack: Stack): TargetPaths {
   if (layout === 'monorepo') return { client: 'client', server: 'server' }
   return {}
 }
+
+/**
+ * Folder of target `t` relative to the project root ('' is the root): the configured path, else the
+ * layout default (single-target layouts live at the root). A target the layout lacks falls back to
+ * its own name; nothing is placed there.
+ */
+export function targetFolder(
+  config: Pick<ProjectConfig, 'stack' | 'targets'>,
+  t: keyof TargetPaths
+): string {
+  return config.targets[t] ?? defaultTargetPaths(config.stack)[t] ?? t
+}

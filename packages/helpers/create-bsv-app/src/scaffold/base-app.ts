@@ -2,6 +2,13 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Capability, CapabilityContext, BaseBuilder, RouteDef } from '../types.js'
 
+/** Base files capabilities wire into, relative to their target root. */
+export const BASE_FILES = {
+  main: 'src/main.tsx',
+  app: 'src/App.tsx',
+  server: 'src/index.ts'
+} as const
+
 export function newBuilder(): BaseBuilder {
   return {
     main: { imports: [], wraps: [] },
@@ -269,13 +276,13 @@ export function assembleAndWrite(
   if (dirs.clientDir != null) {
     write(
       dirs.clientDir,
-      'src/main.tsx',
+      BASE_FILES.main,
       assembleBaseFile(MAIN_TEMPLATE, builder, ctx),
       result.client
     )
     write(
       dirs.clientDir,
-      'src/App.tsx',
+      BASE_FILES.app,
       assembleBaseFile(APP_TEMPLATE, builder, ctx),
       result.client
     )
@@ -289,7 +296,7 @@ export function assembleAndWrite(
   if (dirs.serverDir != null) {
     write(
       dirs.serverDir,
-      'src/index.ts',
+      BASE_FILES.server,
       assembleBaseFile(SERVER_TEMPLATE, builder, ctx),
       result.server
     )

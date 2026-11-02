@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { TargetKey } from '../engine.js'
-import type { TargetPaths } from '../config/model.js'
+import { targetFolder, type ProjectConfig } from '../config/model.js'
 import { readUtf8FileIfExists, writeUtf8FileAtomic } from '../file-system.js'
 
 /** A dependency range the merge raised, or could not raise, in an existing project. */
@@ -82,12 +82,12 @@ export function mergePackageJsonDeps(
 
 export function applyCapabilityDeps(
   targetDir: string,
-  targets: TargetPaths,
+  config: Pick<ProjectConfig, 'stack' | 'targets'>,
   deps: Record<TargetKey, Record<string, string>>
 ): DependencyChange[] {
   const dirForTarget = (key: TargetKey): string => {
     if (key === 'root') return targetDir
-    const relative = targets[key] ?? key
+    const relative = targetFolder(config, key)
     return relative === '' ? targetDir : join(targetDir, relative)
   }
   const changes: DependencyChange[] = []

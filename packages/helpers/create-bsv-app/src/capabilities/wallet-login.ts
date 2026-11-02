@@ -1,6 +1,8 @@
 // src/capabilities/wallet-login.ts
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport } from '../scaffold/base-app.js'
+import { layoutHasRole } from '../engine.js'
+import { sectionLines } from './section-lines.js'
 
 const WALLET_LOGIN_PAGE = `import { useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -99,27 +101,14 @@ export function loginRoute (serverWallet: ProofVerifierWallet) {
 }
 `
 
-function agentsSection(_ctx: CapabilityContext): string {
-  return `## wallet-login
-
-Passwordless login: the connected wallet signs a proof with \`action: 'login'\`, the server verifies it, and you get a trusted \`identityKey\` — no password, no shared secret.
-
-### How it works
-- The client fetches the server's identity key (\`GET /api/identity\`) under the configured API origin's HTTPS/local-development authority, uses it as the proof \`counterparty\`, signs a login proof with the wallet, and POSTs it through the same redirect-free bounded client. Pass \`serverIdentityKey\` to pin an independently validated key when endpoint trust alone is insufficient.
-- The server verifies the signature with its \`serverWallet\` and consumes a single-use nonce (replay protection), then trusts the \`identityKey\` the proof was signed by.
-- That verified \`identityKey\` is the whole BSV-specific step. What you do next — issue a session, create a user — is your app's call (see *Future integrations*). The demo page renders each step so you can watch the exchange.
-
-### How it's used
-- \`WalletLogin.tsx\` (client page) — login UI at \`/login\`; resolves the counterparty via \`getServerIdentity()\` and shows a step-by-step activity log of the exchange.
-- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin()\` for a custom UI; pass \`{ serverIdentityKey }\` to pin a key instead of auto-fetching.
-- \`loginRoute.ts\` (server) — \`app.post('/api/login', loginRoute(serverWallet))\`; verifies the proof and returns \`{ identityKey }\`.
-
-### Environment (in \`bsv/config.ts\`)
-- Client: \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).
-- Server: \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization), \`SERVER_ORIGIN\` (address a phone uses to reach the server for wallet pairing; set \`http://<your LAN IP>:<your server port>\` to pair on the same network). Production requires explicit stable key and HTTPS origin values.
-
-### Future integrations — turn login into a session
-After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):
+// Each side's files and settings are listed only when the layout writes that side.
+const CLIENT_USAGE = `- \`WalletLogin.tsx\` (client page) — login UI at \`/login\`; resolves the counterparty via \`getServerIdentity()\` and shows a step-by-step activity log of the exchange.
+- \`useWalletLogin.tsx\` (client hook) — \`const { login } = useWalletLogin()\` for a custom UI; pass \`{ serverIdentityKey }\` to pin a key instead of auto-fetching.`
+const SERVER_USAGE = `- \`loginRoute.ts\` (server) — \`app.post('/api/login', loginRoute(serverWallet))\`; verifies the proof and returns \`{ identityKey }\`.`
+const CLIENT_ENV = `- Client (in the client's \`bsv/config.ts\`): \`API_BASE_URL\` (default \`http://localhost:3000\`, override with \`VITE_API_URL\`).`
+const SERVER_ENV = `- Server environment (new glued projects read it in the server's \`bsv/config.ts\`; otherwise your server entry reads \`process.env\`): \`SERVER_PRIVATE_KEY\` (the \`serverWallet\` key; random dev fallback), \`PORT\`, \`CLIENT_ORIGIN\` (browser CORS sharing only, not authorization), \`SERVER_ORIGIN\` (address a phone uses to reach the server for wallet pairing; set \`http://<your LAN IP>:<your server port>\` to pair on the same network). Production requires explicit stable key and HTTPS origin values.`
+// The session sketch extends loginRoute.ts, so it needs the server side.
+const SERVER_SESSION = `After \`/api/login\` verifies the proof you hold a trusted \`identityKey\`; mint a session from it however your app prefers. A minimal JWT example with \`jose\` (read a secret from env, like \`serverWallet\` does its key):
 \`\`\`ts
 import { SignJWT, jwtVerify } from 'jose'
 const secretText = process.env.JWT_SECRET
@@ -130,7 +119,30 @@ const token = await new SignJWT({ sub: result.identityKey }).setProtectedHeader(
 res.cookie('session', token, { httpOnly: true, secure: true, sameSite: 'lax' }) // or return it for a bearer header
 // guard a route: const { payload } = await jwtVerify(token, secret) // payload.sub === identityKey
 \`\`\`
-- Swap the in-memory nonce store in \`loginRoute.ts\` for Redis/DB in production.
+- Swap the in-memory nonce store in \`loginRoute.ts\` for Redis/DB in production.`
+// Frontend-only: the login route lives in the user's own backend.
+const CLIENT_ONLY_SESSION = `Your backend's \`POST /api/login\` verifies the proof (\`verifyAuthProof\` from \`auth.ts\`); mint a session there from the trusted \`identityKey\` it yields.`
+
+function agentsSection(ctx: CapabilityContext): string {
+  const client = layoutHasRole(ctx.layout, 'client')
+  const server = layoutHasRole(ctx.layout, 'server')
+  return `## wallet-login
+
+Passwordless login: the connected wallet signs a proof with \`action: 'login'\`, the server verifies it, and you get a trusted \`identityKey\` — no password, no shared secret.
+
+### How it works
+- The client fetches the server's identity key (\`GET /api/identity\`) under the configured API origin's HTTPS/local-development authority, uses it as the proof \`counterparty\`, signs a login proof with the wallet, and POSTs it through the same redirect-free bounded client. Pass \`serverIdentityKey\` to pin an independently validated key when endpoint trust alone is insufficient.
+- The server verifies the signature with its \`serverWallet\` and consumes a single-use nonce (replay protection), then trusts the \`identityKey\` the proof was signed by.
+- That verified \`identityKey\` is the whole BSV-specific step. What you do next — issue a session, create a user — is your app's call (see *Future integrations*).${client ? ' The demo page renders each step so you can watch the exchange.' : ''}
+
+### How it's used
+${sectionLines(client && CLIENT_USAGE, server && SERVER_USAGE)}
+
+### Environment
+${sectionLines(client && CLIENT_ENV, server && SERVER_ENV)}
+
+### Future integrations — turn login into a session
+${server ? SERVER_SESSION : CLIENT_ONLY_SESSION}
 - Persist a user record keyed by \`identityKey\` on first login.
 `
 }
