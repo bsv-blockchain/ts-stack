@@ -308,6 +308,28 @@ describe('deliveryFailed', () => {
     await Promise.all([alice.close(), bob.close(), carol.close()])
   })
 
+  /**
+   * `send` tells a caller to write its own copy without waiting for the
+   * promise, because the group has already advanced. That copy needs a key,
+   * and on this path the promise that would have carried the id rejects.
+   */
+  it('carries the id of the message that did not get through', async () => {
+    let blocked = new Set<IdentityKey>()
+    const { alice, bob, carol, group } = await trio(() => blocked)
+    blocked = new Set([carol.identityKey])
+
+    const ids: Array<string | undefined> = []
+    alice.on('deliveryFailed', ({ messageId }) => {
+      ids.push(messageId)
+    })
+    await expect(group.sendText('hello')).rejects.toThrow()
+
+    expect(ids).toHaveLength(1)
+    expect(ids[0]).toMatch(/^[0-9a-f]{64}$/)
+
+    await Promise.all([alice.close(), bob.close(), carol.close()])
+  })
+
   it('leaves `failed` absent when the transport did not say who was missed', async () => {
     // A backend with its own `broadcast` throws whatever it throws; the
     // partition is genuinely unknown. An empty array would read as "nothing
