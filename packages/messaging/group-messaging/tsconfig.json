@@ -17,6 +17,6 @@
     "exactOptionalPropertyTypes": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/**/*.ts", "vitest.config.ts"],
+  "include": ["src/**/*.ts", "templates/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

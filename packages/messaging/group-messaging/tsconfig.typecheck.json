@@ -5,8 +5,12 @@
     "declaration": false,
     "declarationMap": false,
     "incremental": false,
-    "noEmit": true
+    "noEmit": true,
+    // The templates import the package by name, the way a copied file in a
+    // host would. Only typechecking needs to resolve that: the build does not
+    // compile them, because they ship as source to copy.
+    "paths": { "@bsv/group-messaging": ["./src/index.ts"] }
   },
-  "include": ["src/**/*.ts", "vitest.config.ts"],
+  "include": ["src/**/*.ts", "templates/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
 }
