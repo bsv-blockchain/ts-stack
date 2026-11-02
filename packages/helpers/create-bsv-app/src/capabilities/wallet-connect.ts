@@ -1,6 +1,7 @@
 // src/capabilities/wallet-connect.ts
 import type { Capability, CapabilityContext, BaseBuilder } from '../types.js'
 import { bsvImport, SERVER_ORIGIN_CONFIG } from '../scaffold/base-app.js'
+import { BSV_AUTH_RANGE, BSV_SDK_RANGE, WALLET_RELAY_RANGE } from './versions.js'
 
 const AUTH_UTIL = `// Shared, framework-agnostic auth-proof helpers built on @bsv/auth (BRC-103).
 // One primitive: sign a proof bound to { action, body? }, verify it on the server.
@@ -537,10 +538,10 @@ export const walletConnect: Capability = {
     )
   },
   npmDependencies: () => ({
-    shared: { '@bsv/auth': '^0.1.0', '@bsv/sdk': '^2.4.1' },
-    client: { '@bsv/wallet-relay': '^0.7.0', react: '>=18', 'react-router-dom': '^7.0.0' },
+    shared: { '@bsv/auth': BSV_AUTH_RANGE, '@bsv/sdk': BSV_SDK_RANGE },
+    client: { '@bsv/wallet-relay': WALLET_RELAY_RANGE, react: '>=18', 'react-router-dom': '^7.0.0' },
     // Server-side WalletRelayService + its qrcode peer (ws ships with the relay).
-    server: { '@bsv/wallet-relay': '^0.7.0', qrcode: '^1.5.0' }
+    server: { '@bsv/wallet-relay': WALLET_RELAY_RANGE, qrcode: '^1.5.0' }
   }),
   agentsSection
 }

@@ -250,7 +250,8 @@ describe('wallet-connect', () => {
     const deps = walletConnect.npmDependencies(ctx)
     expect(deps.client?.['@bsv/wallet-relay']).toBe('^0.7.0')
     expect(deps.server?.['@bsv/wallet-relay']).toBe('^0.7.0')
-    expect(deps.shared?.['@bsv/sdk']).toBe('^2.4.1')
+    expect(deps.shared?.['@bsv/sdk']).toBe('^4.0.1')
+    expect(deps.shared?.['@bsv/auth']).toBe('^0.1.8')
   })
   test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
     const ctx2 = {
