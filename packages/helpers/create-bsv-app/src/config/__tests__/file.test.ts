@@ -33,8 +33,8 @@ describe('resolveConfigFromFile', () => {
     const c = resolveConfigFromFile(p)
     expect(c.name).toBe('demo')
     expect(c.stack.frontend?.framework).toBe('react')
-    // new-mode floor appends defaultSelected baseline (wallet-connect) after the explicit entry
-    expect(c.capabilities).toEqual(['wallet-login', 'wallet-connect'])
+    // new-mode floor appends defaultSelected baseline (wallet-connect, tx-core) after the explicit entry
+    expect(c.capabilities).toEqual(['wallet-login', 'wallet-connect', 'tx-core'])
   })
 
   test('throws ConfigError on missing file', () => {

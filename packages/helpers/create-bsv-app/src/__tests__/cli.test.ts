@@ -210,8 +210,8 @@ describe('run --yes new (flags)', () => {
     // wallet-login client file
     expect(res.written).toContain('src/bsv/useWalletLogin.tsx')
     const manifest = JSON.parse(readFileSync(join(dir, 'bsv-scaffold.json'), 'utf8'))
-    // seedDraft pre-selects defaultSelected caps (wallet-connect), so both end up in manifest
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    // seedDraft pre-selects defaultSelected caps (wallet-connect, tx-core), so all three end up in manifest
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core', 'wallet-login'])
   })
 })
 
@@ -341,7 +341,7 @@ describe('run --file (direct manifest door)', () => {
     // new-mode expands requires: wallet-login → wallet-connect + wallet-login, auth.ts from wallet-connect
     expect(res.written).toContain('src/bsv/auth.ts')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 
   test('new-mode config with zero capabilities still scaffolds the wallet-connect baseline', async () => {
@@ -362,7 +362,7 @@ describe('run --file (direct manifest door)', () => {
     expect(res.written).toContain('src/bsv/auth.ts')
     expect(res.written).toContain('src/bsv/WalletContext.tsx')
     const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'tx-core'])
   })
 
   test('new-mode scaffolds normally when the dir holds only a manifest (reproduce-from-manifest)', async () => {
@@ -394,7 +394,7 @@ describe('run --file (direct manifest door)', () => {
     expect(res.written).toContain('src/bsv/auth.ts')
     // the existing manifest is rewritten (regenerated from the config)
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(manifest.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
   })
 
   test('new-mode still errors when the dir holds non-manifest files', async () => {

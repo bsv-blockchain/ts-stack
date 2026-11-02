@@ -374,6 +374,8 @@ code { font-family: var(--bsv-mono); color: var(--bsv-strong); }
 .bsv-btn:disabled { opacity: .5; cursor: default; filter: none; }
 .bsv-btn-ghost { height: 40px; padding: 0 16px; border: 1px solid var(--bsv-border); border-radius: 7px; background: transparent; color: #aab3bf; font: 500 13px/1 system-ui; cursor: pointer; }
 .bsv-btn-ghost:hover { border-color: #3d4855; color: var(--bsv-text); }
+.bsv-input { display: block; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 10px 12px; background: var(--bsv-surface-deep); border: 1px solid var(--bsv-border); border-radius: 7px; color: var(--bsv-text); font: 14px/1.4 system-ui; }
+.bsv-input:focus { outline: none; border-color: var(--bsv-accent); }
 .bsv-connect { margin: 20px 0; }
 .bsv-connect button { height: 44px; padding: 0 20px; border: 0; border-radius: 7px; background: var(--bsv-accent); color: var(--bsv-ink); font: 600 14px/1 system-ui; cursor: pointer; }
 .bsv-connect button:hover { filter: brightness(1.07); }
@@ -539,7 +541,11 @@ export const walletConnect: Capability = {
   },
   npmDependencies: () => ({
     shared: { '@bsv/auth': BSV_AUTH_RANGE, '@bsv/sdk': BSV_SDK_RANGE },
-    client: { '@bsv/wallet-relay': WALLET_RELAY_RANGE, react: '>=18', 'react-router-dom': '^7.0.0' },
+    client: {
+      '@bsv/wallet-relay': WALLET_RELAY_RANGE,
+      react: '>=18',
+      'react-router-dom': '^7.0.0'
+    },
     // Server-side WalletRelayService + its qrcode peer (ws ships with the relay).
     server: { '@bsv/wallet-relay': WALLET_RELAY_RANGE, qrcode: '^1.5.0' }
   }),

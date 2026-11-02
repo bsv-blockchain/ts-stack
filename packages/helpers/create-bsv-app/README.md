@@ -77,8 +77,11 @@ Generated starters can include these composable capabilities:
 | `wallet-connect`  | Default baseline: connect a BRC-100 desktop or relay wallet, expose app-wide wallet state, and provide the shared BRC-103 proof primitive. |
 | `wallet-login`    | Passwordless login using a proof bound to the server identity and `action: "login"`.                                                       |
 | `signed-requests` | Per-request authentication using a proof bound to the route and request body.                                                              |
+| `tx-core`         | Default: `TransactionBuilder` and script support, `dataScript`, `deriveOwnAddress`, `internalizePayment`, tx/BEEF parsing, demo page.      |
 
-New generated projects include `wallet-connect` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
+New generated projects include `wallet-connect` and `tx-core` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
+
+Generated projects use `@bsv/sdk` ^4.0.1 and `@bsv/auth` ^0.1.8. In add mode, the CLI raises an existing project's outdated `dependencies` ranges for the packages a capability needs (including non-BSV ranges a capability declares, such as `react-router-dom` ^7 and `react` >=18) and reports what it changed or could not change; `devDependencies` and unrecognised ranges are never changed and are listed for manual review.
 
 The generated development server uses a bounded, expiring, single-use nonce store for replay protection. Replace it with an atomic Redis or database implementation before running multiple server processes. Generated API calls reject redirects, remain on the configured origin, enforce a whole-response deadline and byte ceilings, and strictly decode JSON. Automatic server-key discovery trusts that configured HTTPS origin; pass an independently validated key to the generated hooks when the application needs identity pinning.
 

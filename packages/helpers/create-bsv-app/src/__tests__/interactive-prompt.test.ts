@@ -84,7 +84,7 @@ describe('interactiveConfigPrompt', () => {
       network: 'test' as const,
       stack: { frontend: { framework: 'react' as const, variant: 'react-ts' } },
       bsvDir: 'src/bsv',
-      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests']
+      capabilities: ['wallet-connect', 'wallet-login', 'signed-requests', 'tx-core']
     }
     const config = await interactiveConfigPrompt({ existing, flags: {} })
 

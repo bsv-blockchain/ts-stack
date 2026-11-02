@@ -43,6 +43,7 @@ Capabilities:
 - `wallet-connect`: default BRC-100 wallet and shared BRC-103 proof baseline.
 - `wallet-login`: passwordless server-verified identity proof.
 - `signed-requests`: route-and-body-bound per-request authentication.
+- `tx-core`: pre-selected in new projects (requires `wallet-connect`); `TransactionBuilder` and script support, `dataScript`, `deriveOwnAddress`, `internalizePayment`, and transaction/BEEF parsing helpers, plus a Transactions demo page with worked examples.
 
 ## Existing project
 

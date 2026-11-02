@@ -107,7 +107,7 @@ test('raises an old sdk floor in add mode', () => {
       backend: { framework: 'express' }
     },
     targets: { client: 'client', server: 'server' },
-    capabilities: ['wallet-connect']
+    capabilities: ['wallet-connect', 'tx-core']
   }
   const res = applyConfig(addConfig, dir, { runCommand: () => {}, force: false })
   for (const t of ['client', 'server']) {

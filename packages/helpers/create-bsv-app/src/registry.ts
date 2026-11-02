@@ -3,8 +3,9 @@ import type { Capability } from './types.js'
 import { walletConnect } from './capabilities/wallet-connect.js'
 import { walletLogin } from './capabilities/wallet-login.js'
 import { signedRequests } from './capabilities/signed-requests.js'
+import { txCore } from './capabilities/tx-core.js'
 
-export const registry: Capability[] = [walletConnect, walletLogin, signedRequests]
+export const registry: Capability[] = [walletConnect, walletLogin, signedRequests, txCore]
 
 export function listCapabilities(): Capability[] {
   return registry

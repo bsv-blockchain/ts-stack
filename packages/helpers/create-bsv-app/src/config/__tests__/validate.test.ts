@@ -19,7 +19,7 @@ describe('resolveConfig', () => {
       stack: { frontend: { framework: 'react', variant: 'react-ts' } },
       targets: { client: '' },
       bsvDir: 'src/bsv',
-      capabilities: ['wallet-connect'],
+      capabilities: ['wallet-connect', 'tx-core'],
       glue: true,
       install: true,
       packageManager: 'npm',
@@ -53,14 +53,14 @@ describe('resolveConfig', () => {
     ).toThrow(/unknown capability: nope/i)
   })
 
-  test('dedupes capabilities and accepts known ones (new mode floor adds wallet-connect)', () => {
+  test('dedupes capabilities and accepts known ones (new mode floor adds wallet-connect and tx-core)', () => {
     const c = resolveConfig({
       name: 'x',
       stack: { backend: { framework: 'express' } },
       capabilities: ['wallet-login', 'wallet-login']
     })
-    // new-mode floor appends wallet-connect after dedup; wallet-login itself is deduped to one entry
-    expect(c.capabilities).toEqual(['wallet-login', 'wallet-connect'])
+    // new-mode floor appends wallet-connect and tx-core after dedup; wallet-login itself is deduped to one entry
+    expect(c.capabilities).toEqual(['wallet-login', 'wallet-connect', 'tx-core'])
   })
 
   test('rejects an unsafe bsvDir', () => {

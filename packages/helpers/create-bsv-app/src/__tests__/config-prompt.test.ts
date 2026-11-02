@@ -29,11 +29,14 @@ describe('runPrompts', () => {
     expect(c.stack.frontend?.framework).toBe('react')
     // wallet-connect is defaultSelected → excluded from new-mode picker options
     expect(capabilityOptions.map(o => o.value)).not.toContain('wallet-connect')
+    expect(capabilityOptions.map(o => o.value)).not.toContain('tx-core')
     // wallet-login IS offered as a picker option in new mode
     expect(capabilityOptions.map(o => o.value)).toContain('wallet-login')
     // wallet-connect is still in the final config (pre-seeded by seedDraft + floored by resolveConfig)
-    expect(c.capabilities).toEqual(expect.arrayContaining(['wallet-connect', 'wallet-login']))
-    expect(c.capabilities).toHaveLength(2)
+    expect(c.capabilities).toEqual(
+      expect.arrayContaining(['wallet-connect', 'tx-core', 'wallet-login'])
+    )
+    expect(c.capabilities).toHaveLength(3)
   })
 
   test('asks one field at a time, so dependent fields see earlier answers', async () => {
