@@ -28,8 +28,8 @@ This candidate is not publication.
 `HTTPWalletJSON` keeps typed `isError` envelopes, including `WERR_REVIEW_ACTIONS`.
 An HTTP 400 JSON object without `isError` and with a string `message` of at most
 4096 UTF-8 bytes throws an `Error` that includes that message and `HTTP status 400`.
-A string `name` and `code` of at most 128 characters, without control characters,
-are copied onto the error. Blank, non-string, or oversized messages, and every
+A non-empty string `name` and `code` of at most 128 characters are copied onto
+the error. Blank, non-string, or oversized messages, and every
 non-400 status, keep the generic status error. No call or wire migration is
 required.
 

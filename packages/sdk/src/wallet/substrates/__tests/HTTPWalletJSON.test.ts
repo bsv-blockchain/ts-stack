@@ -881,12 +881,12 @@ describe('HTTPWalletJSON – api() error responses', () => {
     expect(error.code).toBeUndefined()
   })
 
-  it('omits a name or code that is too long or contains a control character', async () => {
+  it('omits a name or code longer than 128 characters', async () => {
     const client = makeClient(
       makeFetch(
         {
           message: 'declined',
-          name: `WERR_BAD${String.fromCharCode(10)}REQUEST`,
+          name: 'N'.repeat(129),
           code: 'C'.repeat(129)
         },
         { ok: false, status: 400 }
@@ -900,6 +900,21 @@ describe('HTTPWalletJSON – api() error responses', () => {
     expect(error.message).toBe('HTTPWalletJSON createAction failed with HTTP status 400: declined')
     expect(error.name).toBe('Error')
     expect(error.code).toBeUndefined()
+  })
+
+  it('copies a name and code of exactly 128 characters', async () => {
+    const name = 'N'.repeat(128)
+    const code = 'C'.repeat(128)
+    const client = makeClient(
+      makeFetch({ message: 'declined', name, code }, { ok: false, status: 400 })
+    )
+
+    const error = await client
+      .createAction({ description: 'hello world' })
+      .catch(caught => caught as Error & { code?: string })
+
+    expect(error.name).toBe(name)
+    expect(error.code).toBe(code)
   })
 })
 
