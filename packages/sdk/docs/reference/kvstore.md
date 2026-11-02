@@ -645,6 +645,9 @@ It finds the existing output(s) for the key and spends them without creating a n
 If multiple outputs exist, they are all spent in the same transaction.
 If the key does not exist, it does nothing.
 If signing the removal transaction fails, it relinquishes the original outputs instead of spending.
+If the wallet reports a positive totalOutputs and returns an empty page, this rejects
+with an error naming that total, page, and key instead of repeating the same request.
+Setting a key and looking one up are unchanged.
 
 ```ts
 async remove(key: string): Promise<string[]>
@@ -659,6 +662,10 @@ Argument Details
 
 + **key**
   + The key to remove.
+
+Throws
+
+If listOutputs returns an empty page while totalOutputs is positive.
 
 #### Method set
 
