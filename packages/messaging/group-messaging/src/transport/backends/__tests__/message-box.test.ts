@@ -1431,6 +1431,42 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * A screen that mounts after the socket settled would otherwise show nothing
+   * until the next transition, which on a healthy connection never comes. The
+   * `@bsv/message-box-client` keeps a last status and replays it for the same
+   * reason; this is that contract carried one layer out.
+   */
+  it('replays the current status to a handler that subscribes late', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual(['subscribed'])
+
+    await transport.close()
+  })
+
+  it('has nothing to replay before the socket has said anything', () => {
+    const client = fakeLiveClient()
+    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    const phases: Array<LiveStatus['phase']> = []
+
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual([])
+  })
+
   it('passes on the reason the client gave, when it gave one', async () => {
     const client = fakeLiveClient()
     const transport = live(client)

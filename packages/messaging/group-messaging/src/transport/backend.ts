@@ -1,6 +1,20 @@
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
 
 /**
+ * What a backend's live connection is doing, for a host that wants to show or
+ * log it.
+ *
+ * Declared here rather than beside the one backend that has a socket today,
+ * because a host writes one status handler and swaps backends underneath it.
+ */
+export interface LiveStatus {
+  phase: 'connecting' | 'subscribed' | 'delivered' | 'reconnecting' | 'closed'
+  /** Which producer carried a delivery. */
+  source?: 'socket' | 'poll'
+  detail?: string
+}
+
+/**
  * The delivery seam: get these bytes to that identity, and tell me when bytes
  * arrive for me.
  *
@@ -25,6 +39,15 @@ export interface TransportBackend {
    * this they have nowhere to go but an unhandled rejection inside a timer.
    */
   onError?(handler: (error: Error) => void): Unsubscribe
+
+  /**
+   * What the backend's live connection is doing, when it has one.
+   *
+   * A backend that implements this replays its current status to a handler
+   * that subscribes late, so a screen mounted after the connection settled
+   * does not wait for a transition that may never come.
+   */
+  onLiveStatus?(handler: (status: LiveStatus) => void): Unsubscribe
 
   start?(): Promise<void>
   close?(): Promise<void>

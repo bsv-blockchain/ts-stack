@@ -1,7 +1,7 @@
 import { DeliveryFailed, GroupMessagingError, isPermanent } from '../../errors.js'
 import { eachInOrder } from '../../inOrder.js'
 import type { IdentityKey, Unsubscribe, WirePayload } from '../../types.js'
-import type { TransportBackend } from '../backend.js'
+import type { LiveStatus, TransportBackend } from '../backend.js'
 import { decodeBody, encodeBody, UnparsableBodyError } from './message-box-body.js'
 
 /**
@@ -78,13 +78,7 @@ export interface ClientLiveStatus {
   reason?: string
 }
 
-/** What the live socket is doing, for a host that wants to show or log it. */
-export interface LiveStatus {
-  phase: 'connecting' | 'subscribed' | 'delivered' | 'reconnecting' | 'closed'
-  /** Which producer carried a delivery. */
-  source?: 'socket' | 'poll'
-  detail?: string
-}
+export type { LiveStatus }
 
 /** Raised when `live` was asked for and the socket could not carry it. */
 export class LiveDeliveryUnavailable extends GroupMessagingError {
@@ -640,6 +634,18 @@ export class MessageBoxTransport implements TransportBackend {
    */
   onLiveStatus(handler: (status: LiveStatus) => void): Unsubscribe {
     this.#liveStatusHandlers.add(handler)
+    // Replayed, because the states worth showing are the ones that persist: a
+    // screen mounted after the socket settled would otherwise show nothing
+    // until a transition that, on a healthy connection, never comes. Delivered
+    // synchronously so the first paint has it; the client this follows keeps
+    // the same contract.
+    if (this.#lastStatus !== undefined) {
+      try {
+        handler(this.#lastStatus)
+      } catch (cause) {
+        this.#report(toError(cause))
+      }
+    }
     return () => {
       this.#liveStatusHandlers.delete(handler)
     }

@@ -2,7 +2,7 @@ import { eachInOrder } from '../inOrder.js'
 import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
-import type { TransportBackend } from './backend.js'
+import type { LiveStatus, TransportBackend } from './backend.js'
 import { InProcessTransportHub } from './backends/in-process.js'
 import {
   MessageBoxTransport,
@@ -128,6 +128,19 @@ export class TransportService {
       return
     }
     for (const handler of this.#errorHandlers) handler(error, from)
+  }
+
+  /**
+   * What the backend's live connection is doing.
+   *
+   * Delegated rather than re-fanned: the backend already keeps its own set of
+   * handlers and already replays the current status on subscribe, and a second
+   * copy of both here would be a second thing to keep true. A backend with no
+   * live delivery has nothing to report, and silence is the honest answer — a
+   * host writes one handler and swaps backends underneath it.
+   */
+  onLiveStatus(handler: (status: LiveStatus) => void): Unsubscribe {
+    return this.backend.onLiveStatus?.(handler) ?? (() => undefined)
   }
 
   /** Called when an inbound handler throws. */
