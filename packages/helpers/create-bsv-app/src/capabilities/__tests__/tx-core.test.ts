@@ -1024,7 +1024,7 @@ describe('tx-core AGENTS section', () => {
   test.each([
     'TransactionBuilder',
     'dataScript',
-    'deriveOwnAddress',
+    'deriveAddress',
     'internalizePayment',
     'internalizeAction',
     'acceptDelayedBroadcast: false',
@@ -1041,6 +1041,18 @@ describe('tx-core AGENTS section', () => {
     '## tx-core'
   ])('mentions %s', term => {
     expect(section).toContain(term)
+  })
+  test('points paid APIs at 402-pay and payments to others at BRC-29 derivation', () => {
+    expect(section).toContain('@bsv/402-pay')
+    expect(section).toContain('createPaymentMiddleware')
+    expect(section).toContain('create402Fetch')
+    expect(section).toContain('browser or Node')
+    expect(section).toContain('deriveAddress(wallet, payerIdentityKey)')
+    expect(section).toContain('internalizePayment(wallet, {')
+    expect(section).toContain('senderIdentityKey: payerIdentityKey')
+    expect(section).not.toContain('counterparty: recipientIdentityKey')
+    expect(section).not.toContain('forSelf')
+    expect(section).not.toContain('take payment for an API call')
   })
   test('does not present the removed helpers as core exports', () => {
     expect(section).not.toContain('sendSatoshis')
@@ -1066,7 +1078,7 @@ describe('tx-core AGENTS section without a client', () => {
       expect(section).not.toContain(term)
   })
   test('keeps the core and helper docs', () => {
-    for (const term of ['transactions.ts', 'txUtils.ts', 'deriveOwnAddress', 'parseTransaction'])
+    for (const term of ['transactions.ts', 'txUtils.ts', 'deriveAddress', 'parseTransaction'])
       expect(section).toContain(term)
     expect(section).not.toMatch(/\n{3,}/)
   })

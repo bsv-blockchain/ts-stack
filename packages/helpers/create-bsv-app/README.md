@@ -77,7 +77,7 @@ Generated starters can include these composable capabilities:
 | `wallet-connect`  | Default baseline: connect a BRC-100 desktop or relay wallet, expose app-wide wallet state, and provide the shared BRC-103 proof primitive. |
 | `wallet-login`    | Passwordless login using a proof bound to the server identity and `action: "login"`.                                                       |
 | `signed-requests` | Per-request authentication using a proof bound to the route and request body.                                                              |
-| `tx-core`         | Default: `TransactionBuilder` and script support, `dataScript`, `deriveOwnAddress`, `internalizePayment`, tx/BEEF parsing, demo page.      |
+| `tx-core`         | Default: `TransactionBuilder` and script support, `dataScript`, `deriveAddress`, `internalizePayment`, tx/BEEF parsing, demo page.         |
 
 New generated projects include `wallet-connect` and `tx-core` by default. Capability dependencies are expanded in new mode, so selecting `wallet-login` or `signed-requests` also installs the wallet baseline.
 

@@ -10,7 +10,7 @@ import { EXPLICIT_ANY } from '../../__tests__/helpers/explicit-any'
 interface Summary {
   outputs: Array<{ data?: string[] }>
 }
-interface OwnAddress {
+interface DerivedAddress {
   address: string
   derivationPrefix: string
   derivationSuffix: string
@@ -29,7 +29,7 @@ const utils = loadGenerated(TX_UTILS_SOURCE) as {
 }
 const m = loadGenerated(TRANSACTIONS_SOURCE) as {
   dataScript: (fields: string[]) => LockingScript
-  deriveOwnAddress: (wallet: unknown) => Promise<OwnAddress>
+  deriveAddress: (wallet: unknown, counterparty?: string) => Promise<DerivedAddress>
   internalizePayment: (wallet: unknown, args: InternalizePaymentArgs) => Promise<void>
 }
 
@@ -100,13 +100,14 @@ function stubWallet(internalize: 'ok' | 'throws' = 'ok') {
   return { wallet, derived, keyRequests, identity, internalized }
 }
 
-describe('deriveOwnAddress', () => {
+describe('deriveAddress', () => {
   test('returns the P2PKH address of the BRC-29 self key and the split derivation', async () => {
     const { wallet, derived, keyRequests } = stubWallet()
-    const own = await m.deriveOwnAddress(wallet)
+    const own = await m.deriveAddress(wallet)
     expect(keyRequests).toHaveLength(1)
     expect(keyRequests[0].protocolID).toEqual([2, '3241645161d8'])
     expect(keyRequests[0].counterparty).toBe('self')
+    expect(keyRequests[0].forSelf).toBe(true)
     const keyID = keyRequests[0].keyID as string
     const [prefix, suffix] = keyID.split(' ')
     expect(prefix).toMatch(/./)
@@ -116,6 +117,47 @@ describe('deriveOwnAddress', () => {
       derivationPrefix: prefix,
       derivationSuffix: suffix
     })
+  })
+})
+
+describe('deriveAddress with a payer as counterparty (invoice)', () => {
+  test('derives with the payer key, forSelf true, and returns that key address', async () => {
+    const { wallet, derived, keyRequests } = stubWallet()
+    const payer = PrivateKey.fromRandom().toPublicKey().toString()
+    const own = await m.deriveAddress(wallet, payer)
+    expect(keyRequests).toHaveLength(1)
+    expect(keyRequests[0].protocolID).toEqual([2, '3241645161d8'])
+    expect(keyRequests[0].counterparty).toBe(payer)
+    expect(keyRequests[0].forSelf).toBe(true)
+    const keyID = keyRequests[0].keyID as string
+    expect(keyID).toBe(`${own.derivationPrefix} ${own.derivationSuffix}`)
+    expect(own.address).toBe(PublicKey.fromString(derived.get(keyID) as string).toAddress())
+  })
+
+  test('the invoice derivation matches what internalizePayment records for the same payer', async () => {
+    const { wallet, keyRequests, internalized } = stubWallet()
+    const payer = PrivateKey.fromRandom().toPublicKey().toString()
+    const own = await m.deriveAddress(wallet, payer)
+    await m.internalizePayment(wallet, {
+      tx: paymentBytes(),
+      outputIndex: 1,
+      derivationPrefix: own.derivationPrefix,
+      derivationSuffix: own.derivationSuffix,
+      senderIdentityKey: payer
+    })
+    const remittance = internalized[0].outputs[0].paymentRemittance
+    expect(remittance?.senderIdentityKey).toBe(keyRequests[0].counterparty)
+    expect(`${remittance?.derivationPrefix} ${remittance?.derivationSuffix}`).toBe(
+      keyRequests[0].keyID
+    )
+    expect(internalized[0].outputs[0].protocol).toBe('wallet payment')
+  })
+
+  test('rejects an invalid counterparty without touching the wallet', async () => {
+    const { wallet, keyRequests, internalized } = stubWallet()
+    await expect(m.deriveAddress(wallet, 'bob')).rejects.toThrow('counterparty must be')
+    expect(keyRequests).toHaveLength(0)
+    expect(internalized).toHaveLength(0)
   })
 })
 
@@ -235,14 +277,14 @@ describe('emitted source', () => {
         'Utils',
         'WalletP2PKH',
         'dataScript',
-        'deriveOwnAddress',
+        'deriveAddress',
         'extractOpReturnData',
         'getScriptType',
         'internalizePayment',
         'isP2PKH'
       ].sort()
     )
-    expect(TRANSACTIONS_SOURCE).toContain('export interface OwnAddress')
+    expect(TRANSACTIONS_SOURCE).toContain('export interface DerivedAddress')
     expect(TRANSACTIONS_SOURCE).toContain('export interface InternalizePaymentArgs')
   })
 

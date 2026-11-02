@@ -221,19 +221,20 @@ export function dataScript (fields: string[]): LockingScript {
   return script
 }
 
-export interface OwnAddress {
+export interface DerivedAddress {
   address: string
   derivationPrefix: string
   derivationSuffix: string
 }
 
 /**
- * A fresh address your wallet can spend (BRC-29 derivation, counterparty 'self', via wallet-helper getAddress).
- * Payments to it only count toward the wallet balance once internalized (see internalizePayment).
- * Mainnet address format.
+ * A fresh address YOUR wallet controls (BRC-29 derivation via wallet-helper getAddress), with its derivation prefix and suffix.
+ * With a payer's identity key as counterparty it is an invoice address for that payer: send them the address, prefix and suffix.
+ * Payments to it count toward your balance once you call internalizePayment with senderIdentityKey set to that same key.
+ * counterparty is 'self' (default), 'anyone' or a compressed public key. Mainnet address format.
  */
-export async function deriveOwnAddress (wallet: WalletInterface): Promise<OwnAddress> {
-  const [{ address, walletParams }] = await getAddress(wallet)
+export async function deriveAddress (wallet: WalletInterface, counterparty: string = 'self'): Promise<DerivedAddress> {
+  const [{ address, walletParams }] = await getAddress(wallet, 1, counterparty)
   // keyID is "<derivationPrefix> <derivationSuffix>".
   const [derivationPrefix, derivationSuffix] = walletParams.keyID.split(' ')
   return { address, derivationPrefix, derivationSuffix }
@@ -278,7 +279,7 @@ import type { Transaction, WalletInterface } from '@bsv/sdk'
 import { ConnectWallet } from './ConnectWallet.js'
 import { BSV_NETWORK } from './config.js'
 import { useWallet } from './WalletContext.js'
-import { P2PKH, TransactionBuilder, dataScript, deriveOwnAddress, internalizePayment } from './transactions.js'
+import { P2PKH, TransactionBuilder, dataScript, deriveAddress, internalizePayment } from './transactions.js'
 import { explorerTxUrl, findOutputByScript, parseTransaction, summarizeTransaction } from './txUtils.js'
 
 type Network = 'main' | 'test' | 'ttn'
@@ -329,7 +330,7 @@ async function sendSats (wallet: WalletInterface, to: string, satoshis: number):
 // recovery has the address and derivation to get the sats back with.
 async function sendToSelf (wallet: WalletInterface, satoshis: number): Promise<{ txid: string, tx?: Transaction, internalized: boolean, recovery?: Recovery }> {
   if (!Number.isSafeInteger(satoshis) || satoshis <= 0) throw new Error('satoshis must be a positive whole number')
-  const { address, derivationPrefix, derivationSuffix } = await deriveOwnAddress(wallet)
+  const { address, derivationPrefix, derivationSuffix } = await deriveAddress(wallet)
   const recovery = { address, derivationPrefix, derivationSuffix }
   // Broadcast now (acceptDelayedBroadcast: false): a wallet can only take the payment back once it has processed the transaction.
   const builder = new TransactionBuilder(wallet, 'Send to self').options({ acceptDelayedBroadcast: false })
@@ -553,7 +554,7 @@ const TX_DEMO_SECTION = `
 Demo (\`TransactionsDemo.tsx\`, client page at \`/transactions\`), three example flows built from the core:
 - \`publishNote(wallet, text)\` — \`dataScript([text])\` as a 0-satoshi \`addCustomOutput\`, \`build\`, then \`findOutputByScript\` to locate the data output; resolves \`{ txid, vout, tx }\`.
 - \`sendSats(wallet, to, satoshis)\` — \`TransactionBuilder.pay\` to a base58 address or 66-hex public key. Plain P2PKH payments to an address or identity key are not detected by BRC-100 wallets unless the recipient internalizes them.
-- \`sendToSelf(wallet, satoshis)\` — \`deriveOwnAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
+- \`sendToSelf(wallet, satoshis)\` — \`deriveAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
 - The page has a confirm step before any send, shows each txid as a WhatsOnChain link (new tab) with a "Try with the tx reader" button, and reads a pasted transaction.`
 
 const CUSTOM_SPEND = `- Spend your own script outputs with \`TransactionBuilder.addCustomInput\`; carry the source output's BEEF with \`carryOutput\`.`
@@ -579,7 +580,7 @@ Build, send and read BSV transactions. Wraps \`@bsv/wallet-helper\`'s \`Transact
 Core (\`transactions.ts\`):
 - \`TransactionBuilder\`, \`WalletP2PKH\`, \`getScriptType\`, \`isP2PKH\`, \`extractOpReturnData\` (from \`@bsv/wallet-helper\`) and \`Script\`, \`LockingScript\`, \`UnlockingScript\`, \`OP\`, \`P2PKH\`, \`Transaction\`, \`Beef\`, \`Utils\` (from \`@bsv/sdk\`), re-exported so one import covers building and sending.
 - \`dataScript(fields)\` — an OP_FALSE OP_RETURN script carrying UTF-8 fields, for a 0-satoshi data output.
-- \`deriveOwnAddress(wallet)\` — a fresh BRC-29 address of your own wallet (counterparty \`self\`, via wallet-helper \`getAddress\`), with its derivation prefix and suffix. The address is mainnet-format; convert it for a test network. Payments to it only count toward your balance once internalized.
+- \`deriveAddress(wallet, counterparty?)\` — a fresh BRC-29 address your own wallet controls (via wallet-helper \`getAddress\`), with its derivation prefix and suffix. \`counterparty\` defaults to \`self\`; pass a payer's identity key for an invoice address (see below). The address is mainnet-format; convert it for a test network. Payments to it only count toward your balance once internalized.
 - \`internalizePayment(wallet, { tx, outputIndex, derivationPrefix, derivationSuffix })\` — \`internalizeAction\` with protocol \`wallet payment\`, so the wallet adds the output to its balance. The sender defaults to your own identity key.
 
 Helpers (\`txUtils.ts\`):
@@ -602,7 +603,8 @@ Helpers (\`txUtils.ts\`):
 ${sectionLines(CUSTOM_SPEND, demo && PHONE_WALLET_ABORT)}
 
 ### Future integrations
-- Payments: take payment for an API call or a purchase with \`TransactionBuilder.pay\` and inspect the transaction with \`parseTransaction\`. Verifying a payment (SPV \`tx.verify\`) is a separate step the payments capability will own.
+- Paid API calls: use \`@bsv/402-pay\` (BRC-121 Simple 402 Payments), with \`createPaymentMiddleware\` from \`@bsv/402-pay/server\` on the server and \`create402Fetch\` from \`@bsv/402-pay/client\` in the client (browser or Node). Don't hand-build these payments.
+- Receiving a payment from someone (an invoice): \`deriveAddress(wallet, payerIdentityKey)\` gives an address you control plus \`derivationPrefix\` / \`derivationSuffix\`; send those to the payer. The payer pays the address with \`TransactionBuilder\` (\`acceptDelayedBroadcast: false\`) and sends back the AtomicBEEF. You then call \`internalizePayment(wallet, { tx, outputIndex, derivationPrefix, derivationSuffix, senderIdentityKey: payerIdentityKey })\`. Plain payments to an address you never internalize don't count toward the balance. Verifying a payment (SPV \`tx.verify\`) is a separate step.
 - Tokens: build token outputs with \`TransactionBuilder\` custom outputs and track them with \`listAllOutputs\`.
 `
 }
