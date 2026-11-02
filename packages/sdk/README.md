@@ -1121,8 +1121,8 @@ performance improvement.
 including `WERR_REVIEW_ACTIONS`. When a wallet answers HTTP 400 with a JSON
 object that has no `isError` property and a string `message` of at most 4096
 UTF-8 bytes, the thrown `Error` includes that message and `HTTP status 400`.
-A non-empty string `name` and `code` of at most 128 characters are copied onto
-the error, so `error.name === 'WERR_INSUFFICIENT_FUNDS'`
+A string `name` and `code` of at most 128 characters are copied onto the
+error, so `error.name === 'WERR_INSUFFICIENT_FUNDS'`
 matches the BSV Desktop body. Blank, non-string, or oversized messages stay on
 the generic status error. Other HTTP statuses do not copy the response body.
 No BRC-100 call or storage-schema migration is required.

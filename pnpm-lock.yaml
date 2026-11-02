@@ -15,6 +15,8 @@ overrides:
   metro-file-map@0.87.1>micromatch: '-'
   puppeteer-core@25.11.0>chromium-bidi: '-'
   zod@>=4.0.0 <4.6.6: 4.6.7
+  follow-redirects@1.16.1: 1.16.2
+  joi@18.2.9: 18.3.1
 
 packageExtensionsChecksum: sha256-j1ipTIriuh1r8NrHzy5rLoGNr081FjMxVoEY/IdY3mE=
 
@@ -873,8 +875,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       joi:
-        specifier: ^18.2.9
-        version: 18.2.9
+        specifier: 18.3.1
+        version: 18.3.1
     devDependencies:
       '@bsv/sdk':
         specifier: workspace:^
@@ -6441,8 +6443,8 @@ packages:
     resolution: {integrity: sha512-vEZcHIlnKeN8JSVtYFczj8sWJfHIJOkz+YG00O/oul/Bete+t1ZhTi+O6JRRLFYvGW+yJkZ0YgL16iStnbkUqQ==}
     engines: {node: '>=0.4.0'}
 
-  follow-redirects@1.16.1:
-    resolution: {integrity: sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg==}
+  follow-redirects@1.16.2:
+    resolution: {integrity: sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow==}
     engines: {node: '>=4.0'}
     peerDependencies:
       debug: '*'
@@ -7087,8 +7089,8 @@ packages:
       node-notifier:
         optional: true
 
-  joi@18.2.9:
-    resolution: {integrity: sha512-2mD929bUVKUhOLQQEVhlf6EZ0Mlo0DeRb5MO7cViR9AXLtBauuccEtB1py9Ocxpo/P7ucnh442iY/iOwrh3IQw==}
+  joi@18.3.1:
+    resolution: {integrity: sha512-mV9M4Llh4va3NT90p7KBtQhoZqjs8xLX7EWYE4y/GG3yLF6REbIBEHSUb0UX1JXRht2w5tiLSsvmpYc5akiqIw==}
     engines: {node: '>= 20'}
 
   js-md4@0.3.2:
@@ -14048,7 +14050,7 @@ snapshots:
     dependencies:
       flow-estree: 0.331.0
 
-  follow-redirects@1.16.1(debug@4.4.3):
+  follow-redirects@1.16.2(debug@4.4.3):
     optionalDependencies:
       debug: 4.4.3
 
@@ -14960,7 +14962,7 @@ snapshots:
       - supports-color
       - ts-node
 
-  joi@18.2.9:
+  joi@18.3.1:
     dependencies:
       '@hapi/address': 5.1.1
       '@hapi/formula': 3.0.2
@@ -15940,7 +15942,7 @@ snapshots:
       camelcase: 6.3.0
       debug: 4.4.3
       find-cache-dir: 3.3.2
-      follow-redirects: 1.16.1(debug@4.4.3)
+      follow-redirects: 1.16.2(debug@4.4.3)
       https-proxy-agent: 7.0.6
       mongodb: 7.6.0
       new-find-package-json: 2.0.0

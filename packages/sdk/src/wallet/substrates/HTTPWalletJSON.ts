@@ -373,11 +373,7 @@ function throwPlainHttpWalletStatus(
     const error = new Error(`${text}: ${message}`) as Error & { code?: string }
     for (const key of ['name', 'code'] as const) {
       const value = data[key]
-      if (
-        typeof value === 'string' &&
-        value &&
-        value.length <= MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH
-      ) {
+      if (typeof value === 'string' && value.length <= MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH) {
         error[key] = value
       }
     }
@@ -455,6 +451,7 @@ export default class HTTPWalletJSON implements WalletInterface {
         if (res.status === 400 && Object.prototype.hasOwnProperty.call(data, 'isError')) {
           const walletError = deserializeWalletError(data, call, bindingRequest)
           if (walletError !== undefined) throw walletError
+          data.message = 0
         }
         throwPlainHttpWalletStatus(data, call, res.status)
       }

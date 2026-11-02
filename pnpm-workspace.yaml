@@ -63,6 +63,12 @@ overrides:
   # Stryker's protocol permits older Zod 4 releases. Enforce the compatible
   # patched floor without refreshing unrelated mutation-tooling dependencies.
   'zod@>=4.0.0 <4.6.6': 4.6.7
+  # mongodb-memory-server-core 11.2.0 allows follow-redirects ^1.16.0. The lock
+  # selected 1.16.1, affected by GHSA-mrwp-f3q8-3g9p. 1.16.2 is the patch.
+  follow-redirects@1.16.1: 1.16.2
+  # @bsv/paymail allows joi ^18.2.9. 18.2.9 is affected by GHSA-4528-x5fx-h6hg.
+  # 18.3.1 stays inside that range and fixes the email-split denial of service.
+  joi@18.2.9: 18.3.1
 strictDepBuilds: true
 trustPolicy: no-downgrade
 # Apply provenance downgrade checks to the recent supply-chain window. Older
