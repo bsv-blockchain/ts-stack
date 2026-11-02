@@ -1024,7 +1024,7 @@ describe('tx-core AGENTS section', () => {
   test.each([
     'TransactionBuilder',
     'dataScript',
-    'deriveAddress',
+    'getAddress',
     'internalizePayment',
     'internalizeAction',
     'acceptDelayedBroadcast: false',
@@ -1047,9 +1047,10 @@ describe('tx-core AGENTS section', () => {
     expect(section).toContain('createPaymentMiddleware')
     expect(section).toContain('create402Fetch')
     expect(section).toContain('browser or Node')
-    expect(section).toContain('deriveAddress(wallet, payerIdentityKey)')
+    expect(section).toContain('getAddress(wallet, 1, payerIdentityKey)')
     expect(section).toContain('internalizePayment(wallet, {')
     expect(section).toContain('senderIdentityKey: payerIdentityKey')
+    expect(section).not.toContain(['derive', 'Address'].join(''))
     expect(section).not.toContain('counterparty: recipientIdentityKey')
     expect(section).not.toContain('forSelf')
     expect(section).not.toContain('take payment for an API call')
@@ -1078,7 +1079,7 @@ describe('tx-core AGENTS section without a client', () => {
       expect(section).not.toContain(term)
   })
   test('keeps the core and helper docs', () => {
-    for (const term of ['transactions.ts', 'txUtils.ts', 'deriveAddress', 'parseTransaction'])
+    for (const term of ['transactions.ts', 'txUtils.ts', 'getAddress', 'parseTransaction'])
       expect(section).toContain(term)
     expect(section).not.toMatch(/\n{3,}/)
   })

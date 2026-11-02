@@ -1,6 +1,7 @@
 import { describe, expect, test } from '@jest/globals'
 import { LockingScript, P2PKH, PrivateKey, PublicKey, Transaction, Validation } from '@bsv/sdk'
 import type { InternalizeActionArgs } from '@bsv/sdk'
+import { InputBuilder, OutputBuilder, TransactionBuilder } from '@bsv/wallet-helper'
 import { TRANSACTIONS_SOURCE, TX_UTILS_SOURCE } from '../tx-core'
 import { loadGenerated } from '../../__tests__/helpers/generated-module'
 import { EXPLICIT_ANY } from '../../__tests__/helpers/explicit-any'
@@ -10,10 +11,9 @@ import { EXPLICIT_ANY } from '../../__tests__/helpers/explicit-any'
 interface Summary {
   outputs: Array<{ data?: string[] }>
 }
-interface DerivedAddress {
+interface AddressWithParams {
   address: string
-  derivationPrefix: string
-  derivationSuffix: string
+  walletParams: { protocolID: [number, string]; keyID: string; counterparty: string }
 }
 interface InternalizePaymentArgs {
   tx: number[]
@@ -29,7 +29,11 @@ const utils = loadGenerated(TX_UTILS_SOURCE) as {
 }
 const m = loadGenerated(TRANSACTIONS_SOURCE) as {
   dataScript: (fields: string[]) => LockingScript
-  deriveAddress: (wallet: unknown, counterparty?: string) => Promise<DerivedAddress>
+  getAddress: (
+    wallet: unknown,
+    amount?: number,
+    counterparty?: string
+  ) => Promise<AddressWithParams[]>
   internalizePayment: (wallet: unknown, args: InternalizePaymentArgs) => Promise<void>
 }
 
@@ -100,49 +104,34 @@ function stubWallet(internalize: 'ok' | 'throws' = 'ok') {
   return { wallet, derived, keyRequests, identity, internalized }
 }
 
-describe('deriveAddress', () => {
-  test('returns the P2PKH address of the BRC-29 self key and the split derivation', async () => {
+describe('getAddress (re-exported, documented usage)', () => {
+  test('a self address: BRC-29 key, split keyID gives the prefix and suffix', async () => {
     const { wallet, derived, keyRequests } = stubWallet()
-    const own = await m.deriveAddress(wallet)
+    const [{ address, walletParams }] = await m.getAddress(wallet)
     expect(keyRequests).toHaveLength(1)
     expect(keyRequests[0].protocolID).toEqual([2, '3241645161d8'])
     expect(keyRequests[0].counterparty).toBe('self')
     expect(keyRequests[0].forSelf).toBe(true)
-    const keyID = keyRequests[0].keyID as string
-    const [prefix, suffix] = keyID.split(' ')
+    const [prefix, suffix] = walletParams.keyID.split(' ')
     expect(prefix).toMatch(/./)
     expect(suffix).toMatch(/./)
-    expect(own).toEqual({
-      address: PublicKey.fromString(derived.get(keyID) as string).toAddress(),
-      derivationPrefix: prefix,
-      derivationSuffix: suffix
-    })
-  })
-})
-
-describe('deriveAddress with a payer as counterparty (invoice)', () => {
-  test('derives with the payer key, forSelf true, and returns that key address', async () => {
-    const { wallet, derived, keyRequests } = stubWallet()
-    const payer = PrivateKey.fromRandom().toPublicKey().toString()
-    const own = await m.deriveAddress(wallet, payer)
-    expect(keyRequests).toHaveLength(1)
-    expect(keyRequests[0].protocolID).toEqual([2, '3241645161d8'])
-    expect(keyRequests[0].counterparty).toBe(payer)
-    expect(keyRequests[0].forSelf).toBe(true)
-    const keyID = keyRequests[0].keyID as string
-    expect(keyID).toBe(`${own.derivationPrefix} ${own.derivationSuffix}`)
-    expect(own.address).toBe(PublicKey.fromString(derived.get(keyID) as string).toAddress())
+    expect(address).toBe(
+      PublicKey.fromString(derived.get(walletParams.keyID) as string).toAddress()
+    )
   })
 
-  test('the invoice derivation matches what internalizePayment records for the same payer', async () => {
+  test('an invoice address: payer key as counterparty matches what internalizePayment records', async () => {
     const { wallet, keyRequests, internalized } = stubWallet()
     const payer = PrivateKey.fromRandom().toPublicKey().toString()
-    const own = await m.deriveAddress(wallet, payer)
+    const [{ walletParams }] = await m.getAddress(wallet, 1, payer)
+    expect(keyRequests[0].counterparty).toBe(payer)
+    expect(keyRequests[0].forSelf).toBe(true)
+    const [derivationPrefix, derivationSuffix] = walletParams.keyID.split(' ')
     await m.internalizePayment(wallet, {
       tx: paymentBytes(),
       outputIndex: 1,
-      derivationPrefix: own.derivationPrefix,
-      derivationSuffix: own.derivationSuffix,
+      derivationPrefix,
+      derivationSuffix,
       senderIdentityKey: payer
     })
     const remittance = internalized[0].outputs[0].paymentRemittance
@@ -154,10 +143,9 @@ describe('deriveAddress with a payer as counterparty (invoice)', () => {
   })
 
   test('rejects an invalid counterparty without touching the wallet', async () => {
-    const { wallet, keyRequests, internalized } = stubWallet()
-    await expect(m.deriveAddress(wallet, 'bob')).rejects.toThrow('counterparty must be')
+    const { wallet, keyRequests } = stubWallet()
+    await expect(m.getAddress(wallet, 1, 'bob')).rejects.toThrow('counterparty must be')
     expect(keyRequests).toHaveLength(0)
-    expect(internalized).toHaveLength(0)
   })
 })
 
@@ -277,15 +265,45 @@ describe('emitted source', () => {
         'Utils',
         'WalletP2PKH',
         'dataScript',
-        'deriveAddress',
+        'getAddress',
         'extractOpReturnData',
         'getScriptType',
         'internalizePayment',
         'isP2PKH'
       ].sort()
     )
-    expect(TRANSACTIONS_SOURCE).toContain('export interface DerivedAddress')
+    for (const removed of [
+      ['derive', 'Address'],
+      ['Derived', 'Address']
+    ])
+      expect(TRANSACTIONS_SOURCE).not.toContain(removed.join(''))
     expect(TRANSACTIONS_SOURCE).toContain('export interface InternalizePaymentArgs')
+  })
+
+  test('the documented builder methods exist on the real classes', () => {
+    const doc = TRANSACTIONS_SOURCE.split(/\r?\n/)
+      .filter(l => l.startsWith('//'))
+      .join(' ')
+    const names = new Set((doc.match(/\.[A-Za-z0-9]+\(/g) ?? []).map(x => x.slice(1, -1)))
+    const builders = [TransactionBuilder.prototype, OutputBuilder.prototype, InputBuilder.prototype]
+    const known = new Set(['split'])
+    const missing = [...names].filter(
+      n =>
+        !known.has(n) &&
+        !builders.some(b => typeof (b as unknown as Record<string, unknown>)[n] === 'function')
+    )
+    expect(missing).toEqual([])
+    for (const n of [
+      'pay',
+      'addP2PKHOutput',
+      'addCustomOutput',
+      'addOpReturn',
+      'basket',
+      'options',
+      'build',
+      'addCustomInput'
+    ])
+      expect(names.has(n)).toBe(true)
   })
 
   test('avoids completeBoundAction, outputs[0] and explicit any', () => {
