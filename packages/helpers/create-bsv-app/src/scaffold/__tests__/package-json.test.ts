@@ -135,6 +135,8 @@ test('reports an unparseable devDependency as left/devDependency', () => {
 test('a devDependency at or above the required floor is not reported', () => {
   writePkg(dir, { devDependencies: { '@bsv/sdk': '^5.0.0' } })
   expect(mergePackageJsonDeps(dir, { '@bsv/sdk': '^4.0.1' })).toEqual([])
+  writePkg(dir, { devDependencies: { '@bsv/sdk': '^4.0.1' } })
+  expect(mergePackageJsonDeps(dir, { '@bsv/sdk': '^4.0.1' })).toEqual([])
 })
 
 test('creates a minimal package.json when none exists', () => {

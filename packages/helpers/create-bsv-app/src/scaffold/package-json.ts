@@ -58,6 +58,18 @@ function dependencyChange(
   return { name, from, to, action: 'raised' }
 }
 
+/** A `devDependencies` entry is never edited; report it when it is unparseable or below `to`. */
+function devDependencyChange(
+  name: string,
+  from: string,
+  to: string,
+  wanted: [number, number, number]
+): Omit<DependencyChange, 'target'> | undefined {
+  const found = rangeFloor(from)
+  if (found !== undefined && compareFloors(wanted, found) <= 0) return undefined
+  return { name, from, to, action: 'left', reason: 'devDependency' }
+}
+
 /**
  * Adds missing names to `dependencies` and raises lower floors there, across a major only for
  * owned packages. Never edits `devDependencies`. Returns what was raised or could not be raised.
@@ -87,11 +99,8 @@ export function mergePackageJsonDeps(
       if (change?.action === 'raised') dependencies[name] = to
       if (change !== undefined) changes.push(change)
     } else if (devDependencies[name] !== undefined) {
-      const from = devDependencies[name]
-      const found = rangeFloor(from)
-      if (found === undefined || compareFloors(wanted, found) > 0) {
-        changes.push({ name, from, to, action: 'left', reason: 'devDependency' })
-      }
+      const change = devDependencyChange(name, devDependencies[name], to, wanted)
+      if (change !== undefined) changes.push(change)
     } else {
       dependencies[name] = to
     }
