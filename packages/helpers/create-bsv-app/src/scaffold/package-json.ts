@@ -70,6 +70,30 @@ function devDependencyChange(
   return { name, from, to, action: 'left', reason: 'devDependency' }
 }
 
+/** Merges one capability range into `dependencies` in place; returns what to report, if anything. */
+function mergeDependency(
+  name: string,
+  to: string,
+  dependencies: Record<string, string>,
+  devDependencies: Record<string, string>
+): Omit<DependencyChange, 'target'> | undefined {
+  const wanted = rangeFloor(to)
+  // Capability ranges are constants in this package, so a bad one is our bug, not the project's.
+  if (wanted === undefined) {
+    throw new Error(`capability range for ${name} is not a plain version floor: ${to}`)
+  }
+  if (dependencies[name] !== undefined) {
+    const change = dependencyChange(name, dependencies[name], to, wanted)
+    if (change?.action === 'raised') dependencies[name] = to
+    return change
+  }
+  if (devDependencies[name] !== undefined) {
+    return devDependencyChange(name, devDependencies[name], to, wanted)
+  }
+  dependencies[name] = to
+  return undefined
+}
+
 /**
  * Adds missing names to `dependencies` and raises lower floors there, across a major only for
  * owned packages. Never edits `devDependencies`. Returns what was raised or could not be raised.
@@ -88,22 +112,8 @@ export function mergePackageJsonDeps(
     (pkg.devDependencies as Record<string, string>) ?? {}
   const changes: Omit<DependencyChange, 'target'>[] = []
   for (const name of names) {
-    const to = deps[name]
-    const wanted = rangeFloor(to)
-    // Capability ranges are constants in this package, so a bad one is our bug, not the project's.
-    if (wanted === undefined) {
-      throw new Error(`capability range for ${name} is not a plain version floor: ${to}`)
-    }
-    if (dependencies[name] !== undefined) {
-      const change = dependencyChange(name, dependencies[name], to, wanted)
-      if (change?.action === 'raised') dependencies[name] = to
-      if (change !== undefined) changes.push(change)
-    } else if (devDependencies[name] !== undefined) {
-      const change = devDependencyChange(name, devDependencies[name], to, wanted)
-      if (change !== undefined) changes.push(change)
-    } else {
-      dependencies[name] = to
-    }
+    const change = mergeDependency(name, deps[name], dependencies, devDependencies)
+    if (change !== undefined) changes.push(change)
   }
   pkg.dependencies = dependencies
   mkdirSync(dirname(file), { recursive: true })
