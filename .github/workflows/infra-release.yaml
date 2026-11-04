@@ -23,6 +23,12 @@ on:
     tags:
       - 'infra/v*'
   workflow_dispatch:
+    inputs:
+      release-exception-id:
+        description: Temporary exact-source mutation exception; empty requires full qualification
+        required: false
+        default: ''
+        type: string
   workflow_call:
     inputs:
       source-sha:
@@ -144,6 +150,14 @@ jobs:
             echo "::error::Infrastructure release tags must point to a commit reachable from main."
             exit 1
           fi
+          if [[ -n "$EXCEPTION_ID" ]]; then
+            if [[ "$EVENT_NAME" != "workflow_dispatch" || "$GITHUB_WORKFLOW_REF" != "$GITHUB_REPOSITORY/.github/workflows/infra-release.yaml@refs/heads/main" ]]; then
+              echo "::error::The standalone exception requires this workflow's manual main dispatch."
+              exit 1
+            fi
+            node scripts/release-source-admission.mjs "$EXCEPTION_ID" "$GITHUB_SHA"
+            echo "admission-kind=operator-waiver" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Log in to GHCR (for manifest probes)
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -208,7 +222,7 @@ jobs:
   full-mutation:
     name: Qualify exact source before publication
     needs: discover
-    if: needs.discover.outputs.count != '0' && needs.discover.outputs.called == 'false'
+    if: needs.discover.outputs.count != '0' && needs.discover.outputs.called == 'false' && needs.discover.outputs.admission-kind != 'operator-waiver'
     permissions:
       contents: read
     uses: ./.github/workflows/mutation-tests.yml
@@ -234,7 +248,7 @@ jobs:
           CAMPAIGN_RESULT: ${{ needs.full-mutation.result }}
           CAMPAIGN_QUALIFIED: ${{ needs.full-mutation.outputs.qualified-sha }}
         run: |
-          if [[ "$CALLED" == "true" ]]; then
+          if [[ "$CALLED" == "true" || "$CALLER_ADMISSION" == "operator-waiver" ]]; then
             admitted="$CALLER_ADMITTED"
             kind="$CALLER_ADMISSION"
           elif [[ "$CAMPAIGN_RESULT" == "success" ]]; then

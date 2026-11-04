@@ -428,3 +428,26 @@ Remove the temporary admission after publication and published-baseline
 reconciliation; retain the retired record as evidence. The exception is not
 permission for future application changes or production promotion. Staging
 requires its normal fresh availability gates and native validation.
+
+### Same-wave UHRP image security continuation
+
+The initial wave published all four npm candidates and five images. Both UHRP
+image scans rejected follow-redirects1.16.1 for CVE-2026-116689. Regenerating only
+those two standalone locks with npm selects1.16.2; the exact version, resolved
+URL and integrity fields change, with no manifest, first-party runtime or other
+dependency change. Neither failed image version was published, so Cloud Bucket
+0.2.59 and Basic0.1.54 retain their intended unused tags. Existing tags are never
+overwritten. The vendor release is
+https://github.com/follow-redirects/follow-redirects/releases/tag/v1.16.2.
+
+The same operator-authorized mutation-only exception is now pinned to corrected
+base `e46978bb263073f8e1a3b71809725b2c7704d3a8`, including the generated
+version-sync child. A manual main `infra-release.yaml` dispatch may specify the
+exact exception identity; discovery independently validates it before skipping
+mutation. Empty exception input retains normal full qualification. All scans,
+runtime contracts, licenses, signatures, SBOMs and provenance remain required.
+
+The original four package bytes and five successful image sources remain
+unchanged. Keep both failed scans and the earlier attestation-verifier failure;
+no mutation or security pass is inferred from a retry. Retire all temporary
+admission controls and this record after the exact continuation is reconciled.

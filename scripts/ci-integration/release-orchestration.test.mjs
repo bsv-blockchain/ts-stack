@@ -220,3 +220,53 @@ test('release admission keeps a waived campaign distinct and requires the exact 
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('standalone image continuation requires validated discovery and cannot invent qualification', async () => {
+  const infra = await workflow('infra-release.yaml')
+  assert.equal(infra.on.workflow_dispatch.inputs['release-exception-id'].default, '')
+  assert.match(infra.jobs['full-mutation'].if, /admission-kind != 'operator-waiver'/)
+  const source = infra.jobs.discover.steps.find(step => step.id === 'source')
+  assert.match(source.run, /standalone exception requires this workflow's manual main dispatch/)
+  assert.match(source.run, /infra-release\.yaml@refs\/heads\/main/)
+  const job = infra.jobs.qualification
+  const script = job.steps[0].run
+  const root = mkdtempSync(join(tmpdir(), 'image-admission-'))
+  try {
+    const sha = 'a'.repeat(40)
+    const run = overrides => {
+      const output = join(root, 'output')
+      writeFileSync(output, '')
+      const result = spawnSync('/bin/bash', ['-e', '-c', script], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH,
+          GITHUB_SHA: sha,
+          GITHUB_OUTPUT: output,
+          CALLED: 'false',
+          CALLER_ADMITTED: sha,
+          CALLER_ADMISSION: 'operator-waiver',
+          CAMPAIGN_RESULT: 'skipped',
+          CAMPAIGN_QUALIFIED: '',
+          ...overrides
+        }
+      })
+      return { status: result.status, output: readFileSync(output, 'utf8') }
+    }
+    const valid = run({})
+    assert.equal(valid.status, 0)
+    assert.match(valid.output, /admission-kind=operator-waiver/)
+    assert.doesNotMatch(valid.output, /qualified-sha=/)
+    assert.equal(run({ CALLER_ADMITTED: 'b'.repeat(40) }).status, 1)
+    assert.equal(run({ CALLER_ADMISSION: '' }).status, 1)
+    assert.equal(run({ CALLER_ADMISSION: '', CAMPAIGN_RESULT: 'failure' }).status, 1)
+    const normal = run({
+      CALLER_ADMISSION: '',
+      CAMPAIGN_RESULT: 'success',
+      CAMPAIGN_QUALIFIED: sha
+    })
+    assert.equal(normal.status, 0)
+    assert.match(normal.output, /admission-kind=full-mutation/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
