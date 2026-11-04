@@ -6,9 +6,10 @@ import { readConfigFile } from './config/file.js'
 import { draftToConfigInput, resolveDraft, seedDraft, type ConfigDraft } from './config/draft.js'
 import type { RunCommand } from './scaffold/base-scaffolder.js'
 import type { ConfigProvider } from './prompts.js'
-import { applyConfig, type RunResult } from './pipeline.js'
+import { applyConfig, formatDependencyChanges, type RunResult } from './pipeline.js'
 import {
   ConfigError,
+  formatConfigError,
   requestedCapabilityIds,
   resolveBsvDir,
   resolveConfig,
@@ -275,4 +276,55 @@ export async function run(
   const config = await resolveCliConfig(args, initialTargetDir, provider)
   const targetDir = args.dir ?? config.dir
   return applyConfig(config, targetDir, { runCommand: deps?.runCommand, force: args.force })
+}
+
+/** Where main() prints, and the run it calls; tests replace them. */
+export interface MainIo {
+  log: (line: string) => void
+  error: (line: string) => void
+  run: typeof run
+}
+
+/** The whole CLI: runs `argv`, prints the summary, and resolves to the process exit code. */
+export async function main(
+  argv: string[],
+  provider?: ConfigProvider,
+  io: MainIo = { log: console.log, error: console.error, run }
+): Promise<number> {
+  const { log } = io
+  if (argv.includes('--help') || argv.includes('-h')) {
+    log(CLI_HELP)
+    return 0
+  }
+  try {
+    const res = await io.run(argv, provider)
+    const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
+    log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
+    for (const line of summaryNotice(argv, res)) log(line)
+    if (res.dependencyChanges.length > 0) {
+      log('\nDependency ranges:')
+      for (const line of formatDependencyChanges(res.dependencyChanges)) log(`  ${line}`)
+    }
+    if (res.installed === false) {
+      log(
+        '\nDependencies were not installed. Run your package manager install command before starting.'
+      )
+    } else if (res.installed === true) {
+      log('\nDependencies installed.')
+    }
+    if (getStarter(res.starter ?? '')?.kind === 'repository') {
+      log(
+        `\nNext:\n  cd ${res.targetDir}\n  Follow the starter README for its development commands.`
+      )
+    } else {
+      log(`\nNext:\n  cd ${res.targetDir}\n  ${res.packageManager ?? 'npm'} run dev`)
+    }
+    log(
+      '\nSee the generated README/AGENTS.md when present and bsv-scaffold.json for exact provenance.'
+    )
+    return 0
+  } catch (err) {
+    io.error(formatConfigError(err))
+    return 1
+  }
 }

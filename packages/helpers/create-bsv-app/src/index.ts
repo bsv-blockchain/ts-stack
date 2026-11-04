@@ -1,43 +1,8 @@
 #!/usr/bin/env node
-import { CLI_HELP, run, summaryNotice } from './cli.js'
-import { formatDependencyChanges } from './pipeline.js'
+import { main } from './cli.js'
 import { interactiveConfigPrompt } from './prompts.js'
-import { formatConfigError } from './config/validate.js'
-import { getStarter } from './starters.js'
 
-const argv = process.argv.slice(2)
-if (argv.includes('--help') || argv.includes('-h')) {
-  console.log(CLI_HELP)
-  process.exit(0)
-}
-
-try {
-  const res = await run(argv, interactiveConfigPrompt)
-  const verb = res.skipped.length === 0 && res.written.length > 0 ? 'Scaffolded' : 'Updated'
-  console.log(`\n${verb} ${res.targetDir} (${res.written.length} file(s) written).`)
-  for (const line of summaryNotice(argv, res)) console.log(line)
-  if (res.dependencyChanges.length > 0) {
-    console.log('\nDependency ranges:')
-    for (const line of formatDependencyChanges(res.dependencyChanges)) console.log(`  ${line}`)
-  }
-  if (res.installed === false) {
-    console.log(
-      '\nDependencies were not installed. Run your package manager install command before starting.'
-    )
-  } else if (res.installed === true) {
-    console.log('\nDependencies installed.')
-  }
-  if (getStarter(res.starter ?? '')?.kind === 'repository') {
-    console.log(
-      `\nNext:\n  cd ${res.targetDir}\n  Follow the starter README for its development commands.`
-    )
-  } else {
-    console.log(`\nNext:\n  cd ${res.targetDir}\n  ${res.packageManager ?? 'npm'} run dev`)
-  }
-  console.log(
-    '\nSee the generated README/AGENTS.md when present and bsv-scaffold.json for exact provenance.'
-  )
-} catch (err) {
-  console.error(formatConfigError(err))
-  process.exit(1)
-}
+// Everything else lives in main() so it can be tested; this only wires in the process.
+void main(process.argv.slice(2), interactiveConfigPrompt).then(code => {
+  process.exitCode = code
+})
