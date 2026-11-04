@@ -1446,7 +1446,9 @@ export function buildMutationTargets(repositoryRoot) {
     'output-lookup-index': lookupProviderTarget(
       'lookup-sqlite-index.test.ts',
       ['SQLiteLookupIndex', 'SQLiteLookupIndexStore'],
-      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch']
+      ['lookup-sqlite-index', 'lookup-retention', 'lookup-process', 'lookup-batch'],
+      [],
+      { maxTestRunnerReuse: 8 }
     ),
     'output-lookup-index-records': lookupProviderTarget(
       'lookup-retention.test.ts',
@@ -1523,7 +1525,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/live-lookup-indexeddb.test.ts',
           '<rootDir>/test/live-lookup-http.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'output-knowledge-live-boundaries': {

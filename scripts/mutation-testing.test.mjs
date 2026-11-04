@@ -304,7 +304,9 @@ test('live lookup mutation campaigns preserve complete source and test coverage'
       'src/sources/LookupSourceWork.ts'
     ].sort()
   )
-  assert.deepEqual(orchestration.runnerOptions, boundaries.runnerOptions)
+  const { maxTestRunnerReuse, ...orchestrationOptions } = orchestration.runnerOptions
+  assert.equal(maxTestRunnerReuse, 8)
+  assert.deepEqual(orchestrationOptions, boundaries.runnerOptions)
   const selected = selectAffectedMutationTargets(configured, [
     'packages/application/output-knowledge/test/live-lookup-http.test.ts'
   ])
@@ -733,10 +735,14 @@ test('acquisition foundations retain five complete modules and native recovery/f
 
 test('proposal and lookup bounded recycling changes only the selected runner entries', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
-  for (const id of ['proposal-journal-send', 'overlay-proposal-http', 'output-lookup-sessions'])
+  for (const id of [
+    'proposal-journal-send',
+    'overlay-proposal-http',
+    'output-lookup-sessions',
+    'output-lookup-index'
+  ])
     assert.equal(targets[id].runnerOptions.maxTestRunnerReuse, 8)
   for (const id of [
-    'output-lookup-index',
     'output-lookup-index-records',
     'output-lookup-session-records',
     'output-lookup-session-payloads'
