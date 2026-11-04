@@ -129,7 +129,10 @@ it('checks actual received bytes before new intake and retains the same bound fo
         ' '.repeat(manifest.services[0].profiles[0].maxRequestBytes) + f.statusText,
         who
       )
-    ).rejects.toMatchObject({ code: 'limited' })
+    ).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Root request exceeds the selected received-byte limit'
+    })
   } finally {
     await f.cleanup()
   }
@@ -274,7 +277,11 @@ it('holds cancelled signer capacity until physical settlement, preserving retain
       code: 'cancelled',
       message: 'Root request cancelled'
     })
-    await expect(service.status(f.statusText, f.caller)).rejects.toMatchObject({ code: 'limited' })
+    await expect(service.status(f.statusText, f.caller)).rejects.toMatchObject({
+      code: 'limited',
+      message: 'Root physical work capacity is full',
+      retryable: true
+    })
     expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
     physical.resolve()
     for (let step = 0; step < 20; step++) await Promise.resolve()
@@ -360,7 +367,9 @@ it('validates durable installation, capacity, trusted clock policy and caller sh
           ...f.options,
           journal: { ...f.store, durability: 'volatile' } as never
         })
-    ).toThrow('must be durable')
+    ).toThrow(
+      expect.objectContaining({ code: 'unsupported', message: 'Root journal must be durable' })
+    )
     await expect(
       f.service().status(f.statusText, { ...f.caller, principal: 'bad' })
     ).rejects.toThrow()
@@ -371,6 +380,166 @@ it('validates durable installation, capacity, trusted clock policy and caller sh
       f.service().status(f.statusText, { ...f.caller, extra: true } as never)
     ).rejects.toThrow()
     expect(f.guard).not.toHaveBeenCalled()
+  } finally {
+    await f.cleanup()
+  }
+})
+
+it('accepts received text above the default JSON limit under its actual selected contract', async () => {
+  const f = await rootServiceFixture()
+  try {
+    const text = f.text + ' '.repeat(65536)
+    const manifest = rootContractManifest()
+    manifest.services[0].profiles[0].maxRequestBytes = Buffer.byteLength(text)
+    const selection = rootContractPacket(manifest)
+    const response = await f
+      .service()
+      .submit(text, { ...f.caller, capabilityDigest: selection.selector }, selection.packet)
+    expect(
+      verifyOutputRootEvictionResult(parseOutputJSON(response.body), signed(f.body), policy).body
+        .outcomes[0].actionStatus
+    ).toBe('pending')
+    expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
+  } finally {
+    await f.cleanup()
+  }
+})
+
+it('refuses a contract that cannot carry its native result before retaining or signing', async () => {
+  const baseline = await rootServiceFixture(),
+    f = await rootServiceFixture()
+  try {
+    const ordinary = await baseline
+      .service()
+      .submit(baseline.text, baseline.caller, baseline.selection.manifest)
+    const manifest = rootContractManifest()
+    manifest.services[0].profiles[0].maxResponseBytes = Buffer.byteLength(ordinary.body) - 1
+    const selection = rootContractPacket(manifest)
+    await expect(
+      f
+        .service()
+        .submit(f.text, { ...f.caller, capabilityDigest: selection.selector }, selection.packet)
+    ).rejects.toMatchObject({ code: 'limited' })
+    expect(f.sign).not.toHaveBeenCalled()
+    expect(await f.store.get(requester, f.body.requestId)).toBeUndefined()
+  } finally {
+    await Promise.all([baseline.cleanup(), f.cleanup()])
+  }
+})
+
+it.each(['clock', 'authorize', 'contextCurrent'] as const)(
+  'refuses a nonfunction installed %s callback with a protocol diagnostic',
+  async callback => {
+    const f = await rootServiceFixture()
+    try {
+      const guard = await f.guard(
+        { operation: 'submit', principal: requester, requester, requestId: f.body.requestId },
+        new AbortController().signal
+      )
+      Object.assign(guard, { [callback]: null })
+      await expect(
+        f.service({ guard: async () => guard }).submit(f.text, f.caller, f.selection.manifest)
+      ).rejects.toThrow('Root commit callbacks must be synchronous local functions')
+      expect(await f.store.get(requester, f.body.requestId)).toBeUndefined()
+      expect(f.sign).not.toHaveBeenCalled()
+    } finally {
+      await f.cleanup()
+    }
+  }
+)
+
+it.each(['retainCoordinated', 'resultCoordinated'] as const)(
+  'stops work after cancellation at native %s completion',
+  async method => {
+    const f = await rootServiceFixture(),
+      abort = new AbortController()
+    try {
+      const retain = f.store.retainCoordinated.bind(f.store),
+        result = f.store.resultCoordinated.bind(f.store)
+      const retained = jest
+        .spyOn(f.store, 'retainCoordinated')
+        .mockImplementation(async (...args) => {
+          const observed = await retain(...args)
+          if (method === 'retainCoordinated') abort.abort()
+          return observed
+        })
+      const observed = jest
+        .spyOn(f.store, 'resultCoordinated')
+        .mockImplementation(async (...args) => {
+          const value = await result(...args)
+          if (method === 'resultCoordinated') abort.abort()
+          return value
+        })
+      await expect(
+        f.service().submit(f.text, f.caller, f.selection.manifest, abort.signal)
+      ).rejects.toMatchObject({ code: 'cancelled' })
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(retained).toHaveBeenCalledTimes(1)
+      expect(observed).toHaveBeenCalledTimes(method === 'retainCoordinated' ? 0 : 1)
+      expect(f.sign).not.toHaveBeenCalled()
+      expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
+    } finally {
+      await f.cleanup()
+    }
+  }
+)
+
+it('does not inspect a guard that physically completes after cancellation', async () => {
+  const f = await rootServiceFixture(),
+    abort = new AbortController(),
+    reads = jest.fn()
+  try {
+    const nativeGuard = f.guard.getMockImplementation()!
+    f.guard.mockImplementation(async (...args) => {
+      const guard = await nativeGuard(...args)
+      abort.abort()
+      return new Proxy(guard, {
+        get(target, key, receiver) {
+          if (
+            ['clock', 'authorize', 'contextCurrent', 'expectedPolicyDigest'].includes(String(key))
+          )
+            reads()
+          return Reflect.get(target, key, receiver)
+        }
+      })
+    })
+    await expect(
+      f.service().submit(f.text, f.caller, f.selection.manifest, abort.signal)
+    ).rejects.toMatchObject({ code: 'cancelled' })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(f.guard).toHaveBeenCalledTimes(1)
+    expect(reads).not.toHaveBeenCalled()
+    expect(await f.store.get(requester, f.body.requestId)).toBeUndefined()
+    expect(f.sign).not.toHaveBeenCalled()
+  } finally {
+    await f.cleanup()
+  }
+})
+
+it('does not inspect a real signer result that physically completes after cancellation', async () => {
+  const f = await rootServiceFixture(),
+    abort = new AbortController(),
+    reads = jest.fn()
+  try {
+    f.sign.mockImplementation(async body => {
+      const packet = signOutputPacket('root-eviction-result', body, rootContractKey)
+      abort.abort()
+      // Explicit signer-port observation around the actual signed packet; no
+      // replacement signature, journal or authorization result is supplied.
+      return new Proxy(packet, {
+        ownKeys(target) {
+          reads()
+          return Reflect.ownKeys(target)
+        }
+      })
+    })
+    await expect(
+      f.service().submit(f.text, f.caller, f.selection.manifest, abort.signal)
+    ).rejects.toMatchObject({ code: 'cancelled' })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(f.sign).toHaveBeenCalledTimes(1)
+    expect(reads).not.toHaveBeenCalled()
+    expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
   } finally {
     await f.cleanup()
   }
