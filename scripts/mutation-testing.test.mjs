@@ -1720,9 +1720,14 @@ test('complete native initial-suite allowances retain their exact scope and alia
     'lch-overlay-covenant-settlement',
     'lch-overlay-license',
     'lch-overlay-covenant-seller',
-    'lch-overlay-covenant'
+    'lch-overlay-covenant',
+    'lch-overlay-covenant-candidate'
   ])
   const configured = buildMutationTargets(REPOSITORY_ROOT)
+  assert.notEqual(
+    configured['lch-overlay-covenant-candidate'].runnerOptions,
+    configured['lch-overlay-covenant'].runnerOptions
+  )
   for (const [id, target] of Object.entries(configured)) {
     assert.equal(
       target.runnerOptions.dryRunTimeoutMinutes,

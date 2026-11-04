@@ -3922,7 +3922,8 @@ export function buildMutationTargets(repositoryRoot) {
     'lch-overlay-covenant-settlement',
     'lch-overlay-license',
     'lch-overlay-covenant-seller',
-    'lch-overlay-covenant'
+    'lch-overlay-covenant',
+    'lch-overlay-covenant-candidate'
   ])
     targets[id].runnerOptions = { ...targets[id].runnerOptions, dryRunTimeoutMinutes: 15 }
   appendMutationBuildInputs(repositoryRoot, targets)

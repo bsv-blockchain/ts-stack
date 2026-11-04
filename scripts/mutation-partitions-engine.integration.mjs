@@ -55,6 +55,37 @@ async function* serialResults(values, read) {
   for (const value of values) yield read(value)
 }
 
+test('the measured LCH acquisition hotspot retains every actual engine site across three bounded executions', async () => {
+  const target = buildMutationTargets(REPOSITORY_ROOT)['lch-overlay-acquisition'],
+    original = selectedMutationPartition('lch-overlay-acquisition', target, 'auto-18'),
+    directory = resolve(REPOSITORY_ROOT, target.packageDirectory),
+    canonical = await canonicalInventory(
+      directory,
+      targetSources(REPOSITORY_ROOT, original),
+      original.mutate
+    ),
+    parts = partitionMutationTarget('lch-overlay-acquisition', target).filter(part =>
+      part.id.startsWith('terms-')
+    ),
+    observed = []
+  assert.equal(parts.length, 3)
+  for (const part of parts) {
+    assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
+    const inventory = await canonicalInventory(
+      directory,
+      targetSources(REPOSITORY_ROOT, part.target),
+      part.target.mutate
+    )
+    assert.ok(inventory.length > 0, `${part.id} must execute actual mutation sites`)
+    observed.push(...inventory)
+  }
+  assert.deepEqual(
+    observed.map(mutantIdentity).toSorted(compare),
+    canonical.map(mutantIdentity).toSorted(compare)
+  )
+  assert.equal(new Set(observed.map(mutantIdentity)).size, canonical.length)
+})
+
 test('declaration companions preserve the complete pinned-engine inventory without empty executions', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const targetsToCheck = serialResults(
@@ -154,7 +185,7 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
     assert.equal(selectedMutationPartition(id, original), original)
   }
   assert.equal(Object.keys(targets).length, 156)
-  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 604)
+  assert.equal(mutationExecutionMatrix(Object.keys(targets), targets).include.length, 606)
 })
 
 test('serialized mutation configuration preserves both original overlay module partitions', async () => {
