@@ -184,8 +184,9 @@ import type { WalletInterface } from '@bsv/sdk'
 // Everything below is re-exported from the packages, not wrapped. Read the notes, then use it directly.
 
 // TransactionBuilder (@bsv/wallet-helper): builds a transaction and has your wallet create it.
-//   const { txid, tx } = await new TransactionBuilder(wallet, 'Pay a friend').pay(addressOrPubKey, 1000)
-// pay() takes a base58 address or a 66-hex public key and builds straight away. For more control, add outputs and then build():
+//   const { txid, tx } = await new TransactionBuilder(wallet, 'Pay an invoice').pay(address, 1000)
+// pay() locks to exactly the address (or public key) you give it and builds straight away, e.g. an invoice address a
+// recipient made with getAddress (below). For more control, add outputs and then build():
 //   const builder = new TransactionBuilder(wallet, 'Publish and pay')
 //   builder.addP2PKHOutput({ address, satoshis: 500 })              // or { publicKey, satoshis }
 //   builder.addCustomOutput({ lockingScript: dataScript(['hello']), satoshis: 0 }) // any locking script
@@ -215,7 +216,7 @@ export { WalletP2PKH, getScriptType, isP2PKH, extractOpReturnData } from '@bsv/w
 // Paying someone else so their wallet counts it: pick a fresh derivationPrefix and derivationSuffix (random base64),
 // get THEIR key from wallet.getPublicKey with their identity key as counterparty, and pay that publicKey:
 //   const { publicKey } = await wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID: derivationPrefix + ' ' + derivationSuffix, counterparty: theirIdentityKey })
-//   const { tx } = await new TransactionBuilder(wallet, 'Pay').addP2PKHOutput({ publicKey, satoshis: 1000 }).options({ acceptDelayedBroadcast: false }).build()
+//   const { tx } = await new TransactionBuilder(wallet, 'Pay').options({ acceptDelayedBroadcast: false }).pay(publicKey, 1000)
 // then send them what internalizePayment needs (tx, the outputIndex found by script, derivationPrefix, derivationSuffix and
 // your identity key) over MessageBox or directly.
 export { getAddress } from '@bsv/wallet-helper'
@@ -609,7 +610,7 @@ Helpers (\`txUtils.ts\`):
 - BEEF travels as base64 in JSON, never as a number array.
 - \`listOutputs\` is paginated; use \`listAllOutputs\` instead of reading one page.
 - Keep your own outputs in the wallet, not in your own records: put them in a basket (\`.basket(name)\` on a \`TransactionBuilder\` output), and find them again with \`listOutputs({ basket, include: 'entire transactions', includeCustomInstructions: true })\`, which returns the BEEF to spend them and any derivation the builder stored. \`TransactionBuilder\` can't set labels or tags; pass \`labels\` and output \`tags\` to \`wallet.createAction\` directly, then filter with \`listActions({ labels })\` and \`listOutputs({ basket, tags })\`. The comments in transactions.ts show each call.
-- To pay someone else's wallet, get their key with \`wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID, counterparty: theirIdentityKey })\` and pay it with \`addP2PKHOutput({ publicKey, satoshis })\`. Then send them the \`internalizePayment\` inputs (AtomicBEEF, output index, derivation prefix and suffix, your identity key) over MessageBox or directly.
+- To pay someone else's wallet, get their key with \`wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID, counterparty: theirIdentityKey })\` and pay it with \`TransactionBuilder.pay(publicKey, satoshis)\` (with \`acceptDelayedBroadcast: false\`). Then send them the \`internalizePayment\` inputs (AtomicBEEF, output index, derivation prefix and suffix, your identity key) over MessageBox or directly.
 - \`internalizePayment\` needs the wallet to have processed the transaction, so create it with \`acceptDelayedBroadcast: false\`. Elsewhere the wallet's own behaviour decides whether it broadcasts now or later.
 
 ### Advanced
