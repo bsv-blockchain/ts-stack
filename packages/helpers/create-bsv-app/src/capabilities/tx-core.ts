@@ -213,7 +213,7 @@ export { WalletP2PKH, getScriptType, isP2PKH, extractOpReturnData } from '@bsv/w
 // derivationPrefix and derivationSuffix and the sender's identity key: your own key for 'self' (the default),
 // the payer's key for an invoice address.
 // Paying someone else so their wallet counts it: pick a fresh derivationPrefix and derivationSuffix (random base64),
-// derive THEIR key and pay it. builder walletParams always derive your own key, so use getPublicKey here:
+// get THEIR key from wallet.getPublicKey with their identity key as counterparty, and pay that publicKey:
 //   const { publicKey } = await wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID: derivationPrefix + ' ' + derivationSuffix, counterparty: theirIdentityKey })
 //   const { tx } = await new TransactionBuilder(wallet, 'Pay').addP2PKHOutput({ publicKey, satoshis: 1000 }).options({ acceptDelayedBroadcast: false }).build()
 // then send them what internalizePayment needs (tx, the outputIndex found by script, derivationPrefix, derivationSuffix and
@@ -609,7 +609,7 @@ Helpers (\`txUtils.ts\`):
 - BEEF travels as base64 in JSON, never as a number array.
 - \`listOutputs\` is paginated; use \`listAllOutputs\` instead of reading one page.
 - Keep your own outputs in the wallet, not in your own records: put them in a basket (\`.basket(name)\` on a \`TransactionBuilder\` output), and find them again with \`listOutputs({ basket, include: 'entire transactions', includeCustomInstructions: true })\`, which returns the BEEF to spend them and any derivation the builder stored. \`TransactionBuilder\` can't set labels or tags; pass \`labels\` and output \`tags\` to \`wallet.createAction\` directly, then filter with \`listActions({ labels })\` and \`listOutputs({ basket, tags })\`. The comments in transactions.ts show each call.
-- To pay someone else's wallet, derive their key with \`wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID, counterparty: theirIdentityKey })\` and pay that \`publicKey\` (a \`TransactionBuilder\` output's \`walletParams\` always derive your own key). Then send them the \`internalizePayment\` inputs (AtomicBEEF, output index, derivation prefix and suffix, your identity key) over MessageBox or directly.
+- To pay someone else's wallet, get their key with \`wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID, counterparty: theirIdentityKey })\` and pay it with \`addP2PKHOutput({ publicKey, satoshis })\`. Then send them the \`internalizePayment\` inputs (AtomicBEEF, output index, derivation prefix and suffix, your identity key) over MessageBox or directly.
 - \`internalizePayment\` needs the wallet to have processed the transaction, so create it with \`acceptDelayedBroadcast: false\`. Elsewhere the wallet's own behaviour decides whether it broadcasts now or later.
 
 ### Advanced
