@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 export const EXCEPTION_ID = '2026-11-04-pr1093-main'
-export const EXCEPTION_BASE = 'e46978bb263073f8e1a3b71809725b2c7704d3a8'
+export const EXCEPTION_BASE = 'b85764a100f3b3b79778240e71b9cf0a10eb99dc'
 export const EXCEPTION_FILE = 'governance/release-exceptions/2026-11-04-pr1093.json'
 export const EXCEPTION_PATHS = [
   '.github/workflows/release.yaml',

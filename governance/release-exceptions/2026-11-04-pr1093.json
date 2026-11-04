@@ -1,28 +1,31 @@
 {
   "id": "2026-11-04-pr1093-main",
   "owner": "ty-everett",
-  "sourceBase": "e46978bb263073f8e1a3b71809725b2c7704d3a8",
+  "sourceBase": "b85764a100f3b3b79778240e71b9cf0a10eb99dc",
   "recordedAt": "2026-11-04T16:18:00Z",
   "expiresAt": "2026-11-05T16:00:00Z",
   "status": "active",
   "reason": "The operator explicitly waives mutation campaigns for this current-main release to publish the pending versions promptly. Failed and canceled campaigns remain failed or canceled. This is operator-waiver admission, not successful mutation qualification. All non-mutation tests, compatibility, approval, security, license, consumer, immutable artifact, provenance, signature and registry-integrity gates remain mandatory.",
-  "releaseSet": "Original four npm packages are published and unchanged. Five images remain at their verified original generated-source digests. The remaining unpublished UHRP Cloud Bucket0.2.59 and Basic0.1.54 images consume the corrected standalone locks. Existing Relay0.2.3 is unchanged; no immutable tag is overwritten.",
-  "evidence": "Main9b CI and security passed following mergedPR1477; originalPR1093 native wallet/WAB/Paymail/legacy-client qualification retained. PR1478 remains separate draft and is not admitted. Known mutation gaps and incomplete coverage inventory are retained in failed campaign evidence. All four registry tarballs match the staged candidate and eight provenance/SBOM attestations verify. Image scan failure is preserved; only follow-redirects version/resolved/integrity changes in the two regenerated locks, with successful high/critical standalone audits.",
+  "releaseSet": "The four public npm releases remain unchanged. Finish remaining UHRP Cloud Bucket0.2.59, Basic0.1.54 and MessageBox1.1.58. Retain unchanged WAB1.8.18, ChainTracks1.1.33, Overlay2.1.53 and WalletInfra2.0.56 from original generated source fb7; Relay0.2.3 is unchanged. Published MessageBox1.1.57 is retained as a superseded historical tag and never overwritten.",
+  "evidence": "All four registry tarballs equal the immutable candidate and eight provenance/SBOM attestations verify. Both original UHRP scan failures and three complete-audit failures are preserved. All eight standalone complete development+production dependency audits have zero high/critical after the three exact lock patches. No other lock dependency changes. Root health602 tests and17 focused workflow/admission tests pass on the prior control head; final head must pass its own required checks.",
   "failedRuns": [41762196746, 41823811793],
   "reviewAt": "2026-11-05T16:00:00Z",
   "removalCondition": "Retire this record and remove temporary workflow admission immediately after this exact release and generated published-baseline reconciliation. Any application, manifest, dependency, lockfile or other non-allowlisted change is ineligible. Future releases require normal full mutation qualification.",
-  "compatibility": "No runtime, public API, wire, database, package manifest, version or dependency change is authorized by the waiver; the generated sync child retains its existing constrained allowlist. The corrected source base includes the generated published-version synchronization plus a compatible follow-redirects1.16.2 security patch in two standalone image locks. No first-party application runtime, public package manifest, version, API, wire or schema changed.",
+  "compatibility": "Only follow-redirects version/resolved/integrity changes in three standalone image locks, plus MessageBox private image patch version and regenerated facts. No first-party runtime, public package manifest, API, wire, schema or other dependency changes. Temporary admission is limited to control/test/docs changes after this corrected exact base; all security and compatibility gates remain mandatory.",
   "initialSourceBase": "9bdeb5f82de67c109941e2b5296f7cd66a1fc0ac",
-  "updatedAt": "2026-11-04T17:07:34.085642+00:00",
+  "updatedAt": "2026-11-04T17:21:01.908507+00:00",
   "originalAdmittedSource": "a18c5e572cf88fd499759d8303d4c8689e2901b5",
   "originalGeneratedImageSource": "fb7df00d480d613186b159c75df5ca6d0960f12b",
   "originalReleaseRun": "https://github.com/bsv-blockchain/ts-stack/actions/runs/41868900261",
-  "continuationReason": "The original wave published all four npm packages and five images. Both UHRP image scans rejected follow-redirects1.16.1 (CVE-2026-116689). The corrected source base changes only those two lock entries to1.16.2 using npm update; original failed samples remain failed. Permit the same explicitly authorized mutation-only exception for a manual main image continuation, preserving every scan, signature, SBOM, provenance, runtime and compatibility gate.",
+  "continuationReason": "Two UHRP image scans rejected follow-redirects1.16.1; the complete CI audit also found the same advisory in the MessageBox development lock. Regenerate all three entries to1.16.2. MessageBox1.1.57 was already published with a clean production image scan, so use a new immutable1.1.58 tag for its changed lock context. The corrected pinned base includes these exact patches and generated image versions; all other first-party runtime and dependencies are unchanged.",
   "patchedLocks": [
     "infra/uhrp-server-basic/package-lock.json",
-    "infra/uhrp-server-cloud-bucket/package-lock.json"
+    "infra/uhrp-server-cloud-bucket/package-lock.json",
+    "infra/message-box-server/package-lock.json"
   ],
   "failedImageJobs": [126721481757, 126721481981],
   "securityGate": "Mandatory; no vulnerability waiver",
-  "retirement": "Retire this record and all temporary dispatch/admission controls after this exact image continuation and published-baseline reconciliation. Source changes after the corrected pinned base remain ineligible."
+  "retirement": "Retire this record and all temporary dispatch/admission controls after this exact image continuation and published-baseline reconciliation. Source changes after the corrected pinned base remain ineligible.",
+  "previousCorrectedSourceBase": "e46978bb263073f8e1a3b71809725b2c7704d3a8",
+  "failedFullAuditJobs": [126724924628, 126724924716, 126724924823]
 }
