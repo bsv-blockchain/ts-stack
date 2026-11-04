@@ -352,7 +352,15 @@ export class MlsEngine {
     const now = BigInt(Math.floor(Date.now() / 1000))
     const lifetime = {
       notBefore: now - BigInt(CLOCK_SKEW_SECONDS),
-      notAfter: now + BigInt(options.lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS)
+      // Both ends, not just the near one. An admitter running behind us is
+      // covered by `notBefore`; one running ahead is covered only by whatever
+      // is left of the lifetime, so a host asking for a short
+      // `lifetimeSeconds` would hit the very rejection this allowance exists
+      // to remove.
+      notAfter:
+        now +
+        BigInt(CLOCK_SKEW_SECONDS) +
+        BigInt(options.lifetimeSeconds ?? DEFAULT_LIFETIME_SECONDS)
     }
 
     const { publicPackage, privatePackage } = await generateKeyPackageWithKey(

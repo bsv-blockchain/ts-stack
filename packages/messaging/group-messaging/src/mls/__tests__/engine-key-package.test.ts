@@ -11,6 +11,9 @@ const engineFor = async () =>
     identity: await IdentityService.open(new KeyDeriver(PrivateKey.fromRandom()))
   })
 
+/** Mirrors `CLOCK_SKEW_SECONDS` in the engine. */
+const SKEW = 300n
+
 describe('MlsEngine.createKeyPackage', () => {
   it('returns a decodable RFC 9420 KeyPackage', async () => {
     const engine = await engineFor()
@@ -67,9 +70,30 @@ describe('MlsEngine.createKeyPackage', () => {
 
     expect(minted.ciphersuite).toBe('MLS_128_DHKEMP256_AES128GCM_SHA256_P256')
     // `lifetimeSeconds` is how far forward the package is good for; the window
-    // reaches further back than now so a peer ahead of us can still admit it.
-    expect(minted.lifetime.notAfter).toBeGreaterThanOrEqual(before + 60n)
-    expect(minted.lifetime.notAfter).toBeLessThanOrEqual(after + 60n)
+    // reaches past that at both ends by the skew allowance, so an admitter
+    // whose clock disagrees in either direction can still take it.
+    expect(minted.lifetime.notAfter).toBeGreaterThanOrEqual(before + 60n + SKEW)
+    expect(minted.lifetime.notAfter).toBeLessThanOrEqual(after + 60n + SKEW)
     expect(minted.lifetime.notBefore).toBeLessThan(before)
+  })
+
+  /**
+   * The allowance has to be wider than the skew that was actually observed
+   * between two devices, or the fix does not cover the case it was written
+   * for. Nothing else in the suite would notice it being cut: every other
+   * assertion is a direction rather than a distance.
+   */
+  it('covers a clock difference bigger than the one seen between two devices', async () => {
+    const engine = await engineFor()
+    const OBSERVED_DEVICE_SKEW = 162n
+
+    const before = BigInt(Math.floor(Date.now() / 1000))
+    const minted = await engine.createKeyPackage({ lifetimeSeconds: 60 })
+    const after = BigInt(Math.floor(Date.now() / 1000))
+
+    // An admitter that far behind us, and one that far ahead, both see a
+    // package that is currently valid.
+    expect(minted.lifetime.notBefore).toBeLessThanOrEqual(before - OBSERVED_DEVICE_SKEW)
+    expect(minted.lifetime.notAfter).toBeGreaterThanOrEqual(after + OBSERVED_DEVICE_SKEW)
   })
 })
