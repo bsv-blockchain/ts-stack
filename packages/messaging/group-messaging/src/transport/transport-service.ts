@@ -1,4 +1,5 @@
 import { eachInOrder } from '../inOrder.js'
+import type { MessageId } from '../messageId.js'
 import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
@@ -235,6 +236,20 @@ export class BroadcastError extends GroupMessagingError {
         `${failed.length} failed`
     )
   }
+
+  /**
+   * The library's id for the message this error is about, when it is about a
+   * message. Absent on a Commit, which is not one and has no id.
+   *
+   * Set by `Group` after construction rather than passed in, because the
+   * transport carries opaque payloads and must not learn what an MLS message
+   * id is. Without it the id of a failed send is unreachable from the
+   * rejection: the client-wide `deliveryFailed` event names only the chat, so
+   * two sends in flight at once are indistinguishable, and `payload` is the
+   * envelope rather than the MLS message, so hashing it yields a value no
+   * recipient agrees with.
+   */
+  messageId?: MessageId
 }
 
 const resolve = (

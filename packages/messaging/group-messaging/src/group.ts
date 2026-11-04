@@ -252,6 +252,12 @@ export class Group {
     try {
       await this.client.transport.broadcast(this.mlsGroupId, recipients, payload)
     } catch (error) {
+      // Put the id on the rejection too. The event below is client-wide and
+      // names only the chat, so a host with two sends in flight cannot tell
+      // which one it is about; the rejection belongs to this send alone.
+      if (error instanceof BroadcastError && messageId !== undefined) {
+        error.messageId = messageId
+      }
       // The group has advanced locally regardless; the caller decides on retry.
       // `failed` only when the transport counted — see the event's own doc.
       this.client.emit('deliveryFailed', {

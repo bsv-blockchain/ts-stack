@@ -415,7 +415,18 @@ export class GroupMessagingClient {
       await this.#resendWelcome(error)
       return
     }
-    await this.transport.broadcast(error.groupId, error.failed, error.payload)
+    try {
+      await this.transport.broadcast(error.groupId, error.failed, error.payload)
+    } catch (again) {
+      // The fresh error is about the same message, so it carries the same id.
+      // Minting it without one would lose on the second attempt what the
+      // first carried, leaving a host that retries in a loop with an id for
+      // none of the failures after the first.
+      if (again instanceof BroadcastError && error.messageId !== undefined) {
+        again.messageId = error.messageId
+      }
+      throw again
+    }
   }
 
   /**
