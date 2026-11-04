@@ -585,7 +585,8 @@ test('measured root targets recycle workers while retaining complete canonical s
     'root-eviction-records',
     'root-eviction-codec',
     'root-eviction-storage',
-    'root-eviction-scheduler'
+    'root-eviction-scheduler',
+    'root-eviction-service'
   ])
   for (const [id, target] of Object.entries(targets)) {
     if (id.startsWith('root-eviction-')) {
@@ -604,6 +605,9 @@ test('measured root targets recycle workers while retaining complete canonical s
   }
   assert.deepEqual(targets['root-eviction-scheduler'].mutate, [
     'src/root-eviction/RootEvictionScheduler.ts'
+  ])
+  assert.deepEqual(targets['root-eviction-service'].mutate, [
+    'src/root-eviction/RootEvictionService.ts'
   ])
   assert.equal(targets['wallet-recovery-encoding'].runnerOptions.maxTestRunnerReuse, undefined)
 })

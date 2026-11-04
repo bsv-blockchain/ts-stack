@@ -918,7 +918,8 @@ export function buildMutationTargets(repositoryRoot) {
     'root-eviction-service': rootEvictionTarget(
       repositoryRoot,
       'root-eviction-service.property.test.ts',
-      ['RootEvictionService']
+      ['RootEvictionService'],
+      { maxTestRunnerReuse: 8 }
     ),
     'root-eviction-maintenance': rootEvictionTarget(
       repositoryRoot,

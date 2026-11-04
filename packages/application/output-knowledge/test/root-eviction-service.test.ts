@@ -385,7 +385,7 @@ it('validates durable installation, capacity, trusted clock policy and caller sh
   }
 })
 
-it('accepts received text above the default JSON limit under its actual selected contract', async () => {
+it('honors selected received-byte contracts and stops oversized intake before authority work', async () => {
   const f = await rootServiceFixture()
   try {
     const text = f.text + ' '.repeat(65536)
@@ -399,6 +399,22 @@ it('accepts received text above the default JSON limit under its actual selected
       verifyOutputRootEvictionResult(parseOutputJSON(response.body), signed(f.body), policy).body
         .outcomes[0].actionStatus
     ).toBe('pending')
+    expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
+    f.guard.mockClear()
+    f.sign.mockClear()
+    // The shared JSON parser permits4MiB; root intake's explicit1MiB bound
+    // must apply before invoking authority or looking up this retained retry.
+    await expect(
+      f
+        .service()
+        .submit(
+          ' '.repeat(1048576) + f.text,
+          { ...f.caller, capabilityDigest: selection.selector },
+          selection.packet
+        )
+    ).rejects.toMatchObject({ code: 'limited' })
+    expect(f.guard).not.toHaveBeenCalled()
+    expect(f.sign).not.toHaveBeenCalled()
     expect(await f.store.get(requester, f.body.requestId)).toBeDefined()
   } finally {
     await f.cleanup()
