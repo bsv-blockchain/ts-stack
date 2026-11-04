@@ -69,14 +69,18 @@ test('the measured LCH acquisition hotspot retains every actual engine site acro
     ),
     observed = []
   assert.equal(parts.length, 3)
-  for (const part of parts) {
-    assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
-    const inventory = await canonicalInventory(
-      directory,
-      targetSources(REPOSITORY_ROOT, part.target),
-      part.target.mutate
-    )
-    assert.ok(inventory.length > 0, `${part.id} must execute actual mutation sites`)
+  const inventories = await Promise.all(
+    parts.map(part => {
+      assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
+      return canonicalInventory(
+        directory,
+        targetSources(REPOSITORY_ROOT, part.target),
+        part.target.mutate
+      )
+    })
+  )
+  for (const [index, inventory] of inventories.entries()) {
+    assert.ok(inventory.length > 0, `${parts[index].id} must execute actual mutation sites`)
     observed.push(...inventory)
   }
   assert.deepEqual(

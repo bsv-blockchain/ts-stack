@@ -539,7 +539,7 @@ test('mutation execution retains the exact caller runtime and ordinary CI baseli
   )
 })
 
-test('long complete-job allowances apply only to nineteen qualification targets', async () => {
+test('long complete-job allowances apply only to twenty-four qualification targets', async () => {
   const { parse } = await import('yaml')
   const full = parse(
     readFileSync(join(REPOSITORY_ROOT, '.github/workflows/mutation-tests.yml'), 'utf8')
@@ -571,7 +571,12 @@ test('long complete-job allowances apply only to nineteen qualification targets'
     'lch-overlay-covenant-terms',
     'private-purchase-alias-state',
     'private-purchase-alias-custody',
-    'output-knowledge-proposal-core'
+    'output-knowledge-proposal-core',
+    'private-purchase-alias-coordinator',
+    'private-purchase-alias-owner',
+    'private-purchase-alias-disclosure',
+    'private-purchase-buyer-alias',
+    'overlay-integrity'
   ])
   const originalNinetyMinuteTargets = JSON.parse(match[2])
   const configured = buildMutationTargets(REPOSITORY_ROOT)

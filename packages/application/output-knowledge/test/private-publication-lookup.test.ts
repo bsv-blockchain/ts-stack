@@ -1,5 +1,5 @@
 import { expect, it, jest } from '@jest/globals'
-import { Beef, PrivateKey, Utils } from '@bsv/sdk'
+import { Beef, OutputProtocolError, PrivateKey, Utils } from '@bsv/sdk'
 import { PrivatePublicationLookupContext } from '../src/private/PrivatePublicationLookupContext.js'
 import { publicationLookupFixture } from './private-publication-lookup.fixture.js'
 import { allow } from './private-publication-fixture.js'
@@ -279,4 +279,201 @@ it('does not accept promise-returning mapping or transport wrappers and never re
     } as unknown as typeof f.options).prepare(f.initial.publicationId, f.caller)
   ).toThrow('Private lookup unavailable')
   await Promise.resolve()
+})
+
+function lookupRefusal(action: () => unknown, code: string, message: string) {
+  expect(action).toThrow(expect.objectContaining({ code, message }))
+}
+
+it.each(['clock', 'authorize', 'mapContext'] as const)(
+  'rejects a non-function installed %s before accessing protected records',
+  callback => {
+    const f = publicationLookupFixture()
+    lookupRefusal(
+      () => new PrivatePublicationLookupContext({ ...f.options, [callback]: undefined }),
+      'invalid',
+      'Private lookup callbacks must be synchronous'
+    )
+    expect(f.maps).toBe(0)
+  }
+)
+
+it('accepts both declared capacity ceilings and an exactly full mapped context', () => {
+  const f = publicationLookupFixture()
+  expect(
+    () =>
+      new PrivatePublicationLookupContext({
+        ...f.options,
+        maximumContextBytes: 1048576,
+        maximumResponseBytes: 4194304
+      })
+  ).not.toThrow()
+  const reader = new PrivatePublicationLookupContext({
+    ...f.options,
+    maximumContextBytes: 3
+  })
+  const prepared = reader.prepare(f.initial.publicationId, f.caller)
+  expect(prepared.formula()[0].context).toEqual([1, 2, 3])
+  prepared.bind(f.answer()).enqueue(() => undefined)
+})
+
+it.each([false, true])('erases the borrowed private bytes after mapping (refused=%p)', refused => {
+  const f = publicationLookupFixture()
+  let borrowed: Uint8Array | undefined
+  const reader = new PrivatePublicationLookupContext({
+    ...f.options,
+    maximumContextBytes: 3,
+    mapContext: bytes => {
+      borrowed = bytes
+      expect(Array.from(bytes)).toEqual([1, 2, 3])
+      return refused ? new Uint8Array(4) : bytes
+    }
+  })
+  if (refused)
+    lookupRefusal(
+      () => reader.prepare(f.initial.publicationId, f.caller),
+      'limited',
+      'Private lookup context mapping exceeds its contract'
+    )
+  else
+    expect(reader.prepare(f.initial.publicationId, f.caller).formula()[0].context).toEqual([
+      1, 2, 3
+    ])
+  expect(Array.from(borrowed!)).toEqual([0, 0, 0])
+})
+
+it('requires a synchronous caller function and keeps missing lookup refusals indistinguishable', () => {
+  const f = publicationLookupFixture()
+  lookupRefusal(
+    () => f.reader.prepare(f.initial.publicationId, { ...f.caller, current: undefined! }),
+    'invalid',
+    'Private lookup needs current authenticated context'
+  )
+  for (const id of ['99'.repeat(32), f.initial.publicationId]) {
+    f.revoke()
+    lookupRefusal(() => f.reader.prepare(id, f.caller), 'not-found', 'Private lookup unavailable')
+  }
+  expect(f.maps).toBe(0)
+})
+
+it.each(['ledger', 'identity', 'address', 'read', 'disclose', 'loadVerified'] as const)(
+  'refuses a replaced installed %s before mapping private bytes',
+  field => {
+    const f = publicationLookupFixture(),
+      domain = f.native.owner,
+      replace = <T, K extends keyof T>(owner: T, key: K, value: T[K]) => {
+        const original = owner[key]
+        owner[key] = value
+        return () => {
+          owner[key] = original
+        }
+      }
+    let restore: () => void
+    if (field === 'ledger') restore = replace(domain, 'ledger', f.reopenWithDomain().owner.ledger)
+    else if (field === 'identity')
+      restore = replace(domain, 'identity', f.reopenWithDomain().owner.identity)
+    else if (field === 'address')
+      restore = replace(domain.identity, 'address', domain.identity.address.bind(domain.identity))
+    else if (field === 'loadVerified')
+      restore = replace(f.store, 'loadVerified', f.store.loadVerified.bind(f.store))
+    else restore = replace(domain.ledger, field, domain.ledger[field].bind(domain.ledger))
+    try {
+      lookupRefusal(
+        () => f.reader.prepare(f.initial.publicationId, f.caller),
+        'not-found',
+        'Private lookup unavailable'
+      )
+      expect(f.maps).toBe(0)
+    } finally {
+      restore()
+    }
+  }
+)
+
+it('preserves lookup installation errors and single-use lifecycle error identities', () => {
+  const f = publicationLookupFixture()
+  for (const lookup of [
+    { ...f.options.lookup, service: 'ls_other' },
+    { ...f.options.lookup, rulesDigest: '22'.repeat(32) }
+  ])
+    lookupRefusal(
+      () =>
+        new PrivatePublicationLookupContext({ ...f.options, lookup }).prepare(
+          f.initial.publicationId,
+          f.caller
+        ),
+      'unavailable',
+      'Private lookup installation differs'
+    )
+  const prepared = f.reader.prepare(f.initial.publicationId, f.caller),
+    bound = prepared.bind(f.answer())
+  lookupRefusal(() => prepared.bind(f.answer()), 'conflict', 'Private lookup answer already bound')
+  lookupRefusal(
+    () => bound.enqueue(undefined!),
+    'invalid',
+    'Private lookup enqueue must be synchronous'
+  )
+  bound.enqueue(() => undefined)
+  lookupRefusal(
+    () => bound.enqueue(() => undefined),
+    'conflict',
+    'Private lookup enqueue already attempted'
+  )
+  prepared.dispose()
+  for (const action of [
+    prepared.formula,
+    () => prepared.bind(f.answer()),
+    () => bound.enqueue(() => undefined)
+  ])
+    lookupRefusal(action, 'cancelled', 'Private lookup preparation disposed')
+})
+
+it.each(['beef', 'context'] as const)(
+  'validates every %s byte and its exact configured capacity',
+  field => {
+    const f = publicationLookupFixture()
+    for (const invalid of [[-1, 2, 3], [0, 2, 256], [0, 1.5, 3], '123', { 0: 1, length: 1 }]) {
+      const answer = f.answer()
+      Object.assign(answer.outputs[0], { [field]: invalid })
+      lookupRefusal(
+        () => f.reader.prepare(f.initial.publicationId, f.caller).bind(answer),
+        'invalid',
+        Array.isArray(invalid) && invalid.includes(1.5)
+          ? 'Protocol numbers must be safe integers'
+          : 'Invalid private lookup byte array'
+      )
+    }
+    const exact = new PrivatePublicationLookupContext({ ...f.options, maximumContextBytes: 3 })
+    exact
+      .prepare(f.initial.publicationId, f.caller)
+      .bind(f.answer())
+      .enqueue(() => undefined)
+    const over = f.answer()
+    over.outputs[0].context.push(0)
+    lookupRefusal(
+      () => exact.prepare(f.initial.publicationId, f.caller).bind(over),
+      'invalid',
+      'Invalid private lookup byte array'
+    )
+  }
+)
+
+it('bounds the complete hydrated response, accepts its explicit original txid and rejects mismatched answers', () => {
+  const f = publicationLookupFixture(),
+    answer = f.answer()
+  Object.assign(answer.outputs[0], { txid: f.initial.txid })
+  f.reader
+    .prepare(f.initial.publicationId, f.caller)
+    .bind(answer)
+    .enqueue(() => undefined)
+  const small = new PrivatePublicationLookupContext({ ...f.options, maximumResponseBytes: 1 })
+  expect(() => small.prepare(f.initial.publicationId, f.caller).bind(answer)).toThrow(
+    OutputProtocolError
+  )
+  lookupRefusal(
+    () =>
+      f.reader.prepare(f.initial.publicationId, f.caller).bind({ ...f.answer(), type: 'freeform' }),
+    'invalid',
+    'Private lookup requires one exact output'
+  )
 })

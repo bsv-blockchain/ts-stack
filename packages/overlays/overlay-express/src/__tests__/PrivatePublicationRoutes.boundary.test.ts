@@ -1,7 +1,7 @@
 import { afterEach, expect, it, jest } from '@jest/globals'
 import { request } from 'node:http'
-import express, { type RequestHandler } from 'express'
-import { PrivateKey } from '@bsv/sdk'
+import express, { type Request, type RequestHandler } from 'express'
+import { canonicalOutputJSON, PrivateKey } from '@bsv/sdk'
 import { createPrivatePublicationRouter } from '../PrivatePublicationRoutes.js'
 import { privatePublicationHTTPFixture } from './PrivatePublicationRoutes.fixture.js'
 
@@ -173,6 +173,14 @@ it.each([
   const f = await fixture()
   const response = await fetch(f.origin + path, { method: 'POST', headers: f.headers, body: '{}' })
   expect([400, 404]).toContain(response.status)
+  expect(await response.json()).toEqual({
+    version: 1,
+    error: {
+      code: path.includes('?') ? 'invalid' : 'not-found',
+      message: 'Private publication request ' + (path.includes('?') ? 'invalid' : 'not-found'),
+      retryable: false
+    }
+  })
   expect(f.native.rows()).toEqual([])
 })
 
@@ -362,3 +370,211 @@ it.each(['other-error', 'non-error', 'inherited-type'] as const)(
     expect(f!.calls).toEqual([])
   }
 )
+
+it('accepts identity encoding and case-insensitive JSON media types while refusing missing media selection', async () => {
+  const f = await fixture()
+  const accepted = await f.client.fetch(f.origin + '/api/overlay/v1/private/publish', {
+    method: 'POST',
+    headers: {
+      ...f.headers,
+      'content-type': 'APPLICATION/JSON; charset=utf-8'
+    },
+    body: JSON.stringify(f.contract.request)
+  })
+  expect(accepted.status).toBe(200)
+  const identity = await fetch(f.origin + '/api/overlay/v1/private/status', {
+    method: 'POST',
+    headers: { ...f.headers, 'content-encoding': 'identity' },
+    body: '{}'
+  })
+  expect(identity.status).toBe(401)
+  expect((await identity.json()).error.code).toBe('unauthorized')
+  const absent = await fetch(f.origin + '/api/overlay/v1/private/status', {
+    method: 'POST',
+    headers: { 'cache-control': 'no-store' },
+    body: Buffer.from('{}')
+  })
+  expect(absent.status).toBe(400)
+  expect((await absent.json()).error.code).toBe('invalid')
+})
+
+it('keeps an explicitly disabled handshake outside the private route owner', async () => {
+  const f = await fixture({ handleHandshake: false })
+  const response = await fetch(f.origin + '/.well-known/auth', {
+    method: 'POST',
+    headers: f.headers,
+    body: '{}'
+  })
+  expect(response.status).toBe(404)
+  expect(response.headers.get('content-type')).toContain('text/html')
+  expect(f.calls).toEqual([])
+})
+
+it.each(['principal', 'global'] as const)(
+  'enforces the independent %s work ceiling and recovers capacity after physical settlement',
+  async boundary => {
+    const f = await fixture({
+      maximumWork: boundary === 'global' ? 2 : 3,
+      maximumWorkPerPrincipal: 2
+    })
+    expect((await f.fetch()).status).toBe(200)
+    let finish!: () => void,
+      began!: () => void,
+      calls = 0
+    const blocked = new Promise<void>(resolve => {
+        finish = resolve
+      }),
+      started = new Promise<void>(resolve => {
+        began = resolve
+      }),
+      original = f.coordinator.status.bind(f.coordinator),
+      changed = jest.spyOn(f.coordinator, 'status').mockImplementation(async (...args) => {
+        calls++
+        if (calls === 2) began()
+        await blocked
+        return await original(...args)
+      }),
+      second = boundary === 'global' ? f.clientFor(new PrivateKey(64)) : f.client,
+      active = Promise.allSettled([
+        f.fetch('status'),
+        second.fetch(f.origin + '/api/overlay/v1/private/status', {
+          method: 'POST',
+          headers: f.headers,
+          body: JSON.stringify(f.status)
+        })
+      ])
+    try {
+      await started
+      const response = await f.fetch('status')
+      expect(response.status).toBe(413)
+      expect((await response.json()).error).toEqual({
+        code: 'limited',
+        message: 'Private publication request limited',
+        retryable: true
+      })
+      expect(calls).toBe(2)
+    } finally {
+      finish()
+      await active
+      changed.mockRestore()
+    }
+    expect((await f.fetch('status')).status).toBe(200)
+  }
+)
+
+it('cancels a timed-out authenticated response while retaining its occupied work slot until settlement', async () => {
+  const f = await fixture({ requestTimeoutMs: 500, maximumWork: 1 })
+  expect((await f.fetch()).status).toBe(200)
+  let finish!: () => void, began!: () => void, closed!: () => void
+  const blocked = new Promise<void>(resolve => {
+      finish = resolve
+    }),
+    started = new Promise<void>(resolve => {
+      began = resolve
+    }),
+    cancelled = new Promise<void>(resolve => {
+      closed = resolve
+    }),
+    original = f.coordinator.status.bind(f.coordinator),
+    callers: Parameters<typeof original>[1][] = [],
+    changed = jest.spyOn(f.coordinator, 'status').mockImplementationOnce(async (...args) => {
+      callers.push(args[1])
+      args[1].signal!.addEventListener('abort', closed, { once: true })
+      began()
+      await blocked
+      return await original(...args)
+    }),
+    pending = Promise.allSettled([f.fetch('status')])
+  try {
+    await started
+    const beganAt = performance.now()
+    expect((await pending)[0].status).toBe('rejected')
+    await cancelled
+    expect(performance.now() - beganAt).toBeLessThan(2000)
+    expect(callers[0].signal!.aborted).toBe(true)
+    expect(callers[0].current()).toBe(false)
+    const response = await f.fetch('status')
+    expect(response.status).toBe(413)
+    expect((await response.json()).error.code).toBe('limited')
+  } finally {
+    finish()
+    await pending
+    changed.mockRestore()
+  }
+  expect((await f.fetch('status')).status).toBe(200)
+})
+
+it.each(['absent', 'unknown'] as const)(
+  'rejects %s identity from an unhandled authentication adapter',
+  async mode => {
+    const f = await fixture({
+      authenticate: (req, _res, next) => {
+        if (mode === 'unknown') Object.assign(req, { auth: { identityKey: 'unknown' } })
+        next()
+      }
+    })
+    const response = await fetch(f.origin + '/api/overlay/v1/private/status', {
+      method: 'POST',
+      headers: f.headers,
+      body: JSON.stringify(f.status)
+    })
+    expect(response.status).toBe(401)
+    expect((await response.json()).error.code).toBe('unauthorized')
+    expect(f.calls).toEqual([])
+  }
+)
+
+it('keeps both the authenticated request owner and its identity live through native work', async () => {
+  let authenticate!: RequestHandler, selected!: Request & { auth: { identityKey: string } }
+  const f = await fixture(
+    {
+      authenticate: (req, res, next) =>
+        authenticate(req, res, error => {
+          selected = req as typeof selected
+          next(error)
+        })
+    },
+    false,
+    (_app, installed) => {
+      authenticate = installed
+    }
+  )
+  expect((await f.fetch()).status).toBe(200)
+  const original = f.coordinator.status.bind(f.coordinator),
+    changed = jest.spyOn(f.coordinator, 'status').mockImplementationOnce(async (input, caller) => {
+      const owner = selected.auth,
+        identity = owner.identityKey
+      expect(caller.current()).toBe(true)
+      try {
+        selected.auth = { ...owner }
+        expect(caller.current()).toBe(false)
+        selected.auth = owner
+        owner.identityKey = new PrivateKey(64).toPublicKey().toString()
+        expect(caller.current()).toBe(false)
+      } finally {
+        selected.auth = owner
+        owner.identityKey = identity
+      }
+      expect(caller.current()).toBe(true)
+      return await original(input, caller)
+    })
+  try {
+    expect((await f.fetch('status')).status).toBe(200)
+  } finally {
+    changed.mockRestore()
+  }
+})
+
+it('accepts an exactly full native response and a canonical base URL with a final slash', async () => {
+  const f = await fixture(async owner => {
+    await owner.coordinator.publish(owner.contract.request, owner.caller)
+    const result = await owner.coordinator.status(owner.status, owner.caller)
+    return {
+      maximumResponseBytes: Buffer.byteLength(canonicalOutputJSON(result)),
+      baseURL: owner.contract.installation.baseURL + '/'
+    }
+  })
+  const response = await f.fetch('status')
+  expect(response.status).toBe(200)
+  expect((await response.json()).status).toBe('ready')
+})
