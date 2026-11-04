@@ -1693,7 +1693,7 @@ test('listing public-arithmetic mutations include the bounded-retention regressi
   assert.ok(target.mutate.includes('src/script/templates/RevenueListingKeys.ts'))
 })
 
-test('complete alias regression initial-suite allowances retain their exact fourteen-target scope', () => {
+test('complete native initial-suite allowances retain their exact scope and alias selectors', () => {
   const allowances = new Map([
     ['private-purchase-alias-state', 15],
     ['private-purchase-alias-custody', 15],
@@ -1710,12 +1710,22 @@ test('complete alias regression initial-suite allowances retain their exact four
     ['private-purchase-alias-disclosure', 15],
     ['private-purchase-buyer-alias', 15]
   ])
+  const composed = new Set([
+    'private-purchase-http',
+    'private-acquisition-http',
+    'private-lookup-buyer',
+    'wallet-purchase-payment'
+  ])
   const configured = buildMutationTargets(REPOSITORY_ROOT)
   for (const [id, target] of Object.entries(configured)) {
-    assert.equal(target.runnerOptions.dryRunTimeoutMinutes, allowances.get(id), id)
+    assert.equal(
+      target.runnerOptions.dryRunTimeoutMinutes,
+      composed.has(id) ? 15 : allowances.get(id),
+      id
+    )
     if (allowances.has(id))
       for (const selector of currentAliasRegressionTests)
         assert.ok(target.runnerOptions.jest.config.testMatch.includes(selector), id)
   }
-  for (const id of allowances.keys()) assert.ok(Object.hasOwn(configured, id), id)
+  for (const id of [...allowances.keys(), ...composed]) assert.ok(Object.hasOwn(configured, id), id)
 })

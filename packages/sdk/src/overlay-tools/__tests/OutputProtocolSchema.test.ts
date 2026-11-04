@@ -1,11 +1,139 @@
 import { closedOutputObject, createClosedOutputObjectValidator } from '../OutputProtocol.js'
 import { runInNewContext } from 'node:vm'
 import { isDeepStrictEqual } from 'node:util'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 import * as s from '../OutputProtocolSchema.js'
+import * as releasedProtocolSurface from '../OutputProtocol.js'
+import * as releasedJSONSurface from '../OutputProtocolJSON.js'
 import { canonicalOutputJSON, ownOutputJSON, parseOutputJSON } from '../OutputProtocolJSON.js'
 const hex = '11'.repeat(32)
 const chain = { network: 'test', genesisHash: hex }
 const invalid = expect.objectContaining({ code: 'invalid' })
+
+type ReleasedValidationCase = { group: string; id: string; observe: () => unknown }
+const releasedValidationFixture = require('./fixtures/output-validation-cases.cjs') as {
+  calls: (modules: {
+    json: typeof releasedJSONSurface
+    protocol: typeof releasedProtocolSurface
+    schema: typeof s
+  }) => ReleasedValidationCase[]
+  nativeWork: <T>(run: () => T) => { value: T; calls: number; parses: number }
+  workloads: () => {
+    name:
+      | 'parseOutputJSONWithStringRecords'
+      | 'parseOutputJSONWithOwnedRecords'
+      | 'inspectOutputJSONEncodingWithScalarRecords'
+      | 'inspectOutputJSONEncodingWithOwnedRecords'
+    id: string
+    input: string
+  }[]
+}
+const releasedBoundaryCases = releasedValidationFixture.calls({
+  json: releasedJSONSurface,
+  protocol: releasedProtocolSurface,
+  schema: s
+})
+const releasedBoundaryOracle = JSON.parse(
+  gunzipSync(readFileSync(resolve(__dirname, 'fixtures/output-validation-4.0.1.json.gz')), {
+    maxOutputLength: 16 * 1024 * 1024
+  }).toString('utf8')
+) as {
+  source: { package: string; version: string; integrity: string }
+  cases: Record<string, unknown>
+}
+
+test('released validation corpus retains its exact case inventory and immutable reference identity', () => {
+  expect(releasedBoundaryOracle.source).toMatchObject({
+    package: '@bsv/sdk',
+    version: '4.0.1',
+    integrity:
+      'sha512-aLaRa38h+ck5OhqRlNiQ9oUIOuB+vSZwWzkgWlXzr/9qwK5F0pbtog5PM+1Wo2GNIzxVAEnvxYCLL5SU55cW0w=='
+  })
+  expect(releasedBoundaryCases).toHaveLength(26878)
+  expect(Object.keys(releasedBoundaryOracle.cases).sort()).toEqual(
+    releasedBoundaryCases.map(value => value.id).sort()
+  )
+})
+for (const group of new Set(releasedBoundaryCases.map(value => value.group))) {
+  test(`preserves published4.0.1 validation, error identity and resource fences: ${group}`, () => {
+    for (const entry of releasedBoundaryCases.filter(value => value.group === group))
+      expect({ caseId: entry.id, observation: entry.observe() }).toEqual({
+        caseId: entry.id,
+        observation: releasedBoundaryOracle.cases[entry.id]
+      })
+  })
+}
+
+const releasedWorkBudgets = JSON.parse(
+  readFileSync(resolve(__dirname, 'fixtures/output-validation-work-budgets.json'), 'utf8')
+) as {
+  cases: Record<string, { maximumNativeCalls: number; referenceCalls: number }>
+}
+test('flat-record work budgets retain the independently qualified workload inventory', () => {
+  const workloads = releasedValidationFixture.workloads()
+  expect(workloads).toHaveLength(30)
+  expect(Object.keys(releasedWorkBudgets.cases).sort()).toEqual(
+    workloads.map(entry => entry.id).sort()
+  )
+})
+for (const workload of releasedValidationFixture.workloads()) {
+  test(`bounds fresh native lexical/decoding work without a CPU timing oracle: ${workload.id}`, () => {
+    const measured = releasedValidationFixture.nativeWork(() =>
+      releasedJSONSurface[workload.name](workload.input)
+    )
+    expect(measured.calls).toBeLessThanOrEqual(
+      releasedWorkBudgets.cases[workload.id].maximumNativeCalls
+    )
+    const expected = JSON.parse(workload.input)
+    if (workload.name.startsWith('inspect'))
+      expect(measured.value).toEqual({ value: expected, canonical: true })
+    else expect(measured.value).toEqual(expected)
+  })
+}
+
+test('compiled closed validators default to no optional fields', () => {
+  const validate = createClosedOutputObjectValidator(['required'])
+  expect(() => validate({ required: 1 })).not.toThrow()
+  expect(() => validate({})).toThrow(invalid)
+  for (const key of ['optional', 'unexpected', 'constructor'])
+    expect(() => validate({ required: 1, [key]: true })).toThrow(invalid)
+  const empty = createClosedOutputObjectValidator([])
+  expect(() => empty({})).not.toThrow()
+  expect(() => empty({ unexpected: true })).toThrow(invalid)
+})
+
+test('owned grammar builders retain their standalone nullable and tagged parser contracts', () => {
+  const o = s.createOwnedRecordSchema()
+  const nullable = o.nullable(o.u32)
+  expect(nullable(null)).toBeNull()
+  expect(nullable(7)).toBe(7)
+  expect(() => nullable(-1)).toThrow(invalid)
+  expect(() => nullable('7')).toThrow(invalid)
+
+  const tagged = o.tagged('kind', {
+    left: o.fixedObject({ kind: o.literal('left'), count: o.u32 }),
+    right: o.fixedObject({ kind: o.literal('right'), label: o.text })
+  })
+  const left = { kind: 'left', count: 7 }
+  expect(tagged(left)).toEqual(left)
+  expect(tagged(left)).not.toBe(left)
+  expect(tagged({ kind: 'right', label: 'current' })).toEqual({ kind: 'right', label: 'current' })
+  left.count = 8
+  expect(tagged(left)).toEqual({ kind: 'left', count: 8 })
+  for (const value of [null, undefined, [], 'left', 7])
+    expect(() => tagged(value)).toThrow('Expected tagged object')
+  for (const value of [{}, { kind: 7 }, { kind: 'missing' }, { kind: 'toString' }])
+    expect(() => tagged(value)).toThrow('Unknown protocol variant')
+  expect(() => tagged({ kind: 'left', count: -1 })).toThrow(invalid)
+  expect(() => tagged({ kind: 'right', label: 7 })).toThrow(invalid)
+})
+
+test('owned JSON parsing refuses absent and escaped final string delimiters', () => {
+  for (const text of ['"unfinished', String.raw`"unfinished\"`])
+    expect(() => parseOutputJSONWithOwnedRecords(text)).toThrow('Unterminated JSON string')
+})
 function owned(value: unknown): void {
   if (value === null || typeof value !== 'object') return
   if (Array.isArray(value)) {

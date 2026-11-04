@@ -26,11 +26,64 @@ import {
   type OutputDigestDomain
 } from '../../../mod.js'
 import PrivateKey from '../../primitives/PrivateKey.js'
+import PublicKey from '../../primitives/PublicKey.js'
 import { toHex, toBase64 } from '../../primitives/utils.js'
 import * as SignedMessage from '../../messages/SignedMessage.js'
 import { OUTPUT_JSON_LIMITS } from '../OutputProtocolJSON.js'
 
 describe('BRC-192 representation boundary', () => {
+  it.each([verifyOutputPacket, verifyOutputPacketWithInlineStrings])(
+    'reuses successful mathematics while recomputing changed and unsuccessful packet facts',
+    verify => {
+      const signer = new PrivateKey(47900),
+        identity = signer.toPublicKey().toString()
+      const packet = signOutputPacket('purchase-terms', { memo: 'fresh mathematics' }, signer)
+      const other = signOutputPacket('purchase-terms', { memo: 'independent mathematics' }, signer)
+      const mathematics = jest.spyOn(SignedMessage, 'verify')
+      try {
+        expect(verify('purchase-terms', packet, identity)).toBe(true)
+        expect(verify('purchase-terms', other, identity)).toBe(true)
+        expect(verify('purchase-terms', packet, identity)).toBe(true)
+        expect(mathematics).toHaveBeenCalledTimes(2)
+        const changed = { ...packet, body: { memo: 'changed mathematics' } }
+        expect(verify('purchase-terms', changed, identity)).toBe(false)
+        expect(verify('purchase-terms', changed, identity)).toBe(false)
+        expect(mathematics).toHaveBeenCalledTimes(4)
+        expect(verify('purchase-terms', packet, identity)).toBe(true)
+        expect(mathematics).toHaveBeenCalledTimes(4)
+        expect(() =>
+          verify('purchase-terms', packet, new PrivateKey(47901).toPublicKey().toString())
+        ).toThrow(expect.objectContaining({ code: 'unauthorized' }))
+        expect(() => verify('unsupported' as never, packet, identity)).toThrow(
+          expect.objectContaining({ code: 'unsupported' })
+        )
+      } finally {
+        mathematics.mockRestore()
+      }
+    }
+  )
+
+  it('reuses only bounded, validated curve mathematics across independent identity calls', () => {
+    const first = new PrivateKey(47902).toPublicKey().toString()
+    const second = new PrivateKey(47903).toPublicKey().toString()
+    const decoding = jest.spyOn(PublicKey, 'fromString')
+    try {
+      expect(outputIdentity(first)).toBe(first)
+      expect(outputIdentity(second)).toBe(second)
+      expect(outputIdentity(first)).toBe(first)
+      expect(decoding).toHaveBeenCalledTimes(2)
+      for (let index = 0; index < 512; index++) {
+        const other = new PrivateKey(48000 + index).toPublicKey().toString()
+        expect(outputIdentity(other)).toBe(other)
+      }
+      const before = decoding.mock.calls.length
+      expect(outputIdentity(first)).toBe(first)
+      expect(decoding).toHaveBeenCalledTimes(before + 1)
+    } finally {
+      decoding.mockRestore()
+    }
+  }, 30000)
+
   // Unmodified independent Python digest corpus from BRCs 9dade70.
   const fixture = JSON.parse(
     readFileSync(resolve(__dirname, 'fixtures/output-digests.json'), 'utf8')
@@ -1852,6 +1905,7 @@ describe('explicit inline packet canonicalization', () => {
     )
     expect(verifyOutputPacketWithInlineStrings('purchase', packet, identity)).toBe(true)
     expect(verifyOutputPacket('purchase', packet, identity)).toBe(true)
+    expect(verifyOutputPacketWithInlineStrings('purchase', packet, identity)).toBe(true)
     packet.body.text = 'changed'
     expect(verifyOutputPacketWithInlineStrings('purchase', packet, identity)).toBe(false)
     packet.body.text = 'original'
@@ -1882,6 +1936,11 @@ describe('inline packet refusal and byte fences', () => {
       identity = key.toPublicKey().toString()
     const packet = signOutputPacket('purchase', { text: 'original' }, key)
     const shortened = toBase64(Array.from(decodeOutputBytes(packet.signature)).slice(0, 38))
+    expect(() =>
+      verifyOutputPacket('purchase', { ...packet, signature: shortened }, identity)
+    ).toThrow(
+      expect.objectContaining({ code: 'invalid', message: 'Malformed BRC-77 output packet' })
+    )
     expect(() =>
       verifyOutputPacketWithInlineStrings('purchase', { ...packet, signature: shortened }, identity)
     ).toThrow('Malformed BRC-77 output packet')

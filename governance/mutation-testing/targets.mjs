@@ -629,12 +629,14 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/revenue-profile.test.ts',
+          '<rootDir>/test/revenue-profile-graph.test.ts',
+          '<rootDir>/test/revenue-profile-purchase.test.ts',
           '<rootDir>/test/revenue-profile-work.test.ts',
           '<rootDir>/test/revenue-profile.property.test.ts',
           '<rootDir>/test/revenue-lineage-package.test.ts',
           '<rootDir>/test/revenue-lineage-package.property.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'revenue-listing-purchase': {
@@ -3907,6 +3909,16 @@ export function buildMutationTargets(repositoryRoot) {
       mutate: [`src/private/${module}.ts`]
     }
   }
+  // These complete selections compose real native custody/purchase fixtures
+  // and exceed Stryker's five-minute startup default. Preserve every individual
+  // test/property deadline and the original outer diagnostic job caps.
+  for (const id of [
+    'private-purchase-http',
+    'private-acquisition-http',
+    'private-lookup-buyer',
+    'wallet-purchase-payment'
+  ])
+    targets[id].runnerOptions.dryRunTimeoutMinutes = 15
   appendMutationBuildInputs(repositoryRoot, targets)
   return targets
 }

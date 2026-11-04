@@ -112,6 +112,57 @@ function heldWorkPause(entered: ReturnType<typeof deferred>, release: ReturnType
 }
 
 describe('runtime orchestration and publication ports', () => {
+  it('publishes an idle-context checkpoint before starting redundant worker passes', async () => {
+    const published = deferred(),
+      repeated = deferred(),
+      release = deferred()
+    let passes = 0
+    const journal = new MemoryJournal('test')
+    const store = new KnowledgeStore(journal, emptyReducer(), { partition })
+    const runtime = new OutputKnowledge({
+      store,
+      limits: { deadlineMs: 1000 },
+      worker: {
+        pendingBytes: async () => 0,
+        advance: async () => {
+          passes++
+          if (passes >= 2) {
+            repeated.resolve()
+            await release.promise
+          }
+        }
+      },
+      projector: {
+        policyDigest: 'ff'.repeat(32),
+        project: async input => {
+          published.resolve()
+          return projection(input)
+        }
+      }
+    })
+    let flushing: Promise<unknown> | undefined
+    try {
+      await runtime.setContext(context())
+      flushing = runtime.flush().then(
+        () => undefined,
+        error => error
+      )
+      expect(
+        await Promise.race([
+          published.promise.then(() => 'published'),
+          repeated.promise.then(() => 'redundant-pass'),
+          flushing.then(() => 'finished-without-publication')
+        ])
+      ).toBe('published')
+      expect(await flushing).toBeUndefined()
+      expect((await runtime.readProjection())?.contextId).toBe(context().id)
+    } finally {
+      release.resolve()
+      await runtime.close()
+      await flushing
+    }
+  })
+
   it('does not return a retained projection after its publication gate changes during an asynchronous read', async () => {
     const fixture = await open(noWork, {
       policyDigest: 'ff'.repeat(32),
