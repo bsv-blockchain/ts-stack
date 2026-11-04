@@ -52,7 +52,7 @@ export interface ConformanceResult {
 }
 
 const hex = (value: string): Uint8Array<ArrayBuffer> =>
-  bytesOf(value.match(/.{2}/g)!.map(byte => parseInt(byte, 16)))
+  bytesOf(value.match(/.{2}/g)!.map(byte => Number.parseInt(byte, 16)))
 
 /** Always backed by an `ArrayBuffer`, never a `SharedArrayBuffer`. */
 const bytesOf = (values: readonly number[]): Uint8Array<ArrayBuffer> => {
@@ -145,12 +145,14 @@ const aesKey = async (subtle: SubtleCrypto): Promise<CryptoKey> =>
 const CHECKS: Check[] = [
   {
     name: 'randomness',
-    run: async () => {
+    // Not `async`: nothing here awaits, and `runCheck` catches a synchronous
+    // throw from this call exactly as it catches a rejection.
+    run: () => {
       const first = globalThis.crypto.getRandomValues(new Uint8Array(32))
       const second = globalThis.crypto.getRandomValues(new Uint8Array(32))
       if (first.every(byte => byte === 0)) throw new Error('getRandomValues returned all zeroes')
       if (sameBytes(first, second)) throw new Error('getRandomValues repeated itself')
-      return undefined
+      return Promise.resolve(undefined)
     }
   },
   {
@@ -224,7 +226,7 @@ const CHECKS: Check[] = [
           bytesOf(Array.from(new TextEncoder().encode('x')))
         )
       )
-      sealed[sealed.length - 1] = (sealed[sealed.length - 1] ?? 0) ^ 0xff
+      sealed[sealed.length - 1] = (sealed.at(-1) ?? 0) ^ 0xff
       try {
         await subtle.decrypt({ name: 'AES-GCM', iv }, key, sealed)
       } catch {
@@ -265,7 +267,7 @@ const CHECKS: Check[] = [
       const publicRaw = bytes(await subtle.exportKey('raw', pair.publicKey))
       const privateDer = bytes(await subtle.exportKey('pkcs8', pair.privateKey))
       if (publicRaw.length !== 32) throw new Error(`public raw key is ${publicRaw.length} bytes`)
-      if (sameBytes(publicRaw, privateDer.slice(privateDer.length - 32))) {
+      if (sameBytes(publicRaw, privateDer.slice(-32))) {
         throw new Error('exportKey published the private seed as the public key')
       }
 
@@ -331,7 +333,7 @@ const CHECKS: Check[] = [
       const theirs = (await subtle.generateKey('X25519', true, ['deriveBits'])) as CryptoKeyPair
       const ourPublic = bytes(await subtle.exportKey('raw', ours.publicKey))
       const ourPrivate = bytes(await subtle.exportKey('pkcs8', ours.privateKey))
-      if (sameBytes(ourPublic, ourPrivate.slice(ourPrivate.length - 32))) {
+      if (sameBytes(ourPublic, ourPrivate.slice(-32))) {
         throw new Error('exportKey published the private scalar as the public key')
       }
 
@@ -406,21 +408,23 @@ const runCheck = async (check: Check, subtle: SubtleCrypto): Promise<Conformance
 /**
  * Run every check. Never stops early — finding one gap per run is the loop
  * this replaces.
+ *
+ * The checks are independent: each mints its own keys and inputs, none reads
+ * another's result, and `runCheck` turns a failure into a result rather than
+ * letting it escape. So they run together, and `Promise.all` keeps the report
+ * in declaration order. A runtime whose WebCrypto misbehaves only under
+ * concurrent calls fails here, which is correct — MLS and `@hpke/core` will
+ * drive these primitives concurrently in use.
  */
-export const checkWebCrypto = async (subtle: SubtleCrypto): Promise<ConformanceResult[]> => {
-  const results: ConformanceResult[] = []
-  for (const check of CHECKS) {
-    results.push(await runCheck(check, subtle))
-  }
-  return results
-}
+export const checkWebCrypto = async (subtle: SubtleCrypto): Promise<ConformanceResult[]> =>
+  Promise.all(CHECKS.map(check => runCheck(check, subtle)))
 
 export const formatConformance = (results: ConformanceResult[]): string => {
   const failed = results.filter(result => !result.ok)
-  const lines = results.map(
-    result =>
-      `  ${result.ok ? 'ok  ' : 'FAIL'} ${result.name}${result.detail === undefined ? '' : ` — ${result.detail}`}`
-  )
+  const lines = results.map(result => {
+    const detail = result.detail === undefined ? '' : ` — ${result.detail}`
+    return `  ${result.ok ? 'ok  ' : 'FAIL'} ${result.name}${detail}`
+  })
   const headline =
     failed.length === 0
       ? `WebCrypto: all ${results.length} checks passed`

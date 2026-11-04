@@ -94,7 +94,7 @@ const reportLostMessage = (error: Error, message: StoredMessage): void => {
 }
 
 const validName = (name: string): string => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Unusable table name: ${name}`)
+  if (!/^[A-Za-z_]\w*$/.test(name)) throw new Error(`Unusable table name: ${name}`)
   return name
 }
 

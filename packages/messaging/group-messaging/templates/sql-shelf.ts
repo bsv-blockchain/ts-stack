@@ -65,18 +65,20 @@ const DEFAULT_TABLE = 'group_messaging_private_halves'
 
 /** Rejects anything that is not a bare identifier: the name is interpolated. */
 const validName = (name: string): string => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`Unusable table name: ${name}`)
+  if (!/^[A-Za-z_]\w*$/.test(name)) throw new Error(`Unusable table name: ${name}`)
   return name
 }
+
+/** Whatever the host's driver spells a BLOB as; `bytes` narrows it. */
+type BlobValue = Uint8Array | ArrayBuffer | number[] | string
 
 interface Row {
   ref: string
   inviteId: string
   peer: string
   chatId: string
-  /** Whatever the host's driver spells a BLOB as; `bytes` narrows it. */
-  half: Uint8Array | ArrayBuffer | number[] | string
-  keyPackage: Uint8Array | ArrayBuffer | number[] | string
+  half: BlobValue
+  keyPackage: BlobValue
 }
 
 export interface SqlShelfOptions {
@@ -222,11 +224,11 @@ export class SqlShelf implements PrivateHalfShelf {
  * and this is the private half, so it throws instead. The library's own
  * `toBytes` takes the same position.
  */
-const bytes = (value: Uint8Array | ArrayBuffer | number[] | string): Uint8Array => {
+const bytes = (value: BlobValue): Uint8Array => {
   if (value instanceof Uint8Array) return value
   if (Array.isArray(value)) return Uint8Array.from(value)
   if (typeof value === 'string') {
-    throw new Error('Driver returned a BLOB as a string; decode it in your driver')
+    throw new TypeError('Driver returned a BLOB as a string; decode it in your driver')
   }
   return new Uint8Array(value)
 }

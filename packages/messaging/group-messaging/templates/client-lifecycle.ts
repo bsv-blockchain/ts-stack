@@ -92,7 +92,11 @@ interface Held<R> {
 const keyOf = (key: ClientKey): string =>
   JSON.stringify(
     Object.keys(key)
-      .sort()
+      // Code-unit order, not `localeCompare`: this string is a cache key, so it
+      // has to come out identical on every device. A locale-aware collation is
+      // the one comparison that could order the same two names differently
+      // under a different ICU build and quietly reopen a client that was held.
+      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
       .map(name => [name, key[name] ?? null])
   )
 
@@ -115,7 +119,7 @@ export class ClientOwner<R> {
     return this.#serialise(async () => {
       const wanted = keyOf(key)
       const held = this.#held
-      if (held !== undefined && held.key === wanted) {
+      if (held?.key === wanted) {
         // Belt and braces. If this ever fires, something reached past the owner
         // and the quiet wrong answer is the one that cost three bugs.
         if (held.client.identityKey !== key.identityKey) {

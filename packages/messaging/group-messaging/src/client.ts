@@ -1,7 +1,7 @@
 import { decodeEnvelope, encodeEnvelope, type Envelope } from './bootstrap/index.js'
 import { bytesEqual, fromHex, randomId } from './bytes.js'
 import { decodeContent, type MessageContent } from './content/index.js'
-import { messageIdOf, type MessageId } from './messageId.js'
+import { messageIdOf } from './messageId.js'
 import { GroupMessagingError, PermanentProcessingError, WelcomeDeliveryError } from './errors.js'
 import { Emitter } from './events.js'
 import { Group } from './group.js'
@@ -97,7 +97,7 @@ export interface ClientEvents {
     /** The epoch the message was sent in, which may predate the current one. */
     epoch: bigint
     /** What a reply or a reaction names. The sender derived the same one. */
-    messageId: MessageId
+    messageId: string
     content: MessageContent
   }
   membership: {
@@ -152,7 +152,7 @@ export interface ClientEvents {
      * the group has advanced either way — and on this path the promise that
      * would have carried the id rejects instead.
      */
-    messageId?: MessageId
+    messageId?: string
     error: Error
   }
   /**
@@ -417,15 +417,15 @@ export class GroupMessagingClient {
     }
     try {
       await this.transport.broadcast(error.groupId, error.failed, error.payload)
-    } catch (again) {
+    } catch (error_) {
       // The fresh error is about the same message, so it carries the same id.
       // Minting it without one would lose on the second attempt what the
       // first carried, leaving a host that retries in a loop with an id for
       // none of the failures after the first.
-      if (again instanceof BroadcastError && error.messageId !== undefined) {
-        again.messageId = error.messageId
+      if (error_ instanceof BroadcastError && error.messageId !== undefined) {
+        error_.messageId = error.messageId
       }
-      throw again
+      throw error_
     }
   }
 

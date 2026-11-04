@@ -62,20 +62,23 @@ export interface PrivateHalfShelf {
 /** Lasts as long as the process. Replace it with your secure store. */
 export class MemoryShelf implements PrivateHalfShelf {
   readonly #held = new Map<string, ShelvedInvitation>()
-  async hold(record: ShelvedInvitation): Promise<void> {
+  hold(record: ShelvedInvitation): Promise<void> {
     this.#held.set(record.ref, record)
+    return Promise.resolve()
   }
-  async peek(ref: string): Promise<ShelvedInvitation | undefined> {
-    return this.#held.get(ref)
+  peek(ref: string): Promise<ShelvedInvitation | undefined> {
+    return Promise.resolve(this.#held.get(ref))
   }
-  async forInvite(inviteId: string): Promise<ShelvedInvitation | undefined> {
-    for (const record of this.#held.values()) if (record.inviteId === inviteId) return record
-    return undefined
+  forInvite(inviteId: string): Promise<ShelvedInvitation | undefined> {
+    for (const record of this.#held.values()) {
+      if (record.inviteId === inviteId) return Promise.resolve(record)
+    }
+    return Promise.resolve(undefined)
   }
-  async take(ref: string): Promise<ShelvedInvitation | undefined> {
+  take(ref: string): Promise<ShelvedInvitation | undefined> {
     const record = this.#held.get(ref)
     this.#held.delete(ref)
-    return record
+    return Promise.resolve(record)
   }
 }
 
@@ -385,16 +388,16 @@ export class ManagedInvitations {
       // `BroadcastError` from here means the newcomer is in and an existing
       // member missed the epoch — reducing it to a string strands them.
       if (cause instanceof WelcomeDeliveryError || cause instanceof BroadcastError) {
-        await this.client.retryDelivery(cause).catch((again: unknown) => {
+        await this.client.retryDelivery(cause).catch((error_: unknown) => {
           // The error itself, not its message: it holds the bytes a retry needs.
           this.onFailure({
             stage: 'admit',
             chatId,
             peer,
-            reason: String(again),
+            reason: String(error_),
             undelivered:
-              again instanceof WelcomeDeliveryError || again instanceof BroadcastError
-                ? again
+              error_ instanceof WelcomeDeliveryError || error_ instanceof BroadcastError
+                ? error_
                 : cause
           })
         })
