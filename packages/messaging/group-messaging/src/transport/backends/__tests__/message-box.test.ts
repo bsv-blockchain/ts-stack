@@ -1483,9 +1483,38 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * `delivered` reports an event, not a state. Two batches that each carry one
+   * new message produce byte-identical reports, so the transition dedup
+   * swallowed the second and a host counting deliveries undercounted.
+   */
+  it('reports two identical deliveries rather than deduping the second', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    const delivered: Array<string | undefined> = []
+    transport.onLiveStatus(status => {
+      if (status.phase === 'delivered') delivered.push(status.detail)
+    })
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
+    await vi.advanceTimersByTimeAsync(1)
+    client.push({ messageId: 'm2', sender: '02aa', payload: Uint8Array.from([2]) })
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(delivered).toEqual(['1 message(s), 1 new', '1 message(s), 1 new'])
+
+    await transport.close()
+  })
+
+  // Live, and unstarted. Built without `live` it could not have a status at
+  // all, so it passed for a reason that had nothing to do with the replay.
   it('has nothing to replay before the socket has said anything', () => {
     const client = fakeLiveClient()
-    const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })
+    const transport = live(client)
     const phases: Array<LiveStatus['phase']> = []
 
     transport.onLiveStatus(status => {

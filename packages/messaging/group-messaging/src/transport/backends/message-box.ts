@@ -667,7 +667,11 @@ export class MessageBoxTransport implements TransportBackend {
     // socket, so they can say the same thing twice. Only transitions go out,
     // which is the contract the client itself keeps.
     const last = this.#lastStatus
+    // `delivered` reports an event rather than a state, and two polls that each
+    // carry one new message produce byte-identical reports; deduping them loses
+    // the second delivery for a host counting them.
     if (
+      status.phase !== 'delivered' &&
       last?.phase === status.phase &&
       last?.source === status.source &&
       last?.detail === status.detail
@@ -751,6 +755,10 @@ export class MessageBoxTransport implements TransportBackend {
     this.#unfollow = undefined
     await this.#poll.close()
     await this.#live?.close()
+    // After the close, so the `closed` the live source reports on its way out
+    // still reaches whoever asked for it. A handler left in the set holds its
+    // closure, and through it whatever the host captured.
+    this.#liveStatusHandlers.clear()
   }
 
   /**

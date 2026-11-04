@@ -61,6 +61,8 @@ export { DeliveryFailed }
 export class TransportService {
   readonly #handlers = new Set<MessageHandler>()
   readonly #errorHandlers = new Set<ErrorHandler>()
+  /** Live-status subscriptions taken out on the backend, released on close. */
+  readonly #liveStatusUnsubscribes = new Set<Unsubscribe>()
   #unsubscribe: Unsubscribe | undefined
   #unsubscribeErrors: Unsubscribe | undefined
 
@@ -141,7 +143,16 @@ export class TransportService {
    * host writes one handler and swaps backends underneath it.
    */
   onLiveStatus(handler: (status: LiveStatus) => void): Unsubscribe {
-    return this.backend.onLiveStatus?.(handler) ?? (() => undefined)
+    const release = this.backend.onLiveStatus?.(handler)
+    if (release === undefined) return () => undefined
+    // Tracked so `close()` can release it. The handler lives in the backend's
+    // set, so a service closed without releasing it leaves the backend holding
+    // the host's closure.
+    this.#liveStatusUnsubscribes.add(release)
+    return () => {
+      this.#liveStatusUnsubscribes.delete(release)
+      release()
+    }
   }
 
   /** Called when an inbound handler throws. */
@@ -166,6 +177,8 @@ export class TransportService {
     this.#unsubscribe = undefined
     this.#unsubscribeErrors?.()
     this.#unsubscribeErrors = undefined
+    for (const release of this.#liveStatusUnsubscribes) release()
+    this.#liveStatusUnsubscribes.clear()
     this.#handlers.clear()
     this.#errorHandlers.clear()
   }
