@@ -39,7 +39,7 @@
     "doc": "ts2md --inputFilename=src/index.ts --outputFilename=API.md --filenameSubstring=API --firstHeadingLevel=1",
     "format:check": "pnpm --workspace-root exec prettier --check \"packages/messaging/group-messaging/src/**/*.ts\" \"packages/messaging/group-messaging/templates/**/*.ts\" \"packages/messaging/group-messaging/*.{json,ts}\"",
     "lint": "oxlint src templates vitest.config.ts --deny-warnings",
-    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --exports GroupMessagingClient,Group,IdentityService,StorageProvider,TransportService,MlsEngine,InviteService,MessageBoxTransport,InProcessTransportHub",
+    "pack:check": "node ../../../scripts/check-package-artifact.mjs . --allow-source-prefixes templates --exports GroupMessagingClient,Group,IdentityService,StorageProvider,TransportService,MlsEngine,InviteService,MessageBoxTransport,InProcessTransportHub",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:property": "vitest run src/bootstrap/__tests__/envelope.property.test.ts",
