@@ -11,9 +11,8 @@ import {
 import { purchaseContractFixture } from './private-purchase-contract.fixture.js'
 
 /** Signed lifecycle representations; no transaction, actual admission or release-policy proof. */
-export function purchaseProgressFixture() {
-  const f = purchaseContractFixture(),
-    original = f.original(),
+export function purchaseProgressFixture(f = purchaseContractFixture()) {
+  const original = f.original(),
     txid = '55'.repeat(32),
     steak = {
       [original.request.topic]: { outputsToAdmit: [0], coinsToRetain: [], coinsRemoved: [0] }

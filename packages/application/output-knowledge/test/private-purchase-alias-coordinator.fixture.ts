@@ -16,10 +16,10 @@ import { SQLitePrivatePurchaseAdmissionJournal } from '../src/private/SQLitePriv
  * production chain selection, topical admission or portable License validity. */
 export function purchaseAliasCoordinatorFixture(
   options: Partial<PrivatePurchaseAliasCoordinatorOptions> = {},
-  pendingCandidates = false
+  pendingCandidates = false,
+  f = purchaseAliasOwnerFixture(8, 2 * 1048576, options.recoverRejected ? 8 : undefined)
 ) {
-  const f = purchaseAliasOwnerFixture(8, 2 * 1048576, options.recoverRejected ? 8 : undefined),
-    base = purchaseCoordinatorFixture({}, f.base)
+  const base = purchaseCoordinatorFixture({}, f.base)
   let mined = false,
     current = true,
     failure = false,
