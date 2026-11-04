@@ -76,7 +76,7 @@ export class Group {
   }
 
   async sendReaction(input: {
-    reference: string
+    reference: MessageId
     content: string
     action?: Reaction['action']
     schema?: Reaction['schema']
@@ -95,7 +95,7 @@ export class Group {
   }
 
   async sendReply(input: {
-    reference: string
+    reference: MessageId
     body: string
     markdown?: string
   }): Promise<MessageId> {

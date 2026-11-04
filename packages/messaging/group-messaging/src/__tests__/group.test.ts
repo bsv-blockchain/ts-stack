@@ -322,10 +322,17 @@ describe('deliveryFailed', () => {
     alice.on('deliveryFailed', ({ messageId }) => {
       ids.push(messageId)
     })
+    // Bob was reached, so he derives the id the event should be carrying.
+    // Matching a shape instead would pass for an id hashed from the envelope,
+    // which no peer agrees with.
+    const received: string[] = []
+    bob.on('message', ({ messageId }) => {
+      received.push(messageId)
+    })
     await expect(group.sendText('hello')).rejects.toThrow()
 
     expect(ids).toHaveLength(1)
-    expect(ids[0]).toMatch(/^[0-9a-f]{64}$/)
+    expect(received).toEqual([ids[0]])
 
     await Promise.all([alice.close(), bob.close(), carol.close()])
   })

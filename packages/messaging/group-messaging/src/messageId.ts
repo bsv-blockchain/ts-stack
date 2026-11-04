@@ -22,10 +22,21 @@
  * this works on a React Native runtime whose WebCrypto is partial.
  */
 import { Hash } from '@bsv/sdk'
-import { toHex, toNumbers } from './bytes.js'
+import { toHex } from './bytes.js'
 
 /** A sha-256 digest in lower-case hex. */
 export type MessageId = string
 
+/**
+ * Derive the id of an MLS application message.
+ *
+ * Public and deterministic, so it is an identifier rather than a capability:
+ * anyone holding the ciphertext can compute it, and holding one proves
+ * nothing. Nothing may turn on knowing an id — authorise on group membership
+ * and the MLS sender, which is what the framing already authenticates.
+ */
 export const messageIdOf = (message: Uint8Array): MessageId =>
-  toHex(Hash.sha256(toNumbers(message)))
+  // `Hash.sha256` takes a `Uint8Array` as it stands. Converting to a plain
+  // array first allocated one JS number per byte on a path that runs for every
+  // message sent and every message received.
+  toHex(Hash.sha256(message))
