@@ -285,11 +285,17 @@ export interface MainIo {
   run: typeof run
 }
 
+const DEFAULT_IO: MainIo = {
+  log: line => console.log(line),
+  error: line => console.error(line),
+  run
+}
+
 /** The whole CLI: runs `argv`, prints the summary, and resolves to the process exit code. */
 export async function main(
   argv: string[],
   provider?: ConfigProvider,
-  io: MainIo = { log: console.log, error: console.error, run }
+  io: MainIo = DEFAULT_IO
 ): Promise<number> {
   const { log } = io
   if (argv.includes('--help') || argv.includes('-h')) {
@@ -327,4 +333,11 @@ export async function main(
     io.error(formatConfigError(err))
     return 1
   }
+}
+
+/** Runs main() for the bin and sets process.exitCode from it. */
+export function start(argv: string[], provider?: ConfigProvider): void {
+  void main(argv, provider).then(code => {
+    process.exitCode = code
+  })
 }

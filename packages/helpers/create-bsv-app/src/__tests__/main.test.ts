@@ -1,5 +1,5 @@
-import { describe, expect, jest, test } from '@jest/globals'
-import { CLI_HELP, main } from '../cli'
+import { afterEach, describe, expect, jest, test } from '@jest/globals'
+import { CLI_HELP, main, start } from '../cli'
 import { ConfigError } from '../config/validate'
 import type { RunResult } from '../pipeline'
 
@@ -92,5 +92,21 @@ describe('main', () => {
     expect(code).toBe(1)
     expect(err).toContain('bad flag')
     expect(out).toBe('')
+  })
+})
+
+describe('start', () => {
+  afterEach(() => {
+    process.exitCode = undefined
+  })
+
+  test('sets the exit code main() resolves to', async () => {
+    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined)
+    process.exitCode = 9
+    start(['--help'])
+    await new Promise(resolve => setImmediate(resolve))
+    expect(process.exitCode).toBe(0)
+    expect(log).toHaveBeenCalledWith(CLI_HELP)
+    log.mockRestore()
   })
 })
