@@ -35,6 +35,7 @@ const target = {
 }
 
 const semanticTargets = [
+  'lch-overlay-acquisition',
   'wallet-recovery-store',
   'wallet-recovery-plan',
   'lch-overlay-covenant-terms',
@@ -97,11 +98,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 156)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 604)
+  assert.equal(matrix.include.length, 606)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 256, 92]
+    [256, 256, 94]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -134,6 +135,44 @@ test('declaration companions retain every original source line and setting in no
       assert.equal(part.target.runnerOptions, original.runnerOptions)
     }
   }
+})
+
+test('the measured LCH terms hotspot splits without changing its original diagnostic alias or controls', () => {
+  const original = buildMutationTargets(REPOSITORY_ROOT)['lch-overlay-acquisition'],
+    alias = selectedMutationPartition('lch-overlay-acquisition', original, 'auto-18'),
+    parts = partitionMutationTarget('lch-overlay-acquisition', original),
+    terms = parts.filter(part => part.id.startsWith('terms-'))
+  assert.deepEqual(alias.mutate, ['src/overlayAcquisitionTerms.ts:1-171'])
+  assert.deepEqual(
+    terms.map(part => part.id),
+    ['terms-1', 'terms-2', 'terms-3']
+  )
+  assert.deepEqual(
+    terms.flatMap(part => part.target.mutate),
+    [
+      'src/overlayAcquisitionTerms.ts:1-64',
+      'src/overlayAcquisitionTerms.ts:65-96',
+      'src/overlayAcquisitionTerms.ts:97-171'
+    ]
+  )
+  assert.deepEqual(
+    sourceLines(
+      original,
+      terms.flatMap(part => part.target.mutate)
+    ),
+    sourceLines(original, alias.mutate)
+  )
+  for (const part of [...terms, { target: alias }])
+    assert.deepEqual({ ...part.target, mutate: original.mutate }, original)
+  assert.ok(!parts.some(part => part.id === 'auto-18'))
+})
+
+test('targets without a package plan retain their complete original fallback even with known execution companions', () => {
+  const original = { mutate: ['src/example.ts'], runnerOptions: { testMatch: ['original-suite'] } }
+  assert.deepEqual(partitionMutationTarget('private-purchase-disclosure', original), [
+    { id: 'whole', target: original }
+  ])
+  assert.equal(partitionMutationTarget('private-purchase-disclosure', original)[0].target, original)
 })
 
 test('standing covenant terms retain their seven semantic partitions and complete historical and current companions', () => {

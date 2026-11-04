@@ -33,7 +33,7 @@ function compare(left, right) {
   return 0
 }
 const ordered = values => [...values].sort(compare)
-const PINNED_ENGINE = '9.6.1'
+const PINNED_ENGINE = '10.1.1'
 const quietLogger = { debug() {}, info() {}, warn() {}, isDebugEnabled: () => false }
 let enginePromise
 

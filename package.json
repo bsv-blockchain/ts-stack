@@ -50,9 +50,9 @@
   },
   "devDependencies": {
     "@arethetypeswrong/core": "0.18.5",
-    "@stryker-mutator/core": "9.6.1",
-    "@stryker-mutator/jest-runner": "9.6.1",
-    "@stryker-mutator/vitest-runner": "9.6.1",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/jest-runner": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "esbuild": "0.28.2",
     "istanbul-lib-coverage": "3.2.2",
     "istanbul-lib-report": "3.0.1",

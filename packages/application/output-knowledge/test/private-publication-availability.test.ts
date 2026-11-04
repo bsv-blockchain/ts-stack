@@ -1,11 +1,12 @@
 import { expect, it, jest } from '@jest/globals'
 import { createSecretKey, type KeyObject } from 'node:crypto'
-import { PrivateKey, type OutputJSONObject } from '@bsv/sdk'
+import { OutputProtocolError, PrivateKey, type OutputJSONObject } from '@bsv/sdk'
 import { NodeProtectedPayloadCodec } from '../src/private/NodeProtectedPayloadCodec.js'
 import { PrivatePublicationDisclosure } from '../src/private/PrivatePublicationDisclosure.js'
 import { parsePrivatePublicationFenceMetadata } from '../src/private/PrivatePublicationRecords.js'
 import { coordinatorFixture } from './private-publication-coordinator-fixture.js'
 import { allow } from './private-publication-fixture.js'
+import { readCurrentPrivatePublicationStatus } from '../src/private/PrivatePublicationPorts.js'
 
 class SeparateRecordKeys extends NodeProtectedPayloadCodec {
   private readonly material: NodeProtectedPayloadCodec
@@ -173,4 +174,219 @@ it('rejects a wrong original selector before recording custody loss', async () =
   expect(f.store.loadStatus(f.status.publicationId, () => '20', allow)!.record.revision).toBe(
     retained.record.revision
   )
+})
+
+it('returns no status for an absent native publication without invoking selection or loss writes', () => {
+  const f = coordinatorFixture(),
+    validate = jest.fn<() => void>(),
+    mark = jest.spyOn(f.store, 'markUnavailable'),
+    verified = jest.spyOn(f.store, 'loadVerified')
+  try {
+    expect(
+      readCurrentPrivatePublicationStatus(
+        f.store,
+        f.status.publicationId,
+        f.options.clock,
+        allow,
+        validate
+      )
+    ).toBeUndefined()
+    expect(validate).not.toHaveBeenCalled()
+    expect(mark).not.toHaveBeenCalled()
+    expect(verified).not.toHaveBeenCalled()
+  } finally {
+    mark.mockRestore()
+    verified.mockRestore()
+  }
+})
+
+it.each([null, false, 0, 'validator', async () => {}])(
+  'refuses a non-synchronous metadata validator before reading private material: %p',
+  invalid => {
+    const f = coordinatorFixture()
+    f.stage()
+    const verified = jest.spyOn(f.store, 'loadVerified')
+    try {
+      expect(() =>
+        readCurrentPrivatePublicationStatus(
+          f.store,
+          f.status.publicationId,
+          f.options.clock,
+          allow,
+          invalid as unknown as () => void
+        )
+      ).toThrow(
+        expect.objectContaining({
+          code: 'invalid',
+          message: 'Publication metadata selection validation must be synchronous'
+        })
+      )
+      expect(verified).not.toHaveBeenCalled()
+    } finally {
+      verified.mockRestore()
+    }
+  }
+)
+
+it.each([false, true, 0, 'verdict'])(
+  'requires metadata validation to finish with void rather than a truthy or false verdict: %p',
+  verdict => {
+    const f = coordinatorFixture()
+    f.stage()
+    expect(() =>
+      readCurrentPrivatePublicationStatus(
+        f.store,
+        f.status.publicationId,
+        f.options.clock,
+        allow,
+        () => verdict
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Publication metadata selection validation must finish synchronously'
+      })
+    )
+  }
+)
+
+it('consumes a rejected metadata validator promise and never reads private material', async () => {
+  const f = coordinatorFixture(),
+    failure = new Error('Synthetic metadata failure'),
+    verdict = Promise.reject(failure),
+    observed = verdict.then(
+      () => undefined,
+      error => error
+    ),
+    caught = jest.spyOn(verdict, 'catch'),
+    verified = jest.spyOn(f.store, 'loadVerified')
+  f.stage()
+  try {
+    expect(() =>
+      readCurrentPrivatePublicationStatus(
+        f.store,
+        f.status.publicationId,
+        f.options.clock,
+        allow,
+        () => verdict
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Publication metadata selection validation must finish synchronously'
+      })
+    )
+    expect(caught).toHaveBeenCalledWith(expect.any(Function))
+    expect(verified).not.toHaveBeenCalled()
+    expect(await observed).toBe(failure)
+  } finally {
+    caught.mockRestore()
+    verified.mockRestore()
+  }
+})
+
+it.each([
+  new Error('Synthetic driver failure'),
+  new OutputProtocolError('conflict', 'Synthetic CAS failure')
+])(
+  'propagates non-availability failures without recording invented material loss: %p',
+  async failure => {
+    const f = await fixture(),
+      verified = jest.spyOn(f.store, 'loadVerified').mockImplementation(() => {
+        throw failure
+      }),
+      mark = jest.spyOn(f.store, 'markUnavailable')
+    try {
+      let thrown: unknown
+      try {
+        readCurrentPrivatePublicationStatus(
+          f.store,
+          f.status.publicationId,
+          f.options.clock,
+          allow,
+          () => {}
+        )
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).toBe(failure)
+      expect(mark).not.toHaveBeenCalled()
+    } finally {
+      verified.mockRestore()
+      mark.mockRestore()
+    }
+  }
+)
+
+it('requires a missing verified publication to become durably unavailable before returning status', async () => {
+  const f = await fixture(),
+    verified = jest.spyOn(f.store, 'loadVerified').mockReturnValue(undefined)
+  try {
+    const result = readCurrentPrivatePublicationStatus(
+      f.store,
+      f.status.publicationId,
+      f.options.clock,
+      allow,
+      () => {}
+    )
+    expect(result?.verified).toBeUndefined()
+    expect(result?.metadata.fence.state.progress.phase).toBe('unavailable')
+    expect(
+      f.store.loadStatus(f.status.publicationId, f.options.clock, allow)?.fence.state.progress.phase
+    ).toBe('unavailable')
+  } finally {
+    verified.mockRestore()
+  }
+})
+
+it.each(['unchanged', 'absent'] as const)(
+  'refuses a loss writer whose readback is %s instead of durably unavailable',
+  async mode => {
+    const f = await fixture(),
+      metadata = f.store.loadStatus(f.status.publicationId, f.options.clock, allow)!,
+      verified = jest.spyOn(f.store, 'loadVerified').mockReturnValue(undefined),
+      mark = jest.spyOn(f.store, 'markUnavailable').mockReturnValue(metadata.fence.state),
+      status = jest.spyOn(f.store, 'loadStatus')
+    status.mockReturnValueOnce(metadata).mockReturnValue(mode === 'absent' ? undefined : metadata)
+    try {
+      expect(() =>
+        readCurrentPrivatePublicationStatus(
+          f.store,
+          f.status.publicationId,
+          f.options.clock,
+          allow,
+          () => {}
+        )
+      ).toThrow(
+        expect.objectContaining({
+          code: 'unavailable',
+          message: 'Private publication loss is not durably recorded'
+        })
+      )
+      expect(mark).toHaveBeenCalledWith(
+        f.status.publicationId,
+        metadata.record.revision,
+        f.options.clock,
+        allow
+      )
+    } finally {
+      verified.mockRestore()
+      mark.mockRestore()
+      status.mockRestore()
+    }
+  }
+)
+
+it('keeps the readiness observation separate from the original unchecked metadata projection', async () => {
+  const f = await fixture(),
+    result = readCurrentPrivatePublicationStatus(
+      f.store,
+      f.status.publicationId,
+      f.options.clock,
+      allow,
+      () => {}
+    )!
+  expect(result.verified?.fence.state.progress.phase).toBe('ready')
+  expect(result.metadata.availability).toBe('unchecked')
+  expect(result.metadata.original).toEqual(result.verified?.original)
 })

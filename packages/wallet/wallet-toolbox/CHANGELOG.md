@@ -4,6 +4,13 @@ This document captures the history of significant changes to the wallet-toolbox 
 The git commit history contains the details but is unable to draw
 attention to changes that materially alter behavior or extend functionality.
 
+## wallet-toolbox 2.15.2 (source candidate)
+
+- Adds bounded foreground BEEF failure diagnostics identifying the last root
+  check or the structural stage. Provider exceptions retain their original
+  identity; no proof check or public wallet contract is relaxed. Reconcile
+  retained signed actions after ambiguous responses before issuing another spend.
+
 ## wallet-toolbox 2.15.1
 
 - Add optional `StorageClientOptions.authFetchOptions` in the existing third
