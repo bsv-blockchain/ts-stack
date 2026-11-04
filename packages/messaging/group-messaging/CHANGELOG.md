@@ -39,7 +39,10 @@
   event and on the `BroadcastError` it rejects with. The event is client-wide
   and names only the chat, so the rejection is the only place a host with two
   sends in flight can tell them apart, and a retry that fails again carries the
-  same id. The send helpers return the id rather than nothing.
+  same id. The send helpers return the id rather than nothing, and
+  `Reaction.reference`, `MessageContent.replyTo` and the `reference` arguments
+  to `sendReply` and `sendReaction` are typed `MessageId` rather than `string`
+  — an alias, so nothing breaks; it just says which string is meant.
 - `TransportService.onLiveStatus`, forwarding what the backend's live connection
   is doing. A host previously had to build the backend itself and keep a
   reference past the service to learn any of it. `LiveStatus` moves to the
@@ -47,14 +50,20 @@
   the connection phase is replayed to a handler that subscribes late — a screen
   mounted after the socket settled saw nothing until a transition that, on a
   healthy connection, never comes. A `delivered` report describes one batch
-  rather than the connection, so it is not what gets replayed.
+  rather than the connection, so it is not what gets replayed, and two
+  identical ones in a row are both reported rather than deduped. `close()`
+  releases the live-status handlers it was given, on the backend and through
+  `TransportService` alike. `LiveStatus` is exported from the transport barrel
+  where it is declared, as well as from the MessageBox backend.
 - A KeyPackage's `notBefore` reaches five minutes further back than the moment
   it was minted. An admitter validates the lifetime against its own clock and
   `ts-mls` runs that check unconditionally for a commit the caller is sending,
   so a peer whose clock read even a second later rejected the add outright with
   "Current time not within Lifetime" and the join could not be retried into
-  working. `lifetimeSeconds` still means how far forward the package is good
-  for. Verified on two devices with a 162-second skew between them.
+  working. The window reaches that far past `lifetimeSeconds` at both ends, so
+  an admitter whose clock runs either way is covered and a short
+  `lifetimeSeconds` stays usable across devices. `lifetimeSeconds` still means
+  how far forward the package is good for. Verified on two devices with a 162-second skew between them.
 - Four templates under `templates/`, alongside the managed invitation exchange:
   `client-lifecycle` (opening and closing a client without leaking a database a
   failed open had already acquired), `sql-shelf` (the private half of a
