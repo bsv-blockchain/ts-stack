@@ -36,7 +36,7 @@ function conjunctionPasses(expression, context) {
   return expression.split(' && ').every(clause => {
     // always() only lifts GitHub's implicit success(); the remaining clauses
     // must still pass on their own.
-    if (clause === 'always()' || clause === '!cancelled()') return true
+    if (clause === 'always()') return true
     const match = /^(\S+) (==|!=) (\S+)$/.exec(clause)
     assert.ok(match, `Unexpected release guard syntax: ${clause}`)
     return match[2] === '=='
@@ -45,19 +45,13 @@ function conjunctionPasses(expression, context) {
   })
 }
 
-test('every publisher requires exact-source admission before publisher permissions', async () => {
+test('every publisher requires complete exact-source qualification before publisher permissions', async () => {
   for (const { file, workflow } of await releaseWorkflows()) {
     const publisher = workflow.jobs[file === 'infra-release.yaml' ? 'release' : 'publish']
     const campaign = workflow.jobs['full-mutation']
     // infra-release resolves its own campaign or the release.yaml caller's
     // same-run campaign into one exact-source qualification job.
-    const gate =
-      file === 'infra-release.yaml'
-        ? 'qualification'
-        : file === 'release.yaml'
-          ? 'admission'
-          : 'full-mutation'
-    const sourceOutput = gate === 'full-mutation' ? 'qualified-sha' : 'admitted-sha'
+    const gate = file === 'infra-release.yaml' ? 'qualification' : 'full-mutation'
     assert.equal(campaign.uses, './.github/workflows/mutation-tests.yml')
     assert.deepEqual(campaign.permissions, { contents: 'read' })
     // Only release.yaml may narrow a campaign, and only from the same plan
@@ -76,11 +70,11 @@ test('every publisher requires exact-source admission before publisher permissio
           github: { sha: 'a'.repeat(40) },
           needs: {
             approve: { result: 'success' },
-            prepare: { result: 'success', outputs: { count: '1' } },
+            prepare: { outputs: { count: '1' } },
             discover: { result: 'success', outputs: { count: '1' } },
             source: { result: 'success' },
             'build-image': { result: 'success' },
-            [gate]: { result, outputs: { [sourceOutput]: qualified } }
+            [gate]: { result, outputs: { 'qualified-sha': qualified } }
           }
         }
         assert.equal(
@@ -102,7 +96,7 @@ test('every publisher requires exact-source admission before publisher permissio
         needs: {
           approve: { result: 'success' },
           [prerequisite]: { result: 'success', outputs: { count: '0', called: 'false' } },
-          [gate]: { result: 'success', outputs: { [sourceOutput]: 'a'.repeat(40) } }
+          [gate]: { result: 'success', outputs: { 'qualified-sha': 'a'.repeat(40) } }
         }
       }
       assert.equal(conjunctionPasses(publisher.if, context), false)
@@ -111,7 +105,7 @@ test('every publisher requires exact-source admission before publisher permissio
         // it also qualifies the infrastructure images, so an empty npm set
         // does not skip it.
         assert.equal(campaign.needs, 'plan')
-        assert.equal(campaign.if, "inputs.qualification-exception == ''")
+        assert.equal(campaign.if, undefined)
         const { plan, prepare, infra } = workflow.jobs
         assert.equal(prepare.needs, 'plan')
         assert.equal(prepare.outputs.filter, '${{ needs.plan.outputs.filter }}')
@@ -126,10 +120,7 @@ test('every publisher requires exact-source admission before publisher permissio
           undefined
         )
         // Infrastructure images need every canonical target, never a package scope.
-        assert.match(
-          infra.if,
-          /needs\.admission\.outputs\.admission-kind == 'operator-waiver' \|\| needs\.full-mutation\.outputs\.qualified-packages == ''/
-        )
+        assert.match(infra.if, / && needs\.full-mutation\.outputs\.qualified-packages == '' && /)
       } else {
         assert.equal(conjunctionPasses(campaign.if, context), false)
         // A release.yaml call reuses the caller's qualification of github.sha.

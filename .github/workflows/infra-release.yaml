@@ -23,12 +23,6 @@ on:
     tags:
       - 'infra/v*'
   workflow_dispatch:
-    inputs:
-      release-exception-id:
-        description: Temporary exact-source mutation exception; empty requires full qualification
-        required: false
-        default: ''
-        type: string
   workflow_call:
     inputs:
       source-sha:
@@ -37,18 +31,7 @@ on:
         type: string
       qualified-sha:
         description: Exact source qualified by the caller's full mutation campaign
-        required: false
-        default: ''
-        type: string
-      waived-sha:
-        description: Exact source admitted by the caller's pinned operator exception
-        required: false
-        default: ''
-        type: string
-      release-exception-id:
-        description: Temporary exception independently verified against the exact source
-        required: false
-        default: ''
+        required: true
         type: string
 
 permissions: {}
@@ -70,8 +53,6 @@ jobs:
       all-matrix: ${{ steps.set.outputs.all-matrix }}
       called: ${{ steps.source.outputs.called }}
       source-sha: ${{ steps.source.outputs.source-sha }}
-      admitted-sha: ${{ steps.source.outputs.admitted-sha }}
-      admission-kind: ${{ steps.source.outputs.admission-kind }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -89,8 +70,6 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           SOURCE_SHA: ${{ inputs.source-sha }}
           QUALIFIED_SHA: ${{ inputs.qualified-sha }}
-          WAIVED_SHA: ${{ inputs.waived-sha }}
-          EXCEPTION_ID: ${{ inputs.release-exception-id }}
         run: |
           git fetch origin main
           if [[ -n "$SOURCE_SHA" ]]; then
@@ -104,8 +83,8 @@ jobs:
               echo "::error::The calling release commit must be reachable from main."
               exit 1
             fi
-            if [[ "$QUALIFIED_SHA" != "$GITHUB_SHA" && "$WAIVED_SHA" != "$GITHUB_SHA" ]]; then
-              echo "::error::The caller did not admit the exact release commit."
+            if [[ "$QUALIFIED_SHA" != "$GITHUB_SHA" ]]; then
+              echo "::error::The caller did not qualify the exact release commit."
               exit 1
             fi
             if [[ "$SOURCE_SHA" != "$GITHUB_SHA" ]]; then
@@ -124,17 +103,6 @@ jobs:
                 exit 1
               fi
             fi
-            if [[ -n "$WAIVED_SHA" ]]; then
-              if [[ -n "$QUALIFIED_SHA" || "$WAIVED_SHA" != "$GITHUB_SHA" ]]; then
-                echo "::error::Ambiguous or stale operator exception."
-                exit 1
-              fi
-              node scripts/release-source-admission.mjs "$EXCEPTION_ID" "$WAIVED_SHA"
-              echo "admission-kind=operator-waiver" >> "$GITHUB_OUTPUT"
-            else
-              echo "admitted-sha=$QUALIFIED_SHA" >> "$GITHUB_OUTPUT"
-              echo "admission-kind=full-mutation" >> "$GITHUB_OUTPUT"
-            fi
             echo "called=true" >> "$GITHUB_OUTPUT"
             echo "source-sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
             exit 0
@@ -149,14 +117,6 @@ jobs:
           elif ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::Infrastructure release tags must point to a commit reachable from main."
             exit 1
-          fi
-          if [[ -n "$EXCEPTION_ID" ]]; then
-            if [[ "$EVENT_NAME" != "workflow_dispatch" || "$GITHUB_WORKFLOW_REF" != "$GITHUB_REPOSITORY/.github/workflows/infra-release.yaml@refs/heads/main" ]]; then
-              echo "::error::The standalone exception requires this workflow's manual main dispatch."
-              exit 1
-            fi
-            node scripts/release-source-admission.mjs "$EXCEPTION_ID" "$GITHUB_SHA"
-            echo "admission-kind=operator-waiver" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Log in to GHCR (for manifest probes)
@@ -222,48 +182,42 @@ jobs:
   full-mutation:
     name: Qualify exact source before publication
     needs: discover
-    if: needs.discover.outputs.count != '0' && needs.discover.outputs.called == 'false' && needs.discover.outputs.admission-kind != 'operator-waiver'
+    if: needs.discover.outputs.count != '0' && needs.discover.outputs.called == 'false'
     permissions:
       contents: read
     uses: ./.github/workflows/mutation-tests.yml
 
   qualification:
-    name: Resolve exact-source release admission
+    name: Resolve exact-source qualification
     needs: [discover, full-mutation]
     if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
     outputs:
-      admitted-sha: ${{ steps.resolve.outputs.admitted-sha }}
-      admission-kind: ${{ steps.resolve.outputs.admission-kind }}
+      qualified-sha: ${{ steps.resolve.outputs.qualified-sha }}
     steps:
-      - name: Require an admitted exact source
+      - name: Require a qualified exact source
         id: resolve
         env:
           CALLED: ${{ needs.discover.outputs.called }}
           CALLER_QUALIFIED: ${{ inputs.qualified-sha }}
-          CALLER_ADMITTED: ${{ needs.discover.outputs.admitted-sha }}
-          CALLER_ADMISSION: ${{ needs.discover.outputs.admission-kind }}
           CAMPAIGN_RESULT: ${{ needs.full-mutation.result }}
           CAMPAIGN_QUALIFIED: ${{ needs.full-mutation.outputs.qualified-sha }}
         run: |
-          if [[ "$CALLED" == "true" || "$CALLER_ADMISSION" == "operator-waiver" ]]; then
-            admitted="$CALLER_ADMITTED"
-            kind="$CALLER_ADMISSION"
+          if [[ "$CALLED" == "true" ]]; then
+            qualified="$CALLER_QUALIFIED"
           elif [[ "$CAMPAIGN_RESULT" == "success" ]]; then
-            admitted="$CAMPAIGN_QUALIFIED"
-            kind=full-mutation
+            qualified="$CAMPAIGN_QUALIFIED"
           else
             echo "::error::Full mutation qualification did not succeed: $CAMPAIGN_RESULT"
             exit 1
           fi
-          if [[ "$admitted" != "$GITHUB_SHA" ]]; then
-            echo "::error::Admitted source '$admitted' is not $GITHUB_SHA."
+          if [[ "$qualified" != "$GITHUB_SHA" ]]; then
+            echo "::error::Qualified source '$qualified' is not $GITHUB_SHA."
             exit 1
           fi
-          echo "admitted-sha=$admitted" >> "$GITHUB_OUTPUT"
-          echo "admission-kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "qualified-sha=$qualified" >> "$GITHUB_OUTPUT"
 
   # Build, scan and describe each image while the mutation campaign qualifies
   # the source. This job has no publishing permissions; the release job
@@ -395,7 +349,7 @@ jobs:
     # build-image may fail for one component without blocking the others: each
     # component publishes only its own reviewed image, and a component whose
     # build or scan failed has no image to download.
-    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.admitted-sha == github.sha && needs.build-image.result != 'cancelled' && needs.build-image.result != 'skipped'
+    if: always() && needs.discover.result == 'success' && needs.discover.outputs.count != '0' && needs.qualification.result == 'success' && needs.qualification.outputs.qualified-sha == github.sha && needs.build-image.result != 'cancelled' && needs.build-image.result != 'skipped'
     runs-on: ubuntu-latest
     permissions:
       artifact-metadata: write
