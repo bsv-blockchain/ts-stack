@@ -95,7 +95,7 @@ export type { CredentialIdentity } from './identity/index.js'
 // ── Message content ────────────────────────────────────────────────────────
 
 export * from './content/index.js'
-export { messageIdOf, type MessageId } from './messageId.js'
+export { messageIdOf } from './messageId.js'
 
 // ── Shared ─────────────────────────────────────────────────────────────────
 

@@ -7,7 +7,6 @@
  * shaped after XMTP's content-type registry and Matrix's `body` +
  * `formatted_body` pattern.
  */
-import type { MessageId } from '../messageId.js'
 
 export const CONTENT_VERSION = 1
 
@@ -53,7 +52,7 @@ export interface LinkPreview {
 
 export interface Reaction {
   /** The `messageId` of the message being reacted to. */
-  reference: MessageId
+  reference: string
   action: 'added' | 'removed'
   content: string
   schema: 'unicode' | 'shortcode'
@@ -72,7 +71,7 @@ export interface MessageContent {
   markdown?: string
   attachments?: RemoteAttachment[]
   /** The `messageId` of the message being replied to. */
-  replyTo?: MessageId | null
+  replyTo?: string | null
   reaction?: Reaction
   mentions?: Mention[]
   linkPreviews?: LinkPreview[]

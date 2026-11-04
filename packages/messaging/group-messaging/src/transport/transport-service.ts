@@ -1,5 +1,4 @@
 import { eachInOrder } from '../inOrder.js'
-import type { MessageId } from '../messageId.js'
 import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
@@ -262,7 +261,7 @@ export class BroadcastError extends GroupMessagingError {
    * envelope rather than the MLS message, so hashing it yields a value no
    * recipient agrees with.
    */
-  messageId?: MessageId
+  messageId?: string
 }
 
 const resolve = (

@@ -6,7 +6,7 @@
 
 ### Added
 
-- `messageIdOf` and `MessageId`. `replyTo` and a reaction's `reference` always
+- `messageIdOf`. `replyTo` and a reaction's `reference` always
   named an id the library did not define, so each host invented one and two
   hosts inventing differently did not interoperate. The id is derived from the
   MLS application message rather than chosen by the sender, so both ends reach
@@ -17,8 +17,8 @@
   sends in flight can tell them apart, and a retry that fails again carries the
   same id. The send helpers return the id rather than nothing, and
   `Reaction.reference`, `MessageContent.replyTo` and the `reference` arguments
-  to `sendReply` and `sendReaction` are typed `MessageId` rather than `string`
-  — an alias, so nothing breaks; it just says which string is meant.
+  to `sendReply` and `sendReaction` keep their `string` type, documented on
+  each field as the id `messageIdOf` derives.
 - `TransportService.onLiveStatus`, forwarding what the backend's live connection
   is doing. A host previously had to build the backend itself and keep a
   reference past the service to learn any of it. `LiveStatus` moves to the

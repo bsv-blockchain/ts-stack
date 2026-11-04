@@ -9,7 +9,7 @@ import {
   type RemoteAttachment
 } from './content/index.js'
 import { GroupMessagingError, UnknownGroupError } from './errors.js'
-import { messageIdOf, type MessageId } from './messageId.js'
+import { messageIdOf } from './messageId.js'
 import { BroadcastError } from './transport/index.js'
 import type { ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from './types.js'
 
@@ -57,16 +57,16 @@ export class Group {
   // ── Sending ──────────────────────────────────────────────────────────────
 
   /** Send plain text. */
-  async sendText(body: string): Promise<MessageId> {
+  async sendText(body: string): Promise<string> {
     return this.sendContent(textContent(body))
   }
 
   /** Send Markdown, with an optional distinct plain-text fallback. */
-  async sendMarkdown(source: string, body?: string): Promise<MessageId> {
+  async sendMarkdown(source: string, body?: string): Promise<string> {
     return this.sendContent(markdownContent(source, body))
   }
 
-  async sendRemoteAttachment(attachment: RemoteAttachment, body?: string): Promise<MessageId> {
+  async sendRemoteAttachment(attachment: RemoteAttachment, body?: string): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'remoteAttachment',
@@ -76,11 +76,11 @@ export class Group {
   }
 
   async sendReaction(input: {
-    reference: MessageId
+    reference: string
     content: string
     action?: Reaction['action']
     schema?: Reaction['schema']
-  }): Promise<MessageId> {
+  }): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'reaction',
@@ -94,11 +94,7 @@ export class Group {
     })
   }
 
-  async sendReply(input: {
-    reference: MessageId
-    body: string
-    markdown?: string
-  }): Promise<MessageId> {
+  async sendReply(input: { reference: string; body: string; markdown?: string }): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'reply',
@@ -109,7 +105,7 @@ export class Group {
   }
 
   /** Send an already-constructed content envelope. */
-  async sendContent(content: MessageContent): Promise<MessageId> {
+  async sendContent(content: MessageContent): Promise<string> {
     return this.send(encodeContent(content))
   }
 
@@ -127,7 +123,7 @@ export class Group {
    * own message back. Pass the error to `client.retryDelivery` to re-send those
    * exact bytes to the members that missed them.
    */
-  async send(plaintext: Uint8Array): Promise<MessageId> {
+  async send(plaintext: Uint8Array): Promise<string> {
     const { state, message } = await this.#advance(async current =>
       this.client.engine.encrypt({ state: current, plaintext })
     )
@@ -238,14 +234,14 @@ export class Group {
       .filter(identityKey => identityKey !== this.client.identityKey)
   }
 
-  async #broadcast(state: Uint8Array, message: Uint8Array, messageId?: MessageId): Promise<void> {
+  async #broadcast(state: Uint8Array, message: Uint8Array, messageId?: string): Promise<void> {
     await this.#deliver(await this.#recipients(state), message, messageId)
   }
 
   async #deliver(
     recipients: IdentityKey[],
     message: Uint8Array,
-    messageId?: MessageId
+    messageId?: string
   ): Promise<void> {
     if (recipients.length === 0) return
     const payload = encodeEnvelope({ kind: 'mls', payload: message })
