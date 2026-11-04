@@ -399,3 +399,32 @@ the public `publishedVersion` with `releaseType: none`. Run `pnpm docs:packages`
 review the generated package facts and merge the validated reconciliation PR.
 Do not advance a baseline for a held, failed or partially published candidate.
 Later metadata commits do not change the pinned image source or its provenance.
+
+## Temporary current-main exception — November4,2026
+
+The operator explicitly authorized waiving mutation campaigns for one release
+of the unchanged application tree at main
+`9bdeb5f82de67c109941e2b5296f7cd66a1fc0ac`. This includes every pending main
+package, specifically Paymail2.5.0 and Toolbox/core/client/mobile2.15.2, and
+the official image release from its constrained generated version-sync child.
+
+The governed record is
+`governance/release-exceptions/2026-11-04-pr1093.json`; it expires at
+2026-11-05T16:00:00Z. Only ty-everett's manual main dispatch with the exact
+`2026-11-04-pr1093-main` identity is eligible. The source checker permits only
+the temporary control, test and documentation paths declared in the checker.
+Unrelated application, package, version, lock or dependency changes fail closed.
+
+This is **operator-waiver admission**, not full mutation qualification. Existing
+failed/canceled campaigns, uncovered mutations and unfinished PR1478 repairs
+remain unresolved and retain their original evidence. PR1478 is not part of
+this release. All other build, test, compatibility, security, license, consumer,
+immutable tarball, provenance, SBOM, signature, image scan and registry-integrity
+controls remain mandatory. Normal dispatch without the exception still runs
+full exact-source mutation qualification; standalone image/Marketplace releases
+retain their normal qualification.
+
+Remove the temporary admission after publication and published-baseline
+reconciliation; retain the retired record as evidence. The exception is not
+permission for future application changes or production promotion. Staging
+requires its normal fresh availability gates and native validation.
