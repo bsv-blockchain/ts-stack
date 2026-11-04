@@ -1,5 +1,9 @@
 import { expect, it, jest } from '@jest/globals'
-import { outputPacketDigest, outputPrivatePublicationRequestDigest } from '@bsv/sdk'
+import {
+  outputPacketDigest,
+  outputPrivatePublicationRequestDigest,
+  type OutputJSONObject
+} from '@bsv/sdk'
 import { coordinatorFixture } from './private-publication-coordinator-fixture.js'
 import { PrivatePublicationCoordinator } from '../src/private/PrivatePublicationCoordinator.js'
 import { PrivatePublicationWork } from '../src/private/PrivatePublicationWork.js'
@@ -213,14 +217,24 @@ function replaceWorkFormat(
   id: string,
   format: ProtectedLedgerRecord['value']['format'] | undefined
 ) {
+  return replaceWorkValue(f, id, value => {
+    if (format === undefined) delete value.format
+    else value.format = format
+  })
+}
+
+function replaceWorkValue(
+  f: ReturnType<typeof fixture>,
+  id: string,
+  change: (value: OutputJSONObject) => void
+) {
   const ledger = f.native.owner.ledger,
     address = privatePublicationFenceAddress(f.native.owner.identity, id),
     read = ledger.read([address], f.options.clock, allow),
     record = read.records[0]!
   expect(record).toBeDefined()
-  const value = { ...record.value }
-  if (format === undefined) delete value.format
-  else value.format = format
+  const value = structuredClone(record.value)
+  change(value)
   ledger.commit(
     read.revision,
     [
@@ -238,6 +252,125 @@ function replaceWorkFormat(
   )
   return address
 }
+
+it.each([null, false, 0, 'authority', async () => true])(
+  'refuses invalid worker authority at installation before enumerating native state: %p',
+  authority => {
+    const f = fixture()
+    expect(
+      () =>
+        new PrivatePublicationWork(
+          f.native.owner,
+          f.contract.contracts,
+          f.options.clock,
+          authority as unknown as () => boolean
+        )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Private publication worker authority must be synchronous'
+      })
+    )
+    expect(f.calls).toEqual([])
+    expect(f.native.rows()).toEqual([])
+  }
+)
+
+it.each(['seller', 'chain'] as const)(
+  'refuses a work contract installed for a different custody %s',
+  field => {
+    const f = fixture(),
+      original = f.contract.contracts.configuration(),
+      configuration = jest.spyOn(f.contract.contracts, 'configuration').mockReturnValue({
+        ...original,
+        ...(field === 'seller'
+          ? { seller: f.caller.publisher }
+          : { chain: { ...original.chain, genesisHash: 'ff'.repeat(32) } })
+      })
+    try {
+      expect(
+        () =>
+          new PrivatePublicationWork(
+            f.native.owner,
+            f.contract.contracts,
+            f.options.clock,
+            () => true
+          )
+      ).toThrow(
+        expect.objectContaining({
+          code: 'context-changed',
+          message: 'Private work custody installation differs'
+        })
+      )
+      expect(f.calls).toEqual([])
+    } finally {
+      configuration.mockRestore()
+    }
+  }
+)
+
+it.each(['reference', 'original'] as const)(
+  'blocks malformed native %s records before restoring their capability',
+  field => {
+    for (const invalid of [undefined, null, [], false, 0, 'record']) {
+      const f = fixture(),
+        id = f.stage('malformed-' + field),
+        address = replaceWorkValue(f, id, value => {
+          if (invalid === undefined) delete value[field]
+          else value[field] = invalid
+        })
+      expect(f.worker.scan(null, 16)).toEqual({
+        entries: [],
+        blocked: [{ key: address.key, status: 'unavailable' }],
+        next: null
+      })
+      expect(() => f.worker.resolve(id)).toThrow(
+        expect.objectContaining({
+          code: 'unavailable',
+          message: 'Private publication work record is incomplete'
+        })
+      )
+      expect(f.calls).toEqual([])
+    }
+  }
+)
+
+it.each(['chain', 'request'] as const)(
+  'blocks a durable work record with a mismatched %s binding',
+  field => {
+    const f = fixture(),
+      id = f.stage('mismatched-' + field),
+      address = replaceWorkValue(f, id, value => {
+        if (field === 'chain') {
+          const state = value.state as OutputJSONObject
+          state.chain = { ...(state.chain as OutputJSONObject), genesisHash: 'ff'.repeat(32) }
+        } else (value.reference as OutputJSONObject).requestId = 'another-original-request'
+      })
+    expect(f.worker.scan(null, 16)).toEqual({
+      entries: [],
+      blocked: [{ key: address.key, status: 'unavailable' }],
+      next: null
+    })
+    expect(() => f.worker.resolve(id)).toThrow(
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Private publication work binding differs'
+      })
+    )
+    expect(f.calls).toEqual([])
+  }
+)
+
+it('does not reinterpret another topic retained in the same native request-fence kind', () => {
+  const f = fixture(),
+    id = f.stage('other-topic')
+  replaceWorkValue(f, id, value => {
+    ;(value.state as OutputJSONObject).topic = 'tm_other_topic'
+  })
+  expect(f.worker.scan(null, 16)).toEqual({ entries: [], blocked: [], next: null })
+  expect(f.worker.resolve(id)).toBeUndefined()
+  expect(f.calls).toEqual([])
+})
 
 it('does not read records for an empty actual native worker page', () => {
   const f = fixture(),
@@ -566,5 +699,63 @@ it('starts one finite pass per interval and removes each actual abort listener b
     if (loop) await loop.stop()
     jest.useRealTimers()
     scan.mockRestore()
+  }
+})
+
+it('settles shutdown that happens while the native delay listener is being installed', async () => {
+  const f = fixture(),
+    original = f.coordinator.scanWork.bind(f.coordinator)
+  let loop: ReturnType<PrivatePublicationReconciler['start']> | undefined,
+    stop: Promise<void> | undefined,
+    signal: AbortSignal | undefined,
+    restore: (() => void) | undefined,
+    settled = false,
+    failure: unknown
+  const scan = jest.spyOn(f.coordinator, 'scanWork').mockImplementation((...args) => {
+    const page = original(...args)
+    signal = args[2]!
+    const add = signal.addEventListener.bind(signal),
+      observer = jest.spyOn(signal, 'addEventListener').mockImplementation((...listener) => {
+        // A synchronous shutdown at registration must also work when the
+        // native abort event happened before the listener became attached.
+        if (listener[0] === 'abort' && !stop) {
+          stop = loop!.stop()
+          void stop.catch(() => undefined)
+        }
+        add(...listener)
+      })
+    restore = () => observer.mockRestore()
+    return page
+  })
+  jest.useFakeTimers()
+  try {
+    loop = new PrivatePublicationReconciler(f.coordinator).start(100, () => {})
+    const done = loop.done.then(
+      () => {
+        settled = true
+      },
+      error => {
+        failure = error
+      }
+    )
+    await jest.advanceTimersByTimeAsync(0)
+    expect(failure).toBeUndefined()
+    expect(signal?.aborted).toBe(true)
+    expect(stop).toBeDefined()
+    expect(settled).toBe(true)
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(getEventListeners(signal!, 'abort')).toHaveLength(0)
+    expect(jest.getTimerCount()).toBe(0)
+    await done
+    await stop
+  } finally {
+    try {
+      await jest.advanceTimersByTimeAsync(100)
+      await loop?.stop()
+    } finally {
+      restore?.()
+      scan.mockRestore()
+      jest.useRealTimers()
+    }
   }
 })

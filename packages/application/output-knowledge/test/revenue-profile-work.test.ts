@@ -33,6 +33,43 @@ afterEach(() => {
   jest.useRealTimers()
 })
 
+it.each(['lock', 'decode', 'resolve'] as const)(
+  'refuses a changed installed %s before native evidence work',
+  async method => {
+    const family = { lock: profile.lock.bind(profile), decode: profile.decode.bind(profile) },
+      resolver = { resolve: chains.resolve.bind(chains) },
+      verifier = new RevenueListingProfileLineageVerifier(family as typeof profile, resolver),
+      evidence = jest.spyOn(SDKEvidenceVerifier.prototype, 'verify').mockResolvedValue(outcome())
+    if (method === 'resolve') resolver.resolve = chains.resolve.bind(chains)
+    else if (method === 'lock') family.lock = profile.lock.bind(profile)
+    else family.decode = profile.decode.bind(profile)
+    await expect(verifier.verify(packet, context())).resolves.toEqual({
+      status: 'context-changed',
+      dependencies: []
+    })
+    expect(evidence).not.toHaveBeenCalled()
+  }
+)
+
+it.each(['lock', 'decode', 'resolve'] as const)(
+  'rechecks installed %s after physical evidence settles before adopting any verdict',
+  async method => {
+    const family = { lock: profile.lock.bind(profile), decode: profile.decode.bind(profile) },
+      resolver = { resolve: chains.resolve.bind(chains) },
+      verifier = new RevenueListingProfileLineageVerifier(family as typeof profile, resolver)
+    jest.spyOn(SDKEvidenceVerifier.prototype, 'verify').mockImplementation(async () => {
+      if (method === 'resolve') resolver.resolve = chains.resolve.bind(chains)
+      else if (method === 'lock') family.lock = profile.lock.bind(profile)
+      else family.decode = profile.decode.bind(profile)
+      return outcome()
+    })
+    expect(await verifier.verify(packet, context())).toEqual({
+      status: 'context-changed',
+      dependencies: []
+    })
+  }
+)
+
 it.each([
   [new Error('unclassified dependency failure'), 'invalid'],
   [

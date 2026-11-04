@@ -25,7 +25,7 @@ test('one up-front approval gates npm and image publication without a late human
   assert.equal(infra.uses, './.github/workflows/infra-release.yaml')
   assert.ok(infra.needs.includes('approve'))
   assert.match(infra.if, /needs\.approve\.result == 'success'/)
-  assert.match(infra.if, /needs\.full-mutation\.outputs\.qualified-sha == github\.sha/)
+  assert.match(infra.if, /needs\.admission\.outputs\.admitted-sha == github\.sha/)
   assert.match(infra.if, /needs\.prepare\.outputs\.mode == 'cascade'/)
   assert.equal(infra.with['qualified-sha'], '${{ needs.full-mutation.outputs.qualified-sha }}')
 
@@ -38,7 +38,9 @@ test('one up-front approval gates npm and image publication without a late human
   const infraRelease = await workflow('infra-release.yaml')
   assert.deepEqual(Object.keys(infraRelease.on.workflow_call.inputs).sort(), [
     'qualified-sha',
-    'source-sha'
+    'release-exception-id',
+    'source-sha',
+    'waived-sha'
   ])
   assert.match(infraRelease.jobs['post-release-verification'].if, /called == 'false'/)
 })
@@ -148,6 +150,122 @@ test('a release.yaml call accepts only the qualified commit or its infra-sync ch
     const standalone = run('')
     assert.equal(standalone.status, 0)
     assert.match(standalone.output, /called=false/)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('release admission keeps a waived campaign distinct and requires the exact successful preparation', async () => {
+  const release = await workflow('release.yaml')
+  const job = release.jobs.admission
+  assert.deepEqual(job.permissions, {})
+  assert.deepEqual(job.needs, ['full-mutation', 'prepare'])
+  const script = job.steps[0].run
+  const root = mkdtempSync(join(tmpdir(), 'release-admission-'))
+  try {
+    const sha = 'a'.repeat(40)
+    const run = overrides => {
+      const output = join(root, 'output')
+      const summary = join(root, 'summary')
+      writeFileSync(output, '')
+      writeFileSync(summary, '')
+      const result = spawnSync('/bin/bash', ['-e', '-c', script], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH,
+          GITHUB_SHA: sha,
+          GITHUB_OUTPUT: output,
+          GITHUB_STEP_SUMMARY: summary,
+          CAMPAIGN_RESULT: 'skipped',
+          QUALIFIED_SHA: '',
+          EXCEPTION_RESULT: 'success',
+          WAIVED_SHA: sha,
+          ...overrides
+        }
+      })
+      return { status: result.status, output: readFileSync(output, 'utf8') }
+    }
+    const waived = run({})
+    assert.equal(waived.status, 0)
+    assert.match(waived.output, /admission-kind=operator-waiver/)
+    assert.doesNotMatch(waived.output, /qualified-sha=/)
+    assert.equal(run({ WAIVED_SHA: 'b'.repeat(40) }).status, 1)
+    assert.equal(run({ EXCEPTION_RESULT: 'failure' }).status, 1)
+    assert.equal(run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'failure' }).status, 1)
+    assert.equal(
+      run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'success', QUALIFIED_SHA: 'b'.repeat(40) }).status,
+      1
+    )
+    const qualified = run({ WAIVED_SHA: '', CAMPAIGN_RESULT: 'success', QUALIFIED_SHA: sha })
+    assert.equal(qualified.status, 0)
+    assert.match(qualified.output, /admission-kind=full-mutation/)
+    assert.match(release.jobs['sync-versions'].if, /always\(\) && !cancelled\(\)/)
+    const infra = await workflow('infra-release.yaml')
+    const source = infra.jobs.discover.steps.find(step => step.id === 'source')
+    assert.ok(
+      source.run.indexOf('disallowed=') <
+        source.run.indexOf('node scripts/release-source-admission.mjs')
+    )
+    assert.match(source.run, /Ambiguous or stale operator exception/)
+    assert.match(source.run, /admission-kind=operator-waiver/)
+    assert.equal(
+      release.jobs.infra.with['waived-sha'],
+      '${{ needs.prepare.outputs.admitted-exception-sha }}'
+    )
+    assert.equal(
+      release.jobs.infra.with['release-exception-id'],
+      '${{ needs.prepare.outputs.exception-id }}'
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('standalone image continuation requires validated discovery and cannot invent qualification', async () => {
+  const infra = await workflow('infra-release.yaml')
+  assert.equal(infra.on.workflow_dispatch.inputs['release-exception-id'].default, '')
+  assert.match(infra.jobs['full-mutation'].if, /admission-kind != 'operator-waiver'/)
+  const source = infra.jobs.discover.steps.find(step => step.id === 'source')
+  assert.match(source.run, /standalone exception requires this workflow's manual main dispatch/)
+  assert.match(source.run, /infra-release\.yaml@refs\/heads\/main/)
+  const job = infra.jobs.qualification
+  const script = job.steps[0].run
+  const root = mkdtempSync(join(tmpdir(), 'image-admission-'))
+  try {
+    const sha = 'a'.repeat(40)
+    const run = overrides => {
+      const output = join(root, 'output')
+      writeFileSync(output, '')
+      const result = spawnSync('/bin/bash', ['-e', '-c', script], {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH,
+          GITHUB_SHA: sha,
+          GITHUB_OUTPUT: output,
+          CALLED: 'false',
+          CALLER_ADMITTED: sha,
+          CALLER_ADMISSION: 'operator-waiver',
+          CAMPAIGN_RESULT: 'skipped',
+          CAMPAIGN_QUALIFIED: '',
+          ...overrides
+        }
+      })
+      return { status: result.status, output: readFileSync(output, 'utf8') }
+    }
+    const valid = run({})
+    assert.equal(valid.status, 0)
+    assert.match(valid.output, /admission-kind=operator-waiver/)
+    assert.doesNotMatch(valid.output, /qualified-sha=/)
+    assert.equal(run({ CALLER_ADMITTED: 'b'.repeat(40) }).status, 1)
+    assert.equal(run({ CALLER_ADMISSION: '' }).status, 1)
+    assert.equal(run({ CALLER_ADMISSION: '', CAMPAIGN_RESULT: 'failure' }).status, 1)
+    const normal = run({
+      CALLER_ADMISSION: '',
+      CAMPAIGN_RESULT: 'success',
+      CAMPAIGN_QUALIFIED: sha
+    })
+    assert.equal(normal.status, 0)
+    assert.match(normal.output, /admission-kind=full-mutation/)
   } finally {
     rmSync(root, { recursive: true, force: true })
   }

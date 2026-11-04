@@ -7,7 +7,11 @@ import { SDKPrivateAcquisitionFunding } from '../../../application/output-knowle
 import { context, resolver } from '../../../application/output-knowledge/test/evidence-fixture.js'
 
 type SourceMode = 'stable' | 'missing' | 'tampered' | 'oversized' | 'access-lost' | 'cancelled'
-async function fixture(options?: { reverseClockAfterAssessment?: boolean; detached?: boolean }) {
+async function fixture(options?: {
+  reverseClockAfterAssessment?: boolean
+  detached?: boolean
+  revocations?: boolean
+}) {
   let reverseClockAfterAssessment = options?.reverseClockAfterAssessment === true
   const f = await lchPaidFixture(undefined, undefined, options?.detached !== true),
     controller = new AbortController(),
@@ -31,6 +35,18 @@ async function fixture(options?: { reverseClockAfterAssessment?: boolean; detach
     credits = 0,
     sourceReads = 0,
     sourceMode: SourceMode = 'stable'
+  const revocations = options?.revocations
+    ? {
+        at: (time: string) => ({
+          status: () =>
+            Promise.resolve({
+              status: 'unspent' as const,
+              network: 'testnet' as const,
+              observedAt: BigInt(time)
+            })
+        })
+      }
+    : undefined
   const seller = new LCHOverlayPaidSeller({
     id: 'urn:reference:lch-paid-seller:1',
     catalogue: {
@@ -82,6 +98,7 @@ async function fixture(options?: { reverseClockAfterAssessment?: boolean; detach
       return Promise.resolve()
     },
     authorityNetwork: 'testnet',
+    revocations,
     maximumCiphertextBytes: 1048576,
     quoteSeconds: '80',
     derivationPrefix: () => Utils.toBase64(new Uint8Array(32).fill(1)),
@@ -108,6 +125,7 @@ async function fixture(options?: { reverseClockAfterAssessment?: boolean; detach
   return {
     ...f,
     sellerDomain: seller,
+    revocations,
     preparation,
     original,
     progress,
@@ -125,6 +143,16 @@ async function fixture(options?: { reverseClockAfterAssessment?: boolean; detach
     }
   }
 }
+it('pins the installed revocation lookup method independently of its current status result', async () => {
+  const f = await fixture({ revocations: true }),
+    source = f.revocations!,
+    original = source.at
+  expect(f.sellerDomain.isCurrent()).toBe(true)
+  source.at = time => original(time)
+  expect(f.sellerDomain.isCurrent()).toBe(false)
+  source.at = original
+  expect(f.sellerDomain.isCurrent()).toBe(true)
+})
 it('issues a real signed settlement and recipient-bound License from exact accepted material, with independently authenticated buyer playback', async () => {
   const f = await fixture()
   await f.sellerDomain.validate(f.acquire, f.preparation, f.signal)

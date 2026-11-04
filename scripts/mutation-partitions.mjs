@@ -696,6 +696,26 @@ const rangePlans = new Map(
 
 const refinedFileParts = new Map([
   [
+    'lch-overlay-acquisition',
+    new Map([
+      [
+        'auto-18',
+        new Map([
+          [
+            'src/overlayAcquisitionTerms.ts',
+            {
+              label: 'terms',
+              markers: [
+                'function bytes(value: unknown, length: number, name: string): Uint8Array {',
+                'export function validateLCHOverlayCapability('
+              ]
+            }
+          ]
+        ])
+      ]
+    ])
+  ],
+  [
     'wallet-recovery-encoding',
     new Map([
       [
@@ -1436,11 +1456,9 @@ function withExecutionCompanions(targetId, parts) {
     .map(part => (part.id === into ? { ...part, target: { ...part.target, mutate } } : part))
 }
 
-export function partitionMutationTarget(targetId, target) {
-  const ranges = rangePlans.get(targetId)
-  if (ranges) return semanticPartitions(target, ranges, rangeCompanions.get(targetId))
+function fileMutationParts(targetId, target) {
   const plan = plans.get(targetId) ?? automaticPlan(targetId, target)
-  if (!plan) return [{ id: 'whole', target }]
+  if (!plan) return undefined
   const groups = new Map()
   const add = (id, specification) => {
     const mutate = groups.get(id) ?? []
@@ -1467,10 +1485,17 @@ export function partitionMutationTarget(targetId, target) {
     }
   }
   if (groups.size === 0) throw new Error('Empty canonical mutation source union')
+  return [...groups].map(([id, mutate]) => ({ id, target: { ...target, mutate } }))
+}
+
+export function partitionMutationTarget(targetId, target) {
+  const ranges = rangePlans.get(targetId)
+  if (ranges) return semanticPartitions(target, ranges, rangeCompanions.get(targetId))
+  const originals = fileMutationParts(targetId, target)
+  if (!originals) return [{ id: 'whole', target }]
   const refinements = refinedFileParts.get(targetId)
-  const parts = [...groups].flatMap(([id, mutate]) => {
-    const original = { id, target: { ...target, mutate } },
-      refinement = refinements?.get(id)
+  const parts = originals.flatMap(original => {
+    const refinement = refinements?.get(original.id)
     return refinement ? semanticPartitions(original.target, refinement) : [original]
   })
   return withExecutionCompanions(targetId, parts)
@@ -1491,11 +1516,11 @@ export function selectedMutationPartition(targetId, target, partition = 'whole')
   const selected = partitionMutationTarget(targetId, target).find(value => value.id === partition)
   // Keep an existing complete file-part CLI usable as a diagnostic alias. The
   // execution matrix and complete aggregate require every new refined part.
-  if (
-    !selected &&
-    (refinedFileParts.get(targetId)?.has(partition) ||
-      [...(plans.get(targetId)?.files.values() ?? [])].includes(partition))
-  ) {
+  if (!selected && refinedFileParts.get(targetId)?.has(partition)) {
+    const original = fileMutationParts(targetId, target)?.find(value => value.id === partition)
+    if (original) return original.target
+  }
+  if (!selected && [...(plans.get(targetId)?.files.values() ?? [])].includes(partition)) {
     const plan = plans.get(targetId)
     const mutate = target.mutate.filter(
       specification => (plan.files.get(partitionFile(specification)) ?? plan.fallback) === partition
