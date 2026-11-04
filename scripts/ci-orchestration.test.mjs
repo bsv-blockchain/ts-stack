@@ -337,7 +337,7 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
         candidate => candidate.name === 'execution'
       )
       const actualTimeout = executionJob?.source.match(/^ {4}timeout-minutes: .+$/m)?.[0]
-      const qualificationPrefix = `inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile","lch-overlay-acquisition","lch-overlay-covenant","lch-overlay-covenant-candidate","private-purchase-evidence","private-purchase-coordination","private-purchase-state","private-purchase-native-clock","private-purchase-disclosure","output-knowledge-proposal-core"]'), matrix.target) && 180 || `
+      const qualificationPrefix = `inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile","lch-overlay-acquisition","lch-overlay-covenant","lch-overlay-covenant-candidate","private-purchase-evidence","private-purchase-coordination","private-purchase-state","private-purchase-native-clock","private-purchase-disclosure","private-publication-coordination","protected-ledger","private-purchase-buyer","protected-operation-objects","lch-overlay-covenant-terms","private-purchase-alias-state","private-purchase-alias-custody","output-knowledge-proposal-core"]'), matrix.target) && 180 || `
       assert.equal(actualTimeout, expected.replace('${{ ', '${{ ' + qualificationPrefix))
       assert.equal(actualTimeout.replace(qualificationPrefix, ''), expected)
       const dedicated = readFileSync(

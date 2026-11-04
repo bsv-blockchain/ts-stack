@@ -2201,7 +2201,7 @@ export function buildMutationTargets(repositoryRoot) {
           '<rootDir>/test/proposal-bitcoin-core.test.ts',
           '<rootDir>/test/bitcoin-knowledge.test.ts'
         ],
-        { esm: true, buildCommand: 'pnpm build' }
+        { esm: true, buildCommand: 'pnpm build', maxTestRunnerReuse: 8 }
       )
     },
     'proposal-client-verification': {
