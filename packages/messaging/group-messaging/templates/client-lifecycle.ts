@@ -89,14 +89,22 @@ interface Held<R> {
  * spreads a property does not tear the client down on a render that changed
  * nothing.
  */
+/**
+ * Code-unit order, not `localeCompare`: the result is a cache key, so it has to
+ * come out identical on every device. A locale-aware collation is the one
+ * comparison that could order the same two names differently under a different
+ * ICU build and quietly reopen a client that was already held.
+ */
+const byCodeUnit = (left: string, right: string): number => {
+  if (left < right) return -1
+  if (left > right) return 1
+  return 0
+}
+
 const keyOf = (key: ClientKey): string =>
   JSON.stringify(
     Object.keys(key)
-      // Code-unit order, not `localeCompare`: this string is a cache key, so it
-      // has to come out identical on every device. A locale-aware collation is
-      // the one comparison that could order the same two names differently
-      // under a different ICU build and quietly reopen a client that was held.
-      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+      .sort(byCodeUnit)
       .map(name => [name, key[name] ?? null])
   )
 
