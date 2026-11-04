@@ -1,3 +1,4 @@
+import { awaitVoidFromSync, mapAwaitFromSync } from './utility/promiseFromSync'
 import { LocalKVStore, PubKeyHex, PublicKey, WalletInterface } from '@bsv/sdk'
 import { toArray } from '@bsv/sdk/primitives/utils'
 
@@ -223,12 +224,16 @@ export class WalletSettingsManager {
    *
    * @returns - Wallet settings object
    */
-  async get(): Promise<WalletSettings> {
-    const encoded = await this.kv.get('settings', JSON.stringify(this.config.defaultSettings))
-    if (typeof encoded !== 'string' || toArray(encoded, 'utf8').length > MAX_SETTINGS_BYTES) {
-      throw new Error('Invalid wallet settings: encoded value is missing or oversized')
-    }
-    return validateWalletSettings(JSON.parse(encoded))
+  get(): Promise<WalletSettings> {
+    return mapAwaitFromSync(
+      () => this.kv.get('settings', JSON.stringify(this.config.defaultSettings)),
+      encoded => {
+        if (typeof encoded !== 'string' || toArray(encoded, 'utf8').length > MAX_SETTINGS_BYTES) {
+          throw new Error('Invalid wallet settings: encoded value is missing or oversized')
+        }
+        return validateWalletSettings(JSON.parse(encoded))
+      }
+    )
   }
 
   /**
@@ -247,7 +252,7 @@ export class WalletSettingsManager {
   /**
    * Deletes the user's settings token.
    */
-  async delete(): Promise<void> {
-    await this.kv.remove('settings')
+  delete(): Promise<void> {
+    return awaitVoidFromSync(() => this.kv.remove('settings'))
   }
 }

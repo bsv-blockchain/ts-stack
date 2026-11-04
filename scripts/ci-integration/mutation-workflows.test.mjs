@@ -1,3 +1,4 @@
+import { gzipSync } from 'node:zlib'
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { spawnSync } from 'node:child_process'
@@ -5,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { REPOSITORY_ROOT } from '../repository-health.mjs'
-import { mutationExecutionBatches } from '../mutation-execution-batches.mjs'
+import { mutationExecutionBatches, encodeMutationJSON } from '../mutation-execution-batches.mjs'
 import { buildMutationTargets } from '../../governance/mutation-testing/targets.mjs'
 const CI_PATH = join(REPOSITORY_ROOT, '.github/workflows/ci.yml')
 async function mutationExecutor(workflow) {
@@ -251,6 +252,7 @@ test('full campaign receipts cannot borrow another attempt or a partial manual t
     'wallet-snapshot-sync',
     'wallet-snapshot-sync-destination',
     'wallet-snapshot-sync-rows',
+    'wallet-snapshot-remote-reader',
     'root-eviction-journal',
     'root-eviction-records'
   ])
@@ -355,7 +357,7 @@ test('partition jobs cannot replace each original canonical global gate or the f
   const staging = ci.jobs['mutation-quality'].steps.find(
     step => step.name === 'Require every selected canonical partition target gate'
   )
-  assert.match(staging.env.MUTATION_MATRIX, /mutation-matrix/)
+  assert.match(staging.env.MUTATION_MATRIX_GZIP, /mutation-matrix-gzip/)
   assert.match(staging.run, /\.mutation-parts-raw\/mutation-\$target-\$partition/)
   assert.match(staging.run, /Missing mutation partition evidence/)
   for (const targets of ['[]', '', 'null']) {
@@ -400,8 +402,8 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
         MUTATION_RESULT: 'success',
         MUTATION_TARGETS: JSON.stringify(targets),
         MUTATION_CLASSIFICATION: '{"deferred":[]}',
-        MUTATION_MATRIX: JSON.stringify(matrix),
-        MUTATION_BATCHES: JSON.stringify(mutationExecutionBatches(matrix)),
+        MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix),
+        MUTATION_BATCHES_GZIP: encodeMutationJSON(mutationExecutionBatches(matrix)),
         PARTITION_TARGETS: selection,
         GITHUB_STEP_SUMMARY: '/dev/null'
       }
@@ -416,8 +418,8 @@ test('PR partial execution cannot qualify when canonical aggregate selection is 
       MUTATION_RESULT: 'skipped',
       MUTATION_TARGETS: '[]',
       MUTATION_CLASSIFICATION: '{"deferred":[]}',
-      MUTATION_MATRIX: '{"include":[]}',
-      MUTATION_BATCHES: '{"include":[]}',
+      MUTATION_MATRIX_GZIP: encodeMutationJSON({ include: [] }),
+      MUTATION_BATCHES_GZIP: encodeMutationJSON({ include: [] }),
       PARTITION_TARGETS: '[]',
       GITHUB_STEP_SUMMARY: '/dev/null'
     }
@@ -441,10 +443,12 @@ test('the installed PR gate rejects missing, stale and malformed execution batch
         MUTATION_RESULT: 'success',
         MUTATION_TARGETS: '["sdk-auth-http"]',
         MUTATION_CLASSIFICATION: '{"deferred":[]}',
-        MUTATION_MATRIX: JSON.stringify(matrix),
+        MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix),
         PARTITION_TARGETS: '["sdk-auth-http"]',
         GITHUB_STEP_SUMMARY: '/dev/null',
-        ...(value === undefined ? {} : { MUTATION_BATCHES: value })
+        ...(value === undefined
+          ? {}
+          : { MUTATION_BATCHES_GZIP: gzipSync(Buffer.from(value)).toString('base64') })
       },
       encoding: 'utf8'
     })

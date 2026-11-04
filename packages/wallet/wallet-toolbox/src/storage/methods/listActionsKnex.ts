@@ -1,3 +1,10 @@
+import { withBrc38NativePackedWalletTransaction } from '../portable/Brc38NativePackedWalletNode'
+import { hasBrc38NativePackedTextSchema } from '../portable/Brc38NativePackedTextSchemaNode'
+import {
+  prechargeBrc38NativePackedTextWalletRows,
+  hydrateBrc38NativePackedTextWalletRows
+} from '../portable/Brc38NativePackedTextWalletNode'
+import type { Knex } from 'knex'
 import { type ValidListActionsArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
   Transaction as BsvTransaction,
@@ -17,6 +24,7 @@ import { TableOutputX } from '../schema/tables/TableOutput'
 import { asString } from '../../utility/utilityHelpers.noBuffer'
 import { makeBrc114ActionTimeLabel, parseBrc114ActionTimeLabels } from '../../utility/brc114ActionTimeLabels'
 import { applyBrc153ReferenceLabel } from '../../utility/brc153ReferenceLabels'
+import { isOwnedNativeSqlite } from '../schema/ownedNativeSqliteRuntimeNode'
 
 async function enrichActionLabels(
   storage: StorageKnex,
@@ -217,6 +225,10 @@ export async function listActions(
     const q = k('transactions').where('userId', userId).whereIn('status', stati)
     applyTimestampFilters(q)
     const qcount = q.clone().count('transactionId as total')
+    // Native main rows contain internal packed markers. This metadata listing
+    // selects its actual declared fields, as the labelled CTE already does;
+    // binary enrichment uses the complete logical reader after this query.
+    if (isOwnedNativeSqlite(k)) q.select(columns)
     return { q, qcount }
   }
 
@@ -224,7 +236,14 @@ export async function listActions(
 
   q.limit(limit).offset(offset).orderBy('transactionId', 'asc')
 
-  const txs: Array<Partial<TableTransaction>> = await q
+  const txs: Array<Partial<TableTransaction>> = await withBrc38NativePackedWalletTransaction(k, async (db, packed) => {
+    const rows: Array<Partial<TableTransaction>> = await (db === k ? q : q.clone().transacting(db as Knex.Transaction))
+    if (packed && (await hasBrc38NativePackedTextSchema(db as Knex.Transaction))) {
+      await prechargeBrc38NativePackedTextWalletRows(db, 'transactions', rows)
+      await hydrateBrc38NativePackedTextWalletRows(db, 'transactions', rows)
+    }
+    return rows
+  })
 
   if (specOp?.postProcess != null) {
     await specOp.postProcess(storage, auth, vargs, specOpLabels, txs)

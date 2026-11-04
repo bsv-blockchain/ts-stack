@@ -4,6 +4,14 @@ Patch candidate `0.3.5` updates packed first-party runtime or development depend
 
 [BRC-121](https://github.com/bitcoin-sv/BRCs/blob/master/payments/0121.md) Simple 402 Payments -- server middleware and client for BSV micropayments over HTTP.
 
+## Protocol boundary
+
+This package implements the BRC-121 `x-bsv-beef`/sender/nonce/time/vout contract.
+BRC-118 extends the separate authenticated BRC-105 payment path in SDK AuthFetch
+and `@bsv/payment-express-middleware`; it is not implicitly negotiated here.
+See the [BRC-118 guide](../../../docs/guides/brc118-payments.md) when selecting an
+integration. Existing 402-pay wire behavior is unchanged.
+
 ## Install
 
 ```sh

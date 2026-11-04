@@ -8,6 +8,8 @@ import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs
 import { mutationExecutionMatrix, selectedMutationPartition } from './mutation-partitions.mjs'
 import {
   mutationBuildIdentity,
+  encodeMutationJSON,
+  mutationEnvironmentJSON,
   mutationExecutionBatches,
   mutationExecutionDigest,
   verifyMutationExecutionBatches,
@@ -23,10 +25,43 @@ const matrixFor = count => ({
   }))
 })
 
+test('bounded gzip transport preserves complete JSON and rejects ambiguous or malformed input', () => {
+  const matrix = matrixFor(4096)
+  const encoded = encodeMutationJSON(matrix)
+  assert.ok(JSON.stringify(matrix).length > 128 * 1024)
+  assert.ok(encoded.length < 128 * 1024)
+  assert.deepEqual(
+    mutationEnvironmentJSON({ MUTATION_MATRIX_GZIP: encoded }, 'MUTATION_MATRIX'),
+    matrix
+  )
+  assert.deepEqual(
+    mutationEnvironmentJSON({ MUTATION_MATRIX: JSON.stringify(matrix) }, 'MUTATION_MATRIX'),
+    matrix
+  )
+  for (const environment of [
+    { MUTATION_MATRIX_GZIP: encoded, MUTATION_MATRIX: '{}' },
+    { MUTATION_MATRIX_GZIP: '!' },
+    { MUTATION_MATRIX_GZIP: 'YQ==' },
+    { MUTATION_MATRIX_GZIP: encodeMutationJSON('x'.repeat(16 * 1024 * 1024)) }
+  ])
+    assert.throws(() => mutationEnvironmentJSON(environment, 'MUTATION_MATRIX'))
+})
+
 test('real complete planner output verifies every immutable batch and binds the original runtime', async () => {
   const root = mkdtempSync(join(tmpdir(), 'mutation-build-runtime-'))
   const git = args => execFileSync('/usr/bin/git', args, { cwd: root, encoding: 'utf8' })
   const identityInputs = [
+    'governance/mutation-testing/wallet-component-tests.json',
+    'governance/mutation-testing/stop-on-kill-environment.cjs',
+    'governance/mutation-testing/execution-partitions.json',
+    'scripts/mutation-execution-partitions.mjs',
+    'scripts/provision-wallet-native-browser.mjs',
+    'scripts/wallet-native-browser.json',
+    'scripts/wallet-journal-ci.mjs',
+    'scripts/wallet-composed-native-ci.mjs',
+    '.github/workflows/ci.yml',
+    'packages/overlays/overlay/jest-projects.config.mjs',
+    'packages/overlays/overlay-express/jest-projects.config.mjs',
     'governance/mutation-testing/targets.mjs',
     'governance/mutation-testing/policy.json',
     'governance/mutation-testing/durations.json',
@@ -49,7 +84,7 @@ test('real complete planner output verifies every immutable batch and binds the 
       encoding: 'utf8'
     })
       .split('\0')
-      .filter(file => file.endsWith('.ts'))
+      .filter(file => file.endsWith('.ts') || file.endsWith('.json') || file.endsWith('.mjs'))
     for (const file of [...identityInputs, ...sources]) {
       mkdirSync(dirname(join(root, file)), { recursive: true })
       copyFileSync(join(REPOSITORY_ROOT, file), join(root, file))
@@ -88,7 +123,8 @@ test('real complete planner output verifies every immutable batch and binds the 
     const matrix = JSON.parse(
       cli('mutation-partition-evidence.mjs', ['matrix', '--selected', JSON.stringify(selected)])
     )
-    const plannerEnvironment = { MUTATION_MATRIX: JSON.stringify(matrix) }
+    const plannerEnvironment = { MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix) }
+    assert.ok(plannerEnvironment.MUTATION_MATRIX_GZIP.length < 128 * 1024)
     const batches = JSON.parse(cli('mutation-execution-batches.mjs', ['plan'], plannerEnvironment))
     const matrixDigest = cli('mutation-execution-batches.mjs', ['digest'], plannerEnvironment)
     const unscheduled = mutationExecutionMatrix(selected, buildMutationTargets(root))
@@ -237,6 +273,12 @@ test('missing, repeated, unexpected and reordered batches cannot satisfy the ori
 test('the real complete flat inventory crosses a scheduling boundary without changing any part configuration', () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT),
     matrix = mutationExecutionMatrix(Object.keys(targets), targets)
+  const originalParts = new Map(
+    matrix.include.map(row => [
+      JSON.stringify(row),
+      structuredClone(selectedMutationPartition(row.target, targets[row.target], row.partition))
+    ])
+  )
   const before = structuredClone(matrix),
     batches = mutationExecutionBatches(matrix, 128)
   assert.ok(batches.include.length > 1)
@@ -247,7 +289,11 @@ test('the real complete flat inventory crosses a scheduling boundary without cha
   assert.deepEqual(matrix, before)
   for (const row of batches.include.flatMap(batch => batch.executionMatrix.include)) {
     const part = selectedMutationPartition(row.target, targets[row.target], row.partition)
-    assert.deepEqual({ ...part, mutate: targets[row.target].mutate }, targets[row.target])
+    const original = originalParts.get(JSON.stringify(row))
+    assert.deepEqual(part, original)
+    // The original reviewed component selection and full canonical union are
+    // independently checked by mutation-partitions/engine regressions.
+    assert.deepEqual(part.runnerOptions, original.runnerOptions)
   }
 })
 
@@ -318,8 +364,8 @@ test('actual caller output commands fail preparation when any planner or identit
         'ci.yml',
         'scope',
         'Pin complete immutable mutation execution batches',
-        ['plan', 'digest'],
-        'batches=result-plan\nmatrix-digest=result-digest\n'
+        ['plan', 'encode', 'digest'],
+        'batches=result-plan\nbatches-gzip=result-encode\nmatrix-digest=result-digest\n'
       ],
       [
         'ci.yml',
@@ -332,8 +378,8 @@ test('actual caller output commands fail preparation when any planner or identit
         'mutation-tests.yml',
         'prepare',
         'Pin complete immutable mutation execution batches',
-        ['plan', 'digest', 'build-identity'],
-        'batches=result-plan\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
+        ['plan', 'encode', 'digest', 'build-identity'],
+        'batches=result-plan\nbatches-gzip=result-encode\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
       ]
     ]) {
       const source = readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8')

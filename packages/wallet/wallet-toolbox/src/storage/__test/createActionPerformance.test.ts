@@ -32,7 +32,7 @@ describe('createAction funding performance', () => {
     const lockEligible = jest.spyOn(ctx.activeStorage, 'findFundingOutputsForUpdate')
     try {
       const result = await ctx.activeStorage.createAction(
-        { userId: ctx.userId },
+        { userId: ctx.userId, identityKey: ctx.identityKey },
         actionArgs(5_000)
       )
 
@@ -52,7 +52,10 @@ describe('createAction funding performance', () => {
     const lockedLookup = jest.spyOn(ctx.activeStorage, 'findFundingOutputsForUpdate')
     const getRawTx = jest.spyOn(ctx.activeStorage, 'getRawTxOfKnownValidTransaction')
 
-    const result = await ctx.activeStorage.createAction({ userId: ctx.userId }, actionArgs(5_000))
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId, identityKey: ctx.identityKey },
+      actionArgs(5_000)
+    )
 
     expect(result.inputs.length).toBeGreaterThan(4)
     expect(lockedLookup).toHaveBeenCalledTimes(1)
@@ -64,34 +67,41 @@ describe('createAction funding performance', () => {
     const [proven] = await ctx.activeStorage.findProvenTxs({ partial: {} })
     expect(proven).toBeTruthy()
 
-    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 1, 8))
-      .resolves.toEqual(proven.rawTx.slice(1, 9))
-    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(
-      "x' UNION SELECT rawTx FROM proven_tx_reqs--",
-      0,
-      8
-    )).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
-    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, -1, 8))
-      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
-    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 0))
-      .rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 1, 8)).resolves.toEqual(
+      proven.rawTx.slice(1, 9)
+    )
+    await expect(
+      ctx.activeStorage.getRawTxOfKnownValidTransaction("x' UNION SELECT rawTx FROM proven_tx_reqs--", 0, 8)
+    ).rejects.toMatchObject({ code: 'WERR_INVALID_PARAMETER' })
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, -1, 8)).rejects.toMatchObject({
+      code: 'WERR_INVALID_PARAMETER'
+    })
+    await expect(ctx.activeStorage.getRawTxOfKnownValidTransaction(proven.txid, 0)).rejects.toMatchObject({
+      code: 'WERR_INVALID_PARAMETER'
+    })
   })
 
   test('rolls back a concurrent bulk-claim conflict before replanning', async () => {
     await replaceFundingCandidates(20, 1_000)
     const original = ctx.activeStorage.markChangeInputsSpent.bind(ctx.activeStorage)
-    const markSpent = jest.spyOn(ctx.activeStorage, 'markChangeInputsSpent')
+    const markSpent = jest
+      .spyOn(ctx.activeStorage, 'markChangeInputsSpent')
       .mockResolvedValueOnce(0)
       .mockImplementation(original)
 
-    const result = await ctx.activeStorage.createAction({ userId: ctx.userId }, actionArgs(5_000))
+    const result = await ctx.activeStorage.createAction(
+      { userId: ctx.userId, identityKey: ctx.identityKey },
+      actionArgs(5_000)
+    )
 
     expect(result.inputs.length).toBeGreaterThan(4)
     expect(markSpent).toHaveBeenCalledTimes(2)
-    const spent = (await ctx.activeStorage.findOutputs({
-      partial: { userId: ctx.userId },
-      noScript: true
-    })).filter(output => output.vout >= 10_000 && output.spentBy != null)
+    const spent = (
+      await ctx.activeStorage.findOutputs({
+        partial: { userId: ctx.userId },
+        noScript: true
+      })
+    ).filter(output => output.vout >= 10_000 && output.spentBy != null)
     expect(spent).toHaveLength(result.inputs.length)
   })
 
@@ -99,10 +109,9 @@ describe('createAction funding performance', () => {
     await replaceFundingCandidates(147, 1)
     const insertTransaction = jest.spyOn(ctx.activeStorage, 'insertTransaction')
 
-    await expect(ctx.activeStorage.createAction(
-      { userId: ctx.userId },
-      actionArgs(1_000)
-    )).rejects.toMatchObject({ code: 'WERR_INSUFFICIENT_FUNDS' })
+    await expect(
+      ctx.activeStorage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000))
+    ).rejects.toMatchObject({ code: 'WERR_INSUFFICIENT_FUNDS' })
 
     expect(insertTransaction).not.toHaveBeenCalled()
   })
@@ -111,15 +120,17 @@ describe('createAction funding performance', () => {
     await replaceFundingCandidates(1, 5_000)
     const [candidate] = await ctx.activeStorage.findAvailableManagedChangeInputCandidates(
       ctx.userId,
-      (await ctx.activeStorage.findOutputBaskets({
-        partial: { userId: ctx.userId, name: 'default' }
-      }))[0].basketId,
+      (
+        await ctx.activeStorage.findOutputBaskets({
+          partial: { userId: ctx.userId, name: 'default' }
+        })
+      )[0].basketId,
       true
     )
     await ctx.activeStorage.updateTransaction(candidate.transactionId, { status: 'sending' })
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000, true, false)
     )
 
@@ -134,7 +145,7 @@ describe('createAction funding performance', () => {
     ])
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000)
     )
 
@@ -149,7 +160,7 @@ describe('createAction funding performance', () => {
     ])
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(5_000)
     )
 
@@ -162,15 +173,16 @@ describe('createAction funding performance', () => {
       { satoshis: 5_000, status: 'sending' }
     ])
     const original = ctx.activeStorage.findAvailableManagedChangeInputCandidates.bind(ctx.activeStorage)
-    jest.spyOn(ctx.activeStorage, 'findAvailableManagedChangeInputCandidates')
-      .mockImplementation(async (...args) => (await original(...args)).map(candidate => {
+    jest.spyOn(ctx.activeStorage, 'findAvailableManagedChangeInputCandidates').mockImplementation(async (...args) =>
+      (await original(...args)).map(candidate => {
         const { transactionStatus: _transactionStatus, ...legacyCandidate } = candidate
         return legacyCandidate
-      }))
+      })
+    )
     const statusLookup = jest.spyOn(ctx.activeStorage, 'findTransactionStatusesByIds')
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000)
     )
 
@@ -188,7 +200,7 @@ describe('createAction funding performance', () => {
     ctx.activeStorage.managedChangePolicy.pendingComparisonInputs = 1
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(5_000)
     )
 
@@ -203,11 +215,10 @@ describe('createAction funding performance', () => {
       { satoshis: 11_000, status: 'sending', source: 1 }
     ])
     ctx.activeStorage.managedChangePolicy.pendingComparisonInputs = 1
-    jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
-      .mockRejectedValue(new Error('proof service unavailable'))
+    jest.spyOn(ctx.activeStorage, 'getBeefForTransactions').mockRejectedValue(new Error('proof service unavailable'))
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(5_000)
     )
 
@@ -219,17 +230,17 @@ describe('createAction funding performance', () => {
   test('rejects a custom-provider candidate whose ancestry cannot be resolved', async () => {
     await replaceFundingCandidates(1, 5_000)
     const original = ctx.activeStorage.findAvailableManagedChangeInputCandidates.bind(ctx.activeStorage)
-    jest.spyOn(ctx.activeStorage, 'findAvailableManagedChangeInputCandidates')
-      .mockImplementation(async (...args) => (await original(...args)).map(candidate => ({
+    jest.spyOn(ctx.activeStorage, 'findAvailableManagedChangeInputCandidates').mockImplementation(async (...args) =>
+      (await original(...args)).map(candidate => ({
         ...candidate,
         transactionStatus: undefined
-      })))
+      }))
+    )
     jest.spyOn(ctx.activeStorage, 'findTransactionStatusesByIds').mockResolvedValue(new Map())
 
-    await expect(ctx.activeStorage.createAction(
-      { userId: ctx.userId },
-      actionArgs(1_000)
-    )).rejects.toMatchObject({
+    await expect(
+      ctx.activeStorage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000))
+    ).rejects.toMatchObject({
       code: 'WERR_INTERNAL',
       message: expect.stringContaining('missing its source transaction status')
     })
@@ -242,22 +253,20 @@ describe('createAction funding performance', () => {
       { satoshis: 11_000, status: 'sending', source: 1 }
     ])
     ctx.activeStorage.managedChangePolicy.pendingComparisonInputs = -1
-    const basket = (await ctx.activeStorage.findOutputBaskets({
-      partial: { userId: ctx.userId, name: 'default' }
-    }))[0]
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0]
     const available = await ctx.activeStorage.findAvailableManagedChangeInputCandidates(
       ctx.userId,
       basket.basketId,
       false
     )
-    expect(available.map(candidate => candidate.transactionStatus)).toEqual([
-      'completed',
-      'completed',
-      'sending'
-    ])
+    expect(available.map(candidate => candidate.transactionStatus)).toEqual(['completed', 'completed', 'sending'])
 
     const settled = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(5_000)
     )
     expect(settled.inputs).toHaveLength(2)
@@ -268,7 +277,7 @@ describe('createAction funding performance', () => {
       { satoshis: 10_000, status: 'sending' }
     ])
     const fallback = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(5_000)
     )
     expect(fallback.inputs.some(input => input.sourceTxid === fallbackCandidates[1].txid)).toBe(true)
@@ -282,11 +291,11 @@ describe('createAction funding performance', () => {
       chain: ctx.chain,
       knex: ctx.activeStorage.knex,
       feeModel: ctx.activeStorage.feeModel,
-      telemetry: { sink: { capture: event => events.push(event) } }
+      telemetry: { sink: { capture: event => void events.push(event) } }
     })
     await storage.makeAvailable()
 
-    await storage.createAction({ userId: ctx.userId }, actionArgs(1_000, false))
+    await storage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000, false))
 
     const byName = new Map(events.map(event => [event.name, event]))
     expect(byName.get('wallet.storage.create_action')).toMatchObject({ spanStatus: 'ok' })
@@ -333,31 +342,38 @@ describe('createAction funding performance', () => {
       maxQueueSize: 1
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
     const persist = jest.spyOn(ctx.activeStorage, 'upsertPreparedBeef')
     const lookup = jest.spyOn(ctx.activeStorage, 'lookupPreparedBeefs')
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000, false)
     )
 
     expect(result.inputBeef?.length).toBeGreaterThan(0)
     expect(lookup).not.toHaveBeenCalled()
     expect(persist).not.toHaveBeenCalled()
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: []
-    })).toBe(false)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: ['f'.repeat(64)]
-    })).toBe(false)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: []
+      })
+    ).toBe(false)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: ['f'.repeat(64)]
+      })
+    ).toBe(false)
 
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
@@ -373,21 +389,28 @@ describe('createAction funding performance', () => {
       maxQueueSizePerUser: 1
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
 
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: ['a'.repeat(64)]
-    })).toBe(false)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId + 1,
-      rootTxids: ['b'.repeat(64)]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: ['a'.repeat(64)]
+      })
+    ).toBe(false)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId + 1,
+        rootTxids: ['b'.repeat(64)]
+      })
+    ).toBe(true)
 
     await ctx.activeStorage.waitForPreparedBeefTasks()
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
@@ -405,16 +428,21 @@ describe('createAction funding performance', () => {
     jest.spyOn(ctx.activeStorage, 'getBeefForTransaction').mockResolvedValue(oversized)
     const tracker = jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker')
 
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: ['c'.repeat(64)]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: ['c'.repeat(64)]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     expect(tracker).not.toHaveBeenCalled()
-    await expect(ctx.activeStorage.knex('prepared_beefs')
-      .where({ userId: ctx.userId, rootTxid: 'c'.repeat(64) })
-      .first('state')).resolves.toMatchObject({ state: 'failed' })
+    await expect(
+      ctx.activeStorage
+        .knex('prepared_beefs')
+        .where({ userId: ctx.userId, rootTxid: 'c'.repeat(64) })
+        .first('state')
+    ).resolves.toMatchObject({ state: 'failed' })
   })
 
   test('rejects an oversized stored source before loading or parsing its BEEF', async () => {
@@ -426,16 +454,18 @@ describe('createAction funding performance', () => {
     jest.spyOn(ctx.activeStorage, 'readPreparedBeefSourceByteLength').mockResolvedValue(101)
     const load = jest.spyOn(ctx.activeStorage, 'getBeefForTransaction')
 
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     expect(load).not.toHaveBeenCalled()
-    await expect(ctx.activeStorage.knex('prepared_beefs')
-      .where({ userId: ctx.userId, rootTxid: source.txid })
-      .first('state')).resolves.toMatchObject({ state: 'failed' })
+    await expect(
+      ctx.activeStorage.knex('prepared_beefs').where({ userId: ctx.userId, rootTxid: source.txid }).first('state')
+    ).resolves.toMatchObject({ state: 'failed' })
   })
 
   test('preflights an unconfirmed no-send source before loading its input BEEF', async () => {
@@ -468,19 +498,21 @@ describe('createAction funding performance', () => {
   test('bypasses fragmented prepared lookup before loading blobs over the aggregate budget', async () => {
     const rootTxids = ['a'.repeat(64), 'b'.repeat(64)]
     const now = new Date()
-    await ctx.activeStorage.knex('prepared_beefs').insert(rootTxids.map(rootTxid => ({
-      userId: ctx.userId,
-      rootTxid,
-      beef: Buffer.alloc(64),
-      checksum: 'c'.repeat(64),
-      formatVersion: 1,
-      state: 'ready',
-      txCount: 1,
-      bumpCount: 0,
-      byteLength: 64,
-      created_at: now,
-      updated_at: now
-    })))
+    await ctx.activeStorage.knex('prepared_beefs').insert(
+      rootTxids.map(rootTxid => ({
+        userId: ctx.userId,
+        rootTxid,
+        beef: Buffer.alloc(64),
+        checksum: 'c'.repeat(64),
+        formatVersion: 1,
+        state: 'ready',
+        txCount: 1,
+        bumpCount: 0,
+        byteLength: 64,
+        created_at: now,
+        updated_at: now
+      }))
+    )
     Object.assign(ctx.activeStorage.preparedBeefPolicy, {
       readEnabled: true,
       maxArtifactBytes: 2 * 1024 * 1024,
@@ -498,6 +530,10 @@ describe('createAction funding performance', () => {
 
   test('keeps canonical createAction compatible when the optional COOK queue is absent', async () => {
     await replaceFundingCandidates(1, 5_000)
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
     ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
     Object.defineProperty(ctx.activeStorage, 'enqueuePreparedBeef', {
       configurable: true,
@@ -505,7 +541,7 @@ describe('createAction funding performance', () => {
     })
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000, false)
     )
 
@@ -519,12 +555,15 @@ describe('createAction funding performance', () => {
       writeEnabled: true
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId + 1, [source.txid])).resolves.toEqual([])
     await expect(ctx.activeStorage.findPreparedBeefBackfillRoots(10, 1)).resolves.not.toContainEqual({
@@ -534,7 +573,7 @@ describe('createAction funding performance', () => {
     const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
 
     const result = await ctx.activeStorage.createAction(
-      { userId: ctx.userId },
+      { userId: ctx.userId, identityKey: ctx.identityKey },
       actionArgs(1_000, false)
     )
 
@@ -549,12 +588,15 @@ describe('createAction funding performance', () => {
       writeEnabled: true
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
     const merge = jest.spyOn(Beef.prototype, 'mergeBeef').mockImplementationOnce(() => {
       throw new Error('conflicting prepared fragment')
@@ -575,23 +617,26 @@ describe('createAction funding performance', () => {
       writeEnabled: true
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
     const corruptChecksum = '0'.repeat(64)
-    await ctx.activeStorage.knex('prepared_beefs')
+    await ctx.activeStorage
+      .knex('prepared_beefs')
       .where({ userId: ctx.userId, rootTxid: source.txid })
       .update({ checksum: corruptChecksum })
     const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
 
-    await expect(ctx.activeStorage.createAction(
-      { userId: ctx.userId },
-      actionArgs(1_000, false)
-    )).resolves.toMatchObject({ inputBeef: expect.anything() })
+    await expect(
+      ctx.activeStorage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000, false))
+    ).resolves.toMatchObject({ inputBeef: expect.anything() })
 
     expect(canonicalBuilder).toHaveBeenCalledWith([source.txid], expect.any(Object))
     await ctx.activeStorage.waitForPreparedBeefTasks()
@@ -601,24 +646,24 @@ describe('createAction funding performance', () => {
 
   test('falls back to the canonical builder when the prepared store is unavailable', async () => {
     const source = await replaceFundingCandidates(1, 5_000)
+    jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
     ctx.activeStorage.preparedBeefPolicy.readEnabled = true
     jest.spyOn(ctx.activeStorage, 'findPreparedBeefs').mockRejectedValueOnce(new Error('cache unavailable'))
     const canonicalBuilder = jest.spyOn(ctx.activeStorage, 'getBeefForTransactions')
 
-    await expect(ctx.activeStorage.createAction(
-      { userId: ctx.userId },
-      actionArgs(1_000, false)
-    )).resolves.toMatchObject({ inputBeef: expect.anything() })
+    await expect(
+      ctx.activeStorage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000, false))
+    ).resolves.toMatchObject({ inputBeef: expect.anything() })
 
     expect(canonicalBuilder).toHaveBeenCalledWith([source.txid], expect.any(Object))
   })
 
   test('bypasses prepared storage for an unusually broad lookup', async () => {
     ctx.activeStorage.preparedBeefPolicy.readEnabled = true
-    const rootTxids = Array.from(
-      { length: 33 },
-      (_, index) => index.toString(16).padStart(64, '0')
-    )
+    const rootTxids = Array.from({ length: 33 }, (_, index) => index.toString(16).padStart(64, '0'))
     const preparedStore = jest.spyOn(ctx.activeStorage, 'findPreparedBeefs')
 
     const lookup = await ctx.activeStorage.lookupPreparedBeefs(ctx.userId, rootTxids)
@@ -632,21 +677,27 @@ describe('createAction funding performance', () => {
     const source = await replaceFundingCandidates(1, 5_000)
     ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     await expect(ctx.activeStorage.invalidatePreparedBeefs()).resolves.toBe(1)
 
     ctx.activeStorage.preparedBeefPolicy.readEnabled = true
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toEqual([])
-    await expect(ctx.activeStorage.knex('prepared_beefs')
-      .where({ userId: ctx.userId, rootTxid: source.txid })
-      .first('state', 'formatVersion')).resolves.toMatchObject({ state: 'stale', formatVersion: 0 })
+    await expect(
+      ctx.activeStorage
+        .knex('prepared_beefs')
+        .where({ userId: ctx.userId, rootTxid: source.txid })
+        .first('state', 'formatVersion')
+    ).resolves.toMatchObject({ state: 'stale', formatVersion: 0 })
   })
 
   test('does not let an in-flight cook overwrite a proof reorganization', async () => {
@@ -654,37 +705,46 @@ describe('createAction funding performance', () => {
     ctx.activeStorage.preparedBeefPolicy.writeEnabled = true
     let verificationStarted!: () => void
     let releaseVerification!: () => void
-    const started = new Promise<void>(resolve => { verificationStarted = resolve })
-    const release = new Promise<void>(resolve => { releaseVerification = resolve })
+    const started = new Promise<void>(resolve => {
+      verificationStarted = resolve
+    })
+    const release = new Promise<void>(resolve => {
+      releaseVerification = resolve
+    })
     const isValidRootForHeight = jest.fn(async () => {
       verificationStarted()
       await release
       return true
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight
-    } as ChainTracker)
+      isValidRootForHeight,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
     const epoch = await ctx.activeStorage.readPreparedBeefProofEpoch()
 
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await started
     await expect(ctx.activeStorage.invalidatePreparedBeefs()).resolves.toBe(0)
     releaseVerification()
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).resolves.toBe(epoch + 1)
-    await expect(ctx.activeStorage.knex('prepared_beefs')
-      .where({ userId: ctx.userId, rootTxid: source.txid })
-      .first()).resolves.toBeUndefined()
+    await expect(
+      ctx.activeStorage.knex('prepared_beefs').where({ userId: ctx.userId, rootTxid: source.txid }).first()
+    ).resolves.toBeUndefined()
 
     isValidRootForHeight.mockResolvedValue(true)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
   })
@@ -698,8 +758,9 @@ describe('createAction funding performance', () => {
       backfillIntervalMs: 0
     })
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight: async () => true
-    } as ChainTracker)
+      isValidRootForHeight: async () => true,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
 
     ctx.activeStorage.startPreparedBeefBackfill()
     await ctx.activeStorage.waitForPreparedBeefTasks()
@@ -713,7 +774,8 @@ describe('createAction funding performance', () => {
       backfillEnabled: true,
       backfillIntervalMs: 0
     })
-    const findRoots = jest.spyOn(ctx.activeStorage, 'findPreparedBeefBackfillRoots')
+    const findRoots = jest
+      .spyOn(ctx.activeStorage, 'findPreparedBeefBackfillRoots')
       .mockRejectedValueOnce(new Error('backfill unavailable'))
 
     ctx.activeStorage.startPreparedBeefBackfill()
@@ -734,10 +796,12 @@ describe('createAction funding performance', () => {
     })
     await ctx.activeStorage.knex('prepared_beef_metadata').delete()
 
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [])).resolves.toEqual([])
@@ -745,9 +809,7 @@ describe('createAction funding performance', () => {
     await expect(ctx.activeStorage.readPreparedBeefProofEpoch()).rejects.toThrow(
       'prepared BEEF proof epoch is unavailable'
     )
-    await expect(ctx.activeStorage.invalidatePreparedBeefs()).rejects.toThrow(
-      'prepared BEEF proof epoch update failed'
-    )
+    await expect(ctx.activeStorage.invalidatePreparedBeefs()).rejects.toThrow('prepared BEEF proof epoch update failed')
   })
 
   test('suppresses failed backfill roots while allowing an organic retry to repair them', async () => {
@@ -758,23 +820,26 @@ describe('createAction funding performance', () => {
     })
     const isValidRootForHeight = jest.fn(async () => false)
     jest.spyOn(ctx.activeStorage.getServices(), 'getChainTracker').mockResolvedValue({
-      isValidRootForHeight
-    } as ChainTracker)
-    expect(ctx.activeStorage.enqueuePreparedBeef({
-      userId: ctx.userId,
-      rootTxids: [source.txid]
-    })).toBe(true)
+      isValidRootForHeight,
+      currentHeight: async () => 1_000_000
+    } satisfies ChainTracker)
+    expect(
+      ctx.activeStorage.enqueuePreparedBeef({
+        userId: ctx.userId,
+        rootTxids: [source.txid]
+      })
+    ).toBe(true)
     await ctx.activeStorage.waitForPreparedBeefTasks()
-    await expect(ctx.activeStorage.knex('prepared_beefs')
-      .where({ userId: ctx.userId, rootTxid: source.txid })
-      .first('state')).resolves.toMatchObject({ state: 'failed' })
+    await expect(
+      ctx.activeStorage.knex('prepared_beefs').where({ userId: ctx.userId, rootTxid: source.txid }).first('state')
+    ).resolves.toMatchObject({ state: 'failed' })
     await expect(ctx.activeStorage.findPreparedBeefBackfillRoots(10, 1)).resolves.not.toContainEqual({
       userId: ctx.userId,
       rootTxid: source.txid
     })
 
     isValidRootForHeight.mockResolvedValue(true)
-    await ctx.activeStorage.createAction({ userId: ctx.userId }, actionArgs(1_000, false))
+    await ctx.activeStorage.createAction({ userId: ctx.userId, identityKey: ctx.identityKey }, actionArgs(1_000, false))
     await ctx.activeStorage.waitForPreparedBeefTasks()
 
     await expect(ctx.activeStorage.findPreparedBeefs(ctx.userId, [source.txid])).resolves.toHaveLength(1)
@@ -782,9 +847,11 @@ describe('createAction funding performance', () => {
 
   test('keeps fallback storage-provider batch methods guarded and user-scoped', async () => {
     await replaceFundingCandidates(2, 1_000)
-    const basket = (await ctx.activeStorage.findOutputBaskets({
-      partial: { userId: ctx.userId, name: 'default' }
-    }))[0] as TableOutputBasket
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0] as TableOutputBasket
     const candidates = await StorageProvider.prototype.findAvailableManagedChangeInputs.call(
       ctx.activeStorage,
       ctx.userId,
@@ -794,39 +861,41 @@ describe('createAction funding performance', () => {
     expect(candidates).toHaveLength(2)
 
     const transactionId = candidates[0].transactionId
-    const statuses = await StorageProvider.prototype.findTransactionStatusesByIds.call(
-      ctx.activeStorage,
-      ctx.userId,
-      [transactionId, transactionId, 999_999]
-    )
+    const statuses = await StorageProvider.prototype.findTransactionStatusesByIds.call(ctx.activeStorage, ctx.userId, [
+      transactionId,
+      transactionId,
+      999_999
+    ])
     expect(statuses.get(transactionId)).toBe('completed')
-    await expect(StorageProvider.prototype.findTransactionStatusesByIds.call(
-      ctx.activeStorage,
-      ctx.userId + 1,
-      [transactionId]
-    )).resolves.toEqual(new Map())
+    await expect(
+      StorageProvider.prototype.findTransactionStatusesByIds.call(ctx.activeStorage, ctx.userId + 1, [transactionId])
+    ).resolves.toEqual(new Map())
 
     await ctx.activeStorage.updateOutput(candidates[1].outputId, { spendable: false })
-    const updated = await ctx.activeStorage.transaction(async trx =>
-      await StorageProvider.prototype.markChangeInputsSpent.call(
-        ctx.activeStorage,
-        [candidates[0].outputId, candidates[1].outputId, 999_999],
-        transactionId,
-        trx
-      )
+    const updated = await ctx.activeStorage.transaction(
+      async trx =>
+        await StorageProvider.prototype.markChangeInputsSpent.call(
+          ctx.activeStorage,
+          [candidates[0].outputId, candidates[1].outputId, 999_999],
+          transactionId,
+          trx
+        )
     )
     expect(updated).toBe(1)
-    await expect(ctx.activeStorage.transaction(async trx =>
-      await StorageProvider.prototype.markChangeInputsSpent.call(
-        ctx.activeStorage,
-        [candidates[0].outputId],
-        transactionId,
-        trx
+    await expect(
+      ctx.activeStorage.transaction(
+        async trx =>
+          await StorageProvider.prototype.markChangeInputsSpent.call(
+            ctx.activeStorage,
+            [candidates[0].outputId],
+            transactionId,
+            trx
+          )
       )
-    )).resolves.toBe(0)
+    ).resolves.toBe(0)
   })
 
-  function actionArgs (
+  function actionArgs(
     satoshis: number,
     returnTXIDOnly = true,
     acceptDelayedBroadcast = true
@@ -838,14 +907,16 @@ describe('createAction funding performance', () => {
     })
   }
 
-  async function replaceFundingCandidates (
+  async function replaceFundingCandidates(
     count: number,
     satoshis: number,
     offloadScript = false
-  ): Promise<{ txid: string, transactionId: number }> {
-    const basket = (await ctx.activeStorage.findOutputBaskets({
-      partial: { userId: ctx.userId, name: 'default' }
-    }))[0] as TableOutputBasket
+  ): Promise<{ txid: string; transactionId: number }> {
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0] as TableOutputBasket
     await ctx.activeStorage.updateOutputBasket(basket.basketId, {
       numberOfDesiredUTXOs: 0,
       minimumDesiredUTXOValue: 1
@@ -857,11 +928,13 @@ describe('createAction funding performance', () => {
     for (const output of existing) {
       if (output.spendable) await ctx.activeStorage.updateOutput(output.outputId, { spendable: false })
     }
-    const source = (await ctx.activeStorage.findTransactions({
-      partial: { userId: ctx.userId },
-      status: ['completed'],
-      noRawTx: true
-    }))[0] as TableTransaction
+    const source = (
+      await ctx.activeStorage.findTransactions({
+        partial: { userId: ctx.userId },
+        status: ['completed'],
+        noRawTx: true
+      })
+    )[0] as TableTransaction
     expect(source?.txid).toBeDefined()
     const lockingScript = [0x76, 0xa9, 0x14, ...Array<number>(20).fill(0x11), 0x88, 0xac]
     for (let index = 0; index < count; index++) {
@@ -891,12 +964,14 @@ describe('createAction funding performance', () => {
     return { txid: source.txid!, transactionId: source.transactionId }
   }
 
-  async function replaceFundingCandidatesAcrossSources (
-    specs: Array<{ satoshis: number, status: 'completed' | 'unproven' | 'sending', source?: number }>
-  ): Promise<Array<{ txid: string, transactionId: number }>> {
-    const basket = (await ctx.activeStorage.findOutputBaskets({
-      partial: { userId: ctx.userId, name: 'default' }
-    }))[0] as TableOutputBasket
+  async function replaceFundingCandidatesAcrossSources(
+    specs: Array<{ satoshis: number; status: 'completed' | 'unproven' | 'sending'; source?: number }>
+  ): Promise<Array<{ txid: string; transactionId: number }>> {
+    const basket = (
+      await ctx.activeStorage.findOutputBaskets({
+        partial: { userId: ctx.userId, name: 'default' }
+      })
+    )[0] as TableOutputBasket
     await ctx.activeStorage.updateOutputBasket(basket.basketId, {
       numberOfDesiredUTXOs: 0,
       minimumDesiredUTXOValue: 5_000
@@ -908,11 +983,11 @@ describe('createAction funding performance', () => {
     for (const output of existing) {
       if (output.spendable) await ctx.activeStorage.updateOutput(output.outputId, { spendable: false })
     }
-    const sources = await ctx.activeStorage.findTransactions({
+    const sources = (await ctx.activeStorage.findTransactions({
       partial: { userId: ctx.userId },
       status: ['completed'],
       noRawTx: true
-    }) as TableTransaction[]
+    })) as TableTransaction[]
     expect(sources.length).toBeGreaterThanOrEqual(2)
     const lockingScript = [0x76, 0xa9, 0x14, ...Array<number>(20).fill(0x11), 0x88, 0xac]
     const selectedSources = specs.map((spec, index) => sources[spec.source ?? index])

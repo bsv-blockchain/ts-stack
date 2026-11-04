@@ -411,9 +411,9 @@
         "scripts/check-wallet-toolbox-platform.mjs",
         "https://github.com/bsv-blockchain/ts-stack/discussions/757"
       ],
-      "created": "2026-10-03",
-      "reviewBy": "2026-11-02",
-      "removeWhen": "Remove the patch, exact-version package extension and parent-scoped removal together when an official compatible Metro/file-map release removes the affected dependency path. Require the complete independent watcher oracle, frozen graph, full unexcluded audit and packed Metro/Hermes platform checks before retirement."
+      "created": "2026-10-02",
+      "reviewBy": "2026-11-01",
+      "removeWhen": "Remove the patch, exact-version package extension and scoped removal together after an official compatible Metro/file-map release removes the affected dependency path; require the complete watcher oracle, fresh unexcluded audit, frozen graph and packed Metro/Hermes platform checks before retirement."
     },
     {
       "id": "verifast-cdp-only-browser-tooling",
@@ -447,6 +447,39 @@
       "created": "2026-10-23",
       "reviewBy": "2026-11-06",
       "removeWhen": "Remove when upstream mutation-server-protocol declares a minimum Zod version at least 4.6.6, a frozen regeneration without this selector contains no vulnerable Zod, and protocol schema, Stryker smoke/mutation, full audit and normal qualification pass."
+    },
+    {
+      "id": "sonar-pr569-maintainability-budget",
+      "category": "quality-rule",
+      "target": "PR569 exact-head repository Sonar gate only; see governance/sonar-pr569-budget.json",
+      "owner": "ts-stack-maintainers",
+      "reason": "Maintainer ty-everett approved this PR569-only policy. Explicit maintainer approval of visible maintainability-only debt with maintainability A and duplication at most 6% during completion of #544. Correctness, reliability, security and hotspot gates remain strict; no finding is suppressed or reclassified. This avoids contract-risking style refactoring solely to satisfy an absolute smell count.",
+      "evidence": [
+        "governance/sonar-pr569-budget.json",
+        "docs/reviews/sonar-pr569-budget.md",
+        "scripts/sonar-policy-gate.mjs",
+        "scripts/sonar-policy-gate.test.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/pull/569"
+      ],
+      "created": "2026-10-18",
+      "reviewBy": "2026-10-24",
+      "removeWhen": "Remove after full implementation and qualification. Independently of advisory review dates, scoped authorization expires at 2026-10-24T23:59:59Z and enforcement returns to the original strict policy. Any extension requires new explicit maintainer approval."
+    },
+    {
+      "id": "pr569-reviewed-analysis-operations-20261019",
+      "category": "quality-rule",
+      "target": "PR569 only: CodeQL alert353 and two exact Sonar S2612 public artifact permission findings; source identities in governance/pr569-reviewed-analysis-exceptions.json",
+      "owner": "ts-stack-maintainers",
+      "reason": "Operator-delegated review confirms intentional private JSON evidence storage and required public artifact read/execute permissions. Rewriting these operations solely to alter heuristic matches would risk evidence and artifact compatibility contracts. Only exact alert identities and audited source hashes qualify; all findings remain visible and every other gate stays strict.",
+      "evidence": [
+        "governance/pr569-reviewed-analysis-exceptions.json",
+        "scripts/pr569-reviewed-analysis.mjs",
+        "scripts/sonar-policy-gate.test.mjs",
+        "https://github.com/bsv-blockchain/ts-stack/pull/569"
+      ],
+      "created": "2026-10-19",
+      "reviewBy": "2026-10-24",
+      "removeWhen": "Remove when analysis recognizes these constrained operations. Authorization expires 2026-10-24T23:59:59Z; changed source, different alerts or scope restore strict enforcement and require new review."
     }
   ]
 }

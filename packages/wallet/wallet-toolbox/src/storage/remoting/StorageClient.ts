@@ -103,8 +103,8 @@ export class StorageClient extends StorageClientBase {
    * @param method The WalletStorage method name to call.
    * @param params The array of parameters to pass to the method in order.
    */
-  protected async rpcCall<T>(method: string, params: unknown[]): Promise<T> {
-    return await this.traceRpcCall(method, params, async rpcSpan => {
+  protected rpcCall<T>(method: string, params: unknown[], signal?: AbortSignal): Promise<T> {
+    return this.traceRpcCall(method, params, async rpcSpan => {
       const loggerState = this.startRpcLogging(method, params)
       const { logger } = loggerState
 
@@ -131,15 +131,16 @@ export class StorageClient extends StorageClientBase {
           response = await this.traceRpcStep(
             'wallet.storage.http',
             rpcSpan,
-            async () =>
-              await this.authenticatedFetch(this.endpointUrl, {
+            () =>
+              this.authenticatedFetch(this.endpointUrl, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                   [BINARY_ENCODING_HEADER]: BINARY_ENCODING,
                   ...(requestUsesBinary ? { [BINARY_REQUEST_ENCODING_HEADER]: BINARY_ENCODING } : {})
                 },
-                body: requestBody
+                body: requestBody,
+                signal
               }),
             {
               'http.request.method': 'POST',
@@ -157,15 +158,10 @@ export class StorageClient extends StorageClientBase {
 
         const responseUsesBinary = response.headers.get(BINARY_ENCODING_HEADER) === BINARY_ENCODING
         if (responseUsesBinary) this.serverSupportsBinary = true
-        const responseText = await this.traceRpcStep(
-          'wallet.storage.response.read',
-          rpcSpan,
-          async () => await response.text(),
-          {
-            'http.response.status_code': response.status,
-            'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json'
-          }
-        )
+        const responseText = await this.traceRpcStep('wallet.storage.response.read', rpcSpan, () => response.text(), {
+          'http.response.status_code': response.status,
+          'rpc.encoding': responseUsesBinary ? 'binary-json' : 'json'
+        })
         const json = await this.traceRpcStep(
           'wallet.storage.response.parse',
           rpcSpan,

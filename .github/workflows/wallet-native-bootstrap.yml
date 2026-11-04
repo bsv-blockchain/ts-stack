@@ -1,0 +1,53 @@
+name: Wallet native candidate contracts
+
+on:
+  workflow_dispatch:
+  # Enables first-artifact qualification before this workflow reaches main.
+  # This isolated ref does not restart the PR's long integration campaign.
+  push:
+    branches: [codex/native-bootstrap-qualification]
+
+permissions: {}
+
+concurrency:
+  group: wallet-native-bootstrap-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  linux-x64:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      NODE_OPTIONS: --max-old-space-size=1536
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --filter '@bsv/wallet-toolbox...' run build
+      - name: Verify actual x64 worker and record source identity
+        run: |
+          test "$(uname -m)" = x86_64
+          test "$(node -p process.arch)" = x64
+          git diff --exit-code
+          git rev-parse HEAD HEAD^{tree} > "$RUNNER_TEMP/native-bootstrap-source.txt"
+      - name: Run all original native component contracts without delivery
+        run: bash scripts/provision-wallet-native-tests.sh --bootstrap-only
+      - name: Preserve component evidence (not runtime or full-system qualification)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wallet-native-bootstrap-x64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-bootstrap-source.txt
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-bootstrap.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: error
+          retention-days: 14

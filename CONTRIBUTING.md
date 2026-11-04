@@ -283,13 +283,28 @@ After every push, remain responsible for the exact head:
 2. fix every failure or unexpected skip and rerun it;
 3. resolve all review conversations;
 4. require zero new Sonar findings, zero unreviewed Sonar hotspots, and zero new
-   CodeQL alerts; and
+   CodeQL alerts (subject only to the approved PR569 Sonar budget below); and
 5. verify that the reviewed SHA is still the PR head.
 
 SonarCloud’s aggregate “Quality Gate passed” result is not sufficient. The
 repository-owned exact-head zero-finding job and complete merge gate are the
 authority. Reclassifying a new issue as accepted or false-positive does not
 make it mergeable.
+
+The only approved Sonar budget is
+[PR569's scoped policy](./docs/reviews/sonar-pr569-budget.md), registered in
+[`governance/sonar-pr569-budget.json`](./governance/sonar-pr569-budget.json).
+For that exact repository/PR/head branch/base, until `2026-10-24T23:59:59Z`,
+maintainability A and duplication ≤6% replace the zero-maintainability-findings
+requirement. All findings and both original/scoped verdicts remain visible.
+Bugs, vulnerabilities, reliability/security impacts (including mixed CODE_SMELL
+impacts), unknown findings and unreviewed hotspots remain blocking even if
+accepted or marked false-positive. The gate collects live GitHub and complete,
+revision-bracketed Sonar evidence itself; a supplied snapshot cannot activate
+this exception. Other PRs, local invocations and expired approval retain the
+original gate. This authorization window returns to the strict policy at expiry;
+it is not an extension of advisory review dates or permission to merge PR569.
+All other implementation, qualification, security and review requirements remain.
 
 Do not call a PR complete or hand it off with pending or failed CI. If a check
 is transient, rerun and continue monitoring. If work must genuinely transfer

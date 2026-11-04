@@ -1,3 +1,4 @@
+import { awaitFromSync } from '../../utility/promiseFromSync'
 import {
   ChainTracker,
   defaultHttpClient,
@@ -85,10 +86,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
     const apiKey = properties.apiKey?.value
     const httpClient = properties.httpClient?.value
     const requestTimeoutMsecs = properties.requestTimeoutMsecs?.value ?? DEFAULT_REQUEST_TIMEOUT_MSECS
-    if (
-      apiKey !== undefined &&
-      (typeof apiKey !== 'string' || apiKey.length > 4_096 || /\p{Cc}/u.test(apiKey))
-    ) {
+    if (apiKey !== undefined && (typeof apiKey !== 'string' || apiKey.length > 4_096 || /\p{Cc}/u.test(apiKey))) {
       throw new Error('WhatsOnChain API key is invalid.')
     }
     if (httpClient !== undefined && (httpClient == null || typeof httpClient.request !== 'function')) {
@@ -125,16 +123,18 @@ export default class SdkWhatsOnChain implements ChainTracker {
     return this.URL !== ''
   }
 
-  protected async request<T, Data = unknown>(
+  protected request<T, Data = unknown>(
     url: string,
     options: HttpClientRequestOptions<Data>
   ): Promise<HttpClientResponse<T>> {
-    if (!this.isAvailable) {
-      throw new Error(`WhatsOnChain has no service for network '${this.network}'.`)
-    }
-    const timeoutSignal = AbortSignal.timeout(this.requestTimeoutMsecs)
-    const signal = options.signal == null ? timeoutSignal : AbortSignal.any([options.signal, timeoutSignal])
-    return await this.httpClient.request<T, Data>(url, { ...options, signal })
+    return awaitFromSync(() => {
+      if (!this.isAvailable) {
+        throw new Error(`WhatsOnChain has no service for network '${this.network}'.`)
+      }
+      const timeoutSignal = AbortSignal.timeout(this.requestTimeoutMsecs)
+      const signal = options.signal == null ? timeoutSignal : AbortSignal.any([options.signal, timeoutSignal])
+      return this.httpClient.request<T, Data>(url, { ...options, signal })
+    })
   }
 
   async isValidRootForHeight(root: string, height: number): Promise<boolean> {
@@ -150,10 +150,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
       headers: this.getHttpHeaders()
     }
 
-    const response = await this.request<WhatsOnChainBlockHeader>(
-      `${this.URL}/block/${height}/header`,
-      requestOptions
-    )
+    const response = await this.request<WhatsOnChainBlockHeader>(`${this.URL}/block/${height}/header`, requestOptions)
     if (response.ok) {
       const properties = plainDataProperties(response.data, 'WhatsOnChain block header')
       const merkleRoot = properties.merkleroot?.value
@@ -175,10 +172,7 @@ export default class SdkWhatsOnChain implements ChainTracker {
         headers: this.getHttpHeaders()
       }
 
-      const response = await this.request<Array<{ height: number }>>(
-        `${this.URL}/block/headers`,
-        requestOptions
-      )
+      const response = await this.request<Array<{ height: number }>>(`${this.URL}/block/headers`, requestOptions)
       if (response.ok) {
         return firstHeaderHeight(response.data)
       } else {

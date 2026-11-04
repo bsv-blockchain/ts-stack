@@ -39,10 +39,10 @@ jobs:
     name: Mutation / ${{ matrix.target }} / ${{ matrix.partition }}
     # Native fixtures retain their original MongoDB binary; use its supported kernel.
     # See docs/reference/container-supply-chain.md (SERVER-121912/131779).
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.wallet_native && 'ubuntu-24.04-arm' || 'ubuntu-22.04' }}
     # Bound complete qualification work; preserve ordinary diagnostic job limits.
     # Measured timeouts: governance/mutation-testing/REVIEW-2026-10-16.md and REVIEW-2026-10-19-PR674.md.
-    timeout-minutes: ${{ inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile","lch-overlay-acquisition","lch-overlay-covenant","lch-overlay-covenant-candidate","private-purchase-evidence","private-purchase-coordination","private-purchase-native-clock","private-purchase-disclosure","output-knowledge-proposal-core"]'), matrix.target) && 180 || contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
+    timeout-minutes: ${{ inputs.profile == 'qualification' && contains(fromJSON('["wallet-funding-controller","revenue-listing-authority","revenue-listing-profile","lch-overlay-acquisition","lch-overlay-covenant","lch-overlay-covenant-candidate","private-purchase-evidence","private-purchase-coordination","private-purchase-native-clock","private-purchase-disclosure","output-knowledge-proposal-core"]'), matrix.target) && 180 || contains(fromJSON('["revenue-lineage-package","revenue-lineage-graph","sdk-revenue-listing-funding","output-lookup-session-records","output-lookup-session-payloads","wallet-recovery-codec","wallet-recovery-installation","wallet-recovery-store","wallet-funding-store","wallet-recovery-transitions","wallet-recovery-controller","root-eviction-storage","root-eviction-journal","root-eviction-records","wallet-retained-snapshot","wallet-snapshot-sync","wallet-snapshot-sync-destination","wallet-snapshot-sync-rows","wallet-snapshot-archive","wallet-snapshot-remote-http","wallet-snapshot-journal","wallet-snapshot-remote-reader","wallet-snapshot-remote-service","root-eviction-codec"]'), matrix.target) && 90 || 45 }}
     permissions:
       contents: read
     strategy:
@@ -111,6 +111,24 @@ jobs:
       - name: Restore build outputs
         run: tar --extract --gzip --file .ci-artifacts/build-outputs.tar.gz
 
+      - name: Deliver the pinned native browser for selected wallet component tests
+        if: matrix.wallet_native
+        run: node scripts/provision-wallet-native-browser.mjs --target "${{ matrix.target }}"
+
+      - name: Provision the qualified native wallet test executable
+        if: matrix.wallet_native
+        run: bash scripts/provision-wallet-native-tests.sh
+
+      - name: Preserve native component delivery evidence
+        if: always() && matrix.wallet_native
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: mutation-native-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.target }}-${{ matrix.partition }}
+          path: |
+            ${{ runner.temp }}/ts-wallet-native-tests.*/component-delivery.json
+            ${{ runner.temp }}/ts-wallet-native-tests.*/brc38-qualification-*/component-delivery-failure.json
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Enforce the governed mutation-quality ratchet
         env:
           MUTATION_VERBOSE: ${{ inputs.profile == 'qualification' && '0' || '' }}
@@ -136,6 +154,9 @@ jobs:
           node scripts/mutation-partition-evidence.mjs capture --mode "$CAMPAIGN_MODE" \
             --target "${{ matrix.target }}" --partition "${{ matrix.partition }}" \
             --directory "artifacts/mutation/${{ matrix.target }}/${{ matrix.partition }}"
+      - name: Release the exact native browser sandbox attachment
+        if: always() && matrix.wallet_native
+        run: node scripts/provision-wallet-native-browser.mjs --cleanup
       - name: Preserve the machine-readable mutation report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

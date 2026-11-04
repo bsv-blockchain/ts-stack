@@ -50,8 +50,10 @@ const createMinimallyEncodedScriptChunk = (data: number[]): { op: number; data?:
   return { op: 0x4e, data }
 }
 
-export default class PushDrop implements ScriptTemplate {
-  wallet: WalletInterface
+export default class PushDrop<
+  Wallet extends Pick<WalletInterface, 'getPublicKey' | 'createSignature'> = WalletInterface
+> implements ScriptTemplate {
+  wallet: Wallet
   originator?: string
 
   /**
@@ -127,7 +129,7 @@ export default class PushDrop implements ScriptTemplate {
    * @param {WalletInterface} wallet - The wallet interface used for creating signatures and accessing public keys.
    * @param {string} originator — The originator to use with Wallet requests
    */
-  constructor(wallet: WalletInterface, originator?: string) {
+  constructor(wallet: Wallet, originator?: string) {
     this.wallet = wallet
     this.originator = originator
   }
