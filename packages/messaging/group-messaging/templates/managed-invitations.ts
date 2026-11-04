@@ -16,7 +16,7 @@
  *     id and the name that crosses the wire.
  *   - the retry in `#admit` belongs with your outbox.
  */
-import { WelcomeDeliveryError } from '@bsv/group-messaging'
+import { BroadcastError, WelcomeDeliveryError } from '@bsv/group-messaging'
 import type {
   GroupMessagingClient,
   KeyPackageBytes,
@@ -91,8 +91,13 @@ export interface ChatIds {
   /** Inviter side: `inviteId` is what `invites.send` returned. */
   forAnswer(inviteId: string): string
   /**
-   * Inviter side: the name the request and Welcome carry. Without it
-   * `forWelcome` receives `undefined`.
+   * Inviter side: the name for the chat this host creates, which also rides
+   * out on the Welcome.
+   *
+   * It has no bearing on what the invitee's `forWelcome` is handed. That comes
+   * from the `chatName` the inviter passed to `invites.send`, on the request —
+   * omit it there and `forWelcome` receives `undefined` however this is
+   * implemented.
    */
   nameFor?(inviteId: string): string | undefined
   /** Invitee side, called at `accept`: the inviter's name for the chat, if it sent one. */
@@ -109,7 +114,7 @@ export interface Failure {
    * are the only thing that can finish the join and cannot be regenerated:
    * queue the error and pass it to `client.retryDelivery` later.
    */
-  undelivered?: WelcomeDeliveryError
+  undelivered?: WelcomeDeliveryError | BroadcastError
   /**
    * Set when a Welcome named a KeyPackage whose shelved record is missing. The
    * Welcome's own invitation id matches nothing the host passed to `accept`, so
@@ -254,10 +259,23 @@ export class ManagedInvitations {
   }
 
   /**
+   * Invitations retired in this process, so a join whose catch runs after a
+   * decline does not put the half back on the shelf. One string per decline
+   * for the life of the process; a host with its own database would read the
+   * invitation's state instead.
+   */
+  readonly #retired = new Set<string>()
+
+  /**
    * Drops the public ref, then the record. This order, so a throw between the
    * two leaves the record to retry with rather than a live ref nothing points at.
    */
   async #retire(inviteId: string): Promise<void> {
+    // Before the lookup, not after it: a join already in flight may have taken
+    // the record off the shelf a moment ago, and the host still asked for this
+    // invitation to be given up. Recording it here is what stops that join's
+    // catch putting the half back.
+    this.#retired.add(inviteId)
     const record = await this.shelf.forInvite(inviteId)
     if (record === undefined) return
     await this.client.keyPackages.retire(record.ref)
@@ -279,7 +297,15 @@ export class ManagedInvitations {
       half: minted.privateKeyPackage,
       keyPackage: minted.keyPackage
     }
-    await this.shelf.hold(record)
+    try {
+      await this.shelf.hold(record)
+    } catch (cause) {
+      // Same leak as a failed create: the public half is in library storage and
+      // the private one is about to go out of scope, so a shelf that refuses
+      // the write leaves a KeyPackage no Welcome could ever be answered from.
+      await this.client.keyPackages.retire(minted.ref).catch(() => undefined)
+      throw cause
+    }
     return record
   }
 
@@ -336,23 +362,40 @@ export class ManagedInvitations {
         await existing.addMembers([keyPackage])
       } else {
         const own = await this.client.keyPackages.create()
-        await this.client.createGroup({
-          chatId,
-          members: [keyPackage],
-          privateKeyPackage: own.privateKeyPackage,
-          ...(name === undefined ? {} : { name })
-        })
+        try {
+          await this.client.createGroup({
+            chatId,
+            members: [keyPackage],
+            privateKeyPackage: own.privateKeyPackage,
+            ...(name === undefined ? {} : { name })
+          })
+        } catch (cause) {
+          // `createGroup` retires this only when it succeeds, and the private
+          // half goes out of scope here, so a failure otherwise leaves a public
+          // KeyPackage nothing can ever answer. One per failed admit, forever.
+          if (!(cause instanceof WelcomeDeliveryError)) {
+            await this.client.keyPackages.retire(own.ref).catch(() => undefined)
+          }
+          throw cause
+        }
       }
     } catch (cause) {
-      if (cause instanceof WelcomeDeliveryError) {
+      // Both are recoverable and `retryDelivery` takes either. `addMembers`
+      // delivers the Welcome before it rethrows a failed Commit, so a
+      // `BroadcastError` from here means the newcomer is in and an existing
+      // member missed the epoch — reducing it to a string strands them.
+      if (cause instanceof WelcomeDeliveryError || cause instanceof BroadcastError) {
         await this.client.retryDelivery(cause).catch((again: unknown) => {
-          // The error itself, not its message: it holds the Welcome bytes.
+          // The error itself, not its message: it holds the bytes a retry needs.
           this.onFailure({
             stage: 'admit',
             chatId,
             peer,
             reason: String(again),
-            undelivered: again instanceof WelcomeDeliveryError ? again : cause
+            undelivered:
+              again instanceof WelcomeDeliveryError || again instanceof BroadcastError
+                ? again
+                : cause
           })
         })
         return
@@ -426,7 +469,23 @@ export class ManagedInvitations {
       // is never marked joined.
       if (await this.#joined(inviteId, chatId)) return
       // Back on the shelf: a failure the half is not to blame for must stay
-      // retryable.
+      // retryable — unless a decline or an abandon retired this invitation
+      // while the join was in flight. Re-shelving then writes private key
+      // material back after the user asked for it to be destroyed, and nothing
+      // would retire it again: the invitation it was filed under no longer
+      // exists, so only `reap` would ever collect it.
+      // `record.inviteId`, not `inviteId`: the Welcome carries a fresh library
+      // id, and the shelved record is the only thing holding the id the host
+      // accepted under — which is the id a decline names.
+      if (this.#retired.has(record.inviteId)) {
+        this.onFailure({
+          stage: 'join',
+          chatId,
+          peer,
+          reason: `discarded the half for ${chatId}: the invitation was retired while joining`
+        })
+        return
+      }
       await this.shelf.hold(record)
       this.onFailure({ stage: 'join', chatId, peer, reason: String(cause) })
     }

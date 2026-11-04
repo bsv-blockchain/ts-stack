@@ -1,5 +1,5 @@
 import { KeyDeriver, PrivateKey } from '@bsv/sdk'
-import { WelcomeDeliveryError } from '@bsv/group-messaging'
+import { BroadcastError, WelcomeDeliveryError } from '@bsv/group-messaging'
 import type { KeyPackageBytes } from '@bsv/group-messaging'
 import { describe, expect, it, vi } from 'vitest'
 import { decodeEnvelope } from '../../src/bootstrap/index.js'
@@ -262,6 +262,125 @@ describe('the managed-invitations template', () => {
     await close()
   })
 
+  /**
+   * A decline and an arriving Welcome can interleave: `#retire` drops the
+   * public ref while `#joinNow` is already holding the record. Putting the
+   * record back then writes the private half to disk after the user asked for
+   * it to be destroyed, and nothing would ever retire it again — the
+   * invitation it was filed under is gone, so only `reap` would collect it, a
+   * week later.
+   */
+  it('does not put the half back on the shelf after the invitation was retired', async () => {
+    const { alice, bob, asked, send, close } = await invited()
+    const shelf = new RecordingShelf()
+    const failures: Failure[] = []
+    new ManagedInvitations(alice, new MemoryShelf(), ids).start()
+    const bobSide = new ManagedInvitations(bob, shelf, ids, f => void failures.push(f))
+    bobSide.start()
+
+    // The user taps Decline while the join is in flight: the real `#retire`
+    // runs, then the join fails for a reason the half is not to blame for.
+    let accepted = ''
+    bob.joinFromWelcome = async () => {
+      await bobSide.abandon(accepted)
+      throw new Error('relay hiccup')
+    }
+
+    await send()
+    accepted = asked[0]!
+    await bobSide.accept(accepted)
+    await vi.waitFor(() => expect(failures).toHaveLength(1))
+
+    expect(failures[0]!.stage).toBe('join')
+    expect(failures[0]!.reason).toMatch(/retired/)
+    expect(await shelf.take(shelf.refs[0]!)).toBeUndefined()
+
+    await close()
+  })
+
+  /**
+   * `createGroup` retires the KeyPackage it was given only when it succeeds,
+   * and the private half goes out of scope with the call, so a failure leaves
+   * a public KeyPackage nothing can ever answer. One per failed admit, and
+   * nothing collects them.
+   */
+  it('retires its own KeyPackage when creating the chat fails', async () => {
+    const { alice, bob, asked, send, close } = await invited()
+    const failures: Failure[] = []
+    const aliceSide = new ManagedInvitations(
+      alice,
+      new MemoryShelf(),
+      ids,
+      f => void failures.push(f)
+    )
+    aliceSide.start()
+    const bobSide = new ManagedInvitations(bob, new MemoryShelf(), ids)
+    bobSide.start()
+
+    const before = (await alice.keyPackages.list()).length
+    alice.createGroup = async () => {
+      throw new Error('storage full')
+    }
+
+    await send()
+    await bobSide.accept(asked[0]!)
+    await vi.waitFor(() => expect(failures).toHaveLength(1))
+
+    expect(failures[0]!.stage).toBe('admit')
+    expect(await alice.keyPackages.list()).toHaveLength(before)
+
+    await close()
+  })
+
+  /**
+   * `Group.addMembers` delivers the Welcome before it rethrows a Commit that
+   * did not reach everyone, so a `BroadcastError` from here means the newcomer
+   * is in and an existing member missed the epoch. `retryDelivery` takes that
+   * error as readily as a `WelcomeDeliveryError`; reducing it to a string
+   * strands the member, because the bytes a retry needs live on the error.
+   */
+  it('retries a Commit that did not reach every existing member', async () => {
+    const { alice, bob, asked, send, close } = await invited()
+    const failures: Failure[] = []
+    new ManagedInvitations(alice, new MemoryShelf(), ids, f => void failures.push(f)).start()
+    const bobSide = new ManagedInvitations(bob, new MemoryShelf(), ids)
+    bobSide.start()
+
+    // The chat already exists, so the admit takes the `addMembers` branch.
+    const own = await alice.keyPackages.create()
+    await alice.createGroup({
+      chatId: 'project',
+      members: [],
+      privateKeyPackage: own.privateKeyPackage
+    })
+    const group = (await alice.getGroup('project'))!
+    const stranded = new BroadcastError(
+      'group' as never,
+      ['02cc' as never],
+      0,
+      Uint8Array.from([1]) as never
+    )
+    group.addMembers = async () => {
+      throw stranded
+    }
+    alice.getGroup = async () => group
+
+    const retried: unknown[] = []
+    alice.retryDelivery = async error => {
+      retried.push(error)
+      throw new Error('still down')
+    }
+
+    await send()
+    await bobSide.accept(asked[0]!)
+    await vi.waitFor(() => expect(failures).toHaveLength(1))
+
+    expect(retried).toEqual([stranded])
+    expect(failures[0]!.undelivered).toBe(stranded)
+
+    await close()
+  })
+
   it('reports an answer the library refused', async () => {
     const { hub, alice, bob, asked, send, close } = await invited()
     const carol = await open(hub, PrivateKey.fromRandom())
@@ -284,7 +403,7 @@ describe('the managed-invitations template', () => {
     const named: Array<string | undefined> = []
     new ManagedInvitations(alice, new MemoryShelf(), {
       forAnswer: id => (answered.push(id), 'project'),
-      nameFor: () => 'Project',
+      nameFor: () => 'Inviter name',
       forWelcome: () => 'project'
     }).start()
     const bobSide = new ManagedInvitations(bob, new MemoryShelf(), {
@@ -298,7 +417,12 @@ describe('the managed-invitations template', () => {
     await vi.waitFor(async () => expect(await bob.getGroup('project')).toBeDefined())
 
     expect(answered).toEqual([sent])
+    // Two different sources, so the assertions can tell them apart: `nameFor`
+    // names the chat the inviter creates, while `forWelcome` is handed the name
+    // the inviter's own `invites.send` carried. With one string for both, the
+    // test passed whether or not the template called `nameFor` at all.
     expect(named).toEqual(['Project'])
+    expect((await (await alice.getGroup('project'))!.info()).name).toBe('Inviter name')
 
     await close()
   })
