@@ -75,8 +75,18 @@ export async function yieldToEventLoop(): Promise<void> {
 export interface CooperativeOptions {
   /** Work per slice before control returns to the event loop. Defaults to 4 ms. */
   budgetMs?: number
-  /** Receives the duration of every slice, for measurement. */
-  onSlice?: (milliseconds: number) => void
+  /**
+   * Receives the wall-clock duration of every slice, for measurement, and, when `cpuClock` is
+   * given, the CPU time the slice used. Observers written for the duration alone keep working.
+   */
+  onSlice?: (milliseconds: number, cpuMilliseconds?: number) => void
+  /**
+   * Optional CPU clock for this thread in milliseconds (in Node, `process.threadCpuUsage()`),
+   * read at both ends of every slice for `onSlice`. Unlike wall time it excludes time the host
+   * spent running something else, such as a preempted test runner. Measurement only: the slice
+   * budget stays on the monotonic wall clock.
+   */
+  cpuClock?: () => number
   /** Checked after every yield; when it returns true the computation is abandoned. */
   isCancelled?: () => boolean
   /** The error a cancelled computation rejects with. */
@@ -90,18 +100,28 @@ export const monotonicNow = (): number => globalThis.performance?.now() ?? Date.
 
 const now = monotonicNow
 
+const noCpuClock = (): undefined => undefined
+
+/** Starts a CPU measurement; the returned function gives the CPU used since, if there is a clock. */
+function cpuSince(cpuClock: CooperativeOptions['cpuClock']): () => number | undefined {
+  if (cpuClock === undefined) return noCpuClock
+  const start = cpuClock()
+  return () => cpuClock() - start
+}
+
 /** Runs the computation until it finishes or the slice has used its budget. */
 function runSlice<T>(
   steps: Steps<T>,
   budget: number,
-  onSlice: CooperativeOptions['onSlice']
+  { onSlice, cpuClock }: Pick<CooperativeOptions, 'onSlice' | 'cpuClock'>
 ): IteratorResult<void, T> {
+  const sliceCpu = cpuSince(cpuClock)
   const sliceStart = now()
   for (;;) {
     const result = steps.next()
     const elapsed = now() - sliceStart
     if (result.done === true || elapsed >= budget) {
-      onSlice?.(elapsed)
+      onSlice?.(elapsed, sliceCpu())
       return result
     }
   }
@@ -118,7 +138,7 @@ export function runCooperatively<T>(steps: Steps<T>, options: CooperativeOptions
     const next = (): void => {
       let result: IteratorResult<void, T>
       try {
-        result = runSlice(steps, budget, options.onSlice)
+        result = runSlice(steps, budget, options)
       } catch (error) {
         reject(error)
         return

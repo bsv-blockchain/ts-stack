@@ -40,6 +40,49 @@ describe('cooperative key generation', () => {
   })
 })
 
+describe('slice observation', () => {
+  function* threeSteps(): Generator<void, string, void> {
+    yield
+    yield
+    return 'done'
+  }
+
+  it('reports only the wall time of each slice when no CPU clock is given', async () => {
+    const onSlice = jest.fn<(milliseconds: number, cpuMilliseconds?: number) => void>()
+    await expect(runCooperatively(threeSteps(), { budgetMs: 0, onSlice })).resolves.toBe('done')
+    expect(onSlice).toHaveBeenCalledTimes(3)
+    for (const [milliseconds, cpuMilliseconds] of onSlice.mock.calls) {
+      expect(milliseconds).toBeGreaterThanOrEqual(0)
+      expect(cpuMilliseconds).toBeUndefined()
+    }
+  })
+
+  it('reports the CPU clock read at both ends of every slice', async () => {
+    let reading = 0
+    const cpuClock = jest.fn(() => (reading += 1.5))
+    const onSlice = jest.fn<(milliseconds: number, cpuMilliseconds?: number) => void>()
+    await expect(runCooperatively(threeSteps(), { budgetMs: 0, cpuClock, onSlice })).resolves.toBe(
+      'done'
+    )
+    expect(onSlice.mock.calls.map(([, cpuMilliseconds]) => cpuMilliseconds)).toEqual([
+      1.5, 1.5, 1.5
+    ])
+    expect(cpuClock).toHaveBeenCalledTimes(6)
+  })
+
+  it('keeps the slice budget on the wall clock, whatever the CPU clock reports', async () => {
+    let reading = 0
+    const onSlice = jest.fn<(milliseconds: number, cpuMilliseconds?: number) => void>()
+    await runCooperatively(threeSteps(), {
+      budgetMs: 60_000,
+      cpuClock: () => (reading += 1_000_000),
+      onSlice
+    })
+    expect(onSlice).toHaveBeenCalledTimes(1)
+    expect(onSlice.mock.calls[0]?.[1]).toBe(1_000_000)
+  })
+})
+
 describe('yieldToEventLoop', () => {
   const globals = globalThis as unknown as Record<string, unknown>
 

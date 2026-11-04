@@ -3,8 +3,24 @@ import { runCooperatively } from '../scheduling.js'
 
 // Real-clock measurements. Kept apart from the other tests so mutation testing, whose
 // instrumentation distorts timing, can skip them.
+
+/**
+ * CPU time of the main thread in milliseconds, where the host can measure it (Node >= 23.9). A
+ * slice's wall time also counts any time the operating system ran something else instead, which
+ * on a shared CI runner can exceed the bound without the slice doing more work; its CPU time
+ * cannot.
+ */
+const threadCpuClock: (() => number) | undefined =
+  typeof process.threadCpuUsage === 'function'
+    ? () => {
+        const { user, system } = process.threadCpuUsage()
+        return (user + system) / 1000
+      }
+    : undefined
+
 describe('cooperative key generation responsiveness', () => {
   // Real clock, slow: a 4096-bit generation must leave the event loop responsive throughout.
+  // Slices are measured in main-thread CPU time; the event-loop gap stays on the wall clock.
   it('[slow] keeps every slice under 10 ms and the event loop ticking during a 4096-bit generation', async () => {
     const slices: number[] = []
     let last = performance.now()
@@ -21,7 +37,10 @@ describe('cooperative key generation responsiveness', () => {
           4096
         ),
         {
-          onSlice: ms => slices.push(ms)
+          cpuClock: threadCpuClock,
+          // Without a thread CPU clock (Node < 23.9) this falls back to wall time, which a
+          // preempted host can inflate.
+          onSlice: (wallMs, cpuMs) => slices.push(cpuMs ?? wallMs)
         }
       )
       expect(key.n.toString(2)).toHaveLength(4096)
