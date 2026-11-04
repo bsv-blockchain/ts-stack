@@ -1455,6 +1455,34 @@ describe('MessageBoxTransport follows the client it was given', () => {
     await transport.close()
   })
 
+  /**
+   * `delivered` is a transient report about one batch, not a state the socket
+   * stays in. Replaying it tells a late subscriber nothing about the
+   * connection, and a host switching on the connection phases has no case for
+   * it — which is the "stuck on connecting forever" this replay exists to
+   * prevent, wearing a different hat.
+   */
+  it('replays the connection phase, not a delivery, to a late subscriber', async () => {
+    const client = fakeLiveClient()
+    const transport = live(client)
+    transport.onError(() => undefined)
+    transport.onMessage(async () => {})
+    await transport.start()
+    client.reportLive('live', [`${ME}-${DEFAULT_MESSAGE_BOX}`])
+
+    client.push({ messageId: 'm1', sender: '02aa', payload: Uint8Array.from([1]) })
+    await vi.advanceTimersByTimeAsync(1)
+
+    const phases: Array<LiveStatus['phase']> = []
+    transport.onLiveStatus(status => {
+      phases.push(status.phase)
+    })
+
+    expect(phases).toEqual(['subscribed'])
+
+    await transport.close()
+  })
+
   it('has nothing to replay before the socket has said anything', () => {
     const client = fakeLiveClient()
     const transport = new MessageBoxTransport(client, { pollIntervalMs: 1000 })

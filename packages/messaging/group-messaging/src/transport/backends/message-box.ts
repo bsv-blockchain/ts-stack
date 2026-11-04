@@ -503,6 +503,17 @@ export class MessageBoxTransport implements TransportBackend {
   #unfollow: Unsubscribe | undefined
   /** The last status reported, so an unchanged one is not reported again. */
   #lastStatus: LiveStatus | undefined
+  /**
+   * The last status describing the connection rather than a delivery, which is
+   * what a late subscriber is replayed.
+   *
+   * `delivered` is a report about one batch, true for an instant; the
+   * connection phases are states the socket stays in. Replaying the former
+   * tells a subscriber nothing about the socket, and a host switching on the
+   * connection phases has no case for it — so it would sit on whatever it
+   * showed before, which is the symptom the replay exists to prevent.
+   */
+  #lastPhase: LiveStatus | undefined
   /** The cadence the poll runs at while the socket is carrying delivery. */
   readonly #backstopIntervalMs: number
   /**
@@ -639,9 +650,9 @@ export class MessageBoxTransport implements TransportBackend {
     // until a transition that, on a healthy connection, never comes. Delivered
     // synchronously so the first paint has it; the client this follows keeps
     // the same contract.
-    if (this.#lastStatus !== undefined) {
+    if (this.#lastPhase !== undefined) {
       try {
-        handler(this.#lastStatus)
+        handler(this.#lastPhase)
       } catch (cause) {
         this.#report(toError(cause))
       }
@@ -664,6 +675,7 @@ export class MessageBoxTransport implements TransportBackend {
       return
     }
     this.#lastStatus = status
+    if (status.phase !== 'delivered') this.#lastPhase = status
     for (const handler of this.#liveStatusHandlers) {
       try {
         handler(status)
