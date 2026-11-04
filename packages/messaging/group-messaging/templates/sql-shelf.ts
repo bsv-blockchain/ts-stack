@@ -141,8 +141,11 @@ export class SqlShelf implements PrivateHalfShelf {
         record.inviteId,
         record.peer,
         record.chatId,
-        record.half,
-        record.keyPackage,
+        // Copied, as `SqlStorageBackend.set` copies: a driver that reads
+        // through `value.buffer` would otherwise store a view's whole backing
+        // store, and this is the private half.
+        record.half.slice(),
+        record.keyPackage.slice(),
         this.#now()
       ]
     )

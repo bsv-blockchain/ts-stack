@@ -127,6 +127,21 @@ interface Check {
   run: (subtle: SubtleCrypto) => Promise<string | undefined>
 }
 
+/**
+ * An AES-GCM key the way HPKE obtains one: 16 raw bytes through `importKey`.
+ *
+ * `extractable` false and the two AEAD usages match what `@hpke/core` asks
+ * for, so a runtime that refuses this refuses the real thing too.
+ */
+const aesKey = async (subtle: SubtleCrypto): Promise<CryptoKey> =>
+  subtle.importKey(
+    'raw',
+    bytesOf(Array.from({ length: 16 }, () => 7)),
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  )
+
 const CHECKS: Check[] = [
   {
     name: 'randomness',
@@ -181,10 +196,13 @@ const CHECKS: Check[] = [
   {
     name: 'AES-GCM round trip',
     run: async subtle => {
-      const key = await subtle.generateKey({ name: 'AES-GCM', length: 128 }, false, [
-        'encrypt',
-        'decrypt'
-      ])
+      // Imported, not generated. HPKE's AEAD derives its key and brings it in
+      // through `importKey('raw', …)` — `AesGcmContext._importKey` in
+      // `@hpke/core` — and never calls `generateKey` at all. A runtime that
+      // implements one and not the other is the same shape as the HKDF hole
+      // this file documents above, and probing the wrong one passes here and
+      // fails on the first real message.
+      const key = await aesKey(subtle)
       const iv = globalThis.crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)))
       const plaintext = bytesOf(Array.from(new TextEncoder().encode('group messaging')))
       const sealed = bytes(await subtle.encrypt({ name: 'AES-GCM', iv }, key, plaintext))
@@ -197,10 +215,7 @@ const CHECKS: Check[] = [
     name: 'AES-GCM rejects a wrong tag',
     run: async subtle => {
       // The canary. A build with unapplied patches once accepted this.
-      const key = await subtle.generateKey({ name: 'AES-GCM', length: 128 }, false, [
-        'encrypt',
-        'decrypt'
-      ])
+      const key = await aesKey(subtle)
       const iv = globalThis.crypto.getRandomValues(new Uint8Array(new ArrayBuffer(12)))
       const sealed = bytes(
         await subtle.encrypt(

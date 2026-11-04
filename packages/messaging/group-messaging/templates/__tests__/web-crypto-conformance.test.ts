@@ -330,6 +330,26 @@ describe('the adversaries that used to score full marks', () => {
     expect(named(await checkWebCrypto(subtle), 'AES-GCM round trip').ok).toBe(false)
   })
 
+  /**
+   * The shape that used to slip through: HPKE's AEAD never calls
+   * `generateKey`. It derives its key and brings it in with
+   * `importKey('raw', …)`, so a runtime offering one and not the other scored
+   * full marks here and failed on the first real message.
+   */
+  it('catches an AES-GCM that can generate a key but not import one', async () => {
+    const subtle = subvert({
+      importKey: (async (format: unknown, ...rest: unknown[]) => {
+        const algorithm = rest[1]
+        const name =
+          typeof algorithm === 'string' ? algorithm : (algorithm as { name: string }).name
+        if (name === 'AES-GCM') throw new Error('importKey() is not available for AES-GCM')
+        return (real.importKey as never as (...args: unknown[]) => unknown)(format, ...rest)
+      }) as never
+    })
+
+    expect(named(await checkWebCrypto(subtle), 'AES-GCM round trip').ok).toBe(false)
+  })
+
   it('catches a generateKey that refuses a curve outright', async () => {
     // quick-crypto 0.7.17's actual shape for the cfrg family.
     const subtle = subvert({
