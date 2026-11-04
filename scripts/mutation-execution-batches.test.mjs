@@ -8,6 +8,8 @@ import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs
 import { mutationExecutionMatrix, selectedMutationPartition } from './mutation-partitions.mjs'
 import {
   mutationBuildIdentity,
+  encodeMutationJSON,
+  mutationEnvironmentJSON,
   mutationExecutionBatches,
   mutationExecutionDigest,
   verifyMutationExecutionBatches,
@@ -21,6 +23,28 @@ const matrixFor = count => ({
     target: `fixture-${index}`,
     partition: 'whole'
   }))
+})
+
+test('bounded gzip transport preserves complete JSON and rejects ambiguous or malformed input', () => {
+  const matrix = matrixFor(4096)
+  const encoded = encodeMutationJSON(matrix)
+  assert.ok(JSON.stringify(matrix).length > 128 * 1024)
+  assert.ok(encoded.length < 128 * 1024)
+  assert.deepEqual(
+    mutationEnvironmentJSON({ MUTATION_MATRIX_GZIP: encoded }, 'MUTATION_MATRIX'),
+    matrix
+  )
+  assert.deepEqual(
+    mutationEnvironmentJSON({ MUTATION_MATRIX: JSON.stringify(matrix) }, 'MUTATION_MATRIX'),
+    matrix
+  )
+  for (const environment of [
+    { MUTATION_MATRIX_GZIP: encoded, MUTATION_MATRIX: '{}' },
+    { MUTATION_MATRIX_GZIP: '!' },
+    { MUTATION_MATRIX_GZIP: 'YQ==' },
+    { MUTATION_MATRIX_GZIP: encodeMutationJSON('x'.repeat(16 * 1024 * 1024)) }
+  ])
+    assert.throws(() => mutationEnvironmentJSON(environment, 'MUTATION_MATRIX'))
 })
 
 test('real complete planner output verifies every immutable batch and binds the original runtime', async () => {
@@ -99,7 +123,8 @@ test('real complete planner output verifies every immutable batch and binds the 
     const matrix = JSON.parse(
       cli('mutation-partition-evidence.mjs', ['matrix', '--selected', JSON.stringify(selected)])
     )
-    const plannerEnvironment = { MUTATION_MATRIX: JSON.stringify(matrix) }
+    const plannerEnvironment = { MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix) }
+    assert.ok(plannerEnvironment.MUTATION_MATRIX_GZIP.length < 128 * 1024)
     const batches = JSON.parse(cli('mutation-execution-batches.mjs', ['plan'], plannerEnvironment))
     const matrixDigest = cli('mutation-execution-batches.mjs', ['digest'], plannerEnvironment)
     const unscheduled = mutationExecutionMatrix(selected, buildMutationTargets(root))
@@ -339,8 +364,8 @@ test('actual caller output commands fail preparation when any planner or identit
         'ci.yml',
         'scope',
         'Pin complete immutable mutation execution batches',
-        ['plan', 'digest'],
-        'batches=result-plan\nmatrix-digest=result-digest\n'
+        ['plan', 'encode', 'digest'],
+        'batches=result-plan\nbatches-gzip=result-encode\nmatrix-digest=result-digest\n'
       ],
       [
         'ci.yml',
@@ -353,8 +378,8 @@ test('actual caller output commands fail preparation when any planner or identit
         'mutation-tests.yml',
         'prepare',
         'Pin complete immutable mutation execution batches',
-        ['plan', 'digest', 'build-identity'],
-        'batches=result-plan\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
+        ['plan', 'encode', 'digest', 'build-identity'],
+        'batches=result-plan\nbatches-gzip=result-encode\nmatrix-digest=result-digest\nidentity=result-build-identity\n'
       ]
     ]) {
       const source = readFileSync(new URL(`../.github/workflows/${file}`, import.meta.url), 'utf8')

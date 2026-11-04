@@ -281,7 +281,7 @@ test('new ranged targets retain future sources once and require complete root ag
   assert.ok(downloads[0].includes("if: needs.prepare.outputs.partition-targets != '[]'"))
   assert.ok(downloads[0].includes('path: .mutation-parts-raw'))
   assert.ok(aggregate.indexOf(downloads[0]) < verify)
-  assert.match(aggregate.slice(verify), /MUTATION_MATRIX:/)
+  assert.match(aggregate.slice(verify), /MUTATION_MATRIX_GZIP:/)
   assert.match(aggregate.slice(verify), /select\(\.target == \$target and \.partition != "whole"\)/)
   assert.match(aggregate.slice(verify), /\.mutation-parts-raw\/mutation-\$target-\$partition/)
   for (const id of ['root-eviction-journal', 'root-eviction-storage'])

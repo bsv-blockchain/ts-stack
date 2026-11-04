@@ -1,3 +1,4 @@
+import { encodeMutationJSON } from './mutation-execution-batches.mjs'
 import assert from 'node:assert/strict'
 
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -856,8 +857,8 @@ test('the mutation quality job accepts skipped execution only for explicitly emp
       const execution = spawnSync('/bin/bash', ['-e', '-c', script], {
         env: {
           NODE_EXECUTABLE: process.execPath,
-          MUTATION_MATRIX: '{"include":[]}',
-          MUTATION_BATCHES: '{"include":[]}',
+          MUTATION_MATRIX_GZIP: encodeMutationJSON({ include: [] }),
+          MUTATION_BATCHES_GZIP: encodeMutationJSON({ include: [] }),
           PARTITION_TARGETS: '[]',
           PREPARE_RESULT: 'success',
           MUTATION_TARGETS: targets,
@@ -900,8 +901,8 @@ test('the actual required mutation gate rejects missing, altered and unordered e
     spawnSync('/bin/bash', ['-e', '-c', script], {
       env: {
         NODE_EXECUTABLE: process.execPath,
-        MUTATION_MATRIX: JSON.stringify(matrix),
-        MUTATION_BATCHES: JSON.stringify(value),
+        MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix),
+        MUTATION_BATCHES_GZIP: encodeMutationJSON(value),
         PARTITION_TARGETS: '[]',
         PREPARE_RESULT: 'success',
         MUTATION_TARGETS: '["selected"]',
@@ -957,7 +958,7 @@ function assertPartitionDownload(aggregate, id) {
   const verify = aggregate.indexOf('name: Require every selected canonical partition target gate')
   assert.ok(verify > aggregate.indexOf(downloads[0]), id)
   const staging = aggregate.slice(verify)
-  assert.match(staging, /MUTATION_MATRIX:/)
+  assert.match(staging, /MUTATION_MATRIX_GZIP:/)
   assert.match(staging, /select\(\.target == \$target and \.partition != "whole"\)/)
   assert.match(staging, /\.mutation-parts-raw\/mutation-\$target-\$partition/)
   assert.match(staging, /Missing mutation partition evidence/)
@@ -986,7 +987,7 @@ test('canonical staging requires exact selected artifacts and excludes prefix ne
       env: {
         ...process.env,
         PARTITION_TARGETS: JSON.stringify(selected),
-        MUTATION_MATRIX: JSON.stringify(matrix)
+        MUTATION_MATRIX_GZIP: encodeMutationJSON(matrix)
       }
     })
   try {

@@ -3,6 +3,7 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
+import { gzipSync, gunzipSync } from 'node:zlib'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import { scheduledMutationExecutionMatrix } from './mutation-partitions.mjs'
 import { qualificationIdentity } from './mutation-final-qualification.mjs'
@@ -10,6 +11,22 @@ import { qualificationIdentity } from './mutation-final-qualification.mjs'
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 export const MAX_EXECUTION_BATCH_ROWS = 256
+
+// Linux limits each individual environment string to128KiB. Full registries
+// exceed that even though the complete GitHub matrix/output remains valid.
+export function encodeMutationJSON(value) {
+  return gzipSync(Buffer.from(JSON.stringify(value))).toString('base64')
+}
+
+export function mutationEnvironmentJSON(environment, name) {
+  const encoded = environment[`${name}_GZIP`]
+  if (encoded === undefined) return JSON.parse(environment[name])
+  if (environment[name] !== undefined) throw new Error(`Ambiguous mutation transport ${name}`)
+  const bytes = Buffer.from(encoded, 'base64')
+  if (!encoded || bytes.toString('base64') !== encoded)
+    throw new Error(`Invalid mutation transport ${name}`)
+  return JSON.parse(gunzipSync(bytes, { maxOutputLength: 16 * 1024 * 1024 }).toString('utf8'))
+}
 
 function closed(value, fields, label) {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
@@ -224,6 +241,10 @@ export async function verifySelectedExecution(root, environment) {
 async function main() {
   if (process.argv.length !== 3) throw new Error('One execution batch command is required')
   const command = process.argv[2]
+  if (command === 'encode') {
+    console.log(encodeMutationJSON(JSON.parse(readFileSync(0, 'utf8'))))
+    return
+  }
   if (command === 'build-identity') {
     console.log(JSON.stringify(await mutationBuildIdentity(ROOT, process.env)))
     return
@@ -232,11 +253,11 @@ async function main() {
     await verifySelectedExecution(ROOT, process.env)
     return
   }
-  const matrix = JSON.parse(process.env.MUTATION_MATRIX)
+  const matrix = mutationEnvironmentJSON(process.env, 'MUTATION_MATRIX')
   if (command === 'plan') console.log(JSON.stringify(mutationExecutionBatches(matrix)))
   else if (command === 'digest') console.log(mutationExecutionDigest(matrix))
   else if (command === 'verify-batches')
-    verifyMutationExecutionBatches(matrix, JSON.parse(process.env.MUTATION_BATCHES))
+    verifyMutationExecutionBatches(matrix, mutationEnvironmentJSON(process.env, 'MUTATION_BATCHES'))
   else throw new Error('Unknown execution batch command')
 }
 

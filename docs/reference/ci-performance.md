@@ -929,7 +929,6 @@ canonical inventory independently reject gaps, duplicates, changed source or
 metadata, and missing functional evidence. Test tooling changes do not qualify
 recovery behavior by themselves.
 
-
 ### PR569 integration with the 4.0.1 main line (2026-10-28)
 
 The combined integration candidate preserves all 216 canonical mutation targets.
@@ -948,3 +947,11 @@ construction sites and 33 AuthFetch sites from the combined implementation.
 These are source inventory checks, not completed mutation execution. Historical
 failures and the pending native, hosted-analysis and full-mutation qualification
 requirements remain; the integration branch stays a draft.
+
+The held staging integration transports complete mutation matrices and batch
+unions between processes as bounded gzip/base64 JSON. The full1,678-row
+registry exceeds Linux's128KiB per-environment-variable limit. GitHub still
+receives the original complete ordered matrix for scheduling; decompression
+retains the same rows and canonical digest, capped at16MiB. Malformed,
+ambiguous, oversized, missing, reordered and incomplete input still fails.
+The normal256-row batch and100-job execution ceilings are unchanged.

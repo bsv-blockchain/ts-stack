@@ -105,8 +105,10 @@ jobs:
       mutation-targets: ${{ steps.scope.outputs.mutation-targets }}
       mutation-classification: ${{ steps.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ steps.scope.outputs.mutation-matrix }}
+      mutation-matrix-gzip: ${{ steps.scope.outputs.mutation-matrix-gzip }}
       partition-targets: ${{ steps.scope.outputs.partition-targets }}
       mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-batches-gzip: ${{ steps.mutation-execution.outputs.batches-gzip }}
       mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
       infra-matrix: ${{ steps.scope.outputs.infra-matrix }}
       has-infra: ${{ steps.scope.outputs.has-infra }}
@@ -176,6 +178,8 @@ jobs:
           MUTATION_MATRIX=$(node scripts/mutation-partition-evidence.mjs matrix --selected "$MUTATION_TARGETS")
           PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$MUTATION_TARGETS")
           echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
+          MUTATION_MATRIX_GZIP=$(printf '%s' "$MUTATION_MATRIX" | node scripts/mutation-execution-batches.mjs encode)
+          echo "mutation-matrix-gzip=$MUTATION_MATRIX_GZIP" >> "$GITHUB_OUTPUT"
           echo "partition-targets=$PARTITION_TARGETS" >> "$GITHUB_OUTPUT"
           echo "has-infra=$(jq -r '.infraMatrix.include | length > 0' <<<"$SCOPE")" >> "$GITHUB_OUTPUT"
 
@@ -194,11 +198,12 @@ jobs:
         # GitHub caps a matrix at 256 jobs; the full registry runs in ordered batches.
         id: mutation-execution
         env:
-          MUTATION_MATRIX: ${{ steps.scope.outputs.mutation-matrix }}
+          MUTATION_MATRIX_GZIP: ${{ steps.scope.outputs.mutation-matrix-gzip }}
         run: |
           batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          batches_gzip=$(printf '%s' "$batches" | node scripts/mutation-execution-batches.mjs encode)
           matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
-          printf 'batches=%s\nmatrix-digest=%s\n' "$batches" "$matrix_digest" >> "$GITHUB_OUTPUT"
+          printf 'batches=%s\nbatches-gzip=%s\nmatrix-digest=%s\n' "$batches" "$batches_gzip" "$matrix_digest" >> "$GITHUB_OUTPUT"
 
       - name: Plan test lanes
         # Coverage suites run for direct importers and every affected wallet.
@@ -593,8 +598,10 @@ jobs:
       mutation-targets: ${{ needs.scope.outputs.mutation-targets }}
       mutation-classification: ${{ needs.scope.outputs.mutation-classification }}
       mutation-matrix: ${{ needs.scope.outputs.mutation-matrix }}
+      mutation-matrix-gzip: ${{ needs.scope.outputs.mutation-matrix-gzip }}
       partition-targets: ${{ needs.scope.outputs.partition-targets }}
       mutation-batches: ${{ needs.scope.outputs.mutation-batches }}
+      mutation-batches-gzip: ${{ needs.scope.outputs.mutation-batches-gzip }}
       mutation-matrix-digest: ${{ needs.scope.outputs.mutation-matrix-digest }}
       mutation-execution-identity: ${{ needs.build.outputs.mutation-execution-identity }}
       sdk: ${{ needs.scope.outputs.sdk }}
@@ -779,8 +786,8 @@ jobs:
           MUTATION_RESULT: ${{ needs.mutation-tests.result }}
           MUTATION_TARGETS: ${{ needs.prepare.outputs.mutation-targets }}
           MUTATION_CLASSIFICATION: ${{ needs.prepare.outputs.mutation-classification }}
-          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
-          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
+          MUTATION_MATRIX_GZIP: ${{ needs.prepare.outputs.mutation-matrix-gzip }}
+          MUTATION_BATCHES_GZIP: ${{ needs.prepare.outputs.mutation-batches-gzip }}
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
         run: |
           if [[ "$PREPARE_RESULT" != "success" ||
@@ -790,8 +797,10 @@ jobs:
             exit 1
           fi
           "${NODE_EXECUTABLE:-node}" --input-type=module <<'NODE'
-          const batches = JSON.parse(process.env.MUTATION_BATCHES)
-          const matrix = JSON.parse(process.env.MUTATION_MATRIX)
+          const { gunzipSync } = await import('node:zlib')
+          const decode = name => JSON.parse(gunzipSync(Buffer.from(process.env[name + '_GZIP'], 'base64'), {maxOutputLength:16 * 1024 * 1024}).toString('utf8'))
+          const batches = decode('MUTATION_BATCHES')
+          const matrix = decode('MUTATION_MATRIX')
           if (!Array.isArray(matrix.include) || matrix.include.length > 256 ** 2)
             throw new Error('Invalid complete execution matrix')
           const expectedBatches = { include: [] }
@@ -836,8 +845,9 @@ jobs:
         if: needs.prepare.outputs.partition-targets != '[]' && needs.prepare.outputs.partition-targets != ''
         env:
           PARTITION_TARGETS: ${{ needs.prepare.outputs.partition-targets }}
-          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
+          MUTATION_MATRIX_GZIP: ${{ needs.prepare.outputs.mutation-matrix-gzip }}
         run: |
+          MUTATION_MATRIX=$(command node --input-type=module -e "import {gunzipSync} from 'node:zlib'; console.log(gunzipSync(Buffer.from(process.env.MUTATION_MATRIX_GZIP, 'base64'), {maxOutputLength:16 * 1024 * 1024}).toString('utf8'))")
           # Stage each target's parts by their exact matrix artifact names, so a
           # target whose ID prefixes another can never pick up foreign evidence.
           TARGET_LINES=$(jq -er '.[]' <<<"$PARTITION_TARGETS")

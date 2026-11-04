@@ -42,8 +42,10 @@ jobs:
       mode: ${{ steps.targets.outputs.mode }}
       packages: ${{ steps.targets.outputs.packages }}
       mutation-matrix: ${{ steps.targets.outputs.mutation-matrix }}
+      mutation-matrix-gzip: ${{ steps.targets.outputs.mutation-matrix-gzip }}
       partition-targets: ${{ steps.targets.outputs.partition-targets }}
       mutation-batches: ${{ steps.mutation-execution.outputs.batches }}
+      mutation-batches-gzip: ${{ steps.mutation-execution.outputs.batches-gzip }}
       mutation-matrix-digest: ${{ steps.mutation-execution.outputs.matrix-digest }}
       mutation-execution-identity: ${{ steps.mutation-execution.outputs.identity }}
     steps:
@@ -88,6 +90,8 @@ jobs:
           MUTATION_MATRIX=$(node scripts/mutation-partition-evidence.mjs matrix --selected "$TARGETS")
           PARTITION_TARGETS=$(node scripts/mutation-partition-evidence.mjs targets --selected "$TARGETS")
           echo "mutation-matrix=$MUTATION_MATRIX" >> "$GITHUB_OUTPUT"
+          MUTATION_MATRIX_GZIP=$(printf '%s' "$MUTATION_MATRIX" | node scripts/mutation-execution-batches.mjs encode)
+          echo "mutation-matrix-gzip=$MUTATION_MATRIX_GZIP" >> "$GITHUB_OUTPUT"
           echo "partition-targets=$PARTITION_TARGETS" >> "$GITHUB_OUTPUT"
           if [ -n "$REQUESTED_TARGET" ]; then
             echo "mode=diagnostic" >> "$GITHUB_OUTPUT"
@@ -124,15 +128,16 @@ jobs:
       - name: Pin complete immutable mutation execution batches
         id: mutation-execution
         env:
-          MUTATION_MATRIX: ${{ steps.targets.outputs.mutation-matrix }}
+          MUTATION_MATRIX_GZIP: ${{ steps.targets.outputs.mutation-matrix-gzip }}
           BUILD_ARTIFACT_ID: ${{ steps.mutation-build.outputs.artifact-id }}
           BUILD_ARTIFACT_NAME: mutation-build-outputs-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           batches="$(node scripts/mutation-execution-batches.mjs plan)"
+          batches_gzip=$(printf '%s' "$batches" | node scripts/mutation-execution-batches.mjs encode)
           matrix_digest="$(node scripts/mutation-execution-batches.mjs digest)"
           identity="$(node scripts/mutation-execution-batches.mjs build-identity)"
-          printf 'batches=%s\nmatrix-digest=%s\nidentity=%s\n' \
-            "$batches" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
+          printf 'batches=%s\nbatches-gzip=%s\nmatrix-digest=%s\nidentity=%s\n' \
+            "$batches" "$batches_gzip" "$matrix_digest" "$identity" >> "$GITHUB_OUTPUT"
 
   mutation-tests:
     name: Mutation batch / ${{ matrix.batch }}
@@ -246,8 +251,8 @@ jobs:
           path: .mutation-receipts
       - name: Recheck the complete ordered execution batch union
         env:
-          MUTATION_MATRIX: ${{ needs.prepare.outputs.mutation-matrix }}
-          MUTATION_BATCHES: ${{ needs.prepare.outputs.mutation-batches }}
+          MUTATION_MATRIX_GZIP: ${{ needs.prepare.outputs.mutation-matrix-gzip }}
+          MUTATION_BATCHES_GZIP: ${{ needs.prepare.outputs.mutation-batches-gzip }}
         run: node scripts/mutation-execution-batches.mjs verify-batches
 
       - name: Independently recheck every selected canonical partition before full qualification
