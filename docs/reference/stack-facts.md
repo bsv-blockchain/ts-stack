@@ -84,7 +84,7 @@ the separately released and verified image digest.
 | Service | Package | Manifest version | Node engine | Runtime targets | Release | Source |
 | --- | --- | --- | --- | --- | --- | --- |
 | BSV Chaintracks Server | `chaintracks-server` | `1.1.33` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/chaintracks-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/chaintracks-server) |
-| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.57` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
+| BSV Message Box Server | `@bsv/messagebox-server` | `1.1.58` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/message-box-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/message-box-server) |
 | BSV Overlay Server | `@bsv/overlay-express-examples` | `2.1.53` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/overlay-server](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/overlay-server) |
 | BSV UHRP Basic Server | `@bsv/uhrp-lite` | `0.1.54` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-basic](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-basic) |
 | BSV UHRP Cloud Bucket Server | `@bsv/uhrp-storage-server` | `0.2.59` | `>=24 <25` | node, linux/amd64 | ghcr-keyless | [infra/uhrp-server-cloud-bucket](https://github.com/bsv-blockchain/ts-stack/tree/main/infra/uhrp-server-cloud-bucket) |
