@@ -701,3 +701,61 @@ it('starts one finite pass per interval and removes each actual abort listener b
     scan.mockRestore()
   }
 })
+
+it('settles shutdown that happens while the native delay listener is being installed', async () => {
+  const f = fixture(),
+    original = f.coordinator.scanWork.bind(f.coordinator)
+  let loop: ReturnType<PrivatePublicationReconciler['start']> | undefined,
+    stop: Promise<void> | undefined,
+    signal: AbortSignal | undefined,
+    restore: (() => void) | undefined,
+    settled = false,
+    failure: unknown
+  const scan = jest.spyOn(f.coordinator, 'scanWork').mockImplementation((...args) => {
+    const page = original(...args)
+    signal = args[2]!
+    const add = signal.addEventListener.bind(signal),
+      observer = jest.spyOn(signal, 'addEventListener').mockImplementation((...listener) => {
+        // A synchronous shutdown at registration must also work when the
+        // native abort event happened before the listener became attached.
+        if (listener[0] === 'abort' && !stop) {
+          stop = loop!.stop()
+          void stop.catch(() => undefined)
+        }
+        add(...listener)
+      })
+    restore = () => observer.mockRestore()
+    return page
+  })
+  jest.useFakeTimers()
+  try {
+    loop = new PrivatePublicationReconciler(f.coordinator).start(100, () => {})
+    const done = loop.done.then(
+      () => {
+        settled = true
+      },
+      error => {
+        failure = error
+      }
+    )
+    await jest.advanceTimersByTimeAsync(0)
+    expect(failure).toBeUndefined()
+    expect(signal?.aborted).toBe(true)
+    expect(stop).toBeDefined()
+    expect(settled).toBe(true)
+    expect(scan).toHaveBeenCalledTimes(1)
+    expect(getEventListeners(signal!, 'abort')).toHaveLength(0)
+    expect(jest.getTimerCount()).toBe(0)
+    await done
+    await stop
+  } finally {
+    try {
+      await jest.advanceTimersByTimeAsync(100)
+      await loop?.stop()
+    } finally {
+      restore?.()
+      scan.mockRestore()
+      jest.useRealTimers()
+    }
+  }
+})

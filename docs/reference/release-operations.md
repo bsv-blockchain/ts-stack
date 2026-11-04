@@ -300,7 +300,7 @@ artifact and publication checks remain in force.
 
 Every canonical mutation target must have a successful fresh report and matching
 source/run/attempt/configuration/lock-bound receipt. The verifier reconstructs
-canonical source ranges and mutant inventory with pinned Stryker 9.6.1 and rechecks
+canonical source ranges and mutant inventory with pinned Stryker 10.1.1 and rechecks
 all existing target gates. A partial manual target is diagnostic only. Earlier
 weekly passes, previous attempts and reports from another source cannot satisfy
 the gate; rerun the complete workflow when a full attempt needs replacement.

@@ -6,7 +6,7 @@ import { verifiedFixture } from './private-verified-publication-fixture.js'
 import { allow } from './private-publication-fixture.js'
 import { privatePublicationOperation } from '../src/private/PrivatePublicationProgress.js'
 
-function fixture() {
+function fixture(observePrivateReads = false) {
   const f = verifiedFixture(),
     initial = f.stage()
   f.store.advance(initial.publicationId, '1', { kind: 'reserve-admission' }, () => '20', allow)
@@ -38,6 +38,7 @@ function fixture() {
     current = true,
     now = '20'
   const access = new PrivatePublicationAccess(f.native.owner, initial.topic, () => allowed)
+  const privateRead = observePrivateReads ? jest.spyOn(f.store, 'loadVerified') : undefined
   const disclosure = new PrivatePublicationDisclosure(
     f.native.owner,
     f.store,
@@ -58,6 +59,7 @@ function fixture() {
     caller,
     status,
     access,
+    privateRead,
     revoke() {
       allowed = false
     },
@@ -142,6 +144,33 @@ it('rejects wrong publisher or original selector before response preparation', (
     f.disclosure.prepare(f.status, { ...f.caller, capability: '99'.repeat(32) })
   ).toThrow('Original publication capability selector differs')
 })
+
+it.each(['capability', 'profile'] as const)(
+  'refuses the wrong original %s before reading protected publication material',
+  selector => {
+    const f = fixture(true)
+    try {
+      expect(() =>
+        f.disclosure.prepare(f.status, {
+          ...f.caller,
+          ...(selector === 'capability'
+            ? { capability: '99'.repeat(32) }
+            : { profile: 'other-profile' })
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: 'context-changed',
+          message: 'Original publication capability selector differs'
+        })
+      )
+      expect(f.privateRead).not.toHaveBeenCalled()
+      expect(JSON.parse(f.disclosure.prepare(f.status, f.caller).body).status).toBe('ready')
+      expect(f.privateRead).toHaveBeenCalled()
+    } finally {
+      f.privateRead?.mockRestore()
+    }
+  }
+)
 it('does not retry or claim rollback after enqueue itself throws', () => {
   const f = fixture(),
     send = jest.fn(() => {
@@ -210,6 +239,68 @@ it.each(['loadVerified', 'loadStatus', 'markUnavailable'] as const)(
     }
   }
 )
+
+it.each([
+  {
+    name: 'contract restoration',
+    replace: (f: ReturnType<typeof fixture>) => jest.spyOn(f.contract.contracts, 'restore')
+  },
+  {
+    name: 'native identity addressing',
+    replace: (f: ReturnType<typeof fixture>) => jest.spyOn(f.native.owner.identity, 'address')
+  }
+])('refuses changed installed $name at physical response enqueue', ({ replace }) => {
+  const f = fixture(),
+    prepared = f.disclosure.prepare(f.status, f.caller),
+    changed = replace(f),
+    send = jest.fn<() => void>()
+  try {
+    expect(() => prepared.enqueue(send)).toThrow(
+      expect.objectContaining({ code: 'not-found', message: 'Private publication not found' })
+    )
+    expect(send).not.toHaveBeenCalled()
+  } finally {
+    changed.mockRestore()
+  }
+})
+
+it('requires every installed authority to remain current before control disclosure', () => {
+  const f = fixture(),
+    disclosure = new PrivatePublicationDisclosure(
+      f.native.owner,
+      f.store,
+      f.contract.contracts,
+      f.access,
+      () => '20',
+      () => true
+    ),
+    changed = jest.spyOn(f.contract.contracts, 'restore'),
+    send = jest.fn<() => void>()
+  try {
+    expect(() =>
+      disclosure.enqueueControl(
+        {
+          version: 1,
+          error: {
+            code: 'not-found',
+            message: 'Private publication request not-found',
+            retryable: false
+          }
+        },
+        f.caller,
+        send
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'unauthorized',
+        message: 'Private publication control authority changed'
+      })
+    )
+    expect(send).not.toHaveBeenCalled()
+  } finally {
+    changed.mockRestore()
+  }
+})
 
 it.each([null, 0, false, 'clock'])(
   'requires a callable disclosure clock at installation: %p',
@@ -300,6 +391,7 @@ it.each(['cancelled', 'disconnected'] as const)(
   mode => {
     const f = fixture(),
       abort = new AbortController(),
+      current = jest.fn(() => mode !== 'disconnected'),
       send = jest.fn<() => void>(),
       disclosure = new PrivatePublicationDisclosure(
         f.native.owner,
@@ -320,7 +412,7 @@ it.each(['cancelled', 'disconnected'] as const)(
             retryable: false
           }
         },
-        { ...f.caller, signal: abort.signal, current: () => mode !== 'disconnected' },
+        { ...f.caller, signal: abort.signal, current },
         send
       )
     ).toThrow(
@@ -330,8 +422,150 @@ it.each(['cancelled', 'disconnected'] as const)(
       })
     )
     expect(send).not.toHaveBeenCalled()
+    if (mode === 'cancelled') expect(current).not.toHaveBeenCalled()
   }
 )
+
+it.each([null, false, 0, 'authority', async () => true])(
+  'requires installed synchronous control authority before native control disclosure: %p',
+  authority => {
+    const f = fixture(),
+      send = jest.fn<() => void>(),
+      disclosure = new PrivatePublicationDisclosure(
+        f.native.owner,
+        f.store,
+        f.contract.contracts,
+        f.access,
+        () => '20',
+        authority as unknown as () => boolean
+      )
+    expect(() =>
+      disclosure.enqueueControl(
+        {
+          version: 1,
+          error: {
+            code: 'not-found',
+            message: 'Private publication request not-found',
+            retryable: false
+          }
+        },
+        f.caller,
+        send
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Private publication control authority must be installed and synchronous'
+      })
+    )
+    expect(send).not.toHaveBeenCalled()
+  }
+)
+
+it.each([null, false, 0, 'current', async () => true])(
+  'requires a synchronous authenticated control session before native disclosure: %p',
+  current => {
+    const f = fixture(),
+      send = jest.fn<() => void>(),
+      disclosure = new PrivatePublicationDisclosure(
+        f.native.owner,
+        f.store,
+        f.contract.contracts,
+        f.access,
+        () => '20',
+        () => true
+      )
+    expect(() =>
+      disclosure.enqueueControl(
+        {
+          version: 1,
+          error: {
+            code: 'not-found',
+            message: 'Private publication request not-found',
+            retryable: false
+          }
+        },
+        { ...f.caller, current: current as unknown as () => boolean },
+        send
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Private publication control authority must be installed and synchronous'
+      })
+    )
+    expect(send).not.toHaveBeenCalled()
+  }
+)
+
+it.each([null, false, 0, 'enqueue'])(
+  'refuses a non-callable physical control enqueue before native disclosure: %p',
+  invalid => {
+    const f = fixture(),
+      disclosure = new PrivatePublicationDisclosure(
+        f.native.owner,
+        f.store,
+        f.contract.contracts,
+        f.access,
+        () => '20',
+        () => true
+      )
+    expect(() =>
+      disclosure.enqueueControl(
+        {
+          version: 1,
+          error: {
+            code: 'not-found',
+            message: 'Private publication request not-found',
+            retryable: false
+          }
+        },
+        f.caller,
+        invalid as unknown as () => void
+      )
+    ).toThrow(
+      expect.objectContaining({
+        code: 'invalid',
+        message: 'Publication control enqueue must be synchronous'
+      })
+    )
+  }
+)
+
+it('does not invoke an asynchronous physical control enqueue', () => {
+  const f = fixture(),
+    disclosure = new PrivatePublicationDisclosure(
+      f.native.owner,
+      f.store,
+      f.contract.contracts,
+      f.access,
+      () => '20',
+      () => true
+    )
+  let calls = 0
+  expect(() =>
+    disclosure.enqueueControl(
+      {
+        version: 1,
+        error: {
+          code: 'not-found',
+          message: 'Private publication request not-found',
+          retryable: false
+        }
+      },
+      f.caller,
+      async () => {
+        calls++
+      }
+    )
+  ).toThrow(
+    expect.objectContaining({
+      code: 'invalid',
+      message: 'Publication control enqueue must be synchronous'
+    })
+  )
+  expect(calls).toBe(0)
+})
 
 it('never retries a physical enqueue whose synchronous return violates the port contract', () => {
   const f = fixture(),
