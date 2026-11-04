@@ -1,6 +1,18 @@
 import { expect, it, jest } from '@jest/globals'
-import { Beef, OutputProtocolError, PrivateKey, Utils } from '@bsv/sdk'
+import {
+  Beef,
+  OutputProtocolError,
+  PrivateKey,
+  Transaction,
+  Utils,
+  type OutputJSONObject
+} from '@bsv/sdk'
 import { PrivatePublicationLookupContext } from '../src/private/PrivatePublicationLookupContext.js'
+import { privatePublicationFenceAddress } from '../src/private/PrivatePublicationRecords.js'
+import {
+  privatePublicationOperation,
+  type PrivatePublicationProgress
+} from '../src/private/PrivatePublicationProgress.js'
 import { publicationLookupFixture } from './private-publication-lookup.fixture.js'
 import { allow } from './private-publication-fixture.js'
 
@@ -475,5 +487,102 @@ it('bounds the complete hydrated response, accepts its explicit original txid an
       f.reader.prepare(f.initial.publicationId, f.caller).bind({ ...f.answer(), type: 'freeform' }),
     'invalid',
     'Private lookup requires one exact output'
+  )
+})
+
+it.each(['id', 'topic', 'chain', 'publisher', 'reference-topic', 'request'] as const)(
+  'rejects a separately committed native %s binding inconsistency before mapping private bytes',
+  field => {
+    const f = publicationLookupFixture(),
+      ledger = f.native.owner.ledger,
+      address = privatePublicationFenceAddress(f.native.owner.identity, f.initial.publicationId),
+      read = ledger.read([address], f.options.clock, allow),
+      record = read.records[0]!,
+      value = structuredClone(record.value),
+      state = value.state as OutputJSONObject,
+      reference = value.reference as OutputJSONObject
+    if (field === 'id') state.publicationId = '99'.repeat(32)
+    if (field === 'topic') state.topic = 'tm_other'
+    if (field === 'chain') (state.chain as OutputJSONObject).genesisHash = '99'.repeat(32)
+    if (field === 'publisher') state.publisher = new PrivateKey(65).toPublicKey().toString()
+    if (field === 'reference-topic') reference.topic = 'tm_other'
+    if (field === 'request') reference.requestId = 'another-native-request'
+    // Keep the changed state's own admission/binding representations coherent.
+    // The read must still bind them to the independent installation and address.
+    const progress = state.progress as OutputJSONObject,
+      admission = progress.admission as OutputJSONObject,
+      binding = progress.binding as OutputJSONObject
+    admission.operationId = privatePublicationOperation(
+      state as unknown as PrivatePublicationProgress
+    )
+    binding.publicationId = state.publicationId
+    if (field === 'topic') {
+      const steak = admission.steak as OutputJSONObject
+      steak.tm_other = steak[f.initial.topic]
+      delete steak[f.initial.topic]
+    }
+    ledger.commit(
+      read.revision,
+      [
+        {
+          kind: record.kind,
+          key: record.key,
+          expectedRevision: record.revision,
+          reservedBytes: record.reservedBytes,
+          reservedUpdates: Math.max(0, record.reservedUpdates - 1),
+          value
+        }
+      ],
+      f.options.clock,
+      allow
+    )
+    lookupRefusal(
+      () => f.reader.prepare(f.initial.publicationId, f.caller),
+      'unavailable',
+      'Private lookup retained binding differs'
+    )
+    expect(f.maps).toBe(0)
+  }
+)
+
+it.each(['record', 'bindingRecord'] as const)(
+  'compares faulty read-port %s metadata with actual native records before physical enqueue',
+  field => {
+    const f = publicationLookupFixture()
+    // Only the structural read-port result is faulted. The real protected ledger,
+    // its transaction/revision gate and all persisted records remain unchanged.
+    const store = {
+      loadVerified(...args: Parameters<typeof f.store.loadVerified>) {
+        const saved = f.store.loadVerified(...args)
+        if (!saved) return saved
+        return {
+          ...saved,
+          [field]: { ...saved[field], revision: (BigInt(saved[field].revision) + 1n).toString() }
+        }
+      }
+    }
+    const reader = new PrivatePublicationLookupContext({ ...f.options, store }),
+      bound = reader.prepare(f.initial.publicationId, f.caller).bind(f.answer()),
+      send = jest.fn<() => void>()
+    lookupRefusal(() => bound.enqueue(send), 'conflict', 'Private lookup original records changed')
+    expect(send).not.toHaveBeenCalled()
+    expect(f.store.loadVerified(f.initial.publicationId, f.options.clock, allow)).toBeDefined()
+  }
+)
+
+it('rejects a different Atomic BEEF subject even when the exact original transaction is also present', () => {
+  const f = publicationLookupFixture(),
+    answer = f.answer(),
+    beef = Beef.fromBinary(answer.outputs[0].beef),
+    original = beef.findTxid(f.initial.txid)!.tx!,
+    other = Transaction.fromBinary(original.toBinary())
+  other.lockTime++
+  beef.mergeTransaction(other)
+  answer.outputs[0].beef = beef.toBinaryAtomic(other.id('hex'))
+  expect(beef.findTxid(f.initial.txid)).toBeDefined()
+  lookupRefusal(
+    () => f.reader.prepare(f.initial.publicationId, f.caller).bind(answer),
+    'invalid',
+    'Private lookup Atomic BEEF subject differs'
   )
 })
