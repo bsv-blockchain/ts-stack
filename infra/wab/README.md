@@ -368,6 +368,93 @@ only an absent/empty value intentionally disables the routes.
 - `POST /admin/phone-change/restore` restores the associations recorded for a
   `changeId`; it refuses automatic restoration after another ownership change.
 
+### Automatic recovery after an ambiguous faucet result
+
+New faucet actions carry a stable `wab-faucet-…` correlation label derived from
+the reservation's already-saved random recovery secret. The secret itself is
+never placed in the label. WAB keeps the reservation and claim markers before
+wallet work, and attempts recovery both after an ambiguous funding error and
+when the same registration retries. Recovery does not depend on in-memory
+signing state and works after process replacement.
+
+WAB searches the authenticated faucet wallet's history for that label, checks
+the exact reserved output, and obtains the retained signed transaction from
+Storage. Older unlabelled reservations can be found by their unique R-puzzle
+in a complete history of at most 1,000 actions. Truncated, larger or ambiguous
+legacy histories require the administrator recovery route below. A missing
+history entry never authorizes another payout.
+
+Before resubmission, WAB reconstructs complete ancestry, validates Merkle roots
+and unlocking scripts, and bounds each transaction to 32 inputs, traversal to
+64 ancestors and evidence to 8 MiB. Ancestors are read sequentially because
+Toolbox provider fallback selection shares mutable state. Accepted `callback`
+and `unconfirmed` requests remain eligible for the same verification and
+existing-transaction recovery as `unmined` requests. A 30-second traversal budget is checked
+between remote steps and root checks; an already-running provider call retains
+its own transport timeout. Only `sendWith` of the retained transaction
+ID is permitted during recovery: there are no new outputs or new funding
+allocation. After an affirmative submission result, WAB saves the same payment
+as `ready` with locked ownership/field checks. Repeated or concurrent retries
+return that payment; claim eligibility is never reset. Mining is not required
+for automatic recovery of an accepted existing transaction.
+
+Provider outages, invalid proofs/scripts, unknown or conflicting history, and
+rejected/pending submission still fail closed with 503. Retry the retained
+registration later; do not recreate its identity or discard its local recovery
+state. Recovery can finish server-side even if the original caller disconnected.
+This repairs the stranded-registration failure mode, but does not make chain
+providers infallible or prove the trigger of an earlier transient verification
+failure. Existing ready payments and the faucet response format are unchanged.
+No schema migration is needed; older binaries ignore action labels and continue
+to replay ready rows, while pending rows still need upgraded WAB or support.
+
+### Recover an ambiguous faucet payment
+
+A Storage error or lost response after signing can leave an existing faucet
+reservation `creating` even when its transaction is later mined. Retrying
+registration deliberately refuses another grant. An administrator can recover
+that **same confirmed payment** with:
+
+```http
+POST /admin/faucet/reconcile
+Authorization: Bearer <WAB_ADMIN_TOKEN>
+Content-Type: application/json
+
+{"paymentId": 123, "txid": "<64-character transaction ID>"}
+```
+
+Identify the transaction from the faucet wallet's retained Storage evidence;
+use the reservation ID from the **same WAB database/environment**. Do not copy
+user IDs or reservation IDs between test and production environments. This
+route uses the existing admin credential and rate limit, and is disabled with
+the other admin routes when no token is configured. It accepts no raw transaction,
+BEEF, recovery secret or provider URL from the request.
+
+WAB retrieves the transaction and mining proof on its configured `BSV_NETWORK`,
+checks the transaction hash and proof against Chaintracks, and requires output
+zero to match the reservation's exact amount and R-puzzle derived from its
+saved recovery secret. A confirmed payment to that unique puzzle is sufficient;
+the route does not claim to establish the funding wallet's identity. It saves
+Atomic BEEF and the transaction ID on the original row, with a locked recheck
+of ownership and reservation fields. It never signs, broadcasts, clears claim
+markers or grants eligibility. Repeating the same completed recovery succeeds;
+a different transaction, detached reservation or changed reservation fails.
+
+A successful response is `{"success":true,"status":"ready"}`. Resume the
+retained client registration using normal authentication and faucet requests;
+WAB returns the existing payment. Do not delete the reservation, reset the
+claim flag, recreate the account or discard the client's retained registration.
+Unmined, unavailable or rejected proofs return 503 without modifying the row;
+wait for confirmation and retry support recovery. Missing reservations return
+404 and conflicting evidence returns 409. Audit logs contain the payment ID
+and transaction ID, never the recovery secret or BEEF.
+
+No database migration is required. Deploy a reviewed immutable WAB image using
+the normal staged rollout. Rolling back removes only this support route;
+recovered rows remain ordinary `ready` payments compatible with older versions.
+This support route complements automatic recovery when legacy history is too
+large or discovery is indeterminate. Neither route bypasses proof checks.
+
 Follow [UMP account support](../../docs/infrastructure/wab-ump-account-support.md)
 for evidence requirements, commands, auditing, rollout, and rollback.
 
