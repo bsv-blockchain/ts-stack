@@ -394,6 +394,17 @@ describe('saved lookup source transitions', () => {
     expect(codec.advance(repeated, saved).job).toBe('3')
   })
 
+  it('rejects a malformed retained job even when its committed predecessor is intact', async () => {
+    const { codec, packet } = fixture()
+    const captured = codec.capture(codec.initial('0'), packet, '1000')
+    const committed = codec.advance(captured, await receipt(captured.pending!))
+    expect(codec.parse(committed)).toEqual(committed)
+    for (const job of ['01', '-1', '1.5', '18446744073709551616'])
+      expect(() => codec.parse({ ...committed, job })).toThrow(
+        expect.objectContaining({ code: 'invalid' })
+      )
+  })
+
   it('rejects rollback, changed originals and invalid job/predecessor pairs', async () => {
     const { codec, packet } = fixture()
     const initial = codec.initial('7')

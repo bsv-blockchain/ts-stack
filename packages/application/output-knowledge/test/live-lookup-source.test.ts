@@ -8,13 +8,16 @@ import {
   canonicalOutputJSON,
   OutputProtocolError,
   outputServiceErrorHTTPStatus,
+  selectOutputCapability,
   type OutputJSONObject
 } from '@bsv/sdk'
 import { context } from './evidence-fixture.js'
 import { LiveLookupSource, type LiveLookupSourceOptions } from '../src/sources/LiveLookupSource.js'
 import {
   prepareLiveLookupSource,
-  liveLookupSourceBinding
+  liveLookupSourceBinding,
+  liveLookupFraming,
+  normalizeLiveLookupConfiguration
 } from '../src/sources/LiveLookupConfiguration.js'
 import { MemoryOperationStateStore } from '../src/operations/MemoryOperationStateStore.js'
 import { knowledgeMutation } from '../src/storage/Journal.js'
@@ -87,6 +90,23 @@ function liveResponses(h: Awaited<ReturnType<typeof harness>>) {
 }
 
 describe('durable live lookup source', () => {
+  it.each(['none', 'brc103'] as const)(
+    'retains selected %s provenance in native framing',
+    authentication => {
+      const f = liveFixture({}, undefined, authentication)
+      const framing = liveLookupFraming(
+        normalizeLiveLookupConfiguration(f.config),
+        selectOutputCapability(f.options.manifest, f.selection),
+        f.options.query
+      )
+      const batch = framing.fromLookup(f.packet, f.open.limits.maxBytes, '1000')
+      expect(batch.provenance.authentication).toBe(
+        authentication === 'brc103' ? 'brc103' : 'configured-transport'
+      )
+      expect(batch.provenance.peer).toBe(f.config.scope.provider)
+    }
+  )
+
   it('rejects equal or larger polling than the operation deadline before opening storage', () => {
     for (const minimumPollMs of [20, 21])
       expect(() => liveFixture({ minimumPollMs, operationTimeoutMs: 20 })).toThrow(
