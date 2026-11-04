@@ -10,6 +10,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { GroupMessagingClient } from '../../src/client.js'
 import { nodeSqliteDriver } from '../../src/storage/__tests__/node-sqlite-driver.js'
 import { InProcessTransportHub } from '../../src/transport/backends/in-process.js'
+import { BroadcastError, type TransportBackend } from '../../src/transport/index.js'
+import { decodeEnvelope } from '../../src/bootstrap/index.js'
+import type { IdentityKey, WirePayload } from '../../src/types.js'
 import type { MessageContent } from '../../src/content/types.js'
 import { Transcript } from '../transcript.js'
 
@@ -91,17 +94,33 @@ const nextEvent = <K extends 'welcomeReceived' | 'inviteReceived' | 'keyPackageR
   )
 
 /** Two clients joined to one chat, so a real message really arrives. */
-const chatting = async () => {
+/** Lets a test cut Alice's MLS route to a member after the group is built. */
+const refuseMlsTo = (
+  backend: TransportBackend,
+  blocked: () => ReadonlySet<IdentityKey>
+): TransportBackend => ({
+  ...backend,
+  send: async (recipient: IdentityKey, payload: WirePayload) => {
+    if (decodeEnvelope(payload).kind === 'mls' && blocked().has(recipient)) {
+      throw new Error('no route to member')
+    }
+    await backend.send(recipient, payload)
+  }
+})
+
+const chatting = async (blocked: () => ReadonlySet<IdentityKey> = () => new Set()) => {
   const hub = new InProcessTransportHub()
   const aliceKey = PrivateKey.fromRandom()
   const bobKey = PrivateKey.fromRandom()
-  const open = async (key: PrivateKey) =>
-    GroupMessagingClient.create({
+  const open = async (key: PrivateKey, refusing = false) => {
+    const endpoint = hub.endpoint(new KeyDeriver(key).identityKey)
+    return GroupMessagingClient.create({
       wallet: key,
       storage: new Map(),
-      transport: hub.endpoint(new KeyDeriver(key).identityKey)
+      transport: refusing ? refuseMlsTo(endpoint, blocked) : endpoint
     })
-  const alice = await open(aliceKey)
+  }
+  const alice = await open(aliceKey, true)
   const bob = await open(bobKey)
 
   const invited = nextEvent(bob, 'inviteReceived')
@@ -310,6 +329,40 @@ describe('ordering under a driver that actually defers', () => {
   })
 })
 
+describe("the sender's own copy", () => {
+  /**
+   * The recipe in README.md, executed. A send that reaches nobody still
+   * advanced the group, and MLS never hands an author its own message back, so
+   * a host that writes its copy only when the promise resolves loses the one
+   * copy nothing can restore. The snippet used to do exactly that, under a
+   * heading explaining why you must not.
+   */
+  it('records the message even when the send reached nobody', async () => {
+    let blocked: ReadonlySet<IdentityKey> = new Set()
+    const { alice, bob, close } = await chatting(() => blocked)
+    const transcript = await Transcript.open(nodeSqliteDriver() as never)
+    blocked = new Set([bob.identityKey])
+
+    const group = await alice.getGroup('project')
+    const content = text('hello')
+    let id: string
+    try {
+      id = await group!.sendContent(content)
+    } catch (error) {
+      if (!(error instanceof BroadcastError) || error.messageId === undefined) throw error
+      id = error.messageId
+    }
+    await transcript.record({ chatId: 'project', sender: alice.identityKey, content, id })
+
+    const rows = await transcript.list('project')
+    expect(id).toMatch(/^[0-9a-f]{64}$/)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.id).toBe(id)
+
+    await close()
+  })
+})
+
 describe('a write that fails', () => {
   it('reports through onError instead of losing the message silently', async () => {
     const failures: Array<[string, string]> = []
@@ -333,6 +386,37 @@ describe('a write that fails', () => {
     expect(failures[0]![0]).toBe(sent)
     expect(failures[0]![1]).toMatch(/locked/)
 
+    await close()
+  })
+
+  /**
+   * The quickstart opens without an `onError`, so the default is what most
+   * hosts actually run. Silence there loses the message and leaves no trace of
+   * having lost it, which is the worse half of a choice this option exists to
+   * make deliberately.
+   */
+  it('still says so when the host supplied no onError', async () => {
+    const logged: unknown[][] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      logged.push(args)
+    })
+    const transcript = await Transcript.open({
+      ...nodeSqliteDriver(),
+      runAsync: async (sql: string) => {
+        if (/^\s*INSERT/i.test(sql)) throw new Error('database is locked')
+        return { changes: 0, lastInsertRowId: 0 }
+      }
+    } as never)
+    const { alice, bob, close } = await chatting()
+    transcript.follow(bob)
+
+    const group = await alice.getGroup('project')
+    await group!.sendContent(text('doomed'))
+
+    await vi.waitFor(() => expect(logged).toHaveLength(1))
+    expect(logged[0]!.some(arg => arg instanceof Error && /locked/.test(arg.message))).toBe(true)
+
+    spy.mockRestore()
     await close()
   })
 

@@ -4,13 +4,13 @@ Source to copy into your host and own. None of it is part of the package's API
 and none of it carries a compatibility promise. Each file ships as `.ts`, so
 import your copy, not the package path.
 
-| file | what it owns | why it is not in the library |
-| --- | --- | --- |
-| `managed-invitations.ts` | the invitation exchange, from answer to join | its state spans a stored invitation, a private half, a chat row and an outbound Welcome; only your database can write those atomically |
-| `client-lifecycle.ts` | which client exists, and when it is closed | the library cannot know when your identity changes or your screens unmount |
-| `sql-shelf.ts` | where an answered invitation's private half waits | the library never stores private key material (invariant 1); a shelf that survives a restart must |
-| `transcript.ts` | what was said, and the order its writes happen in | how long a transcript lives is the host's decision |
-| `web-crypto-conformance.ts` | whether this runtime's WebCrypto can do the job | the library cannot probe a host's platform for it |
+| file                        | what it owns                                      | why it is not in the library                                                                                                           |
+| --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `managed-invitations.ts`    | the invitation exchange, from answer to join      | its state spans a stored invitation, a private half, a chat row and an outbound Welcome; only your database can write those atomically |
+| `client-lifecycle.ts`       | which client exists, and when it is closed        | the library cannot know when your identity changes or your screens unmount                                                             |
+| `sql-shelf.ts`              | where an answered invitation's private half waits | the library never stores private key material (invariant 1); a shelf that survives a restart must                                      |
+| `transcript.ts`             | what was said, and the order its writes happen in | how long a transcript lives is the host's decision                                                                                     |
+| `web-crypto-conformance.ts` | whether this runtime's WebCrypto can do the job   | the library cannot probe a host's platform for it                                                                                      |
 
 All four exist because of what the first real integration got wrong.
 `__tests__/host-lifecycle.test.ts` reproduces the lifecycle defects against the
@@ -206,7 +206,7 @@ Shipping a working shelf is a better answer than warning harder.
 
 ```ts
 const shelf = await SqlShelf.open(database)
-await shelf.reap()                     // on open: a week-old half is waste
+await shelf.reap() // on open: a week-old half is waste
 new ManagedInvitations(client, shelf, chatIds, onFailure).start()
 ```
 
@@ -246,15 +246,35 @@ row.
 message. Without `Transcript.record`, a sent message is gone on the next read —
 and the 677-line screen that got this wrong had no test covering it.
 
+**A failed send still has to be recorded.** `send` rejects when fan-out did not
+reach everyone, but fan-out has run to completion and the group has already
+advanced: the members it did reach hold the message. Conditioning your own copy
+on the promise resolving therefore loses it for the one member who can never be
+sent it again — its author. The rejection carries `messageId` for exactly this,
+so record on both arms.
+
 ```ts
-const transcript = await Transcript.open(database)
+const transcript = await Transcript.open(database, { onError: report })
 transcript.follow(client)
 transcript.onAppended(() => void redraw())
 
 const content = textContent(draft)
-const id = await group.sendContent(content)
+let id: string
+try {
+  id = await group.sendContent(content)
+} catch (error) {
+  if (!(error instanceof BroadcastError) || error.messageId === undefined) throw error
+  // Everyone in `error.failed` missed it; `client.retryDelivery(error)`
+  // re-sends these exact bytes, and the id does not change.
+  id = error.messageId
+}
 await transcript.record({ chatId, sender: client.identityKey, content, id })
 ```
+
+`onError` is where a failed _inbound_ write surfaces. It defaults to a
+`console.error` rather than to silence, because the library hands each message
+over exactly once: a write that fails has lost the message either way, and the
+only choice left is whether anyone finds out. Pass your own reporter.
 
 **The id comes from the library, not from here.** Every send returns the
 `messageId` and every `message` event carries the same one, derived from the

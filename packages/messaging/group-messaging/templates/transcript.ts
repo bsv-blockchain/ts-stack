@@ -77,9 +77,20 @@ export interface TranscriptOptions {
    * gone. It is gone either way: the library hands each message over exactly
    * once and has already committed the new group state by the time the
    * subscriber runs. The choice is between losing it loudly and losing it
-   * silently.
+   * silently, and the default is loud: a host that has not thought about this
+   * yet gets a log line rather than a message that was never there.
+   *
+   * Replace it with whatever reporting you already have. The library's own
+   * emitter rethrows on a fresh task instead, which reaches the platform's
+   * unhandled-error handling; a template is host code, so it logs where a host
+   * looks rather than inflicting a redbox from a file somebody copied.
    */
   onError?: (error: Error, message: StoredMessage) => void
+}
+
+/** The default `onError`: lose the message, but never lose the fact of it. */
+const reportLostMessage = (error: Error, message: StoredMessage): void => {
+  console.error(`Transcript: dropped message ${message.id} in chat ${message.chatId}`, error)
 }
 
 const validName = (name: string): string => {
@@ -155,7 +166,7 @@ export class Transcript {
       driver,
       table,
       options.now ?? Date.now,
-      options.onError ?? (() => undefined)
+      options.onError ?? reportLostMessage
     )
   }
 
