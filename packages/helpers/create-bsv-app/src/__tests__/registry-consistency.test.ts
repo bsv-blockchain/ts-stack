@@ -38,4 +38,42 @@ describe('registry consistency', () => {
       }
     }
   })
+  test('generated files import exactly the sibling helpers they use', () => {
+    const files = generatedFiles()
+    const exported = new Set(
+      files.flatMap(f =>
+        [...f.content.matchAll(/^export (?:async )?function (\w+)/gm)].map(m => m[1])
+      )
+    )
+    for (const f of files) {
+      const imported = [
+        ...f.content.matchAll(/^import \{([^}]+)\} from '\.\/[\w.]+\.js'/gm)
+      ].flatMap(m => m[1].split(',').map(s => s.trim().replace(/^type /, '')))
+      for (const name of imported) {
+        const uses = f.content.match(new RegExp(`\\b${name}\\b`, 'g'))?.length ?? 0
+        expect({ file: f.path, name, used: uses > 1 }).toEqual({ file: f.path, name, used: true })
+      }
+      for (const name of exported) {
+        if (!new RegExp(`\\b${name}\\(`).test(f.content)) continue
+        const available =
+          new RegExp(`function ${name}\\b`).test(f.content) || imported.includes(name)
+        expect({ file: f.path, name, available }).toEqual({ file: f.path, name, available: true })
+      }
+    }
+  })
+  test('generated files contain no explicit any', () => {
+    for (const f of generatedFiles()) {
+      expect({ file: f.path, any: /:\s*any\b|<any>|as any\b/.test(f.content) }).toEqual({
+        file: f.path,
+        any: false
+      })
+    }
+  })
 })
+
+function generatedFiles() {
+  return registry.flatMap(c => [
+    ...Object.values(c.files(ctx)).flat(),
+    ...Object.values(c.glue?.(ctx) ?? {}).flat()
+  ])
+}

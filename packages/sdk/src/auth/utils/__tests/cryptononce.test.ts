@@ -75,6 +75,49 @@ describe('verifyNonce', () => {
     await expect(verifyNonce(nonce, mockWallet)).resolves.toEqual(false)
   })
 
+  it('returns false when the wallet rejects the HMAC', async () => {
+    const rejected = new Error('HMAC is not valid') as Error & { code: string }
+    rejected.code = 'ERR_INVALID_HMAC'
+    ;(mockWallet.verifyHmac as jest.Mock).mockRejectedValue(rejected)
+
+    const nonce = await createNonce(mockWallet)
+    await expect(verifyNonce(nonce, mockWallet)).resolves.toEqual(false)
+
+    const wireRejection = new Error('HMAC is not valid')
+    ;(mockWallet.verifyHmac as jest.Mock).mockRejectedValue(wireRejection)
+    await expect(verifyNonce(nonce, mockWallet)).resolves.toEqual(false)
+  })
+
+  it('returns false for a real wallet HMAC mismatch', async () => {
+    const realWallet = new CompletedProtoWallet(PrivateKey.fromRandom())
+    const nonce = await createNonce(realWallet)
+    const bytes = Utils.toArray(nonce, 'base64')
+    bytes[16] = bytes[16] === 0 ? 1 : 0
+    await expect(verifyNonce(Utils.toBase64(bytes), realWallet)).resolves.toEqual(false)
+  })
+
+  it('propagates wallet failures that are not an HMAC mismatch', async () => {
+    ;(mockWallet.verifyHmac as jest.Mock).mockRejectedValue(new Error('wallet unavailable'))
+
+    const nonce = await createNonce(mockWallet)
+    await expect(verifyNonce(nonce, mockWallet)).rejects.toThrow('wallet unavailable')
+
+    ;(mockWallet.verifyHmac as jest.Mock).mockRejectedValue('wallet unavailable')
+    await expect(verifyNonce(nonce, mockWallet)).rejects.toBe('wallet unavailable')
+  })
+
+  it('returns false when HMAC error inspection itself fails', async () => {
+    const hidden = new Proxy(new Error('HMAC is not valid'), {
+      getOwnPropertyDescriptor() {
+        throw new Error('descriptor access denied')
+      }
+    })
+    ;(mockWallet.verifyHmac as jest.Mock).mockRejectedValue(hidden)
+
+    const nonce = await createNonce(mockWallet)
+    await expect(verifyNonce(nonce, mockWallet)).rejects.toThrow('HMAC is not valid')
+  })
+
   it('returns false for a malformed truthy HMAC verdict', async () => {
     ;(mockWallet.verifyHmac as jest.Mock).mockResolvedValue({ valid: 'true' })
 

@@ -285,9 +285,10 @@ See [npm Package Supply Chain](./npm-package-supply-chain.md),
 ## Complete mutation qualification before publication
 
 The publication candidate must complete the reusable `mutation-tests.yml`
-campaign at its exact `github.sha`. In `release.yaml` the campaign starts at
-t=0 in parallel with preparation and runs every target concurrently, so the
-slowest single target bounds its wall time. The npm publisher waits for the
+campaign at its exact `github.sha`. In `release.yaml` a seconds-long `plan` job
+resolves the release mode and package filter once; preparation and the campaign
+then start in parallel from that same output, and the campaign runs its targets
+concurrently, so the slowest single target bounds its wall time. The npm publisher waits for the
 up-front approval, preparation, and full qualification. The OCI publisher
 waits for discovery and full qualification, which a `release.yaml` call
 satisfies with that same-run campaign;
@@ -303,6 +304,32 @@ canonical source ranges and mutant inventory with pinned Stryker 9.6.1 and reche
 all existing target gates. A partial manual target is diagnostic only. Earlier
 weekly passes, previous attempts and reports from another source cannot satisfy
 the gate; rerun the complete workflow when a full attempt needs replacement.
+
+A single-package release (`packages/<path>/vX.Y.Z`, or a manual `single`
+dispatch whose filter is a `./packages/<path>` directory) publishes only that
+package's own bytes. Its workspace dependencies ship as npm version ranges that
+resolve to versions qualified by their own releases. The campaign is therefore
+scoped to every canonical target whose source lies in that package directory,
+with all the same exact-source, property-run and receipt checks. The final
+verifier requires exactly that target set and reports the scope as
+`qualified-packages`. A package directory with no governed target, a package
+name filter, and every cascade run the complete campaign. Infrastructure image
+publication accepts only a complete-campaign qualification. Defects in other
+packages are then found by their own releases or the weekly complete campaign.
+
+Preparation and execution verification use the same duration-scheduled complete
+matrix. Every batch binds the digest of that full ordered matrix and its exact
+ordered slice, alongside source, run, attempt and build archive identity. The
+verifier reconstructs the scheduling order from the checked-out measurements;
+it must not compare a scheduled digest with target-order rows or accept a
+digest mismatch. Scheduling changes start order only, never the required union
+of canonical targets, partitions, source ranges or mutation gates.
+
+Declaration/import-only execution companions run with related nonempty parts.
+Their complete original source ranges remain in the plan and the pinned-engine
+inventory must match the original whole target exactly. A standalone empty
+report remains invalid; neither a perfect percentage over zero sites nor a
+passing initial test run can qualify a canonical target.
 
 No mutation target is permanently removed by PR deferral. A failure at this final
 gate blocks publication and requires a source fix and newly qualified candidate;
@@ -327,3 +354,48 @@ execution. Renewed inventory dates record source/disposition review; they do not
 qualify a runtime campaign. Target receipts also bind the fresh successful runner
 record, report digest, property run count, deterministic seed and empty replay
 path. An overridden partial replay cannot qualify publication.
+
+## Retired one-time experimental #674 release waiver
+
+The operator authorized one full release without successful #674 mutation
+qualification: [release 40612905804](https://github.com/bsv-blockchain/ts-stack/actions/runs/40612905804),
+SDK 4.0.1, Toolbox 2.15.1, 37 npm packages and 8 infrastructure images.
+The npm source was f12e0dd669287b63964545035a39f0d339abc447, with package bytes
+identical to the tested a6b6e352 candidates. GitHub skipped its image-sync
+continuation through the intentionally skipped campaign. PR #1433 repaired only
+release controls; [continuation 40617228519](https://github.com/bsv-blockchain/ts-stack/actions/runs/40617228519)
+uses ada0681362455045ff3a0dd795fcf89e6f177d92 and the same immutable package
+bytes, with no repeated npm publication. The image source is its generated
+child 1aa0983115ba39579ac09885e1977c05b765e42e. Established compatibility and
+normal approval,
+artifact, advisory, SBOM, provenance and signature gates remained mandatory.
+
+This was an operator waiver, not successful full mutation qualification. Failed
+and canceled campaign evidence remains failed. The historical record is
+`governance/release-exceptions/2026-10-27-674.json`. The temporary dispatch input
+and admission implementation are removed. Every later release requires the
+normal full mutation qualification; no future release can select this waiver.
+
+The image inventory used two source children. Six new images came from
+`1aa0983115ba39579ac09885e1977c05b765e42e` at caller `ada0681362455045ff3a0dd795fcf89e6f177d92`.
+Message Box1.1.55 and WebRTpay Relay0.2.2 were already occupied by older images
+containing SDK4.0.0, so the remaining recovery published Message Box1.1.56 and
+Relay0.2.3 instead. [Image-only recovery 40623065656](https://github.com/bsv-blockchain/ts-stack/actions/runs/40623065656)
+uses caller `d344bf07b8a9d25adc7203687b667a70e96955f5` and generated child
+`f69c6f2b1f805e0d69962815515a641a35e230cb`. Relative to the original inputs, only
+those two manifest/lock version fields changed; source and dependency bytes
+remained identical. Normal approval, build, scan, signature, provenance and SBOM
+gates remained required, with no additional npm build or publication. This
+consumed the same one-time release waiver. The temporary image-only dispatch
+adapter is removed together with the original admission.
+
+## Reconcile verified published baselines
+
+After a protected cascade publishes, independently verify every public version,
+integrity, actual tarball digest and source-bound attestations. Reconcile the
+generated sync PR against its original immutable image-source commit, then set
+only the verified release entries in `governance/package-release-notes.json` to
+the public `publishedVersion` with `releaseType: none`. Run `pnpm docs:packages`,
+review the generated package facts and merge the validated reconciliation PR.
+Do not advance a baseline for a held, failed or partially published candidate.
+Later metadata commits do not change the pinned image source or its provenance.

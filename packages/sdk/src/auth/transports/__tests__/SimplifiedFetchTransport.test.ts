@@ -3,6 +3,7 @@ import { SimplifiedFetchTransport } from '../SimplifiedFetchTransport.js'
 import * as Utils from '../../../primitives/utils.js'
 import { AuthMessage } from '../../types.js'
 import { AuthFetch } from '../../clients/AuthFetch.js'
+import { runInNewContext } from 'node:vm'
 
 function createGeneralPayload(
   path = '/resource',
@@ -93,6 +94,42 @@ describe('SimplifiedFetchTransport send', () => {
     expect(caught).toBeInstanceOf(Error)
     expect(caught.cause).toBeInstanceOf(Error)
     expect(caught.cause?.message).toBe('network down')
+  })
+
+  test('retains a cross-realm fetch error and its socket cause without replay', async () => {
+    const socket = { code: 'UND_ERR_SOCKET' },
+      original = runInNewContext('new TypeError("fetch failed", { cause: socket })', { socket })
+    expect(original).not.toBeInstanceOf(Error)
+    const fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
+    fetchMock.mockRejectedValue(original)
+    const transport = new SimplifiedFetchTransport('https://api.example.com', fetchMock)
+    await transport.onData(async () => {})
+    const caught = await transport.send(createGeneralMessage()).catch(error => error)
+    expect(caught).toBeInstanceOf(Error)
+    expect(caught.message).toBe(
+      'Network error while sending authenticated request to https://api.example.com/resource: fetch failed'
+    )
+    expect(caught.name).toBe('Error')
+    expect(caught.cause).toBe(original)
+    expect(caught.cause.cause).toBe(socket)
+    expect(caught.stack).toContain('SimplifiedFetchTransport')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('retains an opaque thrown value with the existing message and no replay', async () => {
+    const original = 'plain string error',
+      fetchMock: jest.MockedFunction<typeof fetch> = jest.fn()
+    fetchMock.mockRejectedValue(original)
+    const transport = new SimplifiedFetchTransport('https://api.example.com', fetchMock)
+    await transport.onData(async () => {})
+    const caught = await transport.send(createGeneralMessage()).catch(error => error)
+    expect(caught).toBeInstanceOf(Error)
+    expect(caught.message).toBe(
+      'Network error while sending authenticated request to https://api.example.com/resource: plain string error'
+    )
+    expect(caught.name).toBe('Error')
+    expect(caught.cause).toBe(original)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   test('forbids automatic redirects for authentication handshakes', async () => {

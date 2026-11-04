@@ -17,7 +17,14 @@ const CONTROL_PATH_PREFIXES = [
   '.github/workflows/mutation-tests.yml',
   'governance/mutation-testing/stryker.config.mjs'
 ]
-const CONTROL_PATHS = new Set(['package.json', 'pnpm-workspace.yaml', 'tsconfig.base.json'])
+const CONTROL_PATHS = new Set([
+  'package.json',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+  'scripts/mutation-build.mjs',
+  'scripts/mutation-execution-batches.mjs',
+  '.github/workflows/mutation-execution.yml'
+])
 const REGEXP_META = new Set('.*+?^$(){}|[]\\')
 const OPTION_REQUIREMENTS = new Map([
   ['--target', 'an exact target ID'],
@@ -69,7 +76,9 @@ function globPattern(pattern) {
 
 function targetInputPatterns(target) {
   const packageDirectory = normalized(target.packageDirectory)
-  const patterns = []
+  const patterns = (target.additionalInputs ?? []).map(input =>
+    path.posix.normalize(`${packageDirectory}/${input}`)
+  )
   for (const mutate of target.mutate ?? []) {
     patterns.push(`${packageDirectory}/${mutate.replace(/:\d+(?:-\d+)?$/, '')}`)
   }

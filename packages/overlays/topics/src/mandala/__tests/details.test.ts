@@ -323,23 +323,30 @@ describe('decodeAdminDetails schema', () => {
   test.each([
     // feeRatePerKb: 1.0 as a half float (f9 3c00) in place of the uint 1000 (19 03e8).
     [
-      'a float',
+      'a half float',
       'a2646b696e646a736574466565526174656c666565526174655065724b62f93c00',
-      'simple value or float not allowed'
+      'float must be 64-bit'
     ],
-    // bankRef wrapped in tag 42 (d8 2a).
+    // bankRef wrapped in tag 42 (d8 2a) without the CID identity prefix.
     [
-      'a tag',
+      'a tag that is not a CID',
       `a2646b696e646569737375656762616e6b526566d82a5820${'07'.repeat(32)}`,
-      'major type 6 not allowed'
+      'invalid CID'
     ],
-    ['a negative integer', 'a2617820646b696e64657061757365', 'major type 1 not allowed'],
-    ['an array', 'a1646b696e6481657061757365', 'major type 4 not allowed'],
     ['unsorted keys', 'a2646b696e64657061757365617801', 'map keys unsorted or duplicated'],
     ['a non-text key', 'a2016178646b696e64657061757365', 'map key must be text'],
     ['trailing bytes', 'a1646b696e6465706175736500', 'trailing bytes'],
     ['a non-map top level', '657061757365', 'top level must be a map']
   ])('non-strict CBOR (%s) passes the codec message through', (_label, hex, detail) => {
+    expectSchemaReject(hex, detail)
+  })
+
+  test.each([
+    // {x: -1, kind: "pause"}: strict DAG-CBOR, refused by the schema.
+    ['a negative integer under an unknown key', 'a2617820646b696e64657061757365', 'unknown key x'],
+    // {kind: ["pause"]}
+    ['an array as the kind', 'a1646b696e6481657061757365', 'kind must be text']
+  ])('strict DAG-CBOR with %s is refused by the schema', (_label, hex, detail) => {
     expectSchemaReject(hex, detail)
   })
 
@@ -469,11 +476,7 @@ describe('deployMetadata', () => {
     ['a non-map', [0x63, 0x55, 0x53, 0x44], 'top level must be a map'],
     ['an empty payload', [], 'truncated input'],
     // {sym, dec: 1.0} — accepted by a lenient decoder, never by Mandala (Review Focus 2).
-    [
-      'a float dec',
-      bytesOfHex('a263646563f93c006373796d63555344'),
-      'simple value or float not allowed'
-    ]
+    ['a half-float dec', bytesOfHex('a263646563f93c006373796d63555344'), 'float must be 64-bit']
   ])('refuses %s', (_label, payload, detail) => {
     expectDeployReject(payload, detail)
   })

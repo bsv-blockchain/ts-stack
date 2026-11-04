@@ -146,10 +146,16 @@ required.
 
 - Specifications, conformance vectors, public declarations, documented
   behavior, and established cross-implementation behavior are contracts.
-- Prefer additive and backward-compatible changes. Do not rename or remove
-  exports, narrow accepted input, change defaults, alter wire encodings,
-  serialization, persisted schemas, error identities, runtime targets, or
-  browser/mobile behavior without an explicitly approved migration.
+- Backward compatibility is a project-wide invariant. No change may break an
+  established compatibility contract, including any BRC-100 application-wallet
+  boundary, even in a new major version. Maintainer approval, migration notes,
+  or a coordinated first-party upgrade do not waive this rule. Follow the
+  [compatibility contract](./docs/about/compatibility.md).
+- Preserve old WalletClients and independently deployed wallets in both
+  directions. Keep public types, accepted inputs, defaults, results, errors,
+  serialization, wire encodings, and capability advertisements compatible.
+  Extensions must be additive, explicitly negotiated where needed, and retain
+  legacy behavior when the peer has no new capability.
 - A generic cleanup, analyzer suggestion, dependency upgrade, or refactor is
   never sufficient reason for a breaking change.
 - When behavior is portable across BSV implementations, update or add shared

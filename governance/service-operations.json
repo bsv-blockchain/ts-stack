@@ -612,6 +612,76 @@
       "operatorGuide": "infra/wallet-infra/guides/kube_samples/README.md",
       "publicProtocol": true,
       "corsPrefixes": ["WALLET_STORAGE"]
+    },
+    {
+      "name": "webrtpay-relay",
+      "path": "infra/webrtpay-relay",
+      "envExample": "infra/webrtpay-relay/.env.example",
+      "port": "PORT (default 8787)",
+      "livenessPath": "/health",
+      "readinessPath": "/ready",
+      "configuration": {
+        "required": ["PUBLIC_URLS"],
+        "optional": [
+          "CLOUDFLARE_TURN_API_TOKEN",
+          "CLOUDFLARE_TURN_KEY_ID",
+          "CONNECTIONS_PER_48_PER_MINUTE",
+          "CONNECTIONS_PER_IP_PER_MINUTE",
+          "HOST",
+          "MAX_OVER_RATE_FRAMES",
+          "MAX_SOCKETS",
+          "MAX_UNAUTHENTICATED_SOCKETS",
+          "PORT",
+          "SIGNALS_PER_PAIR_PER_MINUTE",
+          "SIGNALS_PER_RECIPIENT_PER_MINUTE",
+          "SOCKETS_PER_48",
+          "SOCKETS_PER_IP",
+          "STUN_URLS",
+          "TRUSTED_IP_HEADER",
+          "TURN_PER_48_PER_HOUR",
+          "TURN_PER_HOUR",
+          "TURN_PER_IP_PER_HOUR",
+          "TURN_PROVIDER",
+          "TURN_SECRET",
+          "TURN_TTL",
+          "TURN_URLS"
+        ],
+        "secrets": ["CLOUDFLARE_TURN_API_TOKEN", "OTEL_EXPORTER_OTLP_HEADERS", "TURN_SECRET"]
+      },
+      "observability": {
+        "module": "esm",
+        "telemetryFile": "src/telemetry.ts",
+        "loggerFile": "src/logger.ts",
+        "preload": "--import ./dist/telemetry.js",
+        "operations": ["config.summary", "listen", "relay.event", "shutdown"]
+      },
+      "criticalJourneys": [
+        "authenticate a socket by BRC-100 identity key against PUBLIC_URLS",
+        "forward an encrypted signalling envelope to every socket of the recipient identity",
+        "issue short-lived TURN credentials within the per-source and global budgets"
+      ],
+      "alerts": [
+        "authentication failures rise after a PUBLIC_URLS, proxy, or TLS change",
+        "admission refusals (HTTP 429/503) or rate_limited replies remain saturated",
+        "the TURN provider repeatedly fails or the hourly TURN budget is exhausted",
+        "event-loop delay or open-socket count remains above the operator alert threshold"
+      ],
+      "state": "Stateless. Sockets, authenticated identities, and rate-limit buckets live only in process memory; nothing is written to disk or a database.",
+      "migration": "No schema or data migration. Roll forward or back by replacing the image; clients reconnect and re-authenticate.",
+      "backup": "Nothing to back up. Retain the deployment configuration and the TURN secrets in the secret manager.",
+      "rpo": "Not applicable: the relay holds no durable state.",
+      "rto": "Minutes: the time to start a replacement container with the same configuration and public url.",
+      "restoreValidation": "Verify /health and /ready, a client authenticating against each PUBLIC_URLS entry, a signal delivered between two test identities, and TURN issuance when a provider is configured.",
+      "lifecycle": {
+        "status": "implemented",
+        "shutdown": "SIGTERM/SIGINT close every WebSocket, stop the listener, and flush telemetry.",
+        "scaling": "Run one replica per public url: two clients meet only on the same replica, and per-source limits are per process. Scale vertically with the limit variables.",
+        "disruption": "A restart drops every socket; clients reconnect and re-authenticate. Schedule replacements when brief signalling interruption is acceptable.",
+        "topology": "Keep the listener reachable only through the TLS-terminating proxy that sets TRUSTED_IP_HEADER."
+      },
+      "operatorGuide": "docs/infrastructure/webrtpay-relay.md",
+      "publicProtocol": true,
+      "corsPrefixes": ["WEBRTPAY_RELAY"]
     }
   ],
   "applicationWorkloads": [

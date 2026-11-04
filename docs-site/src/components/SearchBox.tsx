@@ -20,9 +20,12 @@ let pagefindPromise: Promise<Pagefind> | null = null
 function loadPagefind(): Promise<Pagefind> {
   if (!pagefindPromise) {
     const base = import.meta.env.BASE_URL.replace(/\/$/, '')
-    pagefindPromise = import(
-      /* @vite-ignore */ `${base}/_pagefind/pagefind.js`
-    ) as Promise<Pagefind>
+    pagefindPromise = (
+      import(/* @vite-ignore */ `${base}/_pagefind/pagefind.js`) as Promise<Pagefind>
+    ).catch(error => {
+      pagefindPromise = null
+      throw error
+    })
   }
   return pagefindPromise
 }
@@ -31,6 +34,7 @@ export default function SearchBox() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [open, setOpen] = useState(false)
+  const [searchError, setSearchError] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -52,7 +56,14 @@ export default function SearchBox() {
   }, [])
 
   useEffect(() => {
-    const timer = setTimeout(() => search(query), 150)
+    const timer = setTimeout(() => {
+      search(query)
+        .then(() => setSearchError(false))
+        .catch(() => {
+          setResults([])
+          setSearchError(true)
+        })
+    }, 150)
     return () => clearTimeout(timer)
   }, [query, search])
 
@@ -93,11 +104,12 @@ export default function SearchBox() {
         }}
         onFocus={() => {
           setOpen(true)
-          loadPagefind()
+          loadPagefind().catch(() => setSearchError(true))
         }}
         aria-label="Search documentation"
       />
       <kbd className={styles.kbd}>⌘K</kbd>
+      {open && searchError && <output>Search is unavailable. Please try again.</output>}
       {open && results.length > 0 && (
         <ul className={styles.dropdown}>
           {results.map(r => (

@@ -1,3 +1,5 @@
+import { internalizeBrc197Action } from './methods/internalizeBrc197Action'
+import type { Brc197InternalizeActionArgs } from '../sdk/Brc197Internalization'
 import {
   type ValidCreateActionArgs,
   type ValidListActionsArgs,
@@ -92,6 +94,7 @@ import {
 import { verifyId, verifyOne, verifyOneOrNone, verifyTruthy } from '../utility/utilityHelpers'
 import { WalletError } from '../sdk/WalletError'
 import { asArray } from '../utility/utilityHelpers.noBuffer'
+import { brc177NoSendExpiryStateRank, type Brc177ValidCreateActionArgs } from '../utility/brc177NoSendExpiry'
 import { TableActionBatch, TableActionBatchBlob, TableActionBatchOutput } from './schema/tables/TableActionBatch'
 import { classifyOutputUtxo, requireConclusiveUtxo } from '../services/classifyOutputUtxo'
 import { processNoSendExpiryLifecycle } from './methods/noSendExpiryLifecycle'
@@ -165,6 +168,16 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   readonly actionBatchMaxReservedOutputs: number
   readonly managedChangePolicy: ManagedChangePolicy
   readonly scriptVerifier?: SpendVerifierInterface
+
+  /**
+   * Safe lower bound for the proof audit. Built-in providers return the minimum
+   * height; custom providers conservatively review from zero when proofs exist.
+   * No insertion-order assumption or unbounded proof-blob scan is required.
+   */
+  async getProvenTxsReviewStartHeight(): Promise<number | undefined> {
+    const rows = await this.findProvenTxs({ partial: {}, paged: { limit: 1, offset: 0 } })
+    return rows.length === 0 ? undefined : 0
+  }
 
   static defaultOptions(): {
     feeModel: StorageFeeModel
@@ -800,6 +813,12 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
         if (tx.noSendExpiryState != null && auth.isActive !== true) {
           throw new WERR_NOT_ACTIVE('BRC-177 requires the active storage provider')
         }
+        if (
+          tx.noSendExpiryMode === 'never' &&
+          brc177NoSendExpiryStateRank(tx.noSendExpiryState) >= brc177NoSendExpiryStateRank('signed')
+        ) {
+          throw new WERR_INVALID_OPERATION('A released BRC-177 never action is permanently sent and cannot be aborted')
+        }
         if (tx.noSendExpiryState === 'signed') {
           // A released BRC-177 transaction must never be invalidated locally: the
           // recipient may be broadcasting it at this instant. Make it due and let
@@ -936,6 +955,14 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async internalizeAction(auth: AuthId, args: InternalizeActionArgs): Promise<StorageInternalizeActionResult> {
     return await internalizeAction(this, auth, args)
+  }
+
+  /** Explicit local profile; ordinary provider and remote methods are unchanged. */
+  async internalizeBrc197Action(
+    auth: AuthId,
+    args: Brc197InternalizeActionArgs
+  ): Promise<StorageInternalizeActionResult> {
+    return await internalizeBrc197Action(this, auth, args)
   }
 
   /**
@@ -1185,6 +1212,10 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
 
   async createAction(auth: AuthId, args: ValidCreateActionArgs): Promise<StorageCreateActionResult> {
     if (auth.userId == null) throw new WERR_UNAUTHORIZED()
+    // BRC-177 actions are created only through prepareNoSendExpiry and activateNoSendExpiry.
+    if ((args as Brc177ValidCreateActionArgs).brc177 != null) {
+      throw new WERR_INVALID_PARAMETER('args', 'without BRC-177 metadata')
+    }
     if (this.supportsActionBatchPersistence() && this.requiresActionBatchCleanupBeforeCreateAction()) {
       await cleanupExpiredActionBatches(this)
     }
@@ -1352,6 +1383,7 @@ export abstract class StorageProvider extends StorageReaderWriter implements Wal
   }
 
   async relinquishCertificate(auth: AuthId, args: RelinquishCertificateArgs): Promise<number> {
+    // Validate an existing reference, including historical types; acquisition remains strict.
     const vargs = validateRelinquishCertificateArgs(args)
     const cert = verifyOne(
       await this.findCertificates({

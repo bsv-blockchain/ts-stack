@@ -132,6 +132,12 @@ export class QRSessionManager {
     if (session) session.mobileIdentityKey = key
   }
 
+  /** Record the backend identity key embedded in this session's QR. */
+  setBackendIdentityKey(id: string, key: string): void {
+    const session = this.sessions.get(id)
+    if (session) session.backendIdentityKey = key
+  }
+
   /** Remove a partially created or explicitly retired session immediately. */
   deleteSession(id: string): void {
     if (this.sessions.delete(id)) this.onExpired?.(id)

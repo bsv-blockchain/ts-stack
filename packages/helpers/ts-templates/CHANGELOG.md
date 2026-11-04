@@ -10,6 +10,85 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+### 2.2.0 candidate
+
+Builds on 2.1.1 and includes it: the SDK4 peer floor stays `^4.0.1` alongside the
+unchanged SDK2/3 alternatives. Additive only; no wire or data migration.
+
+### Added
+
+- `readOneColorAttributes`, the BRC-162 1Color attribute reader. It classifies
+  a payload as `'absent'`, `'empty'`, `'opaque'` or a strict DAG-CBOR `'map'`
+  and reports `dec`, `sym`, `icon`, `req` and `ext` as absent, valid or
+  malformed. It is pure and never throws; nothing is recovered from an opaque
+  payload. `reqBytes` is the exact wire span of a valid `req`.
+  `OneColorAttributes`, `OneColorField` and `OneColorProfileDescriptor` name
+  its types.
+- `reqMatchesDeploy`, which compares a later output's `req` with the deploy's
+  canonical DAG-CBOR bytes (an absent deploy `req` is the empty map `a0`) and
+  fails closed on a malformed `req`.
+- `isProfileId`, which checks BRC-162 processing-profile identifiers.
+- `needsEmptyPayloadMarker`, which reports whether a remainder starts with
+  `<push> OP_DROP`.
+- `OneColor.lockRemainder`, which writes the 1Color prefix in front of any
+  locking script, with an explicit `OP_0 OP_DROP` when no payload is given and
+  the remainder starts with `<push> OP_DROP`.
+- `oneColorTokenIdFromString` and `oneColorTokenIdToString`, the preferred
+  36-byte-aware token-id helpers. `tokenIdFromString` and `tokenIdToString`
+  remain 32-byte only.
+- `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
+
+### Fixed
+
+- `decodeStrictCbor` walks a chain of tag heads without recursion, so a long
+  chain of tag-42 heads fails with `StrictCborError` (`invalid CID`) instead of
+  exhausting the call stack; every message is the one the recursive reading
+  gave. `tryDecodeStrictCbor` therefore returns `undefined` for it.
+- `OneColor.lockRemainder` refuses a remainder that contains a truncated push,
+  which `OneColor.decode` would refuse.
+
+### 2.1.1 candidate
+
+- Prepare `2.1.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+
+### Added
+
+- `OneColor`, the BRC-162 1Color template: the same prefix rules as
+  `Bsv21Binary`, plus 36-byte token ids (txid ‖ little-endian vout) for assets
+  first deployed under BRC-161 at a nonzero output. A 36-byte id with vout 0 is
+  rejected. `OneColor.tokenIdFromString` and `OneColor.tokenIdToString` convert
+  `<txid>_<vout>` ids. `OneColorError`, `OneColorDecoded` and `OneColorRole`
+  name the shared error class and types.
+- `Bsv21Binary` is unchanged; `src/Bsv21Binary.ts` exports the prefix helpers
+  `OneColor` reuses (`payloadChunk`, `splitPayload`, `p2pkhHash`, `roleOf`).
+- `Bsv21Token.envelope` locates a BRC-160 `ord` envelope anywhere in a script
+  and returns its fields, content type, body and the remaining locking script
+  (`Bsv21Envelope`). `Bsv21TokenDecoded` gains `op`, `payload` and
+  `lockingScript`.
+
+### Fixed
+
+- `Bsv21Token.decode` reads the envelope per BRC-160 wherever it sits:
+  `<locking script> <envelope>`, `<envelope> <locking script>` and
+  `<envelope> OP_CODESEPARATOR <locking script>`; a field may repeat (the last
+  value wins) and single-byte `0x00`/`0x01` pushes alias `OP_0`/`OP_1` tags.
+  The spend condition may be any script: `ownerHash160` is empty, rather than
+  an error, when it is not P2PKH. `auth` and `deploy+auth` outputs, which carry
+  no `amt`, decode with `amt` `'0'`.
+- `decodeStrictCbor` and `encodeStrictCbor` implement full strict DAG-CBOR, as
+  BRC-162 requires payloads to be read: negative integers, arrays, finite 64-bit
+  floats and tag 42 links (`StrictCborLink`) are accepted, so the `icon`
+  `[text, bytes]` array and `req` parameter values decode. The Mandala subset
+  rejected them with `major type N not allowed` / `simple value or float not
+allowed`. New messages: `float must be 64-bit`, `non-finite float`, `simple
+value not allowed`, `only tag 42 is allowed`, `invalid CID`, `input bytes
+outside 0..255`. The 4096-byte ceiling (`STRICT_CBOR_MAX_BYTES`) and the
+  depth-4 cap are gone: the spec sets neither; `STRICT_CBOR_MAX_DEPTH` (1024)
+  remains as an anti-DoS bound on nesting. `test/vectors/brc162.json` is
+  regenerated.
+
+- The pending 2.0.1 dependency-manifest correction is included in this 2.1.0 candidate; retain the migration requirements above.
+
 ### 2.0.0 candidate — BRC-162 (breaking)
 
 ### Removed

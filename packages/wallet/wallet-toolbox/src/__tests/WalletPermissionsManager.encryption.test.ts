@@ -1,5 +1,5 @@
 import { mockUnderlyingWallet, MockedBSV_SDK, MockTransaction } from './WalletPermissionsManager.fixtures'
-import { WalletPermissionsManager } from '../WalletPermissionsManager'
+import { maybeDecryptMetadata, WalletPermissionsManager } from '../WalletPermissionsManager'
 import { jest } from '@jest/globals'
 import { Utils } from '@bsv/sdk'
 
@@ -96,6 +96,22 @@ describe('WalletPermissionsManager - Metadata Encryption & Decryption', () => {
 
       // The manager should return the original ciphertext if decryption throws
       expect(result).toBe(ciphertext)
+    })
+
+    it('lets a permission module decrypt metadata through the underlying wallet with the same scheme', async () => {
+      underlying.decrypt.mockResolvedValueOnce({ plaintext: [72, 105] })
+      const ciphertext = Utils.toBase64(Utils.toArray('module-basket-metadata'))
+
+      await expect(maybeDecryptMetadata(underlying, ciphertext, 'module.example')).resolves.toBe('Hi')
+      expect(underlying.decrypt).toHaveBeenCalledWith(
+        { ciphertext: expect.any(Array), protocolID: [2, 'admin metadata encryption'], keyID: '1' },
+        'module.example'
+      )
+
+      underlying.decrypt.mockImplementationOnce(() => {
+        throw new Error('Decryption error')
+      })
+      await expect(maybeDecryptMetadata(underlying, '{"plaintext":true}')).resolves.toBe('{"plaintext":true}')
     })
   })
 

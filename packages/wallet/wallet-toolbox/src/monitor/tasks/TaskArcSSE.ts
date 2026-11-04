@@ -5,7 +5,7 @@ import { ArcSSEClient, ArcSSEEvent } from '../../services/providers/ArcSSEClient
 import { Monitor } from '../Monitor'
 import { WalletMonitorTask } from './WalletMonitorTask'
 import { Services } from '../../services/Services'
-import { quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
+import { failPendingDescendants, quarantineReqInputs } from '../../storage/methods/reconcileFailedTransactionInputs'
 import { classifyArcadeRejection, type ArcadeRejectionClassification } from '../../services/providers/arcadeStatus'
 import { safeDiagnostic } from '../../services/chaintracker/chaintracks/util/safeDiagnostic'
 import { getCanonicalMerklePath } from '../../services/getCanonicalMerklePath'
@@ -273,6 +273,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
     classification: ArcadeRejectionClassification
   ): Promise<string> {
     let quarantined = { checked: 0, staleConfirmed: 0, staleOutpoints: [] as string[] }
+    let descendants: string[] = []
     await this.storage.runAsStorageProvider(async sp => {
       await sp.transaction(async trx => {
         req.status = classification.reqStatus
@@ -286,7 +287,7 @@ export class TaskArcadeSSE extends WalletMonitorTask {
         const ids = req.notify.transactionIds
         if (ids != null) await sp.updateTransactionsStatus(ids, 'failed', trx)
         if (classification.inputConflict) {
-          quarantined = await quarantineReqInputs(req, sp, trx)
+          quarantined = await quarantineReqInputs(req, sp, trx, undefined, { extraInfo: note.extraInfo })
           req.addHistoryNote({
             when: new Date().toISOString(),
             what: 'arcSSEInputQuarantine',
@@ -296,9 +297,14 @@ export class TaskArcadeSSE extends WalletMonitorTask {
           })
           await req.updateStorageDynamicProperties(sp, trx)
         }
+        descendants = await failPendingDescendants([req.txid], sp, trx)
       })
     })
-    return `  req ${req.id} => ${classification.reqStatus}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n`
+    for (const txid of descendants) this.monitor.callOnTransactionStatusChanged(txid, 'REJECTED')
+    return (
+      `  req ${req.id} => ${classification.reqStatus}; quarantined ${quarantined.staleConfirmed} local input copy/copies\n` +
+      (descendants.length > 0 ? `  failed ${descendants.length} pending descendant(s): ${descendants.join(',')}\n` : '')
+    )
   }
 
   /**

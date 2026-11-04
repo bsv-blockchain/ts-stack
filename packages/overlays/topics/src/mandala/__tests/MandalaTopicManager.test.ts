@@ -490,7 +490,7 @@ describe('MandalaTopicManager — Review Focus pins', () => {
     })
   })
 
-  // RF2: CBOR another decoder accepts carries no Mandala attributes.
+  // RF2: CBOR that is not strict DAG-CBOR carries no Mandala attributes.
   test('RF2: refuses a deploy whose payload carries a float as ERR_SHAPE', async () => {
     // {dec: 1.0 (float16), sym: "USD"}, keys in strict order
     const payload = [
@@ -508,8 +508,7 @@ describe('MandalaTopicManager — Review Focus pins', () => {
     const d = await deploy(issuer, ISSUER, payload)
     expect(await rejection(submit(d))).toMatchObject({
       code: 'ERR_SHAPE',
-      reason:
-        'output 0: deploy payload is not a valid Mandala deploy map (simple value or float not allowed)'
+      reason: 'output 0: deploy payload is not a valid Mandala deploy map (float must be 64-bit)'
     })
   })
 
@@ -529,7 +528,7 @@ describe('MandalaTopicManager — Review Focus pins', () => {
     const issueTx = await issue(tokenOf(d), { tx: d.tx, vout: 0 }, 100n, tagged)
     expect(await rejection(submit(issueTx))).toMatchObject({
       code: 'ERR_SHAPE',
-      reason: 'output 1: admin details violate the schema (major type 6 not allowed)'
+      reason: 'output 1: admin details violate the schema (invalid CID)'
     })
   })
 

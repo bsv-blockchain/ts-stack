@@ -161,7 +161,7 @@ if (process.argv.includes('--bootstrap-probe')) {
       await probe(service, environment)
   }
 } else {
-  test('all seven telemetry bootstraps preserve quiet defaults, explicit console mode, OTLP precedence and application shutdown', () => {
+  test('all eight telemetry bootstraps preserve quiet defaults, explicit console mode, OTLP precedence and application shutdown', () => {
     assert.doesNotThrow(() =>
       execFileSync(
         process.execPath,

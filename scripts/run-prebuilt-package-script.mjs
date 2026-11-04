@@ -19,22 +19,46 @@ export function stripLeadingBuildCommand(script) {
   return script
 }
 
+// A Jest shard is appended to the shell command, so accept only k/n with 1 <= k <= n.
+export function parseJestShard(value) {
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(value ?? '')
+  if (!match || Number(match[1]) > Number(match[2]))
+    throw new Error(`--jest-shard must be k/n with 1 <= k <= n: ${value}`)
+  return `${match[1]}/${match[2]}`
+}
+
 export function parseArguments(arguments_) {
   let scriptName = ''
+  let ifPresent = false
+  let jestShard
   for (let index = 0; index < arguments_.length; index += 1) {
     const argument = arguments_[index]
+    if (argument === '--if-present') {
+      ifPresent = true
+      continue
+    }
+    if (argument === '--jest-shard') {
+      jestShard = parseJestShard(arguments_[index + 1])
+      index += 1
+      continue
+    }
     if (argument !== '--script') throw new Error(`Unknown argument: ${argument}`)
     scriptName = arguments_[index + 1] ?? ''
     index += 1
   }
   if (scriptName === '') throw new Error('--script is required')
-  return { scriptName }
+  return { scriptName, ifPresent, jestShard }
 }
 
-export async function resolvePackageScript(packageDirectory, scriptName) {
+export async function resolvePackageScript(
+  packageDirectory,
+  scriptName,
+  { ifPresent = false } = {}
+) {
   const manifestPath = path.join(packageDirectory, 'package.json')
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   const script = manifest.scripts?.[scriptName]
+  if (ifPresent && script === undefined) return undefined
   if (typeof script !== 'string' || script === '') {
     throw new Error(`${manifest.name ?? manifestPath} does not define ${scriptName}`)
   }
@@ -71,11 +95,14 @@ async function main(arguments_) {
       'PREBUILT_PACKAGE_OUTPUTS=1 is required; use the package script directly outside audited CI'
     )
   }
-  const { scriptName } = parseArguments(arguments_)
+  const { scriptName, ifPresent, jestShard } = parseArguments(arguments_)
   const packageDirectory = process.cwd()
-  const resolved = await resolvePackageScript(packageDirectory, scriptName)
-  console.log(`Running prebuilt ${resolved.name} ${scriptName}: ${resolved.command}`)
-  await runCommand(resolved.command, packageDirectory)
+  const resolved = await resolvePackageScript(packageDirectory, scriptName, { ifPresent })
+  if (resolved === undefined) return
+  const command =
+    jestShard === undefined ? resolved.command : `${resolved.command} --shard=${jestShard}`
+  console.log(`Running prebuilt ${resolved.name} ${scriptName}: ${command}`)
+  await runCommand(command, packageDirectory)
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

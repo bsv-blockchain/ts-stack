@@ -26,6 +26,10 @@ through the release workflow after approval):
 
 - Local commands and results:
 - Hosted CI run:
+- Compatibility evidence (published client/wallet versions, both old/new
+  directions, transports, legacy wire fixtures, and unchanged validation):
+- [ ] Established compatibility contracts and the BRC-100 application-wallet
+      boundary remain compatible, including across major versions
 - Conformance evidence:
 - Coverage delta:
 - Lint/typecheck delta:

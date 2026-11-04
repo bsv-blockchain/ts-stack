@@ -67,10 +67,10 @@ requires:
 - the independently locked TypeScript 5.9.3 codegen boundary; and
 - repository-wide fan-out when the toolchain policy or checker changes.
 
-The current governed inventory is 48 native compiler profiles plus one isolated
+The current governed inventory is 49 native compiler profiles plus one isolated
 codegen API profile. It also discovers all 130 tracked `tsconfig` files, resolves
 their complete `extends` chains, rejects missing or circular configurations,
-and requires every project to use one of nine approved runtime profiles. Seven
+and requires every project to use one of nine approved runtime profiles. Eight
 deployable services have self-contained `tsconfig` files because their npm and
 Docker build contexts intentionally contain only the service directory. The
 governance mapping assigns those configs to `node-service.json`, requires every
@@ -128,7 +128,7 @@ browser, mobile, infrastructure, CodeQL, audit, and documentation gates pass.
 Do not add a peer override, invoke the compatibility `tsc6` from a build script,
 or suppress a TypeScript 7 diagnostic.
 
-Routine TypeScript 7 patch and minor updates may flow through the monthly
+Routine TypeScript 7 patch and minor updates may flow through the grouped
 dependency process. Future compiler majors remain coordinated migrations.
 Review the compatibility boundary at least monthly and when TypeScript 7.1 or a
 later stable API becomes available. Remove `@typescript/typescript6` only after

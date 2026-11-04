@@ -8,7 +8,8 @@ export default {
 
   // Ignore compiled output
   testPathIgnorePatterns: ['dist/', String.raw`\.man\.test\.ts$`],
-  modulePathIgnorePatterns: ['<rootDir>/dist'],
+  // A mutation sandbox is itself a test root; ignore generated children only.
+  modulePathIgnorePatterns: ['<rootDir>/dist', String.raw`<rootDir>/\.stryker-tmp/`],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/__test/**',
@@ -30,6 +31,9 @@ export default {
         useESM: true,
         diagnostics: false,
         tsconfig: {
+          // Type errors are not reported here (diagnostics: false), so compile
+          // each file on its own instead of building a whole program per file.
+          isolatedModules: true,
           // Explicitly enable ES2020 to support BigInt literals
           target: 'ES2020',
           module: 'ESNext',

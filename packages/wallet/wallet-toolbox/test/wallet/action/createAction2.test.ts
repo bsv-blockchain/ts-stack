@@ -144,6 +144,55 @@ describe('createAction2 nosend transactions', () => {
     }
   })
 
+  test('prices a provided hex unlocking script at its byte length', async () => {
+    for (const { wallet } of ctxs) {
+      wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]
+      const fundingResult = await wallet.createAction({
+        outputs: [
+          {
+            satoshis: 100,
+            lockingScript: '7551',
+            basket: 'local contract outputs',
+            outputDescription: 'output spent by a large provided unlock'
+          }
+        ],
+        description: 'Stage output for a large provided unlock',
+        options: { noSend: true, randomizeOutputs: false }
+      })
+      // One OP_PUSHDATA2 of 36,398 bytes: a 36,401 byte unlocking script, 72,802 hex characters.
+      const pushed = 36398
+      const unlockingScript = `4d${pushed.toString(16).padStart(4, '0').match(/../g)!.reverse().join('')}${'ab'.repeat(pushed)}`
+      const spendingResult = await wallet.createAction({
+        inputs: [
+          {
+            outpoint: `${fundingResult.txid}.0`,
+            unlockingScript,
+            inputDescription: 'spend with a large provided unlock'
+          }
+        ],
+        outputs: [
+          {
+            satoshis: 50,
+            lockingScript: '76a914fedcba9876543210fedcba9876543210fedcba88ac',
+            outputDescription: 'payment output'
+          }
+        ],
+        description: 'Spend with a large provided unlock',
+        options: { noSend: true, randomizeOutputs: false, noSendChange: [] }
+      })
+
+      const tx = Transaction.fromAtomicBEEF(spendingResult.tx!)
+      expect(tx.inputs[0].unlockingScript!.toHex()).toBe(unlockingScript)
+      const inputSatoshis = tx.inputs.reduce(
+        (sum, input) => sum + input.sourceTransaction!.outputs[input.sourceOutputIndex].satoshis!,
+        0
+      )
+      const outputSatoshis = tx.outputs.reduce((sum, output) => sum + output.satoshis!, 0)
+      // The test storage charges 1 sat/kB on the size it computed for the plan.
+      expect(inputSatoshis - outputSatoshis).toBe(Math.ceil(tx.toBinary().length / 1000))
+    }
+  })
+
   test('2_transaction with multiple outputs checked using toLogString', async () => {
     for (const { wallet } of ctxs) {
       wallet.randomVals = [0.1, 0.2, 0.3, 0.7, 0.8, 0.9]

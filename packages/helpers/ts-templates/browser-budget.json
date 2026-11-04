@@ -8,12 +8,15 @@
     "Bsv21Token",
     "DstasToken",
     "MultiPushDrop",
+    "OneColor",
     "OpReturn",
     "P2MSKH",
     "R1K1Wallet",
     "StasToken",
     "decodeStrictCbor",
-    "encodeStrictCbor"
+    "encodeStrictCbor",
+    "oneColorTokenIdFromString",
+    "readOneColorAttributes"
   ],
   "prohibitedExports": [],
   "maximumBytes": {

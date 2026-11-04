@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "profile": "browser",
+  "package": "@bsv/output-knowledge",
+  "entry": "./operations/protected",
+  "requiredExports": [
+    "ProtectedOperationStateStore",
+    "WalletProtectedOperationPayload",
+    "protectedOperationBinding",
+    "PROTECTED_OPERATION_INITIAL"
+  ],
+  "prohibitedExports": [
+    "SQLiteOperationStateStore",
+    "SQLiteJournal",
+    "BitcoinKnowledge",
+    "OutputKnowledge",
+    "NodeProtectedPayloadCodec"
+  ],
+  "maximumBytes": {
+    "vite": {
+      "raw": 165000,
+      "gzip": 54000,
+      "brotli": 46000
+    },
+    "esbuild": {
+      "raw": 145000,
+      "gzip": 54000,
+      "brotli": 47000
+    }
+  }
+}

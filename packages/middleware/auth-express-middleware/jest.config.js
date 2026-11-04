@@ -2,8 +2,14 @@
 export default {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  testPathIgnorePatterns: ['dist/'],
-  modulePathIgnorePatterns: ['<rootDir>/dist/'], // Add this to ignore dist/ for module mapping
+  testPathIgnorePatterns: [
+    '<rootDir>/dist/',
+    '<rootDir>/node_modules/',
+    String.raw`<rootDir>/\.stryker-tmp/`
+  ],
+  // Ignore generated children, including interrupted mutation runs. The active
+  // Stryker sandbox is itself a root and must still discover all authored tests.
+  modulePathIgnorePatterns: ['<rootDir>/dist/', String.raw`<rootDir>/\.stryker-tmp/`],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1'
   },

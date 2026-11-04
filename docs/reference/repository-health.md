@@ -86,7 +86,7 @@ only from authoritative evidence and retain the evidence URL.
 The lint record retains the original 846-warning baseline while ratcheting the
 current authored-code result to zero across 1,909 files. The TypeScript checker
 currently tracks all 127 governed configurations and their effective strict options,
-including seven self-contained deployable-service contexts. `pnpm lint` and
+including eight self-contained deployable-service contexts. `pnpm lint` and
 `pnpm typescript:check` are executable zero-debt gates; the historical counts
 are evidence, not allowances.
 

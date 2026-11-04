@@ -69,6 +69,8 @@ import {
   WalletClient,
   WalletWireProcessor,
   WalletWireTransceiver,
+  type ListOutputsArgs,
+  type WalletInterface,
   type ListActionsResult,
   type ListActionsArgs
 } from '@bsv/sdk'
@@ -769,6 +771,33 @@ async function dispatchListOutputs(
   input: Record<string, unknown>,
   expected: Record<string, unknown>
 ): Promise<void> {
+  if (typeof input.wireRequestHex === 'string' && typeof input.wireResponseHex === 'string') {
+    const request = Array.from(Buffer.from(input.wireRequestHex, 'hex'))
+    const response = Array.from(Buffer.from(input.wireResponseHex, 'hex'))
+    const caller = new WalletWireTransceiver({
+      transmitToWallet: actual => {
+        expect(actual).toEqual(request)
+        return Promise.resolve(response)
+      }
+    })
+    const result = await caller.listOutputs(
+      input.args as ListOutputsArgs,
+      getString(input, 'originator')
+    )
+    expect({
+      ...result,
+      ...(result.BEEF === undefined ? {} : { BEEF: Array.from(result.BEEF) })
+    }).toEqual(expected)
+    const processor = new WalletWireProcessor({
+      listOutputs: (args: ListOutputsArgs, originator?: string) => {
+        expect(args).toEqual(input.args)
+        expect(originator).toBe(input.originator)
+        return Promise.resolve(expected)
+      }
+    } as unknown as WalletInterface)
+    await expect(processor.transmitToWallet(request)).resolves.toEqual(response)
+    return
+  }
   const rootHex =
     getString(input, 'root_key') ||
     '0000000000000000000000000000000000000000000000000000000000000001'

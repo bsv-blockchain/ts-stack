@@ -6,7 +6,7 @@ import Curve from './Curve.js'
 import { sign, verify } from './ECDSA.js'
 import { sha256, sha256hmac, sha512hmac } from './Hash.js'
 import Random from './Random.js'
-import { fromBase58Check, toArray, toBase58Check } from './utils.js'
+import { fromBase58Check, toArray, toBase58Check, toHex } from './utils.js'
 import Polynomial, { MAX_SHAMIR_SHARES, PointInFiniteField } from './Polynomial.js'
 
 const MAX_BACKUP_SHARE_LENGTH = 256
@@ -127,6 +127,24 @@ export class KeyShares {
  * @extends {BigNumber}
  * @see {@link BigNumber} for more information on BigNumber.
  */
+// Public key per PrivateKey instance, with a SHA-256 fingerprint of the scalar
+// it was derived from, so the cache never holds a copy of the secret. A
+// WeakMap keeps it off the BigNumber instance and frees it with the key.
+// x and y are null when mulCT returned the point at infinity for this scalar.
+const PUBLIC_KEY_CACHE = new WeakMap<
+  PrivateKey,
+  { fingerprint: string, x: BigNumber | null, y: BigNumber | null }
+>()
+
+// Every bit of the value: its magnitude at full width (never fewer than 32
+// bytes, so normal keys hash a fixed-length input) and its sign, which
+// toArray drops but mulCT honours.
+const scalarFingerprint = (key: PrivateKey): string => {
+  const bytes = key.toArray('be', Math.max(32, key.byteLength()))
+  bytes.push(key.isNeg() ? 1 : 0)
+  return toHex(sha256(bytes))
+}
+
 export default class PrivateKey extends BigNumber {
   /**
    * Generates a private key randomly.
@@ -305,9 +323,14 @@ export default class PrivateKey extends BigNumber {
    * const publicKey = privateKey.toPublicKey();
    */
   toPublicKey(): PublicKey {
-    const c = new Curve()
-    const p = c.g.mulCT(this)
-    return new PublicKey(p.x, p.y)
+    const fingerprint = scalarFingerprint(this)
+    let cached = PUBLIC_KEY_CACHE.get(this)
+    if (cached?.fingerprint !== fingerprint) {
+      const p = new Curve().g.mulCT(this)
+      cached = { fingerprint, x: p.x, y: p.y }
+      PUBLIC_KEY_CACHE.set(this, cached)
+    }
+    return new PublicKey(cached.x?.clone() ?? null, cached.y?.clone() ?? null)
   }
 
   /**

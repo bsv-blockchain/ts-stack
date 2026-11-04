@@ -2,11 +2,13 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
 import {
   concretePublicEntrypoints,
   nodeModeDefaultImports,
+  resolutionProbe,
   typeProblemsForModes,
   validateManifestArtifactContract,
   validatePackedFiles,
@@ -282,4 +284,36 @@ test('CommonJS interop policy ignores Babel-style interop and named-only reads',
     '_bsv_sdk_primitives_Hash.defaultish;'
   ].join('\n')
   assert.deepEqual(nodeModeDefaultImports(source), [])
+})
+
+test('one resolution probe checks every entrypoint and names each failure', async () => {
+  const consumer = await fs.mkdtemp(path.join(os.tmpdir(), 'resolution-probe-'))
+  try {
+    const packageRoot = path.join(consumer, 'node_modules', '@bsv', 'example')
+    await fs.mkdir(path.join(packageRoot, 'dist'), { recursive: true })
+    await fs.writeFile(
+      path.join(packageRoot, 'package.json'),
+      JSON.stringify({
+        name: '@bsv/example',
+        exports: { '.': './dist/index.js', './a': './dist/a.js' }
+      })
+    )
+    await fs.writeFile(path.join(packageRoot, 'dist', 'index.js'), 'module.exports = 1\n')
+    await fs.writeFile(path.join(packageRoot, 'dist', 'a.js'), 'module.exports = 2\n')
+    const probe = specifiers =>
+      spawnSync(
+        process.execPath,
+        ['--eval', resolutionProbe('specifier => require.resolve(specifier)', specifiers)],
+        { cwd: consumer, encoding: 'utf8' }
+      )
+
+    assert.equal(probe(['@bsv/example', '@bsv/example/a']).status, 0)
+    const failed = probe(['@bsv/example', '@bsv/example/missing', '@bsv/example/gone'])
+    assert.equal(failed.status, 1)
+    assert.match(failed.stderr, /^@bsv\/example\/missing: /m)
+    assert.match(failed.stderr, /^@bsv\/example\/gone: /m)
+    assert.doesNotMatch(failed.stderr, /^@bsv\/example: /m)
+  } finally {
+    await fs.rm(consumer, { recursive: true, force: true })
+  }
 })

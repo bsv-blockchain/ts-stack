@@ -3,6 +3,9 @@ import { mkdtempSync, rmSync, existsSync, mkdirSync, writeFileSync, readFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { startUiServer, runUi } from '../ui-server'
+import { run } from '../../cli'
+import { serializeSchema, PAGE_DRAFT_SRC } from '../ui-page'
+import * as pipeline from '../../pipeline'
 import type { UiServer } from '../ui-server'
 import type { RunCommand } from '../../scaffold/base-scaffolder'
 import type { ProjectManifest } from '../../config/project-manifest'
@@ -135,6 +138,103 @@ test('GET / in new mode includes "Always included" banner', async () => {
   }
 })
 
+type Draft = Record<string, unknown>
+
+function pageGlobal(html: string, name: string): Draft {
+  const json = new RegExp(`window\\.${name} = (.*);`, 'u').exec(html)?.[1]
+  if (json === undefined) throw new Error(`${name} missing from page`)
+  return JSON.parse(json) as Draft
+}
+
+function pageSeed(html: string): Draft {
+  return pageGlobal(html, '__SEED__')
+}
+
+const { modeDrafts, payloadOf } = new Function(`${PAGE_DRAFT_SRC}
+return { modeDrafts, payloadOf }`)() as {
+  modeDrafts: (
+    schema: unknown,
+    seed: Draft,
+    modeSeeds: Record<string, Draft>
+  ) => Record<string, Draft>
+  payloadOf: (schema: unknown, draft: Draft, modeSeeds: Record<string, Draft>, seed: Draft) => Draft
+}
+
+/** What the shipped page posts after the user picks `edit.mode` (if any) and applies `edit`. */
+function pagePayload(html: string, edit: Draft = {}): Draft {
+  const schema = pageGlobal(html, '__SCHEMA__')
+  const seed = pageSeed(html)
+  const seeds = pageGlobal(html, '__MODE_SEEDS__') as Record<string, Draft>
+  const draft = { ...modeDrafts(schema, seed, seeds)[String(edit.mode ?? seed.mode)], ...edit }
+  return payloadOf(schema, draft, seeds, seed)
+}
+
+test('GET / in new mode seeds every offerable capability as selected', async () => {
+  const srv = await startUiServer({ existing: null, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    const offerable =
+      serializeSchema(null)
+        .flatMap(s => s.fields)
+        .find(f => f.key === 'capabilities')
+        ?.options?.map(o => o.value) ?? []
+    expect(offerable.length).toBeGreaterThan(0)
+    expect(seed.capabilities).toEqual(expect.arrayContaining([...offerable, 'wallet-connect']))
+  } finally {
+    srv.close()
+  }
+})
+
+test('GET / in add mode seeds only the manifest capabilities', async () => {
+  const existing: ProjectManifest = {
+    version: 1,
+    name: 'demo',
+    network: 'test',
+    stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+    bsvDir: 'src/bsv',
+    capabilities: ['wallet-login']
+  }
+  const srv = await startUiServer({ existing, targetDir: dir, deps: { runCommand: noopRun } })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    expect(seed.capabilities).toEqual(['wallet-login'])
+  } finally {
+    srv.close()
+  }
+})
+
+test('--ui flags seed the page and flag-only values (bsvDir) reach the generated config', async () => {
+  const target = join(dir, 'app')
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: target,
+    flags: { name: 'flagged', network: 'main', bsvDir: 'lib/bsv' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const seed = pageSeed(await (await fetch(srv.url)).text())
+    expect(seed).toMatchObject({ name: 'flagged', network: 'main', bsvDir: 'lib/bsv' })
+    expect(seed.capabilities).toEqual(expect.arrayContaining(['wallet-connect', 'wallet-login']))
+    // the page submits only visible schema fields; the server re-applies --bsv-dir
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify({
+        mode: 'new',
+        name: 'flagged',
+        frontend: 'react',
+        capabilities: ['wallet-connect']
+      })
+    })
+    expect(res.status).toBe(200)
+    expect((await res.json()).written).toContain('lib/bsv/auth.ts')
+    const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest.bsvDir).toBe('lib/bsv')
+  } finally {
+    srv.close()
+  }
+})
+
 test('POST /generate (valid new draft) scaffolds, resolves done, and 200s', async () => {
   const calls: string[][] = []
   const fake: RunCommand = (command, args) => {
@@ -222,7 +322,9 @@ test('POST /generate (invalid: new with no targets) returns 400 and stays up', a
     })
     expect(res.status).toBe(400)
     const data = await res.json()
-    expect(data).toEqual({ error: 'Invalid project configuration.' })
+    expect(data).toEqual({
+      error: 'Invalid config: a new project needs at least a frontend or a backend'
+    })
     expect((await fetch(srvUrl)).status).toBe(200)
   } finally {
     srv.close()
@@ -406,5 +508,256 @@ test('POST /generate add-mode does NOT overwrite existing capability files (forc
     expect(readFileSync(join(dir, 'src', 'bsv', 'auth.ts'), 'utf8')).toBe('// SENTINEL')
   } finally {
     srv.close()
+  }
+})
+
+const reactManifest: ProjectManifest = {
+  version: 1,
+  name: 'demo',
+  network: 'test',
+  stack: { frontend: { framework: 'react', variant: 'react-ts' } },
+  bsvDir: 'src/bsv',
+  capabilities: [],
+  targets: { client: '' }
+}
+
+test('add mode honours --skip-install, --no-glue and --package-manager although the page hides them', async () => {
+  const runCommand = jest.fn<RunCommand>()
+  const applySpy = jest.spyOn(pipeline, 'applyConfig')
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    flags: { install: false, glue: false, packageManager: 'pnpm' },
+    deps: { runCommand }
+  })
+  try {
+    const body = pagePayload(await (await fetch(srv.url)).text(), {
+      capabilities: ['wallet-login']
+    })
+    expect(body).toEqual({ mode: 'add', capabilities: ['wallet-login'] })
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify(body)
+    })
+    expect(res.status).toBe(200)
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(applySpy.mock.calls[0]?.[0]).toMatchObject({
+      mode: 'add',
+      install: false,
+      glue: false,
+      packageManager: 'pnpm'
+    })
+  } finally {
+    srv.close()
+    applySpy.mockRestore()
+  }
+})
+
+test('a visible field the user changed in the UI wins over its CLI flag', async () => {
+  const target = join(dir, 'app')
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: target,
+    flags: { name: 'flagged', network: 'main', install: false },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const body = pagePayload(await (await fetch(srv.url)).text(), {
+      name: 'edited',
+      network: 'ttn',
+      install: true
+    })
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify(body)
+    })
+    expect(res.status).toBe(200)
+    const result = await srv.done
+    expect(result.installed).toBe(true)
+    const manifest = JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8'))
+    expect(manifest).toMatchObject({ name: 'edited', network: 'ttn' })
+  } finally {
+    srv.close()
+  }
+})
+
+test('flipping an existing project to new mode does not carry its targets or bsvDir', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    // as with --mode new in the terminal, the name starts empty rather than from the manifest
+    expect(pagePayload(html, { mode: 'new' }).name).toBeUndefined()
+    const body = pagePayload(html, {
+      mode: 'new',
+      name: 'fresh',
+      backend: 'express',
+      capabilities: ['wallet-connect']
+    })
+    expect(body).not.toHaveProperty('targets')
+    expect(body).not.toHaveProperty('bsvDir')
+    const res = await fetch(`${srv.url}/plan`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify(body)
+    })
+    const paths = ((await res.json()).files as Array<{ path: string }>).map(f => f.path)
+    expect(paths).toContain('client/src/bsv/auth.ts')
+    expect(paths.filter(p => p.startsWith('src/'))).toEqual([])
+  } finally {
+    srv.close()
+  }
+})
+
+test('add mode without a detectable project reports the actual config error', async () => {
+  const runCommand = jest.fn<RunCommand>()
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: dir,
+    flags: { mode: 'add' },
+    deps: { runCommand }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(html).toContain('{"value":"add","label":"Add to existing"}')
+    const body = JSON.stringify(pagePayload(html))
+    const headers = await uiHeaders(srv.url)
+    const plan = await fetch(`${srv.url}/plan`, { method: 'POST', headers, body })
+    expect(await plan.json()).toEqual({ files: [], error: 'Invalid config: name is required' })
+    const gen = await fetch(`${srv.url}/generate`, { method: 'POST', headers, body })
+    expect(gen.status).toBe(400)
+    expect(await gen.json()).toEqual({ error: 'Invalid config: name is required' })
+    expect(runCommand).not.toHaveBeenCalled()
+  } finally {
+    srv.close()
+  }
+})
+
+test('flipping a project to New applies new-only CLI flags, as --mode new does', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    flags: { network: 'main' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const body = pagePayload(await (await fetch(srv.url)).text(), { mode: 'new' })
+    expect(body).toMatchObject({ mode: 'new', network: 'main' })
+  } finally {
+    srv.close()
+  }
+})
+
+test('new mode pre-ticks every offered capability even when a project exists', async () => {
+  const srv = await startUiServer({
+    existing: reactManifest,
+    targetDir: dir,
+    flags: { mode: 'new' },
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    const offered =
+      serializeSchema(null)
+        .flatMap(s => s.fields)
+        .find(f => f.key === 'capabilities')
+        ?.options?.map(o => o.value) ?? []
+    expect(offered.length).toBeGreaterThan(0)
+    const seeds = pageGlobal(html, '__MODE_SEEDS__') as Record<string, Draft>
+    expect(pageSeed(html).capabilities).toEqual(expect.arrayContaining(offered))
+    expect(seeds.new.capabilities).toEqual(expect.arrayContaining(offered))
+    expect(seeds.add.capabilities).toEqual([]) // add mode never pre-ticks
+  } finally {
+    srv.close()
+  }
+})
+
+test('the page gets the target directory for the copied command', async () => {
+  const srv = await startUiServer({
+    existing: null,
+    targetDir: '../proj',
+    deps: { runCommand: noopRun }
+  })
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(html).toContain('window.__TARGET_DIR__ = "../proj";')
+  } finally {
+    srv.close()
+  }
+})
+
+/** Starts the UI server the way `run` wires `--ui`, without opening a browser. */
+async function uiFromCli(argv: string[]): Promise<UiServer> {
+  let srv: UiServer | undefined
+  await run(argv, undefined, {
+    startUi: async o => {
+      srv = await startUiServer({ ...o, deps: { runCommand: noopRun } })
+      return {
+        targetDir: o.targetDir,
+        deps: { root: {}, client: {}, server: {} },
+        written: [],
+        skipped: []
+      }
+    }
+  })
+  if (srv === undefined) throw new Error('UI server not started')
+  return srv
+}
+
+test('--ui defaults the name to the target directory, as --yes does, so add mode works without a project', async () => {
+  const target = join(dir, 'my-app')
+  mkdirSync(target)
+  const srv = await uiFromCli(['--ui', '--dir', target])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(pagePayload(html).name).toBe('my-app')
+    const headers = await uiHeaders(srv.url)
+    const body = JSON.stringify(pagePayload(html, { mode: 'add', capabilities: ['wallet-login'] }))
+    const plan = await (await fetch(`${srv.url}/plan`, { method: 'POST', headers, body })).json()
+    expect(plan.error).toBeUndefined()
+    const gen = await fetch(`${srv.url}/generate`, { method: 'POST', headers, body })
+    expect(gen.status).toBe(200)
+    expect(JSON.parse(readFileSync(join(target, 'bsv-scaffold.json'), 'utf8')).name).toBe('my-app')
+  } finally {
+    srv.close()
+  }
+})
+
+test('--ui --name wins over the directory default', async () => {
+  const srv = await uiFromCli(['--ui', '--dir', dir, '--name', 'flagged'])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    expect(pagePayload(html).name).toBe('flagged')
+    expect(pagePayload(html, { mode: 'add' })).not.toHaveProperty('name')
+  } finally {
+    srv.close()
+  }
+})
+
+test('--ui on a manifest project keeps its name in add mode and uses the directory name in new mode', async () => {
+  const target = join(dir, 'fresh-dir')
+  mkdirSync(target)
+  writeFileSync(join(target, 'bsv-scaffold.json'), JSON.stringify(reactManifest), 'utf8')
+  const applySpy = jest.spyOn(pipeline, 'applyConfig')
+  const srv = await uiFromCli(['--ui', '--dir', target])
+  try {
+    const html = await (await fetch(srv.url)).text()
+    // matches --yes --mode new in this directory
+    expect(pagePayload(html, { mode: 'new' }).name).toBe('fresh-dir')
+    const res = await fetch(`${srv.url}/generate`, {
+      method: 'POST',
+      headers: await uiHeaders(srv.url),
+      body: JSON.stringify(pagePayload(html, { capabilities: ['wallet-login'] }))
+    })
+    expect(res.status).toBe(200)
+    expect(applySpy.mock.calls[0]?.[0]).toMatchObject({ mode: 'add', name: 'demo' })
+  } finally {
+    srv.close()
+    applySpy.mockRestore()
   }
 })

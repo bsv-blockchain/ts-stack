@@ -121,6 +121,7 @@ describe('Mongo admission storage', () => {
   test('enlisted indexes are visible at commit and external indexes stay pending', async () => {
     await harness.reset()
     const visible: string[] = []
+    const accessed: PropertyKey[] = []
     const enlisted: MongoEnlistedLookupIndex = {
       protocol: 'overlay-mongo-index-v1',
       target: 'ls_enlisted',
@@ -131,8 +132,16 @@ describe('Mongo admission storage', () => {
           .insertOne({ txid: plan.identity.txid, target: 'ls_enlisted' }, context.options())
       }
     }
+    // An unrelated host property must not be inspected by async iteration.
+    const guardedIndex = new Proxy(enlisted, {
+      get(target, key, receiver) {
+        accessed.push(key)
+        if (!Reflect.has(target, key)) throw new Error('Unexpected index property access')
+        return Reflect.get(target, key, receiver)
+      }
+    })
     const adapter = new MongoAdmissionStorage(fixture.db, fixture.scope, {
-      enlistedIndexes: [enlisted]
+      enlistedIndexes: [guardedIndex]
     })
     const plan = admissionPlan('enlisted-visible', 'e1'.repeat(32))
     plan.outbox = plan.outbox.filter(intent => intent.kind !== 'lookup')
@@ -166,6 +175,7 @@ describe('Mongo admission storage', () => {
       await fixture.db.collection('enlisted_index').findOne({ txid: plan.identity.txid })
     ).toEqual(expect.objectContaining({ target: 'ls_enlisted' }))
     expect(visible).toEqual([plan.identity.txid])
+    expect(accessed).not.toContain('then')
     await adapter.close()
   })
 

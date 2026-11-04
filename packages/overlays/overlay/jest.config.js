@@ -1,19 +1,8 @@
+import { createCoreOverlayTestProjects } from './jest-projects.config.mjs'
+
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
-  testEnvironment: 'node',
-  testPathIgnorePatterns: ['<rootDir>/dist/'],
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
-  moduleNameMapper: {
-    '^(\\.{1,2}/.*)\\.js$': '$1'
-  },
-  transform: {
-    '^.+\\.tsx?$': [
-      'ts-jest',
-      {
-        tsconfig: 'tsconfig.cjs.json'
-      }
-    ]
-  },
+  projects: createCoreOverlayTestProjects(undefined, { rootDir: import.meta.dirname }),
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.test.ts',

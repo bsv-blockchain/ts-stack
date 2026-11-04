@@ -77,7 +77,7 @@ describe('permission-managed createAction binary results', () => {
       )
       expect(underlying.createAction).toHaveBeenCalledTimes(1)
       expect(underlying.abortAction).not.toHaveBeenCalled()
-      expect(module.onResponse).toHaveBeenCalledTimes(transform ? 1 : 0)
+      expect(module.onResponse).toHaveBeenCalledTimes(transform ? (partial ? 1 : 2) : 0)
       expect(Object.getOwnPropertySymbols(received)).toEqual([])
       expect(Object.getOwnPropertySymbols(created)).toEqual(carrier === 'legacy' ? [exactActionSpendSymbol] : [])
       expect(getExactActionSpend(created)).toBe(1200)

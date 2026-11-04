@@ -130,17 +130,91 @@ export function requireProtocolId(value: unknown, context = 'protocolID'): Walle
   return [parsed[0] as 0 | 1 | 2, canonicalName]
 }
 
-export function isLoopbackHost(hostname: string): boolean {
-  const normalized = hostname.toLowerCase()
-  return (
-    normalized === 'localhost' ||
-    normalized === '127.0.0.1' ||
-    normalized === '[::1]' ||
-    normalized.endsWith('.localhost')
-  )
+const CANONICAL_IPV4 = /^(?:(?:0|[1-9]\d{0,2})\.){3}(?:0|[1-9]\d{0,2})$/u
+const UNIQUE_LOCAL_IPV6 = /^\[f[cd][0-9a-f]{2}:[0-9a-f:]*\]$/u
+
+/** Opt-in for plain `http:`/`ws:` on private-network IP addresses (development only). */
+export interface LocalNetworkHttpOptions {
+  /**
+   * Accept plain `http:`/`ws:` on private-network IP literals (10.0.0.0/8,
+   * 172.16.0.0/12, 192.168.0.0/16, IPv6 fc00::/7) for same-LAN development.
+   * Such origins are unauthenticated: an on-path attacker can rewrite the
+   * session lookup and relay URL. Never enable in production. Default: false.
+   */
+  allowLocalNetworkHttp?: boolean
 }
 
-export function normalizeHttpOrigin(value: unknown, context = 'origin'): string {
+/** Internal: transport policy plus whether a rejection may name `allowLocalNetworkHttp`. */
+interface TransportPolicy extends LocalNetworkHttpOptions {
+  /** Server/desktop errors only: append the `allowLocalNetworkHttp` hint. Default false. */
+  developerHint?: boolean
+}
+
+/** Reads an optional boolean option without coercion; `undefined` means false. */
+export function requireOptionalBoolean(value: unknown, context: string): boolean {
+  if (value === undefined) return false
+  if (typeof value !== 'boolean') invalid(context, 'a boolean')
+  return value
+}
+
+/**
+ * Classifies a WHATWG-parsed `URL.hostname` for plain-transport development:
+ * `'loopback'` for `localhost`, `*.localhost`, 127.0.0.0/8 and `[::1]`;
+ * `'local-network'` for 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 and IPv6
+ * fc00::/7; otherwise null. Integer/hex IPv4 forms are expected to be already
+ * canonical. Other names (including `*.local` and wildcard-DNS names) and
+ * IPv4-mapped IPv6 literals return null.
+ */
+export function developmentHostKind(hostname: string): 'loopback' | 'local-network' | null {
+  const host = hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '[::1]') return 'loopback'
+  if (UNIQUE_LOCAL_IPV6.test(host)) return 'local-network'
+  if (!CANONICAL_IPV4.test(host)) return null
+  const octets = host.split('.').map(Number)
+  if (octets.some(octet => octet > 255)) return null
+  const [a, b] = octets as [number, number]
+  if (a === 127) return 'loopback'
+  if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+    return 'local-network'
+  }
+  return null
+}
+
+/**
+ * Returns null when `url` may be used, otherwise the expectation for an error
+ * message (e.g. "HTTPS, except for loopback development"). The secure scheme
+ * is always allowed; its plain counterpart only on loopback, or on
+ * private-network IPs when `allowLocalNetworkHttp` is true. Pass
+ * `developerHint: true` only for server/desktop errors; the default text is
+ * shown to wallet users and does not suggest the `allowLocalNetworkHttp` option.
+ */
+export function plainTransportRejection(
+  url: URL,
+  secure: 'https:' | 'wss:',
+  allowLocalNetworkHttp: boolean,
+  developerHint = false
+): string | null {
+  if (url.protocol === secure) return null
+  const plain = secure === 'https:' ? 'http:' : 'ws:'
+  const kind = url.protocol === plain ? developmentHostKind(url.hostname) : null
+  if (kind === 'loopback' || (kind === 'local-network' && allowLocalNetworkHttp)) return null
+  const name = secure === 'https:' ? 'HTTPS' : 'WSS'
+  if (allowLocalNetworkHttp) return `${name}, except for loopback or local-network development`
+  if (kind === 'local-network' && developerHint) {
+    return `${name}, except for loopback development (set allowLocalNetworkHttp: true to allow private-network IP addresses in development)`
+  }
+  return `${name}, except for loopback development`
+}
+
+export function normalizeHttpOrigin(
+  value: unknown,
+  context = 'origin',
+  options: TransportPolicy = {}
+): string {
+  const allowLocalNetworkHttp = requireOptionalBoolean(
+    options.allowLocalNetworkHttp,
+    'allowLocalNetworkHttp'
+  )
   const encoded = requireBoundedString(value, context, 1, 2_048)
   let parsed: URL
   try {
@@ -157,16 +231,25 @@ export function normalizeHttpOrigin(value: unknown, context = 'origin'): string 
   ) {
     invalid(context, 'a canonical HTTP(S) origin')
   }
-  if (
-    parsed.protocol !== 'https:' &&
-    !(parsed.protocol === 'http:' && isLoopbackHost(parsed.hostname))
-  ) {
-    invalid(context, 'HTTPS, except for loopback development')
-  }
+  const rejection = plainTransportRejection(
+    parsed,
+    'https:',
+    allowLocalNetworkHttp,
+    options.developerHint === true
+  )
+  if (rejection !== null) invalid(context, rejection)
   return parsed.origin
 }
 
-export function normalizeRelayUrl(value: unknown, context = 'relay URL'): string {
+export function normalizeRelayUrl(
+  value: unknown,
+  context = 'relay URL',
+  options: TransportPolicy = {}
+): string {
+  const allowLocalNetworkHttp = requireOptionalBoolean(
+    options.allowLocalNetworkHttp,
+    'allowLocalNetworkHttp'
+  )
   const encoded = requireBoundedString(value, context, 1, 2_048)
   let parsed: URL
   try {
@@ -182,21 +265,25 @@ export function normalizeRelayUrl(value: unknown, context = 'relay URL'): string
   ) {
     invalid(context, 'a credential-free WebSocket base URL without query or fragment')
   }
-  if (
-    parsed.protocol !== 'wss:' &&
-    !(parsed.protocol === 'ws:' && isLoopbackHost(parsed.hostname))
-  ) {
-    invalid(context, 'WSS, except for loopback development')
-  }
+  const rejection = plainTransportRejection(
+    parsed,
+    'wss:',
+    allowLocalNetworkHttp,
+    options.developerHint === true
+  )
+  if (rejection !== null) invalid(context, rejection)
   parsed.pathname = parsed.pathname.replace(/\/+$/u, '')
   return parsed.toString().replace(/\/$/u, '')
 }
 
-export function validatePairingParams(params: PairingParams): PairingParams {
+export function validatePairingParams(
+  params: PairingParams,
+  options: TransportPolicy = {}
+): PairingParams {
   requirePairingTopic(params.topic, 'pairing topic')
   requirePublicKey(params.backendIdentityKey, 'pairing backend identity key')
   requireProtocolId(params.protocolID, 'pairing protocolID')
-  normalizeHttpOrigin(params.origin, 'pairing origin')
+  normalizeHttpOrigin(params.origin, 'pairing origin', options)
   if (!/^(?:0|[1-9]\d*)$/u.test(params.expiry)) invalid('pairing expiry', 'a Unix timestamp')
   const expiry = Number(params.expiry)
   if (!Number.isSafeInteger(expiry) || expiry < Date.now() / 1_000) {
@@ -275,7 +362,11 @@ export function parseRpcMessage(value: unknown): RpcRequest | RpcResponse {
 
 export function validateSessionInfo(
   value: unknown,
-  options: { expectedId?: string; requireCreationSecrets?: boolean; canonicalId?: boolean } = {}
+  options: {
+    expectedId?: string
+    requireCreationSecrets?: boolean
+    canonicalId?: boolean
+  } & TransportPolicy = {}
 ): SessionInfo {
   const record = requirePlainRecord(value, 'session response')
   const sessionId =
@@ -290,7 +381,16 @@ export function validateSessionInfo(
   }
   const status = record.status as SessionStatus
   const result: SessionInfo = { sessionId, status }
-  if (record.relay !== undefined) result.relay = normalizeRelayUrl(record.relay)
+  if (record.relay !== undefined) {
+    // Forward the whole policy so developerHint is not dropped.
+    result.relay = normalizeRelayUrl(record.relay, 'relay URL', options)
+  }
+  if (record.backendIdentityKey !== undefined) {
+    result.backendIdentityKey = requirePublicKey(
+      record.backendIdentityKey,
+      'session response backendIdentityKey'
+    )
+  }
   if (record.qrDataUrl !== undefined) {
     result.qrDataUrl = requireQrDataUrl(record.qrDataUrl, 'session QR data URL')
   }
