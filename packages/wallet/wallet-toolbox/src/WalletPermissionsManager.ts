@@ -4778,10 +4778,11 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   /**
-   * Re-keys the caller's plaintext descriptions to the indices of the args the
-   * permission modules sent. Inputs are matched by outpoint; outputs by locking
-   * script and satoshis, first unused match in order. Entries a module added
-   * have no caller description.
+   * The caller described each of its inputs and outputs, kept by position. A
+   * permission module reorders the list and adds entries of its own, so the
+   * positions change. This finds each caller input (by outpoint) and output (by
+   * locking script and satoshis) in the module's list and moves its description
+   * to the new position. Entries the module added get no description.
    */
   private descriptionsForModuleArgs(
     args: CreateActionArgs,
