@@ -3806,6 +3806,10 @@ export function buildMutationTargets(repositoryRoot) {
     config.roots = [...native.roots]
     config.moduleNameMapper = { ...native.moduleNameMapper, ...config.moduleNameMapper }
   }
+  // These native scheduler suites retain multiple SQLite/Engine compositions.
+  // Recycle their worker heaps after bounded reuse without changing coverage,
+  // concurrency, individual deadlines or any mutation source.
+  targets['root-eviction-scheduler'].runnerOptions.maxTestRunnerReuse = 8
   // Relocated LCH tests import the independent application owner by its original
   // source path. Resolve that dependency without redirecting instrumented LCH code.
   for (const id of [
