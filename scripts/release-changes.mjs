@@ -302,7 +302,7 @@ export function insertChangelogSection(text, { version, date, changes }) {
   const lines = text.split('\n')
   const headings = lines
     .map((line, index) => ({ line, index }))
-    .filter(({ line }) => /^## /.test(line))
+    .filter(({ line }) => line.startsWith('## '))
   const bullets = changelogBullets(changes)
   const versionPattern = new RegExp(
     String.raw`(^|[^\d.])${version.replaceAll('.', String.raw`\.`)}(?![\d.])`

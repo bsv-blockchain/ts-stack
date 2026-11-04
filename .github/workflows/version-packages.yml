@@ -3,16 +3,16 @@ name: Version packages
 # Feature pull requests record their release impact as new files under
 # changes/ and never edit package versions, release notes, changelogs, or the
 # generated ledgers. Those shared files are written here only: after every push
-# to main that adds change files, this workflow folds every pending change into
+# to main while change files are pending, this workflow folds every pending change into
 # one commit on a fixed branch and keeps one pull request open for it. Merging
 # that pull request sets the source versions; publication still requires the
 # separate protected release workflow and tag.
 
 on:
+  # Every push, not only pushes that add change files: the version branch also
+  # rewrites generated docs, so it must be rebuilt whenever main moves.
   push:
     branches: [main]
-    paths:
-      - 'changes/**'
   workflow_dispatch:
 
 permissions: {}

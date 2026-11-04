@@ -392,8 +392,8 @@ adapter is removed together with the original admission.
 ## Version pull request
 
 Feature pull requests add change files under `changes/` and never move a
-version. The `Version packages` workflow runs on every push to `main` that
-touches `changes/`. It applies all pending change files with
+version. The `Version packages` workflow runs on every push to `main` while change
+files are pending. It applies all pending change files with
 `pnpm changes:version`, which sets source versions, release-note entries,
 package changelogs, baseline package versions, and the generated ledgers, and
 deletes the applied change files. It force-pushes the result to
