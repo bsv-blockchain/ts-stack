@@ -83,8 +83,9 @@ compatibility, and security metadata remains the review starting point.
 - [ ] The linked tracker is updated only for work fully proved by merged code,
       passing checks, resolved alerts, measurements, or an approved exception
 - [ ] Review conversations are resolved
-- [ ] Documentation, changelog, migration notes, release notes, and operator
-      guidance are current or concretely not applicable
+- [ ] Documentation, migration notes, a `changes/` file for each public
+      package release impact, and operator guidance are current or concretely
+      not applicable (no direct version, changelog, or release-notes edits)
 - [ ] No pending, failed, stale, cancelled, or unexpectedly skipped check is
       being handed to another contributor as “complete”
 - [ ] One qualified maintainer approval is sufficient; no last-pusher

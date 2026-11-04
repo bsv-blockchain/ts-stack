@@ -276,10 +276,17 @@ shortcut may speed iteration but cannot replace the remote merge gate.
 
 Follow `docs/about/versioning.md` and the protected release workflows.
 Published-byte or manifest changes require the correct affected-package SemVer
-decision, an updated `governance/package-release-notes.json` entry, current
-package documentation, and migration guidance—even when the migration is
-“none.” Update a package-local changelog when that package already maintains
-one.
+decision, current package documentation, and migration guidance—even when the
+migration is “none.” Record the SemVer impact, summary, and migration decision
+in one new change file (`pnpm change`, see [`changes/README.md`](./changes/README.md)).
+
+Do not edit a public package `version`, `governance/package-release-notes.json`,
+a package `CHANGELOG.md`, the publicPackageVersions in
+`governance/repository-health/baselines.json`, or the generated package ledgers
+in a feature pull request. Many pull requests merge each day; these shared
+files are written only by the generated `chore: version packages` pull request,
+so feature pull requests never conflict with each other. CI rejects a direct
+public version change.
 
 Never publish npm packages or container images, create release tags, or deploy
 from a workstation unless an operator explicitly authorizes that separate
