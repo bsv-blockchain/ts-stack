@@ -1,0 +1,15 @@
+{
+  "id": "2026-11-04-pr1093-main",
+  "owner": "ty-everett",
+  "sourceBase": "9bdeb5f82de67c109941e2b5296f7cd66a1fc0ac",
+  "recordedAt": "2026-11-04T16:18:00Z",
+  "expiresAt": "2026-11-05T16:00:00Z",
+  "status": "active",
+  "reason": "The operator explicitly waives mutation campaigns for this current-main release to publish the pending versions promptly. Failed and canceled campaigns remain failed or canceled. This is operator-waiver admission, not successful mutation qualification. All non-mutation tests, compatibility, approval, security, license, consumer, immutable artifact, provenance, signature and registry-integrity gates remain mandatory.",
+  "releaseSet": "All pending public versions on unchanged main9bdeb5f82, including Paymail2.5.0 and Toolbox/core/client/mobile2.15.2, plus the eight official infrastructure images from the generated version-sync child.",
+  "evidence": "Main9b CI and security passed following mergedPR1477; originalPR1093 native wallet/WAB/Paymail/legacy-client qualification retained. PR1478 remains separate draft and is not admitted. Known mutation gaps and incomplete coverage inventory are retained in failed campaign evidence.",
+  "failedRuns": [41762196746, 41823811793],
+  "reviewAt": "2026-11-05T16:00:00Z",
+  "removalCondition": "Retire this record and remove temporary workflow admission immediately after this exact release and generated published-baseline reconciliation. Any application, manifest, dependency, lockfile or other non-allowlisted change is ineligible. Future releases require normal full mutation qualification.",
+  "compatibility": "No runtime, public API, wire, database, package manifest, version or dependency change is authorized by the waiver; the generated sync child retains its existing constrained allowlist."
+}
