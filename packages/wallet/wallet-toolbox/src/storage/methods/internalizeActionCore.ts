@@ -1,5 +1,6 @@
+import { validateInternalizeActionArgs } from '../../utility/validateInternalizeActionArgs'
 import type { InternalizeReceiptClaim } from './InternalizeReceiptClaim'
-import { type ValidInternalizeActionArgs, validateInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
+import { type ValidInternalizeActionArgs } from '@bsv/sdk/wallet/validationHelpers'
 import {
   Transaction as BsvTransaction,
   WalletPayment,
@@ -551,7 +552,10 @@ class InternalizeActionContext {
    * SQLite write guard. An unmined transaction is queued for the existing monitor;
    * the receipt proves ownership, not broadcast or mining. No network I/O occurs here.
    */
-  async internalizeAtomically(trx: TrxToken, retryNewReceipt = this.receipt?.retryNew): Promise<StorageInternalizeActionResult> {
+  async internalizeAtomically(
+    trx: TrxToken,
+    retryNewReceipt = this.receipt?.retryNew
+  ): Promise<StorageInternalizeActionResult> {
     await this.receipt?.assertActive(trx)
     await this.setupStorage(trx, retryNewReceipt)
     const existing = this.etx
