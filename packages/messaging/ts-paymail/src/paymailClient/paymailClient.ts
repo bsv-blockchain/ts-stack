@@ -20,6 +20,16 @@ import SimpleP2pOrdinalReceiveCapability from '../capability/simpleP2pOrdinalRec
 import { createP2PSignature, isCanonicalCompressedPublicKey } from '../p2pSignature.js'
 import { parsePaymail } from '../paymailAddress.js'
 import { transactionIdFromHex } from '../transactionEncoding.js'
+import ProfileLookupCapability from '../capability/profileLookupCapability.js'
+import ProfileReverseLookupCapability from '../capability/profileReverseLookupCapability.js'
+import {
+  PROFILE_LOOKUP_MAX_RESULTS,
+  type VerifiedProfile,
+  isProfileIdentityKey,
+  isValidProfileHandle,
+  normalizeProfileLookupQuery,
+  verifyProfileCertificate
+} from '../profileCertificate.js'
 
 export type DomainCapabilities = Record<string, string | boolean>
 
@@ -424,6 +434,107 @@ export default class PaymailClient {
     const profile = value as PublicProfile
     this.validateServiceUrl(profile.avatar, this.validateDomain(parsedPaymail.domain))
     return { name: profile.name, avatar: profile.avatar }
+  }
+
+  /**
+   * BRC-235 public profile lookup: searches `domain` for handles matching what
+   * the user has typed. Every certificate is verified, and any that fails is
+   * dropped. Results are suggestions in the host's order: show each full
+   * `paymail` and let the user choose; never pick one by position. When
+   * `query` is a complete `handle@domain` at `domain`, only that exact paymail
+   * is returned.
+   * @param domain - The paymail domain to search.
+   * @param query - A partial handle, a full handle, or a full paymail.
+   * @returns Verified profiles, at most ten.
+   */
+  public lookupProfiles = async (domain: string, query: string): Promise<VerifiedProfile[]> => {
+    const validatedDomain = this.validateDomain(domain)
+    const handleQuery = normalizeProfileLookupQuery(query, validatedDomain)
+    if (handleQuery === undefined) return []
+    const typed = query.trim().toLowerCase()
+    const exact = typed === `${handleQuery}@${validatedDomain}` ? typed : undefined
+    const template = await this.ensureCapabilityFor(
+      validatedDomain,
+      ProfileLookupCapability.getCode()
+    )
+    if (!template.includes('{query}')) {
+      throw new PaymailServerResponseError(
+        `Domain "${validatedDomain}" advertises a profile lookup template without {query}`
+      )
+    }
+    const requestUrl = template.replaceAll('{query}', encodeURIComponent(handleQuery))
+    this.validateServiceUrl(requestUrl, validatedDomain)
+    const response = await this.httpClient.request(requestUrl)
+    const body: unknown = await response.json()
+    if (!Array.isArray(body)) {
+      throw new PaymailServerResponseError('Validation error: profile lookup must return an array')
+    }
+    const verified = await Promise.all(
+      body
+        .slice(0, PROFILE_LOOKUP_MAX_RESULTS)
+        .map(
+          async certificate =>
+            await verifyProfileCertificate(certificate, { domain: validatedDomain, paymail: exact })
+        )
+    )
+    return verified.filter((profile): profile is VerifiedProfile => profile !== undefined)
+  }
+
+  /**
+   * Resolves a complete paymail to its verified profile through BRC-235
+   * public profile lookup. The profile's `identityKey` is the BRC-29 payment
+   * recipient.
+   * @param paymail - A complete `handle@domain`.
+   * @returns The profile whose paymail equals `paymail`, or undefined.
+   */
+  public resolveProfile = async (paymail: string): Promise<VerifiedProfile | undefined> => {
+    const parsed = parsePaymail(paymail.trim().toLowerCase())
+    if (parsed == null || !isValidProfileHandle(parsed.name)) {
+      throw new PaymailServerResponseError(`Invalid Paymail address: "${paymail}"`)
+    }
+    const profiles = await this.lookupProfiles(parsed.domain, `${parsed.name}@${parsed.domain}`)
+    return profiles[0]
+  }
+
+  /**
+   * BRC-235 public profile reverse lookup: the verified profile that
+   * `identityKey` holds at `domain`, for showing a paymail in place of a key.
+   * @param domain - The paymail domain to ask.
+   * @param identityKey - A compressed public key, 66 hex characters.
+   * @returns The profile, or undefined when the key holds no handle there or
+   * the host's certificate fails verification.
+   */
+  public reverseLookupProfile = async (
+    domain: string,
+    identityKey: string
+  ): Promise<VerifiedProfile | undefined> => {
+    const validatedDomain = this.validateDomain(domain)
+    const key = typeof identityKey === 'string' ? identityKey.toLowerCase() : ''
+    if (!isProfileIdentityKey(key)) {
+      throw new PaymailServerResponseError('Invalid compressed public key')
+    }
+    const template = await this.ensureCapabilityFor(
+      validatedDomain,
+      ProfileReverseLookupCapability.getCode()
+    )
+    if (!template.includes('{pubkey}')) {
+      throw new PaymailServerResponseError(
+        `Domain "${validatedDomain}" advertises a profile reverse lookup template without {pubkey}`
+      )
+    }
+    const requestUrl = template.replaceAll('{pubkey}', encodeURIComponent(key))
+    this.validateServiceUrl(requestUrl, validatedDomain)
+    let body: unknown
+    try {
+      const response = await this.httpClient.request(requestUrl)
+      body = await response.json()
+    } catch (error) {
+      if (error instanceof PaymailServerResponseError && error.responseStatus === 404) {
+        return undefined
+      }
+      throw error
+    }
+    return await verifyProfileCertificate(body, { domain: validatedDomain, identityKey: key })
   }
 
   /**

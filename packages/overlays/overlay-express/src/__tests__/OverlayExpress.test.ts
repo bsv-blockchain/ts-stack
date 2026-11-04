@@ -2,7 +2,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals'
 import OverlayExpress, { type RegisteredRouterFactory } from '../OverlayExpress.js'
 import Knex from 'knex'
 import { MongoClient } from 'mongodb'
-import { TopicManager, LookupService, serializeErrorForLog, serializeLogValue } from '@bsv/overlay'
+import { Engine, TopicManager, LookupService, serializeErrorForLog, serializeLogValue } from '@bsv/overlay'
 import { ChainTracker } from '@bsv/sdk'
 import * as DiscoveryServices from '@bsv/overlay-discovery-services'
 import { createAuthMiddleware } from '@bsv/auth-express-middleware'
@@ -1132,6 +1132,21 @@ describe('OverlayExpress', () => {
       expect(() => overlayExpress.configureEngineParams({ slapTrackers: {} as any })).toThrow(
         'slapTrackers'
       )
+      for (const scriptVerifier of [
+        null,
+        {},
+        { verifyScripts: true },
+        'verifier',
+        Object.assign(() => true, { verifyScripts: async () => true })
+      ]) {
+        expect(() =>
+          overlayExpress.configureEngineParams({ scriptVerifier: scriptVerifier as any })
+        ).toThrow('scriptVerifier must provide verifyScripts()')
+        expect(() => overlayExpress.configureScriptVerifier(scriptVerifier as any)).toThrow(
+          'scriptVerifier must provide verifyScripts()'
+        )
+      }
+      expect(overlayExpress.engineConfig.scriptVerifier).toBeUndefined()
 
       const slapTrackers = ['https://slap.example']
       const resolver = async (blockHeight: number): Promise<any> => ({
@@ -1196,6 +1211,29 @@ describe('OverlayExpress', () => {
       await expect(freshInstance.configureEngine()).rejects.toThrow(
         'You must configure your SQL database with the .configureKnex() method first!'
       )
+    })
+
+    it('passes a configured script verifier to the engine, and none by default', async () => {
+      const EngineMock = Engine as unknown as jest.Mock
+      await overlayExpress.configureEngine(false)
+      expect(EngineMock.mock.calls.at(-1)).toHaveLength(21)
+      expect(EngineMock.mock.calls.at(-1)?.[20]).toBeUndefined()
+
+      const scriptVerifier = { verifyScripts: async () => true }
+      const log = jest.spyOn(overlayExpress.logger, 'log')
+      overlayExpress.configureScriptVerifier(scriptVerifier)
+      expect(overlayExpress.engineConfig.scriptVerifier).toBe(scriptVerifier)
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('Script verifier has been configured.'))
+      const warn = jest.spyOn(overlayExpress.logger, 'warn')
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('not ready'))
+      overlayExpress.configureScriptVerifier({ ...scriptVerifier, isReady: () => true } as any)
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('not ready'))
+      const cold = { ...scriptVerifier, isReady: () => false }
+      overlayExpress.configureScriptVerifier(cold as any)
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Script verifier is not ready'))
+      overlayExpress.configureScriptVerifier(scriptVerifier)
+      await overlayExpress.configureEngine(false)
+      expect(EngineMock.mock.calls.at(-1)?.[20]).toBe(scriptVerifier)
     })
 
     it('should configure engine with auto SHIP/SLAP', async () => {

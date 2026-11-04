@@ -11,6 +11,7 @@ import {
 } from '@bsv/sdk'
 import { OneColor } from '@bsv/templates'
 import { maybeDecryptMetadata, WalletPermissionsManager } from '@bsv/wallet-toolbox-client'
+import { ColorPermissionModule } from '../ColorPermissionModule.js'
 import { ColorPlan } from '../ColorPlan.js'
 import { assetBasket, assetTag } from '../identifiers.js'
 import {
@@ -19,9 +20,11 @@ import {
   FakeProvider,
   FakeWallet,
   holdTokens,
+  suffixTagOf,
   tokenPayment,
   validInput
 } from './fixtures.js'
+import { FakeStore, issuerLikePayload, issuerLikeProfile } from './profileFixtures.js'
 
 const ADMIN = 'admin.example'
 const APP = 'app.example'
@@ -182,7 +185,7 @@ describe('color module registered on a WalletPermissionsManager', () => {
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: 180, outputs: [] })
-    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=5')
+    expect((await manager.getVersion({}, APP)).version).toContain('brc207-color=4')
   })
 
   it('aborts a declined send, so the inputs it reserved are spendable again', async () => {
@@ -236,5 +239,70 @@ describe('color module registered on a WalletPermissionsManager', () => {
     await expect(
       manager.listOutputs({ basket: `p color balance ${assetTag(assetId)}` }, APP)
     ).resolves.toEqual({ totalOutputs: 300, outputs: [] })
+  })
+
+  it('a pending profile receipt passes through WalletPermissionsManager tagged color_offline', async () => {
+    const wallet = new FakeWallet()
+    const issuer = new FakeWallet()
+    const provider = new FakeProvider()
+    const store = new FakeStore()
+    const handler = issuerLikeProfile({
+      K: issuer.identityKey,
+      admit: async () => ({ credit: 'pending' })
+    })
+    const color = new ColorPermissionModule({
+      wallet: wallet.asWallet(),
+      provider,
+      requestTokenAccess: async () => true,
+      profiles: { [handler.id]: handler },
+      store
+    })
+    const manager = new WalletPermissionsManager(wallet.asWallet(), ADMIN, {
+      permissionModules: { color },
+      seekSpendingPermissions: false,
+      encryptWalletMetadata: true
+    })
+    const { assetId } = await deployAsset(
+      issuer,
+      provider,
+      1_000n,
+      issuerLikePayload(issuer.identityKey)
+    )
+    const { tx, customInstructions } = await tokenPayment(issuer, wallet, assetId, 300n)
+    await expect(
+      manager.internalizeAction(
+        {
+          tx: tx.toAtomicBEEF(),
+          description: 'Receive tokens',
+          outputs: [
+            {
+              outputIndex: 0,
+              protocol: 'basket insertion',
+              insertionRemittance: { basket: assetBasket(assetId, 'value'), customInstructions }
+            }
+          ]
+        },
+        APP
+      )
+    ).resolves.toMatchObject({ accepted: true })
+    const stored = wallet.outputs.get(`${tx.id('hex')}.0`)
+    expect(stored?.tags).toEqual([suffixTagOf(customInstructions), 'color_offline'])
+    expect(stored?.customInstructions?.startsWith('{')).toBe(false)
+    expect(await maybeDecryptMetadata(wallet.asWallet(), stored?.customInstructions ?? '')).toBe(
+      customInstructions
+    )
+    await expect(
+      manager.listOutputs(
+        { basket: `p color balance ${assetTag(assetId)}`, tags: ['color_offline'] },
+        APP
+      )
+    ).resolves.toEqual({ totalOutputs: 300, outputs: [] })
+    await color.markSettled(tx.id('hex'))
+    await expect(
+      manager.listOutputs(
+        { basket: `p color balance ${assetTag(assetId)}`, tags: ['color_offline'] },
+        APP
+      )
+    ).resolves.toEqual({ totalOutputs: 0, outputs: [] })
   })
 })

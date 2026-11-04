@@ -14,6 +14,13 @@ export const ASSETS_SELECTOR = 'p color assets'
 /** Basket namespace of the per-asset value and authority baskets. */
 export const COLOR_BASKET_NAMESPACE = 'p color'
 
+/**
+ * Output tag of a token whose overlay acceptance is still pending: a receipt a required profile's
+ * `admitReceipt` credited as `pending`, or the token change of a plain-noSend hand-over. Views hide
+ * it once the host calls `markSettled` for the output's transaction.
+ */
+export const COLOR_OFFLINE_TAG = 'color_offline'
+
 export type TokenRole = 'value' | 'authority'
 
 const ASSET_ID = /^([0-9a-f]{64})_(0|[1-9]\d{0,9})$/

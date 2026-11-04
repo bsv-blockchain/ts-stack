@@ -57,6 +57,7 @@ import type { ManagedChangeInputCandidate } from './availableManagedChange'
 import { CanonicalChangeSelector, randomizeOutputVouts as randomizePlannedOutputVouts } from './actionPlanning'
 import { TransactionStatus } from '../../sdk/types'
 import { beefForTxids } from '../../utility/beefForTxids'
+import { repairBeefProofs } from './repairBeefProofs'
 import type { PreparedBeefLookupResult, PreparedBeefPreparation } from './preparedBeef'
 import type { Brc177ValidCreateActionArgs } from '../../utility/brc177NoSendExpiry'
 import {
@@ -2087,6 +2088,9 @@ async function mergeAllocatedChangeBeefs(
       })
     }
   )
+  // Cached and embedded funding proofs must be current before the signer receives them.
+  // This network work runs after the allocation transaction has committed.
+  beef = await repairBeefProofs(storage, beef)
   const inputBeef = await traceStorageStep(
     storage,
     'wallet.storage.create_action.beef_trim_serialize',

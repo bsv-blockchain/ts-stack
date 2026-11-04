@@ -168,6 +168,27 @@ Populated private-native journal initialization now completes the existing 1,000
 
 The original eight Linux root-copy fixtures run separately under the installer identity. CI requires their complete report and includes their coverage; ordinary wallet fixtures retain their normal actor. The validator consumes the generated report through stdin within its existing 64 MiB byte ceiling and accepts no filesystem path argument; invalid, interrupted or oversized input fails closed. The inventory and authentication restore fixtures explicitly reserve 8 MiB and an 11 MiB profile catalogue total (the unchanged 3 MiB catalogue reservation plus one 8 MiB profile). Smaller-budget refusal controls and production defaults remain unchanged.
 
+## Diagnosing foreground BEEF verification failures
+
+The staging integration validates and repairs selected funding proofs before
+returning input BEEF to the signer. Failed canonical recovery retains the typed
+proof error and releases the ordinary failed allocation; it cannot return a
+stale proof as successful funding evidence. Remote calls remain outside the
+allocation transaction. Mobile SDK forwarding retains every public root export
+as its original external SDK object. No wire, schema or resource limit changes.
+
+Foreground Storage processing retains its signed transaction before proof
+verification and submission. An error response therefore does not prove that
+no transaction exists or that a replacement spend is safe. Reconcile the
+existing action before creating another payment. With a WalletLogger enabled,
+failed verification now records the last root's height, expected root and
+accepted/declined/pending result, or the structural stage when no root was
+checked. Provider exceptions remain exceptions rather than invalid-proof
+verdicts; public error identities and all verification checks are preserved.
+This diagnostic distinction does not identify a historical missing-header or
+wrong-root cause when that provider response was never retained. Publication
+of these source changes and upgrading remote Storage are separate operations.
+
 ## Remote storage timeouts
 
 `StorageClient` accepts optional `authFetchOptions` in its existing third

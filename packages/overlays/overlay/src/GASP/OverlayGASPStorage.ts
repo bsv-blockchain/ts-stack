@@ -472,7 +472,12 @@ export class OverlayGASPStorage implements GASPStorage {
       // Check that the root node is Bitcoin-valid.
       const beef = this.getBEEFForNode(rootNode)
       const spvTx = Transaction.fromBEEF(beef)
-      const isBitcoinValid = await spvTx.verify(this.engine.chainTracker)
+      const isBitcoinValid = await spvTx.verify(
+        this.engine.chainTracker,
+        undefined,
+        undefined,
+        this.engine.scriptVerifier
+      )
       if (!isBitcoinValid) {
         throw new Error('The graph is not well-anchored according to the rules of Bitcoin.')
       }

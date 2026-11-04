@@ -261,8 +261,25 @@ async function verifyMergedBeef(
 ): Promise<void> {
   if (readyToSendReqs.length === 0 || r.verified === true) return
   r.beef = await repairBeefProofs(storage, r.beef)
-  const beefIsValid = await r.beef.verify(await storage.getServices().getChainTracker())
+  const tracker = await storage.getServices().getChainTracker()
+  let lastRootCheck: { height: number; root: string; result: 'pending' | 'accepted' | 'declined' } | undefined
+  let beefIsValid: boolean
+  try {
+    beefIsValid = await r.beef.verify({
+      currentHeight: async () => await tracker.currentHeight(),
+      isValidRootForHeight: async (root, height) => {
+        lastRootCheck = { height, root, result: 'pending' }
+        const accepted = await tracker.isValidRootForHeight(root, height)
+        lastRootCheck.result = accepted === true ? 'accepted' : 'declined'
+        return accepted
+      }
+    })
+  } catch (error) {
+    logger?.error(`BEEF verification provider error: ${JSON.stringify(lastRootCheck ?? { stage: 'structure' })}`)
+    throw error
+  }
   if (!beefIsValid) {
+    logger?.error(`BEEF verification declined: ${JSON.stringify(lastRootCheck ?? { stage: 'structure' })}`)
     logger?.error('Merged transaction proof graph failed validation; no broadcast attempted.')
     throw new WERR_INTERNAL('merged Beef failed validation.')
   }

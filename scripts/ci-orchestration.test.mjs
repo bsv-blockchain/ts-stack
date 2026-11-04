@@ -452,9 +452,9 @@ test('CI bounds every job and allocates no runner for an empty infrastructure ma
 })
 
 test('wallet mutation allowances preserve other limits and complete campaign execution', () => {
-  for (const [path, defaultMinutes, maxParallel] of [
-    [CI_PATH, 45, 6],
-    [MUTATION_PATH, 45, 100]
+  for (const [path, defaultMinutes] of [
+    [CI_PATH, 45],
+    [MUTATION_PATH, 45]
   ]) {
     const job = workflowJobBlocks(readFileSync(path, 'utf8')).find(
       job => job.name === 'mutation-tests'

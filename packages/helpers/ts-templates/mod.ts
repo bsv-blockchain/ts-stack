@@ -14,8 +14,20 @@ export {
   isTokenShaped
 } from './src/Bsv21Binary.js'
 export type { Bsv21BinaryDecoded, Bsv21Role, Bsv21Role as OneColorRole } from './src/Bsv21Binary.js'
-export { OneColor } from './src/OneColor.js'
+// New 1Color code should prefer oneColorTokenIdFromString/oneColorTokenIdToString (32- and 36-byte ids).
+export { OneColor, oneColorTokenIdFromString, oneColorTokenIdToString } from './src/OneColor.js'
 export type { OneColorDecoded } from './src/OneColor.js'
+export {
+  isProfileId,
+  readOneColorAttributes,
+  reqMatchesDeploy,
+  needsEmptyPayloadMarker
+} from './src/OneColorAttributes.js'
+export type {
+  OneColorAttributes,
+  OneColorField,
+  OneColorProfileDescriptor
+} from './src/OneColorAttributes.js'
 export {
   encodeStrictCbor,
   decodeStrictCbor,

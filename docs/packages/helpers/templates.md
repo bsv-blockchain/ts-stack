@@ -3,10 +3,10 @@ id: pkg-templates
 title: '@bsv/templates'
 kind: package
 domain: helpers
-version: '2.1.1'
+version: '2.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-10-01'
-last_verified: '2026-10-01'
+last_updated: '2026-10-22'
+last_verified: '2026-10-22'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/templates'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/ts-templates'
@@ -21,6 +21,8 @@ a coordinated proposal; see the [qualification and migration limits](../../guide
 before adopting it.
 
 > Low-level BSV script templates library — provides reusable locking/unlocking script implementations (OpReturn, MultiPushDrop, P2MSKH) for common and advanced Bitcoin SV patterns without abstracting away control.
+
+The 2.2.0 source candidate is additive and needs no migration. It adds the BRC-162 1Color attribute reader (`readOneColorAttributes`, `reqMatchesDeploy`, `isProfileId`, `needsEmptyPayloadMarker`), `OneColor.lockRemainder`, which writes an explicit `OP_0 OP_DROP` when a remainder starts with `<push> OP_DROP` and no payload is given, and the preferred 36-byte-aware id helpers `oneColorTokenIdFromString`/`oneColorTokenIdToString`. `tokenIdFromString`/`tokenIdToString` stay 32-byte only, and `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
 
 The 2.0.0 source candidate is a breaking release: `MandalaToken`, `MandalaAdmin` and `ADMIN_PROTOCOL` are removed, and [BRC-162](https://brc.dev/162) token outputs and their strict CBOR payloads move to `Bsv21Binary`. The SDK peer range is unchanged in source, and 2.0.0 is the first release to publish `^3.0.0` alongside `^2.1.6`.
 

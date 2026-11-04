@@ -206,6 +206,29 @@ describe('strictCbor decode accepts exactly strict DAG-CBOR', () => {
     const maps = hex('a1 6161 a1 6162 a1 6163 a1 6164 a1 6165 01')
     expect(decodeStrictCbor(maps)).toEqual({ a: { b: { c: { d: { e: 1n } } } } })
   })
+  it('walks a chain of tags without the call stack, with the recursive outcome', () => {
+    // 200000 nested tag-42 heads around an empty byte string: no tag content may be a tag.
+    const chain = (inner: string, tags = 200_000): number[] => [
+      0xa1,
+      0x61,
+      0x61,
+      ...Array.from({ length: tags }, () => [0xd8, 0x2a]).flat(),
+      ...hex(inner)
+    ]
+    expect(strictCborErrorOf(() => decodeStrictCbor(chain('40')))).toBe('invalid CID')
+    expect(tryDecodeStrictCbor(chain('40'))).toBeUndefined()
+    // Every message is the one the recursive reading gives: the first non-42 tag in chain order,
+    // else an error inside the innermost content, else invalid CID.
+    expect(strictCborErrorOf(() => decodeStrictCbor(hex('a1 6161 d82a d829 4100')))).toBe(
+      'only tag 42 is allowed'
+    )
+    expect(strictCborErrorOf(() => decodeStrictCbor(chain('1805', 3)))).toBe('non-minimal header')
+    expect(strictCborErrorOf(() => decodeStrictCbor(chain('', 2)))).toBe('truncated input')
+    expect(strictCborErrorOf(() => decodeStrictCbor(chain('42 0001', 2)))).toBe('invalid CID')
+    expect(decodeStrictCbor(chain('42 0001', 1))).toEqual({
+      a: new StrictCborLink(Uint8Array.of(0, 1))
+    })
+  })
   it('round-trips a __proto__ key as an ordinary key', () => {
     const encoded = encodeStrictCbor({ ['__proto__']: 1n, a: 2n })
     const decoded = decodeStrictCbor(encoded)

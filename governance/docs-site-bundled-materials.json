@@ -91,7 +91,7 @@
     },
     {
       "name": "@mermaid-js/parser",
-      "version": "2.0.1",
+      "version": "2.0.0",
       "kind": "vite",
       "packageLicense": "MIT",
       "licenseExpression": "MIT",

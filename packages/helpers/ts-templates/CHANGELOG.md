@@ -10,9 +10,46 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
-- Prepare `2.1.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
+### 2.2.0 candidate
+
+Builds on 2.1.1 and includes it: the SDK4 peer floor stays `^4.0.1` alongside the
+unchanged SDK2/3 alternatives. Additive only; no wire or data migration.
+
+### Added
+
+- `readOneColorAttributes`, the BRC-162 1Color attribute reader. It classifies
+  a payload as `'absent'`, `'empty'`, `'opaque'` or a strict DAG-CBOR `'map'`
+  and reports `dec`, `sym`, `icon`, `req` and `ext` as absent, valid or
+  malformed. It is pure and never throws; nothing is recovered from an opaque
+  payload. `reqBytes` is the exact wire span of a valid `req`.
+  `OneColorAttributes`, `OneColorField` and `OneColorProfileDescriptor` name
+  its types.
+- `reqMatchesDeploy`, which compares a later output's `req` with the deploy's
+  canonical DAG-CBOR bytes (an absent deploy `req` is the empty map `a0`) and
+  fails closed on a malformed `req`.
+- `isProfileId`, which checks BRC-162 processing-profile identifiers.
+- `needsEmptyPayloadMarker`, which reports whether a remainder starts with
+  `<push> OP_DROP`.
+- `OneColor.lockRemainder`, which writes the 1Color prefix in front of any
+  locking script, with an explicit `OP_0 OP_DROP` when no payload is given and
+  the remainder starts with `<push> OP_DROP`.
+- `oneColorTokenIdFromString` and `oneColorTokenIdToString`, the preferred
+  36-byte-aware token-id helpers. `tokenIdFromString` and `tokenIdToString`
+  remain 32-byte only.
+- `Bsv21Binary`, `Bsv21Token` and every existing export are unchanged.
+
+### Fixed
+
+- `decodeStrictCbor` walks a chain of tag heads without recursion, so a long
+  chain of tag-42 heads fails with `StrictCborError` (`invalid CID`) instead of
+  exhausting the call stack; every message is the one the recursive reading
+  gave. `tryDecodeStrictCbor` therefore returns `undefined` for it.
+- `OneColor.lockRemainder` refuses a remainder that contains a truncated push,
+  which `OneColor.decode` would refuse.
 
 ### 2.1.1 candidate
+
+- Prepare `2.1.1` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 ### Added
 

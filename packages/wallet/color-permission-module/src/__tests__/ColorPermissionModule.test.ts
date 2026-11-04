@@ -1130,7 +1130,7 @@ describe('ColorPermissionModule', () => {
     })
 
     it('does not select an untagged output', async () => {
-      await holdTokens(wallet, provider, assetId, [300n], false)
+      await holdTokens(wallet, provider, assetId, [300n], undefined, false)
       const output = await recipientOutput(wallet, new FakeWallet(), assetId, 100n)
       await expect(fund({ outputs: [output] })).rejects.toThrow('insufficient spendable balance')
       const [tagged] = await holdTokens(wallet, provider, assetId, [200n])
@@ -1140,7 +1140,7 @@ describe('ColorPermissionModule', () => {
     })
 
     it('refuses an untagged app-named input', async () => {
-      const [untagged] = await holdTokens(wallet, provider, assetId, [100n], false)
+      const [untagged] = await holdTokens(wallet, provider, assetId, [100n], undefined, false)
       await expect(
         fund({
           inputs: [

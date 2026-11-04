@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file. The format 
 
 ## [Unreleased]
 
+- Add an optional `scriptVerifier` (last `Engine` constructor argument) used for SPV verification in `submit` and GASP graph anchoring, for example a preloaded `BdkVerifier` from `@bsv/verifast` (about 11x less CPU per input script than the default interpreter). Omitted, scripts are verified by the SDK interpreter exactly as before. Additive; no migration.
+
 - Prepare `2.7.0` with an SDK4 peer floor of `^4.0.1`; preserve all existing SDK2/3 alternatives and lower bounds. No wire or data migration.
 
 - Add an explicit Mongo retained-admission history option and trusted scoped reader. Preserve default receipt bytes, existing public receipt shape, legacy retry behavior and database validators; old receipts without provenance remain unresolved. Bound the complete opt-in record before effects.

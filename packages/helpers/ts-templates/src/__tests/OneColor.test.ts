@@ -1,4 +1,4 @@
-import { LockingScript, OP } from '@bsv/sdk/script'
+import { LockingScript, OP, P2PKH } from '@bsv/sdk'
 import { Bsv21Binary, Bsv21BinaryError } from '../Bsv21Binary.js'
 import { OneColor } from '../OneColor.js'
 
@@ -77,5 +77,85 @@ describe('OneColor', () => {
       new OneColor().lockBRC29(null, 1n, [2, 'p color'], 'color', 'self')
     ).rejects.toThrow('requires a wallet')
     expect(typeof template.unlock({} as never).sign).toBe('function')
+  })
+})
+
+describe('OneColor.lockRemainder', () => {
+  const pushDrop = new LockingScript([{ op: OP.OP_5 }, { op: OP.OP_DROP }, { op: OP.OP_TRUE }])
+
+  it('writes OP_0 OP_DROP before a remainder that starts with <push> OP_DROP (0162:105)', () => {
+    const s = OneColor.lockRemainder(`${TXID}_0`, 500n, pushDrop)
+    expect(s.toHex().endsWith('6d' + '0075' + '557551')).toBe(true)
+    const d = OneColor.decode(s)
+    expect(d.payload).toEqual([])
+    expect(d.amount).toBe(500n)
+    expect(d.role).toBe('value')
+    expect(new LockingScript(d.restChunks).toHex()).toBe(pushDrop.toHex())
+  })
+
+  it.each([
+    ['OP_0', OP.OP_0],
+    ['OP_1NEGATE', OP.OP_1NEGATE],
+    ['OP_1', OP.OP_1],
+    ['OP_16', OP.OP_16]
+  ])(
+    'RF4: a remainder starting %s OP_DROP decodes with payload [] and the remainder intact',
+    (_, op) => {
+      const r = new LockingScript([{ op }, { op: OP.OP_DROP }, { op: OP.OP_TRUE }])
+      const d = OneColor.decode(OneColor.lockRemainder(`${TXID}_0`, 3n, r))
+      expect(d.payload).toEqual([])
+      expect(new LockingScript(d.restChunks).toHex()).toBe(r.toHex())
+    }
+  )
+
+  it('RF4: keeps a non-minimal remainder byte-exact', () => {
+    const r = LockingScript.fromHex('4c01077551') // OP_PUSHDATA1 0x07, OP_DROP, OP_1
+    const s = OneColor.lockRemainder(null, 0n, r)
+    expect(s.toHex()).toBe('00' + '00' + '6d' + '0075' + '4c01077551')
+    expect(new LockingScript(OneColor.decode(s).restChunks).toHex()).toBe('4c01077551')
+  })
+
+  it('equals lock() for a P2PKH remainder (no marker)', () => {
+    for (const [id, amt, payload] of [
+      [`${TXID}_0`, 500n, undefined],
+      [null, 7n, [1, 2]],
+      [`${TXID}_258`, 0n, undefined]
+    ] as const) {
+      expect(OneColor.lockRemainder(id, amt, new P2PKH().lock(PKH), payload as never).toHex()).toBe(
+        new OneColor().lock(id, amt, PKH, payload as never).toHex()
+      )
+    }
+  })
+
+  it('an explicit payload replaces the marker; an explicit [] writes OP_0 OP_DROP', () => {
+    const d = OneColor.decode(OneColor.lockRemainder(`${TXID}_0`, 9n, pushDrop, [1, 2]))
+    expect(d.payload).toEqual([1, 2])
+    expect(new LockingScript(d.restChunks).toHex()).toBe(pushDrop.toHex())
+    expect(OneColor.lockRemainder(`${TXID}_0`, 9n, new P2PKH().lock(PKH), []).toHex()).toContain(
+      '6d0075'
+    )
+  })
+
+  it('validates id and amount like lock()', () => {
+    expect(() => OneColor.lockRemainder(`${TXID}_0`, 1n << 64n, pushDrop)).toThrow(Bsv21BinaryError)
+    expect(() => OneColor.lockRemainder('x_0', 1n, pushDrop)).toThrow('<64 lowercase hex>_<vout>')
+  })
+
+  it('rejects a remainder that ends in a truncated push, as decode would', () => {
+    // 05 0102: a 5-byte push with only two bytes left.
+    const truncated = LockingScript.fromHex('7551' + '050102')
+    expect(truncated.chunks.some(chunk => chunk.invalidLength === true)).toBe(true)
+    expect(() => OneColor.lockRemainder(`${TXID}_0`, 1n, truncated)).toThrow('truncated push')
+    expect(() => OneColor.lockRemainder(null, 0n, truncated, [1])).toThrow(Bsv21BinaryError)
+  })
+
+  it('never aliases the remainder chunks or their data', () => {
+    const r = LockingScript.fromHex('020102' + '75' + '51')
+    const s = OneColor.lockRemainder(`${TXID}_0`, 1n, r)
+    const before = r.toHex()
+    s.chunks[s.chunks.length - 3].data![0] = 0xff
+    s.chunks.push({ op: OP.OP_NOP })
+    expect(r.toHex()).toBe(before)
+    expect(r.chunks).toHaveLength(3)
   })
 })

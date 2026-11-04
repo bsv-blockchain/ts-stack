@@ -4,6 +4,8 @@ export interface ListedOutput {
   outpoint: string
   lockingScript: LockingScript
   satoshis: number
+  /** The decoded transaction of the listed output, whose id is the outpoint's txid. */
+  transaction: Transaction
 }
 
 /**
@@ -39,7 +41,8 @@ export function readOutputList(
     listed.set(outpoint, {
       outpoint,
       lockingScript: output.lockingScript,
-      satoshis: output.satoshis
+      satoshis: output.satoshis,
+      transaction
     })
   }
   return listed
