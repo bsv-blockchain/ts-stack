@@ -305,7 +305,10 @@ describe('saved lookup source transitions', () => {
       })
     )
     expect(() => codec.advance(pending, { status: 'unavailable', reason: 'offline' })).toThrow(
-      'cannot be established'
+      expect.objectContaining({
+        code: 'unavailable',
+        message: 'Lookup receipt cannot be established'
+      })
     )
     expect(() => codec.capture(pending, packet, '1001')).toThrow(
       expect.objectContaining({
