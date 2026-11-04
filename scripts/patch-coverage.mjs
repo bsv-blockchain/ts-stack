@@ -43,6 +43,13 @@ const EXCLUDED_SOURCE_PATTERNS = [
   // deliberately collected from `src/**/*.ts`; this script is instead
   // exercised by deterministic regeneration and byte-for-byte vector checks.
   /packages\/content\/lch\/scripts\/regenerate-brc170-vectors\.mjs$/,
+  // The Rabin module's Rúnar interop check is an opt-in developer tool: it skips unless
+  // RUNAR_NODE_MODULES names an external Rúnar install, Rúnar is not a dependency, and neither
+  // file is in the package's published `files`. The contract source is compiled by Rúnar, not
+  // executed. Package coverage is collected from `src/**/*.ts`, where the module's behaviour is
+  // tested; the check verifies the published vectors in Rúnar's Script VM when run.
+  /packages\/wallet\/rabin-permission-module\/scripts\/verify-runar\.mjs$/,
+  /packages\/wallet\/rabin-permission-module\/scripts\/RabinCheck\.runar\.ts$/,
   /\.interfaces\.[cm]?[jt]sx?$/,
   /packages\/wallet\/wallet-toolbox\/src\/storage\/schema\/StorageIdbSchema\.ts$/,
   // A barrel of `export ... from` compiles to re-export bindings and no
@@ -67,6 +74,7 @@ const EXCLUDED_SOURCE_PATTERNS = [
   /packages\/wallet\/btms\/src\/types\.ts$/,
   /packages\/wallet\/ecpm-permission-module\/src\/types\.ts$/,
   /packages\/wallet\/color-permission-module\/src\/types\.ts$/,
+  /packages\/wallet\/rabin-permission-module\/src\/types\.ts$/,
   // CHIRP's package entry point is a pure re-export barrel and its types module
   // emits declarations only. The executable CLI remains instrumented and is
   // intentionally not part of this exact exclusion.

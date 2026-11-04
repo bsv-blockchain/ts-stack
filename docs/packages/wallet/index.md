@@ -4,8 +4,8 @@ title: Wallet
 kind: meta
 domain: wallet
 version: 'n/a'
-last_updated: '2026-09-24'
-last_verified: '2026-09-24'
+last_updated: '2026-10-20'
+last_verified: '2026-10-20'
 review_cadence_days: 30
 status: stable
 tags: ['domain', 'wallet']
@@ -28,6 +28,7 @@ The wallet domain builds on top of [@bsv/sdk](../sdk/bsv-sdk.md). If you only ne
 | [@bsv/btms-permission-module](./btms-permission-module.md)   | Framework-agnostic BRC-98/99 permission hooks for BTMS token spending with custom UI callback                                      |
 | [@bsv/ecpm-permission-module](./ecpm-permission-module.md)   | BRC-98 semantic module for applying and removing wallet-derived scalars from secp256k1 points                                      |
 | [@bsv/color-permission-module](./color-permission-module.md) | BRC-207 module for holding, sending and receiving BRC-162 fungible tokens                                                          |
+| [@bsv/rabin-permission-module](./rabin-permission-module.md) | BRC-98 semantic module for wallet-held Rabin keys and signatures that Bitcoin Script can verify                                    |
 | [@bsv/wallet-relay](./wallet-relay.md)                       | Mobile-to-desktop wallet pairing via QR codes and encrypted WebSocket relay with React components                                  |
 
 ## Common Use Cases
@@ -70,6 +71,13 @@ BRC-207 `color` scheme. Applications send, receive and list tokens through the
 ordinary BRC-100 calls; the module selects, signs and verifies token outputs
 against the asset overlays.
 
+### I need signatures that a contract can verify over arbitrary data
+
+Use [@bsv/rabin-permission-module](./rabin-permission-module.md) to install the
+`p rabin` scheme. It reuses `encrypt`, so applications can obtain a
+wallet-held Rabin public key and Rabin signatures (BRC-206) that Bitcoin Script
+verifies with a few arithmetic opcodes, without holding the signing key.
+
 ## Key Concepts
 
 - **BRC-100 Wallet Interface** — Standard interface implemented by all wallet packages. Apps can work with any wallet (desktop, mobile, hardware) without code changes.
@@ -99,6 +107,7 @@ against the asset overlays.
 | **btms-permission-module**  | ✓             | ✓                 | ✓                        |
 | **ecpm-permission-module**  | ✓             | ✓                 | Host-dependent           |
 | **color-permission-module** | ✓             | ✓                 | Host-dependent           |
+| **rabin-permission-module** | ✓             | ✓                 | Host-dependent           |
 | **wallet-relay**            | Server        | React components  | Supported via relay      |
 
 ## When to Use Each Package
