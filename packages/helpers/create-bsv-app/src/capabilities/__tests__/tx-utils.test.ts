@@ -10,12 +10,6 @@ interface Summary {
   inputs: Array<{ outpoint: string }>
   outputs: Array<{ vout: number; satoshis: number; scriptType: string; data?: string[] }>
 }
-interface Carried {
-  outpoint: string
-  satoshis: number
-  lockingScript: string
-  beef: string
-}
 interface Listed {
   outputs: Array<{ outpoint: string }>
   beef?: number[]
@@ -31,7 +25,6 @@ const u = loadGenerated(TX_UTILS_SOURCE) as {
   encodeBeef: (beef: number[] | Uint8Array) => string
   decodeBeef: (b64: string) => number[]
   mergeBeefs: (beefs: Array<number[] | Uint8Array>) => number[] | Uint8Array
-  carryOutput: (tx: Transaction, vout: number) => Carried
   listAllOutputs: (
     wallet: unknown,
     args: Record<string, unknown>,
@@ -267,20 +260,9 @@ describe('beef helpers', () => {
   })
 })
 
-describe('carryOutput', () => {
-  test('returns the output with a BEEF that parses back to the transaction', async () => {
-    const { tx } = await build(funding, [{ lockingScript: p2pkh, satoshis: 321 }])
-    const carried = u.carryOutput(tx, 0)
-    expect(carried.outpoint).toBe(`${tx.id('hex')}.0`)
-    expect(carried.satoshis).toBe(321)
-    expect(carried.lockingScript).toBe(p2pkh.toHex())
-    expect(u.parseTransaction(carried.beef).id('hex')).toBe(tx.id('hex'))
-  })
-
-  test('rejects a missing output', async () => {
-    const { tx } = await build(funding, [{ lockingScript: p2pkh, satoshis: 1 }])
-    expect(() => u.carryOutput(tx, 5)).toThrow(`output 5 does not exist in ${tx.id('hex')}`)
-  })
+test('carryOutput is gone: baskets and listOutputs replace it', () => {
+  expect(TX_UTILS_SOURCE).not.toContain('carryOutput')
+  expect(TX_UTILS_SOURCE).not.toContain('CarriedOutput')
 })
 
 describe('listAllOutputs', () => {

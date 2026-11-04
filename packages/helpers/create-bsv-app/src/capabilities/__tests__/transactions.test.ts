@@ -1,5 +1,13 @@
 import { describe, expect, test } from '@jest/globals'
-import { LockingScript, P2PKH, PrivateKey, PublicKey, Transaction, Validation } from '@bsv/sdk'
+import {
+  LockingScript,
+  P2PKH,
+  PrivateKey,
+  PublicKey,
+  Transaction,
+  Validation,
+  WalletClient
+} from '@bsv/sdk'
 import type { InternalizeActionArgs } from '@bsv/sdk'
 import { InputBuilder, OutputBuilder, TransactionBuilder } from '@bsv/wallet-helper'
 import { TRANSACTIONS_SOURCE, TX_UTILS_SOURCE } from '../tx-core'
@@ -280,17 +288,25 @@ describe('emitted source', () => {
     expect(TRANSACTIONS_SOURCE).toContain('export interface InternalizePaymentArgs')
   })
 
-  test('the documented builder methods exist on the real classes', () => {
+  test('the documented builder and wallet methods exist on the real classes', () => {
     const doc = TRANSACTIONS_SOURCE.split(/\r?\n/)
       .filter(l => l.startsWith('//'))
       .join(' ')
     const names = new Set((doc.match(/\.[A-Za-z0-9]+\(/g) ?? []).map(x => x.slice(1, -1)))
-    const builders = [TransactionBuilder.prototype, OutputBuilder.prototype, InputBuilder.prototype]
+    // Builder chains, wallet calls (WalletClient implements WalletInterface), Transaction statics, JSON.
+    const owners: object[] = [
+      TransactionBuilder.prototype,
+      OutputBuilder.prototype,
+      InputBuilder.prototype,
+      WalletClient.prototype,
+      Transaction,
+      JSON
+    ]
     const known = new Set(['split'])
     const missing = [...names].filter(
       n =>
         !known.has(n) &&
-        !builders.some(b => typeof (b as unknown as Record<string, unknown>)[n] === 'function')
+        !owners.some(o => typeof (o as unknown as Record<string, unknown>)[n] === 'function')
     )
     expect(missing).toEqual([])
     for (const n of [
@@ -301,9 +317,27 @@ describe('emitted source', () => {
       'basket',
       'options',
       'build',
-      'addCustomInput'
+      'addCustomInput',
+      'customInstructions',
+      'addP2PKHInput',
+      'listOutputs',
+      'createAction',
+      'listActions',
+      'fromBEEF'
     ])
       expect(names.has(n)).toBe(true)
+  })
+
+  test('documents baskets, stored derivations, labels and tags for your own outputs', () => {
+    const doc = TRANSACTIONS_SOURCE.split(/\r?\n/)
+      .filter(l => l.startsWith('//'))
+      .join('\n')
+    expect(doc).toContain('includeCustomInstructions: true')
+    expect(doc).toContain("include: 'entire transactions'")
+    expect(doc).toContain("protocolID: [2, '3241645161d8']")
+    expect(doc).toContain('labels: [')
+    expect(doc).toContain('tags: [')
+    expect(doc).toContain('MessageBox')
   })
 
   test('avoids completeBoundAction, outputs[0] and explicit any', () => {

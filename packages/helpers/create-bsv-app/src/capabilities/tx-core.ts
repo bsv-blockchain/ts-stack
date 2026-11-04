@@ -151,31 +151,6 @@ export function mergeBeefs (beefs: Array<number[] | Uint8Array>): number[] | Uin
   return merged.toBinary()
 }
 
-export interface CarriedOutput {
-  outpoint: string
-  satoshis: number
-  lockingScript: string
-  /** base64 BEEF of the creating transaction: everything a spender needs as inputBEEF. */
-  beef: string
-}
-
-/**
- * "Creator carries the BEEF": whoever creates an output returns/stores this record so the
- * spender never has to look the source transaction up. Call it after persisting the txid:
- * it throws if the transaction's ancestry is incomplete.
- */
-export function carryOutput (tx: Transaction, vout: number): CarriedOutput {
-  const output = tx.outputs[vout]
-  if (output == null) throw new Error(\`output \${vout} does not exist in \${tx.id('hex')}\`)
-  if (output.satoshis == null) throw new Error(\`output \${vout} has no satoshi amount\`)
-  return {
-    outpoint: formatOutpoint(tx.id('hex'), vout),
-    satoshis: output.satoshis,
-    lockingScript: output.lockingScript.toHex(),
-    beef: encodeBeef(tx.toBEEF())
-  }
-}
-
 /**
  * Every output in a basket (optionally tag-scoped), paging past listOutputs' default limit of 10.
  * Scope with tags: with include 'entire transactions' each page carries BEEF for all its outputs.
@@ -237,7 +212,30 @@ export { WalletP2PKH, getScriptType, isP2PKH, extractOpReturnData } from '@bsv/w
 // A payment to the address only counts toward your balance once you call internalizePayment (below) with the matching
 // derivationPrefix and derivationSuffix and the sender's identity key: your own key for 'self' (the default),
 // the payer's key for an invoice address.
+// Paying someone else so their wallet counts it: pick a fresh derivationPrefix and derivationSuffix (random base64),
+// derive THEIR key and pay it. builder walletParams always derive your own key, so use getPublicKey here:
+//   const { publicKey } = await wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID: derivationPrefix + ' ' + derivationSuffix, counterparty: theirIdentityKey })
+//   const { tx } = await new TransactionBuilder(wallet, 'Pay').addP2PKHOutput({ publicKey, satoshis: 1000 }).options({ acceptDelayedBroadcast: false }).build()
+// then send them what internalizePayment needs (tx, the outputIndex found by script, derivationPrefix, derivationSuffix and
+// your identity key) over MessageBox or directly.
 export { getAddress } from '@bsv/wallet-helper'
+
+// Your own outputs: the wallet keeps them for you. Put each in a basket and look it up later.
+//   builder.addP2PKHOutput({ satoshis: 1000 }).basket('savings')   // no address: a fresh BRC-29 key for 'self'
+// With no address, publicKey or walletParams, the builder stores the derivation as that output's customInstructions,
+// JSON {"derivationPrefix","derivationSuffix"} (after any .customInstructions(...) you set). List the basket with
+// includeCustomInstructions to get the derivation back, and 'entire transactions' for the BEEF you need to spend:
+//   const { outputs, BEEF } = await wallet.listOutputs({ basket: 'savings', include: 'entire transactions', includeCustomInstructions: true })
+// (txUtils listAllOutputs pages through every output.) To spend one, take txid and vout from output.outpoint
+// (txUtils parseOutpoint), parse the derivation, and sign with that key:
+//   const { derivationPrefix, derivationSuffix } = JSON.parse(output.customInstructions)
+//   new TransactionBuilder(wallet, 'Spend savings').addP2PKHInput({ sourceTransaction: Transaction.fromBEEF(BEEF, txid),
+//     sourceOutputIndex: vout, walletParams: { protocolID: [2, '3241645161d8'], keyID: derivationPrefix + ' ' + derivationSuffix, counterparty: 'self' } })
+// Labels and tags: TransactionBuilder can't set them, so call createAction directly when you need them:
+//   await wallet.createAction({ description: 'Monthly saving', labels: ['savings'],
+//     outputs: [{ lockingScript, satoshis: 1000, basket: 'savings', tags: ['monthly'], outputDescription: 'Monthly saving' }] })
+//   await wallet.listActions({ labels: ['savings'] })                  // your transactions with that label
+//   await wallet.listOutputs({ basket: 'savings', tags: ['monthly'] }) // outputs with that tag
 
 // @bsv/sdk building blocks: Script, LockingScript, UnlockingScript, OP (opcodes), P2PKH (template), Transaction, Beef, Utils (toArray, toHex, ...).
 export { Script, LockingScript, UnlockingScript, OP, P2PKH, Transaction, Beef, Utils } from '@bsv/sdk'
@@ -571,7 +569,7 @@ Demo (\`TransactionsDemo.tsx\`, client page at \`/transactions\`), three example
 - \`sendToSelf(wallet, satoshis)\` — \`getAddress\`, \`pay\` it with \`acceptDelayedBroadcast: false\`, then \`internalizePayment\` the output found by script. It never throws once the payment is sent; if internalizing fails it returns the address, derivation prefix/suffix, error and (when found) the outpoint needed to recover the sats.
 - The page has a confirm step before any send, shows each txid as a WhatsOnChain link (new tab) with a "Try with the tx reader" button, and reads a pasted transaction.`
 
-const CUSTOM_SPEND = `- Spend your own script outputs with \`TransactionBuilder.addCustomInput\`; carry the source output's BEEF with \`carryOutput\`.`
+const CUSTOM_SPEND = `- Spend your own script outputs with \`TransactionBuilder.addCustomInput\`; get the source transaction from the BEEF that \`listOutputs\` returns with \`include: 'entire transactions'\`.`
 // The relay's phone wallet is reachable only through the client's wallet-connect.
 const PHONE_WALLET_ABORT = `- A paired phone wallet (wallet-relay ${WALLET_RELAY_RANGE}) cannot abort a failed custom spend, so its inputs stay unavailable until the phone wallet expires the action.`
 
@@ -604,13 +602,14 @@ Helpers (\`txUtils.ts\`):
 - \`explorerTxUrl(txid, network)\` — WhatsOnChain link for a transaction (\`undefined\` on ttn or for a bad txid).
 - \`formatOutpoint\` / \`parseOutpoint\` — \`txid.vout\` strings.
 - \`encodeBeef\` / \`decodeBeef\` / \`mergeBeefs\` — BEEF as base64 for transport; merge several into one.
-- \`carryOutput(tx, vout)\` — an output plus the BEEF needed to spend it elsewhere.
 - \`listAllOutputs(wallet, args)\` — every page of \`listOutputs\`.${demo ? TX_DEMO_SECTION : ''}
 
 ### Transaction rules
 - Never assume a vout. Wallets may reorder outputs and add change; find yours with \`findOutputByScript\`.
 - BEEF travels as base64 in JSON, never as a number array.
 - \`listOutputs\` is paginated; use \`listAllOutputs\` instead of reading one page.
+- Keep your own outputs in the wallet, not in your own records: put them in a basket (\`.basket(name)\` on a \`TransactionBuilder\` output), and find them again with \`listOutputs({ basket, include: 'entire transactions', includeCustomInstructions: true })\`, which returns the BEEF to spend them and any derivation the builder stored. \`TransactionBuilder\` can't set labels or tags; pass \`labels\` and output \`tags\` to \`wallet.createAction\` directly, then filter with \`listActions({ labels })\` and \`listOutputs({ basket, tags })\`. The comments in transactions.ts show each call.
+- To pay someone else's wallet, derive their key with \`wallet.getPublicKey({ protocolID: [2, '3241645161d8'], keyID, counterparty: theirIdentityKey })\` and pay that \`publicKey\` (a \`TransactionBuilder\` output's \`walletParams\` always derive your own key). Then send them the \`internalizePayment\` inputs (AtomicBEEF, output index, derivation prefix and suffix, your identity key) over MessageBox or directly.
 - \`internalizePayment\` needs the wallet to have processed the transaction, so create it with \`acceptDelayedBroadcast: false\`. Elsewhere the wallet's own behaviour decides whether it broadcasts now or later.
 
 ### Advanced
