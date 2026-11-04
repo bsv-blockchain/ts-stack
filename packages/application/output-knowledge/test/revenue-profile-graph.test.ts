@@ -375,6 +375,81 @@ it.each([-1, 0.5, 0x100000000])('rejects invalid input sequence %s', sequence =>
   )
 })
 
+it.each([
+  ['inputs', 8, 'Duplicate listing input'],
+  ['outputs', 11, 'Listing output count differs']
+] as const)('admits the inclusive %s dimension before enforcing layout', (kind, size, reason) => {
+  const v = candidate()
+  if (kind === 'inputs') while (v.tx.inputs.length < size) v.tx.inputs.push({ ...v.tx.inputs[1] })
+  else while (v.tx.outputs.length < size) v.tx.outputs.push({ satoshis: 1, lockingScript: plain() })
+  expect(() => inspectProfileTransition(v.tx, v.assembly, profile)).toThrow(reason)
+})
+
+it('permits sequence zero as a bounded header without claiming Script authorization', () => {
+  const v = candidate()
+  v.tx.inputs[1].sequence = 0
+  expect(inspectProfileTransition(v.tx, v.assembly, profile).parent).toEqual({
+    chain: v.assembly.package.descriptor.chain,
+    txid: v.tx.inputs[0].sourceTXID,
+    outputIndex: v.tx.inputs[0].sourceOutputIndex
+  })
+})
+
+it.each(['short-receipt', 'other-operation', 'different-prefix'] as const)(
+  'permits unrelated genesis metadata without interpreting it as a purchase: %s',
+  kind => {
+    const bytes = purchaseTransaction().outputs[1].lockingScript.toBinary()
+    if (kind === 'short-receipt') {
+      bytes.length = 90
+      bytes.splice(0, 9, 0, 106, 76, 86, 82, 79, 83, 76, 1)
+    } else if (kind === 'other-operation') bytes[9] = 2
+    else bytes[4] ^= 1
+    const v = genesis(value => {
+      value.tx.outputs.push({ satoshis: 0, lockingScript: LockingScript.fromBinary(bytes) })
+    })
+    expect(inspectProfileTransition(v.tx, v.assembly, profile).parent).toBeUndefined()
+  }
+)
+
+it('rejects an independently retained family output used as additional route funding', () => {
+  const v = candidate(),
+    anchor = v.assembly.package.genesis.body.genesis
+  v.tx.inputs.push({
+    ...v.tx.inputs[1],
+    sourceTXID: anchor.txid,
+    sourceOutputIndex: anchor.outputIndex
+  })
+  expect(() => inspectProfileTransition(v.tx, v.assembly, profile)).toThrow(
+    'Additional family listing cannot fund a route'
+  )
+})
+
+it.each(['prefix', 'suffix'] as const)(
+  'rejects extra opcodes around final P2PKH change: %s',
+  side => {
+    const v = candidate(),
+      output = v.tx.outputs.at(-1)!,
+      bytes = output.lockingScript.toBinary()
+    if (side === 'prefix') bytes.unshift(97)
+    else bytes.push(97)
+    output.lockingScript = LockingScript.fromBinary(bytes)
+    expect(() => inspectProfileTransition(v.tx, v.assembly, profile)).toThrow(
+      'Only one final P2PKH change output is allowed'
+    )
+  }
+)
+
+it('permits exact input/output conservation without requiring a positive fee', () => {
+  const v = candidate(),
+    inputTotal = v.tx.inputs.reduce((sum, input) => {
+      const source = v.assembly.transactions.get(input.sourceTXID!)!
+      return sum + source.outputs[input.sourceOutputIndex].satoshis!
+    }, 0),
+    mandatory = v.tx.outputs.slice(0, -1).reduce((sum, output) => sum + output.satoshis!, 0)
+  v.tx.outputs.at(-1)!.satoshis = inputTotal - mandatory
+  expect(inspectProfileTransition(v.tx, v.assembly, profile).plan?.operation).toBe('purchase')
+})
+
 it('rejects unrelated declared history and out-of-range successor selection', () => {
   const unrelated = candidate()
   unrelated.assembly.entries.add('00'.repeat(32))

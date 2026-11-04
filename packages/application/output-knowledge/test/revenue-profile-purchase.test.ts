@@ -6,11 +6,12 @@ import {
   OutputProtocolError,
   PrivateKey,
   signOutputPacket,
+  Transaction,
   Utils
 } from '@bsv/sdk'
 import { RevenueListingProfilePurchaseVerifier } from '../src/revenue-listing/RevenueListingProfilePurchaseVerifier.js'
 import { RevenueListingProfileLineageVerifier } from '../src/revenue-listing/RevenueListingProfileLineageVerifier.js'
-import { chains, context, fixture, profile } from './revenue-profile.fixture.js'
+import { chains, context, fixture, profile, purchased } from './revenue-profile.fixture.js'
 
 function preparation() {
   const acquisition = structuredClone(fixture.acquisitions[0])
@@ -47,6 +48,62 @@ function resign(original: Original, scalar = fixture.testActors.seller.scalar) {
 afterEach(() => {
   jest.restoreAllMocks()
 })
+
+it('refuses a signed preparation whose predecessor history already contains the submitted purchase', async () => {
+  const f = preparation(),
+    retained = purchased()
+  f.original.request.listing = retained.target
+  f.original.terms.body.domainEvidence.bytes = Utils.toBase64(
+    new TextEncoder().encode(canonicalOutputJSON(retained))
+  )
+  resign(f.original)
+  expect(
+    await new RevenueListingProfilePurchaseVerifier(profile, chains).verify(
+      f.purchase,
+      f.original,
+      context()
+    )
+  ).toEqual({
+    status: 'invalid',
+    dependencies: [],
+    reason: 'Purchase already appears in predecessor history'
+  })
+})
+
+it.each(['predecessor', 'index', 'value', 'program', 'absent-output'] as const)(
+  'binds actual purchase bytes to the prepared listing and mandatory outputs: %s',
+  field => {
+    const f = preparation(),
+      part = Beef.fromBinaryStrict(Utils.toArray(f.purchase.beef, 'base64')),
+      original = part.findTxid(f.purchase.txid)!.tx!,
+      transaction = Transaction.fromHex(original.toHex())
+    if (field === 'predecessor') transaction.inputs[0].sourceTXID = transaction.inputs[1].sourceTXID
+    else if (field === 'index') transaction.inputs[0].sourceOutputIndex++
+    else if (field === 'value') transaction.outputs[0].satoshis!++
+    else if (field === 'program')
+      transaction.outputs[0].lockingScript = transaction.outputs[2].lockingScript
+    else transaction.outputs.splice(0)
+    const txid = part.mergeRawTx(transaction.toBinary()).txid
+    f.purchase.txid = txid
+    f.purchase.beef = Utils.toBase64(part.toBinaryAtomic(txid))
+    // These are complete, independently re-identified raw negative inputs.
+    // No altered transaction is asserted to have valid Script or chain evidence.
+    return expect(
+      new RevenueListingProfilePurchaseVerifier(profile, chains).verify(
+        f.purchase,
+        f.original,
+        context()
+      )
+    ).resolves.toEqual({
+      status: 'invalid',
+      dependencies: [],
+      reason:
+        field === 'predecessor' || field === 'index'
+          ? 'Purchase consumed another prepared listing'
+          : 'Purchase successor increment/state or recipient-bound receipt differs'
+    })
+  }
+)
 
 it('cancels before reading untrusted preparation or purchase objects', async () => {
   const stop = new AbortController()
