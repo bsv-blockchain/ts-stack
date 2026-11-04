@@ -4480,12 +4480,21 @@ export class WalletPermissionsManager implements WalletInterface {
     // source; this is an independent check at the permissions layer.
     try {
       const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, args)
+      // Permission modules may add inputs and outputs of their own (e.g. token
+      // inputs and token change). They are foreign to the signer, so the net
+      // spend must count the args the modules actually sent, not the caller's.
+      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, moduleArgs)
+      const descriptions = this.descriptionsForModuleArgs(
+        args,
+        moduleArgs,
+        originalInputDescriptions,
+        originalOutputDescriptions
+      )
       let { netSpent, lineItems } = this.computeNetSpend(
         tx,
-        args,
-        originalInputDescriptions,
-        originalOutputDescriptions,
+        moduleArgs,
+        descriptions.inputs,
+        descriptions.outputs,
         resolvedOutputSatoshis
       )
       const exactWalletSpend = getExactActionSpend(createResult)
@@ -4765,6 +4774,43 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     return resolved
+  }
+
+  /**
+   * Re-keys the caller's plaintext descriptions to the indices of the args the
+   * permission modules sent. Inputs are matched by outpoint; outputs by locking
+   * script and satoshis, first unused match in order. Entries a module added
+   * have no caller description.
+   */
+  private descriptionsForModuleArgs(
+    args: CreateActionArgs,
+    moduleArgs: CreateActionArgs,
+    originalInputDescriptions: Record<number, string>,
+    originalOutputDescriptions: Record<number, string>
+  ): { inputs: Record<number, string>; outputs: Record<number, string> } {
+    const inputs: Record<number, string> = {}
+    const callerInputs = args.inputs ?? []
+    ;(moduleArgs.inputs ?? []).forEach((input, index) => {
+      const original = callerInputs.findIndex(i => i.outpoint === input.outpoint)
+      if (original !== -1 && originalInputDescriptions[original] !== undefined) {
+        inputs[index] = originalInputDescriptions[original]
+      }
+    })
+    const outputs: Record<number, string> = {}
+    const unmatched = (args.outputs ?? []).map((output, index) => ({ output, index }))
+    ;(moduleArgs.outputs ?? []).forEach((output, index) => {
+      const at = unmatched.findIndex(
+        u =>
+          u.output.satoshis === output.satoshis &&
+          (u.output.lockingScript ?? '').toLowerCase() === (output.lockingScript ?? '').toLowerCase()
+      )
+      if (at === -1) return
+      const [{ index: original }] = unmatched.splice(at, 1)
+      if (originalOutputDescriptions[original] !== undefined) {
+        outputs[index] = originalOutputDescriptions[original]
+      }
+    })
+    return { inputs, outputs }
   }
 
   private computeNetSpend(

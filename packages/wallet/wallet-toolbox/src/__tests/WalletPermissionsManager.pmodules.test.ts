@@ -6,6 +6,7 @@ import {
   PermissionsModuleRequest
 } from '../WalletPermissionsManager'
 import { Utils, type CreateActionArgs } from '@bsv/sdk'
+import { setExactActionSpend } from '../utility/exactActionSpend'
 
 jest.mock('@bsv/sdk', () => MockedBSV_SDK)
 
@@ -743,6 +744,75 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       // Verify P-module was invoked
       expect(testModule.onRequest).toHaveBeenCalled()
       expect(testModule.onResponse).toHaveBeenCalled()
+    })
+
+    it('counts the inputs and outputs a module adds in the net spend', async () => {
+      // A real BEEF for the caller's input; the createAction arg validator parses it.
+      const sdk = jest.requireActual('@bsv/sdk')
+      const source = new sdk.Transaction()
+      source.addOutput({ lockingScript: sdk.LockingScript.fromHex('51'), satoshis: 1 })
+      const callerBEEF = source.toBEEF() as number[]
+      const callerInput = `${source.id('hex') as string}.0`
+      const tokenInputs = [`${'cd'.repeat(32)}.0`, `${'ce'.repeat(32)}.0`]
+      // The module adds two 1-sat token inputs (a real module also merges their
+      // proofs into inputBEEF) and one 1-sat token change output.
+      const testModule: PermissionsModule = {
+        onRequest: jest.fn(async req => {
+          const args = req.args as CreateActionArgs
+          return {
+            ...req,
+            args: {
+              ...args,
+              inputs: [
+                ...tokenInputs.map(outpoint => ({ outpoint, unlockingScriptLength: 2, inputDescription: 'Token' })),
+                ...(args.inputs ?? [])
+              ],
+              outputs: [
+                ...(args.outputs ?? []),
+                { lockingScript: '52', satoshis: 1, outputDescription: 'Token change' }
+              ]
+            }
+          }
+        }),
+        onResponse: jest.fn(async res => res)
+      }
+      // The signer's exact spend: caller output 1000 + module output 1, less
+      // caller input 1 and the two 1-sat module inputs (they are foreign to it).
+      const create = underlying.createAction.getMockImplementation()
+      underlying.createAction.mockImplementation(async (x: any, o: any) => {
+        const result = await create(x, o)
+        setExactActionSpend(result, 998)
+        return result
+      })
+      const manager = new WalletPermissionsManager(underlying, 'admin.com', {
+        permissionModules: { tokens: testModule },
+        seekBasketInsertionPermissions: false,
+        seekPermissionWhenApplyingActionLabels: false
+      })
+      const authorize = jest.spyOn(manager, 'ensureSpendingAuthorization').mockResolvedValue(true)
+
+      await manager.createAction(
+        {
+          description: 'Token send',
+          labels: ['p tokens send'],
+          inputBEEF: callerBEEF,
+          inputs: [{ outpoint: callerInput, unlockingScriptLength: 2, inputDescription: 'Caller input' }],
+          outputs: [{ lockingScript: '51', satoshis: 1000, outputDescription: 'Recipient' }]
+        },
+        'app.com'
+      )
+
+      expect(authorize).toHaveBeenCalledTimes(1)
+      const request = authorize.mock.calls[0][0]
+      expect(request.satoshis).toBe(998)
+      expect(request.lineItems).toEqual([
+        { type: 'input', satoshis: 1, description: 'No input description provided' },
+        { type: 'input', satoshis: 1, description: 'No input description provided' },
+        { type: 'input', satoshis: 1, description: 'Caller input' },
+        { type: 'output', satoshis: 1000, description: 'Recipient' },
+        { type: 'output', satoshis: 1, description: 'No output description provided' },
+        { type: 'fee', satoshis: 0, description: 'Network fee' }
+      ])
     })
 
     it('encrypts P-basket custom instructions once, after the module chain', async () => {
