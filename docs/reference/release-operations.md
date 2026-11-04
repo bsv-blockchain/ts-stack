@@ -402,29 +402,36 @@ Later metadata commits do not change the pinned image source or its provenance.
 
 ## Temporary current-main exception — November4,2026
 
-The operator explicitly authorized waiving mutation campaigns for one release
-of the unchanged application tree at main
-`9bdeb5f82de67c109941e2b5296f7cd66a1fc0ac`. This includes every pending main
-package, specifically Paymail2.5.0 and Toolbox/core/client/mobile2.15.2, and
-the official image release from its constrained generated version-sync child.
+The operator explicitly authorized a mutation-campaign waiver for the current
+main release. The original application base9b and admitted maina18 published
+Paymail2.5.0, Toolbox/core/client/mobile2.15.2 and five images. Failed mutation
+campaigns remain failed/canceled, with no claim of full qualification.
 
-The governed record is
-`governance/release-exceptions/2026-11-04-pr1093.json`; it expires at
-2026-11-05T16:00:00Z. Only ty-everett's manual main dispatch with the exact
-`2026-11-04-pr1093-main` identity is eligible. The source checker permits only
-the temporary control, test and documentation paths declared in the checker.
-Unrelated application, package, version, lock or dependency changes fail closed.
+The original two UHRP image scans rejected follow-redirects1.16.1 for
+CVE-2026-116689. Complete CI audits also found that advisory in MessageBox's
+development lock. Regenerating those three entries selects1.16.2 without any
+other dependency change. MessageBox1.1.57 was already published and its runtime
+image scan passed, so its changed context receives immutable1.1.58. Unpublished
+Cloud Bucket0.2.59 and Basic0.1.54 retain their unused intended tags. Existing
+tags are never overwritten. The vendor patch is documented in the
+[1.16.2 release](https://github.com/follow-redirects/follow-redirects/releases/tag/v1.16.2).
 
-This is **operator-waiver admission**, not full mutation qualification. Existing
-failed/canceled campaigns, uncovered mutations and unfinished PR1478 repairs
-remain unresolved and retain their original evidence. PR1478 is not part of
-this release. All other build, test, compatibility, security, license, consumer,
-immutable tarball, provenance, SBOM, signature, image scan and registry-integrity
-controls remain mandatory. Normal dispatch without the exception still runs
-full exact-source mutation qualification; standalone image/Marketplace releases
-retain their normal qualification.
+The active record is `governance/release-exceptions/2026-11-04-pr1093.json`.
+The same waiver is now pinned to corrected base
+`b85764a100f3b3b79778240e71b9cf0a10eb99dc`, including generated version sync,
+the three precise lock fixes, MessageBox version and regenerated facts. It
+expires2026-11-05T16:00:00Z. Only ty-everett's manual main dispatch with exact ID
+`2026-11-04-pr1093-main` is eligible. The infrastructure workflow independently
+validates this source before skipping mutation. Subsequent application,
+manifest, dependency or lock changes fail the exact control-path allowlist.
+Normal dispatch without an exception still requires full mutation qualification.
 
-Remove the temporary admission after publication and published-baseline
-reconciliation; retain the retired record as evidence. The exception is not
-permission for future application changes or production promotion. Staging
-requires its normal fresh availability gates and native validation.
+This is **operator-waiver admission**, not successful mutation qualification.
+All build, complete dependency audits, non-mutation tests, compatibility,
+license, consumer, immutable artifact, image scan, provenance, signature, SBOM
+and registry-integrity gates remain mandatory. Preserve the initial verifier
+startup failure and all failed scans/audits. Public package bytes and four
+unchanged images remain at their original source; Relay0.2.3 is unchanged.
+Remove all temporary dispatch/admission controls and retire the record after
+this exact continuation and published-baseline reconciliation. Staging keeps
+its normal native/availability acceptance; production promotion remains held.
