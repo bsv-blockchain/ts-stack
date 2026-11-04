@@ -1714,7 +1714,13 @@ test('complete native initial-suite allowances retain their exact scope and alia
     'private-purchase-http',
     'private-acquisition-http',
     'private-lookup-buyer',
-    'wallet-purchase-payment'
+    'wallet-purchase-payment',
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant'
   ])
   const configured = buildMutationTargets(REPOSITORY_ROOT)
   for (const [id, target] of Object.entries(configured)) {

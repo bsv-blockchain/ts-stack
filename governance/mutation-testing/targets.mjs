@@ -3916,9 +3916,15 @@ export function buildMutationTargets(repositoryRoot) {
     'private-purchase-http',
     'private-acquisition-http',
     'private-lookup-buyer',
-    'wallet-purchase-payment'
+    'wallet-purchase-payment',
+    'lch-overlay-acquisition',
+    'lch-overlay-covenant-terms',
+    'lch-overlay-covenant-settlement',
+    'lch-overlay-license',
+    'lch-overlay-covenant-seller',
+    'lch-overlay-covenant'
   ])
-    targets[id].runnerOptions.dryRunTimeoutMinutes = 15
+    targets[id].runnerOptions = { ...targets[id].runnerOptions, dryRunTimeoutMinutes: 15 }
   appendMutationBuildInputs(repositoryRoot, targets)
   return targets
 }

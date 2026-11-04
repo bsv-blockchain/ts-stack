@@ -14,7 +14,7 @@ function values() {
     ['maximum-safe', () => Number.MAX_SAFE_INTEGER],
     ['fraction', () => 0.5],
     ['unsafe', () => Number.MAX_SAFE_INTEGER + 1],
-    ['nan', () => NaN],
+    ['nan', () => Number.NaN],
     ['infinity', () => Infinity],
     ['negative-infinity', () => -Infinity],
     ['undefined', () => undefined],
@@ -29,7 +29,7 @@ function values() {
     ['trailing-surrogate', () => '\uDC00'],
     ['empty-array', () => []],
     ['array', () => [null, true, -0, 'é😀', { b: 2, a: 1 }]],
-    ['hole', () => Array(1)],
+    ['hole', () => Object.assign([], { length: 1 })],
     ['array-extra', () => Object.assign([1], { extra: true })],
     ['empty-object', () => ({})],
     ['flat-strings', () => ({ z: 'last', a: 'first' })],
@@ -63,7 +63,7 @@ function values() {
         Object.defineProperty({}, 'value', {
           enumerable: true,
           get() {
-            throw Error('Input getter executed')
+            throw new Error('Input getter executed')
           }
         })
     ],
@@ -102,20 +102,9 @@ function graphMetadata(root) {
       return
     }
     seen.set(value, path)
-    const prototype = Object.getPrototypeOf(value)
     const keys = Reflect.ownKeys(value),
       fields = []
-    rows.push([
-      path,
-      Array.isArray(value)
-        ? 'array'
-        : prototype === null
-          ? 'null'
-          : prototype === Object.prototype || Object.getPrototypeOf(prototype) === null
-            ? 'plain'
-            : 'other',
-      fields
-    ])
+    rows.push([path, graphPrototype(value), fields])
     for (const key of keys) {
       const name = typeof key === 'symbol' ? 'symbol:' + key.description : key
       const descriptor = Object.getOwnPropertyDescriptor(value, key)
@@ -133,198 +122,170 @@ function graphMetadata(root) {
   return { rows, negativeZeros }
 }
 
+function graphPrototype(value) {
+  if (Array.isArray(value)) return 'array'
+  const prototype = Object.getPrototypeOf(value)
+  if (prototype === null) return 'null'
+  return Object.getPrototypeOf(prototype) === null ? 'plain' : 'other'
+}
+function resultPrototype(value) {
+  if (value === null || typeof value !== 'object') return typeof value
+  if (Array.isArray(value)) return 'array'
+  return Object.getPrototypeOf(value) === null ? 'null' : 'object'
+}
+function encodedObservation(value) {
+  if (new Set(['undefined', 'function', 'symbol']).has(typeof value)) return { undefined: true }
+  const json = JSON.stringify(value, (_key, v) =>
+    typeof v === 'bigint' ? { bigint: String(v) } : v
+  )
+  if (json.length <= 2048) return { json }
+  return { length: json.length, sha256: createHash('sha256').update(json).digest('hex') }
+}
 function observation(run) {
   try {
     const value = run()
-    const json = JSON.stringify(value, (_key, v) =>
-      typeof v === 'bigint' ? { bigint: String(v) } : v
-    )
-    const prototype =
-      value === null || typeof value !== 'object'
-        ? typeof value
-        : Array.isArray(value)
-          ? 'array'
-          : Object.getPrototypeOf(value) === null
-            ? 'null'
-            : 'object'
     return {
-      prototype,
+      prototype: resultPrototype(value),
       negativeZero: Object.is(value, -0),
       graph: graphMetadata(value),
-      ...(json === undefined
-        ? { undefined: true }
-        : json.length <= 2048
-          ? { json }
-          : { length: json.length, sha256: createHash('sha256').update(json).digest('hex') })
+      ...encodedObservation(value)
     }
   } catch (error) {
     return { error: { name: error.name, code: error.code, message: error.message } }
   }
 }
 
-function calls({ json: j, protocol: p, schema: s }) {
-  const result = []
-  const add = (group, id, run) =>
-    result.push({ group, id: group + '/' + id, observe: () => observation(run) })
-  const owners = [
-    'canonicalOutputJSON',
-    'ownOutputJSON',
-    'ownOutputJSONValue',
-    'canonicalOutputJSONWithInlineStrings',
-    'ownOutputJSONWithInlineStrings',
-    'canonicalOutputJSONWithInlineRecords',
-    'ownOutputJSONWithInlineRecords',
-    'ownOutputJSONForSchema',
-    'ownOutputJSONWithCountedRecords',
-    'canonicalOutputJSONWithDirectRecords'
+function ownerInputCases(add, j, name, limits) {
+  for (const [id, make] of values())
+    for (const [i, bound] of limits.entries())
+      add(name, id + '/limit-' + i, () => j[name](make(), bound))
+}
+
+function parsedInputCases(add, j, name, limits) {
+  const texts = [
+    'null',
+    'true',
+    'false',
+    '0',
+    '-0',
+    '1.00',
+    '1e2',
+    '9007199254740991',
+    '"plain"',
+    '"é😀"',
+    String.raw`"\u0061"`,
+    String.raw`"\n"`,
+    '[]',
+    '{}',
+    '[null,true,-0,"é😀"]',
+    '{"z":"last","a":"first"}',
+    '{"a":1,"b":true,"c":null,"d":"text"}',
+    '{"10":1,"2":2}',
+    '{"a":{},"b":[1,{"z":"é😀"}]}',
+    ' \r\n{ "a" : "first", "b": "second" }\t',
+    '',
+    ' ',
+    'undefined',
+    '01',
+    '+1',
+    '-',
+    '1e',
+    '1.5',
+    '9007199254740992',
+    'true false',
+    '[1,]',
+    '[1:2]',
+    '[1 2]',
+    '{"a"!1}',
+    '{"a":1!"b":2}',
+    '1e00',
+    '1e+01',
+    '1e-00',
+    '{"a":1,}',
+    '{"a":1,"a":2}',
+    String.raw`{"a":1,"\u0061":2}`,
+    '"unfinished',
+    String.raw`"unfinished\"`,
+    '"raw\ncontrol"',
+    String.raw`"\uD800"`,
+    String.raw`"\uDC00"`,
+    '\uFEFF{}'
   ]
-  const readers = [
-    'parseOutputJSON',
-    'inspectOutputJSONEncoding',
-    'parseOutputJSONWithStringRecords',
-    'inspectOutputJSONEncodingWithScalarRecords',
-    'parseOutputJSONWithOwnedRecords',
-    'inspectOutputJSONEncodingWithOwnedRecords'
-  ]
-  const limits = [undefined, { bytes: 16 }, { depth: 1 }, { arrayElements: 1 }, { mapKeys: 1 }]
-  const boundaries = [
-    null,
-    true,
-    0,
-    -0,
-    'a',
-    'é😀',
-    '"\n',
-    [],
-    [1],
-    [1, 2],
-    {},
-    { a: 'a' },
-    { a: 1 },
-    { a: [1] },
-    [[], { value: 'x' }],
-    { ['\u0000']: '\n' },
-    { z: 1, a: 2 },
-    { ['"']: '\\' }
-  ]
-  for (const point of [0, 8, 9, 10, 12, 13, 31, 34, 92, 127, 128, 2047, 2048, 0xffff, 0x10000]) {
+  for (const point of [
+    0, 8, 9, 10, 12, 13, 31, 32, 33, 34, 91, 92, 93, 126, 127, 128, 2047, 2048, 0xd7ff, 0xe000,
+    0xffff, 0x10000, 0x10ffff
+  ]) {
     const text = String.fromCodePoint(point)
-    boundaries.push(text, { [text]: text })
+    texts.push(JSON.stringify(text), JSON.stringify({ [text]: text }))
   }
+  for (const [i, text] of texts.entries()) {
+    for (const [k, bound] of limits.entries()) {
+      add(name, 'text-' + i + '/limit-' + k, () => j[name](text, bound))
+      add(name, 'utf8-' + i + '/limit-' + k, () =>
+        j[name](Uint8Array.from(Buffer.from(text)), bound)
+      )
+    }
+  }
+  add(name, 'invalid-utf8', () => j[name](Uint8Array.from([255])))
+}
+
+function invalidLimitCases(add, j, name, isOwner) {
+  for (const key of ['bytes', 'depth', 'arrayElements', 'mapKeys']) {
+    for (const [i, invalid] of [0, -1, 0.5, Number.NaN, Infinity, null, '1'].entries())
+      add(name, 'invalid-limit-' + key + '-' + i, () =>
+        j[name](isOwner ? {} : '{}', { [key]: invalid })
+      )
+  }
+}
+
+function jsonInputCases(add, j, owners, readers, limits) {
   for (const name of [...owners, ...readers]) {
-    if (typeof j[name] !== 'function') throw Error('Missing released JSON API ' + name)
-    if (owners.includes(name)) {
-      for (const [id, make] of values())
-        for (const [i, bound] of limits.entries())
-          add(name, id + '/limit-' + i, () => j[name](make(), bound))
-    } else {
-      const texts = [
-        'null',
-        'true',
-        'false',
-        '0',
-        '-0',
-        '1.00',
-        '1e2',
-        '9007199254740991',
-        '"plain"',
-        '"é😀"',
-        '"\\u0061"',
-        '"\\n"',
-        '[]',
-        '{}',
-        '[null,true,-0,"é😀"]',
-        '{"z":"last","a":"first"}',
-        '{"a":1,"b":true,"c":null,"d":"text"}',
-        '{"10":1,"2":2}',
-        '{"a":{},"b":[1,{"z":"é😀"}]}',
-        ' \r\n{ "a" : "first", "b": "second" }\t',
-        '',
-        ' ',
-        'undefined',
-        '01',
-        '+1',
-        '-',
-        '1e',
-        '1.5',
-        '9007199254740992',
-        'true false',
-        '[1,]',
-        '[1:2]',
-        '[1 2]',
-        '{"a"!1}',
-        '{"a":1!"b":2}',
-        '1e00',
-        '1e+01',
-        '1e-00',
-        '{"a":1,}',
-        '{"a":1,"a":2}',
-        '{"a":1,"\\u0061":2}',
-        '"unfinished',
-        '"unfinished\\"',
-        '"raw\ncontrol"',
-        '"\\uD800"',
-        '"\\uDC00"',
-        '\uFEFF{}'
-      ]
-      for (const point of [
-        0, 8, 9, 10, 12, 13, 31, 32, 33, 34, 91, 92, 93, 126, 127, 128, 2047, 2048, 0xd7ff, 0xe000,
-        0xffff, 0x10000, 0x10ffff
-      ]) {
-        const text = String.fromCodePoint(point)
-        texts.push(JSON.stringify(text), JSON.stringify({ [text]: text }))
-      }
-      for (const [i, text] of texts.entries()) {
-        for (const [k, bound] of limits.entries()) {
-          add(name, 'text-' + i + '/limit-' + k, () => j[name](text, bound))
-          add(name, 'utf8-' + i + '/limit-' + k, () =>
-            j[name](Uint8Array.from(Buffer.from(text)), bound)
-          )
-        }
-      }
-      add(name, 'invalid-utf8', () => j[name](Uint8Array.from([255])))
-    }
-    for (const key of ['bytes', 'depth', 'arrayElements', 'mapKeys']) {
-      for (const [i, invalid] of [0, -1, 0.5, NaN, Infinity, null, '1'].entries())
-        add(name, 'invalid-limit-' + key + '-' + i, () =>
-          j[name](owners.includes(name) ? {} : '{}', { [key]: invalid })
-        )
-    }
+    if (typeof j[name] !== 'function') throw new Error('Missing released JSON API ' + name)
+    if (owners.has(name)) ownerInputCases(add, j, name, limits)
+    else parsedInputCases(add, j, name, limits)
+    invalidLimitCases(add, j, name, owners.has(name))
   }
+}
+
+function jsonBoundaryPointCases(add, j, name, isOwner, i, value) {
+  const text = JSON.stringify(value),
+    bytes = Buffer.byteLength(text)
+  const depth = value =>
+    value === null || typeof value !== 'object'
+      ? 1
+      : 1 + Math.max(0, ...Object.values(value).map(depth))
+  const fences = [
+    { bytes },
+    { bytes: bytes - 1 },
+    { bytes: bytes + 1 },
+    { depth: depth(value) },
+    { depth: depth(value) - 1 },
+    { arrayElements: 2 },
+    { mapKeys: 2 }
+  ]
+  for (const [k, bound] of fences.entries()) {
+    add(name, 'boundary-' + i + '/' + k, () => j[name](isOwner ? value : text, bound))
+    if (!isOwner)
+      add(name, 'boundary-utf8-' + i + '/' + k, () =>
+        j[name](Uint8Array.from(Buffer.from(text)), bound)
+      )
+  }
+}
+
+function jsonBoundaryCases(add, j, owners, readers, boundaries) {
   for (const name of [...owners, ...readers]) {
-    for (const [i, value] of boundaries.entries()) {
-      const text = JSON.stringify(value),
-        bytes = Buffer.byteLength(text)
-      const depth = value =>
-        value === null || typeof value !== 'object'
-          ? 1
-          : 1 + Math.max(0, ...Object.values(value).map(depth))
-      const fences = [
-        { bytes },
-        { bytes: bytes - 1 },
-        { bytes: bytes + 1 },
-        { depth: depth(value) },
-        { depth: depth(value) - 1 },
-        { arrayElements: 2 },
-        { mapKeys: 2 }
-      ]
-      for (const [k, bound] of fences.entries()) {
-        add(name, 'boundary-' + i + '/' + k, () =>
-          j[name](owners.includes(name) ? value : text, bound)
-        )
-        if (readers.includes(name))
-          add(name, 'boundary-utf8-' + i + '/' + k, () =>
-            j[name](Uint8Array.from(Buffer.from(text)), bound)
-          )
-      }
-    }
+    for (const [i, value] of boundaries.entries())
+      jsonBoundaryPointCases(add, j, name, owners.has(name), i, value)
   }
+}
+
+function reportedByteLengthCases(add, j) {
   for (const name of [
     'inspectOutputJSONEncoding',
     'inspectOutputJSONEncodingWithScalarRecords',
     'inspectOutputJSONEncodingWithOwnedRecords'
   ]) {
-    for (const text of ['{"a":"é😀"}', '["é😀"]', '{"a":"\\u0061"}']) {
+    for (const text of ['{"a":"é😀"}', '["é😀"]', String.raw`{"a":"\u0061"}`]) {
       for (const reported of [0, 1]) {
         for (const maximum of [4, 8, 16]) {
           add(name, 'reported-byte-length-' + reported + '-' + maximum + '-' + text, () => {
@@ -336,43 +297,9 @@ function calls({ json: j, protocol: p, schema: s }) {
       }
     }
   }
-  const identity = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
-  const scalars = [
-    undefined,
-    null,
-    false,
-    true,
-    0,
-    -1,
-    1,
-    0.5,
-    4294967295,
-    4294967296,
-    '',
-    '0',
-    '1',
-    '01',
-    '-1',
-    '1e2',
-    '1\n',
-    '18446744073709551615',
-    '18446744073709551616',
-    '11'.repeat(32),
-    'AA'.repeat(32),
-    '11'.repeat(32) + '\n',
-    identity,
-    identity.toUpperCase(),
-    '04' + '11'.repeat(32),
-    '02' + 'ff'.repeat(32),
-    '03' + '00'.repeat(32),
-    'AA==',
-    'AQI=',
-    'AQID',
-    'AA=',
-    'A===',
-    'AA==\n',
-    '\uD800'
-  ]
+}
+
+function protocolBoundaryCases(add, p, scalars) {
   for (const name of [
     'outputU64',
     'incrementOutputU64',
@@ -383,10 +310,10 @@ function calls({ json: j, protocol: p, schema: s }) {
     'decodeOutputBytes',
     'validateOutputByteEncoding'
   ]) {
-    if (typeof p[name] !== 'function') throw Error('Missing released protocol API ' + name)
+    if (typeof p[name] !== 'function') throw new Error('Missing released protocol API ' + name)
     for (const [i, value] of scalars.entries()) add(name, 'scalar-' + i, () => p[name](value))
   }
-  for (const [i, value] of [0, 1, 2, 3, -1, 0.5, NaN, Infinity].entries()) {
+  for (const [i, value] of [0, 1, 2, 3, -1, 0.5, Number.NaN, Infinity].entries()) {
     add('decodeOutputBytes', 'limit-' + i, () => p.decodeOutputBytes('AQID', value))
     add('validateOutputByteEncoding', 'limit-' + i, () =>
       p.validateOutputByteEncoding('AQID', value)
@@ -423,6 +350,9 @@ function calls({ json: j, protocol: p, schema: s }) {
       p.validateOutputExtensions(value, ['urn:fixture:a'])
     )
   }
+}
+
+function schemaBoundaryCases(add, s, scalars, boundaries) {
   for (const [family, getTools] of [
     ['portable', () => s],
     ['owned', () => s.createOwnedRecordSchema()]
@@ -496,6 +426,14 @@ function calls({ json: j, protocol: p, schema: s }) {
       }
     }
   }
+}
+
+function observationLimits(j, scenario) {
+  if (scenario === 'limits') return Object.fromEntries(Object.entries(j.OUTPUT_JSON_LIMITS))
+  if (scenario === 'bounded') return { bytes: 1 }
+  return undefined
+}
+function observedOwnerCases(add, j, owners) {
   for (const name of owners) {
     for (const scenario of ['record', 'array', 'late-invalid', 'bounded', 'limits']) {
       add(name, 'observations-' + scenario, () => {
@@ -518,14 +456,7 @@ function calls({ json: j, protocol: p, schema: s }) {
             return Reflect.get(value, key, receiver)
           }
         })
-        const bound =
-          scenario === 'limits'
-            ? Object.fromEntries(
-                Object.entries(j.OUTPUT_JSON_LIMITS).map(([key, value]) => [key, value])
-              )
-            : scenario === 'bounded'
-              ? { bytes: 1 }
-              : undefined
+        const bound = observationLimits(j, scenario)
         const limitsProxy =
           bound &&
           new Proxy(bound, {
@@ -539,6 +470,100 @@ function calls({ json: j, protocol: p, schema: s }) {
       })
     }
   }
+}
+
+function calls({ json: j, protocol: p, schema: s }) {
+  const result = []
+  const add = (group, id, run) =>
+    result.push({ group, id: group + '/' + id, observe: () => observation(run) })
+  const owners = new Set([
+    'canonicalOutputJSON',
+    'ownOutputJSON',
+    'ownOutputJSONValue',
+    'canonicalOutputJSONWithInlineStrings',
+    'ownOutputJSONWithInlineStrings',
+    'canonicalOutputJSONWithInlineRecords',
+    'ownOutputJSONWithInlineRecords',
+    'ownOutputJSONForSchema',
+    'ownOutputJSONWithCountedRecords',
+    'canonicalOutputJSONWithDirectRecords'
+  ])
+  const readers = new Set([
+    'parseOutputJSON',
+    'inspectOutputJSONEncoding',
+    'parseOutputJSONWithStringRecords',
+    'inspectOutputJSONEncodingWithScalarRecords',
+    'parseOutputJSONWithOwnedRecords',
+    'inspectOutputJSONEncodingWithOwnedRecords'
+  ])
+  const limits = [undefined, { bytes: 16 }, { depth: 1 }, { arrayElements: 1 }, { mapKeys: 1 }]
+  const boundaries = [
+    null,
+    true,
+    0,
+    -0,
+    'a',
+    'é😀',
+    '"\n',
+    [],
+    [1],
+    [1, 2],
+    {},
+    { a: 'a' },
+    { a: 1 },
+    { a: [1] },
+    [[], { value: 'x' }],
+    { ['\u0000']: '\n' },
+    { z: 1, a: 2 },
+    { ['"']: '\\' }
+  ]
+  for (const point of [0, 8, 9, 10, 12, 13, 31, 34, 92, 127, 128, 2047, 2048, 0xffff, 0x10000]) {
+    const text = String.fromCodePoint(point)
+    boundaries.push(text, { [text]: text })
+  }
+  const identity = '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+  const scalars = [
+    undefined,
+    null,
+    false,
+    true,
+    0,
+    -1,
+    1,
+    0.5,
+    4294967295,
+    4294967296,
+    '',
+    '0',
+    '1',
+    '01',
+    '-1',
+    '1e2',
+    '1\n',
+    '18446744073709551615',
+    '18446744073709551616',
+    '11'.repeat(32),
+    'AA'.repeat(32),
+    '11'.repeat(32) + '\n',
+    identity,
+    identity.toUpperCase(),
+    '04' + '11'.repeat(32),
+    '02' + 'ff'.repeat(32),
+    '03' + '00'.repeat(32),
+    'AA==',
+    'AQI=',
+    'AQID',
+    'AA=',
+    'A===',
+    'AA==\n',
+    '\uD800'
+  ]
+  jsonInputCases(add, j, owners, readers, limits)
+  jsonBoundaryCases(add, j, owners, readers, boundaries)
+  reportedByteLengthCases(add, j)
+  protocolBoundaryCases(add, p, scalars)
+  schemaBoundaryCases(add, s, scalars, boundaries)
+  observedOwnerCases(add, j, owners)
   return result
 }
 

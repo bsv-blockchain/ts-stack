@@ -184,6 +184,33 @@ test('separates repeated caller references into independently owned JSON subtree
   expect(value.right.values).toEqual([1, 2])
   expect(shared.values).toEqual([1, 2])
 })
+test('fresh serializers accept shared arrays without confusing aliases with active cycles', () => {
+  const shared = [{ text: 'original' }],
+    input = { a: shared, b: shared, nested: [shared, { rows: shared }] },
+    expected = canonicalOutputJSON(input)
+  for (const write of [
+    releasedJSONSurface.canonicalOutputJSONWithInlineStrings,
+    releasedJSONSurface.canonicalOutputJSONWithInlineRecords,
+    releasedJSONSurface.canonicalOutputJSONWithDirectRecords
+  ])
+    expect(write(input)).toBe(expected)
+  for (const capture of [
+    releasedJSONSurface.ownOutputJSONWithInlineStrings,
+    releasedJSONSurface.ownOutputJSONWithInlineRecords,
+    releasedJSONSurface.ownOutputJSONWithCountedRecords
+  ]) {
+    const result = capture(input)
+    expect(canonicalOutputJSON(result.value)).toBe(expected)
+    const copy = result.value as typeof input
+    expect(copy).toEqual(input)
+    expect(copy.a).not.toBe(copy.b)
+    expect(copy.a).not.toBe(shared)
+    expect(copy.a[0]).not.toBe(copy.b[0])
+    copy.a[0].text = 'changed'
+    expect(copy.b[0].text).toBe('original')
+    expect(shared[0].text).toBe('original')
+  }
+})
 test('retains refusal identities and never invokes input getters or changes input prototypes', () => {
   let reads = 0
   const getter = Object.defineProperty({}, 'value', {
@@ -1393,6 +1420,9 @@ test('server fixed grammar snapshots names and callbacks without changing dynami
     value: 'original',
     count: 1
   })
+  expect(fixed({ value: 'standalone', count: 2 })).toEqual({ value: 'standalone', count: 2 })
+  expect(() => fixed({ value: 'standalone', extra: true })).toThrow('Unknown extra')
+  expect(() => fixed({ value: 2 })).toThrow('Expected bounded string')
   expect(() => o.normalized({ value: 'original', extra: true }, fixed)).toThrow('Unknown extra')
   expect(dynamic({ value: 2, extra: true, count: 'current' })).toEqual({
     value: 2,
@@ -1436,7 +1466,7 @@ test('server tagged alternatives retain mutable-table and custom-callback behavi
   expect(() => o.normalized({ kind: 'a', value: 'old' }, schema)).toThrow()
   expect(calls).toBe(2)
   for (const value of [null, [], { kind: 'constructor' }, { kind: 1 }, { kind: 'missing' }])
-    expect(() => o.normalized(value, schema)).toThrow()
+    expect(() => o.normalized(value, schema)).toThrow(invalid)
 })
 
 test('server child composition independently frames embedded JSON and preserves ordinary custom children', () => {

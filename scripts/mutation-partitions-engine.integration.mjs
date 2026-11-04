@@ -102,8 +102,8 @@ test('declaration companions preserve the complete pinned-engine inventory witho
 test('semantic execution ranges preserve every actual pinned-engine mutant and all original qualification settings', async () => {
   const targets = buildMutationTargets(REPOSITORY_ROOT)
   const expectedCounts = [
-    229, 131, 525, 1082, 580, 1570, 176, 264, 336, 1164, 484, 463, 357, 374, 943, 456, 167, 673,
-    890, 994
+    230, 133, 532, 1100, 645, 1617, 179, 289, 346, 1199, 496, 484, 380, 382, 948, 465, 170, 695,
+    939, 1063
   ]
   const inventories = serialResults(semanticTargets.entries(), async ([index, id]) => {
     const original = targets[id],
@@ -115,10 +115,9 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
   for await (const { index, id, original, directory, canonical } of inventories) {
     const parts = partitionMutationTarget(id, original),
       observed = []
-    // Preserve all twenty original golden totals and explicitly include every
-    // new protected-envelope framing site in the same complete partitions.
-    const addedFramingSites = id === 'protected-ledger' ? 29 : 0
-    assert.equal(canonical.length, expectedCounts[index] + addedFramingSites)
+    // Pin the reviewed10.1.1 totals. Cross-engine replay retains every9.6.1
+    // site, including all protected-envelope framing sites; see the dated review.
+    assert.equal(canonical.length, expectedCounts[index])
     assert.ok(parts.length > 1)
     assert.equal(new Set(parts.map(part => part.id)).size, parts.length)
     const partInventories = serialResults(parts, async part => {
@@ -141,10 +140,10 @@ test('semantic execution ranges preserve every actual pinned-engine mutant and a
       if (id === 'wallet-recovery-plan')
         assert.equal(
           inventory.length,
-          { 'plan-1': 62, 'construction-1': 35, 'construction-2': 34 }[part.id]
+          { 'plan-1': 63, 'construction-1': 36, 'construction-2': 34 }[part.id]
         )
       if (id === 'wallet-recovery-store')
-        assert.equal(inventory.length, [44, 9, 14, 16, 20, 10, 93, 13, 10][parts.indexOf(part)])
+        assert.equal(inventory.length, [44, 9, 15, 16, 20, 10, 93, 13, 10][parts.indexOf(part)])
       observed.push(...inventory)
     }
     assert.deepEqual(

@@ -229,6 +229,52 @@ it('consumes a rejected asynchronous currentness verdict without disclosing nati
   }
 })
 
+it.each(['session', 'control'] as const)(
+  'refuses and consumes a rejected asynchronous %s control verdict before enqueue',
+  async boundary => {
+    const f = fixture(),
+      error = new Error('Synthetic control authority failure'),
+      verdict = Promise.reject(error),
+      observed = verdict.then(
+        () => undefined,
+        failure => failure
+      ),
+      caught = jest.spyOn(verdict, 'catch'),
+      send = jest.fn<() => void>()
+    const current = () => (boundary === 'session' ? verdict : true) as unknown as boolean
+    const authorize = () => (boundary === 'control' ? verdict : true) as unknown as boolean
+    const disclosure = new PrivatePublicationDisclosure(
+      f.native.owner,
+      f.store,
+      f.contract.contracts,
+      f.access,
+      () => '20',
+      authorize
+    )
+    try {
+      expect(() =>
+        disclosure.enqueueControl(
+          {
+            version: 1,
+            error: {
+              code: 'not-found',
+              message: 'Private publication request not-found',
+              retryable: false
+            }
+          },
+          { ...f.caller, current },
+          send
+        )
+      ).toThrow('Private publication control authority changed')
+      expect(caught).toHaveBeenCalledWith(expect.any(Function))
+      expect(send).not.toHaveBeenCalled()
+    } finally {
+      expect(await observed).toBe(error)
+      caught.mockRestore()
+    }
+  }
+)
+
 it('consumes a rejected physical enqueue promise and never retries the attempted response', async () => {
   const f = fixture(),
     response = f.disclosure.prepare(f.status, f.caller),
