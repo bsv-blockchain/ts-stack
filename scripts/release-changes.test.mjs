@@ -15,7 +15,8 @@ import {
   loadChanges,
   nextVersion,
   parseChange,
-  planRelease
+  planRelease,
+  setPageVersion
 } from './release-changes.mjs'
 
 const MIGRATION = 'No consumer migration is required for this change.'
@@ -161,6 +162,15 @@ describe('parseChange', () => {
     assert.ok(errors.some(error => /Migration/.test(error)))
     assert.ok(errors.some(error => /summary/.test(error)))
   })
+})
+
+test('setPageVersion keeps the quote style and the body', () => {
+  assert.equal(
+    setPageVersion('---\nversion: "1.0.0"\n---\nversion: 1', '1.1.0'),
+    '---\nversion: "1.1.0"\n---\nversion: 1'
+  )
+  assert.equal(setPageVersion('---\nversion: 1.0.0\n---\n', '2.0.0'), '---\nversion: 2.0.0\n---\n')
+  assert.equal(setPageVersion('no frontmatter', '2.0.0'), 'no frontmatter')
 })
 
 describe('insertChangelogSection', () => {

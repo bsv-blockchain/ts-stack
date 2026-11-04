@@ -332,6 +332,38 @@ export function insertChangelogSection(text, { version, date, changes }) {
   return lines.join('\n')
 }
 
+const frontmatterOf = text => /^---\r?\n([\s\S]*?)\r?\n---/.exec(text)?.[1] ?? ''
+const frontmatterField = (frontmatter, key) =>
+  new RegExp(String.raw`^${key}:\s*["']?([^"'\n]+)["']?\s*$`, 'm').exec(frontmatter)?.[1]
+
+/** docs/packages pages by the package name in their `title` frontmatter. */
+function packagePages(root) {
+  const pages = new Map()
+  const walk = directory => {
+    if (!existsSync(directory)) return
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) walk(path)
+      else if (entry.name.endsWith('.md')) {
+        const title = frontmatterField(frontmatterOf(readFileSync(path, 'utf8')), 'title')
+        if (title) pages.set(title, path)
+      }
+    }
+  }
+  walk(join(root, 'docs/packages'))
+  return pages
+}
+
+/** The documentation policy requires a package page `version` to match the manifest. */
+export function setPageVersion(text, version) {
+  const frontmatter = frontmatterOf(text)
+  const updated = frontmatter.replace(
+    /^version:\s*(["']?)[^"'\n]*\1\s*$/m,
+    (_line, quote) => `version: ${quote}${version}${quote}`
+  )
+  return updated === frontmatter ? text : text.replace(frontmatter, updated)
+}
+
 const appendNote = (existing, addition, replace) =>
   replace || !existing ? addition : `${collapse(existing)} ${addition}`
 
@@ -344,8 +376,14 @@ export function applyRelease(root = ROOT, { date = new Date().toISOString().slic
   const notes = JSON.parse(readFileSync(notesPath, 'utf8'))
   const baselinesPath = join(root, BASELINES)
   const baselines = JSON.parse(readFileSync(baselinesPath, 'utf8'))
+  const pages = packagePages(root)
 
   for (const item of plan) {
+    const page = pages.get(item.name)
+    if (page !== undefined) {
+      writeFileSync(page, setPageVersion(readFileSync(page, 'utf8'), item.version))
+    }
+
     const manifestPath = join(root, item.path, 'package.json')
     writeFileSync(
       manifestPath,
