@@ -746,7 +746,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       expect(testModule.onResponse).toHaveBeenCalled()
     })
 
-    it('counts the inputs and outputs a module adds in the net spend', async () => {
+    it('counts the inputs and outputs a module appends in the net spend', async () => {
       // A real BEEF for the caller's input; the createAction arg validator parses it.
       const sdk = jest.requireActual('@bsv/sdk')
       const source = new sdk.Transaction()
@@ -754,8 +754,7 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const callerBEEF = source.toBEEF() as number[]
       const callerInput = `${source.id('hex') as string}.0`
       const tokenInputs = [`${'cd'.repeat(32)}.0`, `${'ce'.repeat(32)}.0`]
-      // The module adds two 1-sat token inputs (a real module also merges their
-      // proofs into inputBEEF) and one 1-sat token change output.
+      // The module appends two 1-sat token inputs and one 1-sat token change output.
       const testModule: PermissionsModule = {
         onRequest: jest.fn(async req => {
           const args = req.args as CreateActionArgs
@@ -764,8 +763,8 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
             args: {
               ...args,
               inputs: [
-                ...tokenInputs.map(outpoint => ({ outpoint, unlockingScriptLength: 2, inputDescription: 'Token' })),
-                ...(args.inputs ?? [])
+                ...(args.inputs ?? []),
+                ...tokenInputs.map(outpoint => ({ outpoint, unlockingScriptLength: 2, inputDescription: 'Token' }))
               ],
               outputs: [
                 ...(args.outputs ?? []),
@@ -776,8 +775,8 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
         }),
         onResponse: jest.fn(async res => res)
       }
-      // The signer's exact spend: caller output 1000 + module output 1, less
-      // caller input 1 and the two 1-sat module inputs (they are foreign to it).
+      // The signer's exact spend: outputs 1000 + 1, less the caller's input and
+      // the two token inputs (1 sat each), none of them wallet funding.
       const create = underlying.createAction.getMockImplementation()
       underlying.createAction.mockImplementation(async (x: any, o: any) => {
         const result = await create(x, o)
@@ -806,9 +805,9 @@ describe('WalletPermissionsManager - Permission Module Support', () => {
       const request = authorize.mock.calls[0][0]
       expect(request.satoshis).toBe(998)
       expect(request.lineItems).toEqual([
-        { type: 'input', satoshis: 1, description: 'No input description provided' },
-        { type: 'input', satoshis: 1, description: 'No input description provided' },
         { type: 'input', satoshis: 1, description: 'Caller input' },
+        { type: 'input', satoshis: 1, description: 'No input description provided' },
+        { type: 'input', satoshis: 1, description: 'No input description provided' },
         { type: 'output', satoshis: 1000, description: 'Recipient' },
         { type: 'output', satoshis: 1, description: 'No output description provided' },
         { type: 'fee', satoshis: 0, description: 'Network fee' }

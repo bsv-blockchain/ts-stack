@@ -4480,22 +4480,15 @@ export class WalletPermissionsManager implements WalletInterface {
     // source; this is an independent check at the permissions layer.
     try {
       const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-      // A permission module may add inputs by outpoint and outputs of its own
-      // (the color module: the token inputs it spends, the token change it
-      // creates). The signer counts neither as wallet funding, so the net
-      // spend must be taken from the args the modules sent, not the caller's.
+      // A permission module appends inputs (by outpoint) and outputs of its own
+      // to the caller's; the signer counts neither as wallet funding. The net
+      // spend is taken from the args the modules sent, not the caller's.
       const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, moduleArgs)
-      const descriptions = this.descriptionsForModuleArgs(
-        args,
-        moduleArgs,
-        originalInputDescriptions,
-        originalOutputDescriptions
-      )
       let { netSpent, lineItems } = this.computeNetSpend(
         tx,
         moduleArgs,
-        descriptions.inputs,
-        descriptions.outputs,
+        originalInputDescriptions,
+        originalOutputDescriptions,
         resolvedOutputSatoshis
       )
       const exactWalletSpend = getExactActionSpend(createResult)
@@ -4775,44 +4768,6 @@ export class WalletPermissionsManager implements WalletInterface {
     }
 
     return resolved
-  }
-
-  /**
-   * The caller described each of its inputs and outputs, kept by position. A
-   * permission module reorders the list and adds entries of its own, so the
-   * positions change. This finds each caller input (by outpoint) and output (by
-   * locking script and satoshis) in the module's list and moves its description
-   * to the new position. Entries the module added get no description.
-   */
-  private descriptionsForModuleArgs(
-    args: CreateActionArgs,
-    moduleArgs: CreateActionArgs,
-    originalInputDescriptions: Record<number, string>,
-    originalOutputDescriptions: Record<number, string>
-  ): { inputs: Record<number, string>; outputs: Record<number, string> } {
-    const inputs: Record<number, string> = {}
-    const callerInputs = args.inputs ?? []
-    ;(moduleArgs.inputs ?? []).forEach((input, index) => {
-      const original = callerInputs.findIndex(i => i.outpoint === input.outpoint)
-      if (original !== -1 && originalInputDescriptions[original] !== undefined) {
-        inputs[index] = originalInputDescriptions[original]
-      }
-    })
-    const outputs: Record<number, string> = {}
-    const unmatched = (args.outputs ?? []).map((output, index) => ({ output, index }))
-    ;(moduleArgs.outputs ?? []).forEach((output, index) => {
-      const at = unmatched.findIndex(
-        u =>
-          u.output.satoshis === output.satoshis &&
-          (u.output.lockingScript ?? '').toLowerCase() === (output.lockingScript ?? '').toLowerCase()
-      )
-      if (at === -1) return
-      const [{ index: original }] = unmatched.splice(at, 1)
-      if (originalOutputDescriptions[original] !== undefined) {
-        outputs[index] = originalOutputDescriptions[original]
-      }
-    })
-    return { inputs, outputs }
   }
 
   private computeNetSpend(
