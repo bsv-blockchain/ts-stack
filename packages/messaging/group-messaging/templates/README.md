@@ -12,7 +12,7 @@ import your copy, not the package path.
 | `transcript.ts`             | what was said, and the order its writes happen in | how long a transcript lives is the host's decision                                                                                     |
 | `web-crypto-conformance.ts` | whether this runtime's WebCrypto can do the job   | the library cannot probe a host's platform for it                                                                                      |
 
-All four exist because of what the first real integration got wrong.
+All five exist because of what the first real integration got wrong.
 `__tests__/host-lifecycle.test.ts` reproduces the lifecycle defects against the
 naive pattern; each template's own tests are the counterfactual.
 
@@ -46,9 +46,12 @@ the bookkeeping that therefore belongs on your side.
   with the chat name the request carried, and its answer is shelved: the Welcome
   row carries a fresh library id that matches nothing passed to `accept`, so the
   shelved record, not the Welcome's own chat name, decides where a join files. The optional `nameFor(inviteId)` is a member of this
-  host-supplied interface, not a library feature: it supplies the chat name the
-  Welcome carries, and without it `forWelcome` receives `undefined`. A `chatId`
-  is local and never goes on the wire.
+  host-supplied interface, not a library feature: it names the chat the inviter
+  creates, which is also the name riding out on the Welcome. It has no bearing
+  on what the invitee's `forWelcome` is handed — that is the `chatName` the
+  inviter passed to `invites.send`, and omitting it there leaves `forWelcome`
+  with `undefined` however `nameFor` is implemented. A `chatId` is local and
+  never goes on the wire.
 - **`decline` and `abandon`** are the only things that retire a shelved record
   short of a join. A failed `accept` keeps it, and the retry resends the same
   KeyPackage: the send may have arrived with only its acknowledgement lost, and
@@ -171,12 +174,16 @@ the rule had no owner.
 
 ```ts
 const owner = new ClientOwner(key => ({
-  acquire: () => openDatabase(`chats-${key.identityKey}.db`),
+  // Your SQLite opener, not this package's `openDatabase` — that one is the
+  // IndexedDB opener and returns an `IDBDatabase`, whose close is `close()`.
+  acquire: () => sqlite.openDatabaseAsync(`chats-${key.identityKey}.db`),
   create: database => GroupMessagingClient.create({ wallet, storage: database, transport }),
   release: database => database.closeAsync()
 }))
 
 const client = await owner.get({ identityKey, chain, host })
+// `owner.close()` belongs in your teardown: it releases the held client and
+// the database its recipe acquired.
 ```
 
 `ClientKey` makes `identityKey` mandatory, so the original defect is a compile
@@ -207,7 +214,9 @@ Shipping a working shelf is a better answer than warning harder.
 ```ts
 const shelf = await SqlShelf.open(database)
 await shelf.reap() // on open: a week-old half is waste
-new ManagedInvitations(client, shelf, chatIds, onFailure).start()
+// `stop` belongs in your teardown: `start` subscribes to the client, and a
+// screen that mounts twice without it runs the exchange twice.
+const stop = new ManagedInvitations(client, shelf, chatIds, onFailure).start()
 ```
 
 **It writes key material to your database.** The half is an MLS private
@@ -223,8 +232,10 @@ choice, as long as it is a choice.
 
 1. **Scoping.** One table serves one identity. Several accounts sharing a
    database need a `tableName` each, or an identity column.
-2. **Concurrency.** `take` is a read then a delete, not an atomic claim. One
-   client per identity per process makes that safe; two do not.
+2. **Concurrency.** `take` is an atomic claim: the DELETE is the claim and its
+   `changes` count decides the winner, because `#retire` and an arriving
+   Welcome both call it inside a single client. What is still handed to you is
+   two _processes_ on one database file.
 3. **Encryption.** It stores what it is given.
 
 ## Transcript
@@ -255,8 +266,11 @@ so record on both arms.
 
 ```ts
 const transcript = await Transcript.open(database, { onError: report })
-transcript.follow(client)
-transcript.onAppended(() => void redraw())
+// Both return an unsubscribe, and both belong in your teardown: a screen that
+// mounts twice without them follows the client twice and writes every message
+// twice.
+const unfollow = transcript.follow(client)
+const stopRedraw = transcript.onAppended(() => void redraw())
 
 const content = textContent(draft)
 let id: string

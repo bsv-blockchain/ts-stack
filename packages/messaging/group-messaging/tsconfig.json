@@ -12,6 +12,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "types": ["node"],
+    "paths": { "@bsv/group-messaging": ["./src/index.ts"] },
 
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
