@@ -1,6 +1,6 @@
 // src/__tests__/placement.test.ts
 import { describe, expect, test } from '@jest/globals'
-import { planPlacement } from '../engine'
+import { planPlacement, fitsLayout } from '../engine'
 import { walletConnect } from '../capabilities/wallet-connect'
 import { walletLogin } from '../capabilities/wallet-login'
 import type { Capability, CapabilityContext } from '../types'
@@ -155,5 +155,20 @@ describe('planPlacement — glue toggle', () => {
     const result = planPlacement({ ...monorepoConfig, glue: true }, [capWithGlue])
     const paths = result.utilFiles.map(f => f.path)
     expect(paths.every(p => p.includes(monorepoConfig.bsvDir))).toBe(true)
+  })
+})
+
+describe('fitsLayout', () => {
+  const clientOnly: Capability = { ...capWithGlue, id: 'client-only', roles: ['client'] }
+
+  test('a capability fits when at least one role has a target', () => {
+    expect(fitsLayout(clientOnly, 'frontend-only')).toBe(true)
+    expect(fitsLayout(clientOnly, 'monorepo')).toBe(true)
+    expect(fitsLayout(walletLogin, 'backend-only')).toBe(true) // its server role is placed
+  })
+
+  test('a capability with no placeable role does not fit', () => {
+    expect(fitsLayout(clientOnly, 'backend-only')).toBe(false)
+    expect(fitsLayout(walletConnect, 'none')).toBe(false)
   })
 })

@@ -77,4 +77,13 @@ describe('signed-requests (variant)', () => {
     expect(md).toContain('### Future integrations')
     expect(md).toContain('independently validated key')
   })
+
+  test('frontend-only: says the backend must provide the route and verify the proof', () => {
+    const line = 'Your backend must provide `POST /api/echo` (or your own route)'
+    const frontendOnly = signedRequests.agentsSection({ ...ctx, layout: 'frontend-only' })
+    expect(frontendOnly).toContain(line)
+    expect(frontendOnly).toContain('`verifyAuthProof` from `auth.ts`')
+    for (const layout of ['monorepo', 'backend-only'] as const)
+      expect(signedRequests.agentsSection({ ...ctx, layout })).not.toContain(line)
+  })
 })

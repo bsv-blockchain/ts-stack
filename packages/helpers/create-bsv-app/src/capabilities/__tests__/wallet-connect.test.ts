@@ -246,11 +246,12 @@ describe('wallet-connect', () => {
     expect(Object.keys(server)).toEqual(expect.arrayContaining(['@bsv/wallet-relay', 'qrcode']))
     expect(server).not.toHaveProperty('ws')
   })
-  test('deps target @bsv/wallet-relay 0.7.0 (allowLocalNetworkHttp opt-in) and its @bsv/sdk peer floor', () => {
+  test('deps target @bsv/sdk ^4.0.1, @bsv/auth ^0.1.8 and @bsv/wallet-relay ^0.7.0', () => {
     const deps = walletConnect.npmDependencies(ctx)
     expect(deps.client?.['@bsv/wallet-relay']).toBe('^0.7.0')
     expect(deps.server?.['@bsv/wallet-relay']).toBe('^0.7.0')
-    expect(deps.shared?.['@bsv/sdk']).toBe('^2.4.1')
+    expect(deps.shared?.['@bsv/sdk']).toBe('^4.0.1')
+    expect(deps.shared?.['@bsv/auth']).toBe('^0.1.8')
   })
   test('wallet-connect provides ConnectWallet + client config and only main.* baseEdits (Home is a generated base file)', () => {
     const ctx2 = {

@@ -22,6 +22,13 @@ const config: ProjectConfig = {
   network: 'test'
 }
 
+// Server wiring is only written for a layout with a server, so the server-snippet tests use a monorepo.
+const fullStack: ProjectConfig = {
+  ...config,
+  stack: { ...config.stack, backend: { framework: 'express' } },
+  targets: { client: 'client', server: 'server' }
+}
+
 // The fenced `server/src/index.ts` block of a manual-wiring AGENTS.md.
 function serverSnippet(md: string): string {
   const match = /### `server\/src\/index\.ts`\n\n```ts\n([\s\S]*?)\n```/.exec(md)
@@ -116,7 +123,7 @@ describe('renderAgentsMd', () => {
   })
 
   test('add-mode: wiring section shows route JSX and server route snippet to paste', () => {
-    const md = renderAgentsMd(config, [walletConnect, walletLogin])
+    const md = renderAgentsMd(fullStack, [walletConnect, walletLogin])
     // Should include a Wiring (manual) heading
     expect(md).toContain('Wiring')
     // App.tsx route import generated from the route descriptor
@@ -131,8 +138,8 @@ describe('renderAgentsMd', () => {
   })
 
   test.each([
-    ['add mode', config],
-    ['--no-glue', { ...config, mode: 'new' as const, glue: false }]
+    ['add mode', fullStack],
+    ['--no-glue', { ...fullStack, mode: 'new' as const, glue: false }]
   ])('%s: the wallet-connect server snippet compiles on its own', (_label, cfg) => {
     const snippet = serverSnippet(renderAgentsMd(cfg, [walletConnect]))
     // config.ts is written only for new glued projects, so the snippet must not import it.
@@ -142,7 +149,7 @@ describe('renderAgentsMd', () => {
   })
 
   test('manual wiring env note lists SERVER_ORIGIN next to SERVER_PRIVATE_KEY', () => {
-    const md = renderAgentsMd(config, [walletConnect])
+    const md = renderAgentsMd(fullStack, [walletConnect])
     const note = md.split('\n').find(l => l.startsWith('> **`SERVER_PRIVATE_KEY`**')) ?? ''
     expect(note).toContain('`SERVER_ORIGIN`')
   })

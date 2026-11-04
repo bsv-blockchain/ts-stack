@@ -22,6 +22,13 @@ export interface TargetPaths {
   server?: string
 }
 
+/** A capability added because a selected one requires it. */
+export interface PulledCapability {
+  id: string
+  /** Members of the closed list that require it, in registry order. */
+  requiredBy: string[]
+}
+
 export interface ProjectConfig {
   mode: Mode
   name: string
@@ -30,7 +37,10 @@ export interface ProjectConfig {
   stack: Stack
   targets: TargetPaths
   bsvDir: string
+  /** Closed over `requires`, in registry order. */
   capabilities: string[]
+  /** What the closure added beyond the request; set by `resolveConfig`. */
+  pulled?: PulledCapability[]
   glue: boolean
   install: boolean
   packageManager: PackageManager
@@ -56,4 +66,16 @@ export function defaultTargetPaths(stack: Stack): TargetPaths {
   if (layout === 'backend-only') return { server: '' }
   if (layout === 'monorepo') return { client: 'client', server: 'server' }
   return {}
+}
+
+/**
+ * Folder of target `t` relative to the project root ('' is the root): the configured path, else the
+ * layout default (single-target layouts live at the root). A target the layout lacks falls back to
+ * its own name; nothing is placed there.
+ */
+export function targetFolder(
+  config: Pick<ProjectConfig, 'stack' | 'targets'>,
+  t: keyof TargetPaths
+): string {
+  return config.targets[t] ?? defaultTargetPaths(config.stack)[t] ?? t
 }

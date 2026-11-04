@@ -1,8 +1,18 @@
 // src/config/validate.ts
-import type { ProjectConfig, PackageManager, Network, Mode, Stack, TargetPaths } from './model.js'
-import { defaultTargetPaths } from './model.js'
+import type {
+  ProjectConfig,
+  PackageManager,
+  Network,
+  Mode,
+  Stack,
+  TargetPaths,
+  PulledCapability
+} from './model.js'
+import { defaultTargetPaths, layoutOf } from './model.js'
 import { getCapability, listCapabilities } from '../registry.js'
 import { getStarter } from '../starters.js'
+import { fitsLayout } from '../engine.js'
+import { capabilityClosure, pulledCapabilities } from './requires.js'
 
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -108,22 +118,57 @@ function resolveCapabilityIds(
   return capabilities
 }
 
+const NO_LAYOUT =
+  'add mode found no frontend or backend in this directory; pass --frontend react or --backend express, or set a stack in the --file config'
+
+// A capability whose roles all lack a target in this layout would be recorded with nothing written.
+// A requested misfit is named before a pulled one, so the error names what the user typed.
+function assertCapabilitiesFit(
+  capabilities: string[],
+  pulled: PulledCapability[],
+  stack: Stack
+): void {
+  if (capabilities.length === 0) return
+  const layout = layoutOf(stack)
+  if (layout === 'none') throw new ConfigError(NO_LAYOUT)
+  const misfits = capabilities.filter(id => {
+    const capability = getCapability(id)
+    return capability !== undefined && !fitsLayout(capability, layout)
+  })
+  const misfit = misfits.find(id => !pulled.some(p => p.id === id)) ?? misfits[0]
+  if (misfit === undefined) return
+  const requiredBy = pulled.find(p => p.id === misfit)?.requiredBy
+  const label =
+    requiredBy === undefined ? misfit : `${misfit} (required by ${requiredBy.join(', ')})`
+  throw new ConfigError(`capability ${label} cannot be placed in this project's layout (${layout})`)
+}
+
 function resolvePackageManager(raw: Record<string, unknown>): PackageManager {
   return PACKAGE_MANAGERS.has(raw.packageManager as PackageManager)
     ? (raw.packageManager as PackageManager)
     : 'npm'
 }
 
+/**
+ * The effective mode: an explicit caller override (e.g. the --mode flag on the --file door)
+ * wins over the config's own "mode" field.
+ */
+export function resolveMode(raw: Record<string, unknown>, overrideMode?: Mode): Mode {
+  return overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
+}
+
+export function resolveDir(raw: Record<string, unknown>): string {
+  return typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
+}
+
 export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}): ProjectConfig {
   const raw = asObject(input, 'config')
 
-  // An explicit caller override (e.g. the --mode flag on the --file door) wins over the
-  // config's own "mode" field. Resolved here so the new-mode floor + validation below
-  // run against the effective mode.
-  const mode: Mode = opts.overrideMode ?? (raw.mode === 'add' ? 'add' : 'new')
+  // Resolved first so the new-mode floor + validation below run against the effective mode.
+  const mode = resolveMode(raw, opts.overrideMode)
 
   const name = resolveName(raw)
-  const dir = typeof raw.dir === 'string' && raw.dir.length > 0 ? raw.dir : '.'
+  const dir = resolveDir(raw)
 
   const starterId =
     typeof raw.starter === 'string' && raw.starter.length > 0 ? raw.starter : 'custom'
@@ -142,12 +187,17 @@ export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}
   )
 
   const bsvDir = resolveBsvDir(raw)
-  const capabilities = resolveCapabilityIds(raw, mode, starterId)
+  // every entry point resolves here, so all of them get the same closed list and notice
+  const requested = resolveCapabilityIds(raw, mode, starterId)
+  const layout = layoutOf(stack)
+  const capabilities = capabilityClosure(requested, layout)
   if (mode === 'new' && !starter.supportsCapabilities && capabilities.length > 0) {
     throw new ConfigError(
       `starter ${starter.id} is a complete example and does not accept generated capabilities`
     )
   }
+  const pulled = pulledCapabilities(requested, layout)
+  assertCapabilitiesFit(capabilities, pulled, stack)
   const glue = raw.glue !== false
   const install = raw.install !== false
   const packageManager = resolvePackageManager(raw)
@@ -162,6 +212,7 @@ export function resolveConfig(input: unknown, opts: { overrideMode?: Mode } = {}
     targets,
     bsvDir,
     capabilities,
+    pulled,
     glue,
     install,
     packageManager,

@@ -30,7 +30,8 @@ jest.mock('../registry', () => {
   }
   return {
     getCapability: (id: string): Capability | undefined => [a, b].find(c => c.id === id),
-    listCapabilities: (): Capability[] => [a, b]
+    listCapabilities: (): Capability[] => [a, b],
+    requiredIds: (): string[] => [] // neither fake cap requires anything
   }
 })
 

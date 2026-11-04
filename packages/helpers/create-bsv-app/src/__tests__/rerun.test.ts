@@ -63,7 +63,7 @@ describe('re-run add flow', () => {
     if (after == null) throw new Error('manifest not written after second run')
     expect(after.stack.backend?.framework).toBe('express')
     // Item 3: STRICT dedup assertion — no duplicates after re-run
-    expect(after.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(after.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
     const agentsMd = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
     // Item 4: both wallet-connect and wallet-login sections appear
     expect(agentsMd).toContain('## wallet-connect')
@@ -116,7 +116,7 @@ describe('re-run add flow', () => {
     const after = readValidManifest(dir)
     if (after == null) throw new Error('manifest not written after second run')
     expect(after.stack.backend?.framework).toBe('express')
-    expect(after.capabilities).toEqual(['wallet-connect', 'wallet-login'])
+    expect(after.capabilities).toEqual(['wallet-connect', 'wallet-login', 'tx-core'])
     const agentsMd = readFileSync(join(dir, 'AGENTS.md'), 'utf8')
     expect(agentsMd).toContain('## wallet-connect')
     expect(agentsMd).toContain('## wallet-login')

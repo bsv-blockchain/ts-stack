@@ -299,6 +299,17 @@ describe('page wiring', () => {
     )
   })
 
+  test('renders the plan notice as text, so it is escaped like the page globals', () => {
+    expect(html).toContain('state.notice = (d && d.notice) || [];')
+    expect(html).toMatch(
+      /state\.notice\.forEach\(function \(line\) \{ rail\.appendChild\(el\('div', \{ class: 'notice', text: line \}\)\); \}\);/u
+    )
+  })
+
+  test('capability options embed their requires, escaped as a page global', () => {
+    expect(html).toContain('"requires":["wallet-connect"]')
+  })
+
   test('a draft edit clears the last Generate error, so the live plan error shows', () => {
     // every edit handler re-fetches the plan
     expect(html).toMatch(/function fetchPlan\(\) \{\n\s*state\.error = '';/u)

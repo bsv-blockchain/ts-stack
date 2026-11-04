@@ -1,6 +1,9 @@
 import fc from 'fast-check'
 
 import { ConfigError, resolveConfig, validBsvDir } from '../validate'
+import { capabilityClosure } from '../requires'
+import { getCapability, listCapabilities, requiredIds } from '../../registry'
+import { layoutOf } from '../model'
 
 const MIN_PROPERTY_RUNS = 300
 const requestedRuns = Number.parseInt(process.env.FAST_CHECK_NUM_RUNS ?? '', 10)
@@ -99,6 +102,33 @@ describe('project configuration properties', () => {
         starter: 'not-registered'
       })
     ).toThrow('unknown starter: not-registered')
+  })
+
+  test('closes capabilities over requires, in registry order, stably, in both modes', () => {
+    const ids = listCapabilities().map(c => c.id)
+    const stacks = [
+      { frontend: { framework: 'react' } },
+      { backend: { framework: 'express' } },
+      { frontend: { framework: 'react' }, backend: { framework: 'express' } }
+    ]
+    fc.assert(
+      fc.property(
+        fc.shuffledSubarray(ids),
+        fc.constantFrom('new', 'add'),
+        fc.constantFrom(...stacks),
+        (requested, mode, stack) => {
+          const config = resolveConfig({ mode, name: 'app', stack, capabilities: requested })
+          const { capabilities } = config
+          const layout = layoutOf(config.stack)
+          expect(capabilities).toEqual(expect.arrayContaining(requested))
+          for (const id of capabilities)
+            for (const dep of requiredIds(getCapability(id)!, layout))
+              expect(capabilities).toContain(dep)
+          expect(capabilities).toEqual(ids.filter(id => capabilities.includes(id)))
+          expect(capabilityClosure(capabilities, layout)).toEqual(capabilities)
+        }
+      )
+    )
   })
 
   test('handles arbitrary structured configuration as a resolved config or a governed error', () => {

@@ -3,9 +3,9 @@ id: pkg-create-bsv-app
 title: 'create-bsv-app'
 kind: package
 domain: helpers
-version: '1.2.0'
-last_updated: '2026-10-06'
-last_verified: '2026-10-06'
+version: '1.3.0'
+last_updated: '2026-11-02'
+last_verified: '2026-11-02'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/create-bsv-app'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/helpers/create-bsv-app'
@@ -33,6 +33,18 @@ interactive, flag, JSON configuration, and local browser-UI inputs. Generated
 projects record the resolved starter and layout in `bsv-scaffold.json`.
 Interactive and browser-UI runs start new projects from React, Express, and
 every capability; deselect what you do not need.
+
+Generated projects use `@bsv/sdk` 4. The `tx-core` capability adds transaction
+building blocks (`TransactionBuilder` from `@bsv/wallet-helper`, script support,
+BRC-29 self-addresses and payment internalization), helpers that parse and
+summarize transactions and BEEF, and a Transactions demo page. Adding a
+capability to an existing project raises an outdated dependency range it needs,
+leaves `devDependencies` and unrecognized ranges unchanged, and prints both.
+Only the `@bsv/*` packages it pins are raised across a major version; any other
+package that would need a major upgrade is left and reported for manual review.
+It also adds any capability the selected one requires where the layout uses it
+(for example `wallet-connect` for `tx-core` when the project has a frontend),
+records it in `bsv-scaffold.json`, and says so.
 Select TerraTestNet with `--network ttn` or the browser configurator; the
 choice is preserved in generated configuration and `bsv-scaffold.json`.
 
