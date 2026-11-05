@@ -9,7 +9,10 @@ import { WebRTPayError } from '../util/errors.js'
 export interface DialTimeouts {
   /** From the knock being posted to the recipient's first reply (ring, answer or reject). */
   presenceMs: number
-  /** From the first reply to an open, authenticated session. */
+  /**
+   * From the first reply to an open, authenticated session; for a dial without a knock, from
+   * the carrier taking the offer.
+   */
   dialMs: number
   /** The whole dial, whatever the stage. */
   totalMs: number
@@ -52,6 +55,19 @@ export class DialClock {
 
   /** The recipient replied: stop presence and start the dial clock (once). */
   heard(): void {
+    this.startDial("the recipient's reply")
+  }
+
+  /**
+   * A dial without a knock: the carrier took the offer, so the dial clock starts now and
+   * presence never runs (the caller asserted the recipient is there). Later replies start
+   * nothing.
+   */
+  offerTaken(): void {
+    this.startDial('the carrier taking the offer')
+  }
+
+  private startDial(since: string): void {
     if (this.stopped || this.replied) return
     this.replied = true
     clearTimeout(this.presence)
@@ -59,7 +75,7 @@ export class DialClock {
       this.expire(
         new WebRTPayError(
           'timeout',
-          `Connection not established within ${this.t.dialMs} ms of the recipient's reply`
+          `Connection not established within ${this.t.dialMs} ms of ${since}`
         )
       )
     }, this.t.dialMs)

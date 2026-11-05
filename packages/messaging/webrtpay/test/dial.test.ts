@@ -53,6 +53,23 @@ describe('DialClock', () => {
     c.stop()
   })
 
+  it('times a knockless dial from the carrier taking the offer, with no presence clock', () => {
+    const { c, expired } = clock()
+    c.start()
+    c.offerTaken()
+    jest.advanceTimersByTime(3000)
+    c.heard()
+    jest.advanceTimersByTime(2999)
+    expect(expired).toEqual([])
+    jest.advanceTimersByTime(1)
+    expect(expired).toHaveLength(1)
+    expect(expired[0]).toMatchObject({
+      code: 'timeout',
+      message: 'Connection not established within 6000 ms of the carrier taking the offer'
+    })
+    c.stop()
+  })
+
   it('caps the whole dial: unreachable before a reply, timeout after one', () => {
     const before = clock(1000)
     before.c.start()
