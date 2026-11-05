@@ -155,6 +155,27 @@ export function comparePilotReports(baseline, candidate) {
       })
       .sort(compare)
   const regressions = []
+  const limits = (rows, arm) =>
+    rows.flatMap(({ key, mutant }) => {
+      const reason = mutant.statusReason ?? ''
+      if (mutant.status !== 'Killed') return []
+      let kind
+      if (/^(?:Error: )?Property interrupted after [0-9]+ tests/m.test(reason))
+        kind = 'property-exploration-limit'
+      else if (
+        /^Error:(?: thrown:)? ["']?Exceeded timeout of [0-9]+ ms for a (?:test|hook)/m.test(reason)
+      )
+        kind = 'jest-deadline'
+      if (!kind) return []
+      return [{ key, arm, kind, reportedStatus: mutant.status, reason: reason.split('\n')[0] }]
+    })
+  const harnessLimitedKills = [
+    ...limits(original, 'baseline'),
+    ...limits(
+      [...next].map(([key, mutant]) => ({ key, mutant })),
+      'candidate'
+    )
+  ]
   for (const { key, mutant } of original) {
     const result = next.get(key)
     assert.deepEqual(
@@ -170,9 +191,29 @@ export function comparePilotReports(baseline, candidate) {
     baseline: calculateMutationMetrics(original.map(row => row.mutant)),
     candidate: calculateMutationMetrics([...next.values()]),
     regressions,
+    harnessLimitedKills,
+    requiresAdjudication: harnessLimitedKills.length > 0,
     noWeaker: regressions.length === 0,
     publicationQualification: false
   }
+}
+
+export function requireDeclaredProperty(report, relative, source) {
+  const observed = report.testFiles?.[relative]
+  assert(
+    Array.isArray(observed?.tests) && observed.tests.length > 0,
+    'Declared property absent from actual runner report'
+  )
+  assert.equal(observed.source, source, 'Declared property source differs from the observed tests')
+}
+
+function requireTargetProperty(report, target) {
+  const file = path.join(ROOT, target.propertyTest)
+  const relative = path
+    .relative(path.join(ROOT, target.packageDirectory), file)
+    .split(path.sep)
+    .join('/')
+  requireDeclaredProperty(report, relative, fs.readFileSync(file, 'utf8'))
 }
 
 function identity() {
@@ -276,6 +317,7 @@ async function executePart({
   const elapsedSeconds = (performance.now() - start) / 1000
   const bytes = fs.readFileSync(path.join(destination, 'mutation.json'))
   const report = JSON.parse(bytes)
+  requireTargetProperty(report, target)
   const evidence = await targetEvidence(
     ROOT,
     partitions.find(value => value.id === part).target,
@@ -298,6 +340,23 @@ async function executePart({
   }
 }
 
+export function requirePilotParts(caseName, available) {
+  const selected = PILOT_CASES[caseName]
+  assert(selected, 'Unknown pilot case')
+  const known = new Set(available)
+  assert(
+    selected.parts.every(part => known.has(part)),
+    'Pilot partition moved'
+  )
+  if (caseName === 'lookup-buyer')
+    assert.deepEqual(
+      ordered(known),
+      ordered(selected.parts),
+      'Whole buyer pilot omits a canonical part'
+    )
+  return selected
+}
+
 async function execute(caseName, variant, run) {
   assert(
     ['linux', 'darwin'].includes(process.platform),
@@ -309,10 +368,9 @@ async function execute(caseName, variant, run) {
   assert.match(run, /^[a-z0-9-]{8,80}$/)
   const target = buildMutationTargets(ROOT)[selected.target]
   const partitions = partitionMutationTarget(selected.target, target)
-  const available = new Set(partitions.map(part => part.id))
-  assert(
-    selected.parts.every(part => available.has(part)),
-    'Pilot partition moved'
+  requirePilotParts(
+    caseName,
+    partitions.map(part => part.id)
   )
   const directory = path.join(ROOT, 'artifacts/mutation-pilot', run, selected.target, variant)
   assert(!fs.existsSync(directory), 'Never overwrite a previous arm or failed sample')
@@ -368,6 +426,26 @@ export function comparePilotRun(directory) {
   const candidate = read(path.join(directory, 'candidate/pilot.json'))
   assert.equal(baseline.purpose, 'diagnostic-pilot')
   assert.equal(candidate.purpose, 'diagnostic-pilot')
+  const selected = PILOT_CASES[baseline.caseName]
+  assert(selected, 'Unknown comparison case')
+  assert.equal(baseline.target, selected.target, 'Comparison target changed')
+  const target = buildMutationTargets(ROOT)[selected.target]
+  requirePilotParts(
+    baseline.caseName,
+    partitionMutationTarget(selected.target, target).map(part => part.id)
+  )
+  assert.deepEqual(
+    baseline.parts.map(part => part.part),
+    selected.parts,
+    'Comparison scope omits a pilot part'
+  )
+  assert.equal(
+    baseline.wholeTarget,
+    baseline.caseName === 'lookup-buyer',
+    'Incorrect whole-target claim'
+  )
+  assert.equal(baseline.variant, 'baseline')
+  assert.equal(candidate.variant, 'candidate')
   for (const key of [
     'caseName',
     'target',
@@ -390,6 +468,8 @@ export function comparePilotRun(directory) {
     const afterBytes = fs.readFileSync(
       path.join(directory, 'candidate', before.part, 'mutation.json')
     )
+    requireTargetProperty(JSON.parse(beforeBytes), target)
+    requireTargetProperty(JSON.parse(afterBytes), target)
     assert.equal(hash(beforeBytes), before.reportDigest)
     assert.equal(hash(afterBytes), after.reportDigest)
     assert.equal(before.canonicalInventoryDigest, after.canonicalInventoryDigest)
@@ -407,6 +487,7 @@ export function comparePilotRun(directory) {
     identity: baseline.identity,
     parts,
     noWeaker: parts.every(part => part.noWeaker),
+    requiresAdjudication: parts.some(part => part.requiresAdjudication),
     baselineGateErrors: baseline.gateErrors,
     candidateGateErrors: candidate.gateErrors,
     publicationQualification: false
@@ -421,6 +502,10 @@ async function main(args) {
     fs.writeFileSync(path.join(args[1], 'comparison.json'), `${JSON.stringify(result, null, 2)}\n`)
     console.log(JSON.stringify(result, null, 2))
     assert(result.noWeaker, 'Pilot lost detection or introduced invalid/timeout/unexecuted results')
+    assert(
+      !result.requiresAdjudication,
+      'Runner-limit kills need independent adjudication before acceptance'
+    )
     return
   }
   throw new Error('Use plan, run CASE baseline|candidate RUN, or compare DIRECTORY')

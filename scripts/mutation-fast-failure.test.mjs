@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import test from 'node:test'
-import { comparePilotReports } from './mutation-pilot.mjs'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
+import {
+  comparePilotReports,
+  requirePilotParts,
+  requireDeclaredProperty
+} from './mutation-pilot.mjs'
 
 const require = createRequire(import.meta.url)
 const Sequencer = require('../governance/mutation-testing/fast-failure-sequencer.cjs')
@@ -145,4 +153,104 @@ test('coverage identities survive ID renumbering and distinguish duplicate test 
   // covering case must not be mistaken for a harmless global ID renumbering.
   candidate.files['src/owner.ts'].mutants[0].coveredBy = ['different-case']
   assert.throws(() => comparePilotReports(baseline, candidate), /coverage changed/)
+})
+
+test('the whole buyer scope rejects a newly added or missing canonical part', () => {
+  assert.equal(
+    requirePilotParts('lookup-buyer', ['buyer', 'payment']).target,
+    'private-lookup-buyer'
+  )
+  assert.throws(() => requirePilotParts('lookup-buyer', ['buyer']), /partition moved/)
+  assert.throws(
+    () => requirePilotParts('lookup-buyer', ['buyer', 'payment', 'unexecuted']),
+    /omits a canonical part/
+  )
+  assert.throws(() => requirePilotParts('unknown', []), /Unknown pilot case/)
+  assert.equal(
+    requirePilotParts('native-clock', ['progress-8', 'other-explicitly-unmeasured']).target,
+    'private-purchase-native-clock'
+  )
+})
+
+function explicitProjectSelectsProperty(root, target, config) {
+  const directory = config.rootDir ?? path.join(root, target.packageDirectory)
+  const chosen = new Set()
+  for (const specification of config.testMatch ?? []) {
+    const negate = specification.startsWith('!')
+    const pattern = (negate ? specification.slice(1) : specification).replaceAll(
+      '<rootDir>',
+      directory
+    )
+    const relative = path.relative(directory, pattern).split(path.sep).join('/')
+    for (const file of fs.globSync(relative, { cwd: directory })) {
+      const resolved = fs.realpathSync(path.resolve(directory, file))
+      if (negate) chosen.delete(resolved)
+      else chosen.add(resolved)
+    }
+  }
+  return chosen.has(fs.realpathSync(path.join(root, target.propertyTest)))
+}
+
+test('every explicit Jest mutation selector includes its declared property file', () => {
+  // Necessary selector check, not a substitute for real runner discovery:
+  // package defaults, Vitest and ignore-pattern semantics are not inferred.
+  const root = fileURLToPath(new URL('..', import.meta.url))
+  const targets = buildMutationTargets(root)
+  for (const [id, target] of Object.entries(targets)) {
+    const config = target.runnerOptions.jest?.config
+    const explicit = (config?.projects ?? [config]).filter(project => project?.testMatch)
+    if (explicit.length)
+      assert(
+        explicit.some(project => explicitProjectSelectsProperty(root, target, project)),
+        id
+      )
+  }
+  const buyer = structuredClone(targets['private-lookup-buyer'])
+  buyer.runnerOptions.jest.config.testMatch = buyer.runnerOptions.jest.config.testMatch.filter(
+    pattern => !pattern.includes('private-lookup-buyer.property')
+  )
+  assert.equal(explicitProjectSelectsProperty(root, buyer, buyer.runnerOptions.jest.config), false)
+})
+
+test('a declared property must appear with its actual source and runnable tests', () => {
+  requireDeclaredProperty(report(), 'test/full.test.ts', 'real assertion')
+  assert.throws(
+    () => requireDeclaredProperty(report(), 'test/omitted.property.test.ts', 'real assertion'),
+    /absent from actual runner/
+  )
+  assert.throws(
+    () => requireDeclaredProperty(report(), 'test/full.test.ts', 'different source'),
+    /source differs/
+  )
+  const empty = report()
+  empty.testFiles['test/full.test.ts'].tests = []
+  assert.throws(
+    () => requireDeclaredProperty(empty, 'test/full.test.ts', 'real assertion'),
+    /absent from actual runner/
+  )
+})
+
+test('runner limits remain raw reported kills but never prove an assertion counterexample', () => {
+  const candidate = report('Killed', true)
+  for (const [reason, kind] of [
+    [
+      'Error: Property interrupted after 287 tests\n{ seed: 3242026 }',
+      'property-exploration-limit'
+    ],
+    ['Error: thrown: "Exceeded timeout of 5000 ms for a test.', 'jest-deadline']
+  ]) {
+    const baseline = report()
+    baseline.files['src/owner.ts'].mutants[0].statusReason = reason
+    const result = comparePilotReports(baseline, candidate)
+    assert.equal(baseline.files['src/owner.ts'].mutants[0].status, 'Killed')
+    assert.equal(result.baseline.counts.Killed, 1)
+    assert.equal(result.noWeaker, true)
+    assert.equal(result.requiresAdjudication, true)
+    assert.equal(result.harnessLimitedKills[0].arm, 'baseline')
+    assert.equal(result.harnessLimitedKills[0].kind, kind)
+  }
+  const realFailure = report()
+  realFailure.files['src/owner.ts'].mutants[0].statusReason =
+    'Error: Property failed after 1 tests\nCounterexample: ["wrong owner"]'
+  assert.equal(comparePilotReports(realFailure, candidate).requiresAdjudication, false)
 })
