@@ -3,7 +3,7 @@ id: pkg-wallet-toolbox-client
 title: '@bsv/wallet-toolbox-client'
 kind: package
 domain: wallet
-version: '2.15.3'
+version: '2.15.4'
 last_updated: '2026-11-04'
 last_verified: '2026-11-04'
 review_cadence_days: 30
@@ -14,6 +14,14 @@ tags: [wallet, browser, indexeddb, storage, brc-100]
 ---
 
 # @bsv/wallet-toolbox-client
+
+The 2.15.4 source candidate keeps approved non-spending permissions in memory
+when their on-chain tokens cannot be funded. Grants expire with the manager
+or their approved expiry; no session grant is persisted. Grant methods still
+report `WERR_INSUFFICIENT_FUNDS`, while grouped and counterparty waiters resume.
+Spending still requires its token. Other mint errors retain the existing behavior.
+`revokeAllForOriginator` clears matching session grants with its existing type filters,
+without needing coins or an on-chain token.
 
 The 2.15.3 source candidate restores ordinary import of exactly framed legacy
 AtomicBEEF with surplus unrelated branches. It retains the declared payment and

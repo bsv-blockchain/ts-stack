@@ -53,6 +53,12 @@ import { specOpBasketPrefixOutputs } from './sdk/types'
 import { maxPossibleSatoshis } from './storage/methods/maxPossibleSatoshis'
 
 const MAX_PERMISSION_TOKEN_FIELD_BYTES = 1024 * 1024
+
+/** True when a permission token could not be minted only because the wallet has no coins to fund it. */
+function isUnfundedMint(error: unknown): boolean {
+  const e = error as { code?: unknown; name?: unknown } | null
+  return e?.code === 'WERR_INSUFFICIENT_FUNDS' || e?.name === 'WERR_INSUFFICIENT_FUNDS'
+}
 const MAX_PERMISSION_TOKEN_PAYLOAD_BYTES = 4 * 1024 * 1024
 const MAX_PERMISSION_TOKEN_LIST_FIELDS = 256
 const MAX_MONEY_SATOSHIS = 21e14
@@ -813,6 +819,15 @@ export class WalletPermissionsManager implements WalletInterface {
   /** Cache recently confirmed permissions to avoid repeated lookups. */
   private readonly permissionCache: Map<string, { expiry: number; cachedAt: number }> = new Map()
   private readonly recentGrants: Map<string, number> = new Map()
+  /**
+   * Grants the user approved whose token the wallet could not fund
+   * (WERR_INSUFFICIENT_FUNDS), keyed by permission cache key with expiry and revocation scope.
+   * Kept for the life of this manager so an empty wallet does not ask again for
+   * a decision already made; nothing is persisted, so the next session asks
+   * again and, once funded, mints the token as usual. Never holds spending.
+   */
+  private readonly sessionGrants: Map<string, { expiry: number; originator: string; type: PermissionRequest['type'] }> =
+    new Map()
 
   /** Originator binding for partial actions issued through this manager. */
   private readonly pendingActionOriginators: Map<string, string> = new Map()
@@ -1287,6 +1302,9 @@ export class WalletPermissionsManager implements WalletInterface {
       )
       try {
         await mint
+      } catch (error) {
+        if (isUnfundedMint(error)) this.keepGrantForSession(request, expiry)
+        throw error
       } finally {
         this.mintsInFlight.delete(key)
       }
@@ -1454,13 +1472,16 @@ export class WalletPermissionsManager implements WalletInterface {
 
       // A user-visible grouped grant is atomic from the caller's perspective:
       // never resolve the waiting wallet call if one of the requested tokens
-      // failed to persist. The best-effort helpers intentionally suppress
-      // singleton failures and are therefore only suitable for maintenance
-      // operations where a partial result is explicitly returned.
+      // failed to persist. The one exception is a wallet that cannot fund the
+      // tokens: persistPermissionGrant keeps the grant for this session and
+      // settleFailedGrant resumes the call. The best-effort helpers
+      // intentionally suppress singleton failures and are therefore only
+      // suitable for maintenance operations where a partial result is
+      // explicitly returned.
       await this.persistPermissionGrant(toCreate, toRenew)
       this.settleActiveGrant(params.requestID, matching, 'resolve', true)
     } catch (error) {
-      this.settleActiveGrant(params.requestID, matching, 'reject', error)
+      this.settleFailedGrant(params.requestID, matching, error)
       throw error
     }
   }
@@ -1511,13 +1532,30 @@ export class WalletPermissionsManager implements WalletInterface {
     this.activeRequests.delete(requestID)
   }
 
+  /** An unfunded grant was kept for the session, so its waiting calls resume; any other failure rejects them. */
+  private settleFailedGrant(
+    requestID: string,
+    matching: { pending: Array<{ resolve: (value: any) => void; reject: (error: any) => void }> },
+    error: unknown
+  ): void {
+    if (isUnfundedMint(error)) this.settleActiveGrant(requestID, matching, 'resolve', true)
+    else this.settleActiveGrant(requestID, matching, 'reject', error)
+  }
+
   private async persistPermissionGrant(
     toCreate: Array<{ request: PermissionRequest; expiry: number; amount?: number }>,
     toRenew: Array<{ oldToken: PermissionToken; request: PermissionRequest; expiry: number; amount?: number }>
   ): Promise<void> {
-    const created = await this.createPermissionTokensBestEffort(toCreate, true)
-    const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
-    for (const request of [...created, ...renewed]) this.markRecentGrant(request)
+    try {
+      const created = await this.createPermissionTokensBestEffort(toCreate, true)
+      const renewed = await this.renewPermissionTokensBestEffort(toRenew, true)
+      for (const request of [...created, ...renewed]) this.markRecentGrant(request)
+    } catch (error) {
+      if (isUnfundedMint(error)) {
+        for (const { request, expiry } of [...toCreate, ...toRenew]) this.keepGrantForSession(request, expiry)
+      }
+      throw error
+    }
   }
 
   public async denyGroupedPermission(requestID: string): Promise<void> {
@@ -1609,7 +1647,7 @@ export class WalletPermissionsManager implements WalletInterface {
       await this.persistPermissionGrant(toCreate, toRenew)
       this.settleActiveGrant(params.requestID, matching, 'resolve', true)
     } catch (error) {
-      this.settleActiveGrant(params.requestID, matching, 'reject', error)
+      this.settleFailedGrant(params.requestID, matching, error)
       throw error
     }
   }
@@ -4321,6 +4359,11 @@ export class WalletPermissionsManager implements WalletInterface {
       ...opts
     }
 
+    // Session grants have no UTXO to spend; revoke them locally even in an empty wallet.
+    for (const [key, grant] of this.sessionGrants) {
+      if (grant.originator === preparedOriginator.normalized && include[grant.type]) this.sessionGrants.delete(key)
+    }
+
     const [protocolTokens, basketTokens, certificateTokens, spendingTokens] = await Promise.all([
       include.protocol ? this.listProtocolPermissions({ originator }) : Promise.resolve([]),
       include.basket ? this.listBasketAccess({ originator }) : Promise.resolve([]),
@@ -5916,11 +5959,13 @@ export class WalletPermissionsManager implements WalletInterface {
   }
 
   private async hasRecentOrPendingGrantCore(cacheKey: string): Promise<boolean> {
-    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)) return true
+    if (this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey) || this.isSessionGranted(cacheKey)) {
+      return true
+    }
     const inFlight = this.mintsInFlight.get(cacheKey)
     if (inFlight == null) return false
     await inFlight
-    return this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey)
+    return this.isPermissionCached(cacheKey) || this.isRecentlyGranted(cacheKey) || this.isSessionGranted(cacheKey)
   }
 
   /**
@@ -5952,6 +5997,29 @@ export class WalletPermissionsManager implements WalletInterface {
     const key = this.buildRequestKey(request)
     if (!key) return
     this.recentGrants.set(key, Date.now() + WalletPermissionsManager.RECENT_GRANT_COVER_MS)
+  }
+
+  /** Keeps a non-spending grant whose token the wallet could not fund, until it expires or this manager ends. */
+  private keepGrantForSession(request: PermissionRequest, expiry: number): void {
+    if (request.type === 'spending') return
+    const key = this.buildRequestKey(request)
+    if (!key) return
+    this.sessionGrants.set(key, {
+      expiry,
+      originator: this.normalizeOriginator(request.originator),
+      type: request.type
+    })
+  }
+
+  /** Returns true if the user granted `key` in this session but its token could not be funded. */
+  private isSessionGranted(key: string): boolean {
+    const grant = this.sessionGrants.get(key)
+    if (grant === undefined) return false
+    if (this.isTokenExpired(grant.expiry)) {
+      this.sessionGrants.delete(key)
+      return false
+    }
+    return true
   }
 
   /** Returns true if we are inside the short "cover window" immediately after granting permission. */
