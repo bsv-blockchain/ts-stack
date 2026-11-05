@@ -4480,10 +4480,13 @@ export class WalletPermissionsManager implements WalletInterface {
     // source; this is an independent check at the permissions layer.
     try {
       const tx = Transaction.fromAtomicBEEF(createResult.signableTransaction.tx)
-      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, args)
+      // A permission module appends inputs (by outpoint) and outputs of its own
+      // to the caller's; the signer counts neither as wallet funding. The net
+      // spend is taken from the args the modules sent, not the caller's.
+      const resolvedOutputSatoshis = this.verifyRequestedOutputsPresent(tx, moduleArgs)
       let { netSpent, lineItems } = this.computeNetSpend(
         tx,
-        args,
+        moduleArgs,
         originalInputDescriptions,
         originalOutputDescriptions,
         resolvedOutputSatoshis
