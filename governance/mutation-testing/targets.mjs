@@ -2355,6 +2355,7 @@ export function buildMutationTargets(repositoryRoot) {
         'jest.config.js',
         [
           '<rootDir>/test/private-lookup-buyer.test.ts',
+          '<rootDir>/test/private-lookup-buyer.property.test.ts',
           '<rootDir>/test/private-buyer-payment.test.ts',
           '<rootDir>/test/private-purchase-buyer*.test.ts',
           '<rootDir>/test/private-purchase-wallet-native*.test.ts'
