@@ -769,11 +769,152 @@ describe('HTTPWalletJSON – api() error responses', () => {
 
   it('does NOT throw for an unknown error code when isError is true', async () => {
     // code 99 is unrecognised – falls through to the generic error path
-    const errorBody = { isError: true, code: 99, message: 'Unknown problem' }
+    const errorBody = { isError: true, code: 99, message: 'Unknown problem', name: 'WERR_UNKNOWN' }
     const mockFetch = makeFetch(errorBody, { ok: false, status: 400 })
     const client = makeClient(mockFetch)
 
-    await expect(client.getVersion({})).rejects.toThrow(Error)
+    await expect(client.getVersion({})).rejects.toThrow(
+      'HTTPWalletJSON getVersion failed with HTTP status 400'
+    )
+    try {
+      await client.getVersion({})
+    } catch (e: unknown) {
+      const err = e as Error & { code?: unknown }
+      expect(err.message).toBe('HTTPWalletJSON getVersion failed with HTTP status 400')
+      expect(err.message).not.toContain('Unknown problem')
+      expect(err.name).toBe('Error')
+      expect(err.code).toBeUndefined()
+    }
+  })
+
+  it('surfaces message, name, and code from a 400 body without isError', async () => {
+    const message =
+      'Storage method createAction failed: Insufficient funds for the requested outputs.'
+    const client = makeClient(
+      makeFetch(
+        {
+          message,
+          name: 'WERR_INSUFFICIENT_FUNDS',
+          code: 'WERR_INSUFFICIENT_FUNDS'
+        },
+        { ok: false, status: 400 }
+      )
+    )
+
+    const error = await client
+      .createAction({ description: 'hello world' })
+      .catch(caught => caught as Error & { code?: unknown })
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error).not.toBeInstanceOf(WERR_INSUFFICIENT_FUNDS)
+    expect(error.message).toBe(
+      `HTTPWalletJSON createAction failed with HTTP status 400: ${message}`
+    )
+    expect(error.name).toBe('WERR_INSUFFICIENT_FUNDS')
+    expect(error.code).toBe('WERR_INSUFFICIENT_FUNDS')
+  })
+
+  it.each([
+    ['missing message', { name: 'WERR_INTERNAL', code: 'WERR_INTERNAL' }],
+    ['blank message', { message: '   ', name: 'WERR_INTERNAL', code: 'WERR_INTERNAL' }],
+    ['non-string message', { message: 7, name: 'WERR_INTERNAL', code: 'WERR_INTERNAL' }],
+    [
+      'oversized message',
+      {
+        message: 'é'.repeat(2049),
+        name: 'WERR_INTERNAL',
+        code: 'WERR_INTERNAL'
+      }
+    ]
+  ])(
+    'keeps the generic status error for a 400 body with an unusable message (%s)',
+    async (_label, errorBody) => {
+      const client = makeClient(makeFetch(errorBody, { ok: false, status: 400 }))
+
+      const error = await client
+        .getVersion({})
+        .catch(caught => caught as Error & { code?: unknown })
+
+      expect(error.message).toBe('HTTPWalletJSON getVersion failed with HTTP status 400')
+      expect(error.message).not.toContain('é')
+      expect(error.name).toBe('Error')
+      expect(error.code).toBeUndefined()
+    }
+  )
+
+  it('accepts a 400 message of exactly 4096 UTF-8 bytes', async () => {
+    const message = 'é'.repeat(2048)
+    const client = makeClient(
+      makeFetch(
+        { message, name: 'WERR_INTERNAL', code: 'WERR_INTERNAL' },
+        { ok: false, status: 400 }
+      )
+    )
+
+    const error = await client.getVersion({}).catch(caught => caught as Error & { code?: string })
+
+    expect(error.message).toBe(`HTTPWalletJSON getVersion failed with HTTP status 400: ${message}`)
+    expect(error.name).toBe('WERR_INTERNAL')
+    expect(error.code).toBe('WERR_INTERNAL')
+  })
+
+  it('surfaces the message when name and code are not usable labels', async () => {
+    const client = makeClient(
+      makeFetch(
+        {
+          message: 'bad output',
+          name: 7,
+          code: { nested: true }
+        },
+        { ok: false, status: 400 }
+      )
+    )
+
+    const error = await client
+      .createAction({ description: 'hello world' })
+      .catch(caught => caught as Error & { code?: unknown })
+
+    expect(error.message).toBe(
+      'HTTPWalletJSON createAction failed with HTTP status 400: bad output'
+    )
+    expect(error.name).toBe('Error')
+    expect(error.code).toBeUndefined()
+  })
+
+  it('omits a name or code longer than 128 characters', async () => {
+    const client = makeClient(
+      makeFetch(
+        {
+          message: 'declined',
+          name: 'N'.repeat(129),
+          code: 'C'.repeat(129)
+        },
+        { ok: false, status: 400 }
+      )
+    )
+
+    const error = await client
+      .createAction({ description: 'hello world' })
+      .catch(caught => caught as Error & { code?: unknown })
+
+    expect(error.message).toBe('HTTPWalletJSON createAction failed with HTTP status 400: declined')
+    expect(error.name).toBe('Error')
+    expect(error.code).toBeUndefined()
+  })
+
+  it('copies a name and code of exactly 128 characters', async () => {
+    const name = 'N'.repeat(128)
+    const code = 'C'.repeat(128)
+    const client = makeClient(
+      makeFetch({ message: 'declined', name, code }, { ok: false, status: 400 })
+    )
+
+    const error = await client
+      .createAction({ description: 'hello world' })
+      .catch(caught => caught as Error & { code?: string })
+
+    expect(error.name).toBe(name)
+    expect(error.code).toBe(code)
   })
 })
 

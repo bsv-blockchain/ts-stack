@@ -447,6 +447,34 @@
       "created": "2026-10-23",
       "reviewBy": "2026-11-06",
       "removeWhen": "Remove when upstream mutation-server-protocol declares a minimum Zod version at least 4.6.6, a frozen regeneration without this selector contains no vulnerable Zod, and protocol schema, Stryker smoke/mutation, full audit and normal qualification pass."
+    },
+    {
+      "id": "follow-redirects-memory-server-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override of follow-redirects 1.16.1",
+      "owner": "ts-stack-maintainers",
+      "reason": "mongodb-memory-server-core 11.2.0 allows follow-redirects ^1.16.0 and the frozen lock selected 1.16.1, affected by GHSA-mrwp-f3q8-3g9p. 1.16.2 is the patched release inside that range. The dependency is used only by the BTMS backend development memory server.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-mrwp-f3q8-3g9p"
+      ],
+      "created": "2026-11-02",
+      "reviewBy": "2027-01-02",
+      "removeWhen": "Remove when mongodb-memory-server-core resolves follow-redirects 1.16.2 or newer without this selector and pnpm audit --audit-level=high stays green."
+    },
+    {
+      "id": "joi-paymail-advisory-override",
+      "category": "override",
+      "target": "pnpm-workspace.yaml override of joi 18.2.9",
+      "owner": "ts-stack-maintainers",
+      "reason": "@bsv/paymail allows joi ^18.2.9 and the frozen lock selected 18.2.9, affected by GHSA-4528-x5fx-h6hg. 18.3.1 is the patched release inside that range and keeps the public joi API.",
+      "evidence": [
+        "pnpm-workspace.yaml#overrides",
+        "https://github.com/advisories/GHSA-4528-x5fx-h6hg"
+      ],
+      "created": "2026-11-02",
+      "reviewBy": "2027-01-02",
+      "removeWhen": "Remove when @bsv/paymail resolves joi 18.3.1 or newer without this selector and pnpm audit --audit-level=high stays green."
     }
   ]
 }

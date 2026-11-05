@@ -351,6 +351,37 @@ function deserializeWalletError(
   }
 }
 
+const MAX_PLAIN_WALLET_ERROR_MESSAGE_BYTES = 4096
+const MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH = 128
+
+// Plain HTTP 400 objects carry string message/name/code and no isError property.
+// Typed envelopes stay on the integer-code path. Blank or oversized messages
+// keep the generic status error.
+function throwPlainHttpWalletStatus(
+  data: Record<string, unknown>,
+  call: CallType,
+  status: number
+): never {
+  const text = `HTTPWalletJSON ${call} failed with HTTP status ${status}`
+  const message = data.message
+  if (
+    status === 400 &&
+    typeof message === 'string' &&
+    message.trim() &&
+    toArray(message, 'utf8').length <= MAX_PLAIN_WALLET_ERROR_MESSAGE_BYTES
+  ) {
+    const error = new Error(`${text}: ${message}`) as Error & { code?: string }
+    for (const key of ['name', 'code'] as const) {
+      const value = data[key]
+      if (typeof value === 'string' && value.length <= MAX_PLAIN_WALLET_ERROR_LABEL_LENGTH) {
+        error[key] = value
+      }
+    }
+    throw error
+  }
+  throw new Error(text)
+}
+
 export default class HTTPWalletJSON implements WalletInterface {
   baseUrl: string
   httpClient: typeof fetch
@@ -416,13 +447,13 @@ export default class HTTPWalletJSON implements WalletInterface {
         throw new Error(`Invalid HTTPWalletJSON ${call} response: expected an object`)
       }
 
-      // Check the HTTP status on the original response
       if (!res.ok) {
         if (res.status === 400 && Object.prototype.hasOwnProperty.call(data, 'isError')) {
           const walletError = deserializeWalletError(data, call, bindingRequest)
           if (walletError !== undefined) throw walletError
+          data.message = 0
         }
-        throw new Error(`HTTPWalletJSON ${call} failed with HTTP status ${res.status}`)
+        throwPlainHttpWalletStatus(data, call, res.status)
       }
       return validateWalletResult(call, data, bindingRequest)
     }
