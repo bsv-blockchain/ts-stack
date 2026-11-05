@@ -9,6 +9,7 @@ import {
   type RemoteAttachment
 } from './content/index.js'
 import { GroupMessagingError, UnknownGroupError } from './errors.js'
+import { messageIdOf } from './messageId.js'
 import { BroadcastError } from './transport/index.js'
 import type { ChatInfo, IdentityKey, KeyPackageBytes, MlsGroupId } from './types.js'
 
@@ -56,16 +57,16 @@ export class Group {
   // ── Sending ──────────────────────────────────────────────────────────────
 
   /** Send plain text. */
-  async sendText(body: string): Promise<void> {
+  async sendText(body: string): Promise<string> {
     return this.sendContent(textContent(body))
   }
 
   /** Send Markdown, with an optional distinct plain-text fallback. */
-  async sendMarkdown(source: string, body?: string): Promise<void> {
+  async sendMarkdown(source: string, body?: string): Promise<string> {
     return this.sendContent(markdownContent(source, body))
   }
 
-  async sendRemoteAttachment(attachment: RemoteAttachment, body?: string): Promise<void> {
+  async sendRemoteAttachment(attachment: RemoteAttachment, body?: string): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'remoteAttachment',
@@ -79,7 +80,7 @@ export class Group {
     content: string
     action?: Reaction['action']
     schema?: Reaction['schema']
-  }): Promise<void> {
+  }): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'reaction',
@@ -93,7 +94,7 @@ export class Group {
     })
   }
 
-  async sendReply(input: { reference: string; body: string; markdown?: string }): Promise<void> {
+  async sendReply(input: { reference: string; body: string; markdown?: string }): Promise<string> {
     return this.sendContent({
       v: 1,
       type: 'reply',
@@ -104,7 +105,7 @@ export class Group {
   }
 
   /** Send an already-constructed content envelope. */
-  async sendContent(content: MessageContent): Promise<void> {
+  async sendContent(content: MessageContent): Promise<string> {
     return this.send(encodeContent(content))
   }
 
@@ -122,11 +123,16 @@ export class Group {
    * own message back. Pass the error to `client.retryDelivery` to re-send those
    * exact bytes to the members that missed them.
    */
-  async send(plaintext: Uint8Array): Promise<void> {
+  async send(plaintext: Uint8Array): Promise<string> {
     const { state, message } = await this.#advance(async current =>
       this.client.engine.encrypt({ state: current, plaintext })
     )
-    await this.#broadcast(state, message)
+    // Derived from the ciphertext, so it is the same id the recipients will
+    // derive. Taken before delivery because a failed send still has an id:
+    // the group advanced, and the caller's own copy needs a key either way.
+    const messageId = messageIdOf(message)
+    await this.#broadcast(state, message, messageId)
+    return messageId
   }
 
   // ── Membership ───────────────────────────────────────────────────────────
@@ -228,16 +234,26 @@ export class Group {
       .filter(identityKey => identityKey !== this.client.identityKey)
   }
 
-  async #broadcast(state: Uint8Array, message: Uint8Array): Promise<void> {
-    await this.#deliver(await this.#recipients(state), message)
+  async #broadcast(state: Uint8Array, message: Uint8Array, messageId?: string): Promise<void> {
+    await this.#deliver(await this.#recipients(state), message, messageId)
   }
 
-  async #deliver(recipients: IdentityKey[], message: Uint8Array): Promise<void> {
+  async #deliver(
+    recipients: IdentityKey[],
+    message: Uint8Array,
+    messageId?: string
+  ): Promise<void> {
     if (recipients.length === 0) return
     const payload = encodeEnvelope({ kind: 'mls', payload: message })
     try {
       await this.client.transport.broadcast(this.mlsGroupId, recipients, payload)
     } catch (error) {
+      // Put the id on the rejection too. The event below is client-wide and
+      // names only the chat, so a host with two sends in flight cannot tell
+      // which one it is about; the rejection belongs to this send alone.
+      if (error instanceof BroadcastError && messageId !== undefined) {
+        error.messageId = messageId
+      }
       // The group has advanced locally regardless; the caller decides on retry.
       // `failed` only when the transport counted — see the event's own doc.
       this.client.emit('deliveryFailed', {
@@ -245,6 +261,8 @@ export class Group {
         mlsGroupId: this.mlsGroupId,
         recipients,
         ...(error instanceof BroadcastError ? { failed: error.failed } : {}),
+        // Absent for a Commit, which is not a message and has no id.
+        ...(messageId === undefined ? {} : { messageId }),
         error: error as Error
       })
       throw error

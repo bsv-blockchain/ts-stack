@@ -2,7 +2,7 @@ import { eachInOrder } from '../inOrder.js'
 import { decodeEnvelope } from '../bootstrap/envelope.js'
 import { DeliveryFailed, GroupMessagingError } from '../errors.js'
 import type { IdentityKey, MlsGroupId, Unsubscribe, WirePayload } from '../types.js'
-import type { TransportBackend } from './backend.js'
+import type { LiveStatus, TransportBackend } from './backend.js'
 import { InProcessTransportHub } from './backends/in-process.js'
 import {
   MessageBoxTransport,
@@ -60,6 +60,8 @@ export { DeliveryFailed }
 export class TransportService {
   readonly #handlers = new Set<MessageHandler>()
   readonly #errorHandlers = new Set<ErrorHandler>()
+  /** Live-status subscriptions taken out on the backend, released on close. */
+  readonly #liveStatusUnsubscribes = new Set<Unsubscribe>()
   #unsubscribe: Unsubscribe | undefined
   #unsubscribeErrors: Unsubscribe | undefined
 
@@ -130,6 +132,28 @@ export class TransportService {
     for (const handler of this.#errorHandlers) handler(error, from)
   }
 
+  /**
+   * What the backend's live connection is doing.
+   *
+   * Delegated rather than re-fanned: the backend already keeps its own set of
+   * handlers and already replays the current status on subscribe, and a second
+   * copy of both here would be a second thing to keep true. A backend with no
+   * live delivery has nothing to report, and silence is the honest answer — a
+   * host writes one handler and swaps backends underneath it.
+   */
+  onLiveStatus(handler: (status: LiveStatus) => void): Unsubscribe {
+    const release = this.backend.onLiveStatus?.(handler)
+    if (release === undefined) return () => undefined
+    // Tracked so `close()` can release it. The handler lives in the backend's
+    // set, so a service closed without releasing it leaves the backend holding
+    // the host's closure.
+    this.#liveStatusUnsubscribes.add(release)
+    return () => {
+      this.#liveStatusUnsubscribes.delete(release)
+      release()
+    }
+  }
+
   /** Called when an inbound handler throws. */
   onError(handler: ErrorHandler): Unsubscribe {
     this.#errorHandlers.add(handler)
@@ -152,6 +176,8 @@ export class TransportService {
     this.#unsubscribe = undefined
     this.#unsubscribeErrors?.()
     this.#unsubscribeErrors = undefined
+    for (const release of this.#liveStatusUnsubscribes) release()
+    this.#liveStatusUnsubscribes.clear()
     this.#handlers.clear()
     this.#errorHandlers.clear()
   }
@@ -222,6 +248,20 @@ export class BroadcastError extends GroupMessagingError {
         `${failed.length} failed`
     )
   }
+
+  /**
+   * The library's id for the message this error is about, when it is about a
+   * message. Absent on a Commit, which is not one and has no id.
+   *
+   * Set by `Group` after construction rather than passed in, because the
+   * transport carries opaque payloads and must not learn what an MLS message
+   * id is. Without it the id of a failed send is unreachable from the
+   * rejection: the client-wide `deliveryFailed` event names only the chat, so
+   * two sends in flight at once are indistinguishable, and `payload` is the
+   * envelope rather than the MLS message, so hashing it yields a value no
+   * recipient agrees with.
+   */
+  messageId?: string
 }
 
 const resolve = (

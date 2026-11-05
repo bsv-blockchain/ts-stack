@@ -1,6 +1,7 @@
 import { decodeEnvelope, encodeEnvelope, type Envelope } from './bootstrap/index.js'
 import { bytesEqual, fromHex, randomId } from './bytes.js'
 import { decodeContent, type MessageContent } from './content/index.js'
+import { messageIdOf } from './messageId.js'
 import { GroupMessagingError, PermanentProcessingError, WelcomeDeliveryError } from './errors.js'
 import { Emitter } from './events.js'
 import { Group } from './group.js'
@@ -95,6 +96,8 @@ export interface ClientEvents {
     sender: IdentityKey
     /** The epoch the message was sent in, which may predate the current one. */
     epoch: bigint
+    /** What a reply or a reaction names. The sender derived the same one. */
+    messageId: string
     content: MessageContent
   }
   membership: {
@@ -141,6 +144,15 @@ export interface ClientEvents {
      * different situation from one that reached none.
      */
     failed?: IdentityKey[]
+    /**
+     * The id of the application message that did not get through.
+     *
+     * Absent for a Commit, which is not a message and has no id. `send` tells
+     * a caller to write its own copy without waiting for the promise, because
+     * the group has advanced either way — and on this path the promise that
+     * would have carried the id rejects instead.
+     */
+    messageId?: string
     error: Error
   }
   /**
@@ -403,7 +415,18 @@ export class GroupMessagingClient {
       await this.#resendWelcome(error)
       return
     }
-    await this.transport.broadcast(error.groupId, error.failed, error.payload)
+    try {
+      await this.transport.broadcast(error.groupId, error.failed, error.payload)
+    } catch (error_) {
+      // The fresh error is about the same message, so it carries the same id.
+      // Minting it without one would lose on the second attempt what the
+      // first carried, leaving a host that retries in a loop with an id for
+      // none of the failures after the first.
+      if (error_ instanceof BroadcastError && error.messageId !== undefined) {
+        error_.messageId = error.messageId
+      }
+      throw error_
+    }
   }
 
   /**
@@ -869,6 +892,7 @@ export class GroupMessagingClient {
             mlsGroupId,
             sender: result.sender,
             epoch: result.epoch,
+            messageId: messageIdOf(message),
             content
           })
         }

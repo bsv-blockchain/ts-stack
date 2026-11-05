@@ -3,10 +3,10 @@ id: pkg-group-messaging
 title: '@bsv/group-messaging'
 kind: package
 domain: messaging
-version: '0.1.0'
+version: '0.2.0'
 source_repo: 'bsv-blockchain/ts-stack'
-last_updated: '2026-09-16'
-last_verified: '2026-09-16'
+last_updated: '2026-11-04'
+last_verified: '2026-11-04'
 review_cadence_days: 30
 npm: 'https://www.npmjs.com/package/@bsv/group-messaging'
 repo: 'https://github.com/bsv-blockchain/ts-stack/tree/main/packages/messaging/group-messaging'
@@ -64,8 +64,8 @@ const group = await client.createGroup({
   privateKeyPackage: minted.privateKeyPackage
 })
 
-await group.sendText('hello')
-client.on('message', ({ chatId, sender, content }) => {
+const messageId = await group.sendText('hello')
+client.on('message', ({ chatId, sender, content, messageId }) => {
   /* … */
 })
 ```
@@ -81,7 +81,7 @@ client.on('message', ({ chatId, sender, content }) => {
 Storage is scoped to the client's identity, so one host database serves however
 many accounts the wallet manages.
 
-## Two things worth knowing before you build on it
+## Three things worth knowing before you build on it
 
 **A KeyPackage is an entry ticket, not a chat key.** It is consumed once, when
 its holder enters a group, and a successful `createGroup` or `joinFromWelcome`
@@ -92,6 +92,19 @@ signal for the host to destroy the private half, which this library never holds.
 accepts `live: true`, which layers a socket over a slower polling backstop. The
 socket cannot be a sole source: `joinRoom` replays no backlog, so anything sent
 while it was down is only ever seen by a poll.
+
+**A message id is derived, not chosen.** `messageIdOf` is the sha-256 of the MLS
+application message in lower-case hex, so a sender and every recipient reach the
+same id independently and a sender cannot pick its own. It is what `replyTo` and
+a reaction's `reference` name. Every send returns it, every `message` event
+carries it, and a send that failed carries it on both the `deliveryFailed` event
+and the `BroadcastError` it rejects with.
+
+`templates/` ships alongside `dist/`, reachable at `@bsv/group-messaging/templates/*`.
+These are copy-paste starting points for the machinery the library deliberately
+does not own — client lifecycle, the KeyPackage shelf, a message transcript, a
+WebCrypto conformance probe and a managed invitation exchange. They are source to
+copy rather than API, and carry no compatibility promise.
 
 See the package README for the full invitation handshake, the KeyPackage
 lifecycle, and the events a consumer should handle.

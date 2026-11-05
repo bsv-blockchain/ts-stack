@@ -1,7 +1,7 @@
 import { DeliveryFailed, GroupMessagingError, isPermanent } from '../../errors.js'
 import { eachInOrder } from '../../inOrder.js'
 import type { IdentityKey, Unsubscribe, WirePayload } from '../../types.js'
-import type { TransportBackend } from '../backend.js'
+import type { LiveStatus, TransportBackend } from '../backend.js'
 import { decodeBody, encodeBody, UnparsableBodyError } from './message-box-body.js'
 
 /**
@@ -78,13 +78,7 @@ export interface ClientLiveStatus {
   reason?: string
 }
 
-/** What the live socket is doing, for a host that wants to show or log it. */
-export interface LiveStatus {
-  phase: 'connecting' | 'subscribed' | 'delivered' | 'reconnecting' | 'closed'
-  /** Which producer carried a delivery. */
-  source?: 'socket' | 'poll'
-  detail?: string
-}
+export type { LiveStatus }
 
 /** Raised when `live` was asked for and the socket could not carry it. */
 export class LiveDeliveryUnavailable extends GroupMessagingError {
@@ -509,6 +503,17 @@ export class MessageBoxTransport implements TransportBackend {
   #unfollow: Unsubscribe | undefined
   /** The last status reported, so an unchanged one is not reported again. */
   #lastStatus: LiveStatus | undefined
+  /**
+   * The last status describing the connection rather than a delivery, which is
+   * what a late subscriber is replayed.
+   *
+   * `delivered` is a report about one batch, true for an instant; the
+   * connection phases are states the socket stays in. Replaying the former
+   * tells a subscriber nothing about the socket, and a host switching on the
+   * connection phases has no case for it — so it would sit on whatever it
+   * showed before, which is the symptom the replay exists to prevent.
+   */
+  #lastPhase: LiveStatus | undefined
   /** The cadence the poll runs at while the socket is carrying delivery. */
   readonly #backstopIntervalMs: number
   /**
@@ -640,6 +645,18 @@ export class MessageBoxTransport implements TransportBackend {
    */
   onLiveStatus(handler: (status: LiveStatus) => void): Unsubscribe {
     this.#liveStatusHandlers.add(handler)
+    // Replayed, because the states worth showing are the ones that persist: a
+    // screen mounted after the socket settled would otherwise show nothing
+    // until a transition that, on a healthy connection, never comes. Delivered
+    // synchronously so the first paint has it; the client this follows keeps
+    // the same contract.
+    if (this.#lastPhase !== undefined) {
+      try {
+        handler(this.#lastPhase)
+      } catch (cause) {
+        this.#report(toError(cause))
+      }
+    }
     return () => {
       this.#liveStatusHandlers.delete(handler)
     }
@@ -650,7 +667,11 @@ export class MessageBoxTransport implements TransportBackend {
     // socket, so they can say the same thing twice. Only transitions go out,
     // which is the contract the client itself keeps.
     const last = this.#lastStatus
+    // `delivered` reports an event rather than a state, and two polls that each
+    // carry one new message produce byte-identical reports; deduping them loses
+    // the second delivery for a host counting them.
     if (
+      status.phase !== 'delivered' &&
       last?.phase === status.phase &&
       last?.source === status.source &&
       last?.detail === status.detail
@@ -658,6 +679,7 @@ export class MessageBoxTransport implements TransportBackend {
       return
     }
     this.#lastStatus = status
+    if (status.phase !== 'delivered') this.#lastPhase = status
     for (const handler of this.#liveStatusHandlers) {
       try {
         handler(status)
@@ -733,6 +755,10 @@ export class MessageBoxTransport implements TransportBackend {
     this.#unfollow = undefined
     await this.#poll.close()
     await this.#live?.close()
+    // After the close, so the `closed` the live source reports on its way out
+    // still reaches whoever asked for it. A handler left in the set holds its
+    // closure, and through it whatever the host captured.
+    this.#liveStatusHandlers.clear()
   }
 
   /**
