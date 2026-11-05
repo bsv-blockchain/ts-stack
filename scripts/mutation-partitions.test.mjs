@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArguments } from './mutation-testing.mjs'
 import { mutationExecutionBatches } from './mutation-execution-batches.mjs'
+import { canonicalInventory } from './mutation-final-qualification.mjs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
@@ -98,11 +99,11 @@ test('semantic execution ranges retain the complete source line union and every 
   }
   assert.equal(Object.keys(targets).length, 156)
   const matrix = mutationExecutionMatrix(Object.keys(targets), targets)
-  assert.equal(matrix.include.length, 606)
+  assert.equal(matrix.include.length, 616)
   const batches = mutationExecutionBatches(matrix)
   assert.deepEqual(
     batches.include.map(batch => batch.executionMatrix.include.length),
-    [256, 256, 94]
+    [256, 256, 104]
   )
   assert.deepEqual(
     batches.include.flatMap(batch => batch.executionMatrix.include),
@@ -856,18 +857,48 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
   }
 })
 
-test('durable buyer parts retain the complete source union and identical native recovery tests', () => {
+test('durable buyer parts retain the complete source union and identical native recovery tests', async () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['private-lookup-buyer'],
     parts = partitionMutationTarget('private-lookup-buyer', target)
-  assert.deepEqual(parts.map(part => part.id).sort(compareSpecifications), ['buyer', 'payment'])
-  assert.deepEqual(
-    parts.flatMap(part => part.target.mutate).sort(compareSpecifications),
-    [...target.mutate].sort(compareSpecifications)
-  )
-  for (const part of parts) assert.equal(part.target.runnerOptions, target.runnerOptions)
+  assert.deepEqual(parts.map(part => part.id).sort(compareSpecifications), [
+    'buyer-access',
+    'buyer-advance',
+    'buyer-binding',
+    'buyer-challenge',
+    'buyer-constructor',
+    'buyer-initialization',
+    'buyer-objects',
+    'buyer-recovery',
+    'buyer-state',
+    'buyer-validation',
+    'buyer-work',
+    'payment'
+  ])
+  const lines = parts.flatMap(part => [...sourceLines(target, part.target.mutate)])
+  assert.equal(new Set(lines).size, lines.length)
+  assert.deepEqual(new Set(lines), sourceLines(target, target.mutate))
+  for (const part of parts) {
+    assert.equal(part.target.runnerOptions, target.runnerOptions)
+    assert.deepEqual({ ...part.target, mutate: target.mutate }, target)
+  }
   assert.deepEqual(parts.find(part => part.id === 'payment').target.mutate, [
     'src/private/WalletToolboxBuyerPayment.ts'
   ])
+  const directory = join(REPOSITORY_ROOT, target.packageDirectory),
+    sources = new Map(
+      target.mutate.map(file => [file, readFileSync(join(directory, file), 'utf8')])
+    ),
+    whole = await canonicalInventory(directory, sources, target.mutate),
+    keys = mutants =>
+      mutants.map(({ id: _id, ...mutant }) => JSON.stringify(mutant)).sort(compareSpecifications),
+    combined = []
+  for (const part of parts) {
+    const inventory = await canonicalInventory(directory, sources, part.target.mutate)
+    assert.ok(inventory.length > 0, `${part.id} must execute real canonical mutants`)
+    combined.push(...inventory)
+  }
+  assert.equal(new Set(keys(combined)).size, combined.length)
+  assert.deepEqual(keys(combined), keys(whole))
 })
 
 test('semantic anchors reject ambiguity, absent or duplicate methods and retain explicit numeric plans', () => {
