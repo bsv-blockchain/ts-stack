@@ -301,13 +301,14 @@ artifact and publication checks remain in force.
 
 Every canonical mutation target must have a successful fresh report and matching
 source/run/attempt/configuration/lock-bound receipt. The verifier reconstructs
-canonical source ranges and mutant inventory with pinned Stryker 10.1.1 and rechecks
-all existing target gates. Reported kills caused by interrupted property exploration or a Jest test/hook
-deadline are counted separately as `runnerLimitedKills` and fail execution and
+canonical source ranges and mutant inventory with pinned Stryker 10.1.1 and
+rechecks all existing target gates. Reported kills caused by interrupted property
+exploration or a Jest test/hook deadline are counted separately as `runnerLimitedKills` and fail execution and
 independent raw-report qualification, including per-part checks. Raw Stryker
 counts/scores and explicit Stryker Timeout semantics are preserved. A high raw
-score does not waive incomplete evidence. A partial manual target is diagnostic only. Earlier
-weekly passes, previous attempts and reports from another source cannot satisfy
+score does not waive incomplete evidence. A partial manual target is diagnostic
+only. Earlier weekly passes, previous attempts and reports from another source
+cannot satisfy
 the gate; rerun the complete workflow when a full attempt needs replacement.
 
 A single-package release (`packages/<path>/vX.Y.Z`, or a manual `single`
@@ -350,6 +351,8 @@ The [three-case efficiency pilot](https://github.com/bsv-blockchain/ts-stack/blo
 measures ordering separately from failure stopping. It grants no evidence reuse
 or incremental-state exemption; neither a historical report nor a diagnostic
 pilot can qualify publication.
+Non-verbose campaigns retain JSON reports and emit built-in append-only progress
+every ten seconds, so a slow execution remains observable before completion.
 
 Declaration/import-only execution companions run with related nonempty parts.
 Their complete original source ranges remain in the plan and the pinned-engine

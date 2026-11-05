@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { buildMutationTargets } from '../governance/mutation-testing/targets.mjs'
 import {
   comparePilotReports,
+  PILOT_CASES,
   initialRunEvidence,
   requirePilotParts,
   requireDeclaredProperty
@@ -174,13 +175,12 @@ test('coverage identities survive ID renumbering and distinguish duplicate test 
 })
 
 test('the whole buyer scope rejects a newly added or missing canonical part', () => {
-  assert.equal(
-    requirePilotParts('lookup-buyer', ['buyer', 'payment']).target,
-    'private-lookup-buyer'
-  )
-  assert.throws(() => requirePilotParts('lookup-buyer', ['buyer']), /partition moved/)
+  const parts = PILOT_CASES['lookup-buyer'].parts
+  assert(parts.length > 0)
+  assert.equal(requirePilotParts('lookup-buyer', parts).target, 'private-lookup-buyer')
+  assert.throws(() => requirePilotParts('lookup-buyer', parts.slice(1)), /partition moved/)
   assert.throws(
-    () => requirePilotParts('lookup-buyer', ['buyer', 'payment', 'unexecuted']),
+    () => requirePilotParts('lookup-buyer', [...parts, 'unexecuted']),
     /omits a canonical part/
   )
   assert.throws(() => requirePilotParts('unknown', []), /Unknown pilot case/)

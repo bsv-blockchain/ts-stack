@@ -286,7 +286,8 @@ async function runTarget(targetName, target, policy, partition = 'whole') {
     force: true
   })
   const stryker = path.join(REPOSITORY_ROOT, 'node_modules/.bin/stryker')
-  const reporters = process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'json'
+  const reporters =
+    process.env.MUTATION_VERBOSE === '1' ? 'clear-text,json' : 'progress-append-only,json'
   const propertyEnvironment = {
     FAST_CHECK_NUM_RUNS: process.env.FAST_CHECK_NUM_RUNS ?? String(policy.tool.propertyRuns),
     FAST_CHECK_SEED: process.env.FAST_CHECK_SEED ?? String(policy.tool.propertySeed),

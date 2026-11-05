@@ -19,7 +19,15 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 export const PILOT_CASES = {
   'native-clock': { target: 'private-purchase-native-clock', parts: ['progress-8'] },
   disclosure: { target: 'private-purchase-disclosure', parts: ['auto-3'] },
-  'lookup-buyer': { target: 'private-lookup-buyer', parts: ['buyer', 'payment'] }
+  'lookup-buyer': {
+    target: 'private-lookup-buyer',
+    // Whole-target measurement follows every canonical part in this checkout.
+    // A later safe repartition must not silently leave new parts unmeasured.
+    parts: partitionMutationTarget(
+      'private-lookup-buyer',
+      buildMutationTargets(ROOT)['private-lookup-buyer']
+    ).map(part => part.id)
+  }
 }
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 const read = file => JSON.parse(fs.readFileSync(file, 'utf8'))
