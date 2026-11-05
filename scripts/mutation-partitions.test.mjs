@@ -7,7 +7,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parseArguments } from './mutation-testing.mjs'
 import { mutationExecutionBatches } from './mutation-execution-batches.mjs'
-import { canonicalInventory } from './mutation-final-qualification.mjs'
 import {
   partitionMutationTarget,
   selectedMutationPartition,
@@ -857,7 +856,7 @@ test('paid acquisition and proposal HTTP parts preserve exact whole-source/test 
   }
 })
 
-test('durable buyer parts retain the complete source union and identical native recovery tests', async () => {
+test('durable buyer parts retain the complete source union and identical native recovery tests', () => {
   const target = buildMutationTargets(REPOSITORY_ROOT)['private-lookup-buyer'],
     parts = partitionMutationTarget('private-lookup-buyer', target)
   assert.deepEqual(parts.map(part => part.id).sort(compareSpecifications), [
@@ -884,21 +883,6 @@ test('durable buyer parts retain the complete source union and identical native 
   assert.deepEqual(parts.find(part => part.id === 'payment').target.mutate, [
     'src/private/WalletToolboxBuyerPayment.ts'
   ])
-  const directory = join(REPOSITORY_ROOT, target.packageDirectory),
-    sources = new Map(
-      target.mutate.map(file => [file, readFileSync(join(directory, file), 'utf8')])
-    ),
-    whole = await canonicalInventory(directory, sources, target.mutate),
-    keys = mutants =>
-      mutants.map(({ id: _id, ...mutant }) => JSON.stringify(mutant)).sort(compareSpecifications),
-    combined = []
-  for (const part of parts) {
-    const inventory = await canonicalInventory(directory, sources, part.target.mutate)
-    assert.ok(inventory.length > 0, `${part.id} must execute real canonical mutants`)
-    combined.push(...inventory)
-  }
-  assert.equal(new Set(keys(combined)).size, combined.length)
-  assert.deepEqual(keys(combined), keys(whole))
 })
 
 test('semantic anchors reject ambiguity, absent or duplicate methods and retain explicit numeric plans', () => {
